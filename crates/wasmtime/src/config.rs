@@ -3015,7 +3015,7 @@ impl Config {
     /// The WebAssembly threads proposal, configured by [`Config::wasm_threads`]
     /// is on-by-default but there are enough deficiencies in Wasmtime's
     /// implementation and API integration that creation of a shared memory is
-    /// disabled by default. This cofiguration knob can be used to enable this.
+    /// disabled by default. This configuration knob can be used to enable this.
     ///
     /// When enabling this method be aware that wasm threads are, at this time,
     /// a [tier 2

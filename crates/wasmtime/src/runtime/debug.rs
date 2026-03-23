@@ -54,7 +54,7 @@ impl<T> Store<T> {
     /// purposes.
     ///
     /// Guest debugging must be enabled for this accessor to return
-    /// any instances. If it is not, an empty vector is returend.
+    /// any instances. If it is not, an empty vector is returned.
     pub fn debug_all_instances(&mut self) -> Vec<Instance> {
         self.as_store_opaque().debug_all_instances()
     }
@@ -63,7 +63,7 @@ impl<T> Store<T> {
     /// purposes.
     ///
     /// Guest debugging must be enabled for this accessor to return
-    /// any modules. If it is not, an empty vector is returend.
+    /// any modules. If it is not, an empty vector is returned.
     pub fn debug_all_modules(&mut self) -> Vec<Module> {
         self.as_store_opaque().debug_all_modules()
     }
@@ -943,8 +943,16 @@ pub trait DebugHandler: Clone + Send + Sync + 'static {
 pub(crate) struct BreakpointState {
     /// Single-step mode.
     single_step: bool,
-    /// Breakpoints added individually.
-    breakpoints: BTreeSet<BreakpointKey>,
+    /// Breakpoints added individually. Maps from the actual
+    /// (possibly slipped-forward) breakpoint key to a reference
+    /// count. Multiple requested PCs may map to the same actual
+    /// breakpoint when they are slipped forward.
+    breakpoints: BTreeMap<BreakpointKey, usize>,
+    /// When a requested breakpoint PC does not exactly match an
+    /// opcode boundary, we "slip" it forward to the next available
+    /// PC. This map records the redirect from the requested key to
+    /// the actual key so that `remove_breakpoint` can undo it.
+    breakpoint_redirects: BTreeMap<BreakpointKey, BreakpointKey>,
 }
 
 /// A breakpoint.
@@ -1003,7 +1011,7 @@ impl BreakpointState {
         &'a self,
         registry: &'a ModuleRegistry,
     ) -> impl Iterator<Item = Breakpoint> + 'a {
-        self.breakpoints.iter().map(|key| key.get(registry))
+        self.breakpoints.keys().map(|key| key.get(registry))
     }
 
     pub(crate) fn is_single_step(&self) -> bool {
@@ -1068,18 +1076,36 @@ impl<'a> BreakpointEdit<'a> {
     /// Add a breakpoint in the given module at the given PC in that
     /// module.
     ///
+    /// If the requested PC does not fall exactly on an opcode
+    /// boundary, the breakpoint is "slipped" forward to the next
+    /// available opcode PC.
+    ///
     /// No effect if the breakpoint is already set.
     pub fn add_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
-        let key = BreakpointKey::from_raw(module, pc);
-        self.state.breakpoints.insert(key);
-        log::trace!("patching in breakpoint {key:?}");
-        let mem =
-            Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
         let frame_table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
-        let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
-        Self::patch(patches, mem, true);
+        let actual_pc = frame_table.nearest_breakpoint(pc).unwrap_or(pc);
+        let requested_key = BreakpointKey::from_raw(module, pc);
+        let actual_key = BreakpointKey::from_raw(module, actual_pc);
+
+        if actual_pc != pc {
+            log::trace!("slipping breakpoint from {requested_key:?} to {actual_key:?}");
+            self.state
+                .breakpoint_redirects
+                .insert(requested_key, actual_key);
+        }
+
+        let refcount = self.state.breakpoints.entry(actual_key).or_insert(0);
+        *refcount += 1;
+        if *refcount == 1 {
+            // First reference: actually patch the code.
+            log::trace!("patching in breakpoint {actual_key:?}");
+            let mem =
+                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
+            let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
+            Self::patch(patches, mem, true);
+        }
         Ok(())
     }
 
@@ -1088,16 +1114,32 @@ impl<'a> BreakpointEdit<'a> {
     ///
     /// No effect if the breakpoint was not set.
     pub fn remove_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
-        let key = BreakpointKey::from_raw(module, pc);
-        self.state.breakpoints.remove(&key);
-        if !self.state.single_step {
-            let mem =
-                Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
-            let frame_table = module
-                .frame_table()
-                .expect("Frame table must be present when guest-debug is enabled");
-            let patches = frame_table.lookup_breakpoint_patches_by_pc(pc);
-            Self::patch(patches, mem, false);
+        let requested_key = BreakpointKey::from_raw(module, pc);
+        let actual_key = self
+            .state
+            .breakpoint_redirects
+            .remove(&requested_key)
+            .unwrap_or(requested_key);
+        let actual_pc = actual_key.1;
+
+        if let Some(refcount) = self.state.breakpoints.get_mut(&actual_key) {
+            *refcount -= 1;
+            if *refcount == 0 {
+                self.state.breakpoints.remove(&actual_key);
+                if !self.state.single_step {
+                    let mem = Self::get_code_memory(
+                        self.state,
+                        self.registry,
+                        &mut self.dirty_modules,
+                        module,
+                    )?;
+                    let frame_table = module
+                        .frame_table()
+                        .expect("Frame table must be present when guest-debug is enabled");
+                    let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
+                    Self::patch(patches, mem, false);
+                }
+            }
         }
         Ok(())
     }
@@ -1141,7 +1183,7 @@ impl<'a> BreakpointEdit<'a> {
             let mem =
                 Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, &module)?;
             Self::apply_single_step(mem, &module, enabled, |key| {
-                self.state.breakpoints.contains(key)
+                self.state.breakpoints.contains_key(key)
             })?;
         }
 

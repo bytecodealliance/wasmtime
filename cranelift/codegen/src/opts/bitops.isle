@@ -289,3 +289,259 @@
 ; (~x) | (~y) --> ~(x & y)
 (rule (simplify (bor ty (bnot ty x) (bnot ty y))) (bnot ty (band ty x y)))
 (rule (simplify (bor ty (bnot ty y) (bnot ty x))) (bnot ty (band ty x y)))
+
+; x | ((x ^ y) ^ z) --> x | (y ^ z)
+(rule (simplify (bor ty (bxor ty (bxor ty x y) z) x)) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty x (bxor ty (bxor ty x y) z))) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty (bxor ty z (bxor ty x y)) x)) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty x (bxor ty z (bxor ty x y)))) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty (bxor ty (bxor ty y x) z) x)) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty x (bxor ty (bxor ty y x) z))) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty (bxor ty z (bxor ty y x)) x)) (bor ty (bxor ty y z) x))
+(rule (simplify (bor ty x (bxor ty z (bxor ty y x)))) (bor ty (bxor ty y z) x))
+
+; (x ^ z) == (y ^ z) --> x == y
+(rule (simplify (eq ty (bxor cty x z) (bxor cty y z))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty y z) (bxor cty x z))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty x z) (bxor cty z y))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty z y) (bxor cty x z))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty z x) (bxor cty y z))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty y z) (bxor cty z x))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty z x) (bxor cty z y))) (eq ty x y))
+(rule (simplify (eq ty (bxor cty z y) (bxor cty z x))) (eq ty x y))
+
+; y | ~(x | y) --> y | ~x
+(rule (simplify (bor ty y (bnot ty (bor ty x y)))) (bor ty y (bnot ty x)))
+(rule (simplify (bor ty (bnot ty (bor ty x y)) y)) (bor ty y (bnot ty x)))
+(rule (simplify (bor ty y (bnot ty (bor ty y x)))) (bor ty y (bnot ty x)))
+(rule (simplify (bor ty (bnot ty (bor ty y x)) y)) (bor ty y (bnot ty x)))
+
+; y & ~(x & y) --> y & ~x
+(rule (simplify (band ty y (bnot ty (band ty x y)))) (band ty y (bnot ty x)))
+(rule (simplify (band ty (bnot ty (band ty x y)) y)) (band ty y (bnot ty x)))
+(rule (simplify (band ty y (bnot ty (band ty y x)))) (band ty y (bnot ty x)))
+(rule (simplify (band ty (bnot ty (band ty y x)) y)) (band ty y (bnot ty x)))
+
+; (~x) ^ (x | y) --> x | ~y
+(rule (simplify (bxor ty (bnot ty x) (bor ty x y))) (bor ty x (bnot ty y)))
+(rule (simplify (bxor ty (bor ty x y) (bnot ty x))) (bor ty x (bnot ty y)))
+(rule (simplify (bxor ty (bnot ty x) (bor ty y x))) (bor ty x (bnot ty y)))
+(rule (simplify (bxor ty (bor ty y x) (bnot ty x))) (bor ty x (bnot ty y)))
+
+; (x < y) | (x > y) --> x != y
+(rule (simplify (bor ty (slt ty x y) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (sgt ty x y) (slt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (slt ty x y) (slt ty y x))) (ne ty x y))
+(rule (simplify (bor ty (slt ty y x) (slt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (sgt ty y x) (sgt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (sgt ty x y) (sgt ty y x))) (ne ty x y))
+(rule (simplify (bor ty (sgt ty y x) (slt ty y x))) (ne ty x y))
+(rule (simplify (bor ty (slt ty y x) (sgt ty y x))) (ne ty x y))
+
+; (x <_u y) | (x >_u y) --> x != y
+(rule (simplify (bor ty (ult ty x y) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (ugt ty x y) (ult ty x y))) (ne ty x y))
+(rule (simplify (bor ty (ult ty x y) (ult ty y x))) (ne ty x y))
+(rule (simplify (bor ty (ult ty y x) (ult ty x y))) (ne ty x y))
+(rule (simplify (bor ty (ugt ty y x) (ugt ty x y))) (ne ty x y))
+(rule (simplify (bor ty (ugt ty x y) (ugt ty y x))) (ne ty x y))
+(rule (simplify (bor ty (ugt ty y x) (ult ty y x))) (ne ty x y))
+(rule (simplify (bor ty (ult ty y x) (ugt ty y x))) (ne ty x y))
+
+; ~((~x) & y) --> x | ~y
+(rule (simplify (bnot ty (band ty (bnot ty x) y))) (bor ty x (bnot ty y)))
+(rule (simplify (bnot ty (band ty y (bnot ty x)))) (bor ty x (bnot ty y)))
+
+; ~((~x) | y) --> x & ~y
+(rule (simplify (bnot ty (bor ty (bnot ty x) y))) (band ty x (bnot ty y)))
+(rule (simplify (bnot ty (bor ty y (bnot ty x)))) (band ty x (bnot ty y)))
+
+; (x <_u y) | (x == y) --> (x <=_u y)
+(rule (simplify (bor ty (ult ty x y) (eq ty x y))) (ule ty x y))
+(rule (simplify (bor ty (eq ty x y) (ult ty x y))) (ule ty x y))
+(rule (simplify (bor ty (ult ty x y) (eq ty y x))) (ule ty x y))
+(rule (simplify (bor ty (eq ty y x) (ult ty x y))) (ule ty x y))
+
+; (y >_u x) | (x == y) --> (x <=_u y)
+(rule (simplify (bor ty (ugt ty y x) (eq ty x y))) (ule ty x y))
+(rule (simplify (bor ty (eq ty x y) (ugt ty y x))) (ule ty x y))
+(rule (simplify (bor ty (ugt ty y x) (eq ty y x))) (ule ty x y))
+(rule (simplify (bor ty (eq ty y x) (ugt ty y x))) (ule ty x y))
+
+; (x < y) | (x == y) --> (x <= y)
+(rule (simplify (bor ty (slt ty x y) (eq ty x y))) (sle ty x y))
+(rule (simplify (bor ty (eq ty x y) (slt ty x y))) (sle ty x y))
+(rule (simplify (bor ty (slt ty x y) (eq ty y x))) (sle ty x y))
+(rule (simplify (bor ty (eq ty y x) (slt ty x y))) (sle ty x y))
+
+; (y > x) | (x == y) --> (x <= y)
+(rule (simplify (bor ty (sgt ty y x) (eq ty x y))) (sle ty x y))
+(rule (simplify (bor ty (eq ty x y) (sgt ty y x))) (sle ty x y))
+(rule (simplify (bor ty (sgt ty y x) (eq ty y x))) (sle ty x y))
+(rule (simplify (bor ty (eq ty y x) (sgt ty y x))) (sle ty x y))
+
+; (x ^ z) | (((x ^ z) ^ y)) --> (x ^ z) | y
+(rule (simplify (bor ty (bxor ty x z) (bxor ty (bxor ty x z) y))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty (bxor ty x z) y) (bxor ty x z))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty x z) (bxor ty y (bxor ty x z)))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty y (bxor ty x z)) (bxor ty x z))) (bor ty (bxor ty x z) y))
+
+(rule (simplify (bor ty (bxor ty x z) (bxor ty (bxor ty z x) y))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty (bxor ty z x) y) (bxor ty x z))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty x z) (bxor ty y (bxor ty z x)))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty y (bxor ty z x)) (bxor ty x z))) (bor ty (bxor ty x z) y))
+
+(rule (simplify (bor ty (bxor ty z x) (bxor ty (bxor ty x z) y))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty (bxor ty x z) y) (bxor ty z x))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty z x) (bxor ty y (bxor ty x z)))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty y (bxor ty x z)) (bxor ty z x))) (bor ty (bxor ty x z) y))
+
+(rule (simplify (bor ty (bxor ty z x) (bxor ty (bxor ty z x) y))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty (bxor ty z x) y) (bxor ty z x))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty z x) (bxor ty y (bxor ty z x)))) (bor ty (bxor ty x z) y))
+(rule (simplify (bor ty (bxor ty y (bxor ty z x)) (bxor ty z x))) (bor ty (bxor ty x z) y))
+
+; x | (x ^ y) --> x | y
+(rule (simplify (bor ty x (bxor ty x y))) (bor ty x y))
+(rule (simplify (bor ty (bxor ty x y) x)) (bor ty x y))
+(rule (simplify (bor ty x (bxor ty y x))) (bor ty x y))
+(rule (simplify (bor ty (bxor ty y x) x)) (bor ty x y))
+
+; ~((~x) + y) --> x - y
+(rule (simplify (bnot ty (iadd ty (bnot ty x) y))) (isub ty x y))
+(rule (simplify (bnot ty (iadd ty y (bnot ty x)))) (isub ty x y))
+
+; (x ^ z) | (y | x) --> (y | x) | z
+(rule (simplify (bor ty (bxor ty x z) (bor ty y x))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bor ty y x) (bxor ty x z))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bxor ty x z) (bor ty x y))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bor ty x y) (bxor ty x z))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bxor ty z x) (bor ty y x))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bor ty y x) (bxor ty z x))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bxor ty z x) (bor ty x y))) (bor ty (bor ty y x) z))
+(rule (simplify (bor ty (bor ty x y) (bxor ty z x))) (bor ty (bor ty y x) z))
+
+; (x | y) ^ (x ^ y) --> x & y
+(rule (simplify (bxor ty (bor ty y x) (bxor ty y x))) (band ty x y))
+(rule (simplify (bxor ty (bxor ty y x) (bor ty y x))) (band ty x y))
+(rule (simplify (bxor ty (bor ty y x) (bxor ty x y))) (band ty x y))
+(rule (simplify (bxor ty (bxor ty x y) (bor ty y x))) (band ty x y))
+(rule (simplify (bxor ty (bor ty x y) (bxor ty y x))) (band ty x y))
+(rule (simplify (bxor ty (bxor ty y x) (bor ty x y))) (band ty x y))
+(rule (simplify (bxor ty (bor ty x y) (bxor ty x y))) (band ty x y))
+(rule (simplify (bxor ty (bxor ty x y) (bor ty x y))) (band ty x y))
+
+; x | (z & (x ^ y)) --> x | (z & y)
+(rule (simplify (bor ty (band ty (bxor ty y x) z) x)) (bor ty (band ty y z) x))
+(rule (simplify (bor ty x (band ty (bxor ty y x) z))) (bor ty (band ty y z) x))
+(rule (simplify (bor ty (band ty z (bxor ty y x)) x)) (bor ty (band ty y z) x))
+(rule (simplify (bor ty x (band ty z (bxor ty y x)))) (bor ty (band ty y z) x))
+(rule (simplify (bor ty (band ty (bxor ty x y) z) x)) (bor ty (band ty y z) x))
+(rule (simplify (bor ty x (band ty (bxor ty x y) z))) (bor ty (band ty y z) x))
+(rule (simplify (bor ty (band ty z (bxor ty x y)) x)) (bor ty (band ty y z) x))
+(rule (simplify (bor ty x (band ty z (bxor ty x y)))) (bor ty (band ty y z) x))
+
+; (x | y) | (x ^ z) --> (x | y) | z
+(rule (simplify (bor ty (bor ty x y) (bxor ty x z))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bxor ty x z) (bor ty x y))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bor ty x y) (bxor ty z x))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bxor ty z x) (bor ty x y))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bor ty y x) (bxor ty x z))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bxor ty x z) (bor ty y x))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bor ty y x) (bxor ty z x))) (bor ty (bor ty x y) z))
+(rule (simplify (bor ty (bxor ty z x) (bor ty y x))) (bor ty (bor ty x y) z))
+
+; (x ^ z) != (y ^ z) --> x != y
+(rule (simplify (ne ty (bxor cty x z) (bxor cty y z))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty y z) (bxor cty x z))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty x z) (bxor cty z y))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty z y) (bxor cty x z))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty z x) (bxor cty y z))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty y z) (bxor cty z x))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty z x) (bxor cty z y))) (ne ty x y))
+(rule (simplify (ne ty (bxor cty z y) (bxor cty z x))) (ne ty x y))
+
+; (x & y) | (x & ~y) --> x
+(rule (simplify (bor ty (band ty x y) (band ty x (bnot ty y)))) x)
+(rule (simplify (bor ty (band ty x (bnot ty y)) (band ty x y))) x)
+(rule (simplify (bor ty (band ty x y) (band ty (bnot ty y) x))) x)
+(rule (simplify (bor ty (band ty (bnot ty y) x) (band ty x y))) x)
+(rule (simplify (bor ty (band ty y x) (band ty x (bnot ty y)))) x)
+(rule (simplify (bor ty (band ty x (bnot ty y)) (band ty y x))) x)
+(rule (simplify (bor ty (band ty y x) (band ty (bnot ty y) x))) x)
+(rule (simplify (bor ty (band ty (bnot ty y) x) (band ty y x))) x)
+
+; (x | y) & (x | ~y) --> x
+(rule (simplify (band ty (bor ty x y) (bor ty x (bnot ty y)))) x)
+(rule (simplify (band ty (bor ty x (bnot ty y)) (bor ty x y))) x)
+(rule (simplify (band ty (bor ty x y) (bor ty (bnot ty y) x))) x)
+(rule (simplify (band ty (bor ty (bnot ty y) x) (bor ty x y))) x)
+(rule (simplify (band ty (bor ty y x) (bor ty x (bnot ty y)))) x)
+(rule (simplify (band ty (bor ty x (bnot ty y)) (bor ty y x))) x)
+(rule (simplify (band ty (bor ty y x) (bor ty (bnot ty y) x))) x)
+(rule (simplify (band ty (bor ty (bnot ty y) x) (bor ty y x))) x)
+
+; (x ^ y) | ~x --> ~(x & y)
+(rule (simplify (bor ty (bxor ty y x) (bnot ty x))) (bnot ty (band ty y x)))
+(rule (simplify (bor ty (bnot ty x) (bxor ty y x))) (bnot ty (band ty y x)))
+(rule (simplify (bor ty (bxor ty x y) (bnot ty x))) (bnot ty (band ty y x)))
+(rule (simplify (bor ty (bnot ty x) (bxor ty x y))) (bnot ty (band ty y x)))
+
+; (x ^ y) ^ x --> y
+(rule (simplify (bxor ty (bxor ty x y) x)) y)
+(rule (simplify (bxor ty x (bxor ty x y))) y)
+(rule (simplify (bxor ty (bxor ty y x) x)) y)
+(rule (simplify (bxor ty x (bxor ty y x))) y)
+
+; y | (x & (y | z)) --> y | (x & z)
+(rule (simplify (bor ty (band ty x (bor ty y z)) y)) (bor ty (band ty x z) y))
+(rule (simplify (bor ty y (band ty x (bor ty y z)))) (bor ty (band ty x z) y))
+(rule (simplify (bor ty (band ty (bor ty y z) x) y)) (bor ty (band ty x z) y))
+(rule (simplify (bor ty y (band ty (bor ty y z) x))) (bor ty (band ty x z) y))
+(rule (simplify (bor ty (band ty x (bor ty z y)) y)) (bor ty (band ty x z) y))
+(rule (simplify (bor ty y (band ty x (bor ty z y)))) (bor ty (band ty x z) y))
+(rule (simplify (bor ty (band ty (bor ty z y) x) y)) (bor ty (band ty x z) y))
+(rule (simplify (bor ty y (band ty (bor ty z y) x))) (bor ty (band ty x z) y))
+
+; y & (x | (y & z)) --> y & (x | z)
+(rule (simplify (band ty (bor ty x (band ty y z)) y)) (band ty (bor ty x z) y))
+(rule (simplify (band ty y (bor ty x (band ty y z)))) (band ty (bor ty x z) y))
+(rule (simplify (band ty (bor ty (band ty y z) x) y)) (band ty (bor ty x z) y))
+(rule (simplify (band ty y (bor ty (band ty y z) x))) (band ty (bor ty x z) y))
+(rule (simplify (band ty (bor ty x (band ty z y)) y)) (band ty (bor ty x z) y))
+(rule (simplify (band ty y (bor ty x (band ty z y)))) (band ty (bor ty x z) y))
+(rule (simplify (band ty (bor ty (band ty z y) x) y)) (band ty (bor ty x z) y))
+(rule (simplify (band ty y (bor ty (band ty z y) x))) (band ty (bor ty x z) y))
+
+; y | (x ^ (y & z)) --> x | y
+(rule (simplify (bor ty (bxor ty x (band ty y z)) y)) (bor ty x y))
+(rule (simplify (bor ty y (bxor ty x (band ty y z)))) (bor ty x y))
+(rule (simplify (bor ty (bxor ty (band ty y z) x) y)) (bor ty x y))
+(rule (simplify (bor ty y (bxor ty (band ty y z) x))) (bor ty x y))
+(rule (simplify (bor ty (bxor ty x (band ty z y)) y)) (bor ty x y))
+(rule (simplify (bor ty y (bxor ty x (band ty z y)))) (bor ty x y))
+(rule (simplify (bor ty (bxor ty (band ty z y) x) y)) (bor ty x y))
+(rule (simplify (bor ty y (bxor ty (band ty z y) x))) (bor ty x y))
+
+; ((x & y) ^ y) + z --> (y + z) - (x & y)
+(rule (simplify (iadd ty (bxor ty (band ty x y) y) z)) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty z (bxor ty (band ty x y) y))) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty (bxor ty y (band ty x y)) z)) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty z (bxor ty y (band ty x y)))) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty (bxor ty (band ty y x) y) z)) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty z (bxor ty (band ty y x) y))) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty (bxor ty y (band ty y x)) z)) (isub ty (iadd ty y z) (band ty x y)))
+(rule (simplify (iadd ty z (bxor ty y (band ty y x)))) (isub ty (iadd ty y z) (band ty x y)))
+
+; y & (~y | x) --> y & x
+(rule (simplify (band ty y (bor ty (bnot ty y) x))) (band ty y x))
+(rule (simplify (band ty (bor ty (bnot ty y) x) y)) (band ty y x))
+(rule (simplify (band ty y (bor ty x (bnot ty y)))) (band ty y x))
+(rule (simplify (band ty (bor ty x (bnot ty y)) y)) (band ty y x))
+
+; y | (~y & x) --> y | x
+(rule (simplify (bor ty y (band ty (bnot ty y) x))) (bor ty y x))
+(rule (simplify (bor ty (band ty (bnot ty y) x) y)) (bor ty y x))
+(rule (simplify (bor ty y (band ty x (bnot ty y)))) (bor ty y x))
+(rule (simplify (bor ty (band ty x (bnot ty y)) y)) (bor ty y x))
+

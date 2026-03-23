@@ -6,8 +6,7 @@
 #define WASMTIME_TYPES_TAG_HH
 
 #include <memory>
-#include <wasmtime/engine.hh>
-#include <wasmtime/tag.h>
+#include <wasm.h>
 #include <wasmtime/types/func.hh>
 
 namespace wasmtime {
@@ -20,21 +19,21 @@ namespace wasmtime {
  */
 class TagType {
   struct deleter {
-    void operator()(wasmtime_tagtype_t *p) const { wasmtime_tagtype_delete(p); }
+    void operator()(wasm_tagtype_t *p) const { wasm_tagtype_delete(p); }
   };
 
-  std::unique_ptr<wasmtime_tagtype_t, deleter> ptr;
+  std::unique_ptr<wasm_tagtype_t, deleter> ptr;
 
 public:
   /// Non-owning reference to a `TagType`, must not be used after the original
   /// owner is deleted.
   class Ref {
     friend class TagType;
-    const wasmtime_tagtype_t *ptr;
+    const wasm_tagtype_t *ptr;
 
   public:
     /// Creates a reference from the raw underlying C API representation.
-    Ref(const wasmtime_tagtype_t *ptr) : ptr(ptr) {}
+    Ref(const wasm_tagtype_t *ptr) : ptr(ptr) {}
     /// Creates a reference to the provided `TagType`.
     Ref(const TagType &ty) : Ref(ty.ptr.get()) {}
 
@@ -42,28 +41,27 @@ public:
     ///
     /// The caller owns the returned `FuncType`.
     FuncType functype() const {
-      return FuncType(wasmtime_tagtype_functype(ptr));
+      return FuncType(wasm_functype_copy(wasm_tagtype_functype(ptr)));
     }
   };
 
 private:
   Ref ref;
-  TagType(wasmtime_tagtype_t *ptr) : ptr(ptr), ref(ptr) {}
+  TagType(wasm_tagtype_t *ptr) : ptr(ptr), ref(ptr) {}
 
 public:
-  /// Creates a new tag type from the given function type and engine.
-  TagType(Engine &engine, FuncType &functype)
-      : ptr(wasmtime_tagtype_new(engine.capi(), functype.ptr.get())),
-        ref(ptr.get()) {}
+  /// Creates a new tag type from the given function type.
+  /// Copies `functype` so the original is not consumed.
+  explicit TagType(const FuncType &functype)
+      : TagType(wasm_tagtype_new(wasm_functype_copy(functype.ptr.get()))) {}
 
   /// Copies a reference into a uniquely owned tag type.
-  TagType(Ref other) : TagType(wasmtime_tagtype_copy(other.ptr)) {}
+  TagType(Ref other) : TagType(wasm_tagtype_copy(other.ptr)) {}
   /// Copies another tag type into this one.
-  TagType(const TagType &other)
-      : TagType(wasmtime_tagtype_copy(other.ptr.get())) {}
+  TagType(const TagType &other) : TagType(wasm_tagtype_copy(other.ptr.get())) {}
   /// Copies another tag type into this one.
   TagType &operator=(const TagType &other) {
-    ptr.reset(wasmtime_tagtype_copy(other.ptr.get()));
+    ptr.reset(wasm_tagtype_copy(other.ptr.get()));
     ref = ptr.get();
     return *this;
   }

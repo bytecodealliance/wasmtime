@@ -332,7 +332,7 @@ impl<'a, R: Reg> arbitrary::Arbitrary<'a> for UpperRegSet<R> {
     }
 }
 
-/// Immediate used for the "o32" addresing mode.
+/// Immediate used for the "o32" addressing mode.
 ///
 /// This addressing mode represents a host address stored in `self.addr` which
 /// is byte-offset by `self.offset`.
@@ -347,7 +347,7 @@ pub struct AddrO32 {
     pub offset: i32,
 }
 
-/// Immediate used for the "z" addresing mode.
+/// Immediate used for the "z" addressing mode.
 ///
 /// This addressing mode represents a host address stored in `self.addr` which
 /// is byte-offset by `self.offset`.

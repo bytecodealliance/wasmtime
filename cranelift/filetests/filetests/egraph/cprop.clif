@@ -158,6 +158,55 @@ block0:
 ; check: v3 = iconst.i16 -4
 ; check: return v3
 
+;; 0xf0 == 0b00001111
+function %rotr() -> i8 {
+block0:
+    v0 = iconst.i8 0x0f
+    v1 = iconst.i8 2
+    v2 = rotr v0, v1
+    return v2
+}
+
+;; 0b11000011 == -61
+; check: v3 = iconst.i8 -61
+; check: return v3
+
+function %rotr_i16() -> i16 {
+block0:
+    v0 = iconst.i16 0x0f
+    v1 = iconst.i8 2
+    v2 = rotr v0, v1
+    return v2
+}
+
+;; 0b1100000000000011 == -16381
+; check: v3 = iconst.i16 -16381
+; check: return v3
+
+function %rotl() -> i8 {
+block0:
+    v0 = iconst.i8 0xf0
+    v1 = iconst.i8 2
+    v2 = rotl v0, v1
+    return v2
+}
+
+;; 0b11000011 == -61
+; check: v3 = iconst.i8 -61
+; check: return v3
+
+function %rotl_i16() -> i16 {
+block0:
+    v0 = iconst.i16 0xf000
+    v1 = iconst.i8 2
+    v2 = rotl v0, v1
+    return v2
+}
+
+;; 0b11000011 == -61
+; check: v3 = iconst.i16 -16381
+; check: return v3
+
 function %icmp_eq_i32() -> i8 {
 block0:
     v0 = iconst.i32 1

@@ -46,6 +46,11 @@ async fn run_allow_blocking_current_thread(
 foreach_p3!(assert_test_exists);
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_big_random_buf() -> wasmtime::Result<()> {
+    run(P3_BIG_RANDOM_BUF_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_cli() -> wasmtime::Result<()> {
     run(P3_CLI_COMPONENT).await
 }

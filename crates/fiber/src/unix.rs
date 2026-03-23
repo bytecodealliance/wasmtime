@@ -80,7 +80,7 @@ fn host_page_size() -> usize {
 impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> io::Result<Self> {
         let page_size = host_page_size();
-        // The anonymous `mmap`s we use for `FiberStackStorage` are alawys
+        // The anonymous `mmap`s we use for `FiberStackStorage` are always
         // zeroed.
         let _ = zeroed;
 

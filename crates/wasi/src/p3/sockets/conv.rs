@@ -167,7 +167,7 @@ impl From<&std::io::Error> for types::ErrorCode {
             std::io::ErrorKind::Unsupported => Self::NotSupported,
             _ => {
                 debug!("unknown I/O error: {value}");
-                Self::Unknown
+                Self::Other(None)
             }
         }
     }
@@ -216,7 +216,7 @@ impl From<&Errno> for types::ErrorCode {
             // FYI, EINPROGRESS should have already been handled by connect.
             _ => {
                 debug!("unknown I/O error: {value}");
-                Self::Unknown
+                Self::Other(None)
             }
         }
     }
@@ -225,7 +225,7 @@ impl From<&Errno> for types::ErrorCode {
 impl From<crate::sockets::util::ErrorCode> for types::ErrorCode {
     fn from(code: crate::sockets::util::ErrorCode) -> Self {
         match code {
-            crate::sockets::util::ErrorCode::Unknown => Self::Unknown,
+            crate::sockets::util::ErrorCode::Unknown => Self::Other(None),
             crate::sockets::util::ErrorCode::AccessDenied => Self::AccessDenied,
             crate::sockets::util::ErrorCode::NotSupported => Self::NotSupported,
             crate::sockets::util::ErrorCode::InvalidArgument => Self::InvalidArgument,

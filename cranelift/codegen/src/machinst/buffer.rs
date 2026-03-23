@@ -378,7 +378,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
     pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
-    /// Any patchable call site locations refering to this code.
+    /// Any patchable call site locations referring to this code.
     pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any exception-handler records referred to at call sites.
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
@@ -1865,7 +1865,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         &self.user_stack_maps
     }
 
-    /// Take this buffer's user strack map metadata.
+    /// Take this buffer's user stack map metadata.
     pub fn take_user_stack_maps(&mut self) -> SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]> {
         mem::take(&mut self.user_stack_maps)
     }

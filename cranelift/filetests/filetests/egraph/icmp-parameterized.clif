@@ -2239,8 +2239,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_eq_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp uge v0, v1
-;     return v5
+;     v6 = icmp uge v0, v1
+;     return v6
 ; }
 
 function %icmp_or_eq_uge(i32, i32) -> i8 {
@@ -2295,8 +2295,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_eq_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp sge v0, v1
-;     return v5
+;     v6 = icmp sge v0, v1
+;     return v6
 ; }
 
 function %icmp_or_eq_sge(i32, i32) -> i8 {
@@ -2519,8 +2519,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_ult_ugt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp ne v0, v1
-;     return v5
+;     v6 = icmp ne v1, v0
+;     return v6
 ; }
 
 function %icmp_or_ult_uge(i32, i32) -> i8 {
@@ -2759,8 +2759,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_ugt_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp uge v0, v1
-;     return v5
+;     v6 = icmp uge v0, v1
+;     return v6
 ; }
 
 function %icmp_or_ugt_ne(i32, i32) -> i8 {
@@ -2787,8 +2787,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_ugt_ult(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp ne v0, v1
-;     return v5
+;     v6 = icmp ne v1, v0
+;     return v6
 ; }
 
 function %icmp_or_ugt_ule(i32, i32) -> i8 {
@@ -3175,8 +3175,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_slt_sgt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp ne v0, v1
-;     return v5
+;     v6 = icmp ne v1, v0
+;     return v6
 ; }
 
 function %icmp_or_slt_sge(i32, i32) -> i8 {
@@ -3351,8 +3351,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_sgt_eq(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp sge v0, v1
-;     return v5
+;     v6 = icmp sge v0, v1
+;     return v6
 ; }
 
 function %icmp_or_sgt_ne(i32, i32) -> i8 {
@@ -3443,8 +3443,8 @@ block0(v0: i32, v1: i32):
 
 ; function %icmp_or_sgt_slt(i32, i32) -> i8 fast {
 ; block0(v0: i32, v1: i32):
-;     v5 = icmp ne v0, v1
-;     return v5
+;     v6 = icmp ne v1, v0
+;     return v6
 ; }
 
 function %icmp_or_sgt_sle(i32, i32) -> i8 {

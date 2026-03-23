@@ -2,7 +2,7 @@
 //!
 //! This crate builds on top of the core Wasmtime crate's
 //! guest-debugger APIs to present an environment where a debugger
-//! runs as a "co-running process" and sees the debugee as a a
+//! runs as a "co-running process" and sees the debuggee as a a
 //! provider of a stream of events, on which actions can be taken
 //! between each event.
 //!
@@ -187,7 +187,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
             DebugEvent::EpochYield => {
                 // Only pause on epoch yields that were requested via
                 // interrupt(). Other epoch ticks simply yield to the
-                // event loop (funcionality already implemented in
+                // event loop (functionality already implemented in
                 // core Wasmtime; no need to do that yield here in the
                 // debug handler).
                 if !self.0.interrupt_pending.swap(false, Ordering::SeqCst) {

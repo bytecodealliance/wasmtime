@@ -337,3 +337,398 @@ block0(v0: i32, v1: i32):
 ; run: %test_bor_bnot_bnot(0, 0) == 0xffffffff
 ; run: %test_bor_bnot_bnot(1, 0) == 0xffffffff
 ; run: %test_bor_bnot_bnot(1, 1) == 0xfffffffe
+
+function %test_bor_bxor_bxor_x(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v1
+    v4 = bxor v3, v2
+    v5 = bor v4, v0
+    return v5
+}
+
+; run: %test_bor_bxor_bxor_x(0, 0, 0) == 0
+; run: %test_bor_bxor_bxor_x(1, 0, 0) == 1
+; run: %test_bor_bxor_bxor_x(1, 1, 0) == 1
+
+function %simplify_icmp_eq_bxor_shared_rhs(i32, i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v2
+    v4 = bxor v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; run: %simplify_icmp_eq_bxor_shared_rhs(0, 0, 0) == 1
+; run: %simplify_icmp_eq_bxor_shared_rhs(1, 1, 7) == 1
+; run: %simplify_icmp_eq_bxor_shared_rhs(1, 2, 7) == 0
+
+function %test_bor_bnot_bor_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v2
+    v4 = bor v1, v3
+    return v4
+}
+
+; run: %test_bor_bnot_bor_absorb(0, 0) == 0xffffffff
+; run: %test_bor_bnot_bor_absorb(1, 0) == 0xfffffffe
+
+function %test_band_bnot_band_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v2
+    v4 = band v1, v3
+    return v4
+}
+
+; run: %test_band_bnot_band_absorb(0, 0) == 0
+; run: %test_band_bnot_band_absorb(1, 0) == 0
+; run: %test_band_bnot_band_absorb(0, 1) == 1
+
+function %test_bxor_bnot_bor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v0, v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; run: %test_bxor_bnot_bor(0, 0) == 0xffffffff
+; run: %test_bxor_bnot_bor(1, 0) == 0xffffffff
+
+;; (bor ty (slt ty x y) (sgt ty x y)) -> (ne ty x y)
+function %test_bor_slt_sgt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = icmp sgt v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; run: %test_bor_slt_sgt(1, 1) == 0
+; run: %test_bor_slt_sgt(1, 3) == 1
+; run: %test_bor_slt_sgt(3, 1) == 1
+
+;; (bor ty (ult ty x y) (ugt ty x y)) -> (ne ty x y)
+function %test_bor_ult_ugt(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = icmp ugt v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; run: %test_bor_ult_ugt(1, 1) == 0
+; run: %test_bor_ult_ugt(1, 3) == 1
+; run: %test_bor_ult_ugt(3, 1) == 1
+
+function %test_bnot_band_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = band v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; run: %test_bnot_band_bnot(0, 0) == 0xffffffff
+; run: %test_bnot_band_bnot(1, 0) == 0xffffffff
+; run: %test_bnot_band_bnot(0, 1) == 0xfffffffe
+
+function %test_bnot_bor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = bor v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; run: %test_bnot_bor_bnot(0, 0) == 0
+; run: %test_bnot_bor_bnot(1, 0) == 1
+; run: %test_bnot_bor_bnot(0, 1) == 0
+
+;; (bor ty (ult ty x y) (eq ty x y)) -> (ule ty x y)
+function %test_bor_ult_eq(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    v3 = icmp eq v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; function %test_bor_ult_eq(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ule v0, v1
+;     return v5
+; }
+
+;; (bor ty (ugt ty y x) (eq ty x y)) -> (ule ty x y)
+function %test_bor_ugt_eq_swap(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp ugt v1, v0
+    v3 = icmp eq v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; function %test_bor_ugt_eq_swap(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp ule v0, v1
+;     return v5
+; }
+
+;; (bor ty (slt ty x y) (eq ty x y)) -> (sle ty x y)
+function %test_bor_slt_eq(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    v3 = icmp eq v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; function %test_bor_slt_eq(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp sle v0, v1
+;     return v5
+; }
+
+;; (bor ty (sgt ty y x) (eq ty x y)) -> (sle ty x y)
+function %test_bor_sgt_eq_swap(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = icmp sgt v1, v0
+    v3 = icmp eq v0, v1
+    v4 = bor v2, v3
+    return v4
+}
+
+; function %test_bor_sgt_eq_swap(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = icmp sle v0, v1
+;     return v5
+; }
+
+function %test_bor_bxor_bxor_chain(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v1
+    v4 = bxor v3, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %test_bor_bxor_bxor_chain(0, 0, 0) == 0
+; run: %test_bor_bxor_bxor_chain(1, 0, 0) == 1
+; run: %test_bor_bxor_bxor_chain(1, 1, 0) == 0
+
+function %test_bor_bxor_self(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = bor v0, v2
+    return v3
+}
+
+; run: %test_bor_bxor_self(0, 0) == 0
+; run: %test_bor_bxor_self(1, 0) == 1
+; run: %test_bor_bxor_self(1, 1) == 1
+; run: %test_bor_bxor_self(0xf0, 0x0f) == 0xff
+
+function %test_bnot_iadd_bnot_to_isub_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v0
+    v3 = iadd v2, v1
+    v4 = bnot v3
+    return v4
+}
+
+; run: %test_bnot_iadd_bnot_to_isub_rt(0, 0) == 0
+; run: %test_bnot_iadd_bnot_to_isub_rt(4, 5) == -1
+; run: %test_bnot_iadd_bnot_to_isub_rt(0x12345678, 0x11111111) == 0x01234567
+
+function %test_bor_bxor_bor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v2
+    v4 = bor v1, v0
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %test_bor_bxor_bor(0, 0, 0) == 0
+; run: %test_bor_bxor_bor(1, 0, 0) == 1
+; run: %test_bor_bxor_bor(0xf0, 0x0f, 0xaa) == 0xff
+
+function %test_bxor_bor_bxor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bxor v0, v1
+    v4 = bxor v2, v3
+    return v4
+}
+
+; run: %test_bxor_bor_bxor(0, 0) == 0
+; run: %test_bxor_bor_bxor(1, 0) == 0
+; run: %test_bxor_bor_bxor(0x12345678, 0x9abcdef0) == 0x12345670
+
+function %test_bor_band_bxor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v1
+    v4 = band v3, v2
+    v5 = bor v4, v0
+    return v5
+}
+
+; run: %test_bor_band_bxor(0, 0, 0) == 0
+; run: %test_bor_band_bxor(1, 0, 0) == 1
+; run: %test_bor_band_bxor(1, 1, 1) == 1
+; run: %test_bor_band_bxor(2, 1, 1) == 3
+; run: %test_bor_band_bxor(0xf0, 0x0f, 0xaa) == 0xfa
+
+function %test_bor_bor_bxor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bor v0, v1
+    v4 = bxor v0, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %test_bor_bor_bxor(0, 0, 0) == 0
+; run: %test_bor_bor_bxor(1, 0, 0) == 1
+; run: %test_bor_bor_bxor(1, 1, 0) == 1
+; run: %test_bor_bor_bxor(1, 0, 1) == 1
+; run: %test_bor_bor_bxor(0xf0, 0x0f, 0xaa) == 0xff
+
+;; (ne ty (bxor cty x z) (bxor cty y z)) -> (ne ty x y)
+function %simplify_icmp_ne_bxor_shared_rhs(i32, i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bxor v0, v2
+    v4 = bxor v1, v2
+    v5 = icmp ne v3, v4
+    return v5
+}
+
+; run: %simplify_icmp_ne_bxor_shared_rhs(0, 0, 0) == 0
+; run: %simplify_icmp_ne_bxor_shared_rhs(1, 1, 7) == 0
+; run: %simplify_icmp_ne_bxor_shared_rhs(0x12345678, 0x87654321, 0x9abcdef0) == 1
+
+function %test_bor_band_band_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = band v0, v3
+    v5 = bor v2, v4
+    return v5
+}
+
+; run: %test_bor_band_band_bnot(0, 0) == 0
+; run: %test_bor_band_band_bnot(1, 0) == 1
+; run: %test_bor_band_band_bnot(0xf0, 0x0f) == 0xf0
+
+function %test_band_bor_bor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bnot v1
+    v4 = bor v0, v3
+    v5 = band v2, v4
+    return v5
+}
+
+; run: %test_band_bor_bor_bnot(0, 0) == 0
+; run: %test_band_bor_bor_bnot(1, 0) == 1
+; run: %test_band_bor_bor_bnot(0xf0, 0x0f) == 0xf0
+
+function %test_bor_bxor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = bnot v0
+    v4 = bor v2, v3
+    return v4
+}
+
+; run: %test_bor_bxor_bnot(1, 1) == 0xfffffffe
+; run: %test_bor_bxor_bnot(0xf0, 0x0f) == 0xffffffff
+; run: %test_bor_bxor_bnot(0x12345678, 0x9abcdef0) == 0xedcba98f
+
+function %test_bxor_bxor_x(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = bxor v2, v0
+    return v3
+}
+
+; run: %test_bxor_bxor_x(0, 0) == 0
+; run: %test_bxor_bxor_x(1, 0) == 0
+; run: %test_bxor_bxor_x(1, 1) == 1
+
+function %test_bor_band_bor(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = bor v1, v2
+    v4 = band v0, v3
+    v5 = bor v4, v1
+    return v5
+}
+
+; run: %test_bor_band_bor(0, 0, 0) == 0
+; run: %test_bor_band_bor(1, 0, 0) == 0
+; run: %test_bor_band_bor(1, 1, 0) == 1
+; run: %test_bor_band_bor(2, 1, 1) == 1
+; run: %test_bor_band_bor(0xf0, 0x0f, 0xaa) == 0xaf
+
+function %test_band_bor_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v1, v2
+    v4 = bor v0, v3
+    v5 = band v4, v1
+    return v5
+}
+
+; run: %test_band_bor_band(0, 0, 0) == 0
+; run: %test_band_bor_band(1, 0, 0) == 0
+; run: %test_band_bor_band(1, 1, 0) == 1
+; run: %test_band_bor_band(2, 1, 1) == 1
+; run: %test_band_bor_band(0xf0, 0x0f, 0xaa) == 0x0a
+
+function %test_bor_bxor_band(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v1, v2
+    v4 = bxor v0, v3
+    v5 = bor v4, v1
+    return v5
+}
+
+; run: %test_bor_bxor_band(0, 0, 0) == 0
+; run: %test_bor_bxor_band(1, 0, 0) == 1
+; run: %test_bor_bxor_band(2, 1, 1) == 3
+; run: %test_bor_bxor_band(0xf0, 0x0f, 0xaa) == 0xff
+
+function %test_iadd_bxor_band_to_isub_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = band v0, v1
+    v4 = bxor v3, v1
+    v5 = iadd v4, v2
+    return v5
+}
+
+; run: %test_iadd_bxor_band_to_isub_rt(0, 0, 0) == 0
+; run: %test_iadd_bxor_band_to_isub_rt(2, 1, 3) == 4
+; run: %test_iadd_bxor_band_to_isub_rt(0xf0, 0x0f, 0xaa) == 0xb9
+
+function %test_band_bor_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = bor v2, v0
+    v4 = band v1, v3
+    return v4
+}
+
+; run: %test_band_bor_bnot(0, 0) == 0
+; run: %test_band_bor_bnot(1, 0) == 0
+; run: %test_band_bor_bnot(0xf0, 0x0f) == 0
+
+function %test_bor_band_bnot(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v2, v0
+    v4 = bor v1, v3
+    return v4
+}
+
+; run: %test_bor_band_bnot(0, 0) == 0
+; run: %test_bor_band_bnot(1, 0) == 1
+; run: %test_bor_band_bnot(0xf0, 0x0f) == 0xff

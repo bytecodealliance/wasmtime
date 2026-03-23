@@ -23,7 +23,7 @@ pub struct StructType {
     // Empty for now; fields will come in a future PR.
 }
 
-/// CompsiteType definition.
+/// CompositeType definition.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompositeType {
     /// Struct Type definition.

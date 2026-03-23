@@ -1391,6 +1391,10 @@ impl TranslateTrap for FuncEnvironment<'_> {
     ) -> ir::FuncRef {
         self.builtin_functions.load_builtin(builder.func, index)
     }
+
+    fn debug_tags(&self, srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
+        FuncEnvironment::debug_tags(self, srcloc)
+    }
 }
 
 #[derive(Default)]

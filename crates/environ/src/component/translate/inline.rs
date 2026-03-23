@@ -535,7 +535,7 @@ impl<'a> Inliner<'a> {
                         dfg::CoreDef::Trampoline(index)
                     }
 
-                    // Lowering a lifted functio means that a "fused adapter"
+                    // Lowering a lifted function means that a "fused adapter"
                     // was just identified.
                     //
                     // Metadata about this fused adapter is recorded in the

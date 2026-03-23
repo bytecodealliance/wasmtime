@@ -85,6 +85,12 @@
 (decl pure imm64_sshr (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_sshr imm64_sshr)
 
+(decl pure imm64_rotl (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_rotl imm64_rotl)
+
+(decl pure imm64_rotr (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_rotr imm64_rotr)
+
 ;; Sign extends a u64 from ty bits up to 64bits
 (decl pure i64_sextend_u64 (Type u64) i64)
 (extern constructor i64_sextend_u64 i64_sextend_u64)

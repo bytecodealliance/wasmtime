@@ -255,7 +255,7 @@ impl From<crate::filesystem::DescriptorStat> for types::DescriptorStat {
 impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
     fn from(ty: crate::filesystem::DescriptorType) -> Self {
         match ty {
-            crate::filesystem::DescriptorType::Unknown => Self::Unknown,
+            crate::filesystem::DescriptorType::Unknown => Self::Other(None),
             crate::filesystem::DescriptorType::BlockDevice => Self::BlockDevice,
             crate::filesystem::DescriptorType::CharacterDevice => Self::CharacterDevice,
             crate::filesystem::DescriptorType::Directory => Self::Directory,
@@ -279,7 +279,7 @@ impl From<cap_std::fs::FileType> for types::DescriptorType {
         } else if ft.is_file() {
             Self::RegularFile
         } else {
-            Self::Unknown
+            Self::Other(None)
         }
     }
 }

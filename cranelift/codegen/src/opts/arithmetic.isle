@@ -318,5 +318,9 @@
 (rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
 
 ;; (~x) + x == -1
-(rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
-(rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
+;; Keep the generic fold for <=64-bit types, and handle i128 explicitly.
+(rule (simplify (iadd (fits_in_64 ty) (bnot ty x) x)) (iconst_s ty -1))
+(rule (simplify (iadd (fits_in_64 ty) x (bnot ty x))) (iconst_s ty -1))
+
+(rule (simplify (iadd $I128 (bnot $I128 x) x)) (sextend $I128 (iconst_s $I64 -1)))
+(rule (simplify (iadd $I128 x (bnot $I128 x))) (sextend $I128 (iconst_s $I64 -1)))

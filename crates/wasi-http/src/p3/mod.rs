@@ -44,9 +44,9 @@ impl From<FieldMapError> for HeaderError {
         match e {
             FieldMapError::Immutable => types::HeaderError::Immutable.into(),
             FieldMapError::InvalidHeaderName => types::HeaderError::InvalidSyntax.into(),
-            // FIXME(WebAssembly/WASI#889): these ideally would map to an error
-            // code instead of trapping.
-            FieldMapError::TooManyFields | FieldMapError::TotalSizeTooBig => HeaderError::trap(e),
+            FieldMapError::TooManyFields | FieldMapError::TotalSizeTooBig => {
+                types::HeaderError::SizeExceeded.into()
+            }
         }
     }
 }

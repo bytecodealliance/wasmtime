@@ -1,27 +1,39 @@
-use crate::{CExternType, wasm_engine_t, wasm_externtype_t, wasm_functype_t};
+use crate::{CExternType, CFuncType, wasm_externtype_t, wasm_functype_t};
+use std::cell::OnceCell;
 use wasmtime::TagType;
 
 #[repr(transparent)]
 #[derive(Clone)]
-pub struct wasmtime_tagtype_t {
+pub struct wasm_tagtype_t {
     ext: wasm_externtype_t,
 }
 
-wasmtime_c_api_macros::declare_ty!(wasmtime_tagtype_t);
+wasmtime_c_api_macros::declare_ty!(wasm_tagtype_t);
 
 #[derive(Clone)]
 pub(crate) struct CTagType {
-    ty: TagType,
+    ty: CFuncType,
+    functype_cache: OnceCell<Box<wasm_functype_t>>,
 }
 
 impl CTagType {
     pub(crate) fn new(ty: TagType) -> CTagType {
-        CTagType { ty }
+        CTagType {
+            ty: CFuncType::new(ty.ty().clone()),
+            functype_cache: OnceCell::new(),
+        }
+    }
+
+    fn from_cfunc(ty: CFuncType) -> CTagType {
+        CTagType {
+            ty,
+            functype_cache: OnceCell::new(),
+        }
     }
 }
 
-impl wasmtime_tagtype_t {
-    pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasmtime_tagtype_t> {
+impl wasm_tagtype_t {
+    pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasm_tagtype_t> {
         match &e.which {
             CExternType::Tag(_) => Some(unsafe { &*(e as *const _ as *const _) }),
             _ => None,
@@ -37,58 +49,45 @@ impl wasmtime_tagtype_t {
 }
 
 /// Creates a new tag type from a function type describing the exception payload.
-///
-/// The tag type takes ownership of the exception payload shape from `functype`
-/// (which may have both params and results for forward compatibility with the
-/// stack-switching proposal). Returns an owned `wasmtime_tagtype_t` that must
-/// be freed with `wasmtime_tagtype_delete`.
+/// Takes ownership of `functype`.
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_tagtype_new(
-    engine: &wasm_engine_t,
-    functype: &wasm_functype_t,
-) -> Box<wasmtime_tagtype_t> {
-    let func_ty = functype.ty().ty(&engine.engine);
-    let tag_ty = TagType::new(func_ty);
-    Box::new(wasmtime_tagtype_t {
-        ext: wasm_externtype_t::from_cextern_type(CExternType::Tag(CTagType::new(tag_ty))),
+pub extern "C" fn wasm_tagtype_new(functype: Box<wasm_functype_t>) -> Box<wasm_tagtype_t> {
+    let cfunc = functype.ty().clone();
+    Box::new(wasm_tagtype_t {
+        ext: wasm_externtype_t::from_cextern_type(CExternType::Tag(CTagType::from_cfunc(cfunc))),
     })
 }
 
-/// Returns the function type describing the exception payload of this tag type.
-///
-/// The caller owns the returned `wasm_functype_t` and must free it with
-/// `wasm_functype_delete`.
+/// Returns a borrowed reference to the function type describing this tag's exception payload.
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_tagtype_functype(tt: &wasmtime_tagtype_t) -> Box<wasm_functype_t> {
-    Box::new(wasm_functype_t::new(tt.cty().ty.ty().clone()))
+pub extern "C" fn wasm_tagtype_functype(tt: &wasm_tagtype_t) -> &wasm_functype_t {
+    let cty = tt.cty();
+    cty.functype_cache
+        .get_or_init(|| Box::new(wasm_functype_t::from_cfunc(cty.ty.clone())))
 }
 
-/// Converts a `wasmtime_tagtype_t` to a `wasm_externtype_t` (borrowed).
+/// Converts a `wasm_tagtype_t` to a `wasm_externtype_t` (borrowed).
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_tagtype_as_externtype(ty: &wasmtime_tagtype_t) -> &wasm_externtype_t {
+pub extern "C" fn wasm_tagtype_as_externtype(ty: &wasm_tagtype_t) -> &wasm_externtype_t {
     &ty.ext
 }
 
-/// Converts a const `wasmtime_tagtype_t` to a const `wasm_externtype_t` (borrowed).
+/// Converts a const `wasm_tagtype_t` to a const `wasm_externtype_t` (borrowed).
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_tagtype_as_externtype_const(
-    ty: &wasmtime_tagtype_t,
-) -> &wasm_externtype_t {
+pub extern "C" fn wasm_tagtype_as_externtype_const(ty: &wasm_tagtype_t) -> &wasm_externtype_t {
     &ty.ext
 }
 
-/// Converts a `wasm_externtype_t` to a `wasmtime_tagtype_t`, or NULL if not a tag.
+/// Converts a `wasm_externtype_t` to a `wasm_tagtype_t`, or NULL if not a tag.
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_externtype_as_tagtype(
-    et: &wasm_externtype_t,
-) -> Option<&wasmtime_tagtype_t> {
-    wasmtime_externtype_as_tagtype_const(et)
+pub extern "C" fn wasm_externtype_as_tagtype(et: &wasm_externtype_t) -> Option<&wasm_tagtype_t> {
+    wasm_externtype_as_tagtype_const(et)
 }
 
-/// Converts a const `wasm_externtype_t` to a const `wasmtime_tagtype_t`, or NULL if not a tag.
+/// Converts a const `wasm_externtype_t` to a const `wasm_tagtype_t`, or NULL if not a tag.
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_externtype_as_tagtype_const(
+pub extern "C" fn wasm_externtype_as_tagtype_const(
     et: &wasm_externtype_t,
-) -> Option<&wasmtime_tagtype_t> {
-    wasmtime_tagtype_t::try_from(et)
+) -> Option<&wasm_tagtype_t> {
+    wasm_tagtype_t::try_from(et)
 }

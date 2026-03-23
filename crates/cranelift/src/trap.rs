@@ -20,6 +20,9 @@ pub trait TranslateTrap {
         builder: &mut FunctionBuilder<'_>,
         index: BuiltinFunctionIndex,
     ) -> ir::FuncRef;
+    fn debug_tags(&self, _srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
+        vec![]
+    }
 
     fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
         match (
@@ -36,12 +39,14 @@ pub trait TranslateTrap {
             // pass in our trap code. Leave a debug `unreachable` in place
             // afterwards as a defense-in-depth measure.
             (false, Some(trap)) => {
+                let debug_tags = self.debug_tags(builder.srcloc());
                 let trap_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::trap());
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(trap_libcall, &[vmctx, trap_code]);
                 let raise_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::raise());
-                builder.ins().call(raise_libcall, &[vmctx]);
+                let inst = builder.ins().call(raise_libcall, &[vmctx]);
+                builder.func.debug_tags.set(inst, debug_tags);
                 builder.ins().trap(TRAP_INTERNAL_ASSERT);
             }
         }

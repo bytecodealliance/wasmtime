@@ -613,7 +613,7 @@ pub struct CommonOptions {
     ///
     /// Generates a serialized trace of the Wasm module execution that captures all
     /// non-determinism observable by the module. This trace can subsequently be
-    /// re-executed in a determinstic, embedding-agnostic manner (see the `wasmtime replay` command).
+    /// re-executed in a deterministic, embedding-agnostic manner (see the `wasmtime replay` command).
     ///
     /// Note: Minimal configuration options for deterministic Wasm semantics will be
     /// enforced during recording by default (NaN canonicalization, deterministic relaxed SIMD).
@@ -658,7 +658,7 @@ pub struct CommonOptions {
 
     /// Use the specified TOML configuration file.
     /// This TOML configuration file can provide same configuration options as the
-    /// `--optimize`, `--codgen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
+    /// `--optimize`, `--codegen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
     ///
     /// Additional options specified on the command line will take precedent over options loaded from
     /// this TOML file.

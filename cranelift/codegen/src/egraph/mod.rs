@@ -1057,7 +1057,7 @@ impl<'a> EgraphPass<'a> {
 /// Implementation of external-context equality and hashing on
 /// InstructionData. This allows us to deduplicate instructions given
 /// some context that lets us see its value lists, so we don't need to
-/// store arguments inline in the `InstuctionData` (or alongside it in
+/// store arguments inline in the `InstructionData` (or alongside it in
 /// some newly-defined key type) in all cases.
 struct GVNContext<'a> {
     value_lists: &'a ValueListPool,

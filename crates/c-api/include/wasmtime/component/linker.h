@@ -175,7 +175,7 @@ typedef wasmtime_error_t *(*wasmtime_component_resource_destructor_t)(
  *
  * This can be used to define a new resource type that the guest will be able
  * to import. Here the `resource` is a type, often a host-defined type, which
- * can be used to distinguish and definie different types of resources. A
+ * can be used to distinguish and definite different types of resources. A
  * destruction callback is also specified via `destructor` which has private
  * data `data` along with an optional `finalizer` for the `data` too.
  *

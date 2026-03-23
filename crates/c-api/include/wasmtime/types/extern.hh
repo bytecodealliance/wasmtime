@@ -7,7 +7,6 @@
 
 #include <variant>
 #include <wasm.h>
-#include <wasmtime/tag.h>
 #include <wasmtime/types/export.hh>
 #include <wasmtime/types/func.hh>
 #include <wasmtime/types/global.hh>
@@ -61,8 +60,8 @@ private:
       return wasm_externtype_as_tabletype_const(ptr);
     case WASM_EXTERN_MEMORY:
       return wasm_externtype_as_memorytype_const(ptr);
-    case WASMTIME_EXTERNTYPE_TAG:
-      return wasmtime_externtype_as_tagtype_const(ptr);
+    case WASM_EXTERN_TAG:
+      return wasm_externtype_as_tagtype_const(ptr);
     }
     std::abort();
   }

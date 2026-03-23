@@ -178,7 +178,7 @@ unsafe impl GlobalAlloc for OomTestAllocator {
 /// use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 ///
 /// #[global_allocator]
-/// static GLOBAL_ALOCATOR: OomTestAllocator = OomTestAllocator::new();
+/// static GLOBAL_ALLOCATOR: OomTestAllocator = OomTestAllocator::new();
 ///
 /// #[test]
 /// fn my_oom_test() -> Result<()> {

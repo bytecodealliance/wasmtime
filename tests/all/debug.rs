@@ -694,18 +694,23 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
         },
         r#"
     (module
-      (func (export "main")
+      (func (export "main") (result i32)
         i32.const 0
         i32.const 0
         i32.div_u
-        drop))
+        drop
+        i32.const 42))
     "#,
     )?;
 
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {}
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
+              let frame = store.debug_exit_frames().next().unwrap();
+              let (_func, pc) = frame.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
+              assert_eq!(pc, 0x26);
+          }
         }
     );
 
@@ -714,7 +719,7 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
-    let mut results = [];
+    let mut results = [Val::I32(0)];
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
@@ -1417,6 +1422,89 @@ async fn early_epoch_yield_still_has_vmctx() -> wasmtime::Result<()> {
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Breakpoints set at the function body start (which includes the
+    // local declarations and precedes the first opcode) should be
+    // "slipped" forward to the first opcode. This matches how LLDB
+    // sets breakpoints using DWARF `DW_AT_low_pc`.
+    //
+    // For the WAT below, `wasm-objdump -d` shows:
+    //
+    // ```
+    // 000023 func[0] <main>:
+    //  000024: 20 00                      | local.get 0
+    //  000026: 20 01                      | local.get 1
+    //  000028: 6a                         | i32.add
+    //  000029: 0b                         | end
+    // ```
+    //
+    // 0x23 is the function body start (locals count byte), while 0x24
+    // is the first opcode. Setting a breakpoint at 0x23 should slip
+    // to 0x24.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_exit_frames().next().unwrap();
+              let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
+              assert_eq!(func.as_u32(), 0);
+              // The breakpoint should fire at the first opcode
+              // (0x24), not at the function body start (0x23).
+              assert_eq!(pc, 0x24);
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, 0x23)?;
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // The actual breakpoint stored should be at the slipped PC.
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 1);
+    assert_eq!(breakpoints[0].pc, 0x24);
+
+    // Removing with the originally requested PC should work.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .remove_breakpoint(&module, 0x23)?;
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    // Counter should not have incremented now that we removed the
+    // breakpoint.
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
 
     Ok(())
 }

@@ -91,6 +91,17 @@
                       (iconst _ k2)))
       (subsume (iconst ty (imm64_sshr ty k1 k2))))
 
+(rule (simplify (rotr (fits_in_64 ty)
+                      (iconst ty k1)
+                      (iconst _  k2)))
+      (subsume (iconst ty (imm64_rotr ty k1 k2))))
+
+(rule (simplify (rotl (fits_in_64 ty)
+                      (iconst ty k1)
+                      (iconst _  k2)))
+      (subsume (iconst ty (imm64_rotl ty k1 k2))))
+
+
 (rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
       (subsume (iconst narrow (imm64_masked narrow imm))))
 

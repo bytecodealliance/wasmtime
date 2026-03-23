@@ -1228,8 +1228,8 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let key_info = types.type_information(&ty.key);
         let value_info = types.type_information(&ty.value);
-        // Depth is max of key/value depths, plus 1 for tuple, plus 1 for list
-        self.depth = key_info.depth.max(value_info.depth) + 2;
+        // Depth is max of key/value depths, plus 1 for the extra map layer.
+        self.depth = key_info.depth.max(value_info.depth) + 1;
         self.has_borrow = key_info.has_borrow || value_info.has_borrow;
     }
 }
