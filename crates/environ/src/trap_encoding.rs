@@ -216,6 +216,10 @@ generate_trap_type! {
         /// Cannot resume a thread which is not suspended.
         CannotResumeThread = "cannot resume thread which is not suspended",
 
+        /// Cannot issue a read/write on a future/stream while there is a
+        /// pending operation already.
+        ConcurrentFutureStreamOp = "cannot have concurrent operations active on a future/stream",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }
