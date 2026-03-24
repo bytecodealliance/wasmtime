@@ -116,14 +116,20 @@ impl TransmitIndex {
             TransmitIndex::Future(_) => TransmitKind::Future,
         }
     }
-}
 
-/// Retrieve the payload type of the specified stream or future, or `None` if it
-/// has no payload type.
-fn payload(ty: TransmitIndex, types: &ComponentTypes) -> Option<InterfaceType> {
-    match ty {
-        TransmitIndex::Future(ty) => types[types[ty].ty].payload,
-        TransmitIndex::Stream(ty) => types[types[ty].ty].payload,
+    /// Retrieve the payload type of the specified stream or future, or `None`
+    /// if it has no payload type.
+    fn payload<'a>(&self, types: &'a ComponentTypes) -> Option<&'a InterfaceType> {
+        match self {
+            TransmitIndex::Stream(i) => {
+                let ty = types[*i].ty;
+                types[ty].payload.as_ref()
+            }
+            TransmitIndex::Future(i) => {
+                let ty = types[*i].ty;
+                types[ty].payload.as_ref()
+            }
+        }
     }
 }
 
@@ -177,8 +183,8 @@ fn lower<T: func::Lower + Send + 'static, B: WriteBuffer<T>, U: 'static>(
         .and_then(|b| b.get_mut(..T::SIZE32 * count))
         .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))?;
 
-    if let Some(ty) = payload(ty, lower.types) {
-        T::linear_store_list_to_memory(lower, ty, address, &buffer.remaining()[..count])?;
+    if let Some(ty) = ty.payload(lower.types) {
+        T::linear_store_list_to_memory(lower, *ty, address, &buffer.remaining()[..count])?;
     }
 
     if let Some(old_thread) = old_thread {
@@ -827,11 +833,11 @@ impl<'a, T> Source<'a, T> {
             };
 
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance);
-            let ty = payload(ty, cx.types);
+            let ty = ty.payload(cx.types);
             let old_remaining = buffer.remaining_capacity();
             lift::<T, B>(
                 cx,
-                ty,
+                ty.map(|t| *t),
                 buffer,
                 address + (T::SIZE32 * guest_offset),
                 count - guest_offset,
@@ -3195,7 +3201,7 @@ impl Instance {
     /// specified stream or future.
     fn copy<T: 'static>(
         self,
-        mut store: StoreContextMut<T>,
+        store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
         write_caller_instance: RuntimeComponentInstanceIndex,
         write_ty: TransmitIndex,
@@ -3209,43 +3215,68 @@ impl Instance {
         count: usize,
         rep: u32,
     ) -> Result<()> {
-        let types = self.id().get(store.0).component().types();
+        let (component, mut store) = self.component_and_store_mut(store.0);
+        let types = component.types();
+
+        // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
+        // aligned and in-bounds.
+        let write_payload_ty = write_ty.payload(types);
+        let write_abi = match write_payload_ty {
+            Some(ty) => types.canonical_abi(ty),
+            None => &CanonicalAbiInfo::ZERO,
+        };
+        let write_length_in_bytes = match flat_abi {
+            Some(abi) => usize::try_from(abi.size)? * count,
+            None => usize::try_from(write_abi.size32)? * count,
+        };
+        if write_length_in_bytes > 0 {
+            if write_address % usize::try_from(write_abi.align32)? != 0 {
+                bail!("write pointer not aligned");
+            }
+            self.options_memory(store, write_options)
+                .get(write_address..)
+                .and_then(|b| b.get(..write_length_in_bytes))
+                .ok_or_else(|| crate::format_err!("write pointer out of bounds"))?;
+        }
+
+        let read_payload_ty = read_ty.payload(types);
+        let read_abi = match read_payload_ty {
+            Some(ty) => types.canonical_abi(ty),
+            None => &CanonicalAbiInfo::ZERO,
+        };
+        let read_length_in_bytes = match flat_abi {
+            Some(abi) => usize::try_from(abi.size)? * count,
+            None => usize::try_from(read_abi.size32)? * count,
+        };
+        if read_length_in_bytes > 0 {
+            if read_address % usize::try_from(read_abi.align32)? != 0 {
+                bail!("read pointer not aligned");
+            }
+            self.options_memory(store, read_options)
+                .get(read_address..)
+                .and_then(|b| b.get(..read_length_in_bytes))
+                .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
+        }
+
+        if write_caller_instance == read_caller_instance
+            && !allow_intra_component_read_write(write_payload_ty)
+        {
+            bail!(
+                "cannot read from and write to intra-component future/stream with non-numeric payload"
+            )
+        }
+
         match (write_ty, read_ty) {
-            (TransmitIndex::Future(write_ty), TransmitIndex::Future(read_ty)) => {
+            (TransmitIndex::Future(_), TransmitIndex::Future(_)) => {
                 if count != 1 {
                     bail_bug!("futures can only send 1 item");
                 }
 
-                let payload = types[types[write_ty].ty].payload;
-
-                if write_caller_instance == read_caller_instance
-                    && !allow_intra_component_read_write(payload)
-                {
-                    bail!(
-                        "cannot read from and write to intra-component future with non-numeric payload"
-                    )
-                }
-
-                let val = payload
+                let val = write_payload_ty
                     .map(|ty| {
-                        let lift =
-                            &mut LiftContext::new(store.0.store_opaque_mut(), write_options, self);
-
-                        let abi = lift.types.canonical_abi(&ty);
-                        // FIXME: needs to read an i64 for memory64
-                        if write_address % usize::try_from(abi.align32)? != 0 {
-                            bail!("write pointer not aligned");
-                        }
-
-                        let bytes = lift
-                            .memory()
-                            .get(write_address..)
-                            .and_then(|b| b.get(..usize::try_from(abi.size32).ok()?))
-                            .ok_or_else(|| {
-                                crate::format_err!("write pointer out of bounds of memory")
-                            })?;
-
-                        Val::load(lift, ty, bytes)
+                        let lift = &mut LiftContext::new(store, write_options, self);
+                        let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
+                        Val::load(lift, *ty, bytes)
                     })
                     .transpose()?;
 
@@ -3253,102 +3284,67 @@ impl Instance {
                     // Serializing the value may require calling the guest's realloc function, so we
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
-                    let old_thread = store.0.set_thread(read_caller_thread)?;
+                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
-                    let types = lower.types;
-                    let ty = match types[types[read_ty].ty].payload {
-                        Some(ty) => ty,
-                        None => bail_bug!("expected payload type to be present"),
-                    };
                     let ptr = func::validate_inbounds_dynamic(
-                        types.canonical_abi(&ty),
+                        read_abi,
                         lower.as_slice_mut(),
                         &ValRaw::u32(read_address.try_into()?),
                     )?;
-                    val.store(lower, ty, ptr)?;
-                    store.0.set_thread(old_thread)?;
+                    let ty = match read_payload_ty {
+                        Some(ty) => ty,
+                        None => bail_bug!("expected read payload type to be present"),
+                    };
+                    val.store(lower, *ty, ptr)?;
+                    store.set_thread(old_thread)?;
                 }
             }
-            (TransmitIndex::Stream(write_ty), TransmitIndex::Stream(read_ty)) => {
-                if write_caller_instance == read_caller_instance
-                    && !allow_intra_component_read_write(types[types[write_ty].ty].payload)
-                {
-                    bail!(
-                        "cannot read from and write to intra-component stream with non-numeric payload"
-                    )
+            (TransmitIndex::Stream(_), TransmitIndex::Stream(_)) => {
+                if write_length_in_bytes == 0 {
+                    return Ok(());
                 }
-
-                if let Some(flat_abi) = flat_abi {
+                let write_payload_ty = match write_payload_ty {
+                    Some(ty) => ty,
+                    None => bail_bug!("expected write payload type to be present"),
+                };
+                let read_payload_ty = match read_payload_ty {
+                    Some(ty) => ty,
+                    None => bail_bug!("expected read payload type to be present"),
+                };
+                if flat_abi.is_some() {
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
-                    let length_in_bytes = usize::try_from(flat_abi.size)? * count;
-                    if length_in_bytes > 0 {
-                        if write_address % usize::try_from(flat_abi.align)? != 0 {
-                            bail!("write pointer not aligned");
-                        }
-                        if read_address % usize::try_from(flat_abi.align)? != 0 {
-                            bail!("read pointer not aligned");
-                        }
+                    let store_opaque = store.store_opaque_mut();
 
-                        let store_opaque = store.0.store_opaque_mut();
+                    debug_assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
-                        {
-                            let src = self
-                                .options_memory(store_opaque, write_options)
-                                .get(write_address..)
-                                .and_then(|b| b.get(..length_in_bytes))
-                                .ok_or_else(|| {
-                                    crate::format_err!("write pointer out of bounds of memory")
-                                })?
-                                .as_ptr();
-                            let dst = self
-                                .options_memory_mut(store_opaque, read_options)
-                                .get_mut(read_address..)
-                                .and_then(|b| b.get_mut(..length_in_bytes))
-                                .ok_or_else(|| {
-                                    crate::format_err!("read pointer out of bounds of memory")
-                                })?
-                                .as_mut_ptr();
-                            // SAFETY: Both `src` and `dst` have been validated
-                            // above.
-                            unsafe {
-                                if write_caller_instance == read_caller_instance {
-                                    // If the same instance owns both ends of
-                                    // the stream, the source and destination
-                                    // buffers might overlap.
-                                    src.copy_to(dst, length_in_bytes)
-                                } else {
-                                    // Since the read and write ends of the
-                                    // stream are owned by distinct instances,
-                                    // the buffers cannot possibly belong to the
-                                    // same memory and thus cannot overlap.
-                                    src.copy_to_nonoverlapping(dst, length_in_bytes)
-                                }
-                            }
+                    if write_caller_instance == read_caller_instance {
+                        let memory = self.options_memory_mut(store_opaque, read_options);
+                        memory.copy_within(
+                            write_address..write_address + write_length_in_bytes,
+                            read_address,
+                        );
+                    } else {
+                        let src = self.options_memory(store_opaque, write_options)[write_address..]
+                            [..write_length_in_bytes]
+                            .as_ptr();
+                        let dst = self.options_memory_mut(store_opaque, read_options)
+                            [read_address..][..read_length_in_bytes]
+                            .as_mut_ptr();
+                        unsafe {
+                            src.copy_to_nonoverlapping(dst, write_length_in_bytes);
                         }
                     }
                 } else {
-                    let store_opaque = store.0.store_opaque_mut();
+                    let store_opaque = store.store_opaque_mut();
                     let lift = &mut LiftContext::new(store_opaque, write_options, self);
-                    let ty = match lift.types[lift.types[write_ty].ty].payload {
-                        Some(ty) => ty,
-                        None => bail_bug!("expected payload type to be present"),
-                    };
-                    let abi = lift.types.canonical_abi(&ty);
-                    let size = usize::try_from(abi.size32)?;
-                    if write_address % usize::try_from(abi.align32)? != 0 {
-                        bail!("write pointer not aligned");
-                    }
-                    let bytes = lift
-                        .memory()
-                        .get(write_address..)
-                        .and_then(|b| b.get(..size * count))
-                        .ok_or_else(|| {
-                            crate::format_err!("write pointer out of bounds of memory")
-                        })?;
+                    let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                     lift.consume_fuel_array(count, size_of::<Val>())?;
 
                     let values = (0..count)
-                        .map(|index| Val::load(lift, ty, &bytes[(index * size)..][..size]))
+                        .map(|index| {
+                            let size = usize::try_from(write_abi.size32)?;
+                            Val::load(lift, *write_payload_ty, &bytes[(index * size)..][..size])
+                        })
                         .collect::<Result<Vec<_>>>()?;
 
                     let id = TableId::<TransmitHandle>::new(rep);
@@ -3357,30 +3353,14 @@ impl Instance {
                     // Serializing the value may require calling the guest's realloc function, so we
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
-                    let old_thread = store.0.set_thread(read_caller_thread)?;
+                    let old_thread = store.set_thread(read_caller_thread)?;
                     let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
-                    let ty = match lower.types[lower.types[read_ty].ty].payload {
-                        Some(ty) => ty,
-                        None => bail_bug!("expected payload type to be present"),
-                    };
-                    let abi = lower.types.canonical_abi(&ty);
-                    if read_address % usize::try_from(abi.align32)? != 0 {
-                        bail!("read pointer not aligned");
-                    }
-                    let size = usize::try_from(abi.size32)?;
-                    lower
-                        .as_slice_mut()
-                        .get_mut(read_address..)
-                        .and_then(|b| b.get_mut(..size * count))
-                        .ok_or_else(|| {
-                            crate::format_err!("read pointer out of bounds of memory")
-                        })?;
                     let mut ptr = read_address;
                     for value in values {
-                        value.store(lower, ty, ptr)?;
-                        ptr += size
+                        value.store(lower, *read_payload_ty, ptr)?;
+                        ptr += usize::try_from(read_abi.size32)?;
                     }
-                    store.0.set_thread(old_thread)?;
+                    store.set_thread(old_thread)?;
                 }
             }
             _ => bail_bug!("mismatched transmit types in copy"),
@@ -3560,8 +3540,8 @@ impl Instance {
 
                 let instance = self.id().get_mut(store.0);
                 let types = instance.component().types();
-                let item_size = match payload(ty, types) {
-                    Some(ty) => usize::try_from(types.canonical_abi(&ty).size32)?,
+                let item_size = match ty.payload(types) {
+                    Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
                 let concurrent_state = store.0.concurrent_state_mut();
@@ -3786,8 +3766,8 @@ impl Instance {
 
                 let instance = self.id().get_mut(store.0);
                 let types = instance.component().types();
-                let item_size = match payload(ty, types) {
-                    Some(ty) => usize::try_from(types.canonical_abi(&ty).size32)?,
+                let item_size = match ty.payload(types) {
+                    Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
                 let concurrent_state = store.0.concurrent_state_mut();
@@ -4772,7 +4752,7 @@ impl Waitable {
 /// Determine whether an intra-component read/write is allowed for the specified
 /// `stream` or `future` payload type according to the component model
 /// specification.
-fn allow_intra_component_read_write(ty: Option<InterfaceType>) -> bool {
+fn allow_intra_component_read_write(ty: Option<&InterfaceType>) -> bool {
     matches!(
         ty,
         None | Some(

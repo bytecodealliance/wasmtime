@@ -52,4 +52,4 @@
   (func (export "run") (canon lift (core func $i "run")))
 )
 
-(assert_trap (invoke "run") "cannot read from and write to intra-component future with non-numeric payload")
+(assert_trap (invoke "run") "cannot read from and write to intra-component future/stream with non-numeric payload")
