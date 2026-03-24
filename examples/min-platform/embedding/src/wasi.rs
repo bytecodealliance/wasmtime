@@ -217,6 +217,11 @@ pub fn add_to_linker_async(linker: &mut Linker<ExampleCtx>) -> Result<()> {
     wasi::cli::stdout::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::cli::stderr::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::random::random::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::terminal_input::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::terminal_output::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::terminal_stdin::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::terminal_stdout::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::terminal_stderr::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::filesystem::preopens::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::filesystem::types::add_to_linker::<_, Data>(linker, |t| t)?;
     Ok(())
@@ -561,6 +566,43 @@ impl wasi::cli::stderr::Host for ExampleCtx {
     fn get_stderr(&mut self) -> Result<Resource<DynOutputStream>> {
         let stderr: DynOutputStream = Box::new(self.stderr.clone());
         Ok(self.table().push(stderr)?)
+    }
+}
+
+// Terminal resources: nothing is a terminal in this minimal embedding.
+impl wasi::cli::terminal_input::Host for ExampleCtx {}
+impl wasi::cli::terminal_input::HostTerminalInput for ExampleCtx {
+    fn drop(&mut self, r: Resource<wasi::cli::terminal_input::TerminalInput>) -> Result<()> {
+        self.table.delete(r)?;
+        Ok(())
+    }
+}
+impl wasi::cli::terminal_output::Host for ExampleCtx {}
+impl wasi::cli::terminal_output::HostTerminalOutput for ExampleCtx {
+    fn drop(&mut self, r: Resource<wasi::cli::terminal_output::TerminalOutput>) -> Result<()> {
+        self.table.delete(r)?;
+        Ok(())
+    }
+}
+impl wasi::cli::terminal_stdin::Host for ExampleCtx {
+    fn get_terminal_stdin(
+        &mut self,
+    ) -> Result<Option<Resource<wasi::cli::terminal_input::TerminalInput>>> {
+        Ok(None)
+    }
+}
+impl wasi::cli::terminal_stdout::Host for ExampleCtx {
+    fn get_terminal_stdout(
+        &mut self,
+    ) -> Result<Option<Resource<wasi::cli::terminal_output::TerminalOutput>>> {
+        Ok(None)
+    }
+}
+impl wasi::cli::terminal_stderr::Host for ExampleCtx {
+    fn get_terminal_stderr(
+        &mut self,
+    ) -> Result<Option<Resource<wasi::cli::terminal_output::TerminalOutput>>> {
+        Ok(None)
     }
 }
 
