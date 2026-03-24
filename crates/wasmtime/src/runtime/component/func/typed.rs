@@ -2315,7 +2315,7 @@ where
         .checked_mul(usize::try_from(map.entry_abi.size32)?)
         .and_then(|total| ptr.checked_add(total))
     {
-        Some(n) if n <= cx.memory().len() => cx.consume_fuel(n - ptr)?,
+        Some(n) if n <= cx.memory().len() => cx.consume_fuel_array(len, size_of::<(K, V)>())?,
         _ => bail!("map pointer/length out of bounds of memory"),
     }
     if ptr % (map.entry_abi.align32 as usize) != 0 {
