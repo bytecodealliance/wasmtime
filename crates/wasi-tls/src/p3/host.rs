@@ -182,7 +182,7 @@ impl bindings::tls::client::HostConnectorWithStore for WasiTls {
         server_name: String,
     ) -> wasmtime::Result<Result<(), Resource<Error>>> {
         fn connect_err(msg: &'static str) -> BoxFutureTlStream {
-            Box::pin(async move { Err(Error::msg(msg).into()) })
+            Box::pin(async move { Err(Error::msg(msg)) })
         }
         let (fut, connection) = accessor.with(
             move |mut access| -> wasmtime::Result<(BoxFutureTlStream, _)> {
