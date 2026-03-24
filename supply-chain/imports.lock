@@ -1904,16 +1904,6 @@ version = "42.0.1"
 when = "2026-02-25"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
-[[publisher.wasmtime-wasi-tls-nativetls]]
-version = "42.0.1"
-when = "2026-02-25"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-wasi-tls-openssl]]
-version = "42.0.1"
-when = "2026-02-25"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
 [[publisher.wasmtime-wast]]
 version = "42.0.1"
 when = "2026-02-25"
