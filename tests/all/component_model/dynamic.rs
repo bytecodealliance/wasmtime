@@ -923,3 +923,84 @@ fn introspection() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn flags_beyond_end() -> Result<()> {
+    let engine = super::engine();
+
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (type $f' (flags "a" "b"))
+                (export $f "f" (type $f'))
+
+                (core module $m
+                    (func (export "r") (param i32) (result i32) local.get 0)
+                )
+                (core instance $i (instantiate $m))
+                (func (export "run") (param "x" u32) (result $f)
+                    (canon lift (core func $i "r")))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut output = [Val::Bool(false)];
+    run.call(&mut store, &[Val::U32(0)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(output[0], Val::Flags(vec![]));
+
+    let mut output = [Val::Bool(false)];
+    run.call(&mut store, &[Val::U32(1)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(output[0], Val::Flags(vec!["a".to_string()]));
+
+    let mut output = [Val::Bool(false)];
+    run.call(&mut store, &[Val::U32(2)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(output[0], Val::Flags(vec!["b".to_string()]));
+
+    let mut output = [Val::Bool(false)];
+    run.call(&mut store, &[Val::U32(3)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(
+        output[0],
+        Val::Flags(vec!["a".to_string(), "b".to_string()])
+    );
+    let mut output = [Val::Bool(false)];
+
+    run.call(&mut store, &[Val::U32(4)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(output[0], Val::Flags(vec![]));
+
+    run.call(&mut store, &[Val::U32(5)], &mut output)?;
+    run.post_return(&mut store)?;
+    assert_eq!(output[0], Val::Flags(vec!["a".to_string()]));
+
+    wasmtime::component::flags! {
+        F {
+            #[component(name = "a")]
+            const A;
+            #[component(name = "b")]
+            const B;
+        }
+    }
+
+    let run = instance.get_typed_func::<(u32,), (F,)>(&mut store, "run")?;
+    assert_eq!(run.call(&mut store, (0,))?, (F::empty(),));
+    run.post_return(&mut store)?;
+    assert_eq!(run.call(&mut store, (1,))?, (F::A,));
+    run.post_return(&mut store)?;
+    assert_eq!(run.call(&mut store, (2,))?, (F::B,));
+    run.post_return(&mut store)?;
+    assert_eq!(run.call(&mut store, (3,))?, (F::A | F::B,));
+    run.post_return(&mut store)?;
+    assert_eq!(run.call(&mut store, (4,))?, (F::empty(),));
+    run.post_return(&mut store)?;
+    assert_eq!(run.call(&mut store, (5,))?, (F::A,));
+    run.post_return(&mut store)?;
+    Ok(())
+}

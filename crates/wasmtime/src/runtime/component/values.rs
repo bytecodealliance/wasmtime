@@ -1050,7 +1050,7 @@ fn lower_list<T>(
 }
 
 fn push_flags(ty: &TypeFlags, flags: &mut Vec<String>, mut offset: u32, mut bits: u32) {
-    while bits > 0 {
+    while bits > 0 && usize::try_from(offset).unwrap() < ty.names.len() {
         if bits & 1 != 0 {
             flags.push(ty.names[offset as usize].clone());
         }
