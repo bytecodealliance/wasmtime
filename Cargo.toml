@@ -686,11 +686,12 @@ lto = true
 # https://github.com/crate-ci/typos/blob/master/docs/reference.md
 [workspace.metadata.typos.default]
 extend-ignore-re = [
-    "\\d\\w{4,}\\d",
+    "(\\d\\w{2,}|\\w{2,}\\d)", # possible hex encoding
 ]
 extend-ignore-words-re = [
     '^[a-zA-Z]{1,3}$' # ignore words up to length 3
 ]
+
 extend-ignore-identifiers-re = [
     # prologue, main, epilogue
     "set[pme]",
@@ -729,6 +730,7 @@ aranges = "aranges"
 # literals
 lits = "lits"
 RELA = "RELA"
+fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
