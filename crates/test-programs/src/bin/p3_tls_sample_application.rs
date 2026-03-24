@@ -1,6 +1,5 @@
 use anyhow::{Context as _, Result, anyhow};
 use core::future::Future;
-use futures::try_join;
 use test_programs::p3::wasi::sockets::ip_name_lookup::resolve_addresses;
 use test_programs::p3::wasi::sockets::types::{IpAddress, IpSocketAddress, TcpSocket};
 use test_programs::p3::wasi::tls::client::Connector;
@@ -31,32 +30,23 @@ async fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> 
     let (tls_tx, tls_tx_err_fut) = conn.send(data_rx);
     let sock_tx_fut = sock.send(tls_tx);
 
-    try_join!(
-        async {
-            Connector::connect(conn, domain.into())
-                .await
-                .context("handshake failed")
-        },
-        async {
-            let buf = data_tx.write_all(request.into()).await;
-            assert!(buf.is_empty());
-            drop(data_tx);
-            Ok(())
-        },
-        async {
-            let response = tls_rx.collect().await;
-            let response = String::from_utf8(response)?;
-            if response.contains("HTTP/1.1 200 OK") {
-                Ok(())
-            } else {
-                Err(anyhow!("server did not respond with 200 OK: {response}"))
-            }
-        },
-        async { sock_rx_fut.await.context("failed to receive ciphertext") },
-        async { sock_tx_fut.await.context("failed to send ciphertext") },
-        async { tls_rx_fut.await.context("failed to receive plaintext") },
-        async { tls_tx_err_fut.await.context("failed to send plaintext") },
-    )?;
+    Connector::connect(conn, domain.into())
+        .await
+        .context("tls handshake failed")?;
+    let buf = data_tx.write_all(request.into()).await;
+    assert!(buf.is_empty());
+
+    let response = tls_rx.collect().await;
+    let response = String::from_utf8(response)?;
+    if !response.contains("HTTP/1.1 200 OK") {
+        return Err(anyhow!("server did not respond with 200 OK: {response}"));
+    }
+    drop(data_tx);
+    sock_rx_fut.await.context("tcp recv")?;
+    sock_tx_fut.await.context("tcp send")?;
+    tls_rx_fut.await.context("tls recv")?;
+    tls_tx_err_fut.await.context("tls send")?;
+
     Ok(())
 }
 
