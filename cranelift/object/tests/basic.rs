@@ -258,3 +258,54 @@ fn reject_nul_byte_symbol_for_data() {
         )
         .unwrap();
 }
+
+#[test]
+fn aarch64_colocated_data_symbol_reloc() {
+    let flag_builder = settings::builder();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("aarch64-unknown-linux-gnu").unwrap();
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap());
+
+    let data_id = module
+        .declare_data("my_data", Linkage::Local, true, false)
+        .unwrap();
+
+    let mut data_desc = DataDescription::new();
+    data_desc.define_zeroinit(64);
+    module.define_data(data_id, &data_desc).unwrap();
+
+    let sig = Signature {
+        params: vec![],
+        returns: vec![AbiParam::new(types::I64)],
+        call_conv: CallConv::SystemV,
+    };
+
+    let func_id = module
+        .declare_function("load_data_addr", Linkage::Local, &sig)
+        .unwrap();
+
+    let mut ctx = Context::new();
+    ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
+
+        let gv = module.declare_data_in_func(data_id, &mut bcx.func);
+        let ptr = module.target_config().pointer_type();
+        let addr = bcx.ins().global_value(ptr, gv);
+        bcx.ins().return_(&[addr]);
+
+        bcx.seal_all_blocks();
+        bcx.finalize();
+    }
+
+    module.define_function(func_id, &mut ctx).unwrap();
+
+    let product = module.finish();
+    product.emit().expect("emit object file");
+}
