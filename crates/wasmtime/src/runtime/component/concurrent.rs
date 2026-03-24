@@ -5150,27 +5150,27 @@ impl ConcurrentState {
     ///
     /// The `task` is bit-packed as returned by `current_call_context_scope_id`
     /// below.
-    pub fn call_context(&mut self, task: u32) -> &mut CallContext {
+    pub fn call_context(&mut self, task: u32) -> Result<&mut CallContext> {
         let (task, is_host) = (task >> 1, task & 1 == 1);
         if is_host {
             let task: TableId<HostTask> = TableId::new(task);
-            &mut self.get_mut(task).unwrap().call_context
+            Ok(&mut self.get_mut(task)?.call_context)
         } else {
             let task: TableId<GuestTask> = TableId::new(task);
-            &mut self.get_mut(task).unwrap().call_context
+            Ok(&mut self.get_mut(task)?.call_context)
         }
     }
 
     /// Used by `ResourceTables` to record the scope of a borrow to get undone
     /// in the future.
-    pub fn current_call_context_scope_id(&self) -> u32 {
+    pub fn current_call_context_scope_id(&self) -> Result<u32> {
         let (bits, is_host) = match self.current_thread {
             CurrentThread::Guest(id) => (id.task.rep(), false),
             CurrentThread::Host(id) => (id.rep(), true),
-            CurrentThread::None => unreachable!(),
+            CurrentThread::None => bail_bug!("current thread is not set"),
         };
         assert_eq!((bits << 1) >> 1, bits);
-        (bits << 1) | u32::from(is_host)
+        Ok((bits << 1) | u32::from(is_host))
     }
 
     fn current_guest_thread(&self) -> Result<QualifiedThreadId> {
