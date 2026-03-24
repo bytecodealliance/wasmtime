@@ -623,7 +623,7 @@
             ;; the mask below.
             (unmasked Xmm (x64_psllw src (mov_rmi_to_xmm masked_amt)))
             (mask_addr SyntheticAmode (ishl_i8x16_mask masked_amt))
-            (mask Reg (x64_load $I8X16 mask_addr (ExtKind.None))))
+            (mask Reg (x64_movdqu_load mask_addr)))
         (sse_and $I8X16 unmasked (RegMem.Reg mask))))
 
 ;; Get the address of the mask to use when fixing up the lanes that weren't
@@ -656,7 +656,7 @@
                               (mem_flags_trusted))))
 
 (rule (ishl_i8x16_mask (RegMemImm.Mem amt))
-      (ishl_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
+      (ishl_i8x16_mask (RegMemImm.Reg (x64_movq_rm amt))))
 
 ;; 16x8, 32x4, and 64x2 shifts can each use a single instruction, once the shift amount is masked.
 
@@ -762,7 +762,7 @@
                               (mem_flags_trusted))))
 
 (rule (ushr_i8x16_mask (RegMemImm.Mem amt))
-      (ushr_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
+      (ushr_i8x16_mask (RegMemImm.Reg (x64_movq_rm amt))))
 
 ;; 16x8, 32x4, and 64x2 shifts can each use a single instruction, once the shift amount is masked.
 
@@ -3624,9 +3624,7 @@
       (x64_rsp))
 
 (rule (lower (get_return_address _))
-      (x64_load $I64
-                (Amode.ImmReg 8 (x64_rbp) (mem_flags_trusted))
-                (ExtKind.None)))
+      (x64_movq_rm (Amode.ImmReg 8 (x64_rbp) (mem_flags_trusted))))
 
 ;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4355,7 +4353,7 @@
         )
         (x64_movlhps result a1)))
 (rule (x64_round ty (RegMem.Mem addr) imm)
-      (x64_round ty (RegMem.Reg (x64_load ty addr (ExtKind.ZeroExtend))) imm))
+      (x64_round ty (RegMem.Reg (x64_load_xmm ty addr)) imm))
 
 (decl round_libcall (Type RoundImm) LibCall)
 (rule (round_libcall $F32 (RoundImm.RoundUp)) (LibCall.CeilF32))

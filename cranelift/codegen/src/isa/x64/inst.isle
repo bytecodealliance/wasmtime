@@ -1355,33 +1355,14 @@
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Load a value into a register.
-(decl x64_load (Type SyntheticAmode ExtKind) Reg)
-
-(rule 1 (x64_load (fits_in_32 ty) addr (ExtKind.SignExtend))
-      (x64_movsx (ext_mode (ty_bytes ty) 8)
-             addr))
-
-(rule 2 (x64_load $I64 addr _ext_kind)
-      (x64_movq_rm addr))
-
-(rule 2 (x64_load $F32 addr _ext_kind)
-      (x64_movss_load addr))
-
-(rule 2 (x64_load $F64 addr _ext_kind)
-      (x64_movsd_load addr))
-
-(rule 2 (x64_load $F128 addr _ext_kind)
-      (x64_movdqu_load addr))
-
-(rule 2 (x64_load $F32X4 addr _ext_kind)
-      (x64_movups_load addr))
-
-(rule 2 (x64_load $F64X2 addr _ext_kind)
-      (x64_movupd_load addr))
-
-(rule 0 (x64_load (multi_lane _bits _lanes) addr _ext_kind)
-      (x64_movdqu_load addr))
+;; Load a value into an XMM register.
+(decl x64_load_xmm (Type SyntheticAmode) Xmm)
+(rule 1 (x64_load_xmm $F32 addr) (x64_movss_load addr))
+(rule 1 (x64_load_xmm $F64 addr) (x64_movsd_load addr))
+(rule 1 (x64_load_xmm $F128 addr) (x64_movdqu_load addr))
+(rule 1 (x64_load_xmm $F32X4 addr) (x64_movups_load addr))
+(rule 1 (x64_load_xmm $F64X2 addr) (x64_movupd_load addr))
+(rule 0 (x64_load_xmm (multi_lane _bits _lanes) addr) (x64_movdqu_load addr))
 
 (decl x64_mov (SyntheticAmode) Reg)
 (spec (x64_mov addr)
@@ -1521,7 +1502,7 @@
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
 (rule (x64_xmm_load_const ty const)
-      (x64_load ty (const_to_synthetic_amode const) (ExtKind.None)))
+      (x64_load_xmm ty (const_to_synthetic_amode const)))
 
 
 ;;;; Flag Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
