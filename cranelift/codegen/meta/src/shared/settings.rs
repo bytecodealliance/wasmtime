@@ -92,7 +92,7 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     // Note that Cranelift doesn't currently need an is_pie flag, because PIE is
-    // just PIC where symbols can't be pre-empted, which can be expressed with the
+    // just PIC where symbols can't be preempted, which can be expressed with the
     // `colocated` flag on external functions and global values.
     settings.add_bool(
         "is_pic",

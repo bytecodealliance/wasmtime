@@ -2158,7 +2158,7 @@ pub struct HostFunc {
     ctx: StoreBox<VMArrayCallHostFuncContext>,
 
     /// Whether or not this function was defined with an `async` host function,
-    /// meaning that it is only invokable when wasm is itself on a fiber to
+    /// meaning that it is only invocable when wasm is itself on a fiber to
     /// support suspension on `Poll::Pending`.
     ///
     /// This is used to propagate to an `InstancePre` and then eventually into a

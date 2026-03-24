@@ -1270,7 +1270,7 @@ pub(crate) fn translate_resume<'a>(
     //   user-defined handler blocks, based on the handler index
     //   provided on suspension. Note that we do not jump to the
     //   handler blocks directly. Instead, each handler block has a
-    //   corresponding premable block, which we jump to in order to
+    //   corresponding preamble block, which we jump to in order to
     //   reach a particular handler block. The preamble block prepares
     //   the arguments and continuation object to be passed to the
     //   actual handler block.
@@ -1546,7 +1546,7 @@ pub(crate) fn translate_resume<'a>(
         preamble_blocks
     };
 
-    // Dispatch block. All it does is jump to the right premable block based on
+    // Dispatch block. All it does is jump to the right preamble block based on
     // the handler index.
     {
         builder.switch_to_block(dispatch_block);

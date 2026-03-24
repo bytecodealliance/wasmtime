@@ -740,7 +740,7 @@ impl CallThreadState {
     /// called using, for example, the `unwind` function below.
     ///
     /// Note that this is a relatively low-level function and will panic if
-    /// mis-used.
+    /// misused.
     ///
     /// # Panics
     ///
