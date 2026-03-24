@@ -1502,8 +1502,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.tar]]
-version = "0.4.41"
-when = "2024-06-04"
+version = "0.4.45"
+when = "2026-03-19"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
