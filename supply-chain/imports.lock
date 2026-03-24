@@ -1502,8 +1502,8 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.tar]]
-version = "0.4.41"
-when = "2024-06-04"
+version = "0.4.45"
+when = "2026-03-19"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1900,16 +1900,6 @@ when = "2026-02-25"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-tls]]
-version = "42.0.1"
-when = "2026-02-25"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-wasi-tls-nativetls]]
-version = "42.0.1"
-when = "2026-02-25"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-wasi-tls-openssl]]
 version = "42.0.1"
 when = "2026-02-25"
 trusted-publisher = "github:bytecodealliance/wasmtime"

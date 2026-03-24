@@ -7215,7 +7215,7 @@ end = "2026-10-10"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2025-02-15"
+end = "2027-03-24"
 
 [[trusted.target-lexicon]]
 criteria = "safe-to-deploy"
