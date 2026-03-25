@@ -191,6 +191,22 @@ impl<T> TryVec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::retain`].
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&T) -> bool,
+    {
+        self.inner.retain(f);
+    }
+
+    /// Same as [`std::vec::Vec::retain_mut`].
+    pub fn retain_mut<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut T) -> bool,
+    {
+        self.inner.retain_mut(f);
+    }
+
     /// Same as [`std::vec::Vec::into_raw_parts`].
     pub fn into_raw_parts(mut self) -> (*mut T, usize, usize) {
         // NB: Can't use `Vec::into_raw_parts` until our MSRV is >= 1.93.
