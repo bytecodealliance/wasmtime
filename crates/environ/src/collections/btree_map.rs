@@ -409,6 +409,16 @@ where
     }
 }
 
+impl<'a, K, V> DoubleEndedIterator for BTreeMapRange<'a, K, V>
+where
+    K: Copy + Ord,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let (key, id) = self.inner.next_back()?;
+        Some((key, &self.values[id]))
+    }
+}
+
 /// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
 pub struct BTreeMapRangeMut<'a, K, V>
 where
