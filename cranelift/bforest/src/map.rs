@@ -245,16 +245,28 @@ where
         range: R,
         forest: &'a MapForest<K, V>,
         comp: &'a C,
-    ) -> MapRange<'a, K, V, R, C>
+    ) -> MapRange<'a, K, V, C>
     where
         R: RangeBounds<K>,
         C: Comparator<K>,
     {
         MapRange {
             cursor: self.cursor(forest, comp),
-            range,
-            started: false,
+            start: copied_bound(range.start_bound()),
+            end: copied_bound(range.end_bound()),
+            direction: Direction::None,
         }
+    }
+}
+
+fn copied_bound<K>(start_bound: Bound<&K>) -> Bound<K>
+where
+    K: Copy,
+{
+    match start_bound {
+        Bound::Unbounded => Bound::Unbounded,
+        Bound::Included(x) => Bound::Included(*x),
+        Bound::Excluded(x) => Bound::Excluded(*x),
     }
 }
 
@@ -676,46 +688,61 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Direction {
+    None,
+    Next,
+    NextBack,
+}
+
 /// An immutable iterator over a range of values, returned by `Map::range`.
-pub struct MapRange<'a, K, V, R, C>
+pub struct MapRange<'a, K, V, C>
 where
     K: Copy,
     V: Copy,
-    R: RangeBounds<K>,
     C: Comparator<K>,
 {
     cursor: MapCursor<'a, K, V, C>,
-    range: R,
-    started: bool,
+    start: Bound<K>,
+    end: Bound<K>,
+
+    /// The direction of the last call into the iterator, a.k.a. whether
+    /// `self.cursor` is
+    ///
+    /// 1. `Direction::Next`: just before `self.start`,
+    ///
+    /// 2. `Direction::NextBack`: just after `self.end`, or
+    ///
+    /// 3. `Direction::None`: not initialized to any location yet.
+    direction: Direction,
 }
 
-impl<'a, K, V, R, C> Iterator for MapRange<'a, K, V, R, C>
+impl<'a, K, V, C> Iterator for MapRange<'a, K, V, C>
 where
     K: Copy,
     V: Copy,
-    R: RangeBounds<K>,
     C: Comparator<K>,
 {
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let started = mem::replace(&mut self.started, true);
+        let old_direction = mem::replace(&mut self.direction, Direction::Next);
 
         let key_val = (|| {
-            if started {
+            if old_direction == Direction::Next {
                 self.cursor.next()
             } else {
-                match self.range.start_bound() {
+                match self.start {
                     Bound::Included(k) => {
-                        self.cursor.goto(*k);
+                        self.cursor.goto(k);
                         Some((self.cursor.key()?, self.cursor.value()?))
                     }
                     Bound::Excluded(k) => {
-                        self.cursor.goto(*k);
+                        self.cursor.goto(k);
                         if self
                             .cursor
                             .key()
-                            .is_some_and(|key| self.cursor.comp.cmp(*k, key).is_eq())
+                            .is_some_and(|key| self.cursor.comp.cmp(k, key).is_eq())
                         {
                             self.cursor.next()
                         } else {
@@ -731,7 +758,10 @@ where
         })();
 
         match key_val {
-            Some((key, val)) if self.is_in_bounds(key) => Some((key, val)),
+            Some((key, val)) if self.is_in_bounds(key) => {
+                self.start = Bound::Excluded(key);
+                Some((key, val))
+            }
             _ => {
                 self.cursor.goto_end();
                 None
@@ -740,30 +770,79 @@ where
     }
 }
 
-impl<'a, K, V, R, C> MapRange<'a, K, V, R, C>
+impl<'a, K, V, C> DoubleEndedIterator for MapRange<'a, K, V, C>
 where
     K: Copy,
     V: Copy,
-    R: RangeBounds<K>,
+    C: Comparator<K>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let old_direction = mem::replace(&mut self.direction, Direction::NextBack);
+
+        let key_val = (|| {
+            if old_direction == Direction::NextBack {
+                self.cursor.prev()
+            } else {
+                match self.end {
+                    Bound::Included(k) => match self.cursor.goto(k) {
+                        Some(_) => Some((self.cursor.key()?, self.cursor.value()?)),
+                        None => self.cursor.prev(),
+                    },
+                    Bound::Excluded(k) => {
+                        self.cursor.goto(k);
+                        if self
+                            .cursor
+                            .key()
+                            .is_some_and(|key| self.cursor.comp.cmp(k, key).is_eq())
+                        {
+                            self.cursor.prev()
+                        } else {
+                            Some((self.cursor.key()?, self.cursor.value()?))
+                        }
+                    }
+                    Bound::Unbounded => {
+                        self.cursor.goto_end();
+                        self.cursor.prev()
+                    }
+                }
+            }
+        })();
+
+        match key_val {
+            Some((key, val)) if self.is_in_bounds(key) => {
+                self.end = Bound::Excluded(key);
+                Some((key, val))
+            }
+            _ => {
+                self.cursor.goto_end();
+                None
+            }
+        }
+    }
+}
+
+impl<'a, K, V, C> MapRange<'a, K, V, C>
+where
+    K: Copy,
+    V: Copy,
     C: Comparator<K>,
 {
     fn is_in_bounds(&self, key: K) -> bool {
-        debug_assert!(self.is_in_start_bound(key));
-        self.is_in_end_bound(key)
+        self.is_in_start_bound(key) && self.is_in_end_bound(key)
     }
 
     fn is_in_start_bound(&self, key: K) -> bool {
-        match self.range.start_bound() {
-            Bound::Included(k) => self.cursor.comp.cmp(key, *k).is_ge(),
-            Bound::Excluded(k) => self.cursor.comp.cmp(key, *k).is_gt(),
+        match self.start {
+            Bound::Included(k) => self.cursor.comp.cmp(key, k).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(key, k).is_gt(),
             Bound::Unbounded => true,
         }
     }
 
     fn is_in_end_bound(&self, key: K) -> bool {
-        match self.range.end_bound() {
-            Bound::Included(k) => self.cursor.comp.cmp(*k, key).is_ge(),
-            Bound::Excluded(k) => self.cursor.comp.cmp(*k, key).is_gt(),
+        match self.end {
+            Bound::Included(k) => self.cursor.comp.cmp(k, key).is_ge(),
+            Bound::Excluded(k) => self.cursor.comp.cmp(k, key).is_gt(),
             Bound::Unbounded => true,
         }
     }
@@ -1460,5 +1539,51 @@ mod tests {
             m.range(35..40, &f, &()).collect::<Vec<_>>(),
             vec![(36, 36.0), (38, 38.0)],
         );
+    }
+
+    #[test]
+    fn range_next_back() {
+        let mut f = MapForest::<u32, f32>::new();
+        let mut m = Map::<u32, f32>::new();
+
+        for i in 10..20 {
+            m.insert(i, i as f32, &mut f, &());
+        }
+
+        assert_eq!(
+            m.range(12..16, &f, &()).rev().collect::<Vec<_>>(),
+            vec![(15, 15.0), (14, 14.0), (13, 13.0), (12, 12.0)],
+        );
+
+        assert_eq!(
+            m.range(18.., &f, &()).rev().collect::<Vec<_>>(),
+            vec![(19, 19.0), (18, 18.0)],
+        );
+
+        assert_eq!(
+            m.range(..12, &f, &()).rev().collect::<Vec<_>>(),
+            vec![(11, 11.0), (10, 10.0)],
+        );
+
+        assert_eq!(
+            m.range(11..=12, &f, &()).rev().collect::<Vec<_>>(),
+            vec![(12, 12.0), (11, 11.0)],
+        );
+
+        let mut iter = m.range(13..=16, &f, &());
+        assert_eq!(iter.next(), Some((13, 13.0)));
+        assert_eq!(iter.next_back(), Some((16, 16.0)));
+        assert_eq!(iter.next(), Some((14, 14.0)));
+        assert_eq!(iter.next_back(), Some((15, 15.0)));
+        assert!(iter.next().is_none());
+        assert!(iter.next_back().is_none());
+
+        let mut iter = m.range(13..=16, &f, &());
+        assert_eq!(iter.next_back(), Some((16, 16.0)));
+        assert_eq!(iter.next(), Some((13, 13.0)));
+        assert_eq!(iter.next_back(), Some((15, 15.0)));
+        assert_eq!(iter.next(), Some((14, 14.0)));
+        assert!(iter.next_back().is_none());
+        assert!(iter.next().is_none());
     }
 }

@@ -162,7 +162,7 @@ where
     }
 
     /// Same as [`std::collections::BTreeMap::range`].
-    pub fn range<R>(&self, range: R) -> BTreeMapRange<'_, K, V, R>
+    pub fn range<R>(&self, range: R) -> BTreeMapRange<'_, K, V>
     where
         K: Ord,
         R: RangeBounds<K>,
@@ -174,7 +174,7 @@ where
     }
 
     /// Same as [`std::collections::BTreeMap::range_mut`].
-    pub fn range_mut<R>(&mut self, range: R) -> BTreeMapRangeMut<'_, K, V, R>
+    pub fn range_mut<R>(&mut self, range: R) -> BTreeMapRangeMut<'_, K, V>
     where
         K: Ord,
         R: RangeBounds<K>,
@@ -389,19 +389,17 @@ where
 }
 
 /// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
-pub struct BTreeMapRange<'a, K, V, R>
+pub struct BTreeMapRange<'a, K, V>
 where
     K: Copy + Ord,
-    R: RangeBounds<K>,
 {
-    inner: cranelift_bforest::MapRange<'a, K, Id, R, ()>,
+    inner: cranelift_bforest::MapRange<'a, K, Id, ()>,
     values: &'a Slab<V>,
 }
 
-impl<'a, K, V, R> Iterator for BTreeMapRange<'a, K, V, R>
+impl<'a, K, V> Iterator for BTreeMapRange<'a, K, V>
 where
     K: Copy + Ord,
-    R: RangeBounds<K>,
 {
     type Item = (K, &'a V);
 
@@ -412,19 +410,17 @@ where
 }
 
 /// A range iterator of `(K, &'a V)` items returned by [`TryBTreeMap::range`].
-pub struct BTreeMapRangeMut<'a, K, V, R>
+pub struct BTreeMapRangeMut<'a, K, V>
 where
     K: Copy + Ord,
-    R: RangeBounds<K>,
 {
-    inner: cranelift_bforest::MapRange<'a, K, Id, R, ()>,
+    inner: cranelift_bforest::MapRange<'a, K, Id, ()>,
     values: &'a mut Slab<V>,
 }
 
-impl<'a, K, V, R> Iterator for BTreeMapRangeMut<'a, K, V, R>
+impl<'a, K, V> Iterator for BTreeMapRangeMut<'a, K, V>
 where
     K: Copy + Ord,
-    R: RangeBounds<K>,
 {
     type Item = (K, &'a mut V);
 
