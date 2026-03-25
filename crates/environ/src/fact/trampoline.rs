@@ -2564,7 +2564,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         } else if src_mem_opts.ptr() == dst_mem_opts.ptr() {
             self.calculate_list_byte_len(dst_mem_opts, src_len.idx, dst_element_size)
         } else {
-            self.convert_src_len_to_dst(src_byte_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
+            self.convert_src_len_to_dst(src_len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
             let tmp = self.local_set_new_tmp(dst_mem_opts.ptr());
             let ret = self.calculate_list_byte_len(dst_mem_opts, tmp.idx, dst_element_size);
             self.free_temp_local(tmp);
