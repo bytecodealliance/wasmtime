@@ -823,7 +823,7 @@ impl<'a, T> Source<'a, T> {
                 ..
             } = &transmit.write
             else {
-                bail_bug!("expected WriteState::HostReady");
+                bail_bug!("expected WriteState::GuestReady");
             };
 
             let cx = &mut LiftContext::new(store.0.store_opaque_mut(), options, instance);
