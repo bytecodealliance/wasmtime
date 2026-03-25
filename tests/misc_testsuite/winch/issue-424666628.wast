@@ -1,3 +1,5 @@
+;;! bulk_memory = true
+
 (module
   (type (;0;) (func (param f32 f32) (result i32 f64 i32 f32 f32)))
   (type (;1;) (func (result f64 i32 f32 f32)))

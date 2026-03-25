@@ -1,4 +1,5 @@
 ;;! memory64 = true
+;;! bulk_memory = true
 
 (assert_unlinkable
   (module

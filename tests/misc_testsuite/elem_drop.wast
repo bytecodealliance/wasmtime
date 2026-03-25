@@ -1,4 +1,5 @@
 ;;! reference_types = true
+;;! bulk_memory = true
 
 (module
   (table 1 1 funcref)

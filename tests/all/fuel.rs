@@ -57,7 +57,7 @@ fn fuel_consumed(config: &Config, wasm: &[u8]) -> Result<u64> {
     Ok(u64::MAX - store.get_fuel()?)
 }
 
-#[wasmtime_test(wasm_features(gc, function_references))]
+#[wasmtime_test(wasm_features(gc, function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn iloop(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);

@@ -1,5 +1,6 @@
 ;;! gc = true
 ;;! multi_memory = true
+;;! bulk_memory = true
 
 ;; Instantiation is generative
 

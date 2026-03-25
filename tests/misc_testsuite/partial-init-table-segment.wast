@@ -1,3 +1,5 @@
+;;! bulk_memory = true
+
 (module $m
   (table (export "table") funcref (elem $zero $zero $zero $zero $zero $zero $zero $zero $zero $zero))
 

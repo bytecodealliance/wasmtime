@@ -1,3 +1,5 @@
+;;! bulk_memory = true
+
 (module
   (memory 1 1)
   (data 0 (i32.const 1000) "hello")
