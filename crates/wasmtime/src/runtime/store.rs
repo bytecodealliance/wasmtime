@@ -1929,7 +1929,7 @@ impl StoreOpaque {
 
             let (mem_alloc_index, mem) = engine
                 .allocator()
-                .allocate_memory(&mut request, &mem_ty, None)
+                .allocate_memory(&mut request, &mem_ty, None)?
                 .await?;
 
             // Then, allocate the actual GC heap, passing in that memory

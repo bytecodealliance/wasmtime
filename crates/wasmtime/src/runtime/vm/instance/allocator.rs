@@ -8,6 +8,8 @@ use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
 use crate::store::{Asyncness, InstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::{OpaqueRootScope, Val};
+use core::future::Future;
+use core::pin::Pin;
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
@@ -127,7 +129,6 @@ impl GcHeapAllocationIndex {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime
 /// internals to implement correctly.
-#[async_trait::async_trait]
 pub unsafe trait InstanceAllocator: Send + Sync {
     /// Validate whether a component (including all of its contained core
     /// modules) is allocatable by this instance allocator.
@@ -184,12 +185,18 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     fn decrement_core_instance_count(&self);
 
     /// Allocate a memory for an instance.
-    async fn allocate_memory(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Memory,
+    ///
+    /// Returns `Err(OutOfMemory)` if boxing the future fails. The inner
+    /// `Result` covers other allocation errors (e.g. resource limits).
+    fn allocate_memory<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<(MemoryAllocationIndex, Memory)>;
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
+        OutOfMemory,
+    >;
 
     /// Deallocate an instance's previously allocated memory.
     ///
@@ -206,12 +213,18 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     );
 
     /// Allocate a table for an instance.
-    async fn allocate_table(
-        &self,
-        req: &mut InstanceAllocationRequest<'_, '_>,
-        table: &wasmtime_environ::Table,
+    ///
+    /// Returns `Err(OutOfMemory)` if boxing the future fails. The inner
+    /// `Result` covers other allocation errors (e.g. resource limits).
+    fn allocate_table<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        req: &'a mut InstanceAllocationRequest<'b, 'c>,
+        table: &'a wasmtime_environ::Table,
         table_index: DefinedTableIndex,
-    ) -> Result<(TableAllocationIndex, Table)>;
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>,
+        OutOfMemory,
+    >;
 
     /// Deallocate an instance's previously allocated table.
     ///
@@ -391,9 +404,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate the memories for the given instance allocation request, pushing
     /// them into `memories`.
-    async fn allocate_memories(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
+    async fn allocate_memories<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
         memories: &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -409,7 +422,7 @@ impl dyn InstanceAllocator + '_ {
                 .expect("should be a defined memory since we skipped imported ones");
 
             let memory = self
-                .allocate_memory(request, ty, Some(memory_index))
+                .allocate_memory(request, ty, Some(memory_index))?
                 .await?;
             memories.push(memory)?;
         }
@@ -444,9 +457,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate tables for the given instance allocation request, pushing them
     /// into `tables`.
-    async fn allocate_tables(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
+    async fn allocate_tables<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
         tables: &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -461,7 +474,7 @@ impl dyn InstanceAllocator + '_ {
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            let table = self.allocate_table(request, table, def_index).await?;
+            let table = self.allocate_table(request, table, def_index)?.await?;
             tables.push(table)?;
         }
 
