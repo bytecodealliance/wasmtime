@@ -226,10 +226,14 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
                             Poll::Pending => return Poll::Pending,
                         }
                     }
-                    Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => {
-                        break 'result Ok(());
+                    Err(err) => {
+                        break 'result Err(match err.kind() {
+                            // ECONNABORTED is the closest thing to EPIPE on Windows.
+                            std::io::ErrorKind::BrokenPipe
+                            | std::io::ErrorKind::ConnectionAborted => ErrorCode::ConnectionBroken,
+                            _ => err.into(),
+                        });
                     }
-                    Err(err) => break 'result Err(err.into()),
                 }
             }
         };
