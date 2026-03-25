@@ -6,15 +6,13 @@ use crate::component::Component;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
 use crate::vm::CompiledModuleId;
-use crate::{Engine, prelude::*};
-use crate::{FrameInfo, Module, code_memory::CodeMemory};
-use alloc::collections::btree_map::{BTreeMap, Entry};
+use crate::{Engine, FrameInfo, Module, code_memory::CodeMemory, prelude::*};
 use alloc::sync::Arc;
 #[cfg(not(feature = "debug"))]
 use core::marker::PhantomData;
 use core::ops::Range;
 use core::ptr::NonNull;
-use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::{VMSharedTypeIndex, collections::btree_map::Entry};
 
 /// Used for registering modules with a store.
 ///
@@ -63,18 +61,18 @@ pub struct ModuleRegistry {
     /// then take the last element of the range. That picks the
     /// highest start address <= the query, and we can check whether
     /// it contains the address.
-    loaded_code: BTreeMap<StoreCodePC, LoadedCode>,
+    loaded_code: TryBTreeMap<StoreCodePC, LoadedCode>,
 
     /// Map from EngineCodePC start to StoreCodePC start. We use this
     /// to memoize the store-code creation process: each EngineCode is
     /// instantiated to a StoreCode only once per store.
-    store_code: BTreeMap<EngineCodePC, StoreCodePC>,
+    store_code: TryBTreeMap<EngineCodePC, StoreCodePC>,
 
     /// Modules instantiated in this registry.
     ///
     /// Every module is placed in this map, but not every module will
     /// be in a LoadedCode entry, because the module may have no text.
-    modules: BTreeMap<RegisteredModuleId, Module>,
+    modules: TryBTreeMap<RegisteredModuleId, Module>,
 }
 
 struct LoadedCode {
@@ -82,7 +80,7 @@ struct LoadedCode {
     code: StoreCode,
 
     /// Map by starting text offset of Modules in this code region.
-    modules: BTreeMap<usize, RegisteredModuleId>,
+    modules: TryBTreeMap<usize, RegisteredModuleId>,
 }
 
 /// An identifier of a module that has previously been inserted into a
@@ -93,9 +91,12 @@ struct LoadedCode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RegisteredModuleId(CompiledModuleId);
 
-fn assert_no_overlap(loaded_code: &BTreeMap<StoreCodePC, LoadedCode>, range: Range<StoreCodePC>) {
+fn assert_no_overlap(
+    loaded_code: &TryBTreeMap<StoreCodePC, LoadedCode>,
+    range: Range<StoreCodePC>,
+) {
     if let Some((start, _)) = loaded_code.range(range.start..).next() {
-        assert!(*start >= range.end);
+        assert!(start >= range.end);
     }
     if let Some((_, code)) = loaded_code.range(..range.end).next_back() {
         assert!(code.code.text_range().end <= range.start);
@@ -121,12 +122,12 @@ impl<'a> RegisterBreakpointState<'a> {
 impl ModuleRegistry {
     /// Get a previously-registered module by id.
     pub fn module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
-        self.modules.get(&id)
+        self.modules.get(id)
     }
 
     /// Get a module by CompiledModuleId, if present.
     pub fn module_by_compiled_id(&self, id: CompiledModuleId) -> Option<&Module> {
-        self.modules.get(&RegisteredModuleId(id))
+        self.modules.get(RegisteredModuleId(id))
     }
 
     /// Fetches a registered StoreCode and module and an offset within
@@ -138,7 +139,7 @@ impl ModuleRegistry {
             .next_back()?;
         let offset = StoreCodePC::offset_of(code.code.text_range(), pc)?;
         let (_, module_id) = code.modules.range(..=offset).next_back()?;
-        let module = self.modules.get(&module_id)?;
+        let module = self.modules.get(*module_id)?;
         Some((ModuleWithCode::from_raw(module, &code.code), offset))
     }
 
@@ -151,9 +152,7 @@ impl ModuleRegistry {
 
     /// Fetches the base `StoreCodePC` for a given `EngineCode`.
     pub fn store_code_base(&self, engine_code: &EngineCode) -> Option<StoreCodePC> {
-        self.store_code
-            .get(&engine_code.text_range().start)
-            .cloned()
+        self.store_code.get(engine_code.text_range().start).cloned()
     }
 
     /// Fetches the base `StoreCodePC` for a given `EngineCode` with
@@ -164,11 +163,11 @@ impl ModuleRegistry {
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<StoreCodePC> {
         let key = module.engine_code().text_range().start;
-        if !self.store_code.contains_key(&key) {
+        if !self.store_code.contains_key(key) {
             let engine = module.engine().clone();
             self.register_module(module, &engine, breakpoint_state)?;
         }
-        Ok(*self.store_code.get(&key).unwrap())
+        Ok(*self.store_code.get(key).unwrap())
     }
 
     /// Fetches a mutable `StoreCode` for a given base `StoreCodePC`.
@@ -228,11 +227,13 @@ impl ModuleRegistry {
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<Option<RegisteredModuleId>> {
         // Register the module, if any.
-        let id = module.map(|module| {
+        let id = if let Some(module) = module {
             let id = RegisteredModuleId(compiled_id);
-            self.modules.entry(id).or_insert_with(|| module.clone());
-            id
-        });
+            self.modules.entry(id).or_insert_with(|| module.clone())?;
+            Some(id)
+        } else {
+            None
+        };
 
         // Create a StoreCode if one does not already exist.
         let store_code_pc = match self.store_code.entry(code.text_range().start) {
@@ -244,10 +245,10 @@ impl ModuleRegistry {
                     store_code_pc,
                     LoadedCode {
                         code: store_code,
-                        modules: BTreeMap::default(),
+                        modules: TryBTreeMap::default(),
                     },
-                );
-                *v.insert(store_code_pc)
+                )?;
+                *v.insert(store_code_pc)?
             }
             Entry::Occupied(o) => *o.get(),
         };
@@ -257,9 +258,9 @@ impl ModuleRegistry {
             if let Some((_, range)) = module.compiled_module().finished_function_ranges().next() {
                 let loaded_code = self
                     .loaded_code
-                    .get_mut(&store_code_pc)
+                    .get_mut(store_code_pc)
                     .expect("loaded_code must have entry for StoreCodePC");
-                loaded_code.modules.insert(range.start, id);
+                loaded_code.modules.insert(range.start, id)?;
                 breakpoint_state.update(&mut loaded_code.code, module)?;
             }
         }
@@ -287,7 +288,7 @@ impl ModuleRegistry {
         let (_, module_id) = code.modules.range(..=text_offset).next_back()?;
         let module = self
             .modules
-            .get(&module_id)
+            .get(*module_id)
             .expect("referenced module ID not found");
         let info = FrameInfo::new(module.clone(), text_offset)?;
         let module_with_code = ModuleWithCode::from_raw(module, &code.code);
@@ -332,7 +333,7 @@ fn global_code() -> &'static RwLock<GlobalRegistry> {
     GLOBAL_CODE.get_or_init(Default::default)
 }
 
-type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
+type GlobalRegistry = TryBTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
 /// Find which registered region of code contains the given program counter, and
 /// what offset that PC is within that module's code.
@@ -351,14 +352,15 @@ pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
 /// This is required to enable traps to work correctly since the signal handler
 /// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
 /// is a trap or not.
-pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) {
+pub fn register_code(image: &Arc<CodeMemory>, address: Range<usize>) -> Result<(), OutOfMemory> {
     if address.is_empty() {
-        return;
+        return Ok(());
     }
     let start = address.start;
     let end = address.end - 1;
-    let prev = global_code().write().insert(end, (start, image.clone()));
+    let prev = global_code().write().insert(end, (start, image.clone()))?;
     assert!(prev.is_none());
+    Ok(())
 }
 
 /// Unregisters a code mmap from the global map.
@@ -369,7 +371,7 @@ pub fn unregister_code(address: Range<usize>) {
         return;
     }
     let end = address.end - 1;
-    let code = global_code().write().remove(&end);
+    let code = global_code().write().remove(end);
     assert!(code.is_some());
 }
 

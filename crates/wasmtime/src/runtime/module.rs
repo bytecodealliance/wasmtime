@@ -523,7 +523,7 @@ impl Module {
 
         // Package up all our data into an `EngineCode` and delegate to the final
         // step of module compilation.
-        let code = try_new::<Arc<_>>(EngineCode::new(code_memory, signatures, types.into()))?;
+        let code = try_new::<Arc<_>>(EngineCode::new(code_memory, signatures, types.into())?)?;
         let index = try_new::<Arc<_>>(index)?;
         Module::from_parts_raw(engine, code, info, index, true)
     }
