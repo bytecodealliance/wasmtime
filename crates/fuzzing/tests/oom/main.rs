@@ -12,6 +12,7 @@ mod func_type;
 mod hash_map;
 mod hash_set;
 mod index_map;
+mod instance_pre;
 mod linker;
 mod module;
 mod primary_map;
