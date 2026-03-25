@@ -4244,7 +4244,7 @@ impl Instance {
         let offset = lower_cx
             .as_slice_mut()
             .get(debug_msg_address..)
-            .and_then(|b| b.get(..debug_msg.bytes().len()))
+            .and_then(|b| b.get(..8))
             .map(|_| debug_msg_address)
             .ok_or_else(|| crate::format_err!("invalid debug message pointer: out of bounds"))?;
         debug_msg
