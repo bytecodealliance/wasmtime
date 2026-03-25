@@ -37,8 +37,8 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
-    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PrimaryMap,
-    PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap, VMCONTEXT_MAGIC,
+    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PtrSize,
+    TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap, VMCONTEXT_MAGIC,
     VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
@@ -116,7 +116,7 @@ pub struct Instance {
     /// The `MemoryAllocationIndex` was given from our `InstanceAllocator` and
     /// must be given back to the instance allocator when deallocating each
     /// memory.
-    memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+    memories: TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
 
     /// WebAssembly table data.
     ///
@@ -126,7 +126,7 @@ pub struct Instance {
     /// The `TableAllocationIndex` was given from our `InstanceAllocator` and
     /// must be given back to the instance allocator when deallocating each
     /// table.
-    tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+    tables: TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
 
     /// Stores the dropped passive element segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
@@ -166,8 +166,8 @@ impl Instance {
     /// and `tables` must have been allocated for `req.store`.
     unsafe fn new(
         req: InstanceAllocationRequest,
-        memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
-        tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+        memories: TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+        tables: TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<InstanceHandle, OutOfMemory> {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
@@ -1638,14 +1638,14 @@ impl Instance {
 
     fn memories_mut(
         self: Pin<&mut Self>,
-    ) -> &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)> {
+    ) -> &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)> {
         // SAFETY: see `store_mut` above.
         unsafe { &mut self.get_unchecked_mut().memories }
     }
 
     pub(crate) fn tables_mut(
         self: Pin<&mut Self>,
-    ) -> &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)> {
+    ) -> &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)> {
         // SAFETY: see `store_mut` above.
         unsafe { &mut self.get_unchecked_mut().tables }
     }
