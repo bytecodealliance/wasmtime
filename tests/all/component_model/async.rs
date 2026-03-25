@@ -1267,3 +1267,60 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn bytes_stream_producer() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+            (core module $libc (memory (export "mem") 1))
+            (core instance $libc (instantiate $libc))
+            (core module $m
+                (import "" "mem" (memory 1))
+                (import "" "stream.read" (func $stream.read (param i32 i32 i32) (result i32)))
+
+                (func (export "read") (param i32 i32) (result i32)
+                    (call $stream.read (local.get 0) (i32.const 0) (local.get 1))
+                )
+            )
+            (type $s (stream u8))
+            (core func $stream.read (canon stream.read $s async (memory $libc "mem")))
+            (core instance $i (instantiate $m
+                (with "" (instance
+                    (export "mem" (memory $libc "mem"))
+                    (export "stream.read" (func $stream.read))
+                ))
+            ))
+            (func (export "read") (param "s" (stream u8)) (param "l" u32) (result u32)
+                (canon lift (core func $i "read")))
+        )
+    "#,
+    )?;
+
+    let linker = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(StreamReader<u8>, u32), (u32,)>(&mut store, "read")?;
+
+    // read less than the capacity
+    let reader = StreamReader::new(&mut store, bytes::Bytes::from_static(b"hello"))?;
+    assert_eq!(
+        func.call_async(&mut store, (reader, 1)).await?,
+        ((1 << 4) | 0,),
+    );
+
+    // read more than the capacity
+    let reader = StreamReader::new(&mut store, bytes::Bytes::from_static(b"hello"))?;
+    assert_eq!(
+        func.call_async(&mut store, (reader, 100)).await?,
+        ((5 << 4) | 1,),
+    );
+
+    Ok(())
+}
