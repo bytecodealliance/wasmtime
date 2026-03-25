@@ -3926,13 +3926,13 @@ impl Instance {
             transmit.read,
             transmit.write
         );
+        let waitable = Waitable::Transmit(transmit.write_handle);
 
-        let code = if let Some(event) =
-            Waitable::Transmit(transmit.write_handle).take_event(state)?
-        {
+        let code = if let Some(event) = waitable.take_event(state)? {
             let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
                 bail_bug!("expected either a stream or future write event")
             };
+            waitable.on_delivery(store, self, event.clone())?;
             match (code, event) {
                 (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
                     ReturnCode::Cancelled(count)
@@ -4014,12 +4014,12 @@ impl Instance {
             transmit.write
         );
 
-        let code = if let Some(event) =
-            Waitable::Transmit(transmit.read_handle).take_event(state)?
-        {
+        let waitable = Waitable::Transmit(transmit.read_handle);
+        let code = if let Some(event) = waitable.take_event(state)? {
             let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
                 bail_bug!("expected either a stream or future read event")
             };
+            waitable.on_delivery(store, self, event.clone())?;
             match (code, event) {
                 (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
                     ReturnCode::Cancelled(count)
@@ -4698,31 +4698,21 @@ impl Waitable {
         instance: Instance,
         event: Event,
     ) -> Result<()> {
-        match event {
+        let instance = instance.id().get_mut(store);
+        let (rep, state, code) = match event {
             Event::FutureRead {
                 pending: Some((ty, handle)),
-                ..
+                code,
             }
             | Event::FutureWrite {
                 pending: Some((ty, handle)),
-                ..
+                code,
             } => {
-                let instance = instance.id().get_mut(store);
                 let runtime_instance = instance.component().types()[ty].instance;
                 let (rep, state) = instance.instance_states().0[runtime_instance]
                     .handle_table()
                     .future_rep(ty, handle)?;
-                if rep != self.rep() {
-                    bail_bug!("unexpected rep mismatch");
-                }
-                if *state != TransmitLocalState::Busy {
-                    bail_bug!("expected state to be busy");
-                }
-                *state = match event {
-                    Event::FutureRead { .. } => TransmitLocalState::Read { done: false },
-                    Event::FutureWrite { .. } => TransmitLocalState::Write { done: false },
-                    _ => bail_bug!("unexpected event for future"),
-                };
+                (rep, state, code)
             }
             Event::StreamRead {
                 pending: Some((ty, handle)),
@@ -4732,37 +4722,41 @@ impl Waitable {
                 pending: Some((ty, handle)),
                 code,
             } => {
-                let instance = instance.id().get_mut(store);
                 let runtime_instance = instance.component().types()[ty].instance;
                 let (rep, state) = instance.instance_states().0[runtime_instance]
                     .handle_table()
                     .stream_rep(ty, handle)?;
-                if rep != self.rep() {
-                    bail_bug!("unexpected rep mismatch");
-                }
-                if *state != TransmitLocalState::Busy {
-                    bail_bug!("expected state to be busy");
-                }
-                let done = matches!(code, ReturnCode::Dropped(_));
-                *state = match event {
-                    Event::StreamRead { .. } => TransmitLocalState::Read { done },
-                    Event::StreamWrite { .. } => TransmitLocalState::Write { done },
-                    _ => bail_bug!("unexpected event for stream"),
-                };
-
-                let transmit_handle = TableId::<TransmitHandle>::new(rep);
-                let state = store.concurrent_state_mut();
-                let transmit_id = state.get_mut(transmit_handle)?.state;
-                let transmit = state.get_mut(transmit_id)?;
-
-                match event {
-                    Event::StreamRead { .. } => {
-                        transmit.read = ReadState::Open;
-                    }
-                    Event::StreamWrite { .. } => transmit.write = WriteState::Open,
-                    _ => bail_bug!("unexpected event for stream"),
-                };
+                (rep, state, code)
             }
+            _ => return Ok(()),
+        };
+        if rep != self.rep() {
+            bail_bug!("unexpected rep mismatch");
+        }
+        if *state != TransmitLocalState::Busy {
+            bail_bug!("expected state to be busy");
+        }
+        let done = matches!(code, ReturnCode::Dropped(_));
+        *state = match event {
+            Event::FutureRead { .. } | Event::StreamRead { .. } => {
+                TransmitLocalState::Read { done }
+            }
+            Event::FutureWrite { .. } | Event::StreamWrite { .. } => {
+                TransmitLocalState::Write { done }
+            }
+            _ => bail_bug!("unexpected event for stream"),
+        };
+
+        let transmit_handle = TableId::<TransmitHandle>::new(rep);
+        let state = store.concurrent_state_mut();
+        let transmit_id = state.get_mut(transmit_handle)?.state;
+        let transmit = state.get_mut(transmit_id)?;
+
+        match event {
+            Event::StreamRead { .. } => {
+                transmit.read = ReadState::Open;
+            }
+            Event::StreamWrite { .. } => transmit.write = WriteState::Open,
             _ => {}
         }
         Ok(())
