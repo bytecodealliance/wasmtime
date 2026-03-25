@@ -1450,6 +1450,7 @@ impl Compiler<'_, '_> {
         self.ptr_shl(dst.opts);
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts, dst.ptr.idx, 2);
         self.instruction(End); // end of shrink-to-fit
 
         self.free_temp_local(dst_byte_len);
@@ -1531,6 +1532,7 @@ impl Compiler<'_, '_> {
         self.instruction(LocalGet(dst.len.idx)); // new_size
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts, dst.ptr.idx, 2);
 
         self.free_temp_local(dst_byte_len);
         self.free_temp_local(src_byte_len);
@@ -1603,6 +1605,7 @@ impl Compiler<'_, '_> {
         self.instruction(LocalGet(dst.len.idx)); // new_size
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts, dst.ptr.idx, 2);
         self.instruction(End);
 
         // In this block the latin1 encoding failed. The host transcode
@@ -1628,6 +1631,7 @@ impl Compiler<'_, '_> {
         self.instruction(LocalTee(dst_byte_len.idx));
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts, dst.ptr.idx, 2);
 
         // Call the host utf16 transcoding function. This will inflate the
         // prior latin1 bytes and then encode the rest of the source string
@@ -1667,6 +1671,7 @@ impl Compiler<'_, '_> {
         self.ptr_shl(dst.opts);
         self.instruction(Call(dst.opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts, dst.ptr.idx, 2);
         self.instruction(End);
 
         // Tag the returned pointer as utf16
