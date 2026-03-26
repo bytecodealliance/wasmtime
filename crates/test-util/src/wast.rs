@@ -455,9 +455,11 @@ impl WastTest {
 
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
+            // allocates too much memory for the pooling configuration here
+            if self.config.hogs_memory() {
+                return true;
+            }
             let unsupported = [
-                // allocates too much memory for the pooling configuration here
-                "misc_testsuite/memory64/more-than-4gb.wast",
                 // shared memories + pooling allocator aren't supported yet
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/threads/atomics-end-of-memory.wast",

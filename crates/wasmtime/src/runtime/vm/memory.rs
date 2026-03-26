@@ -360,15 +360,19 @@ impl Memory {
             )
         })?;
 
+        if !ty.allow_growth_to(minimum) {
+            bail!(
+                "memory minimum size of {} pages exceeds memory limits",
+                ty.limits.min
+            );
+        }
+
         Ok((minimum, maximum))
     }
 
     /// Returns this memory's page size, in bytes.
     pub fn page_size(&self) -> u64 {
-        match self {
-            Memory::Local(mem) => mem.page_size(),
-            Memory::Shared(mem) => mem.page_size(),
-        }
+        self.ty().page_size()
     }
 
     /// Returns the size of this memory, in bytes.
@@ -411,6 +415,33 @@ impl Memory {
         delta_pages: u64,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<usize>, Error> {
+        let new_size = delta_pages
+            .checked_mul(self.page_size())
+            .and_then(|new_bytes| {
+                let new_bytes = usize::try_from(new_bytes).ok()?;
+                self.byte_size().checked_add(new_bytes)
+            });
+        match new_size {
+            Some(new_size) => {
+                // FIXME(WebAssembly/custom-page-sizes#45) - what should the
+                // behavior here be exactly? A trap? Return -1? A smaller limit?
+                // Unclear!
+                //
+                // Trap for now to make this as noisy/conservative as possible.
+                if !self.ty().allow_growth_to(new_size) {
+                    bail!(
+                        "disallowing growth to {new_size:#x} bytes based on \
+                         page size"
+                    )
+                }
+            }
+
+            // If the new size in memory isn't representable in a `usize` then
+            // there's no need to actually try to grow it to that size. It's
+            // impossible to succeed so just fail it early.
+            None => return Ok(None),
+        }
+
         let result = match self {
             Memory::Local(mem) => mem.grow(delta_pages, limiter).await?,
             Memory::Shared(mem) => mem.grow(delta_pages)?,
@@ -513,6 +544,13 @@ impl Memory {
             Memory::Shared(mem) => mem.wasm_accessible(),
         }
     }
+
+    fn ty(&self) -> &wasmtime_environ::Memory {
+        match self {
+            Memory::Local(mem) => mem.ty(),
+            Memory::Shared(mem) => mem.ty(),
+        }
+    }
 }
 
 /// An owned allocation of a wasm linear memory.
@@ -579,8 +617,8 @@ impl LocalMemory {
         })
     }
 
-    pub fn page_size(&self) -> u64 {
-        self.ty.page_size()
+    pub fn ty(&self) -> &wasmtime_environ::Memory {
+        &self.ty
     }
 
     /// Grows a memory by `delta_pages`.
@@ -601,7 +639,7 @@ impl LocalMemory {
             return Ok(Some((old_byte_size, old_byte_size)));
         }
 
-        let page_size = usize::try_from(self.page_size()).unwrap();
+        let page_size = usize::try_from(self.ty().page_size()).unwrap();
 
         // The largest wasm-page-aligned region of memory is possible to
         // represent in a `usize`. This will be impossible for the system to
