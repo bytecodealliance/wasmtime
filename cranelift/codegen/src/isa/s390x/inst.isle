@@ -1099,8 +1099,10 @@
     (SubLogical64)
     (SubLogical64Ext32)
     (Mul32)
+    (Mul32CC)
     (Mul32Ext16)
     (Mul64)
+    (Mul64CC)
     (Mul64Ext16)
     (Mul64Ext32)
     (And32)
@@ -4040,6 +4042,10 @@
 (rule (aluop_mul $I32) (ALUOp.Mul32))
 (rule (aluop_mul $I64) (ALUOp.Mul64))
 
+(decl aluop_mul_cc (Type) ALUOp)
+(rule (aluop_mul_cc $I32) (ALUOp.Mul32CC))
+(rule (aluop_mul_cc $I64) (ALUOp.Mul64CC))
+
 (decl aluop_mul_sext16 (Type) ALUOp)
 (rule (aluop_mul_sext16 $I16) (ALUOp.Mul32Ext16))
 (rule (aluop_mul_sext16 $I32) (ALUOp.Mul32Ext16))
@@ -4050,6 +4056,10 @@
 
 (decl mul_reg (Type Reg Reg) Reg)
 (rule (mul_reg ty x y) (alu_rrr ty (aluop_mul ty) x y))
+
+(decl mul_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_with_flags_paired ty x y)
+     (alu_rrr_with_flags_paired ty (aluop_mul_cc ty) x y))
 
 (decl mul_reg_sext32 (Type Reg Reg) Reg)
 (rule (mul_reg_sext32 ty x y) (alu_rr ty (aluop_mul_sext32 ty) x y))
