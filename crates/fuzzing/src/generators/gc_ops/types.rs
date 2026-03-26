@@ -118,30 +118,14 @@ impl Types {
             .map(|(gid, _)| *gid)
     }
 
-    /// Enforce limits: trim excess rec groups, orphaned types, and excess types.
+    /// Fix up the types to ensure they are within the limits.
     pub fn fixup(&mut self, limits: &GcOpsLimits) {
-        // 1. Trim excess rec groups.
-        while self.rec_groups.len()
-            > usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
-        {
-            if let Some((_gid, members)) = self.rec_groups.pop_last() {
-                for tid in &members {
-                    self.type_defs.remove(tid);
-                }
-            }
-        }
+        let max_rec_groups =
+            usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
+        let max_types = usize::try_from(limits.max_types).expect("max_types is too large");
 
-        // 2. Drop orphan type_defs (types not in any rec group's member set).
-        let mut all_members = std::collections::BTreeSet::new();
-        for members in self.rec_groups.values() {
-            all_members.extend(members.iter().copied());
-        }
-        self.type_defs.retain(|tid, _| all_members.contains(tid));
-
-        // 3. Trim excess types.
-        while self.type_defs.len()
-            > usize::try_from(limits.max_types).expect("max_types is too large")
-        {
+        // 1. Trim excess types and remove them from rec group member sets, i.e.
+        while self.type_defs.len() > max_types {
             if let Some((tid, _)) = self.type_defs.pop_last() {
                 for members in self.rec_groups.values_mut() {
                     members.remove(&tid);
@@ -149,17 +133,75 @@ impl Types {
             }
         }
 
-        // 4. Drop orphan rec-group members (member set entries not in type_defs).
+        // 2. Drop dangling member set entries that reference types that do not exist.
         for members in self.rec_groups.values_mut() {
             members.retain(|tid| self.type_defs.contains_key(tid));
         }
 
-        debug_assert!(
-            self.type_defs
-                .keys()
-                .all(|tid| self.rec_group_of(*tid).is_some()),
-            "every type must belong to a rec group"
-        );
+        // 3. Trim excess rec groups and collect their members as orphans.
+        let mut rec_group_orphans = BTreeSet::new();
+        while self.rec_groups.len() > max_rec_groups {
+            if let Some((_gid, members)) = self.rec_groups.pop_last() {
+                rec_group_orphans.extend(members);
+            }
+        }
+
+        // 4. Find corruption orphans that are not in any group.
+        let mut all_members = BTreeSet::new();
+        for members in self.rec_groups.values() {
+            all_members.extend(members.iter().copied());
+        }
+
+        // Exclude rec_group_orphans that are already accounted for in the step 3.
+        let corruption_orphans: BTreeSet<TypeId> = self
+            .type_defs
+            .keys()
+            .filter(|tid| !all_members.contains(tid) && !rec_group_orphans.contains(tid))
+            .copied()
+            .collect();
+
+        // 5. Adopt into the first rec group: corruption orphans first,
+        //    then rec group orphans. Both are already within max_types from step 1.
+        if let Some(gid) = self.rec_groups.keys().next().copied() {
+            let members = self.rec_groups.get_mut(&gid).unwrap();
+            members.extend(corruption_orphans);
+            members.extend(rec_group_orphans);
+        } else {
+            // No rec groups at all — drop everything.
+            for tid in corruption_orphans.iter().chain(rec_group_orphans.iter()) {
+                self.type_defs.remove(tid);
+            }
+        }
+
+        debug_assert!(self.is_well_formed(limits));
+    }
+
+    /// Check if the types are well-formed and within configured limits, i.e.
+    /// rec/type counts are within limits,
+    /// every type belongs to exactly one rec group,
+    /// and every rec group member must exist in type_defs.
+    fn is_well_formed(&self, limits: &GcOpsLimits) -> bool {
+        if self.rec_groups.len()
+            > usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
+        {
+            return false;
+        }
+        if self.type_defs.len() > usize::try_from(limits.max_types).expect("max_types is too large")
+        {
+            return false;
+        }
+        let mut all = BTreeSet::new();
+        for members in self.rec_groups.values() {
+            for tid in members {
+                if !self.type_defs.contains_key(tid) {
+                    return false;
+                }
+                if !all.insert(*tid) {
+                    return false;
+                }
+            }
+        }
+        self.type_defs.keys().all(|tid| all.contains(tid))
     }
 }
 

@@ -28,10 +28,9 @@ impl TypesMutator {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let gid = *ctx
-                .rng()
-                .choose(types.rec_groups.keys())
-                .expect("not empty");
+            let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                return Ok(());
+            };
             let tid = types.fresh_type_id(ctx.rng());
             types.insert_empty_struct(tid, gid);
             log::debug!("Added empty struct {tid:?} to rec group {gid:?}");
@@ -46,7 +45,9 @@ impl TypesMutator {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let tid = *ctx.rng().choose(types.type_defs.keys()).expect("not empty");
+            let Some(tid) = ctx.rng().choose(types.type_defs.keys()).copied() else {
+                return Ok(());
+            };
             types.remove_type(tid);
             log::debug!("Removed struct type {tid:?}");
             Ok(())
@@ -65,10 +66,9 @@ impl TypesMutator {
         }
         c.mutation(|ctx| {
             for _ in 0..16 {
-                let gid = *ctx
-                    .rng()
-                    .choose(types.rec_groups.keys())
-                    .expect("types.rec_groups is not empty (guarded above)");
+                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
 
                 let Some(member_set) = types.rec_groups.get(&gid) else {
                     continue;
@@ -78,20 +78,32 @@ impl TypesMutator {
                     continue;
                 }
 
-                let tid_a = *ctx.rng().choose(&members).expect("len > 2");
-                let mut tid_b = *ctx.rng().choose(&members).expect("len > 2");
+                let Some(tid_a) = ctx.rng().choose(&members).copied() else {
+                    return Ok(());
+                };
+                let Some(mut tid_b) = ctx.rng().choose(&members).copied() else {
+                    return Ok(());
+                };
                 for _ in 0..members.len() {
                     if tid_a != tid_b {
                         break;
                     }
-                    tid_b = *ctx.rng().choose(&members).unwrap();
+                    let Some(next_tid) = ctx.rng().choose(&members).copied() else {
+                        return Ok(());
+                    };
+                    tid_b = next_tid;
                 }
                 if tid_a == tid_b {
                     continue;
                 }
 
-                let a_def = types.type_defs.remove(&tid_a).unwrap();
-                let b_def = types.type_defs.remove(&tid_b).unwrap();
+                let Some(a_def) = types.type_defs.remove(&tid_a) else {
+                    return Ok(());
+                };
+                let Some(b_def) = types.type_defs.remove(&tid_b) else {
+                    types.type_defs.insert(tid_a, a_def);
+                    return Ok(());
+                };
                 types.type_defs.insert(tid_a, b_def);
                 types.type_defs.insert(tid_b, a_def);
                 log::debug!("Swapped types {tid_a:?} and {tid_b:?} in rec group {gid:?}");
@@ -108,21 +120,49 @@ impl TypesMutator {
         c: &mut Candidates<'_>,
         types: &mut Types,
     ) -> mutatis::Result<()> {
-        if types.type_defs.is_empty() || types.rec_groups.len() < 2 {
+        if types.rec_groups.len() < 2 {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let tid = *ctx.rng().choose(types.type_defs.keys()).expect("not empty");
-            let old_gid = types
-                .rec_group_of(tid)
-                .expect("type must belong to a group");
-            let new_gid = *ctx
-                .rng()
-                .choose(types.rec_groups.keys())
-                .expect("not empty");
+            let mut old_gid = None;
+            for _ in 0..16 {
+                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
+                if types
+                    .rec_groups
+                    .get(&gid)
+                    .map(|s| !s.is_empty())
+                    .unwrap_or(false)
+                {
+                    old_gid = Some(gid);
+                    break;
+                }
+            }
+            let Some(old_gid) = old_gid else {
+                return Ok(());
+            };
 
-            types.rec_groups.get_mut(&old_gid).unwrap().remove(&tid);
-            types.rec_groups.get_mut(&new_gid).unwrap().insert(tid);
+            let Some(tid) = types
+                .rec_groups
+                .get(&old_gid)
+                .and_then(|members| ctx.rng().choose(members.iter()).copied())
+            else {
+                return Ok(());
+            };
+
+            let Some(new_gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                return Ok(());
+            };
+
+            let Some(old_members) = types.rec_groups.get_mut(&old_gid) else {
+                return Ok(());
+            };
+            old_members.remove(&tid);
+            let Some(new_members) = types.rec_groups.get_mut(&new_gid) else {
+                return Ok(());
+            };
+            new_members.insert(tid);
             log::debug!("Moved type {tid:?} from {old_gid:?} to {new_gid:?}");
             Ok(())
         })?;
@@ -146,11 +186,12 @@ impl TypesMutator {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let src_gid = *ctx
-                .rng()
-                .choose(types.rec_groups.keys())
-                .expect("not empty");
-            let count = types.rec_groups[&src_gid].len();
+            let Some(src_gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                return Ok(());
+            };
+            let Some(count) = types.rec_groups.get(&src_gid).map(|s| s.len()) else {
+                return Ok(());
+            };
             if count == 0 {
                 return Ok(());
             }
@@ -175,11 +216,12 @@ impl TypesMutator {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let gid = *ctx
-                .rng()
-                .choose(types.rec_groups.keys())
-                .expect("not empty");
-            let members = types.rec_groups.remove(&gid).expect("rec group must exist");
+            let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                return Ok(());
+            };
+            let Some(members) = types.rec_groups.remove(&gid) else {
+                return Ok(());
+            };
             for tid in &members {
                 types.type_defs.remove(tid);
             }
@@ -198,18 +240,16 @@ impl TypesMutator {
             return Ok(());
         }
         c.mutation(|ctx| {
-            let dst_gid = *ctx
-                .rng()
-                .choose(types.rec_groups.keys())
-                .expect("not empty");
+            let Some(dst_gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                return Ok(());
+            };
 
             // Find a distinct source group.
             let mut src_gid = None;
             for _ in 0..16 {
-                let g = *ctx
-                    .rng()
-                    .choose(types.rec_groups.keys())
-                    .expect("not empty");
+                let Some(g) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
                 if g != dst_gid {
                     src_gid = Some(g);
                     break;
@@ -220,15 +260,13 @@ impl TypesMutator {
             };
 
             // Move all members from src into dst.
-            let src_members = types
-                .rec_groups
-                .remove(&src_gid)
-                .expect("rec group must exist");
-            types
-                .rec_groups
-                .get_mut(&dst_gid)
-                .expect("rec group must exist")
-                .extend(src_members.iter());
+            let Some(src_members) = types.rec_groups.remove(&src_gid) else {
+                return Ok(());
+            };
+            let Some(dst_members) = types.rec_groups.get_mut(&dst_gid) else {
+                return Ok(());
+            };
+            dst_members.extend(src_members.iter());
             log::debug!("Merged rec group {src_gid:?} into {dst_gid:?}");
             Ok(())
         })?;
@@ -254,11 +292,10 @@ impl TypesMutator {
             // Find a group with >= 2 members.
             let mut old_gid = None;
             for _ in 0..16 {
-                let gid = *ctx
-                    .rng()
-                    .choose(types.rec_groups.keys())
-                    .expect("not empty");
-                if types.rec_groups[&gid].len() >= 2 {
+                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
+                if types.rec_groups.get(&gid).map(|s| s.len()).unwrap_or(0) >= 2 {
                     old_gid = Some(gid);
                     break;
                 }
@@ -271,8 +308,10 @@ impl TypesMutator {
             types.insert_rec_group(new_gid);
 
             // Collect members so we can pick from them.
-            let mut members: SmallVec<[TypeId; 32]> =
-                types.rec_groups[&old_gid].iter().copied().collect();
+            let Some(old_members) = types.rec_groups.get(&old_gid) else {
+                return Ok(());
+            };
+            let mut members: SmallVec<[TypeId; 32]> = old_members.iter().copied().collect();
             let len = members.len();
 
             // Choose k in [1, len-1] so both groups stay non-empty.
@@ -286,8 +325,14 @@ impl TypesMutator {
                     break;
                 };
                 let tid = members.remove(i);
-                types.rec_groups.get_mut(&old_gid).unwrap().remove(&tid);
-                types.rec_groups.get_mut(&new_gid).unwrap().insert(tid);
+                let Some(old_members) = types.rec_groups.get_mut(&old_gid) else {
+                    return Ok(());
+                };
+                old_members.remove(&tid);
+                let Some(new_members) = types.rec_groups.get_mut(&new_gid) else {
+                    return Ok(());
+                };
+                new_members.insert(tid);
             }
 
             log::debug!("Split rec group {old_gid:?}: moved {k} of {len} members into {new_gid:?}");
@@ -303,10 +348,6 @@ impl TypesMutator {
         types: &mut Types,
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
-        // Fuzzing + raw byte mutation can decode/produce malformed `Types`.
-        // Repair invariants early so the rest of this mutator can rely on
-        // `unwrap()`/`expect()` being sound.
-        types.fixup(limits);
         self.add_struct(c, types, limits)?;
         self.remove_struct(c, types)?;
         self.swap_within_group(c, types)?;
