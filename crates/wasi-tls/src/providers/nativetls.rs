@@ -1,6 +1,6 @@
 //! The `native_tls` provider.
 
-use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsStream, TlsTransport};
 use std::io;
 use std::pin::{Pin, pin};
 use std::task::Poll;
@@ -11,7 +11,7 @@ pub struct NativeTlsProvider {
 }
 
 impl TlsProvider for NativeTlsProvider {
-    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream {
         Box::pin(async move {
             let connector = native_tls::TlsConnector::new()?;
             let stream = tokio_native_tls::TlsConnector::from(connector)

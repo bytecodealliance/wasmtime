@@ -1,6 +1,6 @@
 //! The `openssl` provider.
 
-use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsStream, TlsTransport};
 use openssl::ssl::{SslConnector, SslMethod};
 use std::io;
 use std::pin::{Pin, pin};
@@ -11,7 +11,7 @@ pub struct OpenSslProvider {
 }
 
 impl TlsProvider for OpenSslProvider {
-    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream {
         Box::pin(async move {
             // Per the `openssl` crate's recommendation, we're using the
             // `SslConnector` to set up a Ssl object with secure defaults:

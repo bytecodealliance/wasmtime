@@ -142,8 +142,8 @@ pub trait TlsStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 /// A TLS implementation.
 pub trait TlsProvider: Send + Sync + 'static {
     /// Set up a client TLS connection using the provided `server_name` and `transport`.
-    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream;
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream;
 }
 
-pub(crate) type BoxFutureTlStream =
+pub(crate) type BoxFutureTlsStream =
     std::pin::Pin<Box<dyn Future<Output = Result<Box<dyn TlsStream>, Error>> + Send>>;

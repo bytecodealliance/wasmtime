@@ -1,6 +1,6 @@
 //! The `rustls` provider.
 
-use crate::{BoxFutureTlStream, Error, TlsProvider, TlsStream, TlsTransport};
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsStream, TlsTransport};
 use rustls::pki_types::ServerName;
 use std::sync::{Arc, LazyLock};
 
@@ -12,7 +12,7 @@ pub struct RustlsProvider {
 }
 
 impl TlsProvider for RustlsProvider {
-    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlStream {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream {
         let client_config = Arc::clone(&self.client_config);
         Box::pin(async move {
             let domain =

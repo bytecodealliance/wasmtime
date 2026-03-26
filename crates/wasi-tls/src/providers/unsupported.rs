@@ -1,6 +1,6 @@
 //! The `unsupported` provider.
 
-use crate::{BoxFutureTlStream, Error, TlsProvider, TlsTransport};
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsTransport};
 
 /// A pseudo TLS provider that returns an error for all operations. This is the
 /// default provider when no real TLS providers were enabled at compile time.
@@ -14,7 +14,7 @@ impl TlsProvider for UnsupportedProvider {
         &self,
         _server_name: String,
         _transport: Box<dyn TlsTransport>,
-    ) -> BoxFutureTlStream {
+    ) -> BoxFutureTlsStream {
         Box::pin(async move {
             Err(Error::msg(
                 "no TLS provider enabled; recompile with a TLS provider feature",

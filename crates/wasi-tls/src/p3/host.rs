@@ -2,7 +2,7 @@
 
 use crate::p3::util::{AsyncReadProducer, AsyncWriteConsumer, Closed, Deferred, Shared, pipe};
 use crate::p3::{WasiTls, WasiTlsCtxView, bindings};
-use crate::{BoxFutureTlStream, Error, TlsStream};
+use crate::{BoxFutureTlsStream, Error, TlsStream};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::{io::AsyncWriteExt as _, sync::oneshot};
@@ -181,11 +181,11 @@ impl bindings::tls::client::HostConnectorWithStore for WasiTls {
         this: Resource<Connector>,
         server_name: String,
     ) -> wasmtime::Result<Result<(), Resource<Error>>> {
-        fn connect_err(msg: &'static str) -> BoxFutureTlStream {
+        fn connect_err(msg: &'static str) -> BoxFutureTlsStream {
             Box::pin(async move { Err(Error::msg(msg)) })
         }
         let (fut, connection) = accessor.with(
-            move |mut access| -> wasmtime::Result<(BoxFutureTlStream, _)> {
+            move |mut access| -> wasmtime::Result<(BoxFutureTlsStream, _)> {
                 let WasiTlsCtxView { table, ctx } = access.get();
                 let connector = table.delete(this)?;
                 let connection = connector.connection;
