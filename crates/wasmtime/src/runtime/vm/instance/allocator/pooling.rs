@@ -55,6 +55,8 @@ use crate::runtime::vm::{
     mpk::{self, ProtectionKey, ProtectionMask},
     sys::vm::PageMap,
 };
+use core::future::Future;
+use core::pin::Pin;
 use core::sync::atomic::AtomicUsize;
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -553,7 +555,6 @@ impl PoolingInstanceAllocator {
     }
 }
 
-#[async_trait::async_trait]
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component<'a>(
@@ -678,35 +679,40 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         self.live_core_instances.fetch_sub(1, Ordering::AcqRel);
     }
 
-    async fn allocate_memory(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Memory,
+    fn allocate_memory<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<(MemoryAllocationIndex, Memory)> {
-        async {
-            // FIXME(rust-lang/rust#145127) this should ideally use a version of
-            // `with_flush_and_retry` but adapted for async closures instead of only
-            // sync closures. Right now that won't compile though so this is the
-            // manually expanded version of the method.
-            let e = match self.memories.allocate(request, ty, memory_index).await {
-                Ok(result) => return Ok(result),
-                Err(e) => e,
-            };
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
+        OutOfMemory,
+    > {
+        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+            async {
+                // FIXME(rust-lang/rust#145127) this should ideally use a version of
+                // `with_flush_and_retry` but adapted for async closures instead of only
+                // sync closures. Right now that won't compile though so this is the
+                // manually expanded version of the method.
+                let e = match self.memories.allocate(request, ty, memory_index).await {
+                    Ok(result) => return Ok(result),
+                    Err(e) => e,
+                };
 
-            if e.is::<PoolConcurrencyLimitError>() {
-                let queue = self.decommit_queue.lock().unwrap();
-                if self.flush_decommit_queue(queue) {
-                    return self.memories.allocate(request, ty, memory_index).await;
+                if e.is::<PoolConcurrencyLimitError>() {
+                    let queue = self.decommit_queue.lock().unwrap();
+                    if self.flush_decommit_queue(queue) {
+                        return self.memories.allocate(request, ty, memory_index).await;
+                    }
                 }
-            }
 
-            Err(e)
-        }
-        .await
-        .inspect(|_| {
-            self.live_memories.fetch_add(1, Ordering::Relaxed);
-        })
+                Err(e)
+            }
+            .await
+            .inspect(|_| {
+                self.live_memories.fetch_add(1, Ordering::Relaxed);
+            })
+        })?))
     }
 
     unsafe fn deallocate_memory(
@@ -747,33 +753,38 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         self.merge_or_flush(queue);
     }
 
-    async fn allocate_table(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Table,
+    fn allocate_table<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
-    ) -> Result<(super::TableAllocationIndex, Table)> {
-        async {
-            // FIXME: see `allocate_memory` above for comments about duplication
-            // with `with_flush_and_retry`.
-            let e = match self.tables.allocate(request, ty).await {
-                Ok(result) => return Ok(result),
-                Err(e) => e,
-            };
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(super::TableAllocationIndex, Table)>> + Send + 'a>>,
+        OutOfMemory,
+    > {
+        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+            async {
+                // FIXME: see `allocate_memory` above for comments about duplication
+                // with `with_flush_and_retry`.
+                let e = match self.tables.allocate(request, ty).await {
+                    Ok(result) => return Ok(result),
+                    Err(e) => e,
+                };
 
-            if e.is::<PoolConcurrencyLimitError>() {
-                let queue = self.decommit_queue.lock().unwrap();
-                if self.flush_decommit_queue(queue) {
-                    return self.tables.allocate(request, ty).await;
+                if e.is::<PoolConcurrencyLimitError>() {
+                    let queue = self.decommit_queue.lock().unwrap();
+                    if self.flush_decommit_queue(queue) {
+                        return self.tables.allocate(request, ty).await;
+                    }
                 }
-            }
 
-            Err(e)
-        }
-        .await
-        .inspect(|_| {
-            self.live_tables.fetch_add(1, Ordering::Relaxed);
-        })
+                Err(e)
+            }
+            .await
+            .inspect(|_| {
+                self.live_tables.fetch_add(1, Ordering::Relaxed);
+            })
+        })?))
     }
 
     unsafe fn deallocate_table(
