@@ -11,8 +11,8 @@ use crate::runtime::vm::{
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
-use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, Tunables};
 use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, Tunables};
 
 /// Backing images for memories in a module.
 ///
