@@ -381,7 +381,7 @@ impl Func {
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Creates a new [`Func`] with the given arguments, although has fewer
@@ -425,7 +425,7 @@ impl Func {
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -516,7 +516,7 @@ impl Func {
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Creates a new `Func` from a store and a funcref within that store.
@@ -795,7 +795,7 @@ impl Func {
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
@@ -817,7 +817,7 @@ impl Func {
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Returns the underlying wasm type that this `Func` has.
@@ -2625,13 +2625,13 @@ impl HostFunc {
     ///
     /// Can only be inserted into stores with a matching `T` relative to when
     /// this `HostFunc` was first created.
-    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
+    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Result<Func, OutOfMemory> {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
-        let funcref = funcrefs.push_arc_host(self.clone(), modules);
+        let funcref = funcrefs.push_arc_host(self.clone(), modules)?;
         // SAFETY: this funcref was just pushed within the store, so it's safe
         // to say this store owns it.
-        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
+        Ok(unsafe { Func::from_vm_func_ref(store.id(), funcref) })
     }
 
     /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
@@ -2685,7 +2685,7 @@ impl HostFunc {
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
-    unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
+    unsafe fn into_func(self, store: &mut StoreOpaque) -> Result<Func, OutOfMemory> {
         self.validate_store(store);
 
         // This function could be called by a guest at any time, and it requires
@@ -2693,10 +2693,10 @@ impl HostFunc {
         store.set_async_required(self.asyncness);
 
         let (funcrefs, modules) = store.func_refs_and_modules();
-        let funcref = funcrefs.push_box_host(Box::new(self), modules);
+        let funcref = funcrefs.push_box_host(Box::new(self), modules)?;
         // SAFETY: this funcref was just pushed within `store`, so it's safe to
         // say it's owned by the store's id.
-        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
+        Ok(unsafe { Func::from_vm_func_ref(store.id(), funcref) })
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {
