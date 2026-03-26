@@ -40,7 +40,7 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 use super::DataModel;
 
-const MAX_STRING_BYTE_LENGTH: u32 = 1 << 31;
+const MAX_STRING_BYTE_LENGTH: u32 = (1 << 31) - 1;
 const UTF16_TAG: u32 = 1 << 31;
 
 /// This value is arbitrarily chosen and should be fine to change at any time,
@@ -2403,7 +2403,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(LocalGet(s.len.idx));
         let max = MAX_STRING_BYTE_LENGTH / u32::from(dst);
         self.ptr_uconst(mem_opts, max);
-        self.ptr_ge_u(mem_opts);
+        self.ptr_gt_u(mem_opts);
         self.instruction(If(BlockType::Empty));
         self.trap(Trap::StringOutOfBounds);
         self.instruction(End);
@@ -4004,11 +4004,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         }
     }
 
-    fn ptr_ge_u(&mut self, opts: &LinearMemoryOptions) {
+    fn ptr_gt_u(&mut self, opts: &LinearMemoryOptions) {
         if opts.memory64 {
-            self.instruction(I64GeU);
+            self.instruction(I64GtU);
         } else {
-            self.instruction(I32GeU);
+            self.instruction(I32GtU);
         }
     }
 
@@ -4040,7 +4040,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         if opts.memory64 {
             self.instruction(I64Const(val.into()));
         } else {
-            self.instruction(I32Const(val as i32));
+            self.instruction(I32Const(val.cast_signed()));
         }
     }
 
