@@ -1045,13 +1045,10 @@ fn load_variant(
             u32::linear_lift_from_memory(cx, InterfaceType::U32, &bytes[..4])?
         }
     };
-    let case_ty = types.nth(discriminant as usize).ok_or_else(|| {
-        format_err!(
-            "discriminant {} out of range [0..{})",
-            discriminant,
-            types.len()
-        )
-    })?;
+    let len = types.len();
+    let case_ty = types
+        .nth(discriminant as usize)
+        .ok_or_else(|| format_err!("discriminant {discriminant} out of range [0..{len})"))?;
     let value = match case_ty {
         Some(case_ty) => {
             let payload_offset = usize::try_from(info.payload_offset32).unwrap();
