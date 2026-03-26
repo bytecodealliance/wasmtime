@@ -54,6 +54,7 @@ impl TypesMutator {
         Ok(())
     }
 
+    /// Swap two random types within a rec group.
     fn swap_within_group(
         &mut self,
         c: &mut Candidates<'_>,
@@ -100,6 +101,7 @@ impl TypesMutator {
         })?;
         Ok(())
     }
+
     /// Move a random type from one rec group to another.
     fn move_between_groups(
         &mut self,

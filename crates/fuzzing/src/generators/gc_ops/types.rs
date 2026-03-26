@@ -239,6 +239,7 @@ impl StackType {
         }
     }
 
+    /// Emit an opcode and update the stack.
     pub(crate) fn emit(
         op: GcOp,
         stack: &mut Vec<Self>,
@@ -258,6 +259,7 @@ impl StackType {
         }
     }
 
+    /// Clamp a type index to the number of types.
     fn clamp(t: u32, n: u32) -> u32 {
         if n == 0 { 0 } else { t % n }
     }
