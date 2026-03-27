@@ -783,19 +783,33 @@ impl Func {
     /// # }
     /// ```
     pub fn wrap<T, Params, Results>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Func
     where
         T: 'static,
     {
+        Self::try_wrap(store, func).expect(
+            "allocation failure during `Func::wrap` (use `Func::try_wrap` to handle such errors)",
+        )
+    }
+
+    /// Fallible version of [`Func::wrap`] that returns an error on
+    /// out-of-memory instead of panicking.
+    pub fn try_wrap<T, Params, Results>(
+        mut store: impl AsContextMut<Data = T>,
+        func: impl IntoFunc<T, Params, Results>,
+    ) -> Result<Func>
+    where
+        T: 'static,
+    {
         let store = store.as_context_mut().0;
         let engine = store.engine();
-        let host = func.into_func(engine).panic_on_oom();
+        let host = func.into_func(engine)?;
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
-        unsafe { host.into_func(store).panic_on_oom() }
+        Ok(unsafe { host.into_func(store)? })
     }
 
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
@@ -2693,7 +2707,7 @@ impl HostFunc {
         store.set_async_required(self.asyncness);
 
         let (funcrefs, modules) = store.func_refs_and_modules();
-        let funcref = funcrefs.push_box_host(Box::new(self), modules)?;
+        let funcref = funcrefs.push_box_host(try_new::<Box<_>>(self)?, modules)?;
         // SAFETY: this funcref was just pushed within `store`, so it's safe to
         // say it's owned by the store's id.
         Ok(unsafe { Func::from_vm_func_ref(store.id(), funcref) })

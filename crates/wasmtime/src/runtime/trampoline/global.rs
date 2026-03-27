@@ -83,6 +83,6 @@ pub fn generate_global_export(
         }
     }
 
-    let index = store.host_globals_mut().push(ctx);
+    let index = store.host_globals_mut().push(ctx)?;
     Ok(crate::Global::from_host(store.id(), index))
 }
