@@ -1800,3 +1800,80 @@ fn array_init_elem_oom() -> Result<()> {
 
     Ok(())
 }
+
+// The result of a `select` instruction with a GC reference type should be
+// declared as needing a stack map.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn select_gc_ref_stack_map() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    // Use pooling allocator with a tiny GC heap so that GC is triggered
+    // frequently and freed memory is reused quickly.
+    let mut pool = crate::small_pool_config();
+    pool.max_memory_size(1 << 16); // 64 KiB
+    config.allocation_strategy(pool);
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $pair (struct (field (mut i32))))
+                (type $arr (array (mut i8)))
+
+                ;; Allocate many objects to fill the GC heap and trigger
+                ;; collection. After GC frees everything, subsequent
+                ;; allocations reuse the freed memory.
+                (func $force_gc
+                    (local i32)
+                    (local.set 0 (i32.const 64))
+                    (loop $l
+                        (drop (array.new $arr (i32.const 0) (i32.const 1024)))
+                        (local.set 0 (i32.sub (local.get 0) (i32.const 1)))
+                        (br_if $l (local.get 0))
+                    )
+                )
+
+                (func (export "test") (param $cond i32) (result i32)
+                    ;; The select result stays on the Wasm operand stack (never
+                    ;; stored in a local variable). If the new SSA value created
+                    ;; by select is not declared for stack maps, the GC will
+                    ;; free it.
+                    (select (result (ref null $pair))
+                        (struct.new $pair (i32.const 111))
+                        (ref.null $pair)
+                        (local.get $cond)
+                    )
+
+                    ;; This call is a safepoint. The select result is live
+                    ;; across it. The called function triggers GC which will
+                    ;; free the struct if it is incorrectly omitted from the
+                    ;; safepoint's stack map, and the new allocations would
+                    ;; overwrite the freed memory.
+                    (call $force_gc)
+
+                    ;; Use the select result. If it was incorrectly freed, then
+                    ;; this will have the wrong value.
+                    (struct.get $pair 0)
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let test = instance.get_typed_func::<(i32,), i32>(&mut store, "test")?;
+
+    // Run multiple times to increase chance of triggering GC at the right
+    // moment.
+    for _ in 0..30 {
+        let result = test.call(&mut store, (1,))?;
+        assert_eq!(result, 111);
+    }
+
+    Ok(())
+}

@@ -203,31 +203,38 @@ pub fn translate_operator(
         Operator::Drop => {
             environ.stacks.pop1();
         }
-        Operator::Select => {
-            let (mut arg1, mut arg2, cond) = environ.stacks.pop3();
-            if builder.func.dfg.value_type(arg1).is_vector() {
-                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
-            }
-            if builder.func.dfg.value_type(arg2).is_vector() {
-                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
-            }
-            environ.stacks.push1(builder.ins().select(cond, arg1, arg2));
+        Operator::Nop => {
+            // We do nothing
         }
-        Operator::TypedSelect { ty: _ } => {
+        Operator::Select
+        | Operator::TypedSelect {
             // We ignore the explicit type parameter as it is only needed for
             // validation, which we require to have been performed before
             // translation.
+            ty: _,
+        } => {
             let (mut arg1, mut arg2, cond) = environ.stacks.pop3();
+
             if builder.func.dfg.value_type(arg1).is_vector() {
                 arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
             }
             if builder.func.dfg.value_type(arg2).is_vector() {
                 arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
             }
-            environ.stacks.push1(builder.ins().select(cond, arg1, arg2));
-        }
-        Operator::Nop => {
-            // We do nothing
+
+            let val = builder.ins().select(cond, arg1, arg2);
+
+            if operand_types[..2].iter().any(|ty| match ty {
+                WasmValType::Ref(r) => {
+                    let (_, needs_stack_map) = environ.reference_type(r.heap_type);
+                    needs_stack_map
+                }
+                _ => false,
+            }) {
+                builder.declare_value_needs_stack_map(val);
+            }
+
+            environ.stacks.push1(val);
         }
         Operator::Unreachable => {
             environ.trap(builder, crate::TRAP_UNREACHABLE);
