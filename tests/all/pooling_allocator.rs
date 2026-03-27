@@ -1456,3 +1456,41 @@ fn memory_reset_if_instantiation_fails() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn purge_module_with_mpk() -> Result<()> {
+    if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
+        println!("skipping test; mpk is not supported");
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(2)
+        .memory_protection_keys(Enabled::Yes)
+        .max_memory_protection_keys(2);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    // Create a module and instantiate it in stripe 0.
+    let m1 = Module::new(&engine, "(module (memory 1))")?;
+    let mut store = Store::new(&engine, ());
+    Instance::new(&mut store, &m1, &[])?;
+
+    // Create and instantiate a module in stripe 1. Note that the store is
+    // immediately destroyed here after instantiation. That should leave the
+    // linear memory slot available for re-instantiation.
+    {
+        let m2 = Module::new(&engine, "(module (memory 1))")?;
+        Instance::new(&mut Store::new(&engine, ()), &m2, &[])?;
+
+        // ... drop `m2` here which will purge it and should remove the warm
+        // slot left for the module. Nothing should get corrupted...
+    }
+
+    // Drop the outer store here which will clean up the rest of the
+    // instance/etc.
+    drop(store);
+
+    Ok(())
+}
