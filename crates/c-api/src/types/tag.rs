@@ -1,6 +1,6 @@
 use crate::{CExternType, CFuncType, wasm_externtype_t, wasm_functype_t};
 use std::cell::OnceCell;
-use wasmtime::TagType;
+use wasmtime::{Engine, TagType};
 
 #[repr(transparent)]
 #[derive(Clone)]
@@ -44,6 +44,19 @@ impl wasm_tagtype_t {
         match &self.ext.which {
             CExternType::Tag(t) => t,
             _ => unsafe { std::hint::unreachable_unchecked() },
+        }
+    }
+
+    /// Converts this C tag type into a Wasmtime `TagType`.
+    pub(crate) fn to_tag_type(&self, engine: &Engine) -> TagType {
+        let func_type = self.cty().ty.ty(engine);
+        TagType::new(func_type)
+    }
+
+    /// Creates a `wasm_tagtype_t` from a Wasmtime `TagType`.
+    pub(crate) fn from_tag_type(ty: TagType) -> wasm_tagtype_t {
+        wasm_tagtype_t {
+            ext: wasm_externtype_t::from_cextern_type(CExternType::Tag(CTagType::new(ty))),
         }
     }
 }

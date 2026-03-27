@@ -18,6 +18,9 @@
 namespace wasmtime {
 
 class Caller;
+class Tag;
+class Exn;
+class Trap;
 
 /// \brief An enum for the behavior before extending the epoch deadline.
 enum class DeadlineKind {
@@ -74,6 +77,11 @@ public:
     friend class AnyRef;
     friend class Val;
     friend class Store;
+    friend class Tag;
+    friend class Exn;
+    friend Trap throw_exception(Store::Context, Exn);
+    friend std::optional<Exn> take_exception(Store::Context);
+    friend bool has_exception(Store::Context);
     wasmtime_context_t *ptr;
 
   public:

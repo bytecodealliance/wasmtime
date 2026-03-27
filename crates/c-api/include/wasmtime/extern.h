@@ -10,6 +10,7 @@
 #include <wasmtime/module.h>
 #include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
+#include <wasmtime/tag.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -105,6 +106,9 @@ typedef uint8_t wasmtime_extern_kind_t;
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
 /// shared memory
 #define WASMTIME_EXTERN_SHAREDMEMORY 4
+/// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
+/// tag
+#define WASMTIME_EXTERN_TAG 5
 
 /**
  * \typedef wasmtime_extern_union_t
@@ -127,6 +131,8 @@ typedef union wasmtime_extern_union {
   wasmtime_memory_t memory;
   /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_SHAREDMEMORY
   struct wasmtime_sharedmemory *sharedmemory;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_TAG
+  wasmtime_tag_t tag;
 } wasmtime_extern_union_t;
 
 /**

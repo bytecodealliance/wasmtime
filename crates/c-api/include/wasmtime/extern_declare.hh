@@ -12,10 +12,11 @@ class Global;
 class Func;
 class Memory;
 class Table;
+class Tag;
 
 /// \typedef Extern
 /// \brief Representation of an external WebAssembly item
-typedef std::variant<Func, Global, Memory, Table> Extern;
+typedef std::variant<Func, Global, Memory, Table, Tag> Extern;
 
 } // namespace wasmtime
 

@@ -205,6 +205,7 @@ class Val {
   friend class Global;
   friend class Table;
   friend class Func;
+  friend class Exn;
 
   wasmtime_val_t val;
 
