@@ -1744,7 +1744,10 @@ fn throw_ref(
     exnref: u32,
 ) -> Result<(), TrapReason> {
     let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
-    let exnref = store.unwrap_gc_store_mut().clone_gc_ref(&exnref);
+    // Transfer ownership of the GC ref from Wasm to the pending
+    // exception slot without cloning. The `throw` / `throw_ref`
+    // instruction consumes the exnref operand, so Wasm no longer
+    // holds a reference.
     let exnref = exnref
         .into_exnref(&*store.unwrap_gc_store().gc_heap)
         .expect("gc ref should be an exception object");

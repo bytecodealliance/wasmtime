@@ -33,14 +33,14 @@
 ;;       movq    %rdi, %rbx
 ;;       movq    %rcx, %r12
 ;;       movq    %rdx, %r13
-;;       callq   0x385
+;;       callq   0x3c8
 ;;       movq    %rax, %r14
 ;;       movl    $0x4000000, %esi
 ;;       movl    $3, %edx
 ;;       movl    $0x30, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    %rbx, %rdi
-;;       callq   0x322
+;;       callq   0x365
 ;;       movq    8(%rbx), %rcx
 ;;       movq    0x20(%rcx), %rcx
 ;;       movl    %eax, %edx
@@ -54,7 +54,7 @@
 ;;       movq    %rax, %rsi
 ;;       movq    %rbx, %rdi
 ;;       movq    %rbx, (%rsp)
-;;       callq   0x3b2
+;;       callq   0x3f5
 ;;       ud2
 ;;       ud2
 ;;
@@ -65,7 +65,7 @@
 ;;       movq    0x18(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0x135
+;;       ja      0x149
 ;;   b9: subq    $0x40, %rsp
 ;;       movq    %rbx, 0x10(%rsp)
 ;;       movq    %r12, 0x18(%rsp)
@@ -77,18 +77,24 @@
 ;;       movq    (%rsp), %rdi
 ;;       callq   0
 ;;       ├─╼ exception frame offset: SP = FP - 0x40
-;;       ╰─╼ exception handler: tag=0, context at [SP+0x0], handler=0xf6
+;;       ╰─╼ exception handler: tag=0, context at [SP+0x0], handler=0xfc
 ;;       movl    $0x2a, %eax
 ;;       movl    $0x64, %ecx
-;;       jmp     0x113
-;;   f6: movq    %rax, %rdx
-;;       movq    (%rsp), %rsi
-;;       movq    8(%rsi), %rax
+;;       movq    %rax, %rbx
+;;       movq    %rcx, %r12
+;;       jmp     0x121
+;;   fc: movq    %rax, %rsi
+;;       movq    (%rsp), %rdi
+;;       movq    8(%rdi), %rax
 ;;       movq    0x20(%rax), %rcx
-;;       movq    %rdx, %rax
-;;       movl    %eax, %edx
+;;       movl    %esi, %edx
 ;;       movl    0x20(%rcx, %rdx), %eax
+;;       movq    %rax, %rbx
 ;;       movq    0x28(%rcx, %rdx), %rcx
+;;       movq    %rcx, %r12
+;;       callq   0x336
+;;       movq    %rbx, %rax
+;;       movq    %r12, %rcx
 ;;       movq    0x10(%rsp), %rbx
 ;;       movq    0x18(%rsp), %r12
 ;;       movq    0x20(%rsp), %r13
@@ -98,4 +104,4 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  135: ud2
+;;  149: ud2

@@ -84,6 +84,14 @@ pub fn translate_exn_throw_ref(
     disabled()
 }
 
+pub fn translate_drop_exnref(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _exnref: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
 pub fn translate_array_new(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder,

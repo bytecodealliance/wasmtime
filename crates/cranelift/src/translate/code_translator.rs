@@ -4474,6 +4474,10 @@ fn create_catch_block(
     }
     if is_ref {
         params.push(exn_ref);
+    } else {
+        // For non-ref catches, the exnref is consumed here and not
+        // passed to the branch target.
+        environ.translate_drop_exnref(builder, exn_ref)?;
     }
 
     // Generate the branch itself.

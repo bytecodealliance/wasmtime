@@ -1016,6 +1016,13 @@ impl<T> Store<T> {
         StoreContextMut(&mut self.inner).gc(why)
     }
 
+    /// Returns the current size of the GC heap in bytes, or 0 if the GC heap
+    /// has not been allocated yet.
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_size(&self) -> usize {
+        self.inner.vm_store_context.gc_heap.current_length()
+    }
+
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
     /// be configured via [`Store::set_fuel`].
     ///
@@ -1326,6 +1333,14 @@ impl<'a, T> StoreContext<'a, T> {
     /// For more information see [`Store::get_fuel`].
     pub fn get_fuel(&self) -> Result<u64> {
         self.0.get_fuel()
+    }
+
+    /// Returns the current size of the GC heap in bytes.
+    ///
+    /// Same as [`Store::gc_heap_size`].
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_size(&self) -> usize {
+        self.0.vm_store_context.gc_heap.current_length()
     }
 }
 

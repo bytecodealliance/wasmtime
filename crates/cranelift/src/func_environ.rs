@@ -2904,6 +2904,14 @@ impl FuncEnvironment<'_> {
         gc::translate_exn_throw_ref(self, builder, exnref)
     }
 
+    pub fn translate_drop_exnref(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        exnref: ir::Value,
+    ) -> WasmResult<()> {
+        gc::translate_drop_exnref(self, builder, exnref)
+    }
+
     pub fn translate_array_new(
         &mut self,
         builder: &mut FunctionBuilder,

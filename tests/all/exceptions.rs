@@ -242,3 +242,70 @@ fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn throw_catch_many_times(config: &mut Config) -> Result<()> {
+    // The GC heap is allocated in 64 KiB pages, so the minimum heap
+    // size is one page. With at most one live exception at a time, the
+    // heap should never need to grow beyond that initial page.
+    const HEAP_SIZE_LIMIT: usize = 64 * 1024;
+
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    // Host function that checks the GC heap size mid-loop.
+    let check_heap = Func::wrap(&mut store, |caller: Caller<'_, ()>| {
+        let heap_size = caller.as_context().gc_heap_size();
+        assert!(
+            heap_size <= HEAP_SIZE_LIMIT,
+            "GC heap grew to {heap_size} bytes mid-loop (limit {HEAP_SIZE_LIMIT})"
+        );
+    });
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "" "check_heap" (func $check_heap))
+          (tag $e (param i32))
+
+          (func (export "run") (result i32)
+            (local $i i32)
+            (local $sum i32)
+            (local.set $i (i32.const 0))
+            (local.set $sum (i32.const 0))
+            (block $done
+              (loop $loop
+                ;; throw and catch an exception
+                (local.set $sum
+                  (i32.add (local.get $sum)
+                    (block $handler (result i32)
+                      (try_table (catch $e $handler)
+                        (throw $e (local.get $i)))
+                      (unreachable))))
+                ;; check heap size from the host
+                (call $check_heap)
+                ;; increment and check loop counter
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br_if $done (i32.ge_u (local.get $i) (i32.const 100_000)))
+                (br $loop)))
+            (local.get $sum)))
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[check_heap.into()])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let result = run.call(&mut store, ())?;
+
+    let expected: i32 = (0i64..100_000i64).sum::<i64>() as i32;
+    assert_eq!(result, expected);
+
+    let heap_size = store.gc_heap_size();
+    assert!(
+        heap_size <= HEAP_SIZE_LIMIT,
+        "GC heap grew to {heap_size} bytes after loop (limit {HEAP_SIZE_LIMIT})"
+    );
+
+    Ok(())
+}

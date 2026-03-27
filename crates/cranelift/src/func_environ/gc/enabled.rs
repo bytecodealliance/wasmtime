@@ -462,6 +462,32 @@ pub fn translate_exn_unbox(
     Ok(result)
 }
 
+/// Drop a GC reference to an exception object, decrementing its ref count.
+///
+/// This should be called when a `catch` (non-ref) handler has finished
+/// extracting fields from the caught exnref and no longer needs it.
+pub fn translate_drop_exnref(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    exnref: ir::Value,
+) -> WasmResult<()> {
+    log::trace!("translate_drop_exnref({exnref:?})");
+    match func_env.tunables.collector {
+        #[cfg(feature = "gc-drc")]
+        Some(Collector::DeferredReferenceCounting) => {
+            let drop_gc_ref_libcall = func_env.builtin_functions.drop_gc_ref(builder.func);
+            let vmctx = func_env.vmctx_val(&mut builder.cursor());
+            builder.ins().call(drop_gc_ref_libcall, &[vmctx, exnref]);
+        }
+        // The null collector doesn't track ref counts, so nothing to do.
+        _ => {
+            // Avoid unused-parameter warning.
+            let _ = builder;
+        }
+    }
+    Ok(())
+}
+
 pub fn translate_exn_throw(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
