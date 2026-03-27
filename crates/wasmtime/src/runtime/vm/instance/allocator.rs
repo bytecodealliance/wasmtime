@@ -193,10 +193,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
-        OutOfMemory,
-    >;
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>;
 
     /// Deallocate an instance's previously allocated memory.
     ///
@@ -221,10 +218,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         req: &'a mut InstanceAllocationRequest<'b, 'c>,
         table: &'a wasmtime_environ::Table,
         table_index: DefinedTableIndex,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>,
-        OutOfMemory,
-    >;
+    ) -> Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>;
 
     /// Deallocate an instance's previously allocated table.
     ///
@@ -404,9 +398,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate the memories for the given instance allocation request, pushing
     /// them into `memories`.
-    async fn allocate_memories<'a, 'b: 'a, 'c: 'a>(
-        &'a self,
-        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+    async fn allocate_memories(
+        &self,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         memories: &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -422,7 +416,7 @@ impl dyn InstanceAllocator + '_ {
                 .expect("should be a defined memory since we skipped imported ones");
 
             let memory = self
-                .allocate_memory(request, ty, Some(memory_index))?
+                .allocate_memory(request, ty, Some(memory_index))
                 .await?;
             memories.push(memory)?;
         }
@@ -457,9 +451,9 @@ impl dyn InstanceAllocator + '_ {
 
     /// Allocate tables for the given instance allocation request, pushing them
     /// into `tables`.
-    async fn allocate_tables<'a, 'b: 'a, 'c: 'a>(
-        &'a self,
-        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+    async fn allocate_tables(
+        &self,
+        request: &mut InstanceAllocationRequest<'_, '_>,
         tables: &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<()> {
         let module = request.runtime_info.env_module();
@@ -474,7 +468,7 @@ impl dyn InstanceAllocator + '_ {
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            let table = self.allocate_table(request, table, def_index)?.await?;
+            let table = self.allocate_table(request, table, def_index).await?;
             tables.push(table)?;
         }
 

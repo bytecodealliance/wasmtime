@@ -115,16 +115,13 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
         let creator = self
             .mem_creator
             .as_deref()
             .unwrap_or_else(|| &DefaultMemoryCreator);
 
-        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+        crate::runtime::box_future(async move {
             let image = if let Some(memory_index) = memory_index {
                 request.runtime_info.memory_image(memory_index)?
             } else {
@@ -141,7 +138,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
             )
             .await?;
             Ok((allocation_index, memory))
-        })?))
+        })
     }
 
     unsafe fn deallocate_memory(
@@ -159,11 +156,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
-        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+    ) -> Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>> {
+        crate::runtime::box_future(async move {
             let allocation_index = TableAllocationIndex::default();
             let table = Table::new_dynamic(
                 ty,
@@ -172,7 +166,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
             )
             .await?;
             Ok((allocation_index, table))
-        })?))
+        })
     }
 
     unsafe fn deallocate_table(
