@@ -1755,7 +1755,6 @@ fn throw_ref(
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
     #[cfg(feature = "debug")]
     {
-        log::trace!("hit breakpoint");
         store.block_on_debug_handler(crate::DebugEvent::Breakpoint)?;
     }
     // Avoid unused-argument warning in no-debugger builds.

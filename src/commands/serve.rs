@@ -7,6 +7,7 @@ use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use hyper::body::{Body, Frame, SizeHint};
 use std::convert::Infallible;
+use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -32,6 +33,9 @@ use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{HandlerState, Proxy, ProxyHandler, ProxyPre, StoreBundle};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{WasiHttpCtx, p2::WasiHttpView};
+
+#[cfg(feature = "debug")]
+use crate::commands::run::RunCommand;
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -192,6 +196,155 @@ impl ServeCommand {
         runtime.block_on(self.serve())?;
 
         Ok(())
+    }
+
+    /// Set up the debugger component side-car, mirroring
+    /// [`RunCommand::debugger_run`].
+    #[cfg(feature = "debug")]
+    fn debugger_setup(&mut self) -> Result<Option<RunCommand>> {
+        fn set_implicit_option(
+            place: &str,
+            name: &str,
+            setting: &mut Option<bool>,
+            value: bool,
+        ) -> Result<()> {
+            if *setting == Some(!value) {
+                bail!(
+                    "Explicitly-set option on {place} {name}={} is not compatible \
+                     with debugging-implied setting {value}",
+                    setting.unwrap()
+                );
+            }
+            *setting = Some(value);
+            Ok(())
+        }
+
+        #[cfg(feature = "gdbstub")]
+        let override_bytes = if let Some(addr) = self.run.gdbstub.as_deref() {
+            if self.run.common.debug.debugger.is_some() {
+                bail!("-g/--gdb cannot be combined with -Ddebugger=");
+            }
+            let addr = if addr.parse::<u16>().is_ok() {
+                format!("127.0.0.1:{addr}")
+            } else {
+                use std::net::SocketAddr as SA;
+                addr.parse::<SA>()
+                    .with_context(|| format!("invalid gdbstub address: `{addr}`"))?;
+                addr.to_string()
+            };
+            self.run.common.debug.debugger = Some("<built-in gdbstub>".into());
+            self.run.common.debug.arg.push(addr);
+            Some(gdbstub_component_artifact::GDBSTUB_COMPONENT)
+        } else {
+            None
+        };
+        #[cfg(not(feature = "gdbstub"))]
+        let override_bytes = None;
+
+        if let Some(debugger_component_path) = self.run.common.debug.debugger.as_ref() {
+            set_implicit_option(
+                "debuggee",
+                "guest_debug",
+                &mut self.run.common.debug.guest_debug,
+                true,
+            )?;
+            set_implicit_option(
+                "debuggee",
+                "epoch_interruption",
+                &mut self.run.common.wasm.epoch_interruption,
+                true,
+            )?;
+
+            let mut debugger_run = RunCommand::try_parse_from(
+                ["run".into(), debugger_component_path.into()]
+                    .into_iter()
+                    .chain(self.run.common.debug.arg.iter().map(OsString::from)),
+            )?;
+            debugger_run.module_bytes = override_bytes;
+
+            debugger_run.run.common.wasi.tcp.get_or_insert(true);
+            debugger_run
+                .run
+                .common
+                .wasi
+                .inherit_network
+                .get_or_insert(true);
+
+            set_implicit_option(
+                "debugger",
+                "inherit_stdin",
+                &mut debugger_run.run.common.wasi.inherit_stdin,
+                self.run.common.debug.inherit_stdin.unwrap_or(false),
+            )?;
+            set_implicit_option(
+                "debugger",
+                "inherit_stdout",
+                &mut debugger_run.run.common.wasi.inherit_stdout,
+                self.run.common.debug.inherit_stdout.unwrap_or(false),
+            )?;
+            set_implicit_option(
+                "debugger",
+                "inherit_stderr",
+                &mut debugger_run.run.common.wasi.inherit_stderr,
+                self.run.common.debug.inherit_stderr.unwrap_or(false),
+            )?;
+            Ok(Some(debugger_run))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Run the HTTP server under a debugger component.
+    ///
+    /// Uses a single store and instance to handle all requests
+    /// sequentially, so the debugger can pause and inspect state.
+    #[cfg(feature = "debug")]
+    async fn serve_under_debugger(
+        &self,
+        mut debug_run: RunCommand,
+        engine: &Engine,
+        linker: &Linker<Host>,
+        component: &Component,
+    ) -> Result<()> {
+        let instance_pre = linker.instantiate_pre(component)?;
+        let proxy_pre = wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance_pre)?;
+
+        let mut debuggee_store = self.new_store(engine, None)?;
+
+        // Pre-register component modules so the debugger can see
+        // them and set breakpoints at the initial stop.
+        debuggee_store.debug_register_component(component)?;
+
+        let debug_engine = debug_run.new_engine()?;
+        let debug_main = debug_run.run.load_module(
+            &debug_engine,
+            debug_run.module_and_args[0].as_ref(),
+            debug_run.module_bytes.as_ref().map(|v| &v[..]),
+        )?;
+        let (mut debug_store, debug_linker) =
+            debug_run.new_store_and_linker(&debug_engine, &debug_main)?;
+        let debug_component = match debug_main {
+            RunTarget::Core(_) => {
+                bail!("Debugger component is a core module; only components are supported")
+            }
+            RunTarget::Component(c) => c,
+        };
+        let mut debug_linker = match debug_linker {
+            crate::commands::run::CliLinker::Core(_) => unreachable!(),
+            crate::commands::run::CliLinker::Component(l) => l,
+        };
+        debug_run.add_debugger_api(&mut debug_linker)?;
+
+        let addr = self.addr;
+        debug_run
+            .invoke_debugger(
+                &mut debug_store,
+                &debug_component,
+                &mut debug_linker,
+                debuggee_store,
+                move |store| Box::pin(debug_serve_body(store, proxy_pre, addr)),
+            )
+            .await
     }
 
     fn new_store(&self, engine: &Engine, req_id: Option<u64>) -> Result<Store<Host>> {
@@ -389,6 +542,9 @@ impl ServeCommand {
     async fn serve(mut self) -> Result<()> {
         use hyper::server::conn::http1;
 
+        #[cfg(feature = "debug")]
+        let debug_run = self.debugger_setup()?;
+
         let mut config = self
             .run
             .common
@@ -418,6 +574,13 @@ impl ServeCommand {
             RunTarget::Core(_) => bail!("The serve command currently requires a component"),
             RunTarget::Component(c) => c,
         };
+
+        #[cfg(feature = "debug")]
+        if let Some(debug_run) = debug_run {
+            return self
+                .serve_under_debugger(debug_run, &engine, &linker, &component)
+                .await;
+        }
 
         let instance = linker.instantiate_pre(&component)?;
         #[cfg(feature = "component-model-async")]
@@ -811,6 +974,148 @@ fn setup_guest_profiler(
     });
 
     Ok(write_profile)
+}
+
+/// Build a minimal error response with an empty body.
+fn error_response(status: StatusCode) -> hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>> {
+    Response::builder()
+        .status(status)
+        .body(
+            http_body_util::Empty::new()
+                .map_err(|_| unreachable!())
+                .boxed_unsync(),
+        )
+        .unwrap()
+}
+
+/// Debuggee body for `wasmtime serve -g`: instantiate the HTTP component
+/// once, then handle requests sequentially on a single store.
+#[cfg(feature = "debug")]
+async fn debug_serve_body(
+    store: &mut Store<Host>,
+    proxy_pre: wasmtime_wasi_http::p2::bindings::ProxyPre<Host>,
+    addr: SocketAddr,
+) -> Result<()> {
+    use hyper::server::conn::http1;
+    use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
+    use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
+
+    type P2Response = std::result::Result<
+        hyper::Response<HyperOutgoingBody>,
+        wasmtime_wasi_http::p2::bindings::http::types::ErrorCode,
+    >;
+
+    let engine_clone = store.engine().clone();
+    let _epoch_thread = std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(1));
+            engine_clone.increment_epoch();
+        }
+    });
+
+    store.epoch_deadline_async_yield_and_update(1);
+
+    // Instantiate the HTTP component once.
+    let proxy = proxy_pre.instantiate_async(&mut *store).await?;
+
+    // Bind the TCP listener.
+    let socket = match addr {
+        SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
+        SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
+    };
+    socket.set_reuseaddr(!cfg!(windows))?;
+    socket.bind(addr)?;
+    let listener = socket.listen(100)?;
+    eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
+
+    // Accept loop: handle one connection at a time, requests sequentially.
+    loop {
+        let (stream, _) = listener.accept().await?;
+        stream.set_nodelay(true)?;
+        let stream = TokioIo::new(stream);
+
+        // Channel to bridge hyper's service_fn with our sequential
+        // request processing on the single store.
+        type RespBody = hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;
+        let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<(
+            hyper::Request<hyper::body::Incoming>,
+            tokio::sync::oneshot::Sender<std::result::Result<RespBody, Infallible>>,
+        )>(1);
+
+        let serve_conn = http1::Builder::new().keep_alive(true).serve_connection(
+            stream,
+            hyper::service::service_fn(move |req| {
+                let req_tx = req_tx.clone();
+                async move {
+                    let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                    if req_tx.send((req, resp_tx)).await.is_err() {
+                        return Ok::<_, Infallible>(error_response(
+                            StatusCode::SERVICE_UNAVAILABLE,
+                        ));
+                    }
+                    resp_rx
+                        .await
+                        .unwrap_or(Ok(error_response(StatusCode::SERVICE_UNAVAILABLE)))
+                }
+            }),
+        );
+
+        tokio::pin!(serve_conn);
+
+        loop {
+            tokio::select! {
+                result = &mut serve_conn => {
+                    if let Err(e) = result {
+                        eprintln!("connection error: {e:?}");
+                    }
+                    break;
+                }
+                msg = req_rx.recv() => {
+                    let Some((req, resp_tx)) = msg else { break };
+
+                    let (p2_tx, p2_rx) = tokio::sync::oneshot::channel::<P2Response>();
+                    let wasi_req = store
+                        .data_mut()
+                        .http()
+                        .new_incoming_request(Scheme::Http, req);
+                    let wasi_out = wasi_req.and_then(|_req| {
+                        let out = store.data_mut().http().new_response_outparam(p2_tx);
+                        out.map(|out| (_req, out))
+                    });
+                    let (wasi_req, wasi_out) = match wasi_out {
+                        Ok(pair) => pair,
+                        Err(e) => {
+                            eprintln!("error creating WASI request: {e:?}");
+                            let _ = resp_tx.send(Ok(error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            )));
+                            continue;
+                        }
+                    };
+
+                    if let Err(e) = proxy
+                        .wasi_http_incoming_handler()
+                        .call_handle(&mut *store, wasi_req, wasi_out)
+                        .await
+                    {
+                        eprintln!("handler error: {e:?}");
+                    }
+
+                    let resp = match p2_rx.await {
+                        Ok(Ok(resp)) => resp.map(|body| {
+                            body.map_err(|e| e.into()).boxed_unsync()
+                        }),
+                        Ok(Err(e)) => {
+                            eprintln!("component error: {e:?}");
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR)
+                        }
+                        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR),
+                    };
+                    let _ = resp_tx.send(Ok(resp));
+                }
+            }
+        }
+    }
 }
 
 type Request = hyper::Request<hyper::body::Incoming>;

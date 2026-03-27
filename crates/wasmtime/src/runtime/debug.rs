@@ -1102,7 +1102,6 @@ impl<'a> BreakpointEdit<'a> {
         *refcount += 1;
         if *refcount == 1 {
             // First reference: actually patch the code.
-            log::trace!("patching in breakpoint {actual_key:?}");
             let mem =
                 Self::get_code_memory(self.state, self.registry, &mut self.dirty_modules, module)?;
             let patches = frame_table.lookup_breakpoint_patches_by_pc(actual_pc);
