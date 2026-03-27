@@ -314,7 +314,9 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
     let layout = Layout::from_size_align(size, align)?;
 
     let ptr = unsafe { alloc::alloc::alloc_zeroed(layout) };
-    ensure!(!ptr.is_null(), "failed to allocate memory for table");
+    if ptr.is_null() {
+        return Err(OutOfMemory::new(size).into());
+    }
 
     let elems = unsafe { Vec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
     debug_assert!(elems.iter().all(|e| e.is_none()));
