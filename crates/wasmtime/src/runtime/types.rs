@@ -1925,8 +1925,8 @@ impl StructType {
         // from being reclaimed while constructing this struct type.
         let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
 
-        let fields = fields
-            .map(|ty: FieldType| {
+        let fields: Box<[WasmFieldType]> = fields
+            .map(|ty: FieldType| -> Result<_, Error> {
                 assert!(ty.comes_from_same_engine(engine));
 
                 if supertype.is_some() {
@@ -1939,9 +1939,9 @@ impl StructType {
                     }
                 }
 
-                ty.to_wasm_field_type()
+                Ok(ty.to_wasm_field_type())
             })
-            .collect();
+            .try_collect()?;
 
         if let Some(supertype) = supertype {
             ensure!(
@@ -2206,7 +2206,7 @@ impl ArrayType {
             finality.is_final(),
             supertype.map(|ty| ty.type_index().into()),
             wasm_ty,
-        ))
+        )?)
     }
 
     /// Get the engine that this array type is associated with.
@@ -2323,7 +2323,7 @@ impl ArrayType {
         is_final: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmArrayType,
-    ) -> ArrayType {
+    ) -> Result<ArrayType> {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
@@ -2334,11 +2334,10 @@ impl ArrayType {
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
-        )
-        .panic_on_oom();
-        Self {
+        )?;
+        Ok(Self {
             registered_type: ty,
-        }
+        })
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
@@ -2818,13 +2817,13 @@ impl ExnType {
     /// signature implies a tag type, and when instantiated at
     /// runtime, it must be associated with a tag of that type.
     pub fn new(engine: &Engine, fields: impl IntoIterator<Item = ValType>) -> Result<ExnType> {
-        let fields = fields.into_iter().collect::<Vec<_>>();
+        let fields: TryVec<_> = fields.into_iter().try_collect()?;
 
         // First, construct/intern a FuncType: we need this to exist
         // so we can hand out a TagType, and it also roots any nested registrations.
-        let func_ty = FuncType::new(engine, fields.clone(), []);
+        let func_ty = FuncType::try_new(engine, fields.iter().cloned(), [])?;
 
-        Ok(Self::_new(engine, fields, func_ty))
+        Self::_new(engine, fields, func_ty)
     }
 
     /// Create a new `ExnType` from an existing `TagType`.
@@ -2842,28 +2841,22 @@ impl ExnType {
             "Cannot create an exception type from a tag type with results in the signature"
         );
 
-        Ok(Self::_new(
-            tag.ty.engine(),
-            func_ty.params(),
-            func_ty.clone(),
-        ))
+        Self::_new(tag.ty.engine(), func_ty.params(), func_ty.clone())
     }
 
     fn _new(
         engine: &Engine,
         fields: impl IntoIterator<Item = ValType>,
         func_ty: FuncType,
-    ) -> ExnType {
-        let fields = fields
-            .into_iter()
-            .map(|ty| {
-                assert!(ty.comes_from_same_engine(engine));
-                WasmFieldType {
-                    element_type: WasmStorageType::Val(ty.to_wasm_type()),
-                    mutable: false,
-                }
-            })
-            .collect();
+    ) -> Result<ExnType> {
+        let mut wasm_fields = TryVec::new();
+        for ty in fields.into_iter() {
+            assert!(ty.comes_from_same_engine(engine));
+            wasm_fields.push(WasmFieldType {
+                element_type: WasmStorageType::Val(ty.to_wasm_type()),
+                mutable: false,
+            })?;
+        }
 
         let ty = RegisteredType::new(
             engine,
@@ -2874,17 +2867,16 @@ impl ExnType {
                     shared: false,
                     inner: WasmCompositeInnerType::Exn(WasmExnType {
                         func_ty: EngineOrModuleTypeIndex::Engine(func_ty.type_index()),
-                        fields,
+                        fields: wasm_fields.into_boxed_slice()?,
                     }),
                 },
             },
-        )
-        .panic_on_oom();
+        )?;
 
-        Self {
+        Ok(ExnType {
             func_ty,
             registered_type: ty,
-        }
+        })
     }
 
     /// Get the tag type that this exception type is associated with.

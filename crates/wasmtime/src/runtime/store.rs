@@ -527,7 +527,7 @@ pub struct StoreOpaque {
     hostcall_val_storage: Vec<Val>,
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
-    wasm_val_raw_storage: Vec<ValRaw>,
+    wasm_val_raw_storage: TryVec<ValRaw>,
 
     /// Keep track of what protection key is being used during allocation so
     /// that the right memory pages can be enabled when entering WebAssembly
@@ -771,7 +771,7 @@ impl<T> Store<T> {
             traitobj: StorePtr(None),
             default_caller_vmctx: SendSyncPtr::new(NonNull::dangling()),
             hostcall_val_storage: Vec::new(),
-            wasm_val_raw_storage: Vec::new(),
+            wasm_val_raw_storage: TryVec::new(),
             pkey,
             executor: Executor::new(engine)?,
             #[cfg(feature = "debug")]
@@ -2377,14 +2377,14 @@ impl StoreOpaque {
     /// Same as `take_hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     #[inline]
-    pub fn take_wasm_val_raw_storage(&mut self) -> Vec<ValRaw> {
+    pub fn take_wasm_val_raw_storage(&mut self) -> TryVec<ValRaw> {
         mem::take(&mut self.wasm_val_raw_storage)
     }
 
     /// Same as `save_hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     #[inline]
-    pub fn save_wasm_val_raw_storage(&mut self, storage: Vec<ValRaw>) {
+    pub fn save_wasm_val_raw_storage(&mut self, storage: TryVec<ValRaw>) {
         if storage.capacity() > self.wasm_val_raw_storage.capacity() {
             self.wasm_val_raw_storage = storage;
         }

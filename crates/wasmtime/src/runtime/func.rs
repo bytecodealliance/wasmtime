@@ -372,16 +372,26 @@ impl Func {
     /// Panics if the given function type is not associated with this store's
     /// engine.
     pub fn new<T: 'static>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        Self::try_new(store, ty, func).expect("out of memory")
+    }
+
+    /// Same as [`Func::new`] but returns an error instead of panicking on
+    /// allocation failure.
+    pub fn try_new<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    ) -> Result<Self> {
         let store = store.as_context_mut().0;
-        let host = HostFunc::new(store.engine(), ty, func).panic_on_oom();
+        let host = HostFunc::new(store.engine(), ty, func)?;
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store).panic_on_oom() }
+        Ok(unsafe { host.into_func(store)? })
     }
 
     /// Creates a new [`Func`] with the given arguments, although has fewer
@@ -1143,7 +1153,7 @@ impl Func {
         let values_vec_size = params.len().max(ty.results().len());
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw::v128(0));
+        values_vec.resize_with(values_vec_size, || ValRaw::v128(0))?;
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             *slot = arg.to_raw(&mut *store)?;
         }

@@ -407,29 +407,45 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// Panics if `store` does not own this instance.
+    /// Panics if `store` does not own this instance, or if memory allocation
+    /// fails.
     pub fn exports<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        self._exports(store.into().0)
+        self.try_exports(store).expect("out of memory")
     }
 
-    fn _exports<'a>(
+    /// Returns the list of exported items from this [`Instance`].
+    ///
+    /// Returns an error if memory allocation fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn try_exports<'a, T: 'static>(
+        &'a self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> Result<impl ExactSizeIterator<Item = Export<'a>> + 'a> {
+        Ok(self._try_exports(store.into().0)?)
+    }
+
+    fn _try_exports<'a>(
         &'a self,
         store: &'a mut StoreOpaque,
-    ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
+    ) -> Result<impl ExactSizeIterator<Item = Export<'a>> + 'a, OutOfMemory> {
         let module = store[self.id].env_module().clone();
-        let mut items = Vec::new();
+        let num_exports = module.exports.len();
+        let mut items = TryVec::with_capacity(num_exports)?;
         for (_name, entity) in module.exports.iter() {
-            items.push(self._get_export(store, *entity));
+            items.push(self._get_export(store, *entity))?;
         }
         let module = store[self.id].env_module();
-        module
+        Ok(module
             .exports
             .iter()
             .zip(items)
-            .map(|((name, _), item)| Export::new(&module.strings[name], item))
+            .map(|((name, _), item)| Export::new(&module.strings[name], item)))
     }
 
     /// Looks up an exported [`Extern`] value by name.

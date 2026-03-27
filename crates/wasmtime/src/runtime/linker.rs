@@ -634,7 +634,7 @@ impl<T> Linker<T> {
     {
         let mut store = store.as_context_mut();
         let exports: TryVec<_> = instance
-            .exports(&mut store)
+            .try_exports(&mut store)?
             .map(|e| {
                 Ok((
                     self.import_key(module_name, Some(e.name()))?,
@@ -1216,7 +1216,7 @@ impl<T> Linker<T> {
                 &self.pool[key.module],
                 &self.pool[key.name.unwrap()],
                 // Should be safe since `T` is connecting the linker and store
-                unsafe { item.to_extern(store.0) },
+                unsafe { item.to_extern(store.0).panic_on_oom() },
             )
         })
     }
@@ -1233,16 +1233,33 @@ impl<T> Linker<T> {
     /// same [`Engine`] that this linker was created with.
     pub fn get(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         module: &str,
         name: &str,
     ) -> Option<Extern>
     where
         T: 'static,
     {
+        self.try_get(store, module, name).expect("out of memory")
+    }
+
+    /// Same as [`Linker::get`] but returns an error instead of panicking on
+    /// allocation failure.
+    pub fn try_get(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        module: &str,
+        name: &str,
+    ) -> Result<Option<Extern>>
+    where
+        T: 'static,
+    {
         let store = store.as_context_mut().0;
-        // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get(module, name)?.to_extern(store) })
+        match self._get(module, name) {
+            // Should be safe since `T` is connecting the linker and store
+            Some(def) => Ok(Some(unsafe { def.to_extern(store)? })),
+            None => Ok(None),
+        }
     }
 
     fn _get(&self, module: &str, name: &str) -> Option<&Definition> {
@@ -1264,15 +1281,32 @@ impl<T> Linker<T> {
     /// same [`Engine`] that this linker was created with.
     pub fn get_by_import(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         import: &ImportType,
     ) -> Option<Extern>
     where
         T: 'static,
     {
+        self.try_get_by_import(store, import)
+            .expect("out of memory")
+    }
+
+    /// Same as [`Linker::get_by_import`] but returns an error instead of
+    /// panicking on allocation failure.
+    pub fn try_get_by_import(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        import: &ImportType,
+    ) -> Result<Option<Extern>>
+    where
+        T: 'static,
+    {
         let store = store.as_context_mut().0;
-        // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get_by_import(import).ok()?.to_extern(store) })
+        match self._get_by_import(import) {
+            // Should be safe since `T` is connecting the linker and store
+            Ok(def) => Ok(Some(unsafe { def.to_extern(store)? })),
+            Err(_) => Ok(None),
+        }
     }
 
     fn _get_by_import(&self, import: &ImportType) -> Result<Definition, UnknownImportError> {
@@ -1342,13 +1376,13 @@ impl Definition {
     /// Note the unsafety here is due to calling `HostFunc::to_func`. The
     /// requirement here is that the `T` that was originally used to create the
     /// `HostFunc` matches the `T` on the store.
-    pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Extern {
+    pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Result<Extern, OutOfMemory> {
         match self {
-            Definition::Extern(e, _) => e.clone(),
+            Definition::Extern(e, _) => Ok(e.clone()),
             // SAFETY: the contract of this function is the same as what's
             // required of `to_func`, that `T` of the store matches the `T` of
             // this original definition.
-            Definition::HostFunc(func) => unsafe { func.to_func(store).panic_on_oom().into() },
+            Definition::HostFunc(func) => unsafe { Ok(func.to_func(store)?.into()) },
         }
     }
 
