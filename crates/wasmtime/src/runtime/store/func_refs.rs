@@ -7,6 +7,7 @@ use crate::prelude::*;
 use crate::runtime::HostFunc;
 use crate::runtime::vm::{AlwaysMut, SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
 use alloc::sync::Arc;
+use core::mem::size_of;
 use core::ptr::NonNull;
 
 /// An arena of `VMFuncRef`s.
@@ -92,7 +93,11 @@ impl FuncRefs {
         modules: &ModuleRegistry,
     ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
         debug_assert!(func_ref.wasm_call.is_none());
-        let func_ref = self.bump.get_mut().alloc(func_ref);
+        let func_ref = self
+            .bump
+            .get_mut()
+            .try_alloc(func_ref)
+            .map_err(|_| OutOfMemory::new(size_of::<VMFuncRef>()))?;
         // SAFETY: it's a contract of this function itself that `func_ref` has a
         // valid vmctx field to read.
         let has_hole = unsafe { !try_fill(func_ref, modules) };
