@@ -724,33 +724,52 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         let prev = self.live_memories.fetch_sub(1, Ordering::Relaxed);
         debug_assert!(prev > 0);
 
-        // Reset the image slot. If there is any error clearing the
-        // image, just drop it here, and let the drop handler for the
-        // slot unmap in a way that retains the address space
-        // reservation.
+        // Reset the image slot. Depending on whether this is successful or not
+        // the `image` is preserved for future use. On success it's queued up to
+        // get deallocated later, and on failure the slot is deallocated
+        // immediately without preserving the image.
         let mut image = memory.unwrap_static_image();
         let mut queue = DecommitQueue::default();
-        let bytes_resident = image
-            .clear_and_remain_ready(
-                self.pagemap.as_ref(),
-                self.memories.keep_resident,
-                |ptr, len| {
-                    // SAFETY: the memory in `image` won't be used until this
-                    // decommit queue is flushed, and by definition the memory is
-                    // not in use when calling this function.
-                    unsafe {
-                        queue.push_raw(ptr, len);
-                    }
-                },
-            )
-            .expect("failed to reset memory image");
+        let bytes_resident = image.clear_and_remain_ready(
+            self.pagemap.as_ref(),
+            self.memories.keep_resident,
+            |ptr, len| {
+                // SAFETY: the memory in `image` won't be used until this
+                // decommit queue is flushed, and by definition the memory is
+                // not in use when calling this function.
+                unsafe {
+                    queue.push_raw(ptr, len);
+                }
+            },
+        );
 
-        // SAFETY: this image is not in use and its memory regions were enqueued
-        // with `push_raw` above.
-        unsafe {
-            queue.push_memory(allocation_index, image, bytes_resident);
+        match bytes_resident {
+            Ok(bytes_resident) => {
+                // SAFETY: this image is not in use and its memory regions were enqueued
+                // with `push_raw` above.
+                unsafe {
+                    queue.push_memory(allocation_index, image, bytes_resident);
+                }
+                self.merge_or_flush(queue);
+            }
+            Err(e) => {
+                log::warn!("ignoring clear_and_remain_ready error {e}");
+                // SAFETY: `allocation_index` comes from this pool, as an unsafe
+                // contract of this function itself, and it's guaranteed to be no
+                // longer in use so safe to deallocate. The slot couldn't be
+                // preserved so it's dropped here.
+                //
+                // Note that at this point it's not clear how many bytes are
+                // resident in memory, so it's inevitably going to leave statistics
+                // a little off. Also note though that non-Linux platforms don't
+                // keep track of resident bytes anyway, and this path is only
+                // reachable on non-Linux platforms because Linux can't return an
+                // error.
+                unsafe {
+                    self.memories.deallocate(allocation_index, None, 0);
+                }
+            }
         }
-        self.merge_or_flush(queue);
     }
 
     fn allocate_table<'a, 'b: 'a, 'c: 'a>(
