@@ -36,7 +36,7 @@ pub fn create_tag(store: &mut StoreOpaque, ty: &TagType) -> Result<InstanceId> {
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
+        let module = try_new::<Arc<_>>(module)?;
 
         // Note that `assert_ready` should be valid here because this module
         // doesn't allocate tables or memories meaning it shouldn't need a

@@ -101,7 +101,8 @@ async fn test_tcp_send_drops_stream_when_remote_shutdown(family: IpAddressFamily
             }
         }
 
-        _ = client.send_result.await;
+        let result = client.send_result.await;
+        assert!(matches!(result, Err(ErrorCode::ConnectionBroken)));
     })
     .await;
 }

@@ -771,7 +771,12 @@ impl<I: VCodeInst> MachBuffer<I> {
             offset,
             kind,
         };
-        self.pending_fixup_deadline = self.pending_fixup_deadline.min(fixup.deadline());
+        self.pending_fixup_deadline = self
+            .pending_fixup_deadline
+            // Subtract one alignment here to the deadline to account for
+            // extra space taken by aligning an island.
+            .min(fixup.deadline() - I::LabelUse::ALIGN);
+        trace!("pending_fixup_deadline = {}", self.pending_fixup_deadline);
         self.pending_fixup_records.push(fixup);
 
         // Post-invariant: no mutations to branches/labels data structures.
@@ -1280,7 +1285,15 @@ impl<I: VCodeInst> MachBuffer<I> {
             Some(fixup) => fixup.deadline().min(self.pending_fixup_deadline),
             None => self.pending_fixup_deadline,
         };
-        deadline < u32::MAX && self.worst_case_end_of_island(distance) > deadline
+        trace!(
+            "checking island_needed: cur_offset = {} deadline = {} worst_case_end_of_island = {}",
+            self.cur_offset(),
+            deadline,
+            self.worst_case_end_of_island(distance)
+        );
+        let needed = deadline < u32::MAX && self.worst_case_end_of_island(distance) > deadline;
+        trace!(" -> needed = {needed}");
+        needed
     }
 
     /// Returns the maximal offset that islands can reach if `distance` more
@@ -1320,6 +1333,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         distance: CodeOffset,
         ctrl_plane: &mut ControlPlane,
     ) {
+        trace!(
+            "emitting island at {}, distance = {distance}",
+            self.cur_offset()
+        );
+
         // We're going to purge fixups, so no latest-branch editing can happen
         // anymore.
         self.latest_branches.clear();
@@ -1336,13 +1354,63 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         let forced_threshold = self.worst_case_end_of_island(distance);
+        trace!("forced_threshold = {forced_threshold}");
 
-        // First flush out all traps/constants so we have more labels in case
-        // fixups are applied against these labels.
+        // Emit traps/constants after the island: with potentially
+        // unbounded pending constants/traps and potentially small
+        // deadlines, it would otherwise be possible to emit a
+        // small-range jump, have a nearby deadline *before* the end
+        // of pending constants/traps, and not be able to emit a
+        // veneer in time.
+        //
+        // Fixups whose labels aren't yet defined (e.g. references to
+        // pending constants/traps) are simply deferred here; they'll
+        // be resolved in the next island or in the final fixup pass
+        // at the end of emission.
+
+        // Either handle all pending fixups because they're ready or move them
+        // onto the `BinaryHeap` tracking all pending fixups if they aren't
+        // ready.
+        assert!(self.latest_branches.is_empty());
+        trace!(
+            "About to handle fixups at offset {}: {:?}",
+            self.cur_offset(),
+            self.pending_fixup_records
+        );
+        for fixup in mem::take(&mut self.pending_fixup_records) {
+            if self.should_apply_fixup(&fixup, forced_threshold) {
+                self.handle_fixup(fixup, force_veneers, forced_threshold);
+            } else {
+                self.fixup_records.push(fixup);
+            }
+        }
+        self.pending_fixup_deadline = u32::MAX;
+        while let Some(fixup) = self.fixup_records.peek() {
+            trace!(
+                "emit_island: fixup {:?} deadline {}",
+                fixup,
+                fixup.deadline()
+            );
+
+            // If this fixup shouldn't be applied, that means its label isn't
+            // defined yet and there'll be remaining space to apply a veneer if
+            // necessary in the future after this island. In that situation
+            // because `fixup_records` is sorted by deadline this loop can
+            // exit.
+            if !self.should_apply_fixup(fixup, forced_threshold) {
+                break;
+            }
+
+            let fixup = self.fixup_records.pop().unwrap();
+            self.handle_fixup(fixup, force_veneers, forced_threshold);
+        }
+
+        // Now emit pending traps and constants.
         //
         // Note that traps are placed first since this typically happens at the
         // end of the function and for disassemblers we try to keep all the code
         // contiguously together.
+        trace!("emitting pending traps: {:?}", self.pending_traps);
         for MachLabelTrap { label, code, loc } in mem::take(&mut self.pending_traps) {
             // If this trap has source information associated with it then
             // emit this information for the trap instruction going out now too.
@@ -1358,6 +1426,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             }
         }
 
+        trace!("emitting pending constants: {:?}", self.pending_constants);
         for constant in mem::take(&mut self.pending_constants) {
             let MachBufferConstant { align, size, .. } = self.constants[constant];
             let label = self.constants[constant].upcoming_label.take().unwrap();
@@ -1367,34 +1436,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.get_appended_space(size);
         }
 
-        // Either handle all pending fixups because they're ready or move them
-        // onto the `BinaryHeap` tracking all pending fixups if they aren't
-        // ready.
-        assert!(self.latest_branches.is_empty());
-        for fixup in mem::take(&mut self.pending_fixup_records) {
-            if self.should_apply_fixup(&fixup, forced_threshold) {
-                self.handle_fixup(fixup, force_veneers, forced_threshold);
-            } else {
-                self.fixup_records.push(fixup);
-            }
-        }
-        self.pending_fixup_deadline = u32::MAX;
-        while let Some(fixup) = self.fixup_records.peek() {
-            trace!("emit_island: fixup {:?}", fixup);
-
-            // If this fixup shouldn't be applied, that means its label isn't
-            // defined yet and there'll be remaining space to apply a veneer if
-            // necessary in the future after this island. In that situation
-            // because `fixup_records` is sorted by deadline this loop can
-            // exit.
-            if !self.should_apply_fixup(fixup, forced_threshold) {
-                break;
-            }
-
-            let fixup = self.fixup_records.pop().unwrap();
-            self.handle_fixup(fixup, force_veneers, forced_threshold);
-        }
-
         if let Some(loc) = cur_loc {
             self.start_srcloc(loc);
         }
@@ -1402,7 +1443,20 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     fn should_apply_fixup(&self, fixup: &MachLabelFixup<I>, forced_threshold: CodeOffset) -> bool {
         let label_offset = self.resolve_label_offset(fixup.label);
-        label_offset != UNKNOWN_LABEL_OFFSET || fixup.deadline() < forced_threshold
+        trace!(
+            "should_apply_fixup: fixup {fixup:?} label_offset {label_offset} deadline {} forced_threshold {forced_threshold} supports_veneer {}",
+            fixup.deadline(),
+            fixup.kind.supports_veneer()
+        );
+        let result = (label_offset != UNKNOWN_LABEL_OFFSET)
+            || ((fixup.deadline() < forced_threshold) && fixup.kind.supports_veneer());
+        trace!(
+            " -> {}, {}, {} -> {result}",
+            label_offset != UNKNOWN_LABEL_OFFSET,
+            fixup.deadline() < forced_threshold,
+            fixup.kind.supports_veneer()
+        );
+        result
     }
 
     fn handle_fixup(
@@ -1525,7 +1579,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
-            self.emit_island_maybe_forced(force_veneers, u32::MAX, ctrl_plane);
+            self.emit_island_maybe_forced(force_veneers, 0, ctrl_plane);
         }
 
         // Ensure that all labels have been fixed up after the last island is emitted. This is a
@@ -1991,6 +2045,7 @@ struct MachBufferConstant {
 
 /// A trap that is deferred to the next time an island is emitted for either
 /// traps, constants, or fixups.
+#[derive(Debug)]
 struct MachLabelTrap {
     /// This label will refer to the trap's offset.
     label: MachLabel,

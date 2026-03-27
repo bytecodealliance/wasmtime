@@ -115,7 +115,7 @@ impl MmapMemory {
         }
 
         Ok(Self {
-            mmap: Arc::new(mmap),
+            mmap: try_new::<Arc<_>>(mmap)?,
             len: minimum,
             maximum,
             pre_guard_size: pre_guard_bytes,

@@ -61,6 +61,7 @@ wasmtime-wasi-http = { workspace = true, optional = true }
 wasmtime-unwinder = { workspace = true }
 wasmtime-wizer = { workspace = true, optional = true, features = ['clap', 'wasmtime'] }
 wasmtime-debugger = { workspace = true, optional = true }
+gdbstub-component-artifact = { workspace = true, optional = true }
 clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
@@ -166,6 +167,8 @@ members = [
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/debugger",
+  "crates/gdbstub-component",
+  "crates/gdbstub-component/artifact",
   "crates/wizer/fuzz",
   "crates/wizer/tests/regex-test",
   "crates/wizer/benches/regex-bench",
@@ -191,7 +194,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2024"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.91.0"
+rust-version = "1.92.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -276,6 +279,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=44.0.0", package = 'wasmtime-internal-wit-bindgen' }
 wasmtime-unwinder = { path = "crates/unwinder", version = "=44.0.0", package = 'wasmtime-internal-unwinder' }
 wasmtime-debugger = { path = "crates/debugger", version = "=44.0.0", package = "wasmtime-internal-debugger" }
+gdbstub-component-artifact = { path = "crates/gdbstub-component/artifact", version = "=44.0.0", package = "wasmtime-internal-gdbstub-component-artifact" }
 wasmtime-wizer = { path = "crates/wizer", version = "44.0.0" }
 
 # Miscellaneous crates without a `wasmtime-*` prefix in their name but still
@@ -354,12 +358,15 @@ wasm-wave = "0.245.0"
 wasm-compose = "0.245.0"
 json-from-wast = "0.245.0"
 
+wstd = "0.6.5"
+wasip2 = "1.0"
+
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
 arbitrary = "1.4.2"
 backtrace = "0.3.75"
 bumpalo = "3.20.0"
-mutatis = "0.3.2"
+mutatis = {version = "0.3.2", features = ["alloc"] }
 cc = "1.2.41"
 object = { version = "0.38.1", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.33.0", default-features = false, features = ['read'] }
@@ -419,8 +426,8 @@ libtest-mimic = "0.8.1"
 semver = { version = "1.0.27", default-features = false }
 ittapi = "0.4.0"
 libm = "0.2.16"
-tokio-rustls = "0.25.0"
-rustls = "0.22.0"
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "tls12", "logging"] }
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
@@ -437,6 +444,8 @@ rayon = "1.5.3"
 regex = "1.9.1"
 pin-project-lite = "0.2.14"
 sha2 = { version = "0.10.2", default-features = false }
+gdbstub = "0.7.10"
+gdbstub_arch = "0.3.3"
 
 # =============================================================================
 #
@@ -522,6 +531,11 @@ component-model-async = [
   "dep:futures",
 ]
 rr = ["wasmtime/rr", "component-model", "wasmtime-cli-flags/rr", "run"]
+
+# Enabled in release builds. We cannot enable the built-in gdbstub component in
+# the default build because the published-to-crates.io crates cannot build the
+# artifact (a limitation caused by lack of artifact dependencies).
+gdbstub = ["debug", "dep:gdbstub-component-artifact"]
 
 # This feature, when enabled, will statically compile out all logging statements
 # throughout Wasmtime and its dependencies.
@@ -682,3 +696,55 @@ debug = "line-tables-only"
 inherits = "release"
 codegen-units = 1
 lto = true
+
+# https://github.com/crate-ci/typos/blob/master/docs/reference.md
+[workspace.metadata.typos.default]
+extend-ignore-re = [
+    "(\\d\\w{2,}|\\w{2,}\\d)", # possible hex encoding
+]
+extend-ignore-words-re = [
+    '^[a-zA-Z]{1,3}$' # ignore words up to length 3
+]
+
+extend-ignore-identifiers-re = [
+    # prologue, main, epilogue
+    "set[pme]",
+]
+
+[workspace.metadata.typos.default.extend-identifiers]
+# Arithmetic Logic Unit
+alu = "alu"
+# Data Source
+datas = "datas"
+# library
+flate2 = "flate2"
+ExpandedOrShrinked = "ExpandedOrShrinked"
+EigthMem = "EigthMem"
+
+[workspace.metadata.typos.default.extend-words]
+# Vector ALU
+valu = "valu"
+# AND Shifted
+ANDS = "ANDS"
+# Posix EACCES error
+ACCES = "ACCES"
+# SHift Left Long
+shll = "shll"
+# elements
+eles = "eles"
+# strategy
+strat = "strat"
+# test
+thre = "thre"
+# gimli definition
+endianity = "endianity"
+# A Low
+alow = "alow"
+aranges = "aranges"
+# literals
+lits = "lits"
+RELA = "RELA"
+fpr = "fpr"
+
+[workspace.metadata.typos.files]
+extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]

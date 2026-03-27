@@ -16,8 +16,7 @@ use alloc::sync::Arc;
 use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TagIndex,
-    TypeTrace,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeTrace,
 };
 
 /// An instantiated WebAssembly module.
@@ -230,9 +229,9 @@ impl Instance {
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
-        let mut owned_imports = OwnedImports::new(module);
+        let mut owned_imports = OwnedImports::new(module)?;
         for import in imports {
-            owned_imports.push(import, store);
+            owned_imports.push(import, store)?;
         }
         Ok(owned_imports)
     }
@@ -657,37 +656,38 @@ impl Instance {
 }
 
 pub(crate) struct OwnedImports {
-    functions: PrimaryMap<FuncIndex, VMFunctionImport>,
-    tables: PrimaryMap<TableIndex, VMTableImport>,
-    memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
-    globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    tags: PrimaryMap<TagIndex, VMTagImport>,
+    functions: TryPrimaryMap<FuncIndex, VMFunctionImport>,
+    tables: TryPrimaryMap<TableIndex, VMTableImport>,
+    memories: TryPrimaryMap<MemoryIndex, VMMemoryImport>,
+    globals: TryPrimaryMap<GlobalIndex, VMGlobalImport>,
+    tags: TryPrimaryMap<TagIndex, VMTagImport>,
 }
 
 impl OwnedImports {
-    fn new(module: &Module) -> OwnedImports {
+    fn new(module: &Module) -> Result<OwnedImports, OutOfMemory> {
         let mut ret = OwnedImports::empty();
-        ret.reserve(module);
-        return ret;
+        ret.reserve(module)?;
+        Ok(ret)
     }
 
     pub(crate) fn empty() -> OwnedImports {
         OwnedImports {
-            functions: PrimaryMap::new(),
-            tables: PrimaryMap::new(),
-            memories: PrimaryMap::new(),
-            globals: PrimaryMap::new(),
-            tags: PrimaryMap::new(),
+            functions: TryPrimaryMap::new(),
+            tables: TryPrimaryMap::new(),
+            memories: TryPrimaryMap::new(),
+            globals: TryPrimaryMap::new(),
+            tags: TryPrimaryMap::new(),
         }
     }
 
-    pub(crate) fn reserve(&mut self, module: &Module) {
+    pub(crate) fn reserve(&mut self, module: &Module) -> Result<(), OutOfMemory> {
         let raw = module.compiled_module().module();
-        self.functions.reserve(raw.num_imported_funcs);
-        self.tables.reserve(raw.num_imported_tables);
-        self.memories.reserve(raw.num_imported_memories);
-        self.globals.reserve(raw.num_imported_globals);
-        self.tags.reserve(raw.num_imported_tags);
+        self.functions.reserve(raw.num_imported_funcs)?;
+        self.tables.reserve(raw.num_imported_tables)?;
+        self.memories.reserve(raw.num_imported_memories)?;
+        self.globals.reserve(raw.num_imported_globals)?;
+        self.tags.reserve(raw.num_imported_tags)?;
+        Ok(())
     }
 
     #[cfg(feature = "component-model")]
@@ -699,33 +699,38 @@ impl OwnedImports {
         self.tags.clear();
     }
 
-    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
+    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) -> Result<(), OutOfMemory> {
         match item {
             Extern::Func(i) => {
-                self.functions.push(i.vmimport(store));
+                self.functions.push(i.vmimport(store))?;
             }
             Extern::Global(i) => {
-                self.globals.push(i.vmimport(store));
+                self.globals.push(i.vmimport(store))?;
             }
             Extern::Table(i) => {
-                self.tables.push(i.vmimport(store));
+                self.tables.push(i.vmimport(store))?;
             }
             Extern::Memory(i) => {
-                self.memories.push(i.vmimport(store));
+                self.memories.push(i.vmimport(store))?;
             }
             Extern::SharedMemory(i) => {
-                self.memories.push(i.vmimport(store));
+                self.memories.push(i.vmimport(store))?;
             }
             Extern::Tag(i) => {
-                self.tags.push(i.vmimport(store));
+                self.tags.push(i.vmimport(store))?;
             }
         }
+        Ok(())
     }
 
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) fn push_export(&mut self, store: &StoreOpaque, item: &crate::runtime::vm::Export) {
+    pub(crate) fn push_export(
+        &mut self,
+        store: &StoreOpaque,
+        item: &crate::runtime::vm::Export,
+    ) -> Result<(), OutOfMemory> {
         match item {
             crate::runtime::vm::Export::Function(f) => {
                 // SAFETY: the funcref associated with a `Func` is valid to use
@@ -735,24 +740,25 @@ impl OwnedImports {
                     wasm_call: f.wasm_call.unwrap(),
                     array_call: f.array_call,
                     vmctx: f.vmctx,
-                });
+                })?;
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(g.vmimport(store));
+                self.globals.push(g.vmimport(store))?;
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(t.vmimport(store));
+                self.tables.push(t.vmimport(store))?;
             }
             crate::runtime::vm::Export::Memory(m) => {
-                self.memories.push(m.vmimport(store));
+                self.memories.push(m.vmimport(store))?;
             }
             crate::runtime::vm::Export::SharedMemory(_, vmimport) => {
-                self.memories.push(*vmimport);
+                self.memories.push(*vmimport)?;
             }
             crate::runtime::vm::Export::Tag(t) => {
-                self.tags.push(t.vmimport(store));
+                self.tags.push(t.vmimport(store))?;
             }
         }
+        Ok(())
     }
 
     pub(crate) fn as_ref(&self) -> Imports<'_> {
@@ -976,20 +982,20 @@ fn pre_instantiate_raw(
         // will insert a function into the store automatically as part of
         // instantiation, so reserve space here to make insertion more efficient
         // as it won't have to realloc during the instantiation.
-        funcrefs.reserve_storage(host_funcs);
+        funcrefs.reserve_storage(host_funcs)?;
 
         // The usage of `to_extern_store_rooted` requires that the items are
         // rooted via another means, which happens here by cloning the list of
         // items into the store once. This avoids cloning each individual item
         // below.
-        funcrefs.push_instance_pre_definitions(items.clone());
-        funcrefs.push_instance_pre_func_refs(func_refs.clone());
+        funcrefs.push_instance_pre_definitions(items.clone())?;
+        funcrefs.push_instance_pre_func_refs(func_refs.clone())?;
     }
 
     store.set_async_required(asyncness);
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
-    let mut imports = OwnedImports::new(module);
+    let mut imports = OwnedImports::new(module)?;
     for import in items.iter() {
         if !import.comes_from_same_store(store) {
             bail!("cross-`Store` instantiation is not currently supported");
@@ -1012,7 +1018,7 @@ fn pre_instantiate_raw(
                 .into()
             },
         };
-        imports.push(&item, store);
+        imports.push(&item, store)?;
     }
 
     Ok(imports)

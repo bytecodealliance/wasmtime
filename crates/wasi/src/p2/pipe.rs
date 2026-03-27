@@ -239,7 +239,15 @@ impl InputStream for AsyncReadStream {
                 self.closed = true;
                 Err(e)
             }
-            Err(TryRecvError::Empty) => Ok(Bytes::new()),
+            Err(TryRecvError::Empty) => {
+                if self.closed {
+                    // Note: if the stream is already closed it should return an error,
+                    //       returning empty list would break the wasi contract (returning 0 and ready)
+                    Err(StreamError::Closed)
+                } else {
+                    Ok(Bytes::new())
+                }
+            }
             Err(TryRecvError::Disconnected) => Err(StreamError::Trap(format_err!(
                 "AsyncReadStream sender died - should be impossible"
             ))),
@@ -382,6 +390,11 @@ mod test {
                 assert!(bs.is_empty());
                 resolves_immediately(reader.ready()).await;
                 assert!(matches!(reader.read(0), Err(StreamError::Closed)));
+
+                // Try again to make sure it keeps returning `StreamError::Closed`
+                resolves_immediately(reader.ready()).await;
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
             res => panic!("unexpected: {res:?}"),
         }
@@ -445,6 +458,10 @@ mod test {
             }
             res => panic!("unexpected: {res:?}"),
         }
+
+        // Make sure it stays closed
+        resolves_immediately(reader.ready()).await;
+        assert!(matches!(reader.read(0), Err(StreamError::Closed)));
     }
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]

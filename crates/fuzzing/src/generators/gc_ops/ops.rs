@@ -3,10 +3,9 @@
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, StructType, TypeId, Types},
+    types::{CompositeType, StructType, TypeId, Types},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
     GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
@@ -69,7 +68,9 @@ impl GcOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(self.limits.num_params as usize);
+        let mut params: Vec<ValType> = Vec::with_capacity(
+            usize::try_from(self.limits.num_params).expect("num_params is too large"),
+        );
         for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
@@ -104,18 +105,6 @@ impl GcOps {
 
         let struct_type_base: u32 = types.len();
 
-        let mut rec_groups: BTreeMap<RecGroupId, Vec<TypeId>> = self
-            .types
-            .rec_groups
-            .iter()
-            .copied()
-            .map(|id| (id, Vec::new()))
-            .collect();
-
-        for (id, ty) in self.types.type_defs.iter() {
-            rec_groups.entry(ty.rec_group).or_default().push(*id);
-        }
-
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
@@ -136,10 +125,13 @@ impl GcOps {
 
         let mut struct_count = 0;
 
-        for type_ids in rec_groups.values() {
-            let members: Vec<wasm_encoder::SubType> = type_ids.iter().map(encode_ty_id).collect();
-            types.ty().rec(members);
-            struct_count += type_ids.len() as u32;
+        for member_set in self.types.rec_groups.values() {
+            let member_types: Vec<wasm_encoder::SubType> =
+                member_set.iter().map(|tid| encode_ty_id(tid)).collect();
+            let member_count = u32::try_from(member_types.len())
+                .expect("member_types len should be within u32 range");
+            types.ty().rec(member_types);
+            struct_count += member_count;
         }
 
         let typed_fn_type_base: u32 = struct_type_base + struct_count;

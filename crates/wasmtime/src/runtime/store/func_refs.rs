@@ -7,6 +7,7 @@ use crate::prelude::*;
 use crate::runtime::HostFunc;
 use crate::runtime::vm::{AlwaysMut, SendSyncPtr, VMArrayCallHostFuncContext, VMFuncRef};
 use alloc::sync::Arc;
+use core::mem::size_of;
 use core::ptr::NonNull;
 
 /// An arena of `VMFuncRef`s.
@@ -22,11 +23,11 @@ pub struct FuncRefs {
 
     /// Pointers into `self.bump` for entries that need `wasm_call` field filled
     /// in.
-    with_holes: Vec<SendSyncPtr<VMFuncRef>>,
+    with_holes: TryVec<SendSyncPtr<VMFuncRef>>,
 
     /// General-purpose storage of "function things" that need to live as long
     /// as the entire store.
-    storage: Vec<Storage>,
+    storage: TryVec<Storage>,
 }
 
 /// Various items to place in `FuncRefs::storage`
@@ -90,17 +91,21 @@ impl FuncRefs {
         &mut self,
         func_ref: VMFuncRef,
         modules: &ModuleRegistry,
-    ) -> NonNull<VMFuncRef> {
+    ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
         debug_assert!(func_ref.wasm_call.is_none());
-        let func_ref = self.bump.get_mut().alloc(func_ref);
+        let func_ref = self
+            .bump
+            .get_mut()
+            .try_alloc(func_ref)
+            .map_err(|_| OutOfMemory::new(size_of::<VMFuncRef>()))?;
         // SAFETY: it's a contract of this function itself that `func_ref` has a
         // valid vmctx field to read.
         let has_hole = unsafe { !try_fill(func_ref, modules) };
         let unpatched = SendSyncPtr::from(func_ref);
         if has_hole {
-            self.with_holes.push(unpatched);
+            self.with_holes.push(unpatched)?;
         }
-        unpatched.as_non_null()
+        Ok(unpatched.as_non_null())
     }
 
     /// Patch any `VMFuncRef::wasm_call`s that need filling in.
@@ -110,16 +115,19 @@ impl FuncRefs {
     }
 
     /// Reserves `amt` space for extra items in "storage" for this store.
-    pub fn reserve_storage(&mut self, amt: usize) {
-        self.storage.reserve(amt);
+    pub fn reserve_storage(&mut self, amt: usize) -> Result<(), OutOfMemory> {
+        self.storage.reserve(amt)
     }
 
     /// Push pre-patched `VMFuncRef`s from an `InstancePre`.
     ///
     /// This is used to ensure that the store itself persists the entire list of
     /// `funcs` for the entire lifetime of the store.
-    pub fn push_instance_pre_func_refs(&mut self, funcs: Arc<TryVec<VMFuncRef>>) {
-        self.storage.push(Storage::InstancePreFuncRefs { funcs });
+    pub fn push_instance_pre_func_refs(
+        &mut self,
+        funcs: Arc<TryVec<VMFuncRef>>,
+    ) -> Result<(), OutOfMemory> {
+        self.storage.push(Storage::InstancePreFuncRefs { funcs })
     }
 
     /// Push linker definitions into storage, keeping them alive for the entire
@@ -127,8 +135,11 @@ impl FuncRefs {
     ///
     /// This is used to keep linker-defined functions' vmctx values alive, for
     /// example.
-    pub fn push_instance_pre_definitions(&mut self, defs: Arc<TryVec<Definition>>) {
-        self.storage.push(Storage::InstancePreDefinitions { defs });
+    pub fn push_instance_pre_definitions(
+        &mut self,
+        defs: Arc<TryVec<Definition>>,
+    ) -> Result<(), OutOfMemory> {
+        self.storage.push(Storage::InstancePreDefinitions { defs })
     }
 
     /// Pushes a shared host function into this store.
@@ -147,12 +158,12 @@ impl FuncRefs {
         &mut self,
         func: Arc<HostFunc>,
         modules: &ModuleRegistry,
-    ) -> NonNull<VMFuncRef> {
+    ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
         debug_assert!(func.func_ref().wasm_call.is_none());
         // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
-        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
-        self.storage.push(Storage::ArcHost { func });
-        ret
+        let ret = unsafe { self.push(func.func_ref().clone(), modules)? };
+        self.storage.push(Storage::ArcHost { func })?;
+        Ok(ret)
     }
 
     /// Same as `push_arc_host`, but for owned host functions.
@@ -160,12 +171,12 @@ impl FuncRefs {
         &mut self,
         func: Box<HostFunc>,
         modules: &ModuleRegistry,
-    ) -> NonNull<VMFuncRef> {
+    ) -> Result<NonNull<VMFuncRef>, OutOfMemory> {
         debug_assert!(func.func_ref().wasm_call.is_none());
         // SAFETY: the vmctx field in the funcref of `HostFunc` is safe to read.
-        let ret = unsafe { self.push(func.func_ref().clone(), modules) };
-        self.storage.push(Storage::BoxHost { func });
-        ret
+        let ret = unsafe { self.push(func.func_ref().clone(), modules)? };
+        self.storage.push(Storage::BoxHost { func })?;
+        Ok(ret)
     }
 }
 

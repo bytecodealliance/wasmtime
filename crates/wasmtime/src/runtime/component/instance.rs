@@ -823,7 +823,7 @@ impl<'a> Instantiator<'a> {
                         // `args` list is already in the right order.
                         InstantiateModule::Static(idx, args) => {
                             module = self.component.static_module(*idx);
-                            self.build_imports(store.0, module, args.iter())
+                            self.build_imports(store.0, module, args.iter())?
                         }
 
                         // With imports, unlike upvars, we need to do runtime
@@ -842,7 +842,7 @@ impl<'a> Instantiator<'a> {
                             let args = module
                                 .imports()
                                 .map(|import| &args[import.module()][import.name()]);
-                            self.build_imports(store.0, module, args)
+                            self.build_imports(store.0, module, args)?
                         }
                     };
 
@@ -985,9 +985,9 @@ impl<'a> Instantiator<'a> {
         store: &mut StoreOpaque,
         module: &Module,
         args: impl Iterator<Item = &'b CoreDef>,
-    ) -> &OwnedImports {
+    ) -> Result<&OwnedImports, OutOfMemory> {
         self.core_imports.clear();
-        self.core_imports.reserve(module);
+        self.core_imports.reserve(module)?;
         let mut imports = module.compiled_module().module().imports();
 
         for arg in args {
@@ -1005,11 +1005,11 @@ impl<'a> Instantiator<'a> {
             // directly from an instance which should only give us valid export
             // items.
             let export = lookup_vmdef(store, self.id, arg);
-            self.core_imports.push_export(store, &export);
+            self.core_imports.push_export(store, &export)?;
         }
         debug_assert!(imports.next().is_none());
 
-        &self.core_imports
+        Ok(&self.core_imports)
     }
 
     fn assert_type_matches(

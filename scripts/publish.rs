@@ -82,6 +82,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
     "wasmtime-internal-debugger",
+    "wasmtime-internal-gdbstub-component-artifact",
     "wasmtime-cli",
 ];
 

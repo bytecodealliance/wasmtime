@@ -8,6 +8,8 @@ use crate::runtime::vm::memory::{DefaultMemoryCreator, Memory};
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use alloc::sync::Arc;
+use core::future::Future;
+use core::pin::Pin;
 use wasmtime_environ::{DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, VMOffsets};
 
 #[cfg(feature = "gc")]
@@ -74,7 +76,6 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
-#[async_trait::async_trait]
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     #[cfg(feature = "component-model")]
     fn validate_component<'a>(
@@ -109,33 +110,38 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
 
     fn decrement_core_instance_count(&self) {}
 
-    async fn allocate_memory(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Memory,
+    fn allocate_memory<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<(MemoryAllocationIndex, Memory)> {
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
+        OutOfMemory,
+    > {
         let creator = self
             .mem_creator
             .as_deref()
             .unwrap_or_else(|| &DefaultMemoryCreator);
 
-        let image = if let Some(memory_index) = memory_index {
-            request.runtime_info.memory_image(memory_index)?
-        } else {
-            None
-        };
+        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+            let image = if let Some(memory_index) = memory_index {
+                request.runtime_info.memory_image(memory_index)?
+            } else {
+                None
+            };
 
-        let allocation_index = MemoryAllocationIndex::default();
-        let memory = Memory::new_dynamic(
-            ty,
-            request.store.engine(),
-            creator,
-            image,
-            request.limiter.as_deref_mut(),
-        )
-        .await?;
-        Ok((allocation_index, memory))
+            let allocation_index = MemoryAllocationIndex::default();
+            let memory = Memory::new_dynamic(
+                ty,
+                request.store.engine(),
+                creator,
+                image,
+                request.limiter.as_deref_mut(),
+            )
+            .await?;
+            Ok((allocation_index, memory))
+        })?))
     }
 
     unsafe fn deallocate_memory(
@@ -148,20 +154,25 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         // Normal destructors do all the necessary clean up.
     }
 
-    async fn allocate_table(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Table,
+    fn allocate_table<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
-    ) -> Result<(TableAllocationIndex, Table)> {
-        let allocation_index = TableAllocationIndex::default();
-        let table = Table::new_dynamic(
-            ty,
-            request.store.engine().tunables(),
-            request.limiter.as_deref_mut(),
-        )
-        .await?;
-        Ok((allocation_index, table))
+    ) -> Result<
+        Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>,
+        OutOfMemory,
+    > {
+        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+            let allocation_index = TableAllocationIndex::default();
+            let table = Table::new_dynamic(
+                ty,
+                request.store.engine().tunables(),
+                request.limiter.as_deref_mut(),
+            )
+            .await?;
+            Ok((allocation_index, table))
+        })?))
     }
 
     unsafe fn deallocate_table(

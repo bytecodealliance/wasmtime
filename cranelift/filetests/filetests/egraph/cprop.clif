@@ -484,6 +484,19 @@ block0:
 ; check: v4 = f16const -0.0
 ; check: return v4  ; v4 = -0.0
 
+function %f16_fmin_promotes_correctly() -> f64 {
+block0:
+    v1 = f16const 0x1.0p0
+    v2 = f16const 0x1.0p1
+    v3 = fmin v1, v2
+    v4 = fpromote.f64 v3
+    return v4
+}
+
+; check: v5 = f16const 0x1.000p0
+; check: v4 = fpromote.f64 v5  ; v5 = 0x1.000p0
+; check: return v4
+
 function %f16_fmax() -> f16 {
 block0:
     v1 = f16const -0x1.5p6

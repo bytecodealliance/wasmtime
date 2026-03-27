@@ -2193,7 +2193,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u32(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap_kind::<crate::XDiv64U>(Some(TrapKind::DivideByZero)),
+            None => self.done_trap_kind::<crate::XDiv32U>(Some(TrapKind::DivideByZero)),
         }
     }
 

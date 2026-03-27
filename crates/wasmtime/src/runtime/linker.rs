@@ -13,7 +13,7 @@ use core::future::Future;
 use core::marker;
 use core::mem::MaybeUninit;
 use log::warn;
-use wasmtime_environ::{Atom, StringPool};
+use wasmtime_environ::{Atom, PanicOnOom, StringPool};
 
 /// Structure used to link wasm modules/instances together.
 ///
@@ -1348,7 +1348,7 @@ impl Definition {
             // SAFETY: the contract of this function is the same as what's
             // required of `to_func`, that `T` of the store matches the `T` of
             // this original definition.
-            Definition::HostFunc(func) => unsafe { func.to_func(store).into() },
+            Definition::HostFunc(func) => unsafe { func.to_func(store).panic_on_oom().into() },
         }
     }
 

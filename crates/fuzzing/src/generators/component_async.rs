@@ -151,7 +151,7 @@ impl<R, W> HandleStates<R, W> {
 #[derive(Default)]
 struct HalfStates<T> {
     /// All known handles of this type, where they're located, etc.
-    handles: IndexMap<u32, (Scope, HalfState, Transferrable)>,
+    handles: IndexMap<u32, (Scope, HalfState, Transferable)>,
 
     /// All handles which can currently be dropped. Handles can't be dropped if
     /// they're in use, for example.
@@ -164,12 +164,12 @@ struct HalfStates<T> {
 
     /// All handles which can be transferred somewhere else.
     ///
-    /// Some examples of non-transferrable handles are:
+    /// Some examples of non-transferable handles are:
     ///
     /// * writers
     /// * handles with an outstanding read
     /// * host-based handles that have been used at least once (FIXME #12090)
-    transferrable: IndexSet<u32>,
+    transferable: IndexSet<u32>,
 
     /// Handles currently being read/written to.
     ///
@@ -187,7 +187,7 @@ enum HalfState {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum Transferrable {
+enum Transferable {
     Yes,
     No,
 }
@@ -221,25 +221,25 @@ impl<T> HalfStates<T> {
     }
 
     /// Adds a new handle `id` to this set.
-    fn insert(&mut self, id: u32, scope: Scope, transferrable: Transferrable) {
+    fn insert(&mut self, id: u32, scope: Scope, transferable: Transferable) {
         let prev = self
             .handles
-            .insert(id, (scope, HalfState::Idle, transferrable));
+            .insert(id, (scope, HalfState::Idle, transferable));
         assert!(prev.is_none());
         assert!(self.droppable.insert(id));
-        if transferrable == Transferrable::Yes {
-            self.transferrable.insert(id);
+        if transferable == Transferable::Yes {
+            self.transferable.insert(id);
         }
     }
 
     /// Removes the handle `id` for closing.
     fn remove(&mut self, id: u32) -> Scope {
-        let (scope, state, transferrable) = self.handles.swap_remove(&id).unwrap();
+        let (scope, state, transferable) = self.handles.swap_remove(&id).unwrap();
         assert!(matches!(state, HalfState::Idle));
         self.droppable.swap_remove(&id);
         self.ready.swap_remove(&id);
-        if transferrable == Transferrable::Yes {
-            assert!(self.transferrable.swap_remove(&id));
+        if transferable == Transferable::Yes {
+            assert!(self.transferable.swap_remove(&id));
         }
         scope
     }
@@ -248,25 +248,25 @@ impl<T> HalfStates<T> {
     /// lifetime, preventing its transfer. This is used as a workaround for
     /// #12090.
     fn lock_in_place(&mut self, id: u32) {
-        let (_scope, state, transferrable) = self.handles.get_mut(&id).unwrap();
+        let (_scope, state, transferable) = self.handles.get_mut(&id).unwrap();
         assert!(matches!(state, HalfState::Idle));
-        if matches!(transferrable, Transferrable::Yes) {
-            assert!(self.transferrable.swap_remove(&id));
-            *transferrable = Transferrable::No;
+        if matches!(transferable, Transferable::Yes) {
+            assert!(self.transferable.swap_remove(&id));
+            *transferable = Transferable::No;
         }
     }
 
     /// Starts an operation on the handle `id`.
     fn start(&mut self, id: u32, cancellable: Cancellable, payload: T) {
-        let (_scope, state, transferrable) = self.handles.get_mut(&id).unwrap();
+        let (_scope, state, transferable) = self.handles.get_mut(&id).unwrap();
         assert!(matches!(state, HalfState::Idle));
         assert!(self.ready.swap_remove(&id));
         self.droppable.swap_remove(&id);
         *state = HalfState::InUse;
         let prev = self.in_use.insert(id, (payload, OpState::Pending));
         assert!(prev.is_none());
-        if *transferrable == Transferrable::Yes {
-            assert!(self.transferrable.swap_remove(&id));
+        if *transferable == Transferable::Yes {
+            assert!(self.transferable.swap_remove(&id));
         }
         if cancellable == Cancellable::Yes {
             assert!(self.cancellable.insert(id));
@@ -276,13 +276,13 @@ impl<T> HalfStates<T> {
     /// Completes an operation on `id`, returning the state it was started with
     /// along with whether it was dropped.
     fn stop(&mut self, id: u32) -> (T, OpState) {
-        let (_scope, state, transferrable) = self.handles.get_mut(&id).unwrap();
+        let (_scope, state, transferable) = self.handles.get_mut(&id).unwrap();
         assert!(matches!(state, HalfState::InUse));
         *state = HalfState::Idle;
         let dropped = self.in_use.swap_remove(&id).unwrap();
         self.cancellable.swap_remove(&id);
-        if *transferrable == Transferrable::Yes {
-            assert!(self.transferrable.insert(id));
+        if *transferable == Transferable::Yes {
+            assert!(self.transferable.insert(id));
         }
         assert!(self.droppable.insert(id));
         if dropped.1 != OpState::Dropped {
@@ -374,7 +374,7 @@ impl State {
             if self.futures.readers.ready.len() > 0 {
                 choices.push(Choice::FutureRead);
             }
-            if self.futures.readers.transferrable.len() > 0 {
+            if self.futures.readers.transferable.len() > 0 {
                 choices.push(Choice::FutureReaderTransfer);
             }
         }
@@ -396,7 +396,7 @@ impl State {
         // If more work is allowed then streams can be moved around and new
         // reads/writes may be started.
         if !finish {
-            if self.streams.readers.transferrable.len() > 0 {
+            if self.streams.readers.transferable.len() > 0 {
                 choices.push(Choice::StreamReaderTransfer);
             }
             if self.streams.readers.ready.len() > 0 {
@@ -483,14 +483,14 @@ impl State {
                 let scope = *u.choose(Scope::ALL)?;
                 let id = self.next_id();
                 commands.push((scope, Command::FutureNew(id)));
-                self.futures.readers.insert(id, scope, Transferrable::Yes);
-                self.futures.writers.insert(id, scope, Transferrable::No);
+                self.futures.readers.insert(id, scope, Transferable::Yes);
+                self.futures.writers.insert(id, scope, Transferable::No);
 
                 // Future writers cannot be dropped without writing.
                 assert!(self.futures.writers.droppable.swap_remove(&id));
             }
             Choice::FutureReaderTransfer => {
-                let set = &mut self.futures.readers.transferrable;
+                let set = &mut self.futures.readers.transferable;
                 let i = u.int_in_range(0..=set.len() - 1)?;
                 let id = *set.get_index(i).unwrap();
                 let scope = &mut self.futures.readers.handles[&id].0;
@@ -672,11 +672,11 @@ impl State {
                 let scope = *u.choose(Scope::ALL)?;
                 let id = self.next_id();
                 commands.push((scope, Command::StreamNew(id)));
-                self.streams.readers.insert(id, scope, Transferrable::Yes);
-                self.streams.writers.insert(id, scope, Transferrable::No);
+                self.streams.readers.insert(id, scope, Transferable::Yes);
+                self.streams.writers.insert(id, scope, Transferable::No);
             }
             Choice::StreamReaderTransfer => {
-                let set = &mut self.streams.readers.transferrable;
+                let set = &mut self.streams.readers.transferable;
                 let i = u.int_in_range(0..=set.len() - 1)?;
                 let id = *set.get_index(i).unwrap();
                 let scope = &mut self.streams.readers.handles[&id].0;

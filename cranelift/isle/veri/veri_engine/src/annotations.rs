@@ -235,7 +235,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
                 args.len() > 1,
                 "Unexpected number of args for switch operator {pos:?}",
             );
-            let swith_on = spec_to_expr(&args[0], env);
+            let switch_on = spec_to_expr(&args[0], env);
             let arms: Vec<(Expr, Expr)> = args[1..]
                 .iter()
                 .map(|a| match a {
@@ -247,7 +247,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
                     _ => unreachable!(),
                 })
                 .collect();
-            Expr::Switch(Box::new(swith_on), arms)
+            Expr::Switch(Box::new(switch_on), arms)
         }
         SpecOp::LoadEffect => {
             assert_eq!(

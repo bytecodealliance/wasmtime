@@ -403,7 +403,7 @@
 
 (rule (simplify (fmin $F16 (f16const $F16 n) (f16const $F16 m)))
       (if-let r (f16_min n m))
-      (subsume (f16const $F32 r)))
+      (subsume (f16const $F16 r)))
 (rule (simplify (fmin $F32 (f32const $F32 n) (f32const $F32 m)))
       (if-let r (f32_min n m))
       (subsume (f32const $F32 r)))

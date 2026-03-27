@@ -11,14 +11,15 @@ use crate::runtime::vm::{
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
-use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
+use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, Tunables};
 
 /// Backing images for memories in a module.
 ///
 /// This is meant to be built once, when a module is first loaded/constructed,
 /// and then used many times for instantiation.
 pub struct ModuleMemoryImages {
-    memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryImage>>>,
+    memories: TryPrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryImage>>>,
 }
 
 impl ModuleMemoryImages {
@@ -179,7 +180,7 @@ impl ModuleMemoryImages {
             MemoryInitialization::Static { map } => map,
             _ => return Ok(None),
         };
-        let mut memories = PrimaryMap::with_capacity(map.len());
+        let mut memories = TryPrimaryMap::with_capacity(map.len())?;
         let page_size = crate::runtime::vm::host_page_size();
         let page_size = u32::try_from(page_size).unwrap();
         for (memory_index, init) in map {
@@ -196,7 +197,7 @@ impl ModuleMemoryImages {
             let init = match init {
                 Some(init) => init,
                 None => {
-                    memories.push(None);
+                    memories.push(None)?;
                     continue;
                 }
             };
@@ -233,7 +234,7 @@ impl ModuleMemoryImages {
                 None => return Ok(None),
             };
 
-            let idx = memories.push(Some(Arc::new(image)));
+            let idx = memories.push(Some(try_new::<Arc<_>>(image)?))?;
             assert_eq!(idx, defined_memory);
         }
 

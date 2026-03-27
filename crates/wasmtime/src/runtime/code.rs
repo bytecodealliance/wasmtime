@@ -8,6 +8,7 @@ use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::ops::{Add, Range, Sub};
+use wasmtime_core::error::OutOfMemory;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::ModuleTypes;
 use wasmtime_environ::StaticModuleIndex;
@@ -126,16 +127,20 @@ pub struct EngineCode {
 }
 
 impl EngineCode {
-    pub fn new(mmap: Arc<CodeMemory>, signatures: TypeCollection, types: Types) -> EngineCode {
+    pub fn new(
+        mmap: Arc<CodeMemory>,
+        signatures: TypeCollection,
+        types: Types,
+    ) -> Result<EngineCode, OutOfMemory> {
         // The corresponding unregister for this is below in `Drop for
         // EngineCode`.
-        crate::module::register_code(&mmap, mmap.raw_addr_range());
+        crate::module::register_code(&mmap, mmap.raw_addr_range())?;
 
-        EngineCode {
+        Ok(EngineCode {
             original_code: mmap,
             signatures,
             types,
-        }
+        })
     }
 
     #[cfg(feature = "component-model")]
@@ -334,7 +339,10 @@ impl StoreCode {
             // this clones the whole image.
             let mut private_copy = engine_code.original_code.deep_clone(engine)?;
             private_copy.publish()?;
-            crate::module::register_code(&engine_code.original_code, private_copy.raw_addr_range());
+            crate::module::register_code(
+                &engine_code.original_code,
+                private_copy.raw_addr_range(),
+            )?;
             StoreCodeStorage::Private(Box::new(private_copy))
         } else {
             StoreCodeStorage::Shared(engine_code.original_code.clone())

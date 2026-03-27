@@ -112,7 +112,7 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
+use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
 
 mod context;
 pub use self::context::*;
@@ -478,7 +478,7 @@ pub struct StoreOpaque {
     signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
-    host_globals: PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>>,
+    host_globals: TryPrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>>,
     // GC-related fields.
     gc_store: Option<GcStore>,
     gc_roots: RootSet,
@@ -756,7 +756,7 @@ impl<T> Store<T> {
             pending_exception: None,
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
-            host_globals: PrimaryMap::new(),
+            host_globals: TryPrimaryMap::new(),
             instance_count: 0,
             instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
             memory_count: 0,
@@ -1687,13 +1687,13 @@ impl StoreOpaque {
 
     pub(crate) fn host_globals(
         &self,
-    ) -> &PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
+    ) -> &TryPrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
         &self.host_globals
     }
 
     pub(crate) fn host_globals_mut(
         &mut self,
-    ) -> &mut PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
+    ) -> &mut TryPrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
         &mut self.host_globals
     }
 
@@ -1929,7 +1929,7 @@ impl StoreOpaque {
 
             let (mem_alloc_index, mem) = engine
                 .allocator()
-                .allocate_memory(&mut request, &mem_ty, None)
+                .allocate_memory(&mut request, &mem_ty, None)?
                 .await?;
 
             // Then, allocate the actual GC heap, passing in that memory
