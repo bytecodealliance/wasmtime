@@ -1033,6 +1033,30 @@ jobs:
         LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk
 
+  # Test guest-debug (gdbstub) functionality with LLDB.
+  # Requires wasi-sdk >= 32 for LLDB with the Wasm remote-debug plugin.
+  test_guest_debug:
+    needs: determine
+    if: needs.determine.outputs.run-dwarf
+    name: Test guest debugging
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: |
+        rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
+        cd /tmp
+        curl --retry 5 --retry-all-errors -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/wasi-sdk-32.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-32.0-x86_64-linux.tar.gz
+        mv wasi-sdk-32.0-x86_64-linux wasi-sdk
+    - run: |
+        cargo test --features gdbstub --test all -- --ignored --test-threads 1 guest_debug::
+      env:
+        LLDB: /tmp/wasi-sdk/bin/lldb
+        WASI_SDK_PATH: /tmp/wasi-sdk
+
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
     needs: determine

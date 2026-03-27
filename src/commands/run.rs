@@ -272,6 +272,20 @@ impl RunCommand {
                 };
                 debug_run.add_debugger_api(&mut debug_linker)?;
 
+                // Pre-register the main module on the debuggee store
+                // so that `debug_all_modules()` returns it before any
+                // Wasm executes. This lets the debugger see modules
+                // and set breakpoints at the initial stop.
+                match &main {
+                    RunTarget::Core(m) => {
+                        store.debug_register_module(m)?;
+                    }
+                    #[cfg(feature = "component-model")]
+                    RunTarget::Component(c) => {
+                        store.debug_register_component(c)?;
+                    }
+                }
+
                 debug_run
                     .invoke_debugger(
                         &mut debug_store,

@@ -29,10 +29,21 @@ pub fn add_debuggee<T: Send + 'static>(
     })?)
 }
 
+impl bindings::DebugMainImports for ResourceTable {
+    async fn print_debugger_info(&mut self, message: String) -> wasmtime::Result<()> {
+        eprintln!("Debugger: {message}");
+        Ok(())
+    }
+}
+
 /// Add the debugger world's host functions to a [`wasmtime::component::Linker`].
 pub fn add_to_linker<T: Send + 'static>(
     linker: &mut wasmtime::component::Linker<T>,
     f: fn(&mut T) -> &mut ResourceTable,
 ) -> wasmtime::Result<()> {
-    wit::add_to_linker::<_, wasmtime::component::HasSelf<ResourceTable>>(linker, f)
+    wit::add_to_linker::<_, wasmtime::component::HasSelf<ResourceTable>>(linker, f)?;
+    bindings::DebugMain::add_to_linker_imports::<_, wasmtime::component::HasSelf<ResourceTable>>(
+        linker, f,
+    )?;
+    Ok(())
 }

@@ -3,6 +3,11 @@ package bytecodealliance:wasmtime@44.0.0;
 world debug-main {
   import wasi:io/poll@0.2.6;
   import debuggee;
+
+  /// Print an informational message from the debugger (e.g. "listening
+  /// on port 1234") to the user. The host decides how to display this.
+  import print-debugger-info: func(message: string);
+
   export debugger;
 }
 
