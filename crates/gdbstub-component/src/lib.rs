@@ -81,22 +81,24 @@ struct Debugger<'a> {
 
 impl<'a> Debugger<'a> {
     async fn run(&mut self) -> Result<()> {
-        // Single-step once so modules are loaded and PC is at the
-        // first instruction.
-        self.start_single_step(api::ResumptionValue::Normal);
-        self.running.as_mut().unwrap().wait().await;
-        let _ = self.running.take().unwrap().result(self.debuggee)?;
+        // Load module info from the debuggee. Modules are
+        // pre-registered on the debuggee store before the Debuggee is
+        // created, so they are visible here without needing to
+        // execute any Wasm.
         self.update_on_stop();
 
         let listener = TcpListener::bind(&self.options.tcp_address)
             .await
             .expect("Could not bind to TCP port");
 
-        log::info!("Debugger waiting on {}", self.options.tcp_address);
-        log::info!(
-            "In LLDB, attach with `process connect --plugin wasm connect://{}",
-            self.options.tcp_address
-        );
+        api::print_debugger_info(&format!(
+            "Debugger listening on {}",
+            self.options.tcp_address,
+        ));
+        api::print_debugger_info(&format!(
+            "In LLDB, attach with: process connect --plugin wasm connect://{}",
+            self.options.tcp_address,
+        ));
 
         // Only accept one connection for the run; once the debugger
         // disconnects, we'll just continue.
