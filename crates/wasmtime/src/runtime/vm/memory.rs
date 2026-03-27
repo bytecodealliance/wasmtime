@@ -141,11 +141,13 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
             || tunables.memory_reservation > 0
             || tunables.memory_init_cow
         {
-            return Ok(Box::new(MmapMemory::new(ty, tunables, minimum, maximum)?));
+            return Ok(try_new::<Box<_>>(MmapMemory::new(ty, tunables, minimum, maximum)?)?
+                as Box<dyn RuntimeLinearMemory>);
         }
 
         let _ = maximum;
-        Ok(Box::new(MallocMemory::new(ty, tunables, minimum)?))
+        Ok(try_new::<Box<_>>(MallocMemory::new(ty, tunables, minimum)?)?
+            as Box<dyn RuntimeLinearMemory>)
     }
 }
 
