@@ -645,6 +645,14 @@ pub(crate) fn emit(
             sink.bind_label(resume, state.ctrl_plane_mut());
         }
 
+        Inst::DeadLoadWithContext { .. } => {
+            // The ISLE has already emitted the dead load. Put the address of
+            // this instruction aside so we can later distinguish whether a
+            // segfault is its fault.
+
+            // Search for "let pc_offset = layout.ip_offset as i32;" as a string to pull on.
+        }
+
         Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),
 
         Inst::WinchJmpIf { cc, taken } => one_way_jmp(sink, *cc, *taken),

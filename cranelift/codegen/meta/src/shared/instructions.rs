@@ -395,6 +395,8 @@ fn define_control_flow(
         ``VMContext``'s ``vm_store_context``) and can use the second
         reserved register to store a temp value, as needed on platforms
         where signal handlers cannot push stack frames.
+
+        On x64, RDI holds ``context``, and R10 is used as scratch space.
         "#,
             &formats.binary,
         )
@@ -403,8 +405,10 @@ fn define_control_flow(
             Operand::new("context", iAddr)
                 .with_doc("arbitrary address-sized context to pass to signal handler"),
         ])
-        // Are we a call? stack_switch calls itself one "as it continues execution elsewhere".
-        // .is_call()
+        // Are we a call? stack_switch calls itself one "as it continues
+        // execution elsewhere". See reasoning at
+        // https://github.com/bytecodealliance/wasmtime/pull/9078#issuecomment-2273869774.
+        .call()
         .can_load()
         // Don't optimize me out just because I don't def anything. TODO: Can we use side_effects_idempotent()?
         .other_side_effects(),

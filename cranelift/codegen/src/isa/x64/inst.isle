@@ -194,6 +194,9 @@
                     (offset i64)
                     (distance RelocDistance))
 
+       (DeadLoadWithContext (load_ptr Gpr)
+                            (context Gpr))
+
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
 
@@ -1341,6 +1344,12 @@
 (decl return_call_unknown (BoxReturnCallIndInfo) SideEffectNoResult)
 (rule (return_call_unknown info)
       (SideEffectNoResult.Inst (MInst.ReturnCallUnknown info)))
+
+;; Helper for creating `DeadLoadWithContext` instructions.
+(decl x64_dead_load_with_context (Gpr Gpr) SideEffectNoResult)
+(rule (x64_dead_load_with_context load_ptr context)
+      (SideEffectNoResult.Inst (MInst.DeadLoadWithContext load_ptr
+                                                          context)))
 
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4063,9 +4072,6 @@
 
 (decl preg_rsp () PReg)
 (extern constructor preg_rsp preg_rsp)
-
-(decl preg_rdi () PReg)
-(extern constructor preg_rdi preg_rdi)
 
 (decl preg_pinned () PReg)
 (extern constructor preg_pinned preg_pinned)

@@ -16,7 +16,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @001b                               v2 = load.i64 notrap aligned readonly can_move v0+8
 ;; @001b                               v3 = load.i64 notrap aligned v2+16
-;; @001b                               v4 = load.i32 aligned readonly v3
+;; @001b                               dead_load_with_context v3, v0
 ;; @001c                               jump block1
 ;;
 ;;                                 block1:

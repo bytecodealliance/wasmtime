@@ -659,11 +659,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn preg_rdi(&mut self) -> PReg {
-        regs::rdi().to_real_reg().unwrap().into()
-    }
-
-    #[inline]
     fn preg_pinned(&mut self) -> PReg {
         regs::pinned_reg().to_real_reg().unwrap().into()
     }

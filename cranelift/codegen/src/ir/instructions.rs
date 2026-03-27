@@ -613,9 +613,13 @@ impl InstructionData {
             Self::Ternary {
                 opcode: Opcode::StackSwitch,
                 ..
+            }
+            | Self::Binary {
+                opcode: Opcode::DeadLoadWithContext,
+                ..
             } => {
-                // `StackSwitch` is not actually a call, but has the .call() side
-                // effect as it continues execution elsewhere.
+                // These instructions aren't actually calls, but they have the
+                // .call() side effect, as they continue execution elsewhere.
                 CallInfo::NotACall
             }
             _ => {

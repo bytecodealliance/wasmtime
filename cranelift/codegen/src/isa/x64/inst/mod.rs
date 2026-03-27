@@ -1,6 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 pub use emit_state::EmitState;
+use regalloc2::PRegSet;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{ExternalName, LibCall, TrapCode, Type, types};
@@ -96,6 +97,7 @@ impl Inst {
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::StackSwitchBasic { .. }
+            | Inst::DeadLoadWithContext { .. }
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
             | Inst::TrapIfOr { .. }
@@ -671,6 +673,12 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::DeadLoadWithContext { load_ptr, context } => {
+                let load_ptr = pretty_print_reg(**load_ptr, 8);
+                let context = pretty_print_reg(**context, 8);
+                format!("dead_load_with_context {load_ptr}, {context}")
+            }
+
             Inst::JmpKnown { dst } => {
                 let op = ljustify("jmp".to_string());
                 let dst = dst.to_string();
@@ -1043,6 +1051,19 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                     .into(),
             );
             collector.reg_clobbers(clobbers);
+        }
+
+        Inst::DeadLoadWithContext { load_ptr, context } => {
+            // load_ptr is an input param.
+            collector.reg_use(load_ptr);
+            // Demand context (vmctx) go into RDI.
+            // TODO: Do I still have to move it, or will regalloc make sure it's there?
+            collector.reg_fixed_use(context, regs::rdi());
+            // Reserve r10 as a place for the signal handler to stow the return
+            // address (which we're overwriting with that of the epoch-ending
+            // stub). Picking r10 because it's caller-saved but otherwise
+            // arbitrarily.
+            collector.reg_clobbers(PRegSet::empty().with(regs::gpr_preg(asm::gpr::enc::R10)));
         }
 
         Inst::ReturnCallKnown { info } => {

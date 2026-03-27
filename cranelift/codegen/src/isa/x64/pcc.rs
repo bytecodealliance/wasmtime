@@ -209,6 +209,8 @@ pub(crate) fn check(
 
         Inst::StackSwitchBasic { .. } => Err(PccError::UnimplementedInst),
 
+        Inst::DeadLoadWithContext { .. } => Err(PccError::UnimplementedInst),
+
         Inst::LabelAddress { .. } => Err(PccError::UnimplementedInst),
 
         Inst::SequencePoint { .. } => Ok(()),
