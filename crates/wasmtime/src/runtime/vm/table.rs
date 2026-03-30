@@ -185,7 +185,7 @@ impl From<DynamicContTable> for DynamicTable {
 pub struct DynamicFuncTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<FuncTableElem>,
+    elements: TryVec<FuncTableElem>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
     /// Whether elements of this table are initialized lazily.
@@ -195,7 +195,7 @@ pub struct DynamicFuncTable {
 pub struct DynamicGcRefTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<Option<VMGcRef>>,
+    elements: TryVec<Option<VMGcRef>>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
 }
@@ -203,7 +203,7 @@ pub struct DynamicGcRefTable {
 pub struct DynamicContTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<ContTableElem>,
+    elements: TryVec<ContTableElem>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
 }
@@ -291,7 +291,7 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 ///
 /// Should only ever be called with a `T` that is a table element type and where
 /// `Option<T>`'s `None` variant is represented with zero.
-unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> {
+unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<TryVec<Option<T>>> {
     debug_assert!(
         unsafe {
             core::mem::MaybeUninit::<Option<T>>::zeroed()
@@ -302,7 +302,7 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
     );
 
     if len == 0 {
-        return Ok(vec![]);
+        return Ok(TryVec::new());
     }
 
     let align = mem::align_of::<Option<T>>();
@@ -318,7 +318,7 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
         return Err(OutOfMemory::new(size).into());
     }
 
-    let elems = unsafe { Vec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
+    let elems = unsafe { TryVec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
     debug_assert!(elems.iter().all(|e| e.is_none()));
 
     Ok(elems)
@@ -342,10 +342,11 @@ impl Table {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
                 maximum,
             })),
-            TableElementType::Cont => Ok(Self::from(DynamicContTable {
-                elements: vec![None; minimum],
-                maximum,
-            })),
+            TableElementType::Cont => {
+                let mut elements = TryVec::new();
+                elements.resize_with(minimum, || None)?;
+                Ok(Self::from(DynamicContTable { elements, maximum }))
+            }
         }
     }
 
@@ -730,13 +731,13 @@ impl Table {
             // that delta is non-zero and the new size doesn't exceed the
             // maximum mean we can't get here.
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
-                elements.resize(new_size, None);
+                elements.resize_with(new_size, || None)?;
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
-                elements.resize_with(new_size, || None);
+                elements.resize_with(new_size, || None)?;
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                elements.resize(new_size, None);
+                elements.resize_with(new_size, || None)?;
             }
         }
 

@@ -191,6 +191,20 @@ impl<T> TryVec<T> {
         Ok(())
     }
 
+    /// Same as [`std::vec::Vec::resize_with`] but returns an error on
+    /// allocation failure.
+    pub fn resize_with<F>(&mut self, new_len: usize, f: F) -> Result<(), OutOfMemory>
+    where
+        F: FnMut() -> T,
+    {
+        let len = self.len();
+        if new_len > len {
+            self.reserve(new_len - len)?;
+        }
+        self.inner.resize_with(new_len, f);
+        Ok(())
+    }
+
     /// Same as [`std::vec::Vec::retain`].
     pub fn retain<F>(&mut self, f: F)
     where

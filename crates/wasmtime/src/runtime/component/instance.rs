@@ -1046,7 +1046,7 @@ impl<'a> Instantiator<'a> {
             return;
         }
 
-        let val = crate::Extern::from_wasmtime_export(export, store);
+        let val = crate::Extern::from_wasmtime_export(export, store.engine());
         let ty = DefinitionType::from(store, &val);
         crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)

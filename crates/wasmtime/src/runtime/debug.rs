@@ -346,7 +346,7 @@ impl Instance {
         // this instance as we fetched the instance directly from
         // the store above.
         let export = unsafe { instance.get_export_by_index_mut(registry, store_id, index) };
-        Some(Extern::from_wasmtime_export(export, store))
+        Some(Extern::from_wasmtime_export(export, store.engine()))
     }
 }
 

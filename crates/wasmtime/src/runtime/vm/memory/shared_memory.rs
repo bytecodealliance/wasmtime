@@ -37,11 +37,9 @@ impl SharedMemory {
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
-        Self::wrap(
-            engine,
-            ty,
-            LocalMemory::new(ty, tunables, Box::new(mmap_memory), None)?,
-        )
+        let boxed: Box<dyn crate::runtime::vm::RuntimeLinearMemory> =
+            try_new::<Box<_>>(mmap_memory)?;
+        Self::wrap(engine, ty, LocalMemory::new(ty, tunables, boxed, None)?)
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
@@ -58,12 +56,12 @@ impl SharedMemory {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        Ok(Self(Arc::new(SharedMemoryInner {
+        Ok(Self(try_new::<Arc<_>>(SharedMemoryInner {
             ty: *ty,
             spot: ParkingSpot::default(),
             def: LongTermVMMemoryDefinition(memory.vmmemory()),
             memory: RwLock::new(memory),
-        })))
+        })?))
     }
 
     /// Return the memory type for this [`SharedMemory`].

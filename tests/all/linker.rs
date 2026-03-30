@@ -332,8 +332,8 @@ fn alias_one() -> Result<()> {
     assert!(linker.alias("a", "b", "c", "d").is_err());
     linker.func_wrap("a", "b", || {})?;
     assert!(linker.alias("a", "b", "c", "d").is_ok());
-    assert!(linker.get(&mut store, "a", "b").is_some());
-    assert!(linker.get(&mut store, "c", "d").is_some());
+    assert!(linker.get(&mut store, "a", "b").is_ok());
+    assert!(linker.get(&mut store, "c", "d").is_ok());
     Ok(())
 }
 

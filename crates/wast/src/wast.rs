@@ -171,7 +171,7 @@ impl WastContext {
             return Ok(Export::Core(
                 self.core_linker
                     .get(&mut self.core_store, module, name)
-                    .ok_or_else(|| format_err!("no item named `{module}::{name}` found"))?,
+                    .with_context(|| format_err!("no item named `{module}::{name}` found"))?,
             ));
         }
 
