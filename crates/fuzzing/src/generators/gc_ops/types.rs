@@ -124,7 +124,7 @@ impl Types {
             usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
         let max_types = usize::try_from(limits.max_types).expect("max_types is too large");
 
-        // 1. Trim excess types and remove them from rec group member sets, i.e.
+        // 1. Trim excess types.
         while self.type_defs.len() > max_types {
             if let Some((tid, _)) = self.type_defs.pop_last() {
                 for members in self.rec_groups.values_mut() {
@@ -133,42 +133,35 @@ impl Types {
             }
         }
 
-        // 2. Drop dangling member set entries that reference types that do not exist.
+        // 2. Drop dangling references and deduplicate across groups.
+        let mut seen = BTreeSet::new();
         for members in self.rec_groups.values_mut() {
-            members.retain(|tid| self.type_defs.contains_key(tid));
+            members.retain(|tid| self.type_defs.contains_key(tid) && seen.insert(*tid));
         }
 
-        // 3. Trim excess rec groups and collect their members as orphans.
-        let mut rec_group_orphans = BTreeSet::new();
+        // 3. Trim excess rec groups.
         while self.rec_groups.len() > max_rec_groups {
-            if let Some((_gid, members)) = self.rec_groups.pop_last() {
-                rec_group_orphans.extend(members);
-            }
+            self.rec_groups.pop_last();
         }
 
-        // 4. Find corruption orphans that are not in any group.
-        let mut all_members = BTreeSet::new();
-        for members in self.rec_groups.values() {
-            all_members.extend(members.iter().copied());
-        }
-
-        // Exclude rec_group_orphans that are already accounted for in the step 3.
-        let corruption_orphans: BTreeSet<TypeId> = self
+        // 4. Find all orphans (from trimmed groups or never in any group).
+        let housed: BTreeSet<TypeId> = self
+            .rec_groups
+            .values()
+            .flat_map(|m| m.iter().copied())
+            .collect();
+        let orphans: Vec<TypeId> = self
             .type_defs
             .keys()
-            .filter(|tid| !all_members.contains(tid) && !rec_group_orphans.contains(tid))
+            .filter(|tid| !housed.contains(tid))
             .copied()
             .collect();
 
-        // 5. Adopt into the first rec group: corruption orphans first,
-        //    then rec group orphans. Both are already within max_types from step 1.
-        if let Some(gid) = self.rec_groups.keys().next().copied() {
-            let members = self.rec_groups.get_mut(&gid).unwrap();
-            members.extend(corruption_orphans);
-            members.extend(rec_group_orphans);
+        // 5. Adopt orphans or drop them.
+        if let Some(first_members) = self.rec_groups.values_mut().next() {
+            first_members.extend(orphans);
         } else {
-            // No rec groups at all — drop everything.
-            for tid in corruption_orphans.iter().chain(rec_group_orphans.iter()) {
+            for tid in &orphans {
                 self.type_defs.remove(tid);
             }
         }
@@ -184,24 +177,32 @@ impl Types {
         if self.rec_groups.len()
             > usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
         {
+            log::debug!("[-] Failed: rec_groups.len() > max_rec_groups");
             return false;
         }
         if self.type_defs.len() > usize::try_from(limits.max_types).expect("max_types is too large")
         {
+            log::debug!("[-] Failed: type_defs.len() > max_types");
             return false;
         }
         let mut all = BTreeSet::new();
         for members in self.rec_groups.values() {
             for tid in members {
                 if !self.type_defs.contains_key(tid) {
+                    log::debug!("[-] Failed: type_defs.contains_key(tid) is false");
                     return false;
                 }
                 if !all.insert(*tid) {
+                    log::debug!("[-] Failed: all.insert(tid) is false");
                     return false;
                 }
             }
         }
-        self.type_defs.keys().all(|tid| all.contains(tid))
+        if !self.type_defs.keys().all(|tid| all.contains(tid)) {
+            log::debug!("[-] Failed: type_defs.keys().all(|tid| all.contains(tid)) is false");
+            return false;
+        }
+        true
     }
 }
 
