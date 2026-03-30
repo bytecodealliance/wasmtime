@@ -446,7 +446,7 @@ impl<'a> Trampoline<'a> {
             | Architecture::Pulley64
             | Architecture::Pulley32be
             | Architecture::Pulley64be => {
-                let mut state = pulley::Vm::new();
+                let mut state = pulley::Vm::new().unwrap();
                 unsafe {
                     state.call(
                         NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
