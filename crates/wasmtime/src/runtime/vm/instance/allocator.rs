@@ -508,12 +508,12 @@ fn check_table_init_bounds(
         let start = const_evaluator
             .eval_int(&mut store, context, &segment.offset)
             .expect("const expression should be valid");
-        let start = usize::try_from(start.unwrap_i32().cast_unsigned()).unwrap();
-        let end = start.checked_add(usize::try_from(segment.elements.len()).unwrap());
+        let start = get_index(start, module.tables[segment.table_index].idx_type);
+        let end = start.checked_add(segment.elements.len());
 
         let table = store.instance_mut(instance).get_table(segment.table_index);
         match end {
-            Some(end) if end <= table.size() => {
+            Some(end) if end <= u64::try_from(table.size())? => {
                 // Initializer is in bounds
             }
             _ => {
@@ -564,10 +564,7 @@ async fn initialize_tables(
         let start = const_evaluator
             .eval_int(&mut store, context, &segment.offset)
             .expect("const expression should be valid");
-        let start = get_index(
-            start,
-            store.instance(context.instance).env_module().tables[segment.table_index].idx_type,
-        );
+        let start = get_index(start, module.tables[segment.table_index].idx_type);
         Instance::table_init_segment(
             &mut store,
             limiter.as_deref_mut(),
