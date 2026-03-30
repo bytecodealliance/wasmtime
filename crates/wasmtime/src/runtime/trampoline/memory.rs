@@ -176,10 +176,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
         if cfg!(debug_assertions) {
             let module = request.runtime_info.env_module();
             let offsets = request.runtime_info.offsets();
@@ -188,12 +185,12 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         }
 
         match self.preallocation {
-            Some(shared_memory) => Ok(Box::into_pin(try_new::<Box<_>>(async move {
+            Some(shared_memory) => crate::runtime::box_future(async move {
                 Ok((
                     MemoryAllocationIndex::default(),
                     shared_memory.clone().as_memory(),
                 ))
-            })?)),
+            }),
             None => self.ondemand.allocate_memory(request, ty, memory_index),
         }
     }
@@ -215,10 +212,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         req: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Table,
         table_index: DefinedTableIndex,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
+    ) -> Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>> {
         self.ondemand.allocate_table(req, ty, table_index)
     }
 

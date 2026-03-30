@@ -684,11 +684,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
-        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
+        crate::runtime::box_future(async move {
             async {
                 // FIXME(rust-lang/rust#145127) this should ideally use a version of
                 // `with_flush_and_retry` but adapted for async closures instead of only
@@ -712,7 +709,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             .inspect(|_| {
                 self.live_memories.fetch_add(1, Ordering::Relaxed);
             })
-        })?))
+        })
     }
 
     unsafe fn deallocate_memory(
@@ -758,11 +755,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Table,
         _table_index: DefinedTableIndex,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<(super::TableAllocationIndex, Table)>> + Send + 'a>>,
-        OutOfMemory,
-    > {
-        Ok(Box::into_pin(try_new::<Box<_>>(async move {
+    ) -> Pin<Box<dyn Future<Output = Result<(super::TableAllocationIndex, Table)>> + Send + 'a>>
+    {
+        crate::runtime::box_future(async move {
             async {
                 // FIXME: see `allocate_memory` above for comments about duplication
                 // with `with_flush_and_retry`.
@@ -784,7 +779,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             .inspect(|_| {
                 self.live_tables.fetch_add(1, Ordering::Relaxed);
             })
-        })?))
+        })
     }
 
     unsafe fn deallocate_table(
