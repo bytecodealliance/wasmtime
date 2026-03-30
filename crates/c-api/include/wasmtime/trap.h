@@ -131,8 +131,6 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_UNSUPPORTED_CALLBACK_CODE = 43,
   /// Cannot resume a thread which is not suspended.
   WASMTIME_TRAP_CODE_CANNOT_RESUME_THREAD = 44,
-  /// Cannot resume a thread which is not suspended.
-  WASMTIME_TRAP_CODE_CANNOT_RESUME_THREAD = 44,
   /// Cannot issue a read/write on a future/stream while there is a
   /// pending operation already.
   WASMTIME_TRAP_CODE_CONCURRENT_FUTURE_STREAM_OP = 45,
