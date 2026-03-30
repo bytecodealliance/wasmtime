@@ -2,7 +2,7 @@ use crate::obj::ELF_WASMTIME_STACK_MAP;
 use crate::prelude::*;
 use cranelift_bitset::CompoundBitSet;
 use object::write::{Object, StandardSegment};
-use object::{LittleEndian, SectionKind, U32Bytes};
+use object::{LittleEndian, SectionKind, U32};
 
 /// Builder for the `ELF_WASMTIME_STACK_MAP` section in compiled executables.
 ///
@@ -71,9 +71,9 @@ use object::{LittleEndian, SectionKind, U32Bytes};
 /// more.
 #[derive(Default)]
 pub struct StackMapSection {
-    pcs: Vec<U32Bytes<LittleEndian>>,
-    pointers_to_stack_map: Vec<U32Bytes<LittleEndian>>,
-    stack_map_data: Vec<U32Bytes<LittleEndian>>,
+    pcs: Vec<U32<LittleEndian>>,
+    pointers_to_stack_map: Vec<U32<LittleEndian>>,
+    stack_map_data: Vec<U32<LittleEndian>>,
     last_offset: u32,
 }
 
@@ -103,16 +103,15 @@ impl StackMapSection {
         }
 
         // Record parallel entries in `pcs`/`pointers_to_stack_map`.
-        self.pcs.push(U32Bytes::new(LittleEndian, code_offset));
-        self.pointers_to_stack_map.push(U32Bytes::new(
+        self.pcs.push(U32::new(LittleEndian, code_offset));
+        self.pointers_to_stack_map.push(U32::new(
             LittleEndian,
             u32::try_from(self.stack_map_data.len()).unwrap(),
         ));
 
         // The frame data starts with the frame size and is then followed by
         // `offsets` represented as a bit set.
-        self.stack_map_data
-            .push(U32Bytes::new(LittleEndian, frame_size));
+        self.stack_map_data.push(U32::new(LittleEndian, frame_size));
 
         let mut bits = CompoundBitSet::<u32>::default();
         for offset in frame_offsets {
@@ -121,10 +120,9 @@ impl StackMapSection {
         }
         let count = bits.iter_scalars().count();
         self.stack_map_data
-            .push(U32Bytes::new(LittleEndian, count as u32));
+            .push(U32::new(LittleEndian, count as u32));
         for scalar in bits.iter_scalars() {
-            self.stack_map_data
-                .push(U32Bytes::new(LittleEndian, scalar.0));
+            self.stack_map_data.push(U32::new(LittleEndian, scalar.0));
         }
     }
 

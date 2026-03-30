@@ -1,6 +1,6 @@
 //! Data structures to provide transformation of the source
 
-use object::{Bytes, LittleEndian, U32Bytes};
+use object::{Bytes, LittleEndian, U32};
 use serde_derive::{Deserialize, Serialize};
 
 /// Single source location to generated address mapping.
@@ -63,18 +63,16 @@ impl Default for FilePos {
 
 /// Parse an `ELF_WASMTIME_ADDRMAP` section, returning the slice of code offsets
 /// and the slice of associated file positions for each offset.
-fn parse_address_map(
-    section: &[u8],
-) -> Option<(&[U32Bytes<LittleEndian>], &[U32Bytes<LittleEndian>])> {
+fn parse_address_map(section: &[u8]) -> Option<(&[U32<LittleEndian>], &[U32<LittleEndian>])> {
     let mut section = Bytes(section);
     // NB: this matches the encoding written by `append_to` in the
     // `compile::address_map` module.
-    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+    let count = section.read::<U32<LittleEndian>>().ok()?;
     let count = usize::try_from(count.get(LittleEndian)).ok()?;
     let (offsets, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
+        object::slice_from_bytes::<U32<LittleEndian>>(section.0, count).ok()?;
     let (positions, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section, count).ok()?;
+        object::slice_from_bytes::<U32<LittleEndian>>(section, count).ok()?;
     debug_assert!(section.is_empty());
     Some((offsets, positions))
 }

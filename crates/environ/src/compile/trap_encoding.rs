@@ -2,7 +2,7 @@ use crate::TrapInformation;
 use crate::obj::ELF_WASMTIME_TRAPS;
 use crate::prelude::*;
 use object::write::{Object, StandardSegment};
-use object::{LittleEndian, SectionKind, U32Bytes};
+use object::{LittleEndian, SectionKind, U32};
 use std::ops::Range;
 
 /// A helper structure to build the custom-encoded section of a wasmtime
@@ -13,7 +13,7 @@ use std::ops::Range;
 /// `lookup_trap_code` below with the resulting section.
 #[derive(Default)]
 pub struct TrapEncodingBuilder {
-    offsets: Vec<U32Bytes<LittleEndian>>,
+    offsets: Vec<U32<LittleEndian>>,
     traps: Vec<u8>,
     last_offset: u32,
 }
@@ -45,7 +45,7 @@ impl TrapEncodingBuilder {
         for info in traps {
             let pos = func_start + info.code_offset;
             assert!(pos >= self.last_offset);
-            self.offsets.push(U32Bytes::new(LittleEndian, pos));
+            self.offsets.push(U32::new(LittleEndian, pos));
             self.traps.push(info.trap_code as u8);
             self.last_offset = pos;
         }

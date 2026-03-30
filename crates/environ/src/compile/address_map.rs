@@ -4,7 +4,7 @@ use crate::InstructionAddressMap;
 use crate::obj::ELF_WASMTIME_ADDRMAP;
 use crate::prelude::*;
 use object::write::{Object, StandardSegment};
-use object::{LittleEndian, SectionKind, U32Bytes};
+use object::{LittleEndian, SectionKind, U32};
 use std::ops::Range;
 
 /// Builder for the address map section of a wasmtime compilation image.
@@ -14,8 +14,8 @@ use std::ops::Range;
 /// into an `Object`.
 #[derive(Default)]
 pub struct AddressMapSection {
-    offsets: Vec<U32Bytes<LittleEndian>>,
-    positions: Vec<U32Bytes<LittleEndian>>,
+    offsets: Vec<U32<LittleEndian>>,
+    positions: Vec<U32<LittleEndian>>,
     last_offset: u32,
 }
 
@@ -58,8 +58,8 @@ impl AddressMapSection {
             }
             last_srcloc = Some(srcloc);
 
-            self.offsets.push(U32Bytes::new(LittleEndian, pos));
-            self.positions.push(U32Bytes::new(LittleEndian, srcloc));
+            self.offsets.push(U32::new(LittleEndian, pos));
+            self.positions.push(U32::new(LittleEndian, srcloc));
         }
         self.last_offset = func_end;
     }

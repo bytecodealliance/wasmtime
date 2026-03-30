@@ -1,5 +1,5 @@
 use core::fmt;
-use object::{Bytes, LittleEndian, U32Bytes};
+use object::{Bytes, LittleEndian, U32};
 
 /// Information about trap.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -253,13 +253,12 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
     trap
 }
 
-fn parse(section: &[u8]) -> Option<(&[U32Bytes<LittleEndian>], &[u8])> {
+fn parse(section: &[u8]) -> Option<(&[U32<LittleEndian>], &[u8])> {
     let mut section = Bytes(section);
     // NB: this matches the encoding written by `append_to` above.
-    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+    let count = section.read::<U32<LittleEndian>>().ok()?;
     let count = usize::try_from(count.get(LittleEndian)).ok()?;
-    let (offsets, traps) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
+    let (offsets, traps) = object::slice_from_bytes::<U32<LittleEndian>>(section.0, count).ok()?;
     debug_assert_eq!(traps.len(), count);
     Some((offsets, traps))
 }
