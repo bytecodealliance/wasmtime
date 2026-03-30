@@ -261,8 +261,7 @@ impl DrcCompiler {
         new_val: ir::Value,
         flags: ir::MemFlags,
     ) -> WasmResult<()> {
-        let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
-        debug_assert!(needs_stack_map);
+        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
 
         // Special case for references to uninhabited bottom types: see
         // `translate_write_gc_reference` for details.
