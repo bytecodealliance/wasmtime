@@ -109,7 +109,11 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     1
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
+                    stack
+                        .wasm_function_index_and_pc(&mut caller)?
+                        .unwrap()
+                        .1
+                        .raw(),
                     67
                 );
 
@@ -130,7 +134,11 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     0
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
+                    stack
+                        .wasm_function_index_and_pc(&mut caller)?
+                        .unwrap()
+                        .1
+                        .raw(),
                     57
                 );
 
@@ -290,7 +298,11 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
+            stack
+                .wasm_function_index_and_pc(&mut caller)?
+                .unwrap()
+                .1
+                .raw(),
             58
         );
         assert!(Module::same(
@@ -318,7 +330,11 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
+            stack
+                .wasm_function_index_and_pc(&mut caller)?
+                .unwrap()
+                .1
+                .raw(),
             58
         );
         assert!(Module::same(
@@ -1506,6 +1522,106 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     // Counter should not have incremented now that we removed the
     // breakpoint.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    let _ = env_logger::try_init();
+
+    let m1_body = r#"(func (export "f1") (param i32 i32) (result i32)
+      local.get 0
+      local.get 1
+      i32.add)"#;
+    let m2_body = r#"(func (export "f2") (param i32 i32) (result i32)
+      local.get 0
+      local.get 1
+      i32.mul)"#;
+
+    let _m1_wasm = wat::parse_str(&format!("(module {m1_body})"))?;
+    let _m2_wasm = wat::parse_str(&format!("(module {m2_body})"))?;
+
+    let component_wat = format!(
+        r#"(component
+             (core module $m1 {m1_body})
+             (core instance $i1 (instantiate $m1))
+             (core module $m2 {m2_body})
+             (core instance $i2 (instantiate $m2))
+             (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+               (canon lift (core func $i1 "f1")))
+             (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
+               (canon lift (core func $i2 "f2"))))"#,
+    );
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(&engine, &component_wat)?;
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+
+    let modules = store.debug_all_modules();
+    assert_eq!(modules.len(), 2);
+
+    // The i32.add / i32.mul instruction is at module-relative offset
+    // 0x26 in both modules.
+    let breakpoint_pc = ModulePC::new(0x26);
+
+    // Record breakpoint PCs seen in each event.
+    let observed_pcs = Arc::new(Mutex::new(Vec::<(u32, u32)>::new()));
+    let observed_pcs_clone = observed_pcs.clone();
+
+    #[derive(Clone)]
+    struct D(Arc<Mutex<Vec<(u32, u32)>>>);
+    impl DebugHandler for D {
+        type Data = ();
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            _event: DebugEvent<'_>,
+        ) -> impl std::future::Future<Output = ()> + Send {
+            let frame = store.debug_exit_frames().next().unwrap();
+            let (func, pc) = frame
+                .wasm_function_index_and_pc(&mut store)
+                .unwrap()
+                .unwrap();
+            self.0.lock().unwrap().push((func.as_u32(), pc.raw()));
+            async {}
+        }
+    }
+    store.set_debug_handler(D(observed_pcs_clone));
+
+    // Set breakpoints at the same module-relative PC (0x26) in both
+    // modules.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&modules[0], breakpoint_pc)?;
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&modules[1], breakpoint_pc)?;
+
+    let f1 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f1")?;
+    let (result,) = f1.call_async(&mut store, (3, 5)).await?;
+    assert_eq!(result, 8);
+
+    let f2 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f2")?;
+    let (result,) = f2.call_async(&mut store, (3, 5)).await?;
+    assert_eq!(result, 15);
+
+    // Both breakpoint PCs should be 0x26 (module-relative).
+    let pcs = observed_pcs.lock().unwrap();
+    assert_eq!(pcs.len(), 2);
+    assert_eq!(pcs[0], (0, 0x26));
+    assert_eq!(pcs[1], (0, 0x26));
 
     Ok(())
 }
