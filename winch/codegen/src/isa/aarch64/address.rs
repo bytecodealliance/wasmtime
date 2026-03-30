@@ -1,12 +1,14 @@
 //! Aarch64 addressing mode.
 
 use super::regs;
-use crate::reg::Reg;
-use crate::{Context as _, Result, format_err};
-use cranelift_codegen::VCodeConstant;
-use cranelift_codegen::{
-    ir::types,
-    isa::aarch64::inst::{AMode, PairAMode, SImm7Scaled, SImm9},
+use crate::Result;
+use crate::{
+    masm::{IntScratch, MacroAssembler as Masm, OperandSize, RegImm},
+    reg::Reg,
+};
+use cranelift_codegen::ir::{Type, types};
+use cranelift_codegen::isa::aarch64::inst::{
+    AMode, ExtendOp, PairAMode, SImm7Scaled, SImm9, UImm12Scaled,
 };
 
 /// Aarch64 indexing mode.
@@ -21,47 +23,63 @@ pub(crate) enum Indexing {
 /// Memory address representation.
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum Address {
-    /// Base register with an arbitrary offset.  Potentially gets
-    /// lowered into multiple instructions during code emission
-    /// depending on the offset.
+    /// Base register with an arbitrary offset.
     Offset {
         /// Base register.
         base: Reg,
         /// Offset.
         offset: i64,
     },
-    /// Specialized indexed register and offset variant using
-    /// the stack pointer.
-    IndexedSPOffset {
-        /// Offset.
-        offset: i64,
-        /// Indexing mode.
+    /// SP-indexed addressing mode for single register loads/stores.
+    SPIndexedSingle {
+        /// 9-bit signed offset.
+        offset: SImm9,
+        /// Indexing mode (pre or post).
         indexing: Indexing,
     },
-    /// Address of a constant in the constant pool.
-    Const(VCodeConstant),
+    /// SP-indexed addressing mode for register pair loads/stores.
+    SPIndexedPair {
+        /// 7-bit signed scaled offset.
+        offset: SImm7Scaled,
+        /// Indexing mode (pre or post).
+        indexing: Indexing,
+    },
 }
 
 impl Address {
-    /// Create a pre-indexed addressing mode from the stack pointer.
-    pub fn pre_indexed_from_sp(offset: i64) -> Self {
-        Self::IndexedSPOffset {
+    /// Create a pre-indexed addressing mode from the stack pointer for single register operations.
+    pub fn pre_indexed_from_sp(offset: SImm9) -> Self {
+        Self::SPIndexedSingle {
             offset,
             indexing: Indexing::Pre,
         }
     }
 
-    /// Create a post-indexed addressing mode from the stack pointer.
-    pub fn post_indexed_from_sp(offset: i64) -> Self {
-        Self::IndexedSPOffset {
+    /// Create a post-indexed addressing mode from the stack pointer for single register operations.
+    pub fn post_indexed_from_sp(offset: SImm9) -> Self {
+        Self::SPIndexedSingle {
             offset,
             indexing: Indexing::Post,
         }
     }
 
-    /// Create an offset addressing mode with
-    /// the shadow stack pointer register
-    /// as a base.
+    /// Create a pre-indexed addressing mode from the stack pointer for register pair operations.
+    pub fn pre_indexed_from_sp_for_pair(offset: SImm7Scaled) -> Self {
+        Self::SPIndexedPair {
+            offset,
+            indexing: Indexing::Pre,
+        }
+    }
+
+    /// Create a post-indexed addressing mode from the stack pointer for register pair operations.
+    pub fn post_indexed_from_sp_for_pair(offset: SImm7Scaled) -> Self {
+        Self::SPIndexedPair {
+            offset,
+            indexing: Indexing::Post,
+        }
+    }
+
+    /// Create an offset addressing mode with the shadow stack pointer register as a base.
     pub fn from_shadow_sp(offset: i64) -> Self {
         Self::Offset {
             base: regs::shadow_sp(),
@@ -75,8 +93,7 @@ impl Address {
         // sp generally should not be used as a base register in an
         // address. In the cases where its usage is required and where
         // we are sure that it's 16-byte aligned, the address should
-        // be constructed via the `Self::pre_indexed_sp` and
-        // Self::post_indexed_sp functions.
+        // be constructed via the SP-indexed constructors.
         // For more details around the stack pointer and shadow stack
         // pointer see the docs at regs::shadow_sp().
         assert!(
@@ -86,9 +103,84 @@ impl Address {
         Self::Offset { base, offset }
     }
 
-    /// Create an address for a constant.
-    pub fn constant(data: VCodeConstant) -> Self {
-        Self::Const(data)
+    /// Converts self to cranelift's [`PairAMode`].
+    /// # Panics
+    /// This function panics if self cannot be converted to [`PairAMode`].
+    /// NB: that all uses of this function currently guarantee that
+    /// the offset will fit in a 7-bit signed offset.
+    pub fn to_pair_addressing_mode(self) -> PairAMode {
+        match self {
+            Self::SPIndexedPair { offset, indexing } => {
+                if indexing == Indexing::Pre {
+                    PairAMode::SPPreIndexed { simm7: offset }
+                } else {
+                    PairAMode::SPPostIndexed { simm7: offset }
+                }
+            }
+            _ => panic!("Could not convert addressing mode to PairAMode"),
+        }
+    }
+
+    /// Converts self to cranelift's [`AMode`].
+    /// The closure parameter ensures that the caller scope is kept in
+    /// sync with the scratch register used for materializing the
+    /// general register and offset addressing mode.
+    /// # Panics
+    /// This function panics if self cannot be converted to [`AMode`].
+    pub fn to_addressing_mode<M: Masm>(
+        self,
+        masm: &mut M,
+        size: OperandSize,
+        f: impl FnOnce(&mut M, AMode) -> Result<()>,
+    ) -> Result<()> {
+        use Address::*;
+        use Indexing::*;
+
+        match self {
+            SPIndexedSingle { offset, indexing } => {
+                let amode = if indexing == Pre {
+                    AMode::SPPreIndexed { simm9: offset }
+                } else {
+                    AMode::SPPostIndexed { simm9: offset }
+                };
+
+                f(masm, amode)
+            }
+            Offset { base, offset } => {
+                if let Some(simm9) = SImm9::maybe_from_i64(offset) {
+                    f(
+                        masm,
+                        AMode::Unscaled {
+                            rn: base.into(),
+                            simm9,
+                        },
+                    )
+                } else if let Some(uimm12) =
+                    UImm12Scaled::maybe_from_i64(offset, map_to_scale_type(size))
+                {
+                    f(
+                        masm,
+                        AMode::UnsignedOffset {
+                            rn: base.into(),
+                            uimm12,
+                        },
+                    )
+                } else {
+                    masm.with_scratch::<IntScratch, _>(|masm, temp| {
+                        masm.mov(temp.writable(), RegImm::i64(offset), OperandSize::S64)?;
+                        f(
+                            masm,
+                            AMode::RegExtended {
+                                rn: base.into(),
+                                rm: temp.inner().into(),
+                                extendop: ExtendOp::SXTX,
+                            },
+                        )
+                    })
+                }
+            }
+            _ => panic!("Could not convert addressing mode to AMode"),
+        }
     }
 
     /// Returns the register base and immediate offset of the given [`Address`].
@@ -103,60 +195,12 @@ impl Address {
     }
 }
 
-// Conversions between `winch-codegen`'s addressing mode representation
-// and `cranelift-codegen`s addressing mode representation for aarch64.
-
-impl TryFrom<Address> for PairAMode {
-    type Error = crate::Error;
-
-    fn try_from(addr: Address) -> Result<Self> {
-        use Address::*;
-        use Indexing::*;
-
-        match addr {
-            IndexedSPOffset { offset, indexing } => {
-                let simm7 = SImm7Scaled::maybe_from_i64(offset, types::I64).with_context(|| {
-                    format!("Failed to convert {offset} to signed scaled 7 bit offset")
-                })?;
-
-                if indexing == Pre {
-                    Ok(PairAMode::SPPreIndexed { simm7 })
-                } else {
-                    Ok(PairAMode::SPPostIndexed { simm7 })
-                }
-            }
-            other => Err(format_err!(
-                "Could not convert {other:?} to addressing mode for register pairs"
-            )),
-        }
-    }
-}
-
-impl TryFrom<Address> for AMode {
-    type Error = crate::Error;
-
-    fn try_from(addr: Address) -> Result<Self> {
-        use Address::*;
-        use Indexing::*;
-
-        match addr {
-            IndexedSPOffset { offset, indexing } => {
-                let simm9 = SImm9::maybe_from_i64(offset).ok_or_else(|| {
-                    // TODO: non-string error
-                    format_err!("Failed to convert {offset} to signed 9-bit offset")
-                })?;
-
-                if indexing == Pre {
-                    Ok(AMode::SPPreIndexed { simm9 })
-                } else {
-                    Ok(AMode::SPPostIndexed { simm9 })
-                }
-            }
-            Offset { base, offset } => Ok(AMode::RegOffset {
-                rn: base.into(),
-                off: offset,
-            }),
-            Const(data) => Ok(AMode::Const { addr: data }),
-        }
+fn map_to_scale_type(size: OperandSize) -> Type {
+    match size {
+        OperandSize::S8 => types::I8,
+        OperandSize::S16 => types::I16,
+        OperandSize::S32 => types::I32,
+        OperandSize::S64 => types::I64,
+        OperandSize::S128 => types::I8X16,
     }
 }
