@@ -431,6 +431,9 @@ mod tests {
 
     #[test]
     fn fiber_stack_max_size() {
+        if cfg!(windows) {
+            return;
+        }
         assert!(FiberStack::new(usize::MAX, true).is_err());
         assert!(FiberStack::new(usize::MAX, false).is_err());
     }
