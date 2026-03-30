@@ -732,24 +732,13 @@ impl<D> StreamProducer<D> for bytes::Bytes {
     type Buffer = Cursor<Self>;
 
     fn poll_produce<'a>(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _: &mut Context<'_>,
-        mut store: StoreContextMut<'a, D>,
+        _store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        let cap = dst.remaining(&mut store);
-        let Some(cap) = cap.and_then(core::num::NonZeroUsize::new) else {
-            // on 0-length or host reads, buffer the bytes
-            dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
-            return Poll::Ready(Ok(StreamResult::Dropped));
-        };
-        let cap = cap.into();
-        // data does not fit in destination, fill it and buffer the rest
-        dst.set_buffer(Cursor::new(self.split_off(cap)));
-        let mut dst = dst.as_direct(store, cap);
-        dst.remaining().copy_from_slice(&self);
-        dst.mark_written(cap);
+        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
@@ -760,24 +749,13 @@ impl<D> StreamProducer<D> for bytes::BytesMut {
     type Buffer = Cursor<Self>;
 
     fn poll_produce<'a>(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         _: &mut Context<'_>,
-        mut store: StoreContextMut<'a, D>,
+        _store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        let cap = dst.remaining(&mut store);
-        let Some(cap) = cap.and_then(core::num::NonZeroUsize::new) else {
-            // on 0-length or host reads, buffer the bytes
-            dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
-            return Poll::Ready(Ok(StreamResult::Dropped));
-        };
-        let cap = cap.into();
-        // data does not fit in destination, fill it and buffer the rest
-        dst.set_buffer(Cursor::new(self.split_off(cap)));
-        let mut dst = dst.as_direct(store, cap);
-        dst.remaining().copy_from_slice(&self);
-        dst.mark_written(cap);
+        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
