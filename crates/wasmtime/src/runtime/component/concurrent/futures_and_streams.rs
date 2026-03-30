@@ -3932,7 +3932,7 @@ impl Instance {
             let (Event::FutureWrite { code, .. } | Event::StreamWrite { code, .. }) = event else {
                 bail_bug!("expected either a stream or future write event")
             };
-            waitable.on_delivery(store, self, event.clone())?;
+            waitable.on_delivery(store, self, event)?;
             match (code, event) {
                 (ReturnCode::Completed(count), Event::StreamWrite { .. }) => {
                     ReturnCode::Cancelled(count)
@@ -4019,7 +4019,7 @@ impl Instance {
             let (Event::FutureRead { code, .. } | Event::StreamRead { code, .. }) = event else {
                 bail_bug!("expected either a stream or future read event")
             };
-            waitable.on_delivery(store, self, event.clone())?;
+            waitable.on_delivery(store, self, event)?;
             match (code, event) {
                 (ReturnCode::Completed(count), Event::StreamRead { .. }) => {
                     ReturnCode::Cancelled(count)
