@@ -6,6 +6,7 @@
 #define WASMTIME_VAL_HH
 
 #include <optional>
+#include <wasmtime/gc.h>
 #include <wasmtime/store.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>
@@ -99,6 +100,8 @@ public:
   }
 };
 
+class EqRef;
+
 /**
  * \brief Representation of a WebAssembly `anyref` value.
  */
@@ -172,6 +175,11 @@ public:
     if (wasmtime_anyref_i31_get_s(cx.ptr, &val, &ret))
       return ret;
     return std::nullopt;
+  }
+
+  /// \brief Returns `true` if this anyref is an i31ref.
+  bool is_i31(Store::Context cx) const {
+    return wasmtime_anyref_is_i31(cx.ptr, &val);
   }
 };
 

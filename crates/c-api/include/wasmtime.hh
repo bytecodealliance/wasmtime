@@ -41,6 +41,7 @@
 #include <wasmtime/exn.hh>
 #include <wasmtime/extern.hh>
 #include <wasmtime/func.hh>
+#include <wasmtime/gc.hh>
 #include <wasmtime/global.hh>
 #include <wasmtime/instance.hh>
 #include <wasmtime/linker.hh>

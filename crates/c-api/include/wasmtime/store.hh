@@ -75,6 +75,7 @@ public:
     friend class Linker;
     friend class ExternRef;
     friend class AnyRef;
+    friend class EqRef;
     friend class Val;
     friend class Store;
     friend class Tag;
