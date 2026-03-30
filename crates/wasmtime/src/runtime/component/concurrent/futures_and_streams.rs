@@ -4205,11 +4205,15 @@ impl Instance {
 
         let lower_cx = &mut LowerContext::new(store, options, self);
         let debug_msg_address = usize::try_from(debug_msg_address)?;
-        // Lower the string into the component's memory
+        // Lower the string into the component's memory.
+        //
+        // Note that the "8" here is the size of a WIT `string` in linear
+        // memory, the ptr+length. This'll need to be updated when `memory64`
+        // comes along. (FIXME(#4311))
         let offset = lower_cx
             .as_slice_mut()
             .get(debug_msg_address..)
-            .and_then(|b| b.get(..debug_msg.bytes().len()))
+            .and_then(|b| b.get(..8))
             .map(|_| debug_msg_address)
             .ok_or_else(|| crate::format_err!("invalid debug message pointer: out of bounds"))?;
         debug_msg
