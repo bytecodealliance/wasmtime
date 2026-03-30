@@ -795,8 +795,8 @@ impl SafepointSpiller {
 mod tests {
     use super::*;
     use alloc::string::ToString;
-    use cranelift_codegen::isa::CallConv;
     use cranelift_codegen::ir::{BlockCall, ExceptionTableData};
+    use cranelift_codegen::isa::CallConv;
 
     #[test]
     fn needs_stack_map_and_loop() {
