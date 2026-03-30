@@ -232,3 +232,82 @@ TEST(ArrayRef, UpcastAndDowncast) {
   AnyRef any = arr.to_anyref();
   EXPECT_FALSE(any.is_i31(cx));
 }
+
+TEST(AnyRef, DowncastI31) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  AnyRef any = AnyRef::i31(cx, 42);
+  EXPECT_TRUE(any.is_i31(cx));
+  EXPECT_TRUE(any.is_eqref(cx));
+  EXPECT_FALSE(any.is_struct(cx));
+  EXPECT_FALSE(any.is_array(cx));
+
+  // Downcast to eqref.
+  auto opt_eq = any.as_eqref(cx);
+  EXPECT_TRUE(opt_eq);
+  EqRef eq = *opt_eq;
+  EXPECT_TRUE(eq.is_i31(cx));
+  auto val = eq.i31_get_u(cx);
+  ASSERT_TRUE(val.has_value());
+  EXPECT_EQ(*val, 42u);
+}
+
+TEST(AnyRef, DowncastStruct) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  auto ty = StructType::create(engine, {FieldType::const_(WASMTIME_I32)});
+  auto pre = StructRefPre::create(cx, ty);
+  auto result = StructRef::create(cx, pre, {Val(int32_t(77))});
+  ASSERT_TRUE(result);
+  StructRef s = result.ok();
+
+  AnyRef any = s.to_anyref();
+  EXPECT_TRUE(any.is_eqref(cx));
+  EXPECT_TRUE(any.is_struct(cx));
+  EXPECT_FALSE(any.is_array(cx));
+  EXPECT_FALSE(any.is_i31(cx));
+
+  // Downcast back to struct.
+  auto opt_s2 = any.as_struct(cx);
+  EXPECT_TRUE(opt_s2);
+  StructRef s2 = *opt_s2;
+  auto v = s2.field(cx, 0);
+  ASSERT_TRUE(v);
+  EXPECT_EQ(v.ok().i32(), 77);
+}
+
+TEST(AnyRef, DowncastArray) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  auto ty = ArrayType::create(engine, FieldType::const_(WASMTIME_I32));
+  auto pre = ArrayRefPre::create(cx, ty);
+  auto result = ArrayRef::create(cx, pre, Val(int32_t(55)), 2);
+  ASSERT_TRUE(result);
+  ArrayRef arr = result.ok();
+
+  AnyRef any = arr.to_anyref();
+  EXPECT_TRUE(any.is_eqref(cx));
+  EXPECT_FALSE(any.is_struct(cx));
+  EXPECT_TRUE(any.is_array(cx));
+  EXPECT_FALSE(any.is_i31(cx));
+
+  // Downcast back to array.
+  auto opt_arr2 = any.as_array(cx);
+  EXPECT_TRUE(opt_arr2);
+  ArrayRef arr2 = *opt_arr2;
+  auto len = arr2.len(cx);
+  ASSERT_TRUE(len);
+  EXPECT_EQ(len.ok(), 2u);
+}

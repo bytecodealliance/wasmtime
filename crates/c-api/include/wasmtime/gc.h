@@ -535,6 +535,60 @@ WASM_API_EXTERN bool wasmtime_eqref_as_array(wasmtime_context_t *context,
                                              const wasmtime_eqref_t *eqref,
                                              wasmtime_arrayref_t *out);
 
+/**
+ * \brief Test whether an `anyref` is an `eqref`.
+ *
+ * Returns `false` for null references.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_is_eqref(wasmtime_context_t *context,
+                                              const wasmtime_anyref_t *anyref);
+
+/**
+ * \brief Downcast an `anyref` to an `eqref`.
+ *
+ * If the given `anyref` is an `eqref`, a new root is stored in `out` and
+ * `true` is returned. Otherwise `false` is returned and `out` is set to null.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_as_eqref(wasmtime_context_t *context,
+                                              const wasmtime_anyref_t *anyref,
+                                              wasmtime_eqref_t *out);
+
+/**
+ * \brief Test whether an `anyref` is a `structref`.
+ *
+ * Returns `false` for null references.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_is_struct(wasmtime_context_t *context,
+                                               const wasmtime_anyref_t *anyref);
+
+/**
+ * \brief Downcast an `anyref` to a `structref`.
+ *
+ * If the given `anyref` is a `structref`, a new root is stored in `out` and
+ * `true` is returned. Otherwise `false` is returned and `out` is set to null.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_as_struct(wasmtime_context_t *context,
+                                               const wasmtime_anyref_t *anyref,
+                                               wasmtime_structref_t *out);
+
+/**
+ * \brief Test whether an `anyref` is an `arrayref`.
+ *
+ * Returns `false` for null references.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_is_array(wasmtime_context_t *context,
+                                              const wasmtime_anyref_t *anyref);
+
+/**
+ * \brief Downcast an `anyref` to an `arrayref`.
+ *
+ * If the given `anyref` is an `arrayref`, a new root is stored in `out` and
+ * `true` is returned. Otherwise `false` is returned and `out` is set to null.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_as_array(wasmtime_context_t *context,
+                                              const wasmtime_anyref_t *anyref,
+                                              wasmtime_arrayref_t *out);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
