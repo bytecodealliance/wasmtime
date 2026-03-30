@@ -215,6 +215,7 @@ class Val {
   friend class Func;
   friend class Exn;
   friend class StructRef;
+  friend class ArrayRef;
 
   wasmtime_val_t val;
 
