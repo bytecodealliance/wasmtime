@@ -876,12 +876,12 @@ fn memory_growth_failure() -> Result<()> {
             "tests/all/cli_tests/memory-grow-failure.wat",
         ])
         .output()?;
-    assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("forcing a memory growth failure to be a trap"),
         "bad stderr: {stderr}"
     );
+    assert!(!output.status.success());
     Ok(())
 }
 
