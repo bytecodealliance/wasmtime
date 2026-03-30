@@ -499,7 +499,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 func_ref,
                 DisplayValues(args.as_slice(pool)),
                 exception_tables[exception].display(pool),
-            )
+            )?;
+            write_user_stack_map_entries(w, dfg, inst)
         }
         TryCallIndirect {
             ref args,
@@ -513,7 +514,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 args[0],
                 DisplayValues(&args[1..]),
                 exception_tables[exception].display(pool),
-            )
+            )?;
+            write_user_stack_map_entries(w, dfg, inst)
         }
         FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
         StackLoad {
