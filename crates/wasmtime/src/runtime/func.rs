@@ -1530,9 +1530,12 @@ impl EntryStoreContext {
             //
             // After we've got the stack limit then we store it into the `stack_limit`
             // variable.
-            let wasm_stack_limit = stack_pointer
-                .checked_sub(store.engine().config().max_wasm_stack)
-                .unwrap();
+            //
+            // Also note that `saturating_sub` is used here since if the user
+            // said that the function gets nigh-infinite stack well then by
+            // golly it'll get nigh-infinite stack in which case the limit is 0.
+            let wasm_stack_limit =
+                stack_pointer.saturating_sub(store.engine().config().max_wasm_stack);
             let prev_stack = unsafe {
                 mem::replace(
                     &mut *store.0.vm_store_context().stack_limit.get(),

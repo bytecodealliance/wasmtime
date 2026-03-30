@@ -162,3 +162,22 @@ fn big_stack_works_ok(config: &mut Config) -> Result<()> {
     assert_eq!(func.call(&mut store, ())?, 0);
     Ok(())
 }
+
+#[test]
+fn infinite_wasm_stack_does_not_panic() -> Result<()> {
+    let mut config = Config::new();
+    config.max_wasm_stack(usize::MAX);
+    config.async_stack_size(usize::MAX);
+    let engine = Engine::new(&config)?;
+    // If the store can't get allocated that's probably because we're using
+    // pulley and can't allocate a usize::MAX stack, ignore that failure.
+    // This'll still run on cranelift-native platforms.
+    let Ok(mut store) = Store::try_new(&engine, ()) else {
+        return Ok(());
+    };
+    let module = Module::new(store.engine(), r#"(module (func (export "f")))"#)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    func.call(&mut store, ())?;
+    Ok(())
+}
