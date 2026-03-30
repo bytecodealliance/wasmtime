@@ -585,8 +585,7 @@ impl GcCompiler for DrcCompiler {
 
         assert!(ty.is_vmgcref_type());
 
-        let (reference_type, needs_stack_map) = func_env.reference_type(ty.heap_type);
-        debug_assert!(needs_stack_map);
+        let (reference_type, _) = func_env.reference_type(ty.heap_type);
 
         // Special case for references to uninhabited bottom types: the
         // reference must either be nullable and we can just eagerly return
@@ -737,8 +736,7 @@ impl GcCompiler for DrcCompiler {
     ) -> WasmResult<()> {
         assert!(ty.is_vmgcref_type());
 
-        let (ref_ty, needs_stack_map) = func_env.reference_type(ty.heap_type);
-        debug_assert!(needs_stack_map);
+        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
 
         // Special case for references to uninhabited bottom types: either the
         // reference is nullable and we can just eagerly store null into `dst`

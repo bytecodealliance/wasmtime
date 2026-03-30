@@ -224,13 +224,22 @@ pub fn translate_operator(
 
             let val = builder.ins().select(cond, arg1, arg2);
 
-            if operand_types[..2].iter().any(|ty| match ty {
-                WasmValType::Ref(r) => {
-                    let (_, needs_stack_map) = environ.reference_type(r.heap_type);
-                    needs_stack_map
-                }
-                _ => false,
-            }) {
+            // If either of the input types need inclusion in stack maps, then
+            // the result will as well.
+            //
+            // Note that we don't need to check whether the result's type needs
+            // inclusion in stack maps (that would be a conservative over
+            // approximation) because the input types give us more-precise
+            // information than the result type does. For example, the result
+            // does not need inclusion in stack maps in the scenario where both
+            // inputs are `i31ref`s and the result is an `anyref`. Even though
+            // `anyref`s normally do require inclusion in stack maps, in this
+            // particular case, we know that we are dealing with an `anyref`
+            // that doesn't actually require inclusion.
+            if operand_types
+                .iter()
+                .any(|ty| environ.val_ty_needs_stack_map(*ty))
+            {
                 builder.declare_value_needs_stack_map(val);
             }
 
