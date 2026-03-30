@@ -38,7 +38,7 @@ impl SharedMemory {
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
         let boxed: Box<dyn crate::runtime::vm::RuntimeLinearMemory> =
-            try_new::<Box<_>>(mmap_memory).map_err(|_| OutOfMemory::new(0))?;
+            try_new::<Box<_>>(mmap_memory)?;
         Self::wrap(engine, ty, LocalMemory::new(ty, tunables, boxed, None)?)
     }
 

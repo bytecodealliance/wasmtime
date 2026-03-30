@@ -146,8 +146,7 @@ fn linker_get() -> Result<()> {
 
     OomTest::new().test(|| {
         let mut store = Store::try_new(&engine, ())?;
-        let ext = linker.try_get(&mut store, "mod", "func")?;
-        assert!(ext.is_some());
+        let _item = linker.get(&mut store, "mod", "func")?;
         Ok(())
     })
 }

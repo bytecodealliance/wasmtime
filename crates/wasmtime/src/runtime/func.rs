@@ -376,22 +376,30 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
-        Self::try_new(store, ty, func).expect("out of memory")
+        Self::try_new_(store, ty, func).panic_on_oom()
     }
 
     /// Same as [`Func::new`] but returns an error instead of panicking on
     /// allocation failure.
     pub fn try_new<T: 'static>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Result<Self> {
+        Ok(Self::try_new_(store, ty, func)?)
+    }
+
+    fn try_new_<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    ) -> Result<Self, OutOfMemory> {
         let store = store.as_context_mut().0;
         let host = HostFunc::new(store.engine(), ty, func)?;
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        Ok(unsafe { host.into_func(store)? })
+        unsafe { host.into_func(store) }
     }
 
     /// Creates a new [`Func`] with the given arguments, although has fewer

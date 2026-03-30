@@ -413,39 +413,24 @@ impl Instance {
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        self.try_exports(store).expect("out of memory")
-    }
+        let store = store.into().0;
+        let store_id = store.id();
+        let engine = store.engine().clone();
 
-    /// Returns the list of exported items from this [`Instance`].
-    ///
-    /// Returns an error if memory allocation fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `store` does not own this instance.
-    pub fn try_exports<'a, T: 'static>(
-        &'a self,
-        store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<impl ExactSizeIterator<Item = Export<'a>> + 'a> {
-        Ok(self._try_exports(store.into().0)?)
-    }
+        let (instance, registry) = store.instance_and_module_registry_mut(self.id());
+        let (module, mut instance) = instance.module_and_self();
+        module.exports.iter().map(move |(name, entity)| {
+            // SAFETY: the `store_id` owns this instance and all exports
+            // contained within.
+            let export = unsafe {
+                instance
+                    .as_mut()
+                    .get_export_by_index_mut(registry, store_id, *entity)
+            };
 
-    fn _try_exports<'a>(
-        &'a self,
-        store: &'a mut StoreOpaque,
-    ) -> Result<impl ExactSizeIterator<Item = Export<'a>> + 'a, OutOfMemory> {
-        let module = store[self.id].env_module().clone();
-        let num_exports = module.exports.len();
-        let mut items = TryVec::with_capacity(num_exports)?;
-        for (_name, entity) in module.exports.iter() {
-            items.push(self._get_export(store, *entity))?;
-        }
-        let module = store[self.id].env_module();
-        Ok(module
-            .exports
-            .iter()
-            .zip(items)
-            .map(|((name, _), item)| Export::new(&module.strings[name], item)))
+            let ext = Extern::from_wasmtime_export(export, &engine);
+            Export::new(&module.strings[name], ext)
+        })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -510,7 +495,7 @@ impl Instance {
             let (instance, registry) = self.id.get_mut_and_module_registry(store);
             instance.get_export_by_index_mut(registry, id, entity)
         };
-        Extern::from_wasmtime_export(export, store)
+        Extern::from_wasmtime_export(export, store.engine())
     }
 
     /// Looks up an exported [`Func`] value by name.

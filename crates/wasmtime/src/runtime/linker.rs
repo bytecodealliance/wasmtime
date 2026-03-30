@@ -634,7 +634,7 @@ impl<T> Linker<T> {
     {
         let mut store = store.as_context_mut();
         let exports: TryVec<_> = instance
-            .try_exports(&mut store)?
+            .exports(&mut store)
             .map(|e| {
                 Ok((
                     self.import_key(module_name, Some(e.name()))?,
@@ -1224,7 +1224,7 @@ impl<T> Linker<T> {
     /// Looks up a previously defined value in this [`Linker`], identified by
     /// the names provided.
     ///
-    /// Returns `None` if this name was not previously defined in this
+    /// Returns an error if this name was not previously defined in this
     /// [`Linker`].
     ///
     /// # Panics
@@ -1233,32 +1233,18 @@ impl<T> Linker<T> {
     /// same [`Engine`] that this linker was created with.
     pub fn get(
         &self,
-        store: impl AsContextMut<Data = T>,
-        module: &str,
-        name: &str,
-    ) -> Option<Extern>
-    where
-        T: 'static,
-    {
-        self.try_get(store, module, name).expect("out of memory")
-    }
-
-    /// Same as [`Linker::get`] but returns an error instead of panicking on
-    /// allocation failure.
-    pub fn try_get(
-        &self,
         mut store: impl AsContextMut<Data = T>,
         module: &str,
         name: &str,
-    ) -> Result<Option<Extern>>
+    ) -> Result<Extern>
     where
         T: 'static,
     {
         let store = store.as_context_mut().0;
         match self._get(module, name) {
-            // Should be safe since `T` is connecting the linker and store
-            Some(def) => Ok(Some(unsafe { def.to_extern(store)? })),
-            None => Ok(None),
+            // Safety: `T` is connecting the linker and store.
+            Some(def) => Ok(unsafe { def.to_extern(store)? }),
+            None => bail!("missing definition for `{module}::{name}`"),
         }
     }
 
@@ -1330,7 +1316,13 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
-        if let Some(external) = self.get(&mut store, module, "") {
+        if let Some(external) = self.get(&mut store, module, "").map(Some).or_else(|e| {
+            if e.is::<OutOfMemory>() {
+                Err(e)
+            } else {
+                Ok(None)
+            }
+        })? {
             if let Extern::Func(func) = external {
                 return Ok(func);
             }
@@ -1338,7 +1330,17 @@ impl<T> Linker<T> {
         }
 
         // For compatibility, also recognize "_start".
-        if let Some(external) = self.get(&mut store, module, "_start") {
+        if let Some(external) = self
+            .get(&mut store, module, "_start")
+            .map(Some)
+            .or_else(|e| {
+                if e.is::<OutOfMemory>() {
+                    Err(e)
+                } else {
+                    Ok(None)
+                }
+            })?
+        {
             if let Extern::Func(func) = external {
                 return Ok(func);
             }

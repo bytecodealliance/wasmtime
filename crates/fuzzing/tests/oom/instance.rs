@@ -114,7 +114,7 @@ fn instance_exports() -> Result<()> {
     OomTest::new().test(|| {
         let mut store = Store::try_new(&engine, ())?;
         let instance = instance_pre.instantiate(&mut store)?;
-        let count = instance.try_exports(&mut store)?.count();
+        let count = instance.exports(&mut store).count();
         assert_eq!(count, 3);
         Ok(())
     })
