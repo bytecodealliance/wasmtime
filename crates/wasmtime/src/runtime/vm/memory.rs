@@ -439,7 +439,13 @@ impl Memory {
             // If the new size in memory isn't representable in a `usize` then
             // there's no need to actually try to grow it to that size. It's
             // impossible to succeed so just fail it early.
-            None => return Ok(None),
+            None => {
+                if let Some(limiter) = limiter {
+                    let err = crate::format_err!("memory growth exceeds address space");
+                    limiter.memory_grow_failed(err)?;
+                }
+                return Ok(None);
+            }
         }
 
         let result = match self {
