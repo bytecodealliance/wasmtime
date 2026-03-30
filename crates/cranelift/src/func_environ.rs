@@ -1371,6 +1371,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builder.ins().stack_store(vmctx, slot, 0);
         }
     }
+
+    pub(crate) fn val_ty_needs_stack_map(&self, ty: WasmValType) -> bool {
+        match ty {
+            WasmValType::Ref(r) => self.heap_ty_needs_stack_map(r.heap_type),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn heap_ty_needs_stack_map(&self, ty: WasmHeapType) -> bool {
+        ty.is_vmgcref_type_and_not_i31() && !ty.is_bottom()
+    }
 }
 
 impl TranslateTrap for FuncEnvironment<'_> {
@@ -2552,13 +2563,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
 
     fn reference_type(&self, wasm_ty: WasmHeapType) -> (ir::Type, bool) {
         let ty = crate::reference_type(wasm_ty, self.pointer_type());
-        let needs_stack_map = match wasm_ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => true,
-            WasmHeapTopType::Func => false,
-            // TODO(#10248) Once continuations can be stored on the GC heap, we
-            // will need stack maps for continuation objects.
-            WasmHeapTopType::Cont => false,
-        };
+        let needs_stack_map = self.heap_ty_needs_stack_map(wasm_ty);
         (ty, needs_stack_map)
     }
 
