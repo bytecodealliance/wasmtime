@@ -4,7 +4,7 @@
 //! section in a compiled artifact as produced by
 //! [`crate::compile::FrameTableBuilder`].
 
-use crate::FuncKey;
+use crate::{FuncKey, ModulePC};
 use alloc::vec::Vec;
 use object::{Bytes, LittleEndian, U32};
 
@@ -179,7 +179,7 @@ impl<'a> FrameTable<'a> {
         &self,
         search_pc: u32,
         search_pos: FrameInstPos,
-    ) -> Option<impl Iterator<Item = (u32, FrameTableDescriptorIndex, FrameStackShape)>> {
+    ) -> Option<impl Iterator<Item = (ModulePC, FrameTableDescriptorIndex, FrameStackShape)>> {
         let key = FrameInstPos::encode(search_pc, search_pos);
         let index = match self
             .progpoint_pcs
@@ -201,7 +201,7 @@ impl<'a> FrameTable<'a> {
         Item = (
             u32,
             FrameInstPos,
-            Vec<(u32, FrameTableDescriptorIndex, FrameStackShape)>,
+            Vec<(ModulePC, FrameTableDescriptorIndex, FrameStackShape)>,
         ),
     > + 'a {
         self.progpoint_pcs.iter().enumerate().map(move |(i, pc)| {
@@ -218,7 +218,7 @@ impl<'a> FrameTable<'a> {
     fn program_point_frame_iter(
         &self,
         index: usize,
-    ) -> impl Iterator<Item = (u32, FrameTableDescriptorIndex, FrameStackShape)> {
+    ) -> impl Iterator<Item = (ModulePC, FrameTableDescriptorIndex, FrameStackShape)> {
         let offset =
             usize::try_from(self.progpoint_descriptor_offsets[index].get(LittleEndian)).unwrap();
         let mut data = &self.progpoint_descriptor_data[offset..];
@@ -227,12 +227,12 @@ impl<'a> FrameTable<'a> {
             if data.len() < 3 {
                 return None;
             }
-            let wasm_pc = data[0].get(LittleEndian);
+            let wasm_pc_raw = data[0].get(LittleEndian);
             let frame_descriptor = FrameTableDescriptorIndex(data[1].get(LittleEndian));
             let stack_shape = FrameStackShape(data[2].get(LittleEndian));
             data = &data[3..];
-            let not_last = wasm_pc & 0x8000_0000 != 0;
-            let wasm_pc = wasm_pc & 0x7fff_ffff;
+            let not_last = wasm_pc_raw & 0x8000_0000 != 0;
+            let wasm_pc = ModulePC::new(wasm_pc_raw & 0x7fff_ffff);
             if !not_last {
                 data = &[];
             }
@@ -265,24 +265,25 @@ impl<'a> FrameTable<'a> {
     /// Find a list of breakpoint patches for a given Wasm PC.
     pub fn lookup_breakpoint_patches_by_pc(
         &self,
-        pc: u32,
+        pc: ModulePC,
     ) -> impl Iterator<Item = FrameTableBreakpointData<'_>> + '_ {
         // Find *some* entry with a matching Wasm PC. Note that there
         // may be multiple entries for one PC.
+        let pc_raw = pc.raw();
         let range = match self
             .breakpoint_pcs
-            .binary_search_by_key(&pc, |p| p.get(LittleEndian))
+            .binary_search_by_key(&pc_raw, |p| p.get(LittleEndian))
         {
             Ok(mut i) => {
                 // Scan backward to first index with this PC.
-                while i > 0 && self.breakpoint_pcs[i - 1].get(LittleEndian) == pc {
+                while i > 0 && self.breakpoint_pcs[i - 1].get(LittleEndian) == pc_raw {
                     i -= 1;
                 }
 
                 // Scan forward to find the end of the range.
                 let mut end = i;
                 while end < self.breakpoint_pcs.len()
-                    && self.breakpoint_pcs[end].get(LittleEndian) == pc
+                    && self.breakpoint_pcs[end].get(LittleEndian) == pc_raw
                 {
                     end += 1;
                 }
@@ -296,15 +297,15 @@ impl<'a> FrameTable<'a> {
     }
 
     /// Find the nearest breakpoint PC at or after the given PC.
-    pub fn nearest_breakpoint(&self, pc: u32) -> Option<u32> {
+    pub fn nearest_breakpoint(&self, pc: ModulePC) -> Option<ModulePC> {
         match self
             .breakpoint_pcs
-            .binary_search_by_key(&pc, |p| p.get(LittleEndian))
+            .binary_search_by_key(&pc.raw(), |p| p.get(LittleEndian))
         {
             Ok(_) => Some(pc),
             Err(i) => {
                 if i < self.breakpoint_pcs.len() {
-                    Some(self.breakpoint_pcs[i].get(LittleEndian))
+                    Some(ModulePC::new(self.breakpoint_pcs[i].get(LittleEndian)))
                 } else {
                     None
                 }
@@ -314,12 +315,12 @@ impl<'a> FrameTable<'a> {
 
     /// Return an iterator over all breakpoint patches.
     ///
-    /// Returned tuples are (Wasm PC, breakpoint data).
+    /// Returned tuples are (module-relative Wasm PC, breakpoint data).
     pub fn breakpoint_patches(
         &self,
-    ) -> impl Iterator<Item = (u32, FrameTableBreakpointData<'_>)> + '_ {
+    ) -> impl Iterator<Item = (ModulePC, FrameTableBreakpointData<'_>)> + '_ {
         self.breakpoint_pcs.iter().enumerate().map(|(i, wasm_pc)| {
-            let wasm_pc = wasm_pc.get(LittleEndian);
+            let wasm_pc = ModulePC::new(wasm_pc.get(LittleEndian));
             let data = self.breakpoint_patch(i);
             (wasm_pc, data)
         })

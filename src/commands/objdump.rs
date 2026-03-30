@@ -16,7 +16,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::{Engine, Result, bail, error::Context as _};
 use wasmtime_environ::{
     FilePos, FrameInstPos, FrameStackShape, FrameStateSlot, FrameTable, FrameTableDescriptorIndex,
-    StackMap, Trap, obj,
+    ModulePC, StackMap, Trap, obj,
 };
 use wasmtime_unwinder::{ExceptionHandler, ExceptionTable};
 
@@ -573,7 +573,7 @@ struct Decorator<'a> {
                         Item = (
                             u32,
                             FrameInstPos,
-                            Vec<(u32, FrameTableDescriptorIndex, FrameStackShape)>,
+                            Vec<(ModulePC, FrameTableDescriptorIndex, FrameStackShape)>,
                         ),
                     > + 'a,
             >,
@@ -583,7 +583,7 @@ struct Decorator<'a> {
     // Breakpoint table, sorted by native offset instead so we can
     // display inline with disassembly (the table in the image is
     // sorted by Wasm PC).
-    breakpoints: Peekable<Box<dyn Iterator<Item = (u32, usize, SmallVec<[u8; 8]>)>>>,
+    breakpoints: Peekable<Box<dyn Iterator<Item = (ModulePC, usize, SmallVec<[u8; 8]>)>>>,
 
     frame_table_descriptors: Option<FrameTable<'a>>,
 }

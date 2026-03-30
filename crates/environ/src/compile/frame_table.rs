@@ -10,7 +10,7 @@
 
 use crate::{
     FrameInstPos, FrameStackShape, FrameStateSlotOffset, FrameTableDescriptorIndex, FrameValType,
-    FuncKey, WasmHeapTopType, WasmValType, prelude::*,
+    FuncKey, ModulePC, WasmHeapTopType, WasmValType, prelude::*,
 };
 use object::{LittleEndian, U32};
 use std::collections::{HashMap, hash_map::Entry};
@@ -278,9 +278,9 @@ impl FrameTableBuilder {
         &mut self,
         native_pc: u32,
         pos: FrameInstPos,
-        // For each frame: Wasm PC, frame descriptor, stack shape
-        // within the frame descriptor.
-        frames: &[(u32, FrameTableDescriptorIndex, FrameStackShape)],
+        // For each frame: module-relative Wasm PC, frame descriptor,
+        // stack shape within the frame descriptor.
+        frames: &[(ModulePC, FrameTableDescriptorIndex, FrameStackShape)],
     ) {
         let pc_and_pos = FrameInstPos::encode(native_pc, pos);
         // If we already have a program point record at this PC,
@@ -300,11 +300,12 @@ impl FrameTableBuilder {
             .push(U32::new(LittleEndian, start));
 
         for (i, &(wasm_pc, frame_descriptor, stack_shape)) in frames.iter().enumerate() {
-            debug_assert!(wasm_pc < 0x8000_0000);
+            let wasm_pc_raw = wasm_pc.raw();
+            debug_assert!(wasm_pc_raw < 0x8000_0000);
             let not_last = i < (frames.len() - 1);
-            let wasm_pc = wasm_pc | if not_last { 0x8000_0000 } else { 0 };
+            let wasm_pc_raw = wasm_pc_raw | if not_last { 0x8000_0000 } else { 0 };
             self.progpoint_descriptor_data
-                .push(U32::new(LittleEndian, wasm_pc));
+                .push(U32::new(LittleEndian, wasm_pc_raw));
             self.progpoint_descriptor_data
                 .push(U32::new(LittleEndian, frame_descriptor.0));
             self.progpoint_descriptor_data
@@ -313,8 +314,14 @@ impl FrameTableBuilder {
     }
 
     /// Add one breakpoint patch.
-    pub fn add_breakpoint_patch(&mut self, wasm_pc: u32, patch_start_native_pc: u32, patch: &[u8]) {
-        self.breakpoint_pcs.push(U32::new(LittleEndian, wasm_pc));
+    pub fn add_breakpoint_patch(
+        &mut self,
+        wasm_pc: ModulePC,
+        patch_start_native_pc: u32,
+        patch: &[u8],
+    ) {
+        self.breakpoint_pcs
+            .push(U32::new(LittleEndian, wasm_pc.raw()));
         self.breakpoint_patch_offsets
             .push(U32::new(LittleEndian, patch_start_native_pc));
         self.breakpoint_patch_data.extend(patch.iter().cloned());

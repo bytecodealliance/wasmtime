@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Instance, Module, Mutability, Store, StoreContextMut, Val, ValType,
+    Global, GlobalType, Instance, Module, ModulePC, Mutability, Store, StoreContextMut, Val,
+    ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -108,7 +109,7 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     1
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
                     67
                 );
 
@@ -129,7 +130,7 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     0
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
                     57
                 );
 
@@ -289,7 +290,7 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
             58
         );
         assert!(Module::same(
@@ -317,7 +318,7 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
+            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1.raw(),
             58
         );
         assert!(Module::same(
@@ -709,7 +710,7 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
               let frame = store.debug_exit_frames().next().unwrap();
               let (_func, pc) = frame.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x26);
+              assert_eq!(pc.raw(), 0x26);
           }
         }
     );
@@ -799,7 +800,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
               assert_eq!(stack.local(&mut store, 1).unwrap().unwrap_i32(), 2);
               let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(func.as_u32(), 0);
-              assert_eq!(pc, 0x28);
+              assert_eq!(pc.raw(), 0x28);
               let stack = stack.parent(&mut store).unwrap();
               assert!(stack.is_none());
           }
@@ -811,7 +812,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x28)?;
+        .add_breakpoint(&module, ModulePC::new(0x28))?;
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
@@ -824,12 +825,12 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
     assert_eq!(breakpoints.len(), 1);
     assert!(Module::same(&breakpoints[0].module, &module));
-    assert_eq!(breakpoints[0].pc, 0x28);
+    assert_eq!(breakpoints[0].pc, ModulePC::new(0x28));
 
     store
         .edit_breakpoints()
         .unwrap()
-        .remove_breakpoint(&module, 0x28)?;
+        .remove_breakpoint(&module, ModulePC::new(0x28))?;
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     assert_eq!(counter.load(Ordering::Relaxed), 1); // Should not have incremented from above.
@@ -846,7 +847,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x24);
+              assert_eq!(pc.raw(), 0x24);
           }
         },
         {
@@ -854,7 +855,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x26);
+              assert_eq!(pc.raw(), 0x26);
           }
         },
         {
@@ -862,7 +863,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x28);
+              assert_eq!(pc.raw(), 0x28);
           }
         },
         {
@@ -870,7 +871,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x29);
+              assert_eq!(pc.raw(), 0x29);
           }
         }
     );
@@ -886,7 +887,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x28)
+        .add_breakpoint(&module, ModulePC::new(0x28))
         .unwrap();
 
     // Now disable single-stepping. The single breakpoint set above
@@ -949,7 +950,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x2d)?; // `i32.add` in `$f`.
+        .add_breakpoint(&module, ModulePC::new(0x2d))?; // `i32.add` in `$f`.
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func_main = instance.get_func(&mut store, "main").unwrap();
@@ -1469,7 +1470,7 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
               assert_eq!(func.as_u32(), 0);
               // The breakpoint should fire at the first opcode
               // (0x24), not at the function body start (0x23).
-              assert_eq!(pc, 0x24);
+              assert_eq!(pc.raw(), 0x24);
           }
         }
     );
@@ -1480,7 +1481,7 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x23)?;
+        .add_breakpoint(&module, ModulePC::new(0x23))?;
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
@@ -1493,13 +1494,13 @@ async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
     // The actual breakpoint stored should be at the slipped PC.
     let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
     assert_eq!(breakpoints.len(), 1);
-    assert_eq!(breakpoints[0].pc, 0x24);
+    assert_eq!(breakpoints[0].pc, ModulePC::new(0x24));
 
     // Removing with the originally requested PC should work.
     store
         .edit_breakpoints()
         .unwrap()
-        .remove_breakpoint(&module, 0x23)?;
+        .remove_breakpoint(&module, ModulePC::new(0x23))?;
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     // Counter should not have incremented now that we removed the

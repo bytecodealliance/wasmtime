@@ -27,12 +27,12 @@ use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
-    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables, TypeConvert, TypeIndex,
-    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmValType,
+    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
+    EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
+    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables,
+    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
+    WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1331,10 +1331,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // because the guest-debug API presents a purely core-Wasm
             // view of the world where components are deconstructed
             // into core Wasm modules.
-            let pc = srcloc.bits() - u32::try_from(self.wasm_module_offset).unwrap();
+            let component_pc = ComponentPC::new(srcloc.bits());
+            let module_pc = component_pc.to_module_pc(self.wasm_module_offset);
             vec![
                 ir::DebugTag::StackSlot(*slot),
-                ir::DebugTag::User(pc),
+                ir::DebugTag::User(module_pc.raw()),
                 ir::DebugTag::User(stack_shape),
             ]
         } else {
