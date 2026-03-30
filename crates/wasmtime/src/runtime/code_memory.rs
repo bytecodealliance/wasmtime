@@ -6,7 +6,7 @@ use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
 use object::read::elf::SectionTable;
-use object::{LittleEndian, SectionIndex, U32Bytes};
+use object::{LittleEndian, SectionIndex, U32};
 use object::{
     elf::{FileHeader64, SectionHeader64},
     endian::Endianness,
@@ -378,7 +378,7 @@ impl CodeMemory {
         }
         let ends = self.wasm_bytecode_ends();
         let count = ends.len() / core::mem::size_of::<u32>();
-        let (ends, _) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(ends, count)
+        let (ends, _) = object::slice_from_bytes::<U32<LittleEndian>>(ends, count)
             .expect("Invalid alignment of `ends` section");
         let index = usize::try_from(index.as_u32()).unwrap();
         Some(usize::try_from(ends[index].get(LittleEndian)).unwrap())

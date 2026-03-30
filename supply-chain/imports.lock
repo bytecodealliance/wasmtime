@@ -1302,6 +1302,20 @@ user-id = 359
 user-login = "seanmonstar"
 user-name = "Sean McArthur"
 
+[[publisher.object]]
+version = "0.36.5"
+when = "2024-10-04"
+user-id = 4415
+user-login = "philipc"
+user-name = "Philip Craig"
+
+[[publisher.object]]
+version = "0.39.0"
+when = "2026-03-29"
+user-id = 4415
+user-login = "philipc"
+user-name = "Philip Craig"
+
 [[publisher.once_cell_polyfill]]
 version = "1.70.1"
 when = "2025-05-22"

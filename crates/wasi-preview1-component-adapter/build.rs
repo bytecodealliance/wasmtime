@@ -239,7 +239,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
 /// Like above this is still tricky, mainly around the production of the symbol
 /// table.
 fn build_archive(wasm: &[u8]) -> Vec<u8> {
-    use object::{U32Bytes, bytes_of, endian::BigEndian};
+    use object::{U32, bytes_of, endian::BigEndian};
 
     let mut archive = Vec::new();
     archive.extend_from_slice(&object::archive::MAGIC);
@@ -265,9 +265,9 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     ];
 
     let mut symbol_table = Vec::new();
-    symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, syms.len() as u32)));
+    symbol_table.extend_from_slice(bytes_of(&U32::new(BigEndian, syms.len() as u32)));
     for _ in syms.iter() {
-        symbol_table.extend_from_slice(bytes_of(&U32Bytes::new(BigEndian, 0)));
+        symbol_table.extend_from_slice(bytes_of(&U32::new(BigEndian, 0)));
     }
     for s in syms.iter() {
         symbol_table.extend_from_slice(&std::ffi::CString::new(*s).unwrap().into_bytes_with_nul());
@@ -298,7 +298,7 @@ fn build_archive(wasm: &[u8]) -> Vec<u8> {
     let member_offset = archive.len();
     for (index, _) in syms.iter().enumerate() {
         let index = index + 1;
-        archive[symtab_offset + (index * 4)..][..4].copy_from_slice(bytes_of(&U32Bytes::new(
+        archive[symtab_offset + (index * 4)..][..4].copy_from_slice(bytes_of(&U32::new(
             BigEndian,
             member_offset.try_into().unwrap(),
         )));
