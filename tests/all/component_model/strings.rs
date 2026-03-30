@@ -3,7 +3,7 @@
 use super::REALLOC_AND_FREE;
 use wasmtime::Result;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Engine, Store, StoreContextMut, Trap};
+use wasmtime::{Config, Engine, PoolingAllocationConfig, Store, StoreContextMut, Trap};
 
 const UTF16_TAG: u32 = 1 << 31;
 
@@ -575,4 +575,74 @@ fn test_raw_when_encoded(
         Ok(_) => Ok(None),
         Err(e) => Ok(Some(e)),
     }
+}
+
+#[test]
+fn pass_string_on_component_boundary() -> Result<()> {
+    // Configure an engine such that linear memories are allocated right next
+    // to each other and are 1 wasm page large. This'll ensure that the string
+    // at the beginning of the second memory is at the end of the first memory.
+    let mut pooling_config = PoolingAllocationConfig::new();
+    pooling_config.total_component_instances(3);
+    pooling_config.total_memories(2);
+    pooling_config.total_tables(0);
+    pooling_config.total_stacks(0);
+    pooling_config.max_memory_size(65536);
+    let mut config = Config::new();
+    config.memory_guard_size(0);
+    config.memory_reservation(65536);
+    config.allocation_strategy(pooling_config);
+    let engine = Engine::new(&config)?;
+
+    let component = r#"
+(component
+  ;; This component is instantiated first so its allocation function returns a
+  ;; pointer at the end of memory which will be right up against the next
+  ;; linear memory.
+  (component $c
+    (core module $m
+      (func (export "") (param i32 i32))
+      (func (export "realloc") (param i32 i32 i32 i32) (result i32) i32.const 65520)
+      (memory (export "memory") 1)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param "a" string)
+      (canon lift (core func $m "") (realloc (func $m "realloc")) (memory $m "memory"))
+    )
+  )
+
+  ;; This component is instantiated second meaning its memory is after the
+  ;; one above, so the string is placed first thing in linear memory.
+  (component $c2
+    (import "a" (func $f (param "a" string)))
+    (core module $libc
+      (memory (export "memory") 1)
+      (data (memory 0) (i32.const 0) "0123456789abcdef")
+    )
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core module $m
+      (import "" "" (func $f (param i32 i32)))
+      (func (export "f")
+        (call $f
+          (i32.const 0)   ;; ptr
+          (i32.const 16)) ;; len
+      )
+    )
+    (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
+    (func (export "f") (canon lift (core func $m "f")))
+  )
+
+  (instance $c (instantiate $c))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
+  (export "f" (func $c2 "f"))
+)
+"#;
+
+    let component = Component::new(&engine, &component)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "f")?;
+    func.call(&mut store, ())?;
+    Ok(())
 }

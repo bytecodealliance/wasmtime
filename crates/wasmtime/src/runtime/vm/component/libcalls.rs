@@ -171,9 +171,9 @@ fn assert_no_overlap<T, U>(a: &[T], b: &[U]) {
     let b_end = b_start + (b.len() * core::mem::size_of::<U>());
 
     if a_start < b_start {
-        assert!(a_end < b_start);
+        assert!(a_end <= b_start);
     } else {
-        assert!(b_end < a_start);
+        assert!(b_end <= a_start);
     }
 }
 
