@@ -37,7 +37,7 @@ unsafe fn assert_one<R0, R1, V>(
     V: Into<Val>,
 {
     eprintln!("=======================================================");
-    let mut vm = Vm::new();
+    let mut vm = Vm::new().unwrap();
 
     for (reg, val) in xs {
         let reg = reg.into();
@@ -797,7 +797,7 @@ fn bitcast_float_from_int_64() {
 
 #[test]
 fn trap() {
-    let mut vm = Vm::new();
+    let mut vm = Vm::new().unwrap();
     let dst = XReg::new(0).unwrap();
 
     unsafe {

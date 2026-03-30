@@ -774,15 +774,13 @@ impl Stack {
     ///
     /// The allocated stack might be slightly larger due to rounding necessary.
     fn new(size: usize) -> Result<Stack, OutOfMemory> {
-        Ok(Stack {
-            // Round up `size` to the nearest multiple of 16. Note that the
-            // stack is also allocated here but not initialized, and that's
-            // intentional as pulley bytecode should always initialize the stack
-            // before use.
-            storage: TryVec::with_capacity(
-                size.checked_next_multiple_of(16).unwrap_or(usize::MAX),
-            )?,
-        })
+        let mut storage = TryVec::new();
+        // Round up `size` to the nearest multiple of 16. Note that the
+        // stack is also allocated here but not initialized, and that's
+        // intentional as pulley bytecode should always initialize the stack
+        // before use.
+        storage.reserve_exact(size.checked_next_multiple_of(16).unwrap_or(usize::MAX) / 16)?;
+        Ok(Stack { storage })
     }
 
     /// Returns a pointer to the top of the stack (the highest address).
@@ -1291,7 +1289,7 @@ impl AddressingMode for AddrG32Bne {
 
 #[test]
 fn simple_push_pop() {
-    let mut state = MachineState::with_stack(16);
+    let mut state = MachineState::with_stack(16).unwrap();
     let pc = ExecutingPc::default();
     unsafe {
         let mut bytecode = [0; 10];
