@@ -90,3 +90,73 @@ TEST(I31Ref, SignedValues) {
   ASSERT_TRUE(s.has_value());
   EXPECT_EQ(*s, -1);
 }
+
+TEST(StructRef, CreateAndReadFields) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  // Create a struct type with two mutable i32 fields.
+  auto ty = StructType::create(engine, {
+                                           FieldType::mut_(WASMTIME_I32),
+                                           FieldType::mut_(WASMTIME_I32),
+                                       });
+  auto pre = StructRefPre::create(cx, ty);
+
+  // Allocate a struct with field values 10 and 20.
+  auto result =
+      StructRef::create(cx, pre, {Val(int32_t(10)), Val(int32_t(20))});
+  ASSERT_TRUE(result);
+  StructRef s = result.ok();
+
+  // Read fields back.
+  auto v0 = s.field(cx, 0);
+  ASSERT_TRUE(v0);
+  EXPECT_EQ(v0.ok().i32(), 10);
+
+  auto v1 = s.field(cx, 1);
+  ASSERT_TRUE(v1);
+  EXPECT_EQ(v1.ok().i32(), 20);
+
+  // Write field 0 to 42 and read back.
+  auto set_result = s.set_field(cx, 0, Val(int32_t(42)));
+  ASSERT_TRUE(set_result);
+
+  auto v0b = s.field(cx, 0);
+  ASSERT_TRUE(v0b);
+  EXPECT_EQ(v0b.ok().i32(), 42);
+}
+
+TEST(StructRef, UpcastAndDowncast) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  auto ty = StructType::create(engine, {
+                                           FieldType::const_(WASMTIME_I32),
+                                       });
+  auto pre = StructRefPre::create(cx, ty);
+
+  auto result = StructRef::create(cx, pre, {Val(int32_t(99))});
+  ASSERT_TRUE(result);
+  StructRef s = result.ok();
+
+  // Upcast to eqref.
+  EqRef eq = s.to_eqref();
+  EXPECT_TRUE(eq.is_struct(cx));
+  EXPECT_FALSE(eq.is_i31(cx));
+
+  // Downcast back to structref.
+  StructRef s2 = eq.as_struct(cx);
+  auto v = s2.field(cx, 0);
+  ASSERT_TRUE(v);
+  EXPECT_EQ(v.ok().i32(), 99);
+
+  // Upcast to anyref.
+  AnyRef any = s.to_anyref();
+  EXPECT_FALSE(any.is_i31(cx));
+}
