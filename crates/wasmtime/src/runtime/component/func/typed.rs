@@ -1691,7 +1691,8 @@ impl WasmStr {
                 }
             }
         };
-        if ptr % align != 0 {
+        debug_assert!(align.is_power_of_two());
+        if ptr & (align - 1) != 0 {
             bail!("string pointer not aligned to {align}");
         }
         match byte_len.and_then(|len| ptr.checked_add(len)) {
