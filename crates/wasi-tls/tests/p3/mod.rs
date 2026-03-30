@@ -4,10 +4,7 @@ use wasmtime::{
     format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p3::bindings::Command};
-use wasmtime_wasi_tls::{
-    TlsProvider, WasiTlsCtx, WasiTlsCtxBuilder,
-    p3::{WasiTlsCtxView, WasiTlsView},
-};
+use wasmtime_wasi_tls::{TlsProvider, WasiTlsCtx, WasiTlsCtxBuilder, WasiTlsCtxView, WasiTlsView};
 
 struct Ctx {
     table: ResourceTable,

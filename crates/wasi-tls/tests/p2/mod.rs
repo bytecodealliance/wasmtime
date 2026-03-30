@@ -4,7 +4,9 @@ use wasmtime::{
     format_err,
 };
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView, p2::bindings::Command};
-use wasmtime_wasi_tls::{TlsProvider, WasiTlsCtx, WasiTlsCtxBuilder, p2};
+use wasmtime_wasi_tls::{
+    TlsProvider, WasiTlsCtx, WasiTlsCtxBuilder, WasiTlsCtxView, WasiTlsView, p2,
+};
 
 struct Ctx {
     table: ResourceTable,
@@ -16,6 +18,15 @@ impl WasiView for Ctx {
     fn ctx(&mut self) -> WasiCtxView<'_> {
         WasiCtxView {
             ctx: &mut self.wasi_ctx,
+            table: &mut self.table,
+        }
+    }
+}
+
+impl WasiTlsView for Ctx {
+    fn tls(&mut self) -> WasiTlsCtxView<'_> {
+        WasiTlsCtxView {
+            ctx: &mut self.wasi_tls_ctx,
             table: &mut self.table,
         }
     }
@@ -41,9 +52,7 @@ async fn run_test(provider: Box<dyn TlsProvider>, path: &str) -> Result<()> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
     let mut opts = p2::LinkOptions::default();
     opts.tls(true);
-    p2::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-        p2::WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
-    })?;
+    wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &opts)?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
     command

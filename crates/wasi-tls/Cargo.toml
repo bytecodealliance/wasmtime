@@ -11,6 +11,9 @@ description = "Wasmtime implementation of the wasi-tls API"
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["p2", "rustls"]
 p2 = ["wasmtime-wasi/p2"]
