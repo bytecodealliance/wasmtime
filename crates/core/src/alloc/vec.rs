@@ -309,6 +309,17 @@ impl<T> TryVec<T> {
     pub fn clear(&mut self) {
         self.inner.clear();
     }
+
+    /// Same as [`std::vec::Vec::as_mut_ptr`].
+    //
+    // Note that this is technically inherited through the `DerefMut` impl but
+    // that converts `&mut Self` to `&mut [T]` which invalidates all previously
+    // derived pointers. This causes problems in Miri so by having an inherent
+    // method here it means that the borrow scope matches what we want with
+    // Miri.
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        self.inner.as_mut_ptr()
+    }
 }
 
 impl<T> Deref for TryVec<T> {
