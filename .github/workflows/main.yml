@@ -429,6 +429,8 @@ jobs:
           - name: wasmtime-wasi-tls
             checks: |
               -p wasmtime-wasi-tls --no-default-features
+              -p wasmtime-wasi-tls --no-default-features --features p2
+              -p wasmtime-wasi-tls --no-default-features --features p3
               -p wasmtime-wasi-tls --no-default-features --features rustls
               -p wasmtime-wasi-tls --no-default-features --features nativetls
               -p wasmtime-wasi-tls --no-default-features --features openssl

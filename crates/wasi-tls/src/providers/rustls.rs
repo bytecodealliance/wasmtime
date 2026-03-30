@@ -1,10 +1,8 @@
 //! The `rustls` provider.
 
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsStream, TlsTransport};
 use rustls::pki_types::ServerName;
-use std::io;
 use std::sync::{Arc, LazyLock};
-
-use crate::{BoxFuture, TlsProvider, TlsStream, TlsTransport};
 
 impl crate::TlsStream for tokio_rustls::client::TlsStream<Box<dyn TlsTransport>> {}
 
@@ -14,19 +12,16 @@ pub struct RustlsProvider {
 }
 
 impl TlsProvider for RustlsProvider {
-    fn connect(
-        &self,
-        server_name: String,
-        transport: Box<dyn TlsTransport>,
-    ) -> BoxFuture<io::Result<Box<dyn TlsStream>>> {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream {
         let client_config = Arc::clone(&self.client_config);
         Box::pin(async move {
-            let domain = ServerName::try_from(server_name)
-                .map_err(|_| io::Error::other("invalid server name"))?;
+            let domain =
+                ServerName::try_from(server_name).map_err(|_| Error::msg("invalid server name"))?;
 
             let stream = tokio_rustls::TlsConnector::from(client_config)
                 .connect(domain, transport)
-                .await?;
+                .await
+                .map_err(rustls_to_wasi_error)?;
             Ok(Box::new(stream) as Box<dyn TlsStream>)
         })
     }
@@ -47,5 +42,18 @@ impl Default for RustlsProvider {
         Self {
             client_config: Arc::clone(&CONFIG),
         }
+    }
+}
+
+impl From<rustls::Error> for Error {
+    fn from(e: rustls::Error) -> Self {
+        Error::msg(e.to_string())
+    }
+}
+
+fn rustls_to_wasi_error(e: std::io::Error) -> Error {
+    match e.downcast::<rustls::Error>() {
+        Ok(e) => e.into(),
+        Err(io_err) => Error::msg(io_err),
     }
 }

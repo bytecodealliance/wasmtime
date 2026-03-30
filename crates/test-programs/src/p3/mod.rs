@@ -7,6 +7,7 @@ wit_bindgen::generate!({
 
         world testp3 {
             include wasi:cli/imports@0.3.0-rc-2026-03-15;
+            include wasi:tls/imports@0.3.0-draft;
             import wasi:http/types@0.3.0-rc-2026-03-15;
             import wasi:http/client@0.3.0-rc-2026-03-15;
             import wasi:http/handler@0.3.0-rc-2026-03-15;
@@ -14,7 +15,10 @@ wit_bindgen::generate!({
             export wasi:cli/run@0.3.0-rc-2026-03-15;
         }
     ",
-    path: "../wasi-http/src/p3/wit",
+    path: [
+        "../wasi-http/src/p3/wit",
+        "../wasi-tls/src/p3/wit",
+    ],
     world: "wasmtime:test/testp3",
     default_bindings_module: "test_programs::p3",
     pub_export_macro: true,
@@ -44,3 +48,11 @@ pub mod service {
         },
     });
 }
+
+impl std::fmt::Display for wasi::tls::types::Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_debug_string())
+    }
+}
+
+impl std::error::Error for wasi::tls::types::Error {}

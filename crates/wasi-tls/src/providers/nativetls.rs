@@ -1,10 +1,9 @@
 //! The `native_tls` provider.
 
-use std::{io, pin::pin};
-
-use crate::{TlsProvider, TlsStream, TlsTransport};
-
-type BoxFuture<T> = std::pin::Pin<Box<dyn Future<Output = T> + Send>>;
+use crate::{BoxFutureTlsStream, Error, TlsProvider, TlsStream, TlsTransport};
+use std::io;
+use std::pin::{Pin, pin};
+use std::task::Poll;
 
 /// The `native_tls` provider.
 pub struct NativeTlsProvider {
@@ -12,27 +11,13 @@ pub struct NativeTlsProvider {
 }
 
 impl TlsProvider for NativeTlsProvider {
-    fn connect(
-        &self,
-        server_name: String,
-        transport: Box<dyn TlsTransport>,
-    ) -> BoxFuture<io::Result<Box<dyn TlsStream>>> {
-        async fn connect_impl(
-            server_name: String,
-            transport: Box<dyn TlsTransport>,
-        ) -> Result<NativeTlsStream, native_tls::Error> {
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream {
+        Box::pin(async move {
             let connector = native_tls::TlsConnector::new()?;
             let stream = tokio_native_tls::TlsConnector::from(connector)
                 .connect(&server_name, transport)
                 .await?;
-            Ok(NativeTlsStream(stream))
-        }
-
-        Box::pin(async move {
-            let stream = connect_impl(server_name, transport)
-                .await
-                .map_err(|e| io::Error::other(e))?;
-            Ok(Box::new(stream) as Box<dyn TlsStream>)
+            Ok(Box::new(NativeTlsStream(stream)) as Box<dyn TlsStream>)
         })
     }
 }
@@ -52,7 +37,7 @@ impl tokio::io::AsyncRead for NativeTlsStream {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<io::Result<()>> {
+    ) -> Poll<io::Result<()>> {
         pin!(&mut self.as_mut().0).poll_read(cx, buf)
     }
 }
@@ -62,21 +47,36 @@ impl tokio::io::AsyncWrite for NativeTlsStream {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<io::Result<usize>> {
+    ) -> Poll<io::Result<usize>> {
         pin!(&mut self.as_mut().0).poll_write(cx, buf)
     }
 
     fn poll_flush(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), io::Error>> {
+    ) -> Poll<Result<(), io::Error>> {
         pin!(&mut self.as_mut().0).poll_flush(cx)
     }
 
     fn poll_shutdown(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), io::Error>> {
-        pin!(&mut self.as_mut().0).poll_shutdown(cx)
+    ) -> Poll<Result<(), io::Error>> {
+        match pin!(&mut self.as_mut().0).poll_shutdown(cx) {
+            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+            Poll::Pending => return Poll::Pending,
+        }
+
+        // `tokio-rustls` & `tokio-openssl` shut down the underlying transport,
+        // but `tokio-native-tls` does not, so we need to do that ourselves:
+        let inner = self.0.get_mut().get_mut().get_mut();
+        Pin::new(inner).poll_shutdown(cx)
+    }
+}
+
+impl From<native_tls::Error> for Error {
+    fn from(e: native_tls::Error) -> Self {
+        Error::msg(e.to_string())
     }
 }

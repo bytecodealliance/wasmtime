@@ -163,7 +163,10 @@ impl AsyncWrite for WasiStreamWriter {
                         }
                         Ok(count) => {
                             let count = count.min(buf.len());
-                            return match output.write(Bytes::copy_from_slice(&buf[..count])) {
+                            return match OutputStream::write(
+                                &mut **output,
+                                Bytes::copy_from_slice(&buf[..count]),
+                            ) {
                                 Ok(()) => Poll::Ready(Ok(count)),
                                 Err(StreamError::Closed) => Poll::Ready(Ok(0)),
                                 Err(e) => Poll::Ready(Err(std::io::Error::other(e))),
