@@ -1205,7 +1205,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - crate: "wasmtime"
+          - crate: "wasmtime --features component-model-async-bytes"
           - crate: "wasmtime-cli"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
