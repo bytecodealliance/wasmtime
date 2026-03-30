@@ -61,7 +61,7 @@ impl Interpreter {
     pub fn new(engine: &Engine) -> Result<Interpreter, OutOfMemory> {
         let ret = Interpreter {
             pulley: StoreBox::new(VmState {
-                vm: Vm::with_stack(engine.config().max_wasm_stack),
+                vm: Vm::with_stack(engine.config().max_wasm_stack)?,
                 resume_at_pc: None,
             })?,
         };
