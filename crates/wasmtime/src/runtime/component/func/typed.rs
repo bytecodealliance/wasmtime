@@ -1681,7 +1681,7 @@ pub struct WasmStr {
 impl WasmStr {
     pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let (byte_len, align) = match cx.options().string_encoding {
-            StringEncoding::Utf8 => (Some(len), 1),
+            StringEncoding::Utf8 => (Some(len), 1_usize),
             StringEncoding::Utf16 => (len.checked_mul(2), 2),
             StringEncoding::CompactUtf16 => {
                 if len & UTF16_TAG == 0 {
