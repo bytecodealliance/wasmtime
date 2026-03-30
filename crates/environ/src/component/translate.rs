@@ -1199,7 +1199,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let index = self.validator.types(0).unwrap().module_count();
                 self.validator.module_section(&unchecked_range)?;
                 let static_module_index = self.static_modules.next_key();
-                let translation = ModuleEnvironment::new(
+                let mut translation = ModuleEnvironment::new(
                     self.tunables,
                     self.validator,
                     self.types.module_types_builder(),
@@ -1219,6 +1219,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                             .context("wasm component contains an invalid module section")
                         })?,
                 )?;
+
+                translation.wasm_module_offset = u64::try_from(unchecked_range.start).unwrap();
                 let static_module_index2 = self.static_modules.push(translation);
                 assert_eq!(static_module_index, static_module_index2);
                 let types = self.validator.types(0).unwrap();

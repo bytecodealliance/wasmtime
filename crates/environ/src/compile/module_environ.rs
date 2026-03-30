@@ -53,6 +53,12 @@ pub struct ModuleTranslation<'data> {
     /// themselves.
     pub wasm: &'data [u8],
 
+    /// The byte offset of this module's Wasm binary within the outer
+    /// binary (e.g. a component). For standalone modules this is 0.
+    /// This is used to convert component-relative source locations to
+    /// module-relative source locations.
+    pub wasm_module_offset: u64,
+
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
@@ -118,6 +124,7 @@ impl<'data> ModuleTranslation<'data> {
         Self {
             module: Module::new(module_index),
             wasm: &[],
+            wasm_module_offset: 0,
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
             exported_signatures: Vec::default(),

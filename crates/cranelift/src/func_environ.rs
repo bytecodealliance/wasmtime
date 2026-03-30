@@ -137,6 +137,11 @@ pub struct FuncEnvironment<'module_environment> {
     needs_gc_heap: bool,
     entities: WasmEntities,
 
+    /// The byte offset of the module's wasm binary within the outer
+    /// binary (e.g. a component). Used to make source locations in
+    /// guest-debug frame tables module-relative.
+    pub(crate) wasm_module_offset: u64,
+
     /// Translation state at the given point.
     pub(crate) stacks: FuncTranslationStacks,
 
@@ -291,6 +296,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
+            wasm_module_offset: translation.wasm_module_offset,
         }
     }
 
@@ -1318,7 +1324,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 .last()
                 .map(|s| s.raw())
                 .unwrap_or(u32::MAX);
-            let pc = srcloc.bits();
+            // Convert component-relative srcloc to module-relative
+            // Wasm PC for the frame table. The srcloc on the builder
+            // remains component-relative for native DWARF and other
+            // purposes, but the frame table must be module-relative
+            // because the guest-debug API presents a purely core-Wasm
+            // view of the world where components are deconstructed
+            // into core Wasm modules.
+            let pc = srcloc.bits() - u32::try_from(self.wasm_module_offset).unwrap();
             vec![
                 ir::DebugTag::StackSlot(*slot),
                 ir::DebugTag::User(pc),
