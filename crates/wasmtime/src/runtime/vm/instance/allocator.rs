@@ -509,7 +509,7 @@ fn check_table_init_bounds(
             .eval_int(&mut store, context, &segment.offset)
             .expect("const expression should be valid");
         let start = get_index(start, module.tables[segment.table_index].idx_type);
-        let end = start.checked_add(u64::try_from(segment.elements.len()).unwrap());
+        let end = start.checked_add(segment.elements.len());
 
         let table = store.instance_mut(instance).get_table(segment.table_index);
         match end {
