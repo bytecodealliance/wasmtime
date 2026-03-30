@@ -5,15 +5,15 @@ use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoError};
 
 use crate::p2::{
-    WasiTls, bindings,
+    bindings,
     io::{
         AsyncReadStream, AsyncWriteStream, FutureOutput, WasiFuture, WasiStreamReader,
         WasiStreamWriter,
     },
 };
-use crate::{TlsStream, TlsTransport};
+use crate::{TlsStream, TlsTransport, WasiTlsCtxView};
 
-impl<'a> bindings::types::Host for WasiTls<'a> {}
+impl<'a> bindings::types::Host for WasiTlsCtxView<'a> {}
 
 /// Represents the ClientHandshake which will be used to configure the handshake
 pub struct HostClientHandshake {
@@ -21,7 +21,7 @@ pub struct HostClientHandshake {
     transport: Box<dyn TlsTransport>,
 }
 
-impl<'a> bindings::types::HostClientHandshake for WasiTls<'a> {
+impl<'a> bindings::types::HostClientHandshake for WasiTlsCtxView<'a> {
     fn new(
         &mut self,
         server_name: String,
@@ -86,7 +86,7 @@ impl Pollable for HostFutureClientStreams {
     }
 }
 
-impl<'a> bindings::types::HostFutureClientStreams for WasiTls<'a> {
+impl<'a> bindings::types::HostFutureClientStreams for WasiTlsCtxView<'a> {
     fn subscribe(
         &mut self,
         this: Resource<HostFutureClientStreams>,
@@ -145,7 +145,7 @@ pub struct HostClientConnection(
     crate::p2::io::AsyncWriteStream<tokio::io::WriteHalf<Box<dyn TlsStream>>>,
 );
 
-impl<'a> bindings::types::HostClientConnection for WasiTls<'a> {
+impl<'a> bindings::types::HostClientConnection for WasiTlsCtxView<'a> {
     fn close_output(&mut self, this: Resource<HostClientConnection>) -> wasmtime::Result<()> {
         self.table.get_mut(&this)?.0.close()
     }

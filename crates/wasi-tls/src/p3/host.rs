@@ -1,8 +1,8 @@
 //! p3 host implementation for `wasi:tls`.
 
 use crate::p3::util::{AsyncReadProducer, AsyncWriteConsumer, Closed, Deferred, Shared, pipe};
-use crate::p3::{WasiTls, WasiTlsCtxView, bindings};
-use crate::{BoxFutureTlsStream, Error, TlsStream};
+use crate::p3::{WasiTls, bindings};
+use crate::{BoxFutureTlsStream, Error, TlsStream, WasiTlsCtxView};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::{io::AsyncWriteExt as _, sync::oneshot};

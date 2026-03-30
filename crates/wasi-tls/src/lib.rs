@@ -13,8 +13,8 @@
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result,
 //! };
-//! use wasmtime_wasi_tls::{WasiTlsCtx, WasiTlsCtxBuilder};
-//! use wasmtime_wasi_tls::p2::{LinkOptions, WasiTls};
+//! use wasmtime_wasi_tls::{WasiTlsCtx, WasiTlsCtxBuilder, WasiTlsView, WasiTlsCtxView};
+//! use wasmtime_wasi_tls::p2::LinkOptions;
 //!
 //! struct Ctx {
 //!     table: ResourceTable,
@@ -25,6 +25,12 @@
 //! impl WasiView for Ctx {
 //!     fn ctx(&mut self) -> WasiCtxView<'_> {
 //!         WasiCtxView { ctx: &mut self.wasi_ctx, table: &mut self.table }
+//!     }
+//! }
+//!
+//! impl WasiTlsView for Ctx {
+//!     fn tls(&mut self) -> WasiTlsCtxView<'_> {
+//!         WasiTlsCtxView { ctx: &mut self.wasi_tls_ctx, table: &mut self.table }
 //!     }
 //! }
 //!
@@ -49,15 +55,13 @@
 //!
 //!     // Set up wasi-cli
 //!     let mut store = Store::new(&engine, ctx);
-//!     let mut linker = Linker::new(&engine);
+//!     let mut linker: Linker<Ctx> = Linker::new(&engine);
 //!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 //!
 //!     // Add wasi-tls types and turn on the feature in linker
 //!     let mut opts = LinkOptions::default();
 //!     opts.tls(true);
-//!     wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-//!         WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
-//!     })?;
+//!     wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &opts)?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
 //!     Ok(())
@@ -72,7 +76,6 @@
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
 use tokio::io::{AsyncRead, AsyncWrite};
-
 mod error;
 mod providers;
 
@@ -85,6 +88,9 @@ pub mod p3;
 
 pub use error::Error;
 pub use providers::*;
+
+#[cfg(any(feature = "p2", feature = "p3"))]
+use wasmtime::component::{HasData, ResourceTable};
 
 /// Builder-style structure used to create a [`WasiTlsCtx`].
 #[cfg(any(feature = "p2", feature = "p3"))]
@@ -129,6 +135,31 @@ impl Default for WasiTlsCtxBuilder {
 #[cfg(any(feature = "p2", feature = "p3"))]
 pub struct WasiTlsCtx {
     pub(crate) provider: Box<dyn TlsProvider>,
+}
+
+/// The type for which this crate implements the `wasi:tls` interfaces.
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub(crate) struct WasiTls;
+#[cfg(any(feature = "p2", feature = "p3"))]
+impl HasData for WasiTls {
+    type Data<'a> = WasiTlsCtxView<'a>;
+}
+
+/// View into [`WasiTlsCtx`] implementation and [`ResourceTable`].
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub struct WasiTlsCtxView<'a> {
+    /// Mutable reference to table used to manage resources.
+    pub table: &'a mut ResourceTable,
+
+    /// Mutable reference to the WASI TLS context.
+    pub ctx: &'a mut WasiTlsCtx,
+}
+
+/// A trait which provides internal WASI TLS state.
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub trait WasiTlsView: Send {
+    /// Return a [`WasiTlsCtxView`] from mutable reference to self.
+    fn tls(&mut self) -> WasiTlsCtxView<'_>;
 }
 
 /// The data stream that carries the encrypted TLS data.
