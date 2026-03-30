@@ -795,6 +795,7 @@ impl SafepointSpiller {
 mod tests {
     use super::*;
     use alloc::string::ToString;
+    use cranelift_codegen::ir::{BlockCall, ExceptionTableData};
     use cranelift_codegen::isa::CallConv;
 
     #[test]
@@ -2767,6 +2768,112 @@ block10:
     return
 }
             "#,
+        );
+    }
+
+    #[test]
+    fn needs_stack_map_across_try_call() {
+        let _ = env_logger::try_init();
+
+        // Test that values needing stack maps get stack_map entries on
+        // try_call instructions, not just regular call instructions.
+        //
+        //     block0:
+        //       v0 = call fn0()       ;; returns a gc ref
+        //       v1 = call fn0()       ;; returns another gc ref
+        //       try_call fn0(), sig0, block1(), [default: block2()]
+        //                             ;; v0 and v1 should be in the stack map here
+        //     block1:
+        //       call fn1(v0)          ;; uses v0, v1 is dead
+        //       return
+        //     block2(v2: i64):
+        //       return
+
+        let sig = Signature::new(CallConv::SystemV);
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        // fn0: () -> i32 (returns a gc ref)
+        let name0 = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let mut sig0 = Signature::new(CallConv::SystemV);
+        sig0.returns.push(AbiParam::new(ir::types::I32));
+        let signature0 = builder.func.import_signature(sig0);
+        let func_ref0 = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name0),
+            signature: signature0,
+            colocated: true,
+            patchable: false,
+        });
+
+        // fn1: (i32) -> () (consumes a gc ref)
+        let name1 = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 1,
+            });
+        let mut sig1 = Signature::new(CallConv::SystemV);
+        sig1.params.push(AbiParam::new(ir::types::I32));
+        let signature1 = builder.func.import_signature(sig1);
+        let func_ref1 = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name1),
+            signature: signature1,
+            colocated: true,
+            patchable: false,
+        });
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+
+        builder.switch_to_block(block0);
+
+        // v0 = call fn0()  -- a gc ref that's live across the try_call
+        let call0 = builder.ins().call(func_ref0, &[]);
+        let v0 = builder.func.dfg.inst_results(call0)[0];
+        builder.declare_value_needs_stack_map(v0);
+
+        // v1 = call fn0()  -- another gc ref, also live across the try_call
+        let call1 = builder.ins().call(func_ref0, &[]);
+        let v1 = builder.func.dfg.inst_results(call1)[0];
+        builder.declare_value_needs_stack_map(v1);
+
+        // try_call fn0() -> block1, exception -> block2
+        let normal_return = BlockCall::new(block1, [], &mut builder.func.dfg.value_lists);
+        let exception_table = builder
+            .func
+            .dfg
+            .exception_tables
+            .push(ExceptionTableData::new(signature0, normal_return, []));
+        builder.ins().try_call(func_ref0, &[], exception_table);
+
+        // block1: use v0 (so it's live across the try_call)
+        builder.switch_to_block(block1);
+        builder.ins().call(func_ref1, &[v0]);
+        builder.ins().return_(&[]);
+
+        // block2: exception handler
+        builder.switch_to_block(block2);
+        builder.ins().return_(&[]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        // The try_call should have a stack_map with v0 (and v1 should NOT
+        // be in it since v1 is not used after the try_call).
+        // The second call (which produces v1) should have v0 in its stack_map
+        // since v0 is live across that call too.
+        let output = func.display().to_string();
+        assert!(
+            output.contains("try_call fn0(), sig0, block1, [], stack_map=[i32 @ ss0+0]"),
+            "try_call should have stack_map entry for v0 (spilled to ss0), got:\n{output}"
         );
     }
 }
