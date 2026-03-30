@@ -837,7 +837,7 @@ impl<'a, T> Source<'a, T> {
             let old_remaining = buffer.remaining_capacity();
             lift::<T, B>(
                 cx,
-                ty.map(|t| *t),
+                ty.copied(),
                 buffer,
                 address + (T::SIZE32 * guest_offset),
                 count - guest_offset,
