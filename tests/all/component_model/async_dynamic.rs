@@ -178,3 +178,108 @@ fn simple_type_assertions() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn stream_any_smoke() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let component = Component::new(
+        &engine,
+        r#"
+(component
+    (type $s (stream u8))
+
+    (core module $libc (memory (export "mem") 1))
+    (core instance $libc (instantiate $libc))
+
+    (core module $m
+        (import "" "stream.new" (func $stream.new (result i64)))
+        (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
+        (import "" "task.return" (func $task.return))
+        (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
+        (import "" "waitable.join" (func $waitable.join (param i32 i32)))
+        (import "" "waitable-set.wait" (func $waitable-set.wait (param i32 i32) (result i32)))
+        (import "" "waitable-set.drop" (func $waitable-set.drop (param i32)))
+        (import "" "mem" (memory 1))
+
+        (global $w (mut i32) (i32.const 0))
+
+        (func (export "mk") (result i32)
+            (local $r i32) (local $tmp i64)
+            (local.set $tmp (call $stream.new))
+            (local.set $r (i32.wrap_i64 (local.get $tmp)))
+            (global.set $w (i32.wrap_i64 (i64.shr_u (local.get $tmp) (i64.const 32))))
+            local.get $r
+        )
+
+        (func (export "run") (result i32)
+            (local $ws i32)
+            (local.set $ws (call $waitable-set.new))
+            (call $waitable.join (global.get $w) (local.get $ws))
+            (call $waitable-set.wait (local.get $ws) (i32.const 0))
+            i32.const 3 ;; EVENT_STREAM_WRITE
+            i32.ne
+            if unreachable end
+
+            (if (i32.ne (i32.load (i32.const 0)) (global.get $w))
+              (then unreachable))
+            (if (i32.ne (i32.load (i32.const 4)) (i32.const 1)) ;; DROPPED | (0 << 4)
+              (then unreachable))
+
+            call $task.return
+
+            i32.const 0 ;; CALLBACK_CODE_EXIT
+        )
+
+        (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
+    )
+    (core func $stream.new (canon stream.new $s))
+    (core func $stream.write (canon stream.write $s (memory $libc "mem")))
+    (core func $task.return (canon task.return))
+    (core func $waitable-set.new (canon waitable-set.new))
+    (core func $waitable.join (canon waitable.join))
+    (core func $waitable-set.wait (canon waitable-set.wait (memory $libc "mem")))
+    (core func $waitable-set.drop (canon waitable-set.drop))
+    (core instance $i (instantiate $m
+        (with "" (instance
+            (export "stream.new" (func $stream.new))
+            (export "stream.write" (func $stream.write))
+            (export "task.return" (func $task.return))
+            (export "waitable-set.new" (func $waitable-set.new))
+            (export "waitable.join" (func $waitable.join))
+            (export "waitable-set.wait" (func $waitable-set.wait))
+            (export "waitable-set.drop" (func $waitable-set.drop))
+            (export "mem" (memory $libc "mem"))
+        ))
+    ))
+    (func (export "mk") (result (stream u8))
+        (canon lift (core func $i "mk")))
+    (func (export "run") async
+        (canon lift (core func $i "run") async (callback (func $i "cb"))))
+)
+        "#,
+    )?;
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let mk = instance.get_typed_func::<(), (StreamAny,)>(&mut store, "mk")?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    store
+        .run_concurrent(async |store| {
+            let (mut stream,) = mk.call_concurrent(store, ()).await?;
+            tokio::try_join! {
+                async {
+                    run.call_concurrent(store, ()).await?;
+                    wasmtime::error::Ok(())
+                },
+                async {
+                    store.with(|store| stream.close(store))?;
+                    wasmtime::error::Ok(())
+                }
+            }?;
+            wasmtime::error::Ok(())
+        })
+        .await??;
+    Ok(())
+}
