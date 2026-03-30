@@ -11,11 +11,11 @@ use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 pub enum ConcurrentState {}
 
 impl ConcurrentState {
-    pub fn call_context(&mut self, _: u32) -> &mut CallContext {
+    pub fn call_context(&mut self, _: u32) -> Result<&mut CallContext> {
         match *self {}
     }
 
-    pub fn current_call_context_scope_id(&self) -> u32 {
+    pub fn current_call_context_scope_id(&self) -> Result<u32> {
         match *self {}
     }
 }

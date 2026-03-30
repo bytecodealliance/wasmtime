@@ -503,18 +503,16 @@ pub struct ComponentTasksNotConcurrent {
 }
 
 impl ComponentTaskState {
-    pub fn call_context(&mut self, id: u32) -> &mut CallContext {
+    pub fn call_context(&mut self, id: u32) -> Result<&mut CallContext> {
         match self {
-            ComponentTaskState::NotConcurrent(state) => &mut state.scopes[id as usize],
+            ComponentTaskState::NotConcurrent(state) => Ok(&mut state.scopes[id as usize]),
             ComponentTaskState::Concurrent(state) => state.call_context(id),
         }
     }
 
-    pub fn current_call_context_scope_id(&self) -> u32 {
+    pub fn current_call_context_scope_id(&self) -> Result<u32> {
         match self {
-            ComponentTaskState::NotConcurrent(state) => {
-                u32::try_from(state.scopes.len() - 1).unwrap()
-            }
+            ComponentTaskState::NotConcurrent(state) => Ok(u32::try_from(state.scopes.len() - 1)?),
             ComponentTaskState::Concurrent(state) => state.current_call_context_scope_id(),
         }
     }
