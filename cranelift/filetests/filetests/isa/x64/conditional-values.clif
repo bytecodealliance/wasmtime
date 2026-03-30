@@ -377,7 +377,7 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   notq %rdi
+;   notl %edi
 ;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
 ;   movq %rbp, %rsp
@@ -389,7 +389,7 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   notq %rdi
+;   notl %edi
 ;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
 ;   movq %rbp, %rsp
@@ -437,7 +437,7 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   notq %rdi
+;   notl %edi
 ;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
 ;   movq %rbp, %rsp
@@ -449,7 +449,7 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   notq %rdi
+;   notl %edi
 ;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
 ;   movq %rbp, %rsp

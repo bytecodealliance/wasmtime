@@ -1978,11 +1978,11 @@
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp _ (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32))))
-      (x64_shrl_mi (x64_not $I64 x) 31))
+      (x64_shrl_mi (x64_not $I32 x) 31))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp _ (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0))))
-      (x64_shrl_mi (x64_not $I64 x) 31))
+      (x64_shrl_mi (x64_not $I32 x) 31))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
 ;; one. To note: what is different here about the output values is that each
