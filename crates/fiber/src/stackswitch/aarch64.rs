@@ -132,7 +132,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
         // Unpoison the region we're about to write to. When fiber stacks are
         // reused from the ASAN pool, the shadow memory retains poisoning from
         // the previous fiber execution. Without this, the write below triggers
-        // a false stack-buffer-overflow on aarch64.
+        // a false stack-buffer-overflow.
         #[cfg(asan)]
         {
             unsafe extern "C" {

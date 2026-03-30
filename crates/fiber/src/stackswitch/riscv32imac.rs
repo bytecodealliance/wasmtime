@@ -103,6 +103,22 @@ pub(crate) unsafe fn wasmtime_fiber_init(
 
     unsafe {
         let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
+
+        // Unpoison the region we're about to write to. When fiber stacks are
+        // reused from the ASAN pool, the shadow memory retains poisoning from
+        // the previous fiber execution. Without this, the write below triggers
+        // a false stack-buffer-overflow.
+        #[cfg(asan)]
+        {
+            unsafe extern "C" {
+                fn __asan_unpoison_memory_region(addr: *const u8, size: usize);
+            }
+            __asan_unpoison_memory_region(
+                initial_stack as *const u8,
+                core::mem::size_of::<InitialStack>(),
+            );
+        }
+
         initial_stack.write(InitialStack {
             s1: entry_point as *mut u8,
             s2: entry_arg0,
