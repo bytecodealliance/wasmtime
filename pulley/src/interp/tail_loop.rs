@@ -128,9 +128,7 @@ static OPCODE_HANDLER_TABLE: [Handler; Opcode::MAX as usize + 1] = {
     for_each_op!(define_opcode_handler_table)
 };
 
-// same as above, but without a +1 for handling of extended ops as this is the
-// extended ops.
-static EXTENDED_OPCODE_HANDLER_TABLE: [Handler; ExtendedOpcode::MAX as usize] = {
+static EXTENDED_OPCODE_HANDLER_TABLE: [Handler; ExtendedOpcode::MAX as usize + 1] = {
     macro_rules! define_extended_opcode_handler_table {
         ($(
             $( #[$attr:meta] )*
