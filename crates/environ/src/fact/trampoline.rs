@@ -1817,7 +1817,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             let dst_mem = self.malloc(
                 dst_opts,
                 MallocSize::Local(dst_byte_len.idx),
-                dst_enc.width().into(),
+                dst_enc.align().into(),
             );
             WasmString {
                 ptr: dst_mem.addr,
