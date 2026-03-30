@@ -456,6 +456,10 @@ impl MemoryPool {
 
     /// Deallocate a previously-allocated memory.
     ///
+    /// If `image` is `None` then the state of this memory's slot is left
+    /// unknown. Otherwise `image` is used to retain information about the state
+    /// of this slot.
+    ///
     /// # Safety
     ///
     /// The memory must have been previously allocated from this pool and
@@ -463,11 +467,12 @@ impl MemoryPool {
     /// must never be used again.
     ///
     /// The caller must have already called `clear_and_remain_ready` on the
-    /// memory's image and flushed any enqueued decommits for this memory.
+    /// memory's image and flushed any enqueued decommits for this memory. Note
+    /// that if `image` is `None` then this is not required.
     pub unsafe fn deallocate(
         &self,
         allocation_index: MemoryAllocationIndex,
-        image: MemoryImageSlot,
+        image: Option<MemoryImageSlot>,
         bytes_resident: usize,
     ) {
         self.return_memory_image_slot(allocation_index, image);
@@ -520,7 +525,7 @@ impl MemoryPool {
                     let index = MemoryAllocationIndex(id.0);
                     if let Ok(mut slot) = self.take_memory_image_slot(index) {
                         if slot.remove_image().is_ok() {
-                            self.return_memory_image_slot(index, slot);
+                            self.return_memory_image_slot(index, Some(slot));
                         }
                     }
 
@@ -587,16 +592,23 @@ impl MemoryPool {
     }
 
     /// Return ownership of the given image slot.
+    ///
+    /// If `slot` is not provided then it's reset with `Unknown` meaning a
+    /// future allocation will need to pave over it to use it.
     fn return_memory_image_slot(
         &self,
         allocation_index: MemoryAllocationIndex,
-        slot: MemoryImageSlot,
+        slot: Option<MemoryImageSlot>,
     ) {
-        assert!(!slot.is_dirty());
-
         let prev = mem::replace(
             &mut *self.image_slots[allocation_index.index()].lock().unwrap(),
-            ImageSlot::PreviouslyUsed(slot),
+            match slot {
+                Some(slot) => {
+                    assert!(!slot.is_dirty());
+                    ImageSlot::PreviouslyUsed(slot)
+                }
+                None => ImageSlot::Unknown,
+            },
         );
         assert!(matches!(prev, ImageSlot::Unknown));
     }
