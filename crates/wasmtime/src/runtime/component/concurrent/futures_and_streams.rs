@@ -3315,7 +3315,7 @@ impl Instance {
                     // Fast path memcpy for "flat" (i.e. no pointers or handles) payloads:
                     let store_opaque = store.store_opaque_mut();
 
-                    debug_assert_eq!(read_length_in_bytes, write_length_in_bytes);
+                    assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
                     if write_caller_instance == read_caller_instance {
                         let memory = self.options_memory_mut(store_opaque, read_options);
@@ -3330,6 +3330,16 @@ impl Instance {
                         let dst = self.options_memory_mut(store_opaque, read_options)
                             [read_address..][..read_length_in_bytes]
                             .as_mut_ptr();
+
+                        // SAFETY: Both `src` and `dst` have been validated
+                        // above to be valid pointers as they're derived from
+                        // slices that have the desired length with the desired
+                        // read/write permission. The `unsafe` bit here is that
+                        // the memories are disjoint (present in different
+                        // instances) and there's no easy way to borrow both
+                        // simultaneously from the store. Different instances
+                        // are guaranteed to be disjoint, however, so the
+                        // `unsafe` here should be ok.
                         unsafe {
                             src.copy_to_nonoverlapping(dst, write_length_in_bytes);
                         }
