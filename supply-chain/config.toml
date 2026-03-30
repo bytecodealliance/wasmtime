@@ -384,10 +384,6 @@ criteria = "safe-to-deploy"
 version = "0.4.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.object]]
-version = "0.36.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.once_cell]]
 version = "1.12.0"
 criteria = "safe-to-deploy"
