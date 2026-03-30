@@ -67,8 +67,8 @@ impl SharedMemory {
     }
 
     /// Return the memory type for this [`SharedMemory`].
-    pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.ty
+    pub fn ty(&self) -> &wasmtime_environ::Memory {
+        &self.0.ty
     }
 
     /// Convert this shared memory into a [`Memory`].
@@ -170,10 +170,6 @@ impl SharedMemory {
             let mut waiter = waiter.borrow_mut();
             Ok(self.0.spot.wait64(atomic, expected, deadline, &mut waiter))
         })
-    }
-
-    pub(crate) fn page_size(&self) -> u64 {
-        self.0.ty.page_size()
     }
 
     pub(crate) fn byte_size(&self) -> usize {
