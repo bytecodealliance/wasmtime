@@ -112,6 +112,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, config: &FindConfig) -> Res
 fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
     ret.spec_test = Some(true);
+    ret.bulk_memory = Some(true);
     match spec_proposal_from_path(test) {
         Some("wide-arithmetic") => {
             ret.wide_arithmetic = Some(true);
@@ -248,6 +249,7 @@ impl fmt::Debug for WastTest {
 macro_rules! foreach_config_option {
     ($m:ident) => {
         $m! {
+            bulk_memory
             memory64
             custom_page_sizes
             multi_memory

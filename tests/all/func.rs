@@ -1425,7 +1425,7 @@ fn wrap_multiple_results(config: &mut Config) -> wasmtime::Result<()> {
     }
 }
 
-#[wasmtime_test(wasm_features(reference_types, gc_types))]
+#[wasmtime_test(wasm_features(reference_types, gc_types, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1675,7 +1675,7 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> wasmtime::Result<()>
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(function_references))]
+#[wasmtime_test(wasm_features(function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn typed_concrete_param(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1748,7 +1748,7 @@ fn typed_concrete_param(config: &mut Config) -> wasmtime::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(function_references))]
+#[wasmtime_test(wasm_features(function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn typed_concrete_result(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1924,7 +1924,7 @@ fn call_wasm_passing_subtype_func_param(config: &mut Config) -> wasmtime::Result
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(gc, function_references))]
+#[wasmtime_test(wasm_features(gc, function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn call_wasm_getting_subtype_func_return(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;

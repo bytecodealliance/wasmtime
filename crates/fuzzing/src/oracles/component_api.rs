@@ -142,6 +142,7 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
     let mut config = input.arbitrary::<generators::Config>()?;
     config.enable_async(input)?;
     config.module_config.config.multi_value_enabled = true;
+    config.module_config.config.bulk_memory_enabled = true;
     config.module_config.config.reference_types_enabled = true;
     config.module_config.config.max_memories = 2;
     config.module_config.component_model_async = true;

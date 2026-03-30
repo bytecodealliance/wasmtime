@@ -1,3 +1,5 @@
+;;! bulk_memory = true
+
 (module $m
   (memory (export "mem") 1)
 

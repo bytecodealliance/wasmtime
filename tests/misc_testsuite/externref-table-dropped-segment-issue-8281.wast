@@ -1,4 +1,5 @@
 ;;! reference_types = true
+;;! bulk_memory = true
 
 (module
   (table $t 0 0 externref)

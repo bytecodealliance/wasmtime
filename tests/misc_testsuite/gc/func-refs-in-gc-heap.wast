@@ -1,4 +1,5 @@
 ;;! gc = true
+;;! bulk_memory = true
 
 (module
   (type $f0 (func (result i32)))

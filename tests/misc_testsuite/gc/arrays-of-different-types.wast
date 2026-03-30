@@ -1,5 +1,6 @@
 ;;! gc = true
 ;;! simd = true
+;;! bulk_memory = true
 
 (module
   (type $func_ty (func))

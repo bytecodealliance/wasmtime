@@ -1,5 +1,6 @@
 ;;! memory64 = true
 ;;! multi_memory = true
+;;! bulk_memory = true
 
 ;; 64 => 64
 (module

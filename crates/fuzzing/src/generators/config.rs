@@ -122,6 +122,7 @@ impl Config {
     /// to execute all tests.
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
         let wasmtime_test_util::wast::TestConfig {
+            bulk_memory,
             memory64,
             custom_page_sizes,
             multi_memory,
@@ -174,7 +175,7 @@ impl Config {
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
         let config = &mut self.module_config.config;
-        config.bulk_memory_enabled = true;
+        config.bulk_memory_enabled = bulk_memory.unwrap_or(false);
         config.multi_value_enabled = true;
         config.wide_arithmetic_enabled = wide_arithmetic.unwrap_or(false);
         config.memory64_enabled = memory64.unwrap_or(false);
@@ -285,7 +286,7 @@ impl Config {
             self.wasmtime.memory_guaranteed_dense_image_size,
         ));
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
-        cfg.wasm.bulk_memory = Some(true);
+        cfg.wasm.bulk_memory = Some(self.module_config.config.bulk_memory_enabled);
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
         cfg.wasm.component_model_async_builtins =
             Some(self.module_config.component_model_async_builtins);

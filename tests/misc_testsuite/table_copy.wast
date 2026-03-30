@@ -1,3 +1,5 @@
+;;! bulk_memory = true
+
 (module
   (func $f (param i32 i32 i32) (result i32) (local.get 0))
   (func $g (param i32 i32 i32) (result i32) (local.get 1))
