@@ -142,7 +142,6 @@ impl Status {
 #[derive(Clone, Copy, Debug)]
 enum Event {
     None,
-    Cancelled,
     Subtask {
         status: Status,
     },
@@ -162,6 +161,7 @@ enum Event {
         code: ReturnCode,
         pending: Option<(TypeFutureTableIndex, u32)>,
     },
+    Cancelled,
 }
 
 impl Event {

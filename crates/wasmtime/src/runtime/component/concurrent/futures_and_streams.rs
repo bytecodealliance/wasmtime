@@ -14,7 +14,7 @@ use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use crate::{
-    Error, Result, bail, bail_bug, ensure,
+    Error, Result, Trap, bail, bail_bug, ensure,
     error::{Context as _, format_err},
 };
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
@@ -3423,10 +3423,7 @@ impl Instance {
         self.check_bounds(store.0, options, ty, address, count)?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Write { done } = *state else {
-            bail!(
-                "invalid handle {handle}; expected `Write`; got {:?}",
-                *state
-            );
+            bail!(Trap::ConcurrentFutureStreamOp);
         };
 
         if done {
@@ -3668,7 +3665,7 @@ impl Instance {
         self.check_bounds(store.0, options, ty, address, count)?;
         let (rep, state) = self.id().get_mut(store.0).get_mut_by_index(ty, handle)?;
         let TransmitLocalState::Read { done } = *state else {
-            bail_bug!("invalid handle {handle}; expected `Read`; got {:?}", *state);
+            bail!(Trap::ConcurrentFutureStreamOp);
         };
 
         if done {
