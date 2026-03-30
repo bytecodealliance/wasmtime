@@ -11,6 +11,7 @@
 use super::PoolingInstanceAllocator;
 use crate::vm::{MemoryAllocationIndex, MemoryImageSlot, Table, TableAllocationIndex};
 use smallvec::SmallVec;
+use std::io;
 
 #[cfg(feature = "async")]
 use wasmtime_fiber::FiberStack;
@@ -156,18 +157,13 @@ impl DecommitQueue {
     }
 
     /// Returns if any decommit call failed.
-    fn decommit_all_raw(&mut self) -> bool {
-        let mut all_ok = true;
+    fn decommit_all_raw(&mut self) -> io::Result<()> {
         for iovec in self.raw.drain(..) {
-            let result = unsafe {
-                crate::vm::sys::vm::decommit_pages(iovec.0.iov_base.cast(), iovec.0.iov_len)
-            };
-            if let Err(e) = result {
-                log::warn!("decommit_pages failure: {e}");
-                all_ok = false;
+            unsafe {
+                crate::vm::sys::vm::decommit_pages(iovec.0.iov_base.cast(), iovec.0.iov_len)?;
             }
         }
-        all_ok
+        Ok(())
     }
 
     /// Flush this queue, decommitting all enqueued regions in batch.
@@ -176,7 +172,7 @@ impl DecommitQueue {
     /// the associated free lists; `false` if the queue was empty.
     pub fn flush(mut self, pool: &PoolingInstanceAllocator) -> bool {
         // First, do the raw decommit syscall(s).
-        let decommit_succeeded = self.decommit_all_raw();
+        let decommit_succeeded = self.decommit_all_raw().is_ok();
 
         // Second, restore the various entities to their associated pools' free
         // lists. This is safe, and they are ready for reuse, now that their
