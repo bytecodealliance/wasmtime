@@ -175,7 +175,10 @@ impl MmapFiberStack {
         let size = if size == 0 {
             page_size
         } else {
-            (size + (page_size - 1)) & (!(page_size - 1))
+            let with_extra = size
+                .checked_add(page_size - 1)
+                .ok_or(io::ErrorKind::OutOfMemory)?;
+            with_extra & (!(page_size - 1))
         };
 
         unsafe {
@@ -451,7 +454,9 @@ mod asan {
 
     pub fn new_fiber_stack(size: usize) -> std::io::Result<Box<dyn RuntimeFiberStack>> {
         let page_size = host_page_size();
-        let needed_size = size + page_size;
+        let needed_size = size
+            .checked_add(page_size)
+            .ok_or(std::io::ErrorKind::OutOfMemory)?;
         let mut stacks = FIBER_STACKS.lock().unwrap();
 
         let stack = match stacks.iter().position(|i| needed_size <= i.mapping_len) {
