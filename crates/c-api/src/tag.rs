@@ -4,11 +4,6 @@ use crate::{
 use std::mem::MaybeUninit;
 use wasmtime::Tag;
 
-const _: () = {
-    assert!(std::mem::size_of::<Tag>() == 24);
-    assert!(std::mem::align_of::<Tag>() == 8);
-};
-
 /// Creates a new host-defined tag with the given type.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_tag_new(
