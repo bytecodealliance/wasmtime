@@ -1727,6 +1727,15 @@ where
 
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
 
+        // Similar to the memory.grow builtin, `table.grow` returns a
+        // pointer, however, we need to ensure that the returned index
+        // is representative of the 32-bit address space for tables.
+        if self.env.ptr_type() == WasmValType::I64 {
+            let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
+            self.masm.wrap(writable!(top), top)?;
+            self.context.stack.push(TypedReg::i32(top).into());
+        }
+
         Ok(())
     }
 
