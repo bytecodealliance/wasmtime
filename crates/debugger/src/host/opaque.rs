@@ -503,7 +503,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
                 .wasm_function_index_and_pc(&mut store)
                 .map_err(|_| wit::Error::InvalidFrame)?
                 .ok_or(wit::Error::NonWasmFrame)?;
-            Ok((func.as_u32(), pc))
+            Ok((func.as_u32(), pc.raw()))
         })
         .await?
     }
@@ -556,7 +556,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             store
                 .edit_breakpoints()
                 .expect("guest debugging is enabled")
-                .add_breakpoint(&module, pc)
+                .add_breakpoint(&module, wasmtime::ModulePC::new(pc))
                 .map_err(|_| wit::Error::InvalidPc)?;
             Ok(())
         })
@@ -568,7 +568,7 @@ impl<T: Send + 'static> OpaqueDebugger for crate::Debuggee<T> {
             store
                 .edit_breakpoints()
                 .expect("guest debugging is enabled")
-                .remove_breakpoint(&module, pc)
+                .remove_breakpoint(&module, wasmtime::ModulePC::new(pc))
                 .map_err(|_| wit::Error::InvalidPc)?;
             Ok(())
         })

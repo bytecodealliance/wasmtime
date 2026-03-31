@@ -35,28 +35,28 @@
 ;;       mov     x0, x2
 ;;       stur    x2, [sp, #0x10]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 53, slot at FP-0xc0, locals , stack 
-;;       ╰─╼ breakpoint patch: wasm PC 53, patch bytes [38, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x35, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x35, patch bytes [38, 1, 0, 148]
 ;;       ldur    x0, [sp, #0x10]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 55, slot at FP-0xc0, locals , stack 
-;;       ╰─╼ breakpoint patch: wasm PC 55, patch bytes [36, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x37, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x37, patch bytes [36, 1, 0, 148]
 ;;       ldur    x0, [sp, #0x10]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 61, slot at FP-0xc0, locals , stack 
-;;       ╰─╼ breakpoint patch: wasm PC 61, patch bytes [34, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x3d, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x3d, patch bytes [34, 1, 0, 148]
 ;;       mov     w19, #0x2a
 ;;       stur    w19, [sp, #8]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 63, slot at FP-0xc0, locals , stack I32 @ slot+0x8
-;;       ╰─╼ breakpoint patch: wasm PC 63, patch bytes [31, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x3f, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ breakpoint patch: wasm PC 0x3f, patch bytes [31, 1, 0, 148]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 64, slot at FP-0xc0, locals , stack 
-;;       ╰─╼ breakpoint patch: wasm PC 64, patch bytes [30, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x40, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x40, patch bytes [30, 1, 0, 148]
 ;;       stur    w19, [sp, #8]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 66, slot at FP-0xc0, locals , stack I32 @ slot+0x8
-;;       ╰─╼ breakpoint patch: wasm PC 66, patch bytes [28, 1, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x42, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ breakpoint patch: wasm PC 0x42, patch bytes [28, 1, 0, 148]
 ;;       ldur    x2, [sp, #0x10]
 ;;       bl      #0x448
 ;;   84: mov     x20, x2
@@ -89,7 +89,7 @@
 ;;       bl      #0x3dc
 ;;   ec: ldur    x2, [sp, #0x10]
 ;;       bl      #0x414
-;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 66, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x42, slot at FP-0xc0, locals , stack I32 @ slot+0x8
 ;;   f4: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;       mov     x2, x0
 ;;       mov     w3, w2
@@ -110,21 +110,21 @@
 ;;       stur    w0, [sp, #8]
 ;;       ldur    x0, [sp, #0x10]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 72, slot at FP-0xc0, locals , stack I32 @ slot+0x8
-;;       ╰─╼ breakpoint patch: wasm PC 72, patch bytes [234, 0, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x48, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ breakpoint patch: wasm PC 0x48, patch bytes [234, 0, 0, 148]
 ;;       ldur    x1, [sp, #0x10]
 ;;       ldr     x0, [x1, #0x30]
 ;;       ldr     x2, [x1, #0x40]
 ;;       ldur    x3, [sp, #0x10]
 ;;       blr     x0
-;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 74, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x4a, slot at FP-0xc0, locals , stack I32 @ slot+0x8
 ;;  158: ldur    x0, [sp, #0x10]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 74, slot at FP-0xc0, locals , stack I32 @ slot+0x8
-;;       ╰─╼ breakpoint patch: wasm PC 74, patch bytes [227, 0, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x4a, slot at FP-0xc0, locals , stack I32 @ slot+0x8
+;;       ╰─╼ breakpoint patch: wasm PC 0x4a, patch bytes [227, 0, 0, 148]
 ;;       nop
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 75, slot at FP-0xc0, locals , stack 
-;;       ╰─╼ breakpoint patch: wasm PC 75, patch bytes [226, 0, 0, 148]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x4b, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x4b, patch bytes [226, 0, 0, 148]
 ;;       add     sp, sp, #0x30
 ;;       ldp     d8, d9, [sp], #0x10
 ;;       ldp     d10, d11, [sp], #0x10
@@ -142,7 +142,7 @@
 ;;  19c: bl      #0x3dc
 ;;  1a0: ldur    x2, [sp, #0x10]
 ;;  1a4: bl      #0x414
-;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 52, slot at FP-0xc0, locals , stack 
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x34, slot at FP-0xc0, locals , stack 
 ;;  1a8: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  1ac: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  1b0: .byte   0x1f, 0xc1, 0x00, 0x00

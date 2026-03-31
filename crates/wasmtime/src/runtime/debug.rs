@@ -20,6 +20,8 @@ use alloc::vec::Vec;
 use core::{ffi::c_void, ptr::NonNull};
 #[cfg(feature = "gc")]
 use wasmtime_environ::FrameTable;
+// Re-export ModulePC so downstream crates can use it.
+pub use wasmtime_environ::ModulePC;
 use wasmtime_environ::{
     DefinedFuncIndex, EntityIndex, FrameInstPos, FrameStackShape, FrameStateSlot,
     FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
@@ -537,13 +539,13 @@ impl FrameHandle {
     }
 
     /// Get the raw function index associated with the current frame, and the
-    /// PC as an offset within its code section, if it is a Wasm
-    /// function directly from the given `Module` (rather than a
-    /// trampoline).
+    /// module-relative PC as an offset within the module binary, if
+    /// this is a Wasm function directly from the given `Module`
+    /// (rather than a trampoline).
     pub fn wasm_function_index_and_pc(
         &self,
         mut store: impl AsContextMut,
-    ) -> Result<Option<(DefinedFuncIndex, u32)>> {
+    ) -> Result<Option<(DefinedFuncIndex, ModulePC)>> {
         let mut store = store.as_context_mut();
         let frame_data = self.frame_data(store.0.as_store_opaque())?;
         let FuncKey::DefinedWasmFunction(module, func) = frame_data.func_key else {
@@ -659,8 +661,8 @@ impl FrameDataCache {
 /// This represents one frame as produced by the progpoint lookup
 /// (Wasm PC, frame descriptor index, stack shape).
 struct VirtualFrame {
-    /// The Wasm PC for this frame.
-    wasm_pc: u32,
+    /// The module-relative Wasm PC for this frame.
+    wasm_pc: ModulePC,
     /// The frame descriptor for this frame.
     frame_descriptor: FrameTableDescriptorIndex,
     /// The stack shape for this frame.
@@ -697,7 +699,7 @@ impl VirtualFrame {
 struct FrameData {
     slot_to_fp_offset: usize,
     func_key: FuncKey,
-    wasm_pc: u32,
+    wasm_pc: ModulePC,
     /// Shape of locals in this frame.
     ///
     /// We need to store this locally because `FrameView` cannot
@@ -959,15 +961,15 @@ pub(crate) struct BreakpointState {
 pub struct Breakpoint {
     /// Reference to the module in which we are setting the breakpoint.
     pub module: Module,
-    /// Wasm PC offset within the module.
-    pub pc: u32,
+    /// Module-relative Wasm PC offset.
+    pub pc: ModulePC,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct BreakpointKey(CompiledModuleId, u32);
+struct BreakpointKey(CompiledModuleId, ModulePC);
 
 impl BreakpointKey {
-    fn from_raw(module: &Module, pc: u32) -> BreakpointKey {
+    fn from_raw(module: &Module, pc: ModulePC) -> BreakpointKey {
         BreakpointKey(module.id(), pc)
     }
 
@@ -1081,7 +1083,7 @@ impl<'a> BreakpointEdit<'a> {
     /// available opcode PC.
     ///
     /// No effect if the breakpoint is already set.
-    pub fn add_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+    pub fn add_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
         let frame_table = module
             .frame_table()
             .expect("Frame table must be present when guest-debug is enabled");
@@ -1113,7 +1115,7 @@ impl<'a> BreakpointEdit<'a> {
     /// that module.
     ///
     /// No effect if the breakpoint was not set.
-    pub fn remove_breakpoint(&mut self, module: &Module, pc: u32) -> Result<()> {
+    pub fn remove_breakpoint(&mut self, module: &Module, pc: ModulePC) -> Result<()> {
         let requested_key = BreakpointKey::from_raw(module, pc);
         let actual_key = self
             .state

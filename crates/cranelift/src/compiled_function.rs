@@ -6,7 +6,7 @@ use cranelift_codegen::{
     isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{
-    FilePos, FrameStateSlotBuilder, InstructionAddressMap, PrimaryMap, TrapInformation,
+    FilePos, FrameStateSlotBuilder, InstructionAddressMap, ModulePC, PrimaryMap, TrapInformation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -67,8 +67,8 @@ pub struct CompiledFunction {
     metadata: CompiledFunctionMetadata,
     /// Debug metadata for the top-level function's state slot.
     pub debug_slot_descriptor: Option<FrameStateSlotBuilder>,
-    /// Debug breakpoint patches: Wasm PC, offset range in buffer.
-    pub breakpoint_patch_points: Vec<(u32, Range<u32>)>,
+    /// Debug breakpoint patches: module-relative Wasm PC, offset range in buffer.
+    pub breakpoint_patch_points: Vec<(ModulePC, Range<u32>)>,
 }
 
 impl CompiledFunction {
@@ -120,7 +120,7 @@ impl CompiledFunction {
             // second-to-last tag will get the innermost Wasm PC (if
             // there are multiple nested frames due to inlining).
             assert!(tag.tags.len() >= 3);
-            let ir::DebugTag::User(wasm_pc) = tag.tags[tag.tags.len() - 2] else {
+            let ir::DebugTag::User(wasm_pc_raw) = tag.tags[tag.tags.len() - 2] else {
                 panic!("invalid tag")
             };
 
@@ -128,7 +128,7 @@ impl CompiledFunction {
             let patchable_end = patchable_callsite.ret_addr;
 
             self.breakpoint_patch_points
-                .push((wasm_pc, patchable_start..patchable_end));
+                .push((ModulePC::new(wasm_pc_raw), patchable_start..patchable_end));
 
             tags.next();
             patchable_callsites.next();
@@ -218,7 +218,7 @@ impl CompiledFunction {
     /// Returns an iterator over breakpoint patches for this function.
     ///
     /// Each tuple is (wasm PC, buffer offset range).
-    pub fn breakpoint_patches(&self) -> impl Iterator<Item = (u32, Range<u32>)> + '_ {
+    pub fn breakpoint_patches(&self) -> impl Iterator<Item = (ModulePC, Range<u32>)> + '_ {
         self.breakpoint_patch_points.iter().cloned()
     }
 }

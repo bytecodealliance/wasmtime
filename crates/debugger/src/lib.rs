@@ -586,7 +586,8 @@ mod test {
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
                         .unwrap()
-                        .1,
+                        .1
+                        .raw(),
                     36
                 );
                 assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
@@ -618,7 +619,8 @@ mod test {
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
                         .unwrap()
-                        .1,
+                        .1
+                        .raw(),
                     38
                 );
                 assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
@@ -651,7 +653,8 @@ mod test {
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
                         .unwrap()
-                        .1,
+                        .1
+                        .raw(),
                     40
                 );
                 assert_eq!(frame.num_locals(&mut store).unwrap(), 2);
@@ -685,7 +688,8 @@ mod test {
                         .wasm_function_index_and_pc(&mut store)
                         .unwrap()
                         .unwrap()
-                        .1,
+                        .1
+                        .raw(),
                     41
                 );
                 assert_eq!(frame.num_locals(&mut store).unwrap(), 2);

@@ -26,12 +26,12 @@ use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
-    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables, TypeConvert, TypeIndex,
-    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmValType,
+    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
+    EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
+    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables,
+    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
+    WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -135,6 +135,11 @@ pub struct FuncEnvironment<'module_environment> {
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
     needs_gc_heap: bool,
     entities: WasmEntities,
+
+    /// The byte offset of the module's wasm binary within the outer
+    /// binary (e.g. a component). Used to make source locations in
+    /// guest-debug frame tables module-relative.
+    pub(crate) wasm_module_offset: u64,
 
     /// Translation state at the given point.
     pub(crate) stacks: FuncTranslationStacks,
@@ -285,6 +290,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
+            wasm_module_offset: translation.wasm_module_offset,
         }
     }
 
@@ -1229,10 +1235,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 .last()
                 .map(|s| s.raw())
                 .unwrap_or(u32::MAX);
-            let pc = srcloc.bits();
+            // Convert component-relative srcloc to module-relative
+            // Wasm PC for the frame table. The srcloc on the builder
+            // remains component-relative for native DWARF and other
+            // purposes, but the frame table must be module-relative
+            // because the guest-debug API presents a purely core-Wasm
+            // view of the world where components are deconstructed
+            // into core Wasm modules.
+            let component_pc = ComponentPC::new(srcloc.bits());
+            let module_pc = component_pc.to_module_pc(self.wasm_module_offset);
             vec![
                 ir::DebugTag::StackSlot(*slot),
-                ir::DebugTag::User(pc),
+                ir::DebugTag::User(module_pc.raw()),
                 ir::DebugTag::User(stack_shape),
             ]
         } else {

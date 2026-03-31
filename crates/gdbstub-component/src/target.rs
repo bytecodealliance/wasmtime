@@ -306,9 +306,12 @@ impl<'a> Libraries for Debugger<'a> {
         buf: &mut [u8],
     ) -> TargetResult<usize, Self> {
         let mut xml = String::from("<library-list>");
-        for addr in self.addr_space.module_base_addrs() {
+        for (i, addr) in self.addr_space.module_base_addrs().enumerate() {
+            // Each library entry needs a unique name; LLDB's
+            // DynamicLoader deduplicates by name, so using the same
+            // name for all modules causes only the first to be loaded.
             xml.push_str(&format!(
-                "<library name=\"wasm\"><section address=\"{}\"/></library>",
+                "<library name=\"wasm-{i}\"><section address=\"{}\"/></library>",
                 addr.as_raw()
             ));
         }
