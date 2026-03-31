@@ -6,13 +6,13 @@ use super::{
     regs::{self, rbp, rsp, scratch_fpr_bitset, scratch_gpr_bitset},
 };
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm as I, IntCmpKind,
-    IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
-    RemKind, ReplaceLaneKind, RmwOp, RoundingMode, Scratch, ScratchType, ShiftKind, SplatKind,
-    StoreKind, TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind,
-    V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind,
-    V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind,
-    VectorEqualityKind, Zero,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm, Imm as I,
+    IntCmpKind, IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind,
+    OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, Scratch, ScratchType,
+    ShiftKind, SplatKind, StoreKind, TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS,
+    V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind,
+    V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
+    VectorCompareKind, VectorEqualityKind, Zero,
 };
 use crate::{
     Result,
@@ -484,15 +484,30 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn add_uextend(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        _from_size: OperandSize,
+        size: OperandSize,
+    ) -> Result<()> {
+        // On x64, 32-bit operations automatically zero-extend to 64 bits,
+        // so we can just use regular add.
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
+        self.asm.add_rr(rhs, dst, size);
+        Ok(())
+    }
+
     fn checked_uadd(
         &mut self,
         dst: WritableReg,
         lhs: Reg,
-        rhs: RegImm,
+        rhs: Imm,
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()> {
-        self.add(dst, lhs, rhs, size)?;
+        self.add(dst, lhs, RegImm::Imm(rhs), size)?;
         self.asm.trapif(CC::B, trap);
         Ok(())
     }
