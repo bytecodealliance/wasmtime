@@ -682,6 +682,7 @@ where
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None)?);
+
         let offset = bounds::ensure_index_and_offset(
             self.masm,
             index,
@@ -754,7 +755,7 @@ where
             self.masm.checked_uadd(
                 writable!(index_offset_and_access_size),
                 index_offset_and_access_size,
-                RegImm::i64(offset_with_access_size as i64),
+                Imm::i64(offset_with_access_size as i64),
                 ptr_size,
                 TrapCode::HEAP_OUT_OF_BOUNDS,
             )?;
