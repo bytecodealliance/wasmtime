@@ -5,6 +5,10 @@
 #ifndef WASMTIME_EXN_HH
 #define WASMTIME_EXN_HH
 
+#include <wasmtime/conf.h>
+
+#ifdef WASMTIME_FEATURE_GC
+
 #include <vector>
 #include <wasmtime/error.hh>
 #include <wasmtime/exn.h>
@@ -109,5 +113,7 @@ inline bool Store::Context::has_exception() {
 }
 
 } // namespace wasmtime
+
+#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_EXN_HH

@@ -166,6 +166,7 @@ public:
       wasmtime_context_set_epoch_deadline(ptr, ticks_beyond_current);
     }
 
+#ifdef WASMTIME_FEATURE_GC
     /// \brief Sets the pending exception on the store and returns a Trap.
     ///
     /// This transfers ownership of `exn`. After this call, `exn` is consumed.
@@ -180,6 +181,7 @@ public:
 
     /// \brief Tests whether there is a pending exception on the store.
     inline bool has_exception();
+#endif // WASMTIME_FEATURE_GC
 
     /// \brief Returns the underlying C API pointer.
     const wasmtime_context_t *capi() const { return ptr; }

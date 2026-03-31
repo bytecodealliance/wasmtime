@@ -29,6 +29,10 @@
 #ifndef WASMTIME_EXN_H
 #define WASMTIME_EXN_H
 
+#include <wasmtime/conf.h>
+
+#ifdef WASMTIME_FEATURE_GC
+
 #include <wasm.h>
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
@@ -156,5 +160,7 @@ WASM_API_EXTERN bool wasmtime_context_has_exception(wasmtime_context_t *store);
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_EXN_H
