@@ -1478,11 +1478,12 @@ where
         )?;
 
         if arg.offset != 0 {
-            self.masm.add(
+            self.masm.checked_uadd(
                 writable!(addr.reg),
                 addr.reg,
                 RegImm::i64(arg.offset as i64),
                 OperandSize::S64,
+                TrapCode::HEAP_OUT_OF_BOUNDS,
             )?;
         }
 
@@ -1528,11 +1529,12 @@ where
         )?;
 
         if arg.offset != 0 {
-            self.masm.add(
+            self.masm.checked_uadd(
                 writable!(addr.reg),
                 addr.reg,
                 RegImm::i64(arg.offset as i64),
                 OperandSize::S64,
+                TrapCode::HEAP_OUT_OF_BOUNDS,
             )?;
         }
 

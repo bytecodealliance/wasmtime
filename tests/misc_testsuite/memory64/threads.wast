@@ -80,3 +80,31 @@
 )
 
 (assert_return (invoke "run"))
+
+(module
+  (memory i64 1 1 shared)
+
+  (func (export "notify_oob") (param i64) (result i32)
+    local.get 0
+    i32.const 1
+    memory.atomic.notify offset=0x200
+  )
+  (func (export "wait32_oob") (param i64) (result i32)
+    local.get 0
+    i32.const 1
+    i64.const -1
+    memory.atomic.wait32 offset=0x200
+  )
+  (func (export "wait64_oob") (param i64) (result i32)
+    local.get 0
+    i64.const 1
+    i64.const -1
+    memory.atomic.wait64 offset=0x200
+  )
+)
+(assert_trap (invoke "notify_oob" (i64.const 0xFFFF_FFFF_FFFF_FF00))
+  "out of bounds memory access")
+(assert_trap (invoke "wait32_oob" (i64.const 0xFFFF_FFFF_FFFF_FF00))
+  "out of bounds memory access")
+(assert_trap (invoke "wait64_oob" (i64.const 0xFFFF_FFFF_FFFF_FF00))
+  "out of bounds memory access")
