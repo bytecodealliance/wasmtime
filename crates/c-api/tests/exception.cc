@@ -23,7 +23,7 @@ TEST(Exception, ConstructAndExamine) {
 
   // Create an exception with payload (42, 100).
   std::vector<Val> fields = {Val(int32_t(42)), Val(int64_t(100))};
-  auto exn = Exn::create(cx, tag, tt, fields).unwrap();
+  auto exn = Exn::create(cx, tag, fields).unwrap();
 
   // Read back the tag and verify identity.
   auto exn_tag = exn.tag(cx).unwrap();
@@ -97,8 +97,8 @@ TEST(Exception, HostThrowWasmCatch) {
                   auto cx2 = caller.context();
 
                   std::vector<Val> fields = {Val(int32_t(99))};
-                  auto exn = Exn::create(cx2, tag, tt, fields).unwrap();
-                  return throw_exception(cx2, std::move(exn));
+                  auto exn = Exn::create(cx2, tag, fields).unwrap();
+                  return cx2.throw_exception(std::move(exn));
                 });
 
   std::vector<Extern> imports = {throw_fn, tag};
@@ -111,6 +111,70 @@ TEST(Exception, HostThrowWasmCatch) {
   ASSERT_TRUE(result);
   ASSERT_EQ(result.ok().size(), 1u);
   EXPECT_EQ(result.ok()[0].i32(), 99);
+}
+
+TEST(Exception, ExnRefRoundTripThroughVal) {
+  auto engine = make_engine();
+  Store store(engine);
+  auto cx = store.context();
+
+  // A module that throws an exception and catches it as an exnref.
+  Module module =
+      Module::compile(engine, "(module"
+                              "  (tag $t (param i32))"
+                              "  (export \"tag\" (tag $t))"
+                              "  (func (export \"make_exnref\") (result exnref)"
+                              "    (block $done (result exnref)"
+                              "      (try_table (catch_all_ref $done)"
+                              "        (throw $t (i32.const 55))"
+                              "      )"
+                              "      (unreachable)"
+                              "    )"
+                              "  )"
+                              ")")
+          .unwrap();
+
+  auto instance = Instance::create(cx, module, {}).unwrap();
+
+  auto tag_ext = instance.get(cx, "tag");
+  ASSERT_TRUE(tag_ext.has_value());
+  auto tag = std::get<Tag>(*tag_ext);
+
+  auto make_fn = std::get<Func>(*instance.get(cx, "make_exnref"));
+  auto result = make_fn.call(cx, {});
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result.ok().size(), 1u);
+
+  // The returned value should be an exnref.
+  auto &exnref_val = result.ok()[0];
+  EXPECT_EQ(exnref_val.kind(), ValKind::ExnRef);
+
+  // Pass the exnref back into a wasm function that extracts the i32 payload.
+  Module module2 =
+      Module::compile(engine,
+                      "(module"
+                      "  (import \"host\" \"tag\" (tag $t (param i32)))"
+                      "  (func (export \"read\") (param exnref) (result i32)"
+                      "    (block $done (result i32)"
+                      "      (try_table (catch 0 $done)"
+                      "        (throw_ref (local.get 0))"
+                      "      )"
+                      "      (unreachable)"
+                      "    )"
+                      "  )"
+                      ")")
+          .unwrap();
+
+  std::vector<Extern> imports2 = {tag};
+  auto instance2 = Instance::create(cx, module2, imports2).unwrap();
+  auto read_fn = std::get<Func>(*instance2.get(cx, "read"));
+
+  // Call with the exnref we got back from the first module.
+  std::vector<Val> args = {std::move(exnref_val)};
+  auto result2 = read_fn.call(cx, args);
+  ASSERT_TRUE(result2);
+  ASSERT_EQ(result2.ok().size(), 1u);
+  EXPECT_EQ(result2.ok()[0].i32(), 55);
 }
 
 TEST(Exception, WasmThrowHostCatch) {
@@ -140,8 +204,8 @@ TEST(Exception, WasmThrowHostCatch) {
   auto result = throw_fn.call(cx, {});
   ASSERT_FALSE(result);
 
-  ASSERT_TRUE(has_exception(cx));
-  auto exn = take_exception(cx);
+  ASSERT_TRUE(cx.has_exception());
+  auto exn = cx.take_exception();
   ASSERT_TRUE(exn.has_value());
 
   auto exn_tag = exn->tag(cx).unwrap();

@@ -59,7 +59,6 @@ WASM_API_EXTERN void wasmtime_exn_delete(wasmtime_exn_t *exn);
  *
  * \param store the store context
  * \param tag the tag to associate with this exception
- * \param tag_type the tag type (must match `tag`)
  * \param fields pointer to an array of field values matching the tag's
  *        payload signature
  * \param nfields the number of elements in `fields`
@@ -69,10 +68,11 @@ WASM_API_EXTERN void wasmtime_exn_delete(wasmtime_exn_t *exn);
  *
  * \return NULL on success, or an error on failure.
  */
-WASM_API_EXTERN wasmtime_error_t *
-wasmtime_exn_new(wasmtime_context_t *store, const wasmtime_tag_t *tag,
-                 const wasm_tagtype_t *tag_type, const wasmtime_val_t *fields,
-                 size_t nfields, wasmtime_exn_t **exn_ret);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_exn_new(wasmtime_context_t *store,
+                                                   const wasmtime_tag_t *tag,
+                                                   const wasmtime_val_t *fields,
+                                                   size_t nfields,
+                                                   wasmtime_exn_t **exn_ret);
 
 /**
  * \brief Returns the tag associated with this exception.
@@ -103,6 +103,7 @@ WASM_API_EXTERN size_t wasmtime_exn_field_count(wasmtime_context_t *store,
  * \param exn the exception to query
  * \param index the field index (0-based)
  * \param val_ret on success, filled with the field value
+ *                (caller-owned on return).
  *
  * \return NULL on success, or an error if the index is out of bounds.
  */

@@ -1,6 +1,6 @@
 use crate::{
     WasmStoreRef, WasmtimeStoreContext, wasm_externkind_t, wasm_externtype_t, wasm_func_t,
-    wasm_global_t, wasm_memory_t, wasm_table_t, wasm_tag_t,
+    wasm_global_t, wasm_memory_t, wasm_table_t,
 };
 use std::mem::ManuallyDrop;
 use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table, Tag};
@@ -25,16 +25,6 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         ),
         Extern::Tag(_) => crate::types::WASMTIME_EXTERNTYPE_TAG,
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasm_extern_as_tag(e: &wasm_extern_t) -> Option<&wasm_tag_t> {
-    wasm_tag_t::try_from(e)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn wasm_extern_as_tag_const(e: &wasm_extern_t) -> Option<&wasm_tag_t> {
-    wasm_extern_as_tag(e)
 }
 
 #[unsafe(no_mangle)]

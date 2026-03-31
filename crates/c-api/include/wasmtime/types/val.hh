@@ -30,6 +30,8 @@ enum class ValKind {
   FuncRef,
   /// WebAssembly's `anyref` type
   AnyRef,
+  /// WebAssembly's `exnref` type
+  ExnRef,
 };
 
 /// Helper X macro to construct statement for each enumerator in `ValKind`.
@@ -42,6 +44,7 @@ enum class ValKind {
   X(ExternRef, "externref", WASM_EXTERNREF)                                    \
   X(FuncRef, "funcref", WASM_FUNCREF)                                          \
   X(AnyRef, "anyref", WASMTIME_ANYREF)                                         \
+  X(ExnRef, "exnref", WASMTIME_EXNREF)                                        \
   X(V128, "v128", WASMTIME_V128)
 
 /// \brief Used to print a ValKind.

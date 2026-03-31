@@ -1,7 +1,7 @@
 use crate::{WasmtimeStoreContextMut, abort};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::{num::NonZeroU64, os::raw::c_void, ptr};
-use wasmtime::{AnyRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
+use wasmtime::{AnyRef, ExnRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s
@@ -258,6 +258,7 @@ macro_rules! ref_wrapper {
 
 ref_wrapper!(AnyRef => wasmtime_anyref_t);
 ref_wrapper!(ExternRef => wasmtime_externref_t);
+ref_wrapper!(ExnRef => wasmtime_exnref_t);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
@@ -420,4 +421,22 @@ pub unsafe extern "C" fn wasmtime_externref_from_raw(
     let rooted = ExternRef::from_raw(&mut scope, raw)
         .map(|e| e.to_owned_rooted(&mut scope).expect("in scope"));
     crate::initialize(val, rooted.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_exnref_clone(
+    exnref: Option<&wasmtime_exnref_t>,
+    out: &mut MaybeUninit<wasmtime_exnref_t>,
+) {
+    let exnref = exnref.and_then(|e| e.as_wasmtime());
+    crate::initialize(out, exnref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_exnref_unroot(val: Option<&mut ManuallyDrop<wasmtime_exnref_t>>) {
+    if let Some(val) = val {
+        unsafe {
+            ManuallyDrop::drop(val);
+        }
+    }
 }

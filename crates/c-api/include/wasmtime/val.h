@@ -288,6 +288,60 @@ WASM_API_EXTERN void wasmtime_externref_from_raw(wasmtime_context_t *context,
 WASM_API_EXTERN uint32_t wasmtime_externref_to_raw(
     wasmtime_context_t *context, const wasmtime_externref_t *ref);
 
+/**
+ * \typedef wasmtime_exnref_t
+ * \brief Convenience alias for #wasmtime_exnref
+ *
+ * \struct wasmtime_exnref
+ * \brief A WebAssembly exception reference value.
+ *
+ * This structure represents an `exnref` value, which is a reference to a
+ * WebAssembly exception object. Like other GC reference types, it must be
+ * explicitly unrooted via #wasmtime_exnref_unroot to enable garbage
+ * collection.
+ *
+ * Null exnref values are represented with `store_id == 0`.
+ */
+typedef struct wasmtime_exnref {
+  /// Internal metadata tracking within the store, embedders should not
+  /// configure or modify these fields.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_exnref_t;
+
+/// \brief Helper function to initialize the `ref` provided to a null exnref
+/// value.
+static inline void wasmtime_exnref_set_null(wasmtime_exnref_t *ref) {
+  ref->store_id = 0;
+}
+
+/// \brief Helper function to return whether the provided `ref` points to a null
+/// `exnref` value.
+static inline bool wasmtime_exnref_is_null(const wasmtime_exnref_t *ref) {
+  return ref->store_id == 0;
+}
+
+/**
+ * \brief Creates a new reference pointing to the same exception that `ref`
+ * points to.
+ *
+ * The returned reference is stored in `out`.
+ */
+WASM_API_EXTERN void wasmtime_exnref_clone(const wasmtime_exnref_t *ref,
+                                           wasmtime_exnref_t *out);
+
+/**
+ * \brief Unroots the `ref` provided, enabling future garbage collection.
+ *
+ * After this call, `ref` is left in an undefined state and should not be used.
+ */
+WASM_API_EXTERN void wasmtime_exnref_unroot(wasmtime_exnref_t *ref);
+
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
 /// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i32
@@ -309,6 +363,9 @@ typedef uint8_t wasmtime_valkind_t;
 /// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
 /// anyref
 #define WASMTIME_ANYREF 7
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
+/// exnref
+#define WASMTIME_EXNREF 8
 
 /// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
 /// stored in little-endian order.
@@ -337,6 +394,8 @@ typedef union wasmtime_valunion {
   wasmtime_anyref_t anyref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
   wasmtime_externref_t externref;
+  /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXNREF
+  wasmtime_exnref_t exnref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
   /// Use `wasmtime_funcref_is_null` to test whether this is a null function
@@ -464,7 +523,8 @@ typedef struct wasmtime_val {
  * \brief Unroot the value contained by `val`.
  *
  * This function will unroot any GC references that `val` points to, for
- * example if it has the `WASMTIME_EXTERNREF` or `WASMTIME_ANYREF` kinds. This
+ * example if it has the `WASMTIME_EXTERNREF`, `WASMTIME_ANYREF`, or
+ * `WASMTIME_EXNREF` kinds. This
  * function leaves `val` in an undefined state and it should not be used again
  * without re-initializing.
  *

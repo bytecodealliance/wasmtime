@@ -78,10 +78,6 @@ public:
     friend class Val;
     friend class Store;
     friend class Tag;
-    friend class Exn;
-    friend Trap throw_exception(Store::Context, Exn);
-    friend std::optional<Exn> take_exception(Store::Context);
-    friend bool has_exception(Store::Context);
     wasmtime_context_t *ptr;
 
   public:
@@ -169,6 +165,21 @@ public:
     void set_epoch_deadline(uint64_t ticks_beyond_current) {
       wasmtime_context_set_epoch_deadline(ptr, ticks_beyond_current);
     }
+
+    /// \brief Sets the pending exception on the store and returns a Trap.
+    ///
+    /// This transfers ownership of `exn`. After this call, `exn` is consumed.
+    /// Returns a Trap that the host callback MUST return to propagate the
+    /// exception through Wasm catch blocks.
+    inline Trap throw_exception(Exn exn);
+
+    /// \brief Takes the pending exception from the store, if any.
+    ///
+    /// Returns the exception if one was pending, or std::nullopt.
+    inline std::optional<Exn> take_exception();
+
+    /// \brief Tests whether there is a pending exception on the store.
+    inline bool has_exception();
 
     /// \brief Returns the underlying C API pointer.
     const wasmtime_context_t *capi() const { return ptr; }

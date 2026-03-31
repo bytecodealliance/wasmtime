@@ -318,6 +318,8 @@ public:
       return ValKind::ExternRef;
     case WASMTIME_ANYREF:
       return ValKind::AnyRef;
+    case WASMTIME_EXNREF:
+      return ValKind::ExnRef;
     case WASMTIME_V128:
       return ValKind::V128;
     }
