@@ -229,6 +229,7 @@ where
             ptr_size,
         )?;
     } else {
+        assert!(index_typed.ty == WasmValType::I64);
         masm.add(writable!(dst), dst, index_typed.reg.into(), ptr_size)?;
     }
 
