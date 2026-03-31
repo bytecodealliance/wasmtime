@@ -507,7 +507,7 @@ impl MemoryPool {
         // associated with a module (not just module and memory). The latter
         // would require care to make sure that its maintenance wouldn't be too
         // expensive for normal allocation/free operations.
-        for stripe in &self.stripes {
+        for (stripe_index, stripe) in self.stripes.iter().enumerate() {
             for i in 0..self.memories_per_instance {
                 use wasmtime_environ::EntityRef;
                 let memory_index = DefinedMemoryIndex::new(i);
@@ -522,7 +522,8 @@ impl MemoryPool {
                     // If anything fails then the slot will be in an "unknown"
                     // state which means that on next use it'll be remapped with
                     // anonymous memory.
-                    let index = MemoryAllocationIndex(id.0);
+                    let index = StripedAllocationIndex(id.0)
+                        .as_unstriped_slot_index(stripe_index, self.stripes.len());
                     if let Ok(mut slot) = self.take_memory_image_slot(index) {
                         if slot.remove_image().is_ok() {
                             self.return_memory_image_slot(index, Some(slot));
