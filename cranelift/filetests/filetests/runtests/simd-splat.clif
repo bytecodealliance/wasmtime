@@ -212,3 +212,13 @@ block0(v0: f64):
 ; run: %load_splat_f64x2(0x0.0) == [0x0.0 0x0.0]
 ; run: %load_splat_f64x2(0x2.0) == [0x2.0 0x2.0]
 ; run: %load_splat_f64x2(NaN) == [NaN NaN]
+
+function %splat_ireduce() -> i32 {
+block0:
+    v0 = iconst.i64 0x000000FF_00FFFF00
+    v1 = ireduce.i32 v0
+    v2 = splat.i32x4 v1
+    v3 = extractlane v2, 1
+    return v3
+}
+; run: %splat_ireduce() == 0x00ffff00
