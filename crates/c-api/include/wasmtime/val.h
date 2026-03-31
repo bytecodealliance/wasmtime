@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 struct wasmtime_eqref;
+/// Convenience alias for #wasmtime_eqref
 typedef struct wasmtime_eqref wasmtime_eqref_t;
 
 /**
