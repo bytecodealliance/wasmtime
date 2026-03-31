@@ -484,57 +484,67 @@ where
                     if self.body.is_end_stream() {
                         break 'result Ok(None);
                     } else {
-                        return Poll::Ready(Ok(StreamResult::Completed));
+                        // Destination has zero capacity but the body could still have data. Cannot return
+                        // `Completed` (nothing was produced — violates the StreamProducer contract). Fall
+                        // through to poll the body with `cap = None` so it buffers the frame.
+                        None
                     }
                 }
                 None => None,
             };
-            match Pin::new(&mut self.body).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    match frame.into_data().map_err(http_body::Frame::into_trailers) {
-                        Ok(mut frame) => {
-                            // Libraries like `Reqwest` generate a 0-length frame after sensing end-of-stream,
-                            // so we have to check for the body's end-of-stream indicator here too
-                            if frame.len() == 0 && self.body.is_end_stream() {
-                                break 'result Ok(None);
-                            }
-
-                            if let Some(cap) = cap {
-                                let n = frame.len();
-                                let cap = cap.into();
-                                if n > cap {
-                                    // data frame does not fit in destination, fill it and buffer the rest
-                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
-                                    let mut dst = dst.as_direct(store, cap);
-                                    dst.remaining().copy_from_slice(&frame);
-                                    dst.mark_written(cap);
-                                } else {
-                                    // copy the whole frame into the destination
-                                    let mut dst = dst.as_direct(store, n);
-                                    dst.remaining()[..n].copy_from_slice(&frame);
-                                    dst.mark_written(n);
+            loop {
+                match Pin::new(&mut self.body).poll_frame(cx) {
+                    Poll::Ready(Some(Ok(frame))) => {
+                        match frame.into_data().map_err(http_body::Frame::into_trailers) {
+                            Ok(mut frame) => {
+                                if frame.len() == 0 {
+                                    // Zero-length data frames are valid per the http_body::Body
+                                    // trait contract and RFC 9113 §6.1 — skip and re-poll
+                                    // directly rather than using `wake_by_ref()` + Pending, which
+                                    // would just re-enter this function via the task queue
+                                    if self.body.is_end_stream() {
+                                        break 'result Ok(None);
+                                    }
+                                    continue;
                                 }
-                            } else {
-                                dst.set_buffer(Cursor::new(frame));
+
+                                if let Some(cap) = cap {
+                                    let n = frame.len();
+                                    let cap = cap.into();
+                                    if n > cap {
+                                        // data frame does not fit in destination, fill it and buffer the rest
+                                        dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                        let mut dst = dst.as_direct(store, cap);
+                                        dst.remaining().copy_from_slice(&frame);
+                                        dst.mark_written(cap);
+                                    } else {
+                                        // copy the whole frame into the destination
+                                        let mut dst = dst.as_direct(store, n);
+                                        dst.remaining()[..n].copy_from_slice(&frame);
+                                        dst.mark_written(n);
+                                    }
+                                } else {
+                                    dst.set_buffer(Cursor::new(frame));
+                                }
+                                return Poll::Ready(Ok(StreamResult::Completed));
                             }
-                            return Poll::Ready(Ok(StreamResult::Completed));
+                            Err(Ok(trailers)) => {
+                                let view = (self.getter)(store.data_mut());
+                                let trailers = FieldMap::new_immutable(trailers);
+                                let trailers = view
+                                    .table
+                                    .push(trailers)
+                                    .context("failed to push trailers to table")?;
+                                break 'result Ok(Some(trailers));
+                            }
+                            Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                         }
-                        Err(Ok(trailers)) => {
-                            let view = (self.getter)(store.data_mut());
-                            let trailers = FieldMap::new_immutable(trailers);
-                            let trailers = view
-                                .table
-                                .push(trailers)
-                                .context("failed to push trailers to table")?;
-                            break 'result Ok(Some(trailers));
-                        }
-                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                     }
+                    Poll::Ready(Some(Err(err))) => break 'result Err(err),
+                    Poll::Ready(None) => break 'result Ok(None),
+                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Poll::Ready(Some(Err(err))) => break 'result Err(err),
-                Poll::Ready(None) => break 'result Ok(None),
-                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => return Poll::Pending,
             }
         };
         self.close(res);

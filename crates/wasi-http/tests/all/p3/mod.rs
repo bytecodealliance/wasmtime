@@ -731,3 +731,93 @@ async fn p3_http_data_frame_at_end_of_stream() -> Result<()> {
     assert_eq!(collected_body, expected.as_slice());
     Ok(())
 }
+
+/// Body wrapper that interleaves zero-length data frames with real data.
+///
+/// Zero-length data frames are valid per the `http_body::Body` trait contract and
+/// RFC 9113 §6.1. This wrapper injects `empty_per_frame` empty frames before each
+/// real frame from the inner body, testing that `HostBodyStreamProducer` tolerates them.
+struct BodyWithEmptyFrames {
+    inner: http_body_util::StreamBody<
+        futures::channel::mpsc::Receiver<Result<http_body::Frame<Bytes>, ErrorCode>>,
+    >,
+    /// Number of empty frames to inject before each real frame
+    empty_per_frame: usize,
+    /// Number of empty frames left to inject before the next real frame
+    empty_remaining: usize,
+}
+
+impl http_body::Body for BodyWithEmptyFrames {
+    type Data = Bytes;
+    type Error = ErrorCode;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        if self.empty_remaining > 0 {
+            self.empty_remaining -= 1;
+            return Poll::Ready(Some(Ok(http_body::Frame::data(Bytes::new()))));
+        }
+        let this = &mut *self;
+        let result = Pin::new(&mut this.inner).poll_frame(cx);
+        if matches!(&result, Poll::Ready(Some(Ok(_)))) {
+            // Reset counter so empty frames are injected before the next real frame
+            this.empty_remaining = this.empty_per_frame;
+        }
+        result
+    }
+
+    fn is_end_stream(&self) -> bool {
+        false
+    }
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_empty_frames_interleaved() -> Result<()> {
+    _ = env_logger::try_init();
+
+    // Verifies that zero-length data frames interleaved with real data do not cause
+    // poll_produce to return Completed with 0 items produced.
+    // Pattern: empty, empty, data("hello "), empty, empty, data("world")
+
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(2);
+
+    let wrapped_body = BodyWithEmptyFrames {
+        inner: http_body_util::StreamBody::new(body_rx),
+        empty_per_frame: 2,
+        empty_remaining: 2,
+    };
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET);
+
+    let response = futures::join!(
+        run_http(
+            P3_HTTP_ECHO_COMPONENT,
+            request.body(wrapped_body)?,
+            oneshot::channel().0
+        ),
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(Bytes::from_static(b"hello "))))
+                .await
+                .unwrap();
+            body_tx
+                .send(Ok(http_body::Frame::data(Bytes::from_static(b"world"))))
+                .await
+                .unwrap();
+            drop(body_tx);
+        }
+    )
+    .0?
+    .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+
+    let (_, collected_body) = response.into_parts();
+    let collected_body = collected_body.to_bytes();
+    assert_eq!(collected_body, b"hello world".as_slice());
+    Ok(())
+}
