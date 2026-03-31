@@ -1073,7 +1073,8 @@ where
             masm.load(size_addr, writable!(size), table_data.current_elements_size)
         })?;
 
-        self.context.stack.push(TypedReg::i32(size).into());
+        let dst = TypedReg::new(table_data.index_type(), size);
+        self.context.stack.push(dst.into());
         Ok(())
     }
 
