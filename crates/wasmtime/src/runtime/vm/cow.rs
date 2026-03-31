@@ -460,7 +460,7 @@ impl MemoryImageSlot {
         let host_page_size_log2 = u8::try_from(host_page_size().ilog2()).unwrap();
         if initial_size_bytes_page_aligned < self.accessible
             && (tunables.memory_guard_size > 0
-                || ty.can_elide_bounds_check(tunables, host_page_size_log2))
+                || ty.can_use_virtual_memory(tunables, host_page_size_log2))
         {
             self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
             self.accessible = initial_size_bytes_page_aligned;
