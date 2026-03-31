@@ -1456,7 +1456,6 @@ impl FuncEnvironment<'_> {
         let heap = self.heaps.push(HeapData {
             base,
             bound,
-            pcc_memory_type: None,
             memory,
         });
         self.gc_heap = Some(heap);

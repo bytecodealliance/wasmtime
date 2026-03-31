@@ -236,8 +236,6 @@ wasmtime_option_group! {
         pub cache_config: Option<String>,
         /// Whether or not to enable parallel compilation of modules.
         pub parallel_compilation: Option<bool>,
-        /// Whether to enable proof-carrying code (PCC)-based validation.
-        pub pcc: Option<bool>,
         /// Controls whether native unwind information is present in compiled
         /// object files.
         pub native_unwind_info: Option<bool>,
@@ -815,11 +813,6 @@ impl CommonOptions {
         match_feature! {
             ["cranelift" : self.wasm.nan_canonicalization]
             enable => config.cranelift_nan_canonicalization(enable),
-            true => err,
-        }
-        match_feature! {
-            ["cranelift" : self.codegen.pcc]
-            enable => config.cranelift_pcc(enable),
             true => err,
         }
 

@@ -1,6 +1,6 @@
 //! Heaps to implement WebAssembly linear memories.
 
-use cranelift_codegen::ir::{self, GlobalValue, MemoryType, Type};
+use cranelift_codegen::ir::{self, GlobalValue, Type};
 use cranelift_entity::entity_impl;
 use wasmtime_environ::{IndexType, Memory};
 
@@ -45,9 +45,6 @@ pub struct HeapData {
 
     /// The type of wasm memory that this heap is operating on.
     pub memory: Memory,
-
-    /// The memory type for the pointed-to memory, if using proof-carrying code.
-    pub pcc_memory_type: Option<MemoryType>,
 }
 
 impl HeapData {
