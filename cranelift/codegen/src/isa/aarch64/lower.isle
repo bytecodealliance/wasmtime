@@ -2313,9 +2313,6 @@
 (rule (lower (has_type ty (splat _ (iconst _ (u64_from_imm64 n)))))
       (splat_const n (vector_size ty)))
 
-(rule (lower (has_type ty (splat _ (ireduce _ (iconst _ (u64_from_imm64 n))))))
-      (splat_const n (vector_size ty)))
-
 (rule (lower (has_type ty (splat _ x @ (load _ flags _ _))))
       (if-let mem_op (is_sinkable_inst x))
       (let ((addr Reg (sink_load_into_addr (lane_type ty) mem_op)))
