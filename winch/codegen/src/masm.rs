@@ -1624,13 +1624,26 @@ pub(crate) trait MacroAssembler {
     /// Perform add operation.
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()>;
 
+    /// Perform add with unsigned extension.
+    fn add_uextend(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        from_size: OperandSize,
+        size: OperandSize,
+    ) -> Result<()>;
+
     /// Perform a checked unsigned integer addition, emitting the provided trap
     /// if the addition overflows.
+    ///
+    /// Note: This only accepts immediate operands. For register operands with
+    /// proper extension, use add_uextend with manual overflow checking.
     fn checked_uadd(
         &mut self,
         dst: WritableReg,
         lhs: Reg,
-        rhs: RegImm,
+        rhs: Imm,
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()>;
