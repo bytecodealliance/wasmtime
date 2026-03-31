@@ -35,7 +35,7 @@ class WasiConfig {
       ptrs.push_back(arg.c_str());
     }
 
-    wasi_config_set_argv(ptr.get(), (int)args.size(), ptrs.data());
+    wasi_config_set_argv(ptr.get(), args.size(), ptrs.data());
   }
 
   /// Configures the argv for wasm to be inherited from this process itself.
@@ -51,7 +51,7 @@ class WasiConfig {
       names.push_back(name.c_str());
       values.push_back(value.c_str());
     }
-    wasi_config_set_env(ptr.get(), (int)env.size(), names.data(),
+    wasi_config_set_env(ptr.get(), env.size(), names.data(),
                         values.data());
   }
 
@@ -67,7 +67,7 @@ class WasiConfig {
 
   /// Configures this WASI configuration to inherit its stdin from the host
   /// process.
-  void inherit_stdin() { return wasi_config_inherit_stdin(ptr.get()); }
+  void inherit_stdin() { wasi_config_inherit_stdin(ptr.get()); }
 
   /// Configures the provided file to be created and all stdout output will be
   /// written there.
@@ -77,7 +77,7 @@ class WasiConfig {
 
   /// Configures this WASI configuration to inherit its stdout from the host
   /// process.
-  void inherit_stdout() { return wasi_config_inherit_stdout(ptr.get()); }
+  void inherit_stdout() { wasi_config_inherit_stdout(ptr.get()); }
 
   /// Configures the provided file to be created and all stderr output will be
   /// written there.
@@ -85,9 +85,9 @@ class WasiConfig {
     return wasi_config_set_stderr_file(ptr.get(), path.c_str());
   }
 
-  /// Configures this WASI configuration to inherit its stdout from the host
+  /// Configures this WASI configuration to inherit its stderr from the host
   /// process.
-  void inherit_stderr() { return wasi_config_inherit_stderr(ptr.get()); }
+  void inherit_stderr() { wasi_config_inherit_stderr(ptr.get()); }
 
   /// Opens `path` to be opened as `guest_path` in the WASI pseudo-filesystem.
   [[nodiscard]] bool preopen_dir(const std::string &path,
@@ -95,6 +95,14 @@ class WasiConfig {
                                  size_t dir_perms, size_t file_perms) {
     return wasi_config_preopen_dir(ptr.get(), path.c_str(), guest_path.c_str(),
                                    dir_perms, file_perms);
+  }
+
+  /// Allows all network addresses accessible to the host.
+  void inherit_network() { wasi_config_inherit_network(ptr.get()); }
+
+  /// Configures whether `wasi:sockets/ip-name-lookup` is allowed.
+  void allow_ip_name_lookup(bool enable) {
+    wasi_config_allow_ip_name_lookup(ptr.get(), enable);
   }
 };
 

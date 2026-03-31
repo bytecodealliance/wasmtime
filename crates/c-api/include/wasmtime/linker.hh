@@ -180,7 +180,7 @@ class Linker {
 
   /// \brief Defines any import of `module` previously unknown to this linker
   /// as a trap.
-  Result<std::monostate> define_unknown_imports_as_traps(Module &module) {
+  Result<std::monostate> define_unknown_imports_as_traps(const Module &module) {
     auto *error = wasmtime_linker_define_unknown_imports_as_traps(
         ptr.get(), module.capi());
     if (error != nullptr) {
@@ -193,7 +193,8 @@ class Linker {
   /// as the "default" value for that import, for example a function that
   /// returns zeros.
   Result<std::monostate>
-  define_unknown_imports_as_default_values(Store::Context cx, Module &module) {
+  define_unknown_imports_as_default_values(Store::Context cx,
+                                           const Module &module) {
     auto *error = wasmtime_linker_define_unknown_imports_as_default_values(
         ptr.get(), cx.ptr, module.capi());
     if (error != nullptr) {

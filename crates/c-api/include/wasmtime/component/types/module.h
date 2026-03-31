@@ -24,7 +24,7 @@ WASM_API_EXTERN
 wasmtime_module_type_t *
 wasmtime_module_type_clone(const wasmtime_module_type_t *ty);
 
-/// \brief Deallocates a component instance type.
+/// \brief Deallocates a module type.
 WASM_API_EXTERN
 void wasmtime_module_type_delete(wasmtime_module_type_t *ty);
 

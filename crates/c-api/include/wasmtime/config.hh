@@ -397,6 +397,7 @@ class Config {
   void wasm_gc(bool enable) { wasmtime_config_wasm_gc_set(ptr.get(), enable); }
 #endif // WASMTIME_FEATURE_GC
 
+#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly function references proposal
   /// will be enabled
   ///
@@ -404,6 +405,7 @@ class Config {
   void wasm_function_references(bool enable) {
     wasmtime_config_wasm_function_references_set(ptr.get(), enable);
   }
+#endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly wide arithmetic proposal will be
   /// enabled
@@ -524,7 +526,7 @@ class Config {
   /// \brief Configures the size of the initial linear memory allocation.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation
-  void memory_reservation(size_t size) {
+  void memory_reservation(uint64_t size) {
     wasmtime_config_memory_reservation_set(ptr.get(), size);
   }
 
@@ -532,14 +534,14 @@ class Config {
   /// linear memory to grow into.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation_for_growth
-  void memory_reservation_for_growth(size_t size) {
+  void memory_reservation_for_growth(uint64_t size) {
     wasmtime_config_memory_reservation_for_growth_set(ptr.get(), size);
   }
 
   /// \brief Configures the size of memory's guard region
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_guard_size
-  void memory_guard_size(size_t size) {
+  void memory_guard_size(uint64_t size) {
     wasmtime_config_memory_guard_size_set(ptr.get(), size);
   }
 
@@ -668,6 +670,7 @@ public:
   }
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
   /**
    * \brief Specifies whether support for concurrent execution of WebAssembly is
    * supported within this store.
@@ -678,6 +681,38 @@ public:
   void concurrency_support(bool enable) {
     wasmtime_config_concurrency_support_set(ptr.get(), enable);
   }
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+  /**
+   * \brief Configures whether component-model async support is enabled.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async
+   */
+  void wasm_component_model_async(bool enable) {
+    wasmtime_config_wasm_component_model_async_set(ptr.get(), enable);
+  }
+
+  /**
+   * \brief Configures whether async built-in intrinsics are enabled for the
+   * component model.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_builtins
+   */
+  void wasm_component_model_async_builtins(bool enable) {
+    wasmtime_config_wasm_component_model_async_builtins_set(ptr.get(), enable);
+  }
+
+  /**
+   * \brief Configures whether stackful coroutine support is enabled for async
+   * components.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_stackful
+   */
+  void wasm_component_model_async_stackful(bool enable) {
+    wasmtime_config_wasm_component_model_async_stackful_set(ptr.get(), enable);
+  }
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 };
 
 } // namespace wasmtime

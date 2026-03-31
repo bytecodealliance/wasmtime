@@ -31,7 +31,8 @@ class LinkerInstance {
   /**
    * \brief Adds a module to this linker instance under the specified name.
    */
-  Result<std::monostate> add_module(std::string_view name, Module &module) {
+  Result<std::monostate> add_module(std::string_view name,
+                                    const Module &module) {
     wasmtime_error_t *error = wasmtime_component_linker_instance_add_module(
         ptr.get(), name.data(), name.size(), module.capi());
     if (error != nullptr) {
@@ -188,7 +189,7 @@ class Linker {
   }
 
   /// \brief Instantiates the given component within this linker.
-  Result<Instance> instantiate(Store::Context cx, Component &component) {
+  Result<Instance> instantiate(Store::Context cx, const Component &component) {
     wasmtime_component_instance_t ret;
     wasmtime_error_t *error = wasmtime_component_linker_instantiate(
         ptr.get(), cx.capi(), component.capi(), &ret);
@@ -277,4 +278,4 @@ class Linker {
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
-#endif // WASMTIME_COMPONENT_LINKER_H
+#endif // WASMTIME_COMPONENT_LINKER_HH

@@ -23,8 +23,8 @@ typedef struct wasmtime_component_type_t wasmtime_component_type_t;
 
 /// \brief Clones a component type.
 ///
-/// The returned pointer must be deallocated wit
-/// h`wasmtime_component_type_delete`.
+/// The returned pointer must be deallocated with
+/// `wasmtime_component_type_delete`.
 WASM_API_EXTERN
 wasmtime_component_type_t *
 wasmtime_component_type_clone(const wasmtime_component_type_t *ty);

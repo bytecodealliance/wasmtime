@@ -156,15 +156,15 @@ typedef struct wasmtime_extern {
 } wasmtime_extern_t;
 
 /// \brief Deletes a #wasmtime_extern_t.
-void wasmtime_extern_delete(wasmtime_extern_t *val);
+WASM_API_EXTERN void wasmtime_extern_delete(wasmtime_extern_t *val);
 
 /// \brief Returns the type of the #wasmtime_extern_t defined within the given
 /// store.
 ///
 /// Does not take ownership of `context` or `val`, but the returned
 /// #wasm_externtype_t is an owned value that needs to be deleted.
-wasm_externtype_t *wasmtime_extern_type(wasmtime_context_t *context,
-                                        wasmtime_extern_t *val);
+WASM_API_EXTERN wasm_externtype_t *
+wasmtime_extern_type(wasmtime_context_t *context, const wasmtime_extern_t *val);
 
 #ifdef __cplusplus
 } // extern "C"

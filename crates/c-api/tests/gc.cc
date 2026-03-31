@@ -149,7 +149,9 @@ TEST(StructRef, UpcastAndDowncast) {
   EXPECT_FALSE(eq.is_i31(cx));
 
   // Downcast back to structref.
-  StructRef s2 = eq.as_struct(cx);
+  auto s2_opt = eq.as_struct(cx);
+  ASSERT_TRUE(s2_opt.has_value());
+  StructRef s2 = *s2_opt;
   auto v = s2.field(cx, 0);
   ASSERT_TRUE(v);
   EXPECT_EQ(v.ok().i32(), 99);
@@ -217,7 +219,9 @@ TEST(ArrayRef, UpcastAndDowncast) {
   EXPECT_FALSE(eq.is_i31(cx));
 
   // Downcast back to arrayref.
-  ArrayRef arr2 = eq.as_array(cx);
+  auto arr2_opt = eq.as_array(cx);
+  ASSERT_TRUE(arr2_opt.has_value());
+  ArrayRef arr2 = *arr2_opt;
   auto len = arr2.len(cx);
   ASSERT_TRUE(len);
   EXPECT_EQ(len.ok(), 3u);

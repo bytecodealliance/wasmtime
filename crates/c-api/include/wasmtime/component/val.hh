@@ -992,4 +992,4 @@ inline WitResult WitResult::err(std::optional<Val> v) {
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
-#endif // WASMTIME_COMPONENT_VAL_H
+#endif // WASMTIME_COMPONENT_VAL_HH
