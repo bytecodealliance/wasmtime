@@ -1100,7 +1100,7 @@ where
             Imm::i32(pow as i32),
             dst.into(),
             ShiftKind::ShrU,
-            heap_data.index_type().try_into()?,
+            self.env.ptr_type().try_into()?,
         )?;
         self.context.stack.push(dst.into());
         Ok(())
