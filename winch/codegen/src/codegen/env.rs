@@ -41,6 +41,17 @@ pub struct TableData {
     pub(crate) element_size: OperandSize,
     /// The size of the current elements field.
     pub(crate) current_elements_size: OperandSize,
+    /// The type of this table.
+    pub ty: Table,
+}
+
+impl TableData {
+    pub fn index_type(&self) -> WasmValType {
+        match self.ty.idx_type {
+            IndexType::I32 => WasmValType::I32,
+            IndexType::I64 => WasmValType::I64,
+        }
+    }
 }
 
 /// Heap metadata.
@@ -246,6 +257,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     current_elements_size: OperandSize::from_bytes(
                         self.vmoffsets.size_of_vmtable_definition_current_elements(),
                     ),
+                    ty: self.translation.module.tables[index],
                 })
             }
         }
