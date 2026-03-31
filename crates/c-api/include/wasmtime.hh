@@ -38,6 +38,7 @@
 #include <wasmtime/config.hh>
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
+#include <wasmtime/exn.hh>
 #include <wasmtime/extern.hh>
 #include <wasmtime/func.hh>
 #include <wasmtime/global.hh>
@@ -47,6 +48,7 @@
 #include <wasmtime/module.hh>
 #include <wasmtime/store.hh>
 #include <wasmtime/table.hh>
+#include <wasmtime/tag.hh>
 #include <wasmtime/trap.hh>
 #include <wasmtime/types.hh>
 #include <wasmtime/val.hh>

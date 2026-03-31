@@ -18,6 +18,9 @@ namespace wasmtime {
  * payload types (and whose results are empty under the current proposal).
  */
 class TagType {
+  friend class Tag;
+  friend class Exn;
+
   struct deleter {
     void operator()(wasm_tagtype_t *p) const { wasm_tagtype_delete(p); }
   };

@@ -13,6 +13,7 @@
 #include <wasmtime/module.hh>
 #include <wasmtime/store.hh>
 #include <wasmtime/table.hh>
+#include <wasmtime/tag.hh>
 
 namespace wasmtime {
 
