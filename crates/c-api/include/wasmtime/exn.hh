@@ -38,10 +38,13 @@ public:
   /// Takes ownership of a raw `wasmtime_exn_t` pointer.
   explicit Exn(wasmtime_exn_t *raw) : ptr(raw) {}
 
+  /// Constructs a new exception.
   Exn(Exn &&other) = default;
+  /// Moves an exception.
   Exn &operator=(Exn &&other) = default;
   Exn(const Exn &) = delete;
   Exn &operator=(const Exn &) = delete;
+  /// Destroys an exception.
   ~Exn() = default;
 
   /**
