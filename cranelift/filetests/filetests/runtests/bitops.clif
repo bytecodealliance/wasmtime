@@ -224,8 +224,8 @@ block0(v0: i32, v1: i32):
 
 function %test_bxor_band_band(i32, i32, i32) -> i32 fast {
 block0(v0: i32, v1: i32, v2: i32):
-    v3 = band v0, v1  
-    v4 = band v0, v2 
+    v3 = band v0, v1
+    v4 = band v0, v2
     v5 = bxor v3, v4
     return v5
 }
@@ -732,3 +732,14 @@ block0(v0: i32, v1: i32):
 ; run: %test_bor_band_bnot(0, 0) == 0
 ; run: %test_bor_band_bnot(1, 0) == 1
 ; run: %test_bor_band_bnot(0xf0, 0x0f) == 0xff
+
+function %test_aarch64_extr(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ishl_imm v0, 32
+    v3 = ushr_imm v1, 0
+    v4 = bor v2, v3
+    return v4
+}
+
+; run: %test_aarch64_extr(1, 0) == 1
+; run: %test_aarch64_extr(0, 1) == 1
