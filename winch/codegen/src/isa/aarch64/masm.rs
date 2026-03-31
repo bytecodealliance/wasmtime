@@ -528,6 +528,7 @@ impl Masm for MacroAssembler {
         from_size: OperandSize,
         size: OperandSize,
     ) -> Result<()> {
+        assert!(from_size.num_bits() <= size.num_bits());
         let extendop = match from_size {
             OperandSize::S8 => ExtendOp::UXTB,
             OperandSize::S16 => ExtendOp::UXTH,

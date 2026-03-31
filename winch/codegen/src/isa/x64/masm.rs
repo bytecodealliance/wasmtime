@@ -488,9 +488,11 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         lhs: Reg,
         rhs: Reg,
-        _from_size: OperandSize,
+        from_size: OperandSize,
         size: OperandSize,
     ) -> Result<()> {
+        assert!(size == OperandSize::S64);
+        assert!(from_size == OperandSize::S32 || from_size == OperandSize::S64);
         // On x64, 32-bit operations automatically zero-extend to 64 bits,
         // so we can just use regular add.
         Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
