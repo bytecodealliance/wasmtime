@@ -670,103 +670,106 @@ fn instance_too_large() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn dynamic_memory_pooling_allocator() -> Result<()> {
     for guard_size in [0, 1 << 16] {
-        let max_size = 128 << 20;
-        let mut pool = crate::small_pool_config();
-        pool.max_memory_size(max_size as usize);
-        let mut config = Config::new();
-        config.memory_reservation(max_size);
-        config.memory_guard_size(guard_size);
-        config.allocation_strategy(pool);
+        for signals_based_traps in [false, true] {
+            let max_size = 128 << 20;
+            let mut pool = crate::small_pool_config();
+            pool.max_memory_size(max_size as usize);
+            let mut config = Config::new();
+            config.memory_reservation(max_size);
+            config.memory_guard_size(guard_size);
+            config.allocation_strategy(pool);
+            config.signals_based_traps(signals_based_traps);
 
-        let engine = Engine::new(&config)?;
+            let engine = Engine::new(&config)?;
 
-        let module = Module::new(
-            &engine,
-            r#"
-            (module
-                (memory (export "memory") 1)
+            let module = Module::new(
+                &engine,
+                r#"
+                    (module
+                        (memory (export "memory") 1)
 
-                (func (export "grow") (param i32) (result i32)
-                    local.get 0
-                    memory.grow)
+                        (func (export "grow") (param i32) (result i32)
+                            local.get 0
+                            memory.grow)
 
-                (func (export "size") (result i32)
-                    memory.size)
+                        (func (export "size") (result i32)
+                            memory.size)
 
-                (func (export "i32.load") (param i32) (result i32)
-                    local.get 0
-                    i32.load)
+                        (func (export "i32.load") (param i32) (result i32)
+                            local.get 0
+                            i32.load)
 
-                (func (export "i32.store") (param i32 i32)
-                    local.get 0
-                    local.get 1
-                    i32.store)
+                        (func (export "i32.store") (param i32 i32)
+                            local.get 0
+                            local.get 1
+                            i32.store)
 
-                (data (i32.const 100) "x")
-            )
-         "#,
-        )?;
+                        (data (i32.const 100) "x")
+                    )
+                 "#,
+            )?;
 
-        let mut store = Store::new(&engine, ());
-        let instance = Instance::new(&mut store, &module, &[])?;
+            let mut store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, &module, &[])?;
 
-        let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
-        let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
-        let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
-        let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
-        let memory = instance.get_memory(&mut store, "memory").unwrap();
+            let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+            let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
+            let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+            let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
+            let memory = instance.get_memory(&mut store, "memory").unwrap();
 
-        // basic length 1 tests
-        // assert_eq!(memory.grow(&mut store, 1)?, 0);
-        assert_eq!(memory.size(&store), 1);
-        assert_eq!(size.call(&mut store, ())?, 1);
-        assert_eq!(i32_load.call(&mut store, 0)?, 0);
-        assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'x'));
-        i32_store.call(&mut store, (0, 0))?;
-        i32_store.call(&mut store, (100, i32::from(b'y')))?;
-        assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'y'));
+            // basic length 1 tests
+            // assert_eq!(memory.grow(&mut store, 1)?, 0);
+            assert_eq!(memory.size(&store), 1);
+            assert_eq!(size.call(&mut store, ())?, 1);
+            assert_eq!(i32_load.call(&mut store, 0)?, 0);
+            assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'x'));
+            i32_store.call(&mut store, (0, 0))?;
+            i32_store.call(&mut store, (100, i32::from(b'y')))?;
+            assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'y'));
 
-        // basic length 2 tests
-        let page = 64 * 1024;
-        assert_eq!(grow.call(&mut store, 1)?, 1);
-        assert_eq!(memory.size(&store), 2);
-        assert_eq!(size.call(&mut store, ())?, 2);
-        i32_store.call(&mut store, (page, 200))?;
-        assert_eq!(i32_load.call(&mut store, page)?, 200);
+            // basic length 2 tests
+            let page = 64 * 1024;
+            assert_eq!(grow.call(&mut store, 1)?, 1);
+            assert_eq!(memory.size(&store), 2);
+            assert_eq!(size.call(&mut store, ())?, 2);
+            i32_store.call(&mut store, (page, 200))?;
+            assert_eq!(i32_load.call(&mut store, page)?, 200);
 
-        // test writes are visible
-        i32_store.call(&mut store, (2, 100))?;
-        assert_eq!(i32_load.call(&mut store, 2)?, 100);
+            // test writes are visible
+            i32_store.call(&mut store, (2, 100))?;
+            assert_eq!(i32_load.call(&mut store, 2)?, 100);
 
-        // test growth can't exceed maximum
-        let too_many = max_size / (64 * 1024);
-        assert_eq!(grow.call(&mut store, too_many as u32)?, -1);
-        assert!(memory.grow(&mut store, too_many).is_err());
+            // test growth can't exceed maximum
+            let too_many = max_size / (64 * 1024);
+            assert_eq!(grow.call(&mut store, too_many as u32)?, -1);
+            assert!(memory.grow(&mut store, too_many).is_err());
 
-        assert_eq!(memory.data(&store)[page as usize], 200);
+            assert_eq!(memory.data(&store)[page as usize], 200);
 
-        // Re-instantiate in another store.
-        store = Store::new(&engine, ());
-        let instance = Instance::new(&mut store, &module, &[])?;
-        let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
-        let memory = instance.get_memory(&mut store, "memory").unwrap();
+            // Re-instantiate in another store.
+            store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, &module, &[])?;
+            let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+            let memory = instance.get_memory(&mut store, "memory").unwrap();
 
-        // This is out of bounds...
-        assert!(i32_load.call(&mut store, page).is_err());
-        assert_eq!(memory.data_size(&store), page as usize);
+            // This is out of bounds...
+            assert!(i32_load.call(&mut store, page).is_err());
+            assert_eq!(memory.data_size(&store), page as usize);
 
-        // ... but implementation-wise it should still be mapped memory from
-        // before if we don't have any guard pages.
-        //
-        // Note though that prior writes should all appear as zeros and we can't see
-        // data from the prior instance.
-        //
-        // Note that this part is only implemented on Linux which has
-        // `MADV_DONTNEED`.
-        if cfg!(target_os = "linux") && guard_size == 0 {
-            unsafe {
-                let ptr = memory.data_ptr(&store);
-                assert_eq!(*ptr.offset(page as isize), 0);
+            // ... but implementation-wise it should still be mapped memory from
+            // before if we don't have any guard pages.
+            //
+            // Note though that prior writes should all appear as zeros and we can't see
+            // data from the prior instance.
+            //
+            // Note that this part is only implemented on Linux which has
+            // `MADV_DONTNEED`.
+            if cfg!(target_os = "linux") && guard_size == 0 && !signals_based_traps {
+                unsafe {
+                    let ptr = memory.data_ptr(&store);
+                    assert_eq!(*ptr.offset(page as isize), 0);
+                }
             }
         }
     }
@@ -1331,6 +1334,49 @@ fn instantiate_non_page_aligned_sizes() -> Result<()> {
     )?;
     let mut store = Store::new(&engine, ());
     Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pooling_reuse_resets() -> Result<()> {
+    let mut config = Config::new();
+    let mut cfg = crate::small_pool_config();
+    cfg.total_memories(1);
+    cfg.max_memory_size(0x2000000);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    config.memory_guard_size(0);
+    config.memory_reservation(0x2000000);
+    let engine = Engine::new(&config)?;
+
+    let a = Module::new(&engine, r#"(module (memory (export "m") 10 100))"#)?;
+    let b = Module::new(
+        &engine,
+        r#"
+(module $B
+  (memory 5 100)
+  (func (export "read_oob") (result i32)
+    (i32.load (i32.const 983040))
+  )
+)
+        "#,
+    )?;
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &a, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
+        memory.grow(&mut store, 10)?;
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &b, &[])?;
+        let read_oob = instance.get_typed_func::<(), i32>(&mut store, "read_oob")?;
+        let trap: Trap = read_oob.call(&mut store, ()).unwrap_err().downcast()?;
+        assert_eq!(trap, Trap::MemoryOutOfBounds);
+    }
+
     Ok(())
 }
 
