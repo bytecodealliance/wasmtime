@@ -1745,13 +1745,9 @@ where
 
         let at = self.context.stack.ensure_index_at(3)?;
 
-        self.context.stack.insert_many(at, &[table.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
+        let callee = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+
         self.context.pop_and_free(self.masm)
     }
 
