@@ -663,6 +663,35 @@ jobs:
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
     - run: cargo fuzz check --dev --fuzz-dir ./crates/wizer/fuzz
 
+  # Run GC-related tests with `cfg(gc_zeal)` set
+  gc_zeal:
+    needs: determine
+    name: GC Zeal Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - name: Run GC tests with cfg(gc_zeal) enabled
+      env:
+        GC_KEYWORDS: "gc drc any eq struct array i31 extern exn ref rec"
+        RUSTFLAGS: "--cfg gc_zeal"
+      run: |
+        set -e
+
+        cargo test --test all -- $GC_KEYWORDS
+
+        # The wast test runner doesn't support multiple test filters. Instead,
+        # make a list of all matches, and then run each individually.
+        tmp=$(mktemp)
+        for kw in $GC_KEYWORDS; do
+          cargo test --test wast -- --list $kw  | cut -d ':' -f 1 >> $tmp
+        done
+        for f in $(cat $tmp | sort -u); do
+          cargo test --test wast -- $f
+        done
+
   # Perform all tests of the c-api
   test_capi:
     needs: determine
