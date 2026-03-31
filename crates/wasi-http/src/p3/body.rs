@@ -508,42 +508,43 @@ where
                                     continue;
                                 }
 
-                            if let Some(cap) = cap {
-                                let n = frame.len();
-                                let cap = cap.into();
-                                if n > cap {
-                                    // data frame does not fit in destination, fill it and buffer the rest
-                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
-                                    let mut dst = dst.as_direct(store, cap);
-                                    dst.remaining().copy_from_slice(&frame);
-                                    dst.mark_written(cap);
+                                if let Some(cap) = cap {
+                                    let n = frame.len();
+                                    let cap = cap.into();
+                                    if n > cap {
+                                        // data frame does not fit in destination, fill it and buffer the rest
+                                        dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                        let mut dst = dst.as_direct(store, cap);
+                                        dst.remaining().copy_from_slice(&frame);
+                                        dst.mark_written(cap);
+                                    } else {
+                                        // copy the whole frame into the destination
+                                        let mut dst = dst.as_direct(store, n);
+                                        dst.remaining()[..n].copy_from_slice(&frame);
+                                        dst.mark_written(n);
+                                    }
                                 } else {
-                                    // copy the whole frame into the destination
-                                    let mut dst = dst.as_direct(store, n);
-                                    dst.remaining()[..n].copy_from_slice(&frame);
-                                    dst.mark_written(n);
+                                    dst.set_buffer(Cursor::new(frame));
                                 }
-                            } else {
-                                dst.set_buffer(Cursor::new(frame));
+                                return Poll::Ready(Ok(StreamResult::Completed));
                             }
-                            return Poll::Ready(Ok(StreamResult::Completed));
+                            Err(Ok(trailers)) => {
+                                let view = (self.getter)(store.data_mut());
+                                let trailers = FieldMap::new_immutable(trailers);
+                                let trailers = view
+                                    .table
+                                    .push(trailers)
+                                    .context("failed to push trailers to table")?;
+                                break 'result Ok(Some(trailers));
+                            }
+                            Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                         }
-                        Err(Ok(trailers)) => {
-                            let view = (self.getter)(store.data_mut());
-                            let trailers = FieldMap::new_immutable(trailers);
-                            let trailers = view
-                                .table
-                                .push(trailers)
-                                .context("failed to push trailers to table")?;
-                            break 'result Ok(Some(trailers));
-                        }
-                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                     }
+                    Poll::Ready(Some(Err(err))) => break 'result Err(err),
+                    Poll::Ready(None) => break 'result Ok(None),
+                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Poll::Ready(Some(Err(err))) => break 'result Err(err),
-                Poll::Ready(None) => break 'result Ok(None),
-                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => return Poll::Pending,
             }
         };
         self.close(res);
