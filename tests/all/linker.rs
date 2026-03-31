@@ -774,3 +774,36 @@ fn linker_defines_table_subtype_err() -> Result<()> {
 
     Ok(())
 }
+
+// Regression test for a soundness bug in StringPool::try_clone() introduced
+// in wasmtime 43.0.0: cloning a StringPool (and thus a Linker) copied the
+// map's &'static str keys that pointed into the *original* pool's string
+// storage. After the original was dropped those keys became dangling, causing
+// get_atom() on the clone to silently fail to find registered imports.
+#[test]
+fn linker_clone_drop_original_then_instantiate() -> Result<()> {
+    let engine = Engine::default();
+    let wat = r#"(module
+        (import "env" "answer" (func (result i32)))
+        (func (export "run") (result i32)
+            call 0
+        )
+    )"#;
+    let module = Module::new(&engine, wat)?;
+
+    let original = {
+        let mut l: Linker<()> = Linker::new(&engine);
+        l.func_wrap("env", "answer", || -> i32 { 42 })?;
+        l
+    };
+
+    let clone = original.clone();
+    // Dropping the original must not invalidate the clone's string pool.
+    drop(original);
+
+    let mut store = Store::new(&engine, ());
+    let instance = clone.instantiate(&mut store, &module)?;
+    let f = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    assert_eq!(f.call(&mut store, ())?, 42);
+    Ok(())
+}
