@@ -660,6 +660,15 @@ impl FixedEncoding {
             FixedEncoding::Latin1 => 1,
         }
     }
+
+    /// Returns the alignment of strings using this encoding.
+    pub fn align(&self) -> u8 {
+        match self {
+            FixedEncoding::Utf8 => 1,
+            FixedEncoding::Utf16 => 2,
+            FixedEncoding::Latin1 => 2,
+        }
+    }
 }
 
 /// Description of a new resource declared in a `GlobalInitializer::Resource`
