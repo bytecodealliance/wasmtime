@@ -49,7 +49,7 @@ The emoji legend is:
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
-| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ❌     |
+| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 
