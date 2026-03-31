@@ -478,6 +478,7 @@ impl WastTest {
                 "spec_testsuite/proposals/threads/atomic.wast",
                 "spec_testsuite/proposals/threads/exports.wast",
                 "spec_testsuite/proposals/threads/memory.wast",
+                "misc_testsuite/memory64/threads.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
