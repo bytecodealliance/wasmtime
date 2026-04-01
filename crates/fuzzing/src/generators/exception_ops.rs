@@ -21,9 +21,11 @@ pub const CALL_DEPTH_MAX: u32 = 6;
 pub const MAX_SCENARIOS: usize = 16;
 /// Maximum params per tag signature.
 pub const MAX_TAG_PARAMS: usize = 4;
+/// Maximum number of decoy catches.
+pub const MAX_DECOY_CATCHES: usize = 4;
 
 /// Limits controlling the structure of a generated Wasm module.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, Mutate)]
 pub struct ExceptionOpsLimits {
     /// Number of distinct tags to define.
     pub(crate) num_tags: u32,
@@ -39,7 +41,7 @@ impl ExceptionOpsLimits {
 }
 
 /// A tag signature.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Mutate)]
 pub struct TagSig {
     pub(crate) params: Vec<SimpleValType>,
 }
@@ -68,7 +70,7 @@ impl SimpleValType {
     /// used as the thrown payload so the oracle can verify the catch.
     fn test_value(self, idx: u32) -> Instruction<'static> {
         match self {
-            Self::I32 => Instruction::I32Const(0x1000_i32.wrapping_add(idx as i32)),
+            Self::I32 => Instruction::I32Const(0x1000_i32.wrapping_add(idx.cast_signed())),
             Self::I64 => Instruction::I64Const(0x2000_i64.wrapping_add(i64::from(idx))),
             Self::F32 => Instruction::F32Const(wasm_encoder::Ieee32::new(0x4000_0000 + idx)),
             Self::F64 => Instruction::F64Const(wasm_encoder::Ieee64::new(
@@ -88,7 +90,7 @@ pub enum CatchKind {
 }
 
 /// One throw-and-catch scenario.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Mutate)]
 pub struct Scenario {
     /// Index (into our tag list) of the tag to throw.
     pub(crate) throw_tag: u32,
@@ -102,10 +104,14 @@ pub struct Scenario {
     /// try_table, exercising the "skip non-matching" path. These must be
     /// indices of tags different from `throw_tag`.
     pub(crate) decoy_catches: Vec<u32>,
+    /// Extra catch clauses (tag indices) to place *after* the real one in the
+    /// try_table, exercising the "clauses past the match" path. These must be
+    /// indices of tags different from `throw_tag`.
+    pub(crate) decoy_catches_after: Vec<u32>,
 }
 
 /// A description of a Wasm module that exercises exception throw/catch.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, Mutate)]
 pub struct ExceptionOps {
     pub(crate) limits: ExceptionOpsLimits,
     pub(crate) tag_sigs: Vec<TagSig>,
@@ -122,7 +128,7 @@ impl ExceptionOps {
     /// Fix up the test case to ensure all indices and structures are valid.
     pub fn fixup(&mut self) {
         self.limits.fixup();
-        let num_tags = self.limits.num_tags as usize;
+        let num_tags = usize::try_from(self.limits.num_tags).unwrap();
 
         // Ensure we have exactly num_tags tag signatures.
         while self.tag_sigs.len() < num_tags {
@@ -149,6 +155,7 @@ impl ExceptionOps {
                 catch_depth: 0,
                 catch_kind: CatchKind::Catch,
                 decoy_catches: vec![],
+                decoy_catches_after: vec![],
             });
         }
         self.scenarios.truncate(MAX_SCENARIOS);
@@ -164,7 +171,13 @@ impl ExceptionOps {
             for t in &mut s.decoy_catches {
                 *t = *t % num_tags;
             }
-            s.decoy_catches.truncate(4);
+            s.decoy_catches.truncate(MAX_DECOY_CATCHES);
+            s.decoy_catches_after
+                .retain(|t| *t % num_tags != s.throw_tag);
+            for t in &mut s.decoy_catches_after {
+                *t = *t % num_tags;
+            }
+            s.decoy_catches_after.truncate(MAX_DECOY_CATCHES);
         }
     }
 
@@ -184,7 +197,7 @@ impl ExceptionOps {
     fn encode(&self) -> Vec<u8> {
         let num_tags = self.limits.num_tags;
         let call_depth = self.limits.call_depth;
-        let num_scenarios = self.scenarios.len() as u32;
+        let num_scenarios = u32::try_from(self.scenarios.len()).unwrap();
 
         let mut module = Module::new();
 
@@ -206,15 +219,15 @@ impl ExceptionOps {
         }
 
         // Utility function types
-        let fn_type_void_to_i32 = 2 * num_tags;
+        let fn_type_void_to_i32 = types.len();
         types.ty().function(vec![], vec![ValType::I32]);
 
-        let fn_type_check = 2 * num_tags + 1;
+        let fn_type_check = types.len();
         types
             .ty()
             .function(vec![ValType::I32, ValType::I32], vec![]);
 
-        let fn_type_void_to_void = 2 * num_tags + 2;
+        let fn_type_void_to_void = types.len();
         types.ty().function(vec![], vec![]);
 
         let mut tags = TagSection::new();
@@ -246,8 +259,8 @@ impl ExceptionOps {
         let mut code = CodeSection::new();
 
         for (si, scenario) in self.scenarios.iter().enumerate() {
-            let scenario_base = import_count + (si as u32) * funcs_per_scenario;
-            let tag_sig = &self.tag_sigs[scenario.throw_tag as usize];
+            let scenario_base = import_count + u32::try_from(si).unwrap() * funcs_per_scenario;
+            let tag_sig = &self.tag_sigs[usize::try_from(scenario.throw_tag).unwrap()];
 
             for d in 0..=call_depth {
                 if d == scenario.throw_depth {
@@ -255,10 +268,10 @@ impl ExceptionOps {
                     functions.function(fn_type_void_to_void);
                     let mut f = Function::new(vec![]);
                     for (pi, param_ty) in tag_sig.params.iter().enumerate() {
-                        f.instruction(
-                            &param_ty
-                                .test_value(scenario.throw_tag * MAX_TAG_PARAMS as u32 + pi as u32),
-                        );
+                        f.instruction(&param_ty.test_value(
+                            scenario.throw_tag * u32::try_from(MAX_TAG_PARAMS).unwrap()
+                                + u32::try_from(pi).unwrap(),
+                        ));
                     }
                     f.instruction(&Instruction::Throw(scenario.throw_tag));
                     f.instruction(&Instruction::End);
@@ -268,7 +281,16 @@ impl ExceptionOps {
                     functions.function(fn_type_void_to_i32);
                     let mut f = Function::new(vec![]);
 
-                    let num_decoys = scenario.decoy_catches.len();
+                    // All decoys (before + after the real catch) share the same
+                    // block structure; only the catch-clause ordering differs.
+                    let all_decoys: Vec<u32> = scenario
+                        .decoy_catches
+                        .iter()
+                        .chain(scenario.decoy_catches_after.iter())
+                        .copied()
+                        .collect();
+                    let num_decoys = all_decoys.len();
+                    let num_before = scenario.decoy_catches.len();
 
                     // Block nesting (outermost to innermost):
                     //   block $result (result i32)
@@ -288,17 +310,16 @@ impl ExceptionOps {
                     // br instructions inside the try_table body do count the
                     // try_table, so they need +1 compared to catch labels.
 
-                    let catch_label = num_decoys as u32;
-                    let result_label = (num_decoys + 1) as u32;
+                    let catch_label = u32::try_from(num_decoys).unwrap();
+                    let result_label = u32::try_from(num_decoys + 1).unwrap();
 
                     // For br inside try_table body, add 1 for the try_table scope
                     let br_result_label = result_label + 1;
 
-                    // Build catch clauses (order: decoys first, then real catch)
+                    // Build catch clauses: before-decoys, real catch, after-decoys
                     let mut catches: Vec<wasm_encoder::Catch> = Vec::new();
                     for (di, &decoy_tag) in scenario.decoy_catches.iter().enumerate() {
-                        // decoy_0 is outermost -> highest label, decoy_{n-1} is innermost → label 0
-                        let decoy_label = (num_decoys - 1 - di) as u32;
+                        let decoy_label = u32::try_from(num_decoys - 1 - di).unwrap();
                         catches.push(wasm_encoder::Catch::One {
                             tag: decoy_tag,
                             label: decoy_label,
@@ -314,6 +335,14 @@ impl ExceptionOps {
                         CatchKind::CatchAll => {
                             catches.push(wasm_encoder::Catch::All { label: catch_label });
                         }
+                    }
+                    for (i, &decoy_tag) in scenario.decoy_catches_after.iter().enumerate() {
+                        let di = num_before + i;
+                        let decoy_label = u32::try_from(num_decoys - 1 - di).unwrap();
+                        catches.push(wasm_encoder::Catch::One {
+                            tag: decoy_tag,
+                            label: decoy_label,
+                        });
                     }
 
                     // Emit blocks (outermost first)
@@ -333,7 +362,7 @@ impl ExceptionOps {
                     }
 
                     // Decoy blocks (decoy_0 outermost, decoy_{n-1} innermost)
-                    for &decoy_tag in &scenario.decoy_catches {
+                    for &decoy_tag in &all_decoys {
                         let bt = BlockType::FunctionType(catch_block_type_base + decoy_tag);
                         f.instruction(&Instruction::Block(bt));
                     }
@@ -362,14 +391,14 @@ impl ExceptionOps {
                     for di in (0..num_decoys).rev() {
                         f.instruction(&Instruction::End); // end block $decoy_{di}
                         // Drop the caught payload values
-                        let decoy_tag = scenario.decoy_catches[di];
-                        let decoy_sig = &self.tag_sigs[decoy_tag as usize];
+                        let decoy_tag = all_decoys[di];
+                        let decoy_sig = &self.tag_sigs[usize::try_from(decoy_tag).unwrap()];
                         for _ in &decoy_sig.params {
                             f.instruction(&Instruction::Drop);
                         }
                         // Wrong tag caught -- return -1
                         f.instruction(&Instruction::I32Const(-1));
-                        let depth_to_result = di as u32 + 1;
+                        let depth_to_result = u32::try_from(di).unwrap() + 1;
                         f.instruction(&Instruction::Br(depth_to_result));
                     }
 
@@ -386,8 +415,9 @@ impl ExceptionOps {
                             }
                             // First param is now on top
                             if tag_sig.params[0] == SimpleValType::I32 {
-                                let idx = scenario.throw_tag * MAX_TAG_PARAMS as u32;
-                                let expected = 0x1000_i32.wrapping_add(idx as i32);
+                                let idx =
+                                    scenario.throw_tag * u32::try_from(MAX_TAG_PARAMS).unwrap();
+                                let expected = 0x1000_i32.wrapping_add(i32::try_from(idx).unwrap());
                                 f.instruction(&Instruction::I32Const(expected));
                                 f.instruction(&Instruction::Call(check_func_idx));
                             } else {
@@ -471,15 +501,17 @@ impl ExceptionOps {
     /// catches succeed.
     pub fn expected_result(&mut self) -> i32 {
         self.fixup();
-        self.scenarios.len() as i32
+        i32::try_from(self.scenarios.len()).unwrap()
     }
 }
 
-/// Mutator for [`ExceptionOps`].
+/// Mutator for unit-variant enums ([`SimpleValType`] and [`CatchKind`]),
+/// which need manual impls because `#[derive(Mutate)]` doesn't switch
+/// between variants.
 #[derive(Debug, Default)]
-pub struct ExceptionOpsMutator;
+pub struct EnumMutator;
 
-impl Mutate<SimpleValType> for ExceptionOpsMutator {
+impl Mutate<SimpleValType> for EnumMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, value: &mut SimpleValType) -> MutResult<()> {
         c.mutation(|ctx| {
             let choices = [
@@ -495,7 +527,7 @@ impl Mutate<SimpleValType> for ExceptionOpsMutator {
     }
 }
 
-impl Generate<SimpleValType> for ExceptionOpsMutator {
+impl Generate<SimpleValType> for EnumMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<SimpleValType> {
         let choices = [
             SimpleValType::I32,
@@ -508,10 +540,10 @@ impl Generate<SimpleValType> for ExceptionOpsMutator {
 }
 
 impl DefaultMutate for SimpleValType {
-    type DefaultMutate = ExceptionOpsMutator;
+    type DefaultMutate = EnumMutator;
 }
 
-impl Mutate<CatchKind> for ExceptionOpsMutator {
+impl Mutate<CatchKind> for EnumMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, value: &mut CatchKind) -> MutResult<()> {
         c.mutation(|ctx| {
             let choices = [CatchKind::Catch, CatchKind::CatchAll];
@@ -522,7 +554,7 @@ impl Mutate<CatchKind> for ExceptionOpsMutator {
     }
 }
 
-impl Generate<CatchKind> for ExceptionOpsMutator {
+impl Generate<CatchKind> for EnumMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<CatchKind> {
         let choices = [CatchKind::Catch, CatchKind::CatchAll];
         Ok(*ctx.rng().choose(&choices).unwrap())
@@ -530,143 +562,30 @@ impl Generate<CatchKind> for ExceptionOpsMutator {
 }
 
 impl DefaultMutate for CatchKind {
-    type DefaultMutate = ExceptionOpsMutator;
+    type DefaultMutate = EnumMutator;
 }
 
-impl Mutate<TagSig> for ExceptionOpsMutator {
-    fn mutate(&mut self, c: &mut Candidates<'_>, value: &mut TagSig) -> MutResult<()> {
-        // Possibly add a param
-        c.mutation(|ctx| {
-            if value.params.len() < MAX_TAG_PARAMS {
-                let ty = <Self as Generate<SimpleValType>>::generate(self, ctx)?;
-                value.params.push(ty);
-            }
-            Ok(())
-        })?;
-        // Possibly remove a param
-        c.mutation(|ctx| {
-            if value.params.len() > 1 {
-                let idx = ctx.rng().gen_index(value.params.len()).unwrap_or(0);
-                value.params.remove(idx);
-            }
-            Ok(())
-        })?;
-        // Possibly change a param type
-        c.mutation(|ctx| {
-            if !value.params.is_empty() {
-                let idx = ctx.rng().gen_index(value.params.len()).unwrap_or(0);
-                value.params[idx] = <Self as Generate<SimpleValType>>::generate(self, ctx)?;
-            }
-            Ok(())
-        })?;
-        Ok(())
-    }
-}
-
-impl Generate<TagSig> for ExceptionOpsMutator {
+impl Generate<TagSig> for TagSigMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<TagSig> {
         let count = ctx.rng().gen_index(MAX_TAG_PARAMS).unwrap_or(0) + 1;
         let params = (0..count)
-            .map(|_| <Self as Generate<SimpleValType>>::generate(self, ctx))
+            .map(|_| EnumMutator.generate(ctx))
             .collect::<MutResult<Vec<_>>>()?;
         Ok(TagSig { params })
     }
 }
 
-impl DefaultMutate for TagSig {
-    type DefaultMutate = ExceptionOpsMutator;
-}
-
-impl Mutate<Scenario> for ExceptionOpsMutator {
-    fn mutate(&mut self, c: &mut Candidates<'_>, value: &mut Scenario) -> MutResult<()> {
-        c.mutation(|ctx| {
-            // Randomly tweak one field
-            let field = ctx.rng().gen_index(5).unwrap_or(0);
-            match field {
-                0 => value.throw_tag = value.throw_tag.wrapping_add(1),
-                1 => value.throw_depth = value.throw_depth.wrapping_add(1),
-                2 => {
-                    value.catch_depth = if value.catch_depth > 0 {
-                        value.catch_depth - 1
-                    } else {
-                        value.catch_depth + 1
-                    }
-                }
-                3 => {
-                    value.catch_kind = match value.catch_kind {
-                        CatchKind::Catch => CatchKind::CatchAll,
-                        CatchKind::CatchAll => CatchKind::Catch,
-                    }
-                }
-                4 => {
-                    // Toggle decoys
-                    if value.decoy_catches.is_empty() {
-                        let mut m = mutatis::mutators::u32();
-                        value
-                            .decoy_catches
-                            .push(mutatis::Generate::<u32>::generate(&mut m, ctx)?);
-                    } else {
-                        value.decoy_catches.pop();
-                    }
-                }
-                _ => {}
-            }
-            Ok(())
-        })?;
-        Ok(())
-    }
-}
-
-impl Generate<Scenario> for ExceptionOpsMutator {
+impl Generate<Scenario> for ScenarioMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<Scenario> {
         let mut m = mutatis::mutators::u32();
         Ok(Scenario {
             throw_tag: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
             throw_depth: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
             catch_depth: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
-            catch_kind: <Self as Generate<CatchKind>>::generate(self, ctx)?,
+            catch_kind: EnumMutator.generate(ctx)?,
             decoy_catches: vec![],
+            decoy_catches_after: vec![],
         })
-    }
-}
-
-impl DefaultMutate for Scenario {
-    type DefaultMutate = ExceptionOpsMutator;
-}
-
-impl Mutate<ExceptionOps> for ExceptionOpsMutator {
-    fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut ExceptionOps) -> MutResult<()> {
-        // Mutate limits
-        c.mutation(|ctx| {
-            let field = ctx.rng().gen_index(2).unwrap_or(0);
-            match field {
-                0 => ops.limits.num_tags = ops.limits.num_tags.wrapping_add(1),
-                1 => ops.limits.call_depth = ops.limits.call_depth.wrapping_add(1),
-                _ => {}
-            }
-            Ok(())
-        })?;
-
-        // Mutate tag sigs
-        mutatis::mutators::vec(ExceptionOpsMutator).mutate(c, &mut ops.tag_sigs)?;
-
-        // Mutate scenarios
-        mutatis::mutators::vec(ExceptionOpsMutator).mutate(c, &mut ops.scenarios)?;
-
-        Ok(())
-    }
-}
-
-impl DefaultMutate for ExceptionOps {
-    type DefaultMutate = ExceptionOpsMutator;
-}
-
-impl<'a> arbitrary::Arbitrary<'a> for ExceptionOps {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let mut session = mutatis::Session::new().seed(u.arbitrary()?);
-        session
-            .generate()
-            .map_err(|_| arbitrary::Error::IncorrectFormat)
     }
 }
 
@@ -684,56 +603,27 @@ impl Generate<ExceptionOps> for ExceptionOpsMutator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasmparser::WasmFeatures;
 
     #[test]
-    fn default_generates_valid_wasm() {
-        for seed in 0..100u64 {
-            let mut session = mutatis::Session::new().seed(seed);
-            let mut ops: ExceptionOps = session.generate().unwrap();
-            let wasm = ops.to_wasm_binary();
-            let mut validator =
-                wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all());
-            if let Err(e) = validator.validate_all(&wasm) {
-                panic!("seed {seed}: invalid wasm: {e}\n{ops:#?}");
-            }
-        }
-    }
-
-    #[test]
-    fn mutate_produces_valid_wasm() {
-        let mut ops = ExceptionOps::default();
-        let mut session = mutatis::Session::new().seed(42);
-        for i in 0..200 {
-            session.mutate(&mut ops).unwrap();
-            let wasm = ops.to_wasm_binary();
-            let mut validator =
-                wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all());
-            if let Err(e) = validator.validate_all(&wasm) {
-                panic!("iteration {i}: invalid wasm: {e}\n{ops:#?}");
-            }
-        }
-    }
-
-    #[test]
-    fn oracle_runs_successfully() {
-        use arbitrary::Arbitrary;
-        use rand::SeedableRng;
-
-        for seed in 0..20u64 {
-            let mut session = mutatis::Session::new().seed(seed);
-            let ops: ExceptionOps = session.generate().unwrap();
-
-            let mut buf = [0u8; 1024];
-            let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
-            rand::Rng::fill(&mut rng, &mut buf[..]);
-            let u = arbitrary::Unstructured::new(&buf);
-            let Ok(config) = crate::generators::Config::arbitrary_take_rest(u) else {
-                continue;
-            };
-
-            if let Err(e) = crate::oracles::exception_ops(config, ops) {
-                panic!("seed {seed}: oracle failed: {e}");
-            }
-        }
+    fn always_produces_valid_wasm() {
+        mutatis::check::Check::new()
+            .iters(200)
+            .run(|ops: &ExceptionOps| {
+                let mut ops = ops.clone();
+                let wasm = ops.to_wasm_binary();
+                let features = WasmFeatures::EXCEPTIONS
+                    | WasmFeatures::GC_TYPES
+                    | WasmFeatures::REFERENCE_TYPES
+                    | WasmFeatures::MULTI_VALUE
+                    | WasmFeatures::FLOATS
+                    | WasmFeatures::SIMD;
+                let mut validator = wasmparser::Validator::new_with_features(features);
+                validator
+                    .validate_all(&wasm)
+                    .map(|_| ())
+                    .map_err(|e| format!("{e}\n{ops:#?}"))
+            })
+            .unwrap();
     }
 }

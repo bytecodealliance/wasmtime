@@ -1024,9 +1024,16 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
 /// Execute a series of exception-related operations.
 pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps) -> Result<()> {
-    // Force exceptions + GC on (exceptions require GC).
-    fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
+    match fuzz_config.wasmtime.compiler_strategy {
+        // Winch doesn't support exceptions; force to Cranelift.
+        CompilerStrategy::Winch => {
+            fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
+        }
+        CompilerStrategy::CraneliftNative | CompilerStrategy::CraneliftPulley => {}
+    }
+
     let module_cfg = &mut fuzz_config.module_config.config;
+    // Force exceptions + GC on (exceptions require GC).
     module_cfg.gc_enabled = true;
     module_cfg.exceptions_enabled = true;
     module_cfg.reference_types_enabled = true;
@@ -1038,11 +1045,8 @@ pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps)
 
     let mut store = fuzz_config.to_store();
 
-    let module = match compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config) {
-        Some(m) => m,
-        None => return Ok(()),
-    };
-
+    let module = compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config)
+        .ok_or_else(|| wasmtime::format_err!("Compilation failed"))?;
     let mut linker = Linker::new(store.engine());
 
     let check_ty = FuncType::new(store.engine(), [ValType::I32, ValType::I32], []);
