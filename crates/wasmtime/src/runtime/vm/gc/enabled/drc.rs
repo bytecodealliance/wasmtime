@@ -64,7 +64,8 @@ use core::{
 };
 use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, POISON, VMGcKind, VMSharedTypeIndex,
+    gc_assert,
 };
 
 #[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
@@ -177,10 +178,15 @@ impl DrcHeap {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size();
         let layout = FreeList::layout(size);
-        self.free_list
-            .as_mut()
-            .unwrap()
-            .dealloc(gc_ref.as_heap_index().unwrap(), layout);
+        let index = gc_ref.as_heap_index().unwrap();
+
+        // Poison the freed memory so that any stale access is detectable.
+        if cfg!(gc_zeal) {
+            let index = usize::try_from(index.get()).unwrap();
+            self.heap_slice_mut()[index..][..layout.size()].fill(POISON);
+        }
+
+        self.free_list.as_mut().unwrap().dealloc(index, layout);
     }
 
     /// Increment the ref count for the associated object.
@@ -311,6 +317,7 @@ impl DrcHeap {
             debug_assert!(header.kind().matches(VMGcKind::ExternRef));
             return;
         };
+
         match self
             .trace_infos
             .get(&ty)
@@ -321,11 +328,24 @@ impl DrcHeap {
                 let data = self.gc_object_data(gc_ref);
                 for offset in gc_ref_offsets {
                     let raw = data.read_u32(*offset);
-                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw) {
+                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw)
+                        && !gc_ref.is_i31()
+                    {
+                        debug_assert!(
+                            {
+                                let header = self.header(&gc_ref);
+                                let kind = header.kind().as_u32();
+                                VMGcKind::try_from_u32(kind).is_some()
+                            },
+                            "trace_gc_ref: struct field at offset {offset} references object \
+                             with invalid `VMGcKind`",
+                        );
+
                         stack.push(gc_ref);
                     }
                 }
             }
+
             TraceInfo::Array { gc_ref_elems } => {
                 if !*gc_ref_elems {
                     return;
@@ -338,7 +358,19 @@ impl DrcHeap {
                     let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
                         + i * u32::try_from(mem::size_of::<u32>()).unwrap();
                     let raw = data.read_u32(elem_offset);
-                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw) {
+                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw)
+                        && !gc_ref.is_i31()
+                    {
+                        debug_assert!(
+                            {
+                                let header = self.header(&gc_ref);
+                                let kind = header.kind().as_u32();
+                                VMGcKind::try_from_u32(kind).is_some()
+                            },
+                            "trace_gc_ref: array element at index {i} references object \
+                             with invalid `VMGcKind`",
+                        );
+
                         stack.push(gc_ref);
                     }
                 }
@@ -357,6 +389,64 @@ impl DrcHeap {
             link = self.index(drc_ref(&r)).next_over_approximated_stack_root();
             Some(r)
         })
+    }
+
+    /// Assert the integrity of the over-approximated stack roots list.
+    fn assert_over_approximated_stack_roots_integrity(&self) {
+        if !cfg!(gc_zeal) {
+            return;
+        }
+
+        let mut visited = HashSet::new();
+        for gc_ref in self.iter_over_approximated_stack_roots() {
+            let idx = gc_ref.as_heap_index().unwrap().get();
+
+            // Each entry must have a valid `VMGcKind`.
+            let header = self.header(&gc_ref);
+            let kind = header.kind().as_u32();
+            assert!(
+                VMGcKind::try_from_u32(kind).is_some(),
+                "over-approx list: entry at heap index {idx} has invalid VMGcKind {kind:#034b}",
+            );
+
+            // Each entry must have its in-list bit set.
+            let drc_header = self.index(drc_ref(&gc_ref));
+            assert!(
+                drc_header.is_in_over_approximated_stack_roots(),
+                "over-approx list: entry at heap index {idx} does not have in-list bit set",
+            );
+
+            // Each entry must have a nonzero ref count.
+            assert_ne!(
+                drc_header.ref_count, 0,
+                "over-approx list: entry at heap index {idx} has zero ref count",
+            );
+
+            // No cycles or duplicates.
+            assert!(
+                visited.insert(idx),
+                "over-approx list: cycle or duplicate detected at heap index {idx}",
+            );
+        }
+    }
+
+    /// Assert that every free block in the free list is filled with the poison
+    /// pattern.
+    fn assert_free_blocks_are_poisoned(&self) {
+        if !cfg!(gc_zeal) {
+            return;
+        }
+
+        let free_list = self.free_list.as_ref().unwrap();
+        for (index, len) in free_list.iter_free_blocks() {
+            let start = usize::try_from(index).unwrap();
+            let size = usize::try_from(len).unwrap();
+            let slice = &self.heap_slice()[start..][..size];
+            assert!(
+                slice.iter().all(|&b| b == POISON),
+                "free block at heap index {start} (size {size}) is not fully poisoned",
+            );
+        }
     }
 
     fn trace(&mut self, roots: &mut GcRootsIter<'_>) {
@@ -685,6 +775,12 @@ unsafe impl GcHeap for DrcHeap {
         self.free_list = Some(FreeList::new(len));
         self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
+
+        // Poison the entire heap so any access to uninitialized memory is
+        // detectable.
+        if cfg!(gc_zeal) {
+            self.heap_slice_mut().fill(POISON);
+        }
     }
 
     fn detach(&mut self) -> crate::vm::Memory {
@@ -795,11 +891,27 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader {
-        self.index(gc_ref.as_typed_unchecked())
+        let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked());
+
+        debug_assert!(
+            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
+            "header: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
+            header.kind().as_u32(),
+        );
+
+        header
     }
 
     fn header_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcHeader {
-        self.index_mut(gc_ref.as_typed_unchecked())
+        let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked());
+
+        debug_assert!(
+            VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
+            "header_mut: invalid VMGcKind {:#010x} at gc_ref {gc_ref:#p}",
+            header.kind().as_u32(),
+        );
+
+        header
     }
 
     fn object_size(&self, gc_ref: &VMGcRef) -> usize {
@@ -827,6 +939,19 @@ unsafe impl GcHeap for DrcHeap {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };
+
+        // Assert that the newly-allocated memory is still filled with the
+        // poison pattern, and hasn't been corrupted since deallocation (or
+        // initial heap creation).
+        if cfg!(gc_zeal) {
+            let start = usize::try_from(gc_ref.as_heap_index().unwrap().get()).unwrap();
+            let slice = &self.heap_slice()[start..][..layout.size()];
+            gc_assert!(
+                slice.iter().all(|&b| b == POISON),
+                "newly allocated GC object at index {start} is not fully poisoned; \
+                 freed memory was corrupted",
+            );
+        }
 
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,
@@ -922,6 +1047,16 @@ unsafe impl GcHeap for DrcHeap {
         self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
 
+        // Poison the newly-grown region so stale accesses are detectable.
+        if cfg!(gc_zeal) {
+            let old_cap = self.free_list.as_ref().unwrap().current_capacity();
+            let new_bytes = usize::try_from(delta_bytes_grown).unwrap();
+            let slice = self.heap_slice_mut();
+            if old_cap + new_bytes <= slice.len() {
+                slice[old_cap..old_cap + new_bytes].fill(POISON);
+            }
+        }
+
         self.free_list
             .as_mut()
             .unwrap()
@@ -958,14 +1093,30 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
         match self.phase {
             DrcCollectionPhase::Trace => {
                 log::trace!("Begin DRC trace");
+
+                self.heap.assert_over_approximated_stack_roots_integrity();
+                self.heap.assert_free_blocks_are_poisoned();
+
                 self.heap.trace(&mut self.roots);
+
+                self.heap.assert_over_approximated_stack_roots_integrity();
+                self.heap.assert_free_blocks_are_poisoned();
+
                 log::trace!("End DRC trace");
                 self.phase = DrcCollectionPhase::Sweep;
                 GcProgress::Continue
             }
             DrcCollectionPhase::Sweep => {
                 log::trace!("Begin DRC sweep");
+
+                self.heap.assert_over_approximated_stack_roots_integrity();
+                self.heap.assert_free_blocks_are_poisoned();
+
                 self.heap.sweep(self.host_data_table);
+
+                self.heap.assert_over_approximated_stack_roots_integrity();
+                self.heap.assert_free_blocks_are_poisoned();
+
                 log::trace!("End DRC sweep");
                 self.phase = DrcCollectionPhase::Done;
                 GcProgress::Complete
