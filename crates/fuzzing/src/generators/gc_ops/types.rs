@@ -5,6 +5,7 @@ use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
+use wasmtime_environ::graphs::{Dfs, DfsEvent, Graph};
 
 /// Identifies a `(rec ...)` group.
 #[derive(
@@ -32,7 +33,79 @@ pub enum CompositeType {
 /// A sub-type definition (the per-type payload).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubType {
+    pub(crate) is_final: bool,
+    pub(crate) supertype: Option<TypeId>,
     pub(crate) composite_type: CompositeType,
+}
+
+/// Supertype graph: edges go from a type to its supertype.
+struct SupertypeGraph<'a> {
+    type_defs: &'a BTreeMap<TypeId, SubType>,
+}
+
+impl Graph<TypeId> for SupertypeGraph<'_> {
+    type NodesIter<'a>
+        = std::iter::Copied<std::collections::btree_map::Keys<'a, TypeId, SubType>>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        self.type_defs.keys().copied()
+    }
+
+    type SuccessorsIter<'a>
+        = std::option::IntoIter<TypeId>
+    where
+        Self: 'a;
+
+    fn successors(&self, node: TypeId) -> Self::SuccessorsIter<'_> {
+        self.type_defs
+            .get(&node)
+            .and_then(|def| def.supertype)
+            .into_iter()
+    }
+}
+
+/// Rec-group dependency graph: group A depends on group B when a type
+/// in A has a supertype in B.
+struct RecGroupGraph<'a> {
+    type_defs: &'a BTreeMap<TypeId, SubType>,
+    rec_groups: &'a BTreeMap<RecGroupId, BTreeSet<TypeId>>,
+    type_to_group: &'a BTreeMap<TypeId, RecGroupId>,
+}
+
+impl Graph<RecGroupId> for RecGroupGraph<'_> {
+    type NodesIter<'a>
+        = std::iter::Copied<std::collections::btree_map::Keys<'a, RecGroupId, BTreeSet<TypeId>>>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        self.rec_groups.keys().copied()
+    }
+
+    type SuccessorsIter<'a>
+        = std::vec::IntoIter<RecGroupId>
+    where
+        Self: 'a;
+
+    fn successors(&self, group: RecGroupId) -> Self::SuccessorsIter<'_> {
+        let mut deps = BTreeSet::new();
+
+        if let Some(type_ids) = self.rec_groups.get(&group) {
+            for &ty in type_ids {
+                if let Some(super_ty) = self.type_defs.get(&ty).and_then(|d| d.supertype) {
+                    if let Some(&super_group) = self.type_to_group.get(&super_ty) {
+                        if super_group != group {
+                            deps.insert(super_group);
+                        }
+                    }
+                }
+            }
+        }
+
+        deps.into_iter().collect::<Vec<_>>().into_iter()
+    }
 }
 
 /// All type and rec-group state.
@@ -89,7 +162,13 @@ impl Types {
     /// Insert an empty struct type into the given rec group.
     ///
     /// The rec group must already exist.
-    pub fn insert_empty_struct(&mut self, id: TypeId, group: RecGroupId) {
+    pub fn insert_empty_struct(
+        &mut self,
+        id: TypeId,
+        group: RecGroupId,
+        is_final: bool,
+        supertype: Option<TypeId>,
+    ) {
         self.rec_groups
             .get_mut(&group)
             .expect("rec group must exist")
@@ -97,6 +176,8 @@ impl Types {
         self.type_defs.insert(
             id,
             SubType {
+                is_final,
+                supertype,
                 composite_type: CompositeType::Struct(StructType::default()),
             },
         );
@@ -116,6 +197,158 @@ impl Types {
             .iter()
             .find(|(_, members)| members.contains(&id))
             .map(|(gid, _)| *gid)
+    }
+
+    /// Topological sort of types by their supertype (supertype before subtype).
+    pub fn sort_types_topo(&self, out: &mut Vec<TypeId>) {
+        let graph = SupertypeGraph {
+            type_defs: &self.type_defs,
+        };
+
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+
+        out.clear();
+        out.reserve(self.type_defs.len());
+
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
+                }
+                DfsEvent::Post(id) => {
+                    out.push(id);
+                }
+                DfsEvent::AfterEdge(_, _) => {}
+            }
+        }
+    }
+
+    /// Topological sort of rec groups: if a type in group G has a
+    /// supertype in group H, then H appears before G in the output.
+    pub fn sort_rec_groups_topo(&self, out: &mut Vec<RecGroupId>) {
+        let type_to_group = self.type_to_group_map();
+        let graph = RecGroupGraph {
+            type_defs: &self.type_defs,
+            rec_groups: &self.rec_groups,
+            type_to_group: &type_to_group,
+        };
+
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+
+        out.clear();
+        out.reserve(self.rec_groups.len());
+
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
+                }
+                DfsEvent::Post(id) => {
+                    out.push(id);
+                }
+                DfsEvent::AfterEdge(_, _) => {}
+            }
+        }
+    }
+
+    /// Break cycles in the [type -> supertype] graph by dropping some supertype edges.
+    pub fn break_supertype_cycles(&mut self) {
+        let graph = SupertypeGraph {
+            type_defs: &self.type_defs,
+        };
+
+        let mut dfs = Dfs::new(graph.nodes());
+        let mut seen = BTreeSet::new();
+        let mut active = BTreeSet::new();
+        let mut to_clear = BTreeSet::new();
+
+        while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+            match event {
+                DfsEvent::Pre(id) => {
+                    seen.insert(id);
+                    active.insert(id);
+                }
+                DfsEvent::Post(id) => {
+                    active.remove(&id);
+                }
+                DfsEvent::AfterEdge(from, to) => {
+                    if active.contains(&to) {
+                        to_clear.insert(from);
+                    }
+                }
+            }
+        }
+
+        for id in to_clear {
+            if let Some(def) = self.type_defs.get_mut(&id) {
+                def.supertype = None;
+            }
+        }
+    }
+
+    /// Build a reverse map from type id to its owning rec group.
+    fn type_to_group_map(&self) -> BTreeMap<TypeId, RecGroupId> {
+        self.rec_groups
+            .iter()
+            .flat_map(|(&gid, members)| members.iter().map(move |&tid| (tid, gid)))
+            .collect()
+    }
+
+    /// Break cycles in the rec-group dependency graph by dropping cross-group
+    /// supertype edges that are DFS back edges.
+    pub fn break_rec_group_cycles(&mut self) {
+        let type_to_group = self.type_to_group_map();
+        let graph = RecGroupGraph {
+            type_defs: &self.type_defs,
+            rec_groups: &self.rec_groups,
+            type_to_group: &type_to_group,
+        };
+
+        let mut seen = BTreeSet::new();
+        let mut back_edges: BTreeSet<(RecGroupId, RecGroupId)> = BTreeSet::new();
+        let mut dfs = Dfs::default();
+
+        for &root in self.rec_groups.keys() {
+            if seen.contains(&root) {
+                continue;
+            }
+            dfs.add_root(root);
+            let mut active = BTreeSet::new();
+
+            while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
+                match event {
+                    DfsEvent::Pre(id) => {
+                        seen.insert(id);
+                        active.insert(id);
+                    }
+                    DfsEvent::Post(id) => {
+                        active.remove(&id);
+                    }
+                    DfsEvent::AfterEdge(from, to) => {
+                        if active.contains(&to) {
+                            back_edges.insert((from, to));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drop supertype edges that correspond to back edges.
+        if !back_edges.is_empty() {
+            for (&tid, def) in self.type_defs.iter_mut() {
+                if let Some(st) = def.supertype {
+                    if let (Some(&sg), Some(&spg)) =
+                        (type_to_group.get(&tid), type_to_group.get(&st))
+                    {
+                        if back_edges.contains(&(sg, spg)) {
+                            def.supertype = None;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Fix up the types to ensure they are within the limits.
@@ -166,6 +399,35 @@ impl Types {
             }
         }
 
+        // 6. Clear supertypes that reference removed types.
+        let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
+        for def in self.type_defs.values_mut() {
+            if let Some(st) = def.supertype {
+                if !valid_type_ids.contains(&st) {
+                    def.supertype = None;
+                }
+            }
+        }
+
+        // 7. A subtype cannot have a final supertype.
+        let final_type_ids: BTreeSet<TypeId> = self
+            .type_defs
+            .iter()
+            .filter(|(_, d)| d.is_final)
+            .map(|(id, _)| *id)
+            .collect();
+        for def in self.type_defs.values_mut() {
+            if let Some(st) = def.supertype {
+                if final_type_ids.contains(&st) {
+                    def.supertype = None;
+                }
+            }
+        }
+
+        // 8. Break supertype cycles and rec-group dependency cycles.
+        self.break_supertype_cycles();
+        self.break_rec_group_cycles();
+
         debug_assert!(self.is_well_formed(limits));
     }
 
@@ -201,6 +463,22 @@ impl Types {
         if !self.type_defs.keys().all(|tid| all.contains(tid)) {
             log::debug!("[-] Failed: type_defs.keys().all(|tid| all.contains(tid)) is false");
             return false;
+        }
+        // Every supertype must exist and must not be final.
+        for (&tid, def) in &self.type_defs {
+            if let Some(st) = def.supertype {
+                match self.type_defs.get(&st) {
+                    None => {
+                        log::debug!("[-] Failed: supertype {st:?} missing for subtype {tid:?}");
+                        return false;
+                    }
+                    Some(super_def) if super_def.is_final => {
+                        log::debug!("[-] Failed: subtype {tid:?} has final supertype {st:?}");
+                        return false;
+                    }
+                    _ => {}
+                }
+            }
         }
         true
     }
