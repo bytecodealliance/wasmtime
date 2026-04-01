@@ -1,9 +1,9 @@
 ;;! target = "x86_64"
 ;;! flags = "-W gc,exceptions"
 ;;! test = "compile"
+;;! objdump = "--stack-maps=true"
 
 (module
-  (type $a (array (mut i8)))
   (type $s (struct (field (mut i32))))
 
   (import "" "gc" (func $gc))
@@ -22,7 +22,6 @@
     struct.get $s 0
   )
 )
-
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
@@ -30,7 +29,7 @@
 ;;       movq    0x18(%r10), %r10
 ;;       addq    $0x60, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0xc1
+;;       ja      0xbe
 ;;   19: subq    $0x50, %rsp
 ;;       movq    %rbx, 0x20(%rsp)
 ;;       movq    %r12, 0x28(%rsp)
@@ -39,12 +38,12 @@
 ;;       movq    %r15, 0x40(%rsp)
 ;;       movq    %rdi, 8(%rsp)
 ;;       movl    $0xb0000000, %esi
-;;       movl    $1, %edx
+;;       xorl    %edx, %edx
 ;;       movl    $0x20, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    8(%rsp), %rbx
 ;;       movq    %rbx, %rdi
-;;       callq   0x218
+;;       callq   0x215
 ;;       movl    %eax, (%rsp)
 ;;       movq    8(%rbx), %rcx
 ;;       movq    0x20(%rcx), %rcx
@@ -57,11 +56,12 @@
 ;;       movq    %rbx, 8(%rsp)
 ;;       callq   *%rax
 ;;       ├─╼ exception frame offset: SP = FP - 0x50
-;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0x89
+;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0x86
 ;;       movl    (%rsp), %eax
+;;       ╰─╼ stack_map: frame_size=80, frame_offsets=[0]
 ;;       testl   %eax, %eax
-;;       je      0xc3
-;;   94: movl    %eax, %eax
+;;       je      0xc0
+;;   91: movl    %eax, %eax
 ;;       movq    0x10(%rsp), %rcx
 ;;       movl    0x18(%rcx, %rax), %eax
 ;;       movq    0x20(%rsp), %rbx
@@ -73,5 +73,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   c1: ud2
-;;   c3: ud2
+;;   be: ud2
+;;       ╰─╼ trap: StackOverflow
+;;   c0: ud2
+;;       ╰─╼ trap: NullReference
