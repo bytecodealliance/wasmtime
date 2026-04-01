@@ -2266,6 +2266,14 @@
 
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(decl maybe_csdb_after_select (ValueRegs) ValueRegs)
+(rule (maybe_csdb_after_select dst)
+  (if-let true (use_csdb))
+  (let ((_ InstOutput (side_effect (csdb)))) dst))
+(rule (maybe_csdb_after_select dst)
+  (if-let false (use_csdb))
+  dst)
+
 (rule (lower (has_type ty
                        (select_spectre_guard _ (maybe_uextend (icmp _ cc x @ (value_type in_ty) y))
                                              if_true

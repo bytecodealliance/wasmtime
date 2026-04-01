@@ -31,6 +31,7 @@ use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlags, RelSourceLoc, SourceLoc, types},
+    isa::aarch64,
     isa::aarch64::inst::{self, Cond, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VectorSize},
     settings,
 };
@@ -62,11 +63,15 @@ pub(crate) struct MacroAssembler {
 
 impl MacroAssembler {
     /// Create an Aarch64 MacroAssembler.
-    pub fn new(ptr_size: impl PtrSize, shared_flags: settings::Flags) -> Result<Self> {
+    pub fn new(
+        ptr_size: impl PtrSize,
+        shared_flags: settings::Flags,
+        isa_flags: aarch64::settings::Flags,
+    ) -> Result<Self> {
         Ok(Self {
             sp_max: 0,
             stack_max_use_add: None,
-            asm: Assembler::new(shared_flags),
+            asm: Assembler::new(shared_flags, isa_flags),
             sp_offset: 0u32,
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
             scratch_scope: RegAlloc::from(scratch_gpr_bitset(), scratch_fpr_bitset()),
