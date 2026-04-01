@@ -15,6 +15,10 @@
 extern "C" {
 #endif
 
+struct wasmtime_eqref;
+/// Convenience alias for #wasmtime_eqref
+typedef struct wasmtime_eqref wasmtime_eqref_t;
+
 /**
  * \typedef wasmtime_anyref_t
  * \brief Convenience alias for #wasmtime_anyref
@@ -78,6 +82,19 @@ WASM_API_EXTERN void wasmtime_anyref_clone(const wasmtime_anyref_t *anyref,
                                            wasmtime_anyref_t *out);
 
 /**
+ * \brief Downcast an `anyref` to an `eqyref`.
+ *
+ * Returns `true` if the downcast succeeded, and `out` is initialized. Returns
+ * `false` if the downcast failed, and `out` is left uninitialized.
+ *
+ * The original `anyref` is not consumed; `out` receives a new cloned root
+ * pointing to the same GC object as `anyref`.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_to_eqref(wasmtime_context_t *context,
+                                              const wasmtime_anyref_t *anyref,
+                                              wasmtime_eqref_t *out);
+
+/**
  * \brief Unroots the `ref` provided within the `context`.
  *
  * This API is required to enable the `ref` value provided to be
@@ -127,6 +144,15 @@ WASM_API_EXTERN uint32_t wasmtime_anyref_to_raw(wasmtime_context_t *context,
 WASM_API_EXTERN void wasmtime_anyref_from_i31(wasmtime_context_t *context,
                                               uint32_t i31val,
                                               wasmtime_anyref_t *out);
+
+/**
+ * \brief Test whether an `anyref` is an `i31ref`.
+ *
+ * Returns `true` if the given `anyref` is an `i31ref`, `false` otherwise.
+ * Returns `false` for null references.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_is_i31(wasmtime_context_t *context,
+                                            const wasmtime_anyref_t *anyref);
 
 /**
  * \brief Get the `anyref`'s underlying `i31ref` value, zero extended, if any.

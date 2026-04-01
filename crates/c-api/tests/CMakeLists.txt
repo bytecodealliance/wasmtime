@@ -49,6 +49,7 @@ add_capi_test(tests FILES
   wasi.cc
   store.cc
   val.cc
+  gc.cc
   table.cc
   global.cc
   memory.cc

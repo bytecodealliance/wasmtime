@@ -205,6 +205,7 @@
 #include <wasmtime/tag.h>
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
+#include <wasmtime/gc.h>
 #include <wasmtime/async.h>
 #include <wasmtime/component.h>
 #include <wasmtime/wat.h>
