@@ -390,3 +390,75 @@
   (export "f" (func $c2 "f"))
 )
 (assert_trap (invoke "f") "unreachable")
+
+;; utf8 -> latin1+utf16
+;;  - first realloc fails to hold latin1
+;;  - second realloc is out of bounds
+(component
+  (component $c
+    (core module $m
+      (global $cnt (mut i32) (i32.const 0))
+      (func (export "") (param i32 i32)
+        unreachable
+      )
+      (func (export "realloc") (param $old_ptr i32) (param $old_size i32)
+                               (param $align i32) (param $new_size i32) (result i32)
+        (if (i32.ne (local.get $align) (i32.const 2)) (then unreachable))
+        (global.set $cnt (i32.add (global.get $cnt) (i32.const 1)))
+
+        ;; first allocation is aligned
+        (if (i32.eq (global.get $cnt) (i32.const 1))
+          (then
+            (if (i32.ne (local.get $old_ptr) (i32.const 0)) (then unreachable))
+            (if (i32.ne (local.get $old_size) (i32.const 0)) (then unreachable))
+            (if (i32.ne (local.get $new_size) (i32.const 5)) (then unreachable))
+            (return (i32.const 2)))
+        )
+        ;; second allocation is out of bounds
+        (if (i32.eq (global.get $cnt) (i32.const 2))
+          (then
+            (if (i32.ne (local.get $old_ptr) (i32.const 2)) (then unreachable))
+            (if (i32.ne (local.get $old_size) (i32.const 5)) (then unreachable))
+            (if (i32.ne (local.get $new_size) (i32.const 10)) (then unreachable))
+            (return (i32.const -2)))
+        )
+
+        unreachable
+      )
+      (memory (export "memory") 1)
+    )
+    (core instance $m (instantiate $m))
+    (func (export "a") (param "a" string)
+      (canon lift
+        (core func $m "")
+        (realloc (func $m "realloc"))
+        (memory $m "memory")
+        string-encoding=latin1+utf16)
+    )
+  )
+
+  (component $c2
+    (import "a" (func $f (param "a" string)))
+    (core module $libc
+      (memory (export "memory") 1)
+      ;; "Ë┛" in UTF-8 is "\xc3\xab\xe2\x8c\x9b", 5 bytes.
+      ;; * First, a 5-byte allocation is made to see if it fits in latin 1.
+      ;; * This fails since "┛" does not fit in latin1. The second allocation
+      ;;   is then out of bounds and should trap
+      (data (memory 0) (i32.const 0) "Ë┛")
+    )
+    (core instance $libc (instantiate $libc))
+    (core func $f (canon lower (func $f) (memory $libc "memory")))
+    (core module $m
+      (import "" "" (func $f (param i32 i32)))
+      (func (export "f") (call $f (i32.const 0) (i32.const 5)))
+    )
+    (core instance $m (instantiate $m (with "" (instance (export "" (func $f))))))
+    (func (export "f") (canon lift (core func $m "f")))
+  )
+
+  (instance $c (instantiate $c))
+  (instance $c2 (instantiate $c2 (with "a" (func $c "a"))))
+  (export "f" (func $c2 "f"))
+)
+(assert_trap (invoke "f") "unreachable")
