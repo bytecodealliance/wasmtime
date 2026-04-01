@@ -254,6 +254,8 @@ pub(crate) enum DescriptorType {
     SymbolicLink,
     /// The descriptor refers to a regular file inode.
     RegularFile,
+    /// The descriptor refers to a FIFO
+    Fifo,
 }
 
 impl From<cap_std::fs::FileType> for DescriptorType {
@@ -268,6 +270,8 @@ impl From<cap_std::fs::FileType> for DescriptorType {
             DescriptorType::CharacterDevice
         } else if ft.is_file() {
             DescriptorType::RegularFile
+        } else if ft.is_fifo() {
+            DescriptorType::Fifo
         } else {
             DescriptorType::Unknown
         }

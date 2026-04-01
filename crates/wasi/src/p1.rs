@@ -536,8 +536,9 @@ impl Transaction<'_> {
         let fd = fd.into();
         match self.descriptors.used.get(&fd) {
             Some(Descriptor::File(file)) => {
+                let descriptor_type = self.view.filesystem().get_type(file.fd.borrowed()).await?;
                 if matches!(
-                    self.view.filesystem().get_type(file.fd.borrowed()).await?,
+                    descriptor_type,
                     filesystem::DescriptorType::CharacterDevice | filesystem::DescriptorType::Fifo
                 ) {
                     return Err(types::Errno::Spipe.into());
