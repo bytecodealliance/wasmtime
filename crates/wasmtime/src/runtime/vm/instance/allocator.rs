@@ -517,7 +517,7 @@ fn check_table_init_bounds(
                 // Initializer is in bounds
             }
             _ => {
-                bail!("table out of bounds: elements segment does not fit")
+                bail!(Trap::TableOutOfBounds);
             }
         }
     }
@@ -627,7 +627,7 @@ fn check_memory_init_bounds(
                 // Initializer is in bounds
             }
             _ => {
-                bail!("memory out of bounds: data segment does not fit")
+                bail!(Trap::MemoryOutOfBounds);
             }
         }
     }
