@@ -113,7 +113,9 @@ public:
  * element.
  */
 struct FieldType {
+  /// The field's storage kind.
   wasmtime_storage_kind_t kind;
+  /// Whether the field is mutable or not.
   bool mutable_;
 
   /// Create a mutable field type.
