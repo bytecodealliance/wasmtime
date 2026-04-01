@@ -221,7 +221,7 @@ pub struct Suspend {
     previous: asan::PreviousStack,
 }
 
-extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8)
+extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8) -> *mut u8
 where
     F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
@@ -235,7 +235,10 @@ where
             previous,
         };
         let initial = inner.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()))
+        let mut inner =
+            super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()));
+        asan::fiber_exit(&mut inner.previous);
+        inner.top_of_stack
     }
 }
 
@@ -269,11 +272,7 @@ impl Fiber {
             let addr = stack.top().unwrap().cast::<usize>().offset(-1);
             addr.write(result as *const _ as usize);
 
-            asan::fiber_switch(
-                stack.top().unwrap(),
-                false,
-                &mut asan::PreviousStack::new(stack),
-            );
+            asan::fiber_switch(stack.top().unwrap(), &mut asan::PreviousStack::new(stack));
 
             // null this out to help catch use-after-free
             addr.write(0);
@@ -286,22 +285,19 @@ impl Fiber {
 impl Suspend {
     pub(crate) fn switch<A, B, C>(&mut self, result: RunResult<A, B, C>) -> A {
         unsafe {
-            let is_finishing = match &result {
-                RunResult::Returned(_) | RunResult::Panicked(_) => true,
-                RunResult::Executing | RunResult::Resuming(_) | RunResult::Yield(_) => false,
-            };
             // Calculate 0xAff8 and then write to it
             (*self.result_location::<A, B, C>()).set(result);
 
-            asan::fiber_switch(self.top_of_stack, is_finishing, &mut self.previous);
+            asan::fiber_switch(self.top_of_stack, &mut self.previous);
 
             self.take_resume::<A, B, C>()
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!()
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {
@@ -378,22 +374,9 @@ mod asan {
     ///   final time; customizes how asan intrinsics are invoked.
     /// * `prev` - the stack we're switching to initially and saves the
     ///   stack to return to upon resumption.
-    pub unsafe fn fiber_switch(
-        top_of_stack: *mut u8,
-        is_finishing: bool,
-        prev: &mut PreviousStack,
-    ) {
+    pub unsafe fn fiber_switch(top_of_stack: *mut u8, prev: &mut PreviousStack) {
         assert!(super::SUPPORTED_ARCH);
         let mut private_asan_pointer = std::ptr::null_mut();
-
-        // If this fiber is finishing then NULL is passed to asan to let it know
-        // that it can deallocate the "fake stack" that it's tracking for this
-        // fiber.
-        let private_asan_pointer_ref = if is_finishing {
-            None
-        } else {
-            Some(&mut private_asan_pointer)
-        };
 
         // NB: in fiddling with asan an optimizations and such it appears that
         // these functions need to be "very close to each other". If other Rust
@@ -402,9 +385,16 @@ mod asan {
         // module as-is where this function exists to have these three
         // functions very close to one another.
         unsafe {
-            __sanitizer_start_switch_fiber(private_asan_pointer_ref, prev.bottom, prev.size);
+            __sanitizer_start_switch_fiber(Some(&mut private_asan_pointer), prev.bottom, prev.size);
             super::wasmtime_fiber_switch(top_of_stack);
             __sanitizer_finish_switch_fiber(private_asan_pointer, &mut prev.bottom, &mut prev.size);
+        }
+    }
+
+    pub unsafe fn fiber_exit(prev: &mut PreviousStack) {
+        assert!(super::SUPPORTED_ARCH);
+        unsafe {
+            __sanitizer_start_switch_fiber(None, prev.bottom, prev.size);
         }
     }
 
@@ -523,16 +513,14 @@ mod asan_disabled {
         }
     }
 
-    pub unsafe fn fiber_switch(
-        top_of_stack: *mut u8,
-        _is_finishing: bool,
-        _prev: &mut PreviousStack,
-    ) {
+    pub unsafe fn fiber_switch(top_of_stack: *mut u8, _prev: &mut PreviousStack) {
         assert!(super::SUPPORTED_ARCH);
         unsafe {
             super::wasmtime_fiber_switch(top_of_stack);
         }
     }
+
+    pub unsafe fn fiber_exit(_prev: &mut PreviousStack) {}
 
     #[inline]
     pub unsafe fn fiber_start_complete() -> PreviousStack {
