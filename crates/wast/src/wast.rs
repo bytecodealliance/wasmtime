@@ -236,6 +236,17 @@ impl WastContext {
         Ok(())
     }
 
+    /// Register the "wasmtime" module, which provides utilities that our misc
+    /// tests use.
+    pub fn register_wasmtime(&mut self) -> Result<()> {
+        self.core_linker
+            .func_wrap("wasmtime", "gc", |mut caller: Caller<_>| {
+                caller.gc(None)?;
+                Ok(())
+            })?;
+        Ok(())
+    }
+
     /// Perform the action portion of a command.
     fn perform_action(&mut self, action: &Action<'_>) -> Result<Outcome> {
         // Need to simultaneously borrow `self.async_runtime` and a `&mut

@@ -267,6 +267,13 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
                 use_shared_memory: true,
                 suppress_prints: true,
             })?;
+            if test
+                .path
+                .to_str()
+                .is_some_and(|s| s.contains("misc_testsuite"))
+            {
+                wast_context.register_wasmtime()?;
+            }
             wast_context
                 .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
                 .with_context(|| format!("failed to run spec test with {desc} engine"))
