@@ -133,15 +133,15 @@ WASM_API_EXTERN bool wasmtime_eqref_i31_get_s(wasmtime_context_t *context,
 /**
  * \brief Discriminant for storage types in struct/array field types.
  *
- * Extends #wasmtime_valkind_t with packed storage types #WASMTIME_I8 and
- * #WASMTIME_I16.
+ * Extends #wasmtime_valkind_t with packed storage types
+ * #WASMTIME_STORAGE_KIND_I8 and #WASMTIME_STORAGE_KIND_I16.
  */
 typedef uint8_t wasmtime_storage_kind_t;
 
 /// \brief An 8-bit packed integer (only valid inside struct/array fields).
-#define WASMTIME_I8 8
+#define WASMTIME_STORAGE_KIND_I8 9
 /// \brief A 16-bit packed integer (only valid inside struct/array fields).
-#define WASMTIME_I16 9
+#define WASMTIME_STORAGE_KIND_I16 10
 
 /**
  * \typedef wasmtime_field_type_t
@@ -152,8 +152,8 @@ typedef uint8_t wasmtime_storage_kind_t;
  */
 typedef struct wasmtime_field_type {
   /// The storage type of this field. Use #WASMTIME_I32, #WASMTIME_I64,
-  /// #WASMTIME_F32, etc. for value types, or #WASMTIME_I8 / #WASMTIME_I16
-  /// for packed types.
+  /// #WASMTIME_F32, etc. for value types, or #WASMTIME_STORAGE_KIND_I8 /
+  /// #WASMTIME_STORAGE_KIND_I16 for packed types.
   wasmtime_storage_kind_t kind;
   /// Whether this field is mutable. `true` for mutable, `false` for
   /// immutable.

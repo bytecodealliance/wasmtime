@@ -557,8 +557,8 @@ pub unsafe extern "C" fn wasmtime_eqref_i31_get_s(
 }
 
 pub type wasmtime_storage_kind_t = u8;
-pub const WASMTIME_I8: wasmtime_storage_kind_t = 8;
-pub const WASMTIME_I16: wasmtime_storage_kind_t = 9;
+pub const WASMTIME_STORAGE_KIND_I8: wasmtime_storage_kind_t = 9;
+pub const WASMTIME_STORAGE_KIND_I16: wasmtime_storage_kind_t = 10;
 
 #[repr(C)]
 pub struct wasmtime_field_type_t {
@@ -573,8 +573,8 @@ fn field_type_from_c(ft: &wasmtime_field_type_t) -> FieldType {
         Mutability::Const
     };
     let storage = match ft.kind {
-        WASMTIME_I8 => StorageType::I8,
-        WASMTIME_I16 => StorageType::I16,
+        WASMTIME_STORAGE_KIND_I8 => StorageType::I8,
+        WASMTIME_STORAGE_KIND_I16 => StorageType::I16,
         crate::WASMTIME_I32 => StorageType::ValType(ValType::I32),
         crate::WASMTIME_I64 => StorageType::ValType(ValType::I64),
         crate::WASMTIME_F32 => StorageType::ValType(ValType::F32),
@@ -583,6 +583,7 @@ fn field_type_from_c(ft: &wasmtime_field_type_t) -> FieldType {
         crate::WASMTIME_FUNCREF => StorageType::ValType(ValType::FUNCREF),
         crate::WASMTIME_EXTERNREF => StorageType::ValType(ValType::EXTERNREF),
         crate::WASMTIME_ANYREF => StorageType::ValType(ValType::ANYREF),
+        crate::WASMTIME_EXNREF => StorageType::ValType(ValType::EXNREF),
         other => panic!("unknown wasmtime_storage_kind_t: {other}"),
     };
     FieldType::new(mutability, storage)

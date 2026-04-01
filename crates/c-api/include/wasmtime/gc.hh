@@ -149,7 +149,7 @@ public:
   }
 
   /// Get the underlying C pointer (non-owning).
-  const wasmtime_struct_type_t *c_ptr() const { return ptr.get(); }
+  const wasmtime_struct_type_t *capi() const { return ptr.get(); }
 
 private:
   StructType() = default;
@@ -163,28 +163,16 @@ private:
  * many struct instances of the same type.
  */
 class StructRefPre {
-  struct Deleter {
-    void operator()(wasmtime_struct_ref_pre_t *p) const {
-      wasmtime_struct_ref_pre_delete(p);
-    }
-  };
-  std::unique_ptr<wasmtime_struct_ref_pre_t, Deleter> ptr;
+  friend class StructRef;
+  WASMTIME_OWN_WRAPPER(StructRefPre, wasmtime_struct_ref_pre)
 
 public:
   /// Create a new struct pre-allocator.
   static StructRefPre create(Store::Context cx, const StructType &ty) {
-    auto *raw = wasmtime_struct_ref_pre_new(cx.capi(), ty.c_ptr());
-    StructRefPre pre;
-    pre.ptr.reset(raw);
+    auto *raw = wasmtime_struct_ref_pre_new(cx.capi(), ty.capi());
+    StructRefPre pre(raw);
     return pre;
   }
-
-  /// Get the underlying C pointer (non-owning).
-  const wasmtime_struct_ref_pre_t *c_ptr() const { return ptr.get(); }
-
-private:
-  StructRefPre() = default;
-  friend class StructRef;
 };
 
 /**
@@ -237,7 +225,7 @@ public:
     }
 
     wasmtime_structref_t out;
-    auto *err = wasmtime_structref_new(cx.capi(), pre.c_ptr(), c_fields.data(),
+    auto *err = wasmtime_structref_new(cx.capi(), pre.capi(), c_fields.data(),
                                        c_fields.size(), &out);
     if (err)
       return Result<StructRef>(Error(err));
