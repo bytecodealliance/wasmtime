@@ -29,7 +29,6 @@
 ;;       mov     x9, #0xffff
 ;;       cmp     x4, x9
 ;;       csel    x12, x10, x11, hi
-;;       csdb
 ;;       strb    w5, [x12]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -45,7 +44,6 @@
 ;;       mov     x9, #0xffff
 ;;       cmp     x4, x9
 ;;       csel    x12, x10, x11, hi
-;;       csdb
 ;;       ldrb    w2, [x12]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

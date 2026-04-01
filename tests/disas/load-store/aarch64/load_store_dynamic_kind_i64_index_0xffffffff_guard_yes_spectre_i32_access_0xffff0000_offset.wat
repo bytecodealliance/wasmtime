@@ -29,7 +29,6 @@
 ;;       add     x12, x12, x13
 ;;       cmp     x4, x10
 ;;       csel    x11, x11, x12, hi
-;;       csdb
 ;;       str     w5, [x11]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -45,7 +44,6 @@
 ;;       add     x12, x12, x13
 ;;       cmp     x4, x10
 ;;       csel    x11, x11, x12, hi
-;;       csdb
 ;;       ldr     w2, [x11]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

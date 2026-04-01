@@ -1,5 +1,6 @@
 use crate::ir::types::*;
 use crate::ir::{ExternalName, TrapCode};
+use crate::isa::aarch64;
 use crate::isa::aarch64::inst::*;
 
 use alloc::boxed::Box;
@@ -7929,7 +7930,8 @@ fn test_aarch64_binemit() {
     insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));
 
     let flags = settings::Flags::new(settings::builder());
-    let emit_info = EmitInfo::new(flags);
+    let isa_flags = aarch64::settings::Flags::new(&flags, &aarch64::settings::builder());
+    let emit_info = EmitInfo::new(flags, isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!("AArch64: {insn:?}, {expected_encoding}, {expected_printing}");
 

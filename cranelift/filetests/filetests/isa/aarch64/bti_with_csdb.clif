@@ -1,6 +1,6 @@
 test compile precise-output
 set unwind_info=false
-target aarch64 use_bti
+target aarch64 use_bti use_csdb
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
@@ -57,30 +57,31 @@ block5(v5: i32):
 ;   hint #0x22
 ; block1: ; offset 0x4
 ;   cmp w0, #3
-;   b.hs #0x50
+;   b.hs #0x54
 ;   csel x11, xzr, x0, hs
-;   adr x10, #0x20
+;   csdb
+;   adr x10, #0x24
 ;   ldrsw x11, [x10, w11, uxtw #2]
 ;   add x10, x10, x11
 ;   br x10
 ;   .byte 0x24, 0x00, 0x00, 0x00
 ;   .byte 0x18, 0x00, 0x00, 0x00
 ;   .byte 0x0c, 0x00, 0x00, 0x00
-; block2: ; offset 0x2c
+; block2: ; offset 0x30
 ;   hint #0x24
 ;   mov w5, #3
-;   b #0x54
-; block3: ; offset 0x38
+;   b #0x58
+; block3: ; offset 0x3c
 ;   hint #0x24
 ;   mov w5, #2
-;   b #0x54
-; block4: ; offset 0x44
+;   b #0x58
+; block4: ; offset 0x48
 ;   hint #0x24
 ;   mov w5, #1
-;   b #0x54
-; block5: ; offset 0x50
+;   b #0x58
+; block5: ; offset 0x54
 ;   mov w5, #4
-; block6: ; offset 0x54
+; block6: ; offset 0x58
 ;   add w0, w0, w5
 ;   ret
 
@@ -123,19 +124,20 @@ block2:
 ;   ldr x5, [x0]
 ;   mov x8, x5
 ;   cmp w0, #1
-;   b.hs #0x3c
+;   b.hs #0x40
 ;   csel x7, xzr, x0, hs
-;   adr x6, #0x28
+;   csdb
+;   adr x6, #0x2c
 ;   ldrsw x7, [x6, w7, uxtw #2]
 ;   add x6, x6, x7
 ;   br x6
 ;   .byte 0x04, 0x00, 0x00, 0x00
-; block2: ; offset 0x2c
+; block2: ; offset 0x30
 ;   hint #0x24
 ;   mov x0, x8
 ;   add x0, x0, #0x2a
 ;   ret
-; block3: ; offset 0x3c
+; block3: ; offset 0x40
 ;   mov x0, x8
 ;   ret
 
@@ -170,4 +172,3 @@ block0(v0: i64):
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-

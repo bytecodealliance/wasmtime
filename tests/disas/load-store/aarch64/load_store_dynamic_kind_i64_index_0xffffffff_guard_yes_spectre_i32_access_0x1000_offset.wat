@@ -28,7 +28,6 @@
 ;;       add     x11, x11, #1, lsl #12
 ;;       cmp     x4, x9
 ;;       csel    x10, x10, x11, hi
-;;       csdb
 ;;       str     w5, [x10]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -43,7 +42,6 @@
 ;;       add     x11, x11, #1, lsl #12
 ;;       cmp     x4, x9
 ;;       csel    x10, x10, x11, hi
-;;       csdb
 ;;       ldr     w2, [x10]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
