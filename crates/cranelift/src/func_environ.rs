@@ -2742,7 +2742,9 @@ impl FuncEnvironment<'_> {
             libcall,
             &[vmctx, interned_type_index, data_index, data_offset, len],
         );
-        Ok(builder.func.dfg.first_result(call_inst))
+        let array_ref = builder.func.dfg.first_result(call_inst);
+        builder.declare_value_needs_stack_map(array_ref);
+        Ok(array_ref)
     }
 
     pub fn translate_array_new_elem(
