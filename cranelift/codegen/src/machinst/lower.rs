@@ -1151,8 +1151,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // End branch.
             if let Some(bb) = lb.orig_block() {
                 if let Some(branch) = self.collect_branch_and_targets(bindex, bb, &mut targets) {
+                    let branch_start = self.vcode.vcode.num_insts();
                     self.lower_clif_branch(backend, bindex, bb, branch, &targets)?;
                     self.finish_ir_inst(self.srcloc(branch));
+
+                    // Branch instructions like try_call can also be safepoints
+                    // that need stack maps. Forward the stack map from the CLIF
+                    // branch to the VCode safepoint, just like we do for
+                    // non-branch instructions in `lower_clif_block`.
+                    if let Some(entries) = self.f.dfg.user_stack_map_entries(branch) {
+                        let branch_end = self.vcode.vcode.num_insts();
+                        for i in branch_start..branch_end {
+                            let iix = InsnIndex::new(i);
+                            if self.vcode.vcode[iix].is_safepoint() {
+                                self.vcode.add_user_stack_map(
+                                    BackwardsInsnIndex::new(iix.index()),
+                                    entries,
+                                );
+                                break;
+                            }
+                        }
+                    }
                 }
             } else {
                 // If no orig block, this must be a pure edge block;
