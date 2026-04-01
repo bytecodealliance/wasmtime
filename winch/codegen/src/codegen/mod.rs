@@ -1047,7 +1047,7 @@ where
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
-            self.masm.cmp(index, bound.into(), OperandSize::S32)?;
+            self.masm.cmp(index, bound.into(), bound_size)?;
             self.masm
                 .cmov(writable!(base), tmp, IntCmpKind::GeU, ptr_size)?;
         }

@@ -79,7 +79,7 @@
 ;;       ldur    x2, [x2, #0x30]
 ;;       mov     x4, x2
 ;;       add     x2, x2, x16, uxtx
-;;       cmp     w1, w3, uxtx
+;;       cmp     x1, x3, uxtx
 ;;       csel    x2, x4, x2, hs
 ;;       ldur    x0, [x2]
 ;;       tst     x0, x0
