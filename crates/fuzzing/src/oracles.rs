@@ -23,6 +23,7 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
+use crate::generators::ExceptionOps;
 use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
@@ -1019,6 +1020,70 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             log::info!("CountDrops::drop: actual drops: {drops} -> {}", drops + 1);
         }
     }
+}
+
+/// Execute a series of exception-related operations.
+pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps) -> Result<()> {
+    // Force exceptions + GC on (exceptions require GC).
+    fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
+    let module_cfg = &mut fuzz_config.module_config.config;
+    module_cfg.gc_enabled = true;
+    module_cfg.exceptions_enabled = true;
+    module_cfg.reference_types_enabled = true;
+
+    let expected = ops.expected_result();
+
+    let wasm = ops.to_wasm_binary();
+    log_wasm(&wasm);
+
+    let mut store = fuzz_config.to_store();
+
+    let module = match compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config) {
+        Some(m) => m,
+        None => return Ok(()),
+    };
+
+    let mut linker = Linker::new(store.engine());
+
+    let check_ty = FuncType::new(store.engine(), [ValType::I32, ValType::I32], []);
+    let check_func = Func::new(&mut store, check_ty, |_caller, params, _results| {
+        let actual = params[0].unwrap_i32();
+        let expected = params[1].unwrap_i32();
+        assert_eq!(actual, expected, "check_i32 mismatch");
+        Ok(())
+    });
+    linker.define(&store, "", "check_i32", check_func).unwrap();
+
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::I32(0)];
+    match run.call(&mut store, &[], &mut results) {
+        Ok(()) => {
+            let actual = results[0].unwrap_i32();
+            assert_eq!(
+                actual, expected,
+                "exception_ops: run returned {actual}, expected {expected} \
+                 (one catch per scenario)"
+            );
+        }
+        Err(e) => {
+            // AllocationTooLarge / GcHeapOutOfMemory are acceptable resource-limit traps.
+            if let Some(trap) = e.downcast_ref::<Trap>() {
+                match trap {
+                    Trap::AllocationTooLarge => return Ok(()),
+                    _ => {}
+                }
+            }
+            if e.is::<GcHeapOutOfMemory<()>>() {
+                return Ok(());
+            }
+            // Any other error (including ThrownException) is unexpected.
+            panic!("exception_ops: unexpected error during execution: {e:?}");
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Default)]

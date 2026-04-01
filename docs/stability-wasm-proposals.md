@@ -47,7 +47,7 @@ The emoji legend is:
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | 🚧[^9] | ✅  | ✅     |
+| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
 | [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ❌     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
@@ -71,9 +71,6 @@ The emoji legend is:
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
-[^9]: The exception-handling proposal is fuzzed by our whole-module fuzzer,
-      but we do not have an exception-specific fuzzer that attempts to create
-      interesting throw/catch patterns or payloads.
 
 [cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 
