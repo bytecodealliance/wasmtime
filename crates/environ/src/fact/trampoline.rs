@@ -2357,6 +2357,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(Call(dst_mem_opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
         self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
+        self.validate_string_inbounds(&dst, dst_byte_len.idx);
 
         // Call the host utf16 transcoding function. This will inflate the
         // prior latin1 bytes and then encode the rest of the source string
