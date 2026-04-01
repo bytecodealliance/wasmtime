@@ -34,10 +34,10 @@ impl TypesMutator {
             };
             let tid = types.fresh_type_id(ctx.rng());
             let is_final = (ctx.rng().gen_u32() % 4) == 0;
-            let supertype = if types.type_defs.is_empty() {
-                None
-            } else {
+            let supertype = if (ctx.rng().gen_u32() % 4) == 0 {
                 ctx.rng().choose(types.type_defs.keys()).copied()
+            } else {
+                None
             };
             types.insert_empty_struct(tid, gid, is_final, supertype);
             log::debug!("Added empty struct {tid:?} to rec group {gid:?}");
