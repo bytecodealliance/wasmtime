@@ -31,7 +31,7 @@ wiggle::from_witx!({
             fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
             fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
             path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-            path_rename, path_symlink, path_unlink_file
+            path_rename, path_symlink, path_unlink_file, fd_tell,
         }
     },
     errors: { errno => trappable Error },
@@ -50,7 +50,7 @@ mod sync {
                 fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
                 fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
                 path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-                path_rename, path_symlink, path_unlink_file
+                path_rename, path_symlink, path_unlink_file, fd_tell,
             }
         },
         errors: { errno => trappable Error },
@@ -325,12 +325,12 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
         Ok(())
     }
 
-    fn fd_tell(
+    async fn fd_tell(
         &mut self,
         memory: &mut GuestMemory<'_>,
         fd: types::Fd,
     ) -> Result<types::Filesize, Error> {
-        Ok(Snapshot1::fd_tell(self, memory, fd.into())?)
+        Ok(Snapshot1::fd_tell(self, memory, fd.into()).await?)
     }
 
     async fn fd_readdir(
