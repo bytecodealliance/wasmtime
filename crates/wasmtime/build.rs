@@ -35,10 +35,6 @@ fn main() {
     custom_cfg("has_custom_sync", has_custom_sync);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
 
-    // When enabled, `cfg(gc_zeal)` activates aggressive GC debugging
-    // assertions.
-    println!("cargo:rustc-check-cfg=cfg(gc_zeal)");
-
     // If this OS isn't supported and no debug-builtins or if Cranelift doesn't support
     // the host or there's no need to build these helpers.
     #[cfg(feature = "runtime")]

@@ -24,19 +24,14 @@ use core::alloc::Layout;
 
 /// Poison byte written over unallocated GC heap memory when `cfg(gc_zeal)` is
 /// enabled.
-pub const POISON: u8 = 0xFF;
+pub const POISON: u8 = 0b00001111;
 
 /// Assert a condition, but only when `gc_zeal` is enabled.
 #[macro_export]
 macro_rules! gc_assert {
-    ($cond:expr $(,)?) => {
+    ($($arg:tt)*) => {
         if cfg!(gc_zeal) {
-            assert!($cond);
-        }
-    };
-    ($cond:expr, $($arg:tt)+) => {
-        if cfg!(gc_zeal) {
-            assert!($cond, $($arg)+);
+            assert!($($arg)*);
         }
     };
 }
@@ -514,14 +509,11 @@ impl VMGcKind {
             _ => panic!("invalid `VMGcKind`: {masked:#032b}"),
         };
 
-        #[cfg(debug_assertions)]
-        {
-            let poison_kind = u32::from_le_bytes([POISON, POISON, POISON, POISON]) & VMGcKind::MASK;
-            debug_assert_ne!(
-                masked, poison_kind,
-                "No valid `VMGcKind` should overlap with the poison pattern"
-            );
-        }
+        let poison_kind = u32::from_le_bytes([POISON, POISON, POISON, POISON]) & VMGcKind::MASK;
+        debug_assert_ne!(
+            masked, poison_kind,
+            "No valid `VMGcKind` should overlap with the poison pattern"
+        );
 
         result
     }

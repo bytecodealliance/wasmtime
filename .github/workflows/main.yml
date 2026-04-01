@@ -231,6 +231,9 @@ jobs:
           if grep -q pulley names.log; then
             echo test-nightly=true >> $GITHUB_OUTPUT
           fi
+          if grep -q gc names.log; then
+            echo test-gc-zeal=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -244,6 +247,7 @@ jobs:
             echo test-capi=true >> $GITHUB_OUTPUT
             echo test-nightly=true >> $GITHUB_OUTPUT
             echo test-miri=true >> $GITHUB_OUTPUT
+            echo test-gc-zeal=true >> $GITHUB_OUTPUT
             echo audit=true >> $GITHUB_OUTPUT
             echo preview1-adapter=true >> $GITHUB_OUTPUT
             echo run-dwarf=true >> $GITHUB_OUTPUT
@@ -666,6 +670,7 @@ jobs:
   # Run GC-related tests with `cfg(gc_zeal)` set
   gc_zeal:
     needs: determine
+    if: needs.determine.outputs.test-gc-zeal
     name: GC Zeal Tests
     runs-on: ubuntu-latest
     steps:
@@ -675,22 +680,15 @@ jobs:
     - uses: ./.github/actions/install-rust
     - name: Run GC tests with cfg(gc_zeal) enabled
       env:
-        GC_KEYWORDS: "gc drc any eq struct array i31 extern exn ref rec"
+        WASMTIME_TEST_GC_KEYWORDS: "gc drc any eq struct array i31 extern exn ref rec"
         RUSTFLAGS: "--cfg gc_zeal"
       run: |
         set -e
 
-        cargo test --test all -- $GC_KEYWORDS
+        cargo test --test all -- $WASMTIME_TEST_GC_KEYWORDS
 
-        # The wast test runner doesn't support multiple test filters. Instead,
-        # make a list of all matches, and then run each individually.
-        tmp=$(mktemp)
-        for kw in $GC_KEYWORDS; do
-          cargo test --test wast -- --list $kw  | cut -d ':' -f 1 >> $tmp
-        done
-        for f in $(cat $tmp | sort -u); do
-          cargo test --test wast -- $f
-        done
+        # The wast test runner will read `WASMTIME_TEST_GC_KEYWORDS` on its own.
+        cargo test --test wast
 
   # Perform all tests of the c-api
   test_capi:
@@ -1365,6 +1363,7 @@ jobs:
       - build-preview1-component-adapter-provider
       - test-min-platform-example
       - check_js
+      - gc_zeal
     if: always()
     steps:
     # Calculate the exit status of the whole CI workflow.

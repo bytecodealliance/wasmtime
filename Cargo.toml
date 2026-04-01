@@ -205,13 +205,17 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
-# Don't warn about unknown cfgs for pulley
+# Don't warn about unknown cfgs for our custom cfgs.
 [workspace.lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = [
   'cfg(pulley_tail_calls)',
   'cfg(pulley_assume_llvm_makes_tail_calls)',
   'cfg(pulley_disable_interp_simd)',
+  'cfg(arc_try_new)',
+
+  # When enabled, `cfg(gc_zeal)` activates aggressive GC debugging assertions.
+  'cfg(gc_zeal)',
 ]
 
 [workspace.lints.clippy]
