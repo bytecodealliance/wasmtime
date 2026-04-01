@@ -22,6 +22,20 @@ use crate::{
 use alloc::sync::Arc;
 use core::alloc::Layout;
 
+/// Poison byte written over unallocated GC heap memory when `cfg(gc_zeal)` is
+/// enabled.
+pub const POISON: u8 = 0b00001111;
+
+/// Assert a condition, but only when `gc_zeal` is enabled.
+#[macro_export]
+macro_rules! gc_assert {
+    ($($arg:tt)*) => {
+        if cfg!(gc_zeal) {
+            assert!($($arg)*);
+        }
+    };
+}
+
 /// Discriminant to check whether GC reference is an `i31ref` or not.
 pub const I31_DISCRIMINANT: u32 = 1;
 
@@ -485,7 +499,7 @@ impl VMGcKind {
     #[inline]
     pub fn from_high_bits_of_u32(val: u32) -> VMGcKind {
         let masked = val & Self::MASK;
-        match masked {
+        let result = match masked {
             x if x == Self::ExternRef.as_u32() => Self::ExternRef,
             x if x == Self::AnyRef.as_u32() => Self::AnyRef,
             x if x == Self::EqRef.as_u32() => Self::EqRef,
@@ -493,7 +507,15 @@ impl VMGcKind {
             x if x == Self::StructRef.as_u32() => Self::StructRef,
             x if x == Self::ExnRef.as_u32() => Self::ExnRef,
             _ => panic!("invalid `VMGcKind`: {masked:#032b}"),
-        }
+        };
+
+        let poison_kind = u32::from_le_bytes([POISON, POISON, POISON, POISON]) & VMGcKind::MASK;
+        debug_assert_ne!(
+            masked, poison_kind,
+            "No valid `VMGcKind` should overlap with the poison pattern"
+        );
+
+        result
     }
 
     /// Does this kind match the other kind?
