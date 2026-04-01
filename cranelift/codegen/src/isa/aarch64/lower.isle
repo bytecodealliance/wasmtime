@@ -2284,9 +2284,8 @@
                             (cond_code (flags_and_cc_cc comparison))
                             ty
                             if_true
-                            if_false))
-            (_ InstOutput (side_effect (csdb))))
-       dst))
+                            if_false)))
+       (maybe_csdb_after_select dst)))
 
 (rule -1 (lower (has_type ty (select_spectre_guard _ rcond @ (value_type (fits_in_64 _)) rn rm)))
       (let ((rcond Reg (put_in_reg_zext64 rcond)))
