@@ -52,7 +52,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8,
 ) {
     #[repr(C)]
@@ -104,6 +104,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
             r6: top_of_stack,
             r7: entry_point as *mut u8,
             r8: entry_arg0,
+            r9: wasmtime_fiber_switch_ as *mut u8,
 
             last_sp: initial_stack.cast(),
             ..InitialStack::default()
@@ -145,6 +146,10 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         // ... and then we call the function! Note that this is a function call so
         // our frame stays on the stack to backtrace through.
         basr %r14, %r7  // entry_point
+
+        // Perform the final switch.
+        basr %r14, %r9  // wasmtime_fiber_switch_
+
         // .. technically we shouldn't get here, so just trap.
         .word 0x0000
         .cfi_endproc

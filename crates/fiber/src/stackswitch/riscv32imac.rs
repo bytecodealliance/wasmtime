@@ -72,7 +72,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* a0 */) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8,
 ) {
     #[repr(C)]
@@ -106,6 +106,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
         initial_stack.write(InitialStack {
             s1: entry_point as *mut u8,
             s2: entry_arg0,
+            s3: wasmtime_fiber_switch_ as *mut u8,
             fp: top_of_stack,
             ra: wasmtime_fiber_start as *mut u8,
             last_sp: initial_stack.cast(),
@@ -147,6 +148,7 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
       mv a0, s2
       mv a1, fp
       jalr s1
+      jalr s3
       // .4byte 0 will cause panic.
       // for safety just like x86_64.rs and riscv64.rs.
       .4byte 0

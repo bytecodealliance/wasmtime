@@ -255,7 +255,7 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         inner: imp::Suspend,
         initial: Resume,
         func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return,
-    ) {
+    ) -> imp::Suspend {
         let mut suspend = Suspend {
             inner,
             _phantom: PhantomData,
@@ -278,7 +278,8 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         #[cfg(not(feature = "std"))]
         let result = RunResult::Returned((func)(initial, &mut suspend));
 
-        suspend.inner.exit::<Resume, Yield, Return>(result);
+        suspend.inner.start_exit::<Resume, Yield, Return>(result);
+        suspend.inner
     }
 }
 

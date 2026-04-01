@@ -115,14 +115,16 @@ pub struct Suspend {
     top_of_stack: *mut u8,
 }
 
-extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8)
+extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8) -> *mut u8
 where
     F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
     unsafe {
         let inner = Suspend { top_of_stack };
         let initial = inner.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()))
+        let inner =
+            super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()));
+        inner.top_of_stack
     }
 }
 
@@ -176,9 +178,10 @@ impl Suspend {
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!();
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {
