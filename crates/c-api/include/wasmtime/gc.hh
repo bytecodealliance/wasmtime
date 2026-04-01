@@ -102,6 +102,8 @@ public:
     return AnyRef(out);
   }
 
+  /// Downcast this `eqref` into a `structref`.
+  //
   // as_struct() defined after StructRef below.
   inline StructRef as_struct(Store::Context cx) const;
 };
