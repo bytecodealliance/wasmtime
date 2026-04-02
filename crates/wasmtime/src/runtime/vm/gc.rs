@@ -269,22 +269,13 @@ impl GcStore {
                 Some(c) => self.gc_zeal_alloc_counter = Some(c),
                 None => {
                     log::trace!("gc_zeal: allocation counter reached zero, forcing GC");
+                    self.gc_zeal_alloc_counter = self.gc_zeal_alloc_counter_init;
                     return Ok(Err(0));
                 }
             }
         }
 
-        let result = self.gc_heap.alloc_raw(header, layout);
-
-        // Reset the gc_zeal counter after a successful allocation (it was set
-        // to None when the counter triggered the fake OOM).
-        #[cfg(all(gc_zeal, feature = "std"))]
-        if let Ok(Ok(_)) = &result {
-            debug_assert!(self.gc_zeal_alloc_counter.is_none());
-            self.gc_zeal_alloc_counter = self.gc_zeal_alloc_counter_init;
-        }
-
-        result
+        self.gc_heap.alloc_raw(header, layout)
     }
 
     /// Allocate an uninitialized struct with the given type index and layout.

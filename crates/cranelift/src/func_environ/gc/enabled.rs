@@ -98,13 +98,16 @@ fn unbarriered_store_gc_ref(
 /// expected kind. Only emits code when `cfg(gc_zeal)` is enabled.
 ///
 /// `gc_ref` must be a non-null, non-i31 GC reference (i32 heap index).
-#[cfg(gc_zeal)]
 fn emit_gc_kind_assert(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     gc_ref: ir::Value,
     expected_kind: VMGcKind,
 ) {
+    if !cfg!(gc_zeal) {
+        return;
+    }
+
     func_env.trapz(builder, gc_ref, crate::TRAP_NULL_REFERENCE);
 
     let kind_addr = func_env.prepare_gc_ref_access(
@@ -375,7 +378,6 @@ pub fn translate_struct_get(
     // type info from `wasmparser` and through to here is a bit funky.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
-    #[cfg(gc_zeal)]
     emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
 
     let field_index = usize::try_from(field_index).unwrap();
@@ -425,7 +427,6 @@ pub fn translate_struct_set(
     // TODO: See comment in `translate_struct_get` about the `trapz`.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
-    #[cfg(gc_zeal)]
     emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
 
     let field_index = usize::try_from(field_index).unwrap();
@@ -1029,7 +1030,6 @@ pub fn translate_array_get(
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_get({array_type_index:?}, {array_ref:?}, {index:?})");
 
-    #[cfg(gc_zeal)]
     emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
@@ -1053,7 +1053,6 @@ pub fn translate_array_set(
 ) -> WasmResult<()> {
     log::trace!("translate_array_set({array_type_index:?}, {array_ref:?}, {index:?}, {value:?})");
 
-    #[cfg(gc_zeal)]
     emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
