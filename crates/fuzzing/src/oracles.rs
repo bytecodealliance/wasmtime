@@ -772,6 +772,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
             suppress_prints: true,
         })
         .unwrap();
+    wast_context.register_wasmtime().unwrap();
     wast_context
         .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
         .unwrap();
