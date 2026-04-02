@@ -56,6 +56,8 @@ pub(crate) struct MacroAssembler {
     ptr_size: OperandSize,
     /// Scratch register scope.
     scratch_scope: RegAlloc,
+    /// Shared flags.
+    shared_flags: settings::Flags,
 }
 
 impl MacroAssembler {
@@ -64,10 +66,11 @@ impl MacroAssembler {
         Ok(Self {
             sp_max: 0,
             stack_max_use_add: None,
-            asm: Assembler::new(shared_flags),
+            asm: Assembler::new(shared_flags.clone()),
             sp_offset: 0u32,
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
             scratch_scope: RegAlloc::from(scratch_gpr_bitset(), scratch_fpr_bitset()),
+            shared_flags,
         })
     }
 
@@ -673,6 +676,35 @@ impl Masm for MacroAssembler {
 
     fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         self.asm.fsqrt_rr(src, dst, size);
+        Ok(())
+    }
+
+    fn canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        let nan_label = self.asm.buffer_mut().get_label();
+        let done_label = self.asm.buffer_mut().get_label();
+
+        self.asm.fcmp(reg.to_reg(), reg.to_reg(), size);
+        self.asm.jmp_if(Cond::Vs, nan_label);
+        self.asm.jmp(done_label);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(nan_label, &mut Default::default());
+        let canonical_nan: &[u8] = match size {
+            OperandSize::S32 => &0x7FC00000u32.to_le_bytes(),
+            OperandSize::S64 => &0x7FF8000000000000u64.to_le_bytes(),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        let addr = self.asm.add_constant(canonical_nan);
+        self.asm.uload(addr, reg, size, TRUSTED_FLAGS);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(done_label, &mut Default::default());
         Ok(())
     }
 

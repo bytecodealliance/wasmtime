@@ -685,6 +685,34 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        let nan_label = self.asm.buffer_mut().get_label();
+        let done_label = self.asm.buffer_mut().get_label();
+
+        self.asm.ucomis(reg.to_reg(), reg.to_reg(), size);
+        self.asm.jmp_if(CC::P, nan_label);
+        self.asm.jmp(done_label);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(nan_label, &mut Default::default());
+        let canonical_nan: &[u8] = match size {
+            OperandSize::S32 => &0x7FC00000u32.to_le_bytes(),
+            OperandSize::S64 => &0x7FF8000000000000u64.to_le_bytes(),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        self.asm.load_fp_const(reg, canonical_nan, size);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(done_label, &mut Default::default());
+        Ok(())
+    }
+
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
         match (rhs, dst) {
