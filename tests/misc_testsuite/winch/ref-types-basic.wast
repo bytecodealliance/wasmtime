@@ -50,6 +50,12 @@
     (table.set $t (local.get $i) (ref.func $returns-42))
   )
 
+  ;; ref.func -> table.set -> call_indirect
+  (func (export "set-and-call") (result i32)
+    (table.set $t (i32.const 5) (ref.func $returns-42))
+    (call_indirect $t (type $i32-func) (i32.const 5))
+  )
+
   ;; table.grow
   (func (export "table-grow") (param $n i32) (result i32)
     (table.grow $t (ref.null func) (local.get $n))
@@ -73,6 +79,9 @@
 (assert_return (invoke "select-funcref" (i32.const 0)) (ref.func 1))
 (assert_return (invoke "select-null-first" (i32.const 1)) (ref.null func))
 (assert_return (invoke "select-null-first" (i32.const 0)) (ref.func 1))
+
+;; ref.func -> table.set -> call_indirect
+(assert_return (invoke "set-and-call") (i32.const 42))
 
 ;; table.get
 (assert_return (invoke "table-get" (i32.const 0)) (ref.func 0))
