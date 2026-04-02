@@ -1,7 +1,10 @@
 use crate::{WasmtimeStoreContextMut, abort};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::{num::NonZeroU64, os::raw::c_void, ptr};
-use wasmtime::{AnyRef, EqRef, ExnRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
+use wasmtime::{
+    AnyRef, EqRef, ExnRef, ExternRef, FieldType, I31, Mutability, OwnedRooted, Ref, RootScope,
+    StorageType, StructRef, StructRefPre, StructType, Val, ValType,
+};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s
@@ -265,7 +268,19 @@ macro_rules! ref_wrapper {
 ref_wrapper!(AnyRef => wasmtime_anyref_t);
 ref_wrapper!(ExternRef => wasmtime_externref_t);
 ref_wrapper!(EqRef => wasmtime_eqref_t);
+ref_wrapper!(StructRef => wasmtime_structref_t);
 ref_wrapper!(ExnRef => wasmtime_exnref_t);
+
+// Opaque types for struct type and struct ref pre-allocator
+pub struct wasmtime_struct_type_t {
+    ty: StructType,
+}
+wasmtime_c_api_macros::declare_own!(wasmtime_struct_type_t);
+
+pub struct wasmtime_struct_ref_pre_t {
+    pre: StructRefPre,
+}
+wasmtime_c_api_macros::declare_own!(wasmtime_struct_ref_pre_t);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
@@ -538,5 +553,204 @@ pub unsafe extern "C" fn wasmtime_eqref_i31_get_s(
             return true;
         }
     }
+    false
+}
+
+pub type wasmtime_storage_kind_t = u8;
+pub const WASMTIME_STORAGE_KIND_I8: wasmtime_storage_kind_t = 9;
+pub const WASMTIME_STORAGE_KIND_I16: wasmtime_storage_kind_t = 10;
+
+#[repr(C)]
+pub struct wasmtime_field_type_t {
+    pub kind: wasmtime_storage_kind_t,
+    pub mutable_: bool,
+}
+
+fn field_type_from_c(ft: &wasmtime_field_type_t) -> FieldType {
+    let mutability = if ft.mutable_ {
+        Mutability::Var
+    } else {
+        Mutability::Const
+    };
+    let storage = match ft.kind {
+        WASMTIME_STORAGE_KIND_I8 => StorageType::I8,
+        WASMTIME_STORAGE_KIND_I16 => StorageType::I16,
+        crate::WASMTIME_I32 => StorageType::ValType(ValType::I32),
+        crate::WASMTIME_I64 => StorageType::ValType(ValType::I64),
+        crate::WASMTIME_F32 => StorageType::ValType(ValType::F32),
+        crate::WASMTIME_F64 => StorageType::ValType(ValType::F64),
+        crate::WASMTIME_V128 => StorageType::ValType(ValType::V128),
+        crate::WASMTIME_FUNCREF => StorageType::ValType(ValType::FUNCREF),
+        crate::WASMTIME_EXTERNREF => StorageType::ValType(ValType::EXTERNREF),
+        crate::WASMTIME_ANYREF => StorageType::ValType(ValType::ANYREF),
+        crate::WASMTIME_EXNREF => StorageType::ValType(ValType::EXNREF),
+        other => panic!("unknown wasmtime_storage_kind_t: {other}"),
+    };
+    FieldType::new(mutability, storage)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_struct_type_new(
+    engine: &crate::wasm_engine_t,
+    fields: *const wasmtime_field_type_t,
+    nfields: usize,
+) -> Box<wasmtime_struct_type_t> {
+    let fields = if nfields == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(fields, nfields) }
+    };
+    let field_types: Vec<FieldType> = fields.iter().map(field_type_from_c).collect();
+    let ty = StructType::new(&engine.engine, field_types).expect("failed to create struct type");
+    Box::new(wasmtime_struct_type_t { ty })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_struct_ref_pre_new(
+    cx: WasmtimeStoreContextMut<'_>,
+    ty: &wasmtime_struct_type_t,
+) -> Box<wasmtime_struct_ref_pre_t> {
+    let pre = StructRefPre::new(cx, ty.ty.clone());
+    Box::new(wasmtime_struct_ref_pre_t { pre })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_new(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    pre: &wasmtime_struct_ref_pre_t,
+    fields: *const crate::wasmtime_val_t,
+    nfields: usize,
+    out: &mut MaybeUninit<wasmtime_structref_t>,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let c_fields = if nfields == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(fields, nfields)
+    };
+    let mut scope = RootScope::new(&mut cx);
+    let vals: Vec<Val> = c_fields.iter().map(|v| v.to_val(&mut scope)).collect();
+    match StructRef::new(&mut scope, &pre.pre, &vals) {
+        Ok(structref) => {
+            let owned = structref
+                .to_owned_rooted(&mut scope)
+                .expect("just allocated");
+            crate::initialize(out, Some(owned).into());
+            None
+        }
+        Err(e) => {
+            crate::initialize(out, None::<OwnedRooted<StructRef>>.into());
+            Some(Box::new(e.into()))
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_clone(
+    structref: Option<&wasmtime_structref_t>,
+    out: &mut MaybeUninit<wasmtime_structref_t>,
+) {
+    let structref = structref.and_then(|s| s.as_wasmtime());
+    crate::initialize(out, structref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_unroot(
+    structref: Option<&mut ManuallyDrop<wasmtime_structref_t>>,
+) {
+    if let Some(structref) = structref {
+        ManuallyDrop::drop(structref);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_to_anyref(
+    structref: Option<&wasmtime_structref_t>,
+    out: &mut MaybeUninit<wasmtime_anyref_t>,
+) {
+    let anyref = structref
+        .and_then(|s| s.as_wasmtime())
+        .map(|s| s.to_anyref());
+    crate::initialize(out, anyref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_to_eqref(
+    structref: Option<&wasmtime_structref_t>,
+    out: &mut MaybeUninit<wasmtime_eqref_t>,
+) {
+    let eqref = structref
+        .and_then(|s| s.as_wasmtime())
+        .map(|s| s.to_eqref());
+    crate::initialize(out, eqref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_field(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    structref: Option<&wasmtime_structref_t>,
+    index: usize,
+    out: &mut MaybeUninit<crate::wasmtime_val_t>,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let structref = structref
+        .and_then(|s| s.as_wasmtime())
+        .expect("non-null structref required");
+    let mut scope = RootScope::new(&mut cx);
+    let rooted = structref.to_rooted(&mut scope);
+    match rooted.field(&mut scope, index) {
+        Ok(val) => {
+            let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
+            crate::initialize(out, c_val);
+            None
+        }
+        Err(e) => Some(Box::new(e.into())),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_set_field(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    structref: Option<&wasmtime_structref_t>,
+    index: usize,
+    val: &crate::wasmtime_val_t,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let structref = structref
+        .and_then(|s| s.as_wasmtime())
+        .expect("non-null structref required");
+    let mut scope = RootScope::new(&mut cx);
+    let rooted = structref.to_rooted(&mut scope);
+    let rust_val = val.to_val(&mut scope);
+    match rooted.set_field(&mut scope, index, rust_val) {
+        Ok(()) => None,
+        Err(e) => Some(Box::new(e.into())),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_is_struct(
+    cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+) -> bool {
+    match eqref.and_then(|e| e.as_wasmtime()) {
+        Some(eqref) => eqref.is_struct(&cx).expect("OwnedRooted always in scope"),
+        None => false,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_as_struct(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+    out: &mut MaybeUninit<wasmtime_structref_t>,
+) -> bool {
+    if let Some(eqref) = eqref.and_then(|e| e.as_wasmtime()) {
+        let mut scope = RootScope::new(&mut cx);
+        let rooted = eqref.to_rooted(&mut scope);
+        if let Ok(Some(structref)) = rooted.as_struct(&scope) {
+            let owned = structref.to_owned_rooted(&mut scope).expect("in scope");
+            crate::initialize(out, Some(owned).into());
+            return true;
+        }
+    }
+    crate::initialize(out, None::<OwnedRooted<StructRef>>.into());
     false
 }

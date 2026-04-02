@@ -214,6 +214,7 @@ class Val {
   friend class Table;
   friend class Func;
   friend class Exn;
+  friend class StructRef;
 
   wasmtime_val_t val;
 
