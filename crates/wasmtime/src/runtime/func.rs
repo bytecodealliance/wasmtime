@@ -2124,6 +2124,14 @@ impl<T> Caller<'_, T> {
         self.store.gc(why)
     }
 
+    /// Returns the current capacity of the GC heap in bytes.
+    ///
+    /// Same as [`Store::gc_heap_capacity`](crate::Store::gc_heap_capacity).
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_capacity(&self) -> usize {
+        self.store.0.gc_heap_capacity()
+    }
+
     /// Perform garbage collection asynchronously.
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).

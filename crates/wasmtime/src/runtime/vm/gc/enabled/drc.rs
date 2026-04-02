@@ -151,6 +151,9 @@ struct DrcHeap {
     /// behind an empty vec instead of `None`) but we keep it because it will
     /// help us catch unexpected re-entry, similar to how a `RefCell` would.
     dec_ref_stack: Option<Vec<VMGcRef>>,
+
+    /// Running total of bytes currently allocated (live objects) in this heap.
+    allocated_bytes: usize,
 }
 
 impl DrcHeap {
@@ -166,6 +169,7 @@ impl DrcHeap {
             vmmemory: None,
             free_list: None,
             dec_ref_stack: Some(Vec::with_capacity(1)),
+            allocated_bytes: 0,
         })
     }
 
@@ -176,6 +180,7 @@ impl DrcHeap {
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size();
+        self.allocated_bytes -= size;
         let layout = FreeList::layout(size);
         self.free_list
             .as_mut()
@@ -698,6 +703,7 @@ unsafe impl GcHeap for DrcHeap {
             dec_ref_stack,
             memory,
             vmmemory,
+            allocated_bytes,
 
             // NB: we will only ever be reused with the same engine, so no need
             // to clear out our tracing info just to fill it back in with the
@@ -709,6 +715,7 @@ unsafe impl GcHeap for DrcHeap {
         **over_approximated_stack_roots = None;
         *free_list = None;
         *vmmemory = None;
+        *allocated_bytes = 0;
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
 
         memory.take().unwrap()
@@ -834,6 +841,7 @@ unsafe impl GcHeap for DrcHeap {
             next_over_approximated_stack_root: None,
             object_size,
         };
+        self.allocated_bytes += layout.size();
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Ok(gc_ref))
     }
@@ -889,6 +897,10 @@ unsafe impl GcHeap for DrcHeap {
         debug_assert!(arrayref.as_gc_ref().is_typed::<VMDrcArrayHeader>(self));
         self.index::<VMDrcArrayHeader>(arrayref.as_gc_ref().as_typed_unchecked())
             .length
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        self.allocated_bytes
     }
 
     fn gc<'a>(

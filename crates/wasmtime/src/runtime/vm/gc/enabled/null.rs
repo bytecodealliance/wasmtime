@@ -327,6 +327,13 @@ unsafe impl GcHeap for NullHeap {
         self.index(arrayref).length
     }
 
+    fn allocated_bytes(&self) -> usize {
+        // The null collector never frees, so everything from the start of
+        // the heap up to the bump pointer is allocated.
+        let next = unsafe { *self.next.get() };
+        usize::try_from(next.get()).unwrap()
+    }
+
     fn gc<'a>(
         &'a mut self,
         _roots: GcRootsIter<'a>,

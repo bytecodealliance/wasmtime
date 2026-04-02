@@ -48,6 +48,11 @@ pub struct GcStore {
 
     /// The function-references table for this GC heap.
     pub func_ref_table: FuncRefTable,
+
+    /// The total allocated bytes recorded after the last GC collection.
+    /// `None` if no collection has been performed yet. Used by the
+    /// grow-or-collect heuristic.
+    pub last_post_gc_allocated_bytes: Option<usize>,
 }
 
 impl GcStore {
@@ -60,6 +65,7 @@ impl GcStore {
             gc_heap,
             host_data_table,
             func_ref_table,
+            last_post_gc_allocated_bytes: None,
         }
     }
 
@@ -68,10 +74,16 @@ impl GcStore {
         self.gc_heap.vmmemory()
     }
 
+    /// Get the current capacity (in bytes) of this GC heap.
+    pub fn gc_heap_capacity(&self) -> usize {
+        self.gc_heap.heap_slice().len()
+    }
+
     /// Asynchronously perform garbage collection within this heap.
     pub async fn gc(&mut self, asyncness: Asyncness, roots: GcRootsIter<'_>) {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
         collect_async(collection, asyncness).await;
+        self.last_post_gc_allocated_bytes = Some(self.gc_heap.allocated_bytes());
     }
 
     /// Get the kind of the given GC reference.

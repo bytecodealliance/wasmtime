@@ -56,12 +56,12 @@ impl StoreOpaque {
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
     ) {
-        if let Some(n) = bytes_needed {
-            if self.grow_gc_heap(limiter, n).await.is_ok() {
-                return;
-            }
-        }
+        // When explicitly called (e.g., from Store::gc), always collect.
+        // If bytes_needed is specified, also try to grow if needed.
         self.do_gc(asyncness).await;
+        if let Some(n) = bytes_needed {
+            let _ = self.grow_gc_heap(limiter, n).await;
+        }
     }
 
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
@@ -165,8 +165,14 @@ impl StoreOpaque {
         }
     }
 
-    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
-    /// retry.
+    /// Attempt an allocation, if it fails due to GC OOM, apply the
+    /// grow-or-collect heuristic and retry.
+    ///
+    /// The heuristic is:
+    /// - If the last post-collection heap usage is less than half the current
+    ///   capacity, collect first, then retry. If that still fails, grow and
+    ///   retry one final time.
+    /// - Otherwise, grow first and retry.
     pub(crate) async fn retry_after_gc_async<T, U>(
         &mut self,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
@@ -183,9 +189,45 @@ impl StoreOpaque {
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
                     let (value, oom) = oom.take_inner();
-                    self.gc(limiter, None, Some(oom.bytes_needed()), asyncness)
-                        .await;
-                    alloc_func(self, value)
+                    let bytes_needed = oom.bytes_needed();
+
+                    // Determine whether to collect or grow first.
+                    let should_collect_first = self.gc_store.as_ref().map_or(false, |gc_store| {
+                        let capacity = gc_store.gc_heap_capacity();
+                        let last_usage = gc_store.last_post_gc_allocated_bytes.unwrap_or(0);
+                        last_usage < capacity / 2
+                    });
+
+                    if should_collect_first {
+                        // Collect first, then retry.
+                        self.gc(limiter.as_deref_mut(), None, None, asyncness).await;
+
+                        match alloc_func(self, value) {
+                            Ok(x) => Ok(x),
+                            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
+                                Ok(oom2) => {
+                                    // Collection wasn't enough; grow and try
+                                    // one final time.
+                                    let (value, _) = oom2.take_inner();
+                                    // Ignore error; we'll get one
+                                    // from `alloc_func` below if
+                                    // growth failed and failure to
+                                    // grow was fatal.
+                                    let _ = self.grow_gc_heap(limiter, bytes_needed).await;
+                                    alloc_func(self, value)
+                                }
+                                Err(e) => Err(e),
+                            },
+                        }
+                    } else {
+                        // Grow first and retry.
+                        //
+                        // Ignore error; we'll get one from
+                        // `alloc_func` below if growth failed and
+                        // failure to grow was fatal.
+                        let _ = self.grow_gc_heap(limiter, bytes_needed).await;
+                        alloc_func(self, value)
+                    }
                 }
                 Err(e) => Err(e),
             },
