@@ -40,6 +40,11 @@ impl FreeList {
         Layout::from_size_align(size, ALIGN_USIZE).unwrap()
     }
 
+    /// Get the current total capacity this free list manages.
+    pub fn current_capacity(&self) -> usize {
+        self.capacity
+    }
+
     /// Create a new `FreeList` for a contiguous region of memory of the given
     /// size.
     pub fn new(capacity: usize) -> Self {
@@ -338,6 +343,11 @@ impl FreeList {
         // integrity.
         #[cfg(debug_assertions)]
         self.check_integrity();
+    }
+
+    /// Iterate over all free blocks as `(index, len)` pairs.
+    pub fn iter_free_blocks(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
+        self.free_block_index_to_len.iter().map(|(&i, &l)| (i, l))
     }
 
     /// Assert that the free list is valid:

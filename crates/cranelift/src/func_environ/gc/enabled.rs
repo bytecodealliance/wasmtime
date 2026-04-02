@@ -94,8 +94,55 @@ fn unbarriered_store_gc_ref(
     Ok(())
 }
 
-/// Emit code to read a struct field or array element from its raw address in
-/// the GC heap.
+/// Emit inline CLIF code that asserts an object's `VMGcKind` matches the
+/// expected kind. Only emits code when `cfg(gc_zeal)` is enabled.
+///
+/// `gc_ref` must be a non-null, non-i31 GC reference (i32 heap index).
+fn emit_gc_kind_assert(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    gc_ref: ir::Value,
+    expected_kind: VMGcKind,
+) {
+    if !cfg!(gc_zeal) {
+        return;
+    }
+
+    func_env.trapz(builder, gc_ref, crate::TRAP_NULL_REFERENCE);
+
+    let kind_addr = func_env.prepare_gc_ref_access(
+        builder,
+        gc_ref,
+        BoundsCheck::StaticObjectField {
+            offset: wasmtime_environ::VM_GC_HEADER_KIND_OFFSET,
+            access_size: wasmtime_environ::VM_GC_KIND_SIZE,
+            object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
+        },
+    );
+    let kind_and_reserved_bits = builder.ins().load(
+        ir::types::I32,
+        ir::MemFlags::trusted().with_readonly(),
+        kind_addr,
+        0,
+    );
+    let kind_mask = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
+    let actual_kind = builder.ins().band(kind_and_reserved_bits, kind_mask);
+
+    let expected_kind = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
+
+    // NB: Do a subtype check rather than a strict equality check. See
+    // `VMGcKind::matches` for details.
+    let and = builder.ins().band(actual_kind, expected_kind);
+    let matches = builder.ins().icmp(IntCC::Equal, and, expected_kind);
+
+    builder.ins().trapz(matches, TRAP_INTERNAL_ASSERT);
+}
+
+/// Read a struct field or array element from its raw address in the GC heap.
 ///
 /// The given address MUST have already been bounds-checked via
 /// `prepare_gc_ref_access`.
@@ -331,6 +378,8 @@ pub fn translate_struct_get(
     // type info from `wasmparser` and through to here is a bit funky.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
+    emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
+
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
@@ -377,6 +426,8 @@ pub fn translate_struct_set(
 
     // TODO: See comment in `translate_struct_get` about the `trapz`.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
+
+    emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -979,6 +1030,8 @@ pub fn translate_array_get(
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_get({array_type_index:?}, {array_ref:?}, {index:?})");
 
+    emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
+
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
@@ -999,6 +1052,8 @@ pub fn translate_array_set(
     value: ir::Value,
 ) -> WasmResult<()> {
     log::trace!("translate_array_set({array_type_index:?}, {array_ref:?}, {index:?}, {value:?})");
+
+    emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);

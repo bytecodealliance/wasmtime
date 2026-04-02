@@ -48,6 +48,18 @@ pub struct GcStore {
 
     /// The function-references table for this GC heap.
     pub func_ref_table: FuncRefTable,
+
+    /// An allocation counter that triggers GC when it reaches zero.
+    ///
+    /// Initialized from the `WASMTIME_GC_ZEAL_ALLOC_COUNTER` environment
+    /// variable. Decremented on every allocation and when it hits zero, a GC is
+    /// forced and the counter is reset.
+    #[cfg(all(gc_zeal, feature = "std"))]
+    gc_zeal_alloc_counter: Option<NonZeroU32>,
+
+    /// The initial value to reset the counter to after it triggers.
+    #[cfg(all(gc_zeal, feature = "std"))]
+    gc_zeal_alloc_counter_init: Option<NonZeroU32>,
 }
 
 impl GcStore {
@@ -55,11 +67,29 @@ impl GcStore {
     pub fn new(allocation_index: GcHeapAllocationIndex, gc_heap: Box<dyn GcHeap>) -> Self {
         let host_data_table = ExternRefHostDataTable::default();
         let func_ref_table = FuncRefTable::default();
+
+        #[cfg(all(gc_zeal, feature = "std"))]
+        let gc_zeal_alloc_counter_init =
+            std::env::var("WASMTIME_GC_ZEAL_ALLOC_COUNTER")
+                .ok()
+                .map(|v| {
+                    v.parse::<NonZeroU32>().unwrap_or_else(|_| {
+                        panic!(
+                            "`WASMTIME_GC_ZEAL_ALLOC_COUNTER` must be a non-zero \
+                             `u32` value, got: {v}"
+                        )
+                    })
+                });
+
         Self {
             allocation_index,
             gc_heap,
             host_data_table,
             func_ref_table,
+            #[cfg(all(gc_zeal, feature = "std"))]
+            gc_zeal_alloc_counter: gc_zeal_alloc_counter_init,
+            #[cfg(all(gc_zeal, feature = "std"))]
+            gc_zeal_alloc_counter_init,
         }
     }
 
@@ -231,6 +261,20 @@ impl GcStore {
         header: VMGcHeader,
         layout: Layout,
     ) -> Result<Result<VMGcRef, u64>> {
+        // When gc_zeal is enabled with an allocation counter, decrement it and
+        // force a GC cycle when it reaches zero by returning a fake OOM.
+        #[cfg(all(gc_zeal, feature = "std"))]
+        if let Some(counter) = self.gc_zeal_alloc_counter.take() {
+            match NonZeroU32::new(counter.get() - 1) {
+                Some(c) => self.gc_zeal_alloc_counter = Some(c),
+                None => {
+                    log::trace!("gc_zeal: allocation counter reached zero, forcing GC");
+                    self.gc_zeal_alloc_counter = self.gc_zeal_alloc_counter_init;
+                    return Ok(Err(0));
+                }
+            }
+        }
+
         self.gc_heap.alloc_raw(header, layout)
     }
 
