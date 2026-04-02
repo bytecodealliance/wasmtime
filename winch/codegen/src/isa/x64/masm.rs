@@ -494,10 +494,18 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         assert!(size == OperandSize::S64);
         assert!(from_size == OperandSize::S32 || from_size == OperandSize::S64);
-        // On x64, 32-bit operations automatically zero-extend to 64 bits,
-        // so we can just use regular add.
+
         Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
+        if from_size == OperandSize::S32 && size == OperandSize::S64 {
+            self.extend(
+                writable!(rhs),
+                rhs,
+                ExtendKind::Unsigned(Extend::I64Extend32),
+            )?;
+        }
+
         self.asm.add_rr(rhs, dst, size);
+
         Ok(())
     }
 
