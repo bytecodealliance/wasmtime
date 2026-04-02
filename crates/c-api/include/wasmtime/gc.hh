@@ -193,23 +193,28 @@ class StructRef {
   wasmtime_structref_t val;
 
 public:
+  /// Create a `StructRef` from its C-API representation.
   explicit StructRef(wasmtime_structref_t val) : val(val) {}
 
+  /// Clone a `StructRef`.
   StructRef(const StructRef &other) {
     wasmtime_structref_clone(&other.val, &val);
   }
 
+  /// Clone a `StructRef` into this one.
   StructRef &operator=(const StructRef &other) {
     wasmtime_structref_unroot(&val);
     wasmtime_structref_clone(&other.val, &val);
     return *this;
   }
 
+  /// Move a `StructRef`.
   StructRef(StructRef &&other) {
     val = other.val;
     wasmtime_structref_set_null(&other.val);
   }
 
+  /// Move a `StructRef` into this one.
   StructRef &operator=(StructRef &&other) {
     wasmtime_structref_unroot(&val);
     val = other.val;
@@ -217,6 +222,7 @@ public:
     return *this;
   }
 
+  /// Unroot this `StructRef`.
   ~StructRef() { wasmtime_structref_unroot(&val); }
 
   /// Allocate a new struct instance.
