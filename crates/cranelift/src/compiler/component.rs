@@ -1860,6 +1860,8 @@ impl TrampolineCompiler<'_> {
                 args.push(self.len_param(1, from64));
                 args.push(self.ptr_param(2, to64, to_base));
                 args.push(self.len_param(3, to64));
+                let first_pass = self.builder.func.dfg.block_params(self.block0)[6];
+                args.push(first_pass);
             }
 
             Transcode::Utf8ToCompactUtf16 | Transcode::Utf16ToCompactUtf16 => {
