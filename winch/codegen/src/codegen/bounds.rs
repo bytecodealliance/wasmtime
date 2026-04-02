@@ -220,8 +220,11 @@ where
 
     // Start by adding the index to the heap base addr.
     let index_typed = index.as_typed_reg();
+    let heap_size: OperandSize = heap.index_type().try_into()?;
 
-    if index_typed.ty == WasmValType::I32 && ptr_size == OperandSize::S64 {
+    // Emit a zero-extend add when dealing with 32-bit heaps to ensure
+    // that the high bits of the 64-bit values are zeroed.
+    if ptr_size == OperandSize::S64 && heap_size == OperandSize::S32 {
         masm.add_uextend(
             writable!(dst),
             dst,
