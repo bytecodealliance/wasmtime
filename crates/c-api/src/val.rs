@@ -1,7 +1,7 @@
 use crate::r#ref::ref_to_val;
 use crate::{
     WASM_I32, from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_anyref_t,
-    wasmtime_externref_t, wasmtime_valkind_t,
+    wasmtime_exnref_t, wasmtime_externref_t, wasmtime_valkind_t,
 };
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
@@ -148,6 +148,7 @@ pub union wasmtime_val_union {
     pub f64: u64,
     pub anyref: ManuallyDrop<wasmtime_anyref_t>,
     pub externref: ManuallyDrop<wasmtime_externref_t>,
+    pub exnref: ManuallyDrop<wasmtime_exnref_t>,
     pub funcref: wasmtime_func_t,
     pub v128: [u8; 16],
 }
@@ -168,6 +169,9 @@ impl Drop for wasmtime_val_t {
                 crate::WASMTIME_EXTERNREF => {
                     let _ = ManuallyDrop::take(&mut self.of.externref);
                 }
+                crate::WASMTIME_EXNREF => {
+                    let _ = ManuallyDrop::take(&mut self.of.exnref);
+                }
                 _ => {}
             }
         }
@@ -179,12 +183,14 @@ unsafe impl Send for wasmtime_val_union
 where
     Option<Box<wasmtime_anyref_t>>: Send,
     Option<Box<wasmtime_externref_t>>: Send,
+    Option<Box<wasmtime_exnref_t>>: Send,
 {
 }
 unsafe impl Sync for wasmtime_val_union
 where
     Option<Box<wasmtime_anyref_t>>: Sync,
     Option<Box<wasmtime_externref_t>>: Sync,
+    Option<Box<wasmtime_exnref_t>>: Sync,
 {
 }
 
@@ -268,7 +274,12 @@ impl wasmtime_val_t {
                     funcref: func.into(),
                 },
             },
-            Val::ExnRef(_) => crate::abort("exnrefs not yet supported in C API"),
+            Val::ExnRef(e) => wasmtime_val_t {
+                kind: crate::WASMTIME_EXNREF,
+                of: wasmtime_val_union {
+                    exnref: ManuallyDrop::new(e.and_then(|e| e.to_owned_rooted(cx).ok()).into()),
+                },
+            },
             Val::V128(val) => wasmtime_val_t {
                 kind: crate::WASMTIME_V128,
                 of: wasmtime_val_union {
@@ -308,6 +319,9 @@ impl wasmtime_val_t {
                 Val::ExternRef(self.of.externref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
             crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
+            crate::WASMTIME_EXNREF => {
+                Val::ExnRef(self.of.exnref.as_wasmtime().map(|e| e.to_rooted(cx)))
+            }
             other => panic!("unknown wasmtime_valkind_t: {other}"),
         }
     }
@@ -329,6 +343,9 @@ pub unsafe extern "C" fn wasmtime_val_clone(
         },
         crate::WASMTIME_EXTERNREF => wasmtime_val_union {
             externref: ManuallyDrop::new(src.of.externref.as_wasmtime().into()),
+        },
+        crate::WASMTIME_EXNREF => wasmtime_val_union {
+            exnref: ManuallyDrop::new(src.of.exnref.as_wasmtime().into()),
         },
         crate::WASMTIME_I32 => wasmtime_val_union { i32: src.of.i32 },
         crate::WASMTIME_I64 => wasmtime_val_union { i64: src.of.i64 },

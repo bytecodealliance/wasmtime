@@ -92,7 +92,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8, // x2
 ) {
     #[repr(C)]
@@ -132,6 +132,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
             x19: top_of_stack,
             x20: entry_point as *mut u8,
             x21: entry_arg0,
+            x22: wasmtime_fiber_switch_ as *mut u8,
 
             // We set up the newly initialized fiber, so that it resumes
             // execution from wasmtime_fiber_start(). As a result, we need a
@@ -208,6 +209,11 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         // ... and then we call the function! Note that this is a function call
         // so our frame stays on the stack to backtrace through.
         blr x20
+
+        // The entry function returns where to switch to as the final switch, so
+        // that's performed here in inline assembly.
+        blr x22
+
         // Unreachable, here for safety. This should help catch unexpected
         // behaviors.  Use a noticeable payload so one can grep for it in the
         // codebase.

@@ -190,6 +190,7 @@
 #include <wasmtime/config.h>
 #include <wasmtime/engine.h>
 #include <wasmtime/error.h>
+#include <wasmtime/exn.h>
 #include <wasmtime/extern.h>
 #include <wasmtime/func.h>
 #include <wasmtime/global.h>
@@ -201,8 +202,10 @@
 #include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
 #include <wasmtime/table.h>
+#include <wasmtime/tag.h>
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
+#include <wasmtime/gc.h>
 #include <wasmtime/async.h>
 #include <wasmtime/component.h>
 #include <wasmtime/wat.h>

@@ -205,13 +205,17 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
-# Don't warn about unknown cfgs for pulley
+# Don't warn about unknown cfgs for our custom cfgs.
 [workspace.lints.rust.unexpected_cfgs]
 level = "warn"
 check-cfg = [
   'cfg(pulley_tail_calls)',
   'cfg(pulley_assume_llvm_makes_tail_calls)',
   'cfg(pulley_disable_interp_simd)',
+  'cfg(arc_try_new)',
+
+  # When enabled, `cfg(gc_zeal)` activates aggressive GC debugging assertions.
+  'cfg(gc_zeal)',
 ]
 
 [workspace.lints.clippy]
@@ -345,18 +349,18 @@ wit-bindgen = { version = "0.53.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.53.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.245.0", default-features = false, features = ['simd'] }
-wat = "1.245.0"
-wast = "245.0.0"
-wasmprinter = "0.245.0"
-wasm-encoder = "0.245.0"
-wasm-smith = "0.245.0"
-wasm-mutate = "0.245.0"
-wit-parser = "0.245.0"
-wit-component = "0.245.0"
-wasm-wave = "0.245.0"
-wasm-compose = "0.245.0"
-json-from-wast = "0.245.0"
+wasmparser = { version = "0.246.1", default-features = false, features = ['simd'] }
+wat = "1.246.1"
+wast = "246.0.1"
+wasmprinter = "0.246.1"
+wasm-encoder = "0.246.1"
+wasm-smith = "0.246.1"
+wasm-mutate = "0.246.1"
+wit-parser = "0.246.1"
+wit-component = "0.246.1"
+wasm-wave = "0.246.1"
+wasm-compose = { version = "0.246.1", default-features = false }
+json-from-wast = "0.246.1"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
@@ -366,7 +370,7 @@ wasip2 = "1.0"
 arbitrary = "1.4.2"
 backtrace = "0.3.75"
 bumpalo = "3.20.0"
-mutatis = {version = "0.3.2", features = ["alloc"] }
+mutatis = {version = "0.3.2", features = ["alloc", "derive", "check"] }
 cc = "1.2.41"
 object = { version = "0.39.0", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.33.0", default-features = false, features = ['read'] }

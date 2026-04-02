@@ -396,7 +396,10 @@ impl RunCommand {
     }
 
     #[cfg(feature = "debug")]
-    fn add_debugger_api(&mut self, linker: &mut wasmtime::component::Linker<Host>) -> Result<()> {
+    pub(crate) fn add_debugger_api(
+        &mut self,
+        linker: &mut wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
         wasmtime_debugger::add_to_linker(linker, |x| x.ctx().table)?;
         Ok(())
     }
@@ -510,7 +513,7 @@ impl RunCommand {
         Ok(instance)
     }
 
-    fn compute_argv(&self) -> Result<Vec<String>> {
+    pub(crate) fn compute_argv(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
         for (i, arg) in self.module_and_args.iter().enumerate() {
@@ -898,10 +901,15 @@ impl RunCommand {
         }
     }
 
+    /// Invoke a debugger component with a debuggee.
+    ///
+    /// The debugger runs in `store` (using run's `Host`), while the
+    /// debuggee wraps an arbitrary store type `T` and body closure.
     #[cfg(feature = "debug")]
-    async fn invoke_debugger<
+    pub(crate) async fn invoke_debugger<
+        T: Send + 'static,
         F: for<'a> FnOnce(
-                &'a mut Store<Host>,
+                &'a mut Store<T>,
             ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
             + Send
             + 'static,
@@ -910,7 +918,7 @@ impl RunCommand {
         store: &mut Store<Host>,
         component: &wasmtime::component::Component,
         linker: &mut wasmtime::component::Linker<Host>,
-        debuggee_host: Store<Host>,
+        debuggee_host: Store<T>,
         body: F,
     ) -> Result<()> {
         let instance = linker.instantiate_async(&mut *store, component).await?;

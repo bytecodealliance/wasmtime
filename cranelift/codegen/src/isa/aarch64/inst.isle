@@ -1822,6 +1822,9 @@
 (decl pure use_fp16 () bool)
 (extern constructor use_fp16 use_fp16)
 
+(decl pure use_csdb () bool)
+(extern constructor use_csdb use_csdb)
+
 ;; Extractor helpers for various immediate constants ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure partial move_wide_const_from_u64 (Type u64) MoveWideConst)

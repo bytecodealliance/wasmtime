@@ -403,7 +403,7 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
 }
 
 fn store_err(err: Error, trap_ret: &mut *mut wasm_trap_t) -> Option<Box<wasmtime_error_t>> {
-    if err.is::<Trap>() {
+    if err.is::<Trap>() || err.is::<wasmtime::ThrownException>() {
         *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
         None
     } else {

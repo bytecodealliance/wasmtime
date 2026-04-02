@@ -65,3 +65,4 @@ pub const WASMTIME_V128: wasmtime_valkind_t = 4;
 pub const WASMTIME_FUNCREF: wasmtime_valkind_t = 5;
 pub const WASMTIME_EXTERNREF: wasmtime_valkind_t = 6;
 pub const WASMTIME_ANYREF: wasmtime_valkind_t = 7;
+pub const WASMTIME_EXNREF: wasmtime_valkind_t = 8;

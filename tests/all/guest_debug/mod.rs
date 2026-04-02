@@ -10,8 +10,8 @@
 //!   - Built with `--features gdbstub`
 
 use filecheck::{CheckerBuilder, NO_VARIABLES};
-use std::io::{BufRead, BufReader};
-use std::net::TcpListener;
+use std::io::{BufRead, BufReader, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 use test_programs_artifacts::*;
@@ -51,7 +51,7 @@ const GDBSTUB_READY_MARKER: &str = "Debugger listening on";
 struct WasmtimeWithGdbstub {
     child: Child,
     /// Keeps the stderr pipe alive to avoid SIGPIPE on the child.
-    #[allow(dead_code)]
+    /// Also used by serve tests to read the HTTP address.
     stderr_reader: BufReader<std::process::ChildStderr>,
 }
 
@@ -96,6 +96,26 @@ impl WasmtimeWithGdbstub {
                 let _ = child.kill();
                 let status = child.wait()?;
                 bail!("wasmtime exited ({status}) without readiness marker");
+            }
+        }
+    }
+
+    /// Read stderr lines until one contains `marker`, returning that line.
+    fn wait_for_stderr(&mut self, marker: &str, timeout: Duration) -> Result<String> {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut line = String::new();
+        loop {
+            if std::time::Instant::now() > deadline {
+                bail!("timed out waiting for '{marker}' on stderr");
+            }
+            line.clear();
+            self.stderr_reader.read_line(&mut line)?;
+            eprintln!("wasmtime stderr: {}", line.trim_end());
+            if line.contains(marker) {
+                return Ok(line);
+            }
+            if line.is_empty() {
+                bail!("wasmtime stderr closed before finding '{marker}'");
             }
         }
     }
@@ -217,5 +237,162 @@ check: stop reason
 check: fib
 "#,
     )?;
+    Ok(())
+}
+
+/// Helper: send an HTTP/1.0 request and return the full response.
+fn http_request(addr: SocketAddr, path: &str) -> Result<String> {
+    let mut tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(5))?;
+    tcp.set_read_timeout(Some(Duration::from_secs(5)))?;
+    write!(tcp, "GET {path} HTTP/1.0\r\nHost: localhost\r\n\r\n")?;
+    let mut response = String::new();
+    let _ = std::io::Read::read_to_string(&mut tcp, &mut response);
+    Ok(response)
+}
+
+/// Parse an HTTP serve address from a "Serving HTTP on http://addr/" line.
+fn parse_http_addr(line: &str) -> Result<SocketAddr> {
+    line.find("127.0.0.1")
+        .and_then(|start| {
+            let addr = &line[start..];
+            let end = addr.find('/')?;
+            addr[..end].parse().ok()
+        })
+        .ok_or_else(|| format_err!("failed to parse HTTP address from: {line}"))
+}
+
+/// Start serve under debugger, continue, and send multiple HTTP requests
+/// to verify instance reuse works correctly under the debugger.
+#[test]
+#[ignore]
+fn guest_debug_serve_requests() -> Result<()> {
+    let gdb_port = free_port();
+
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "serve",
+        gdb_port,
+        &[
+            "-Ccache=n",
+            "--addr=127.0.0.1:0",
+            "-Scli",
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+        ],
+        Duration::from_secs(30),
+    )?;
+
+    // Connect LLDB in background: just continue to start the HTTP server.
+    let lldb_handle = std::thread::spawn(move || lldb_with_gdbstub_script(gdb_port, "c\n"));
+
+    // Wait for the HTTP server to start.
+    let line = wt.wait_for_stderr("Serving HTTP", Duration::from_secs(15))?;
+    let http_addr = parse_http_addr(&line)?;
+    eprintln!("HTTP address: {http_addr}");
+
+    // Send 3 requests to the same instance, verifying instance reuse.
+    for i in 1..=3 {
+        let resp = http_request(http_addr, "/")?;
+        eprintln!("Response {i}: {}", resp.lines().last().unwrap_or(""));
+        assert!(
+            resp.contains("Hello, WASI!"),
+            "request {i}: expected 'Hello, WASI!' in response, got:\n{resp}"
+        );
+    }
+
+    // Kill wasmtime to unblock LLDB (which is waiting for the process).
+    wt.child.kill().ok();
+    wt.child.wait()?;
+
+    // Collect LLDB output (it exits once the process is killed).
+    let lldb_output = lldb_handle.join().unwrap()?;
+
+    // Verify LLDB connected and the process was running.
+    check_output(
+        &lldb_output,
+        r#"
+check: stop reason
+check: resuming
+"#,
+    )?;
+
+    Ok(())
+}
+
+/// Start serve under debugger, set a breakpoint on the HTTP handler,
+/// send requests, verify breakpoints fire and responses are correct.
+/// Tests instance reuse across multiple requests.
+#[test]
+#[ignore]
+fn guest_debug_serve_breakpoint() -> Result<()> {
+    let gdb_port = free_port();
+
+    let mut wt = WasmtimeWithGdbstub::spawn(
+        "serve",
+        gdb_port,
+        &[
+            "-Ccache=n",
+            "--addr=127.0.0.1:0",
+            "-Scli",
+            P2_CLI_SERVE_HELLO_WORLD_COMPONENT,
+        ],
+        Duration::from_secs(30),
+    )?;
+
+    // LLDB script: set a breakpoint on the incoming-handler Guest::handle,
+    // continue to start the server, then for each request: print backtrace
+    // at breakpoint and continue. We do this for 3 requests.
+    let lldb_handle = std::thread::spawn(move || {
+        lldb_with_gdbstub_script(
+            gdb_port,
+            r#"
+rbreak Guest.*handle
+c
+bt
+c
+bt
+c
+bt
+c
+"#,
+        )
+    });
+
+    // Wait for the HTTP server to start.
+    let line = wt.wait_for_stderr("Serving HTTP", Duration::from_secs(15))?;
+    let http_addr = parse_http_addr(&line)?;
+    eprintln!("HTTP address: {http_addr}");
+
+    // Send 3 requests. Each one will hit the breakpoint, LLDB prints
+    // the backtrace, then continues to let the response through.
+    for i in 1..=3 {
+        let resp = http_request(http_addr, "/")?;
+        eprintln!("Response {i}: {}", resp.lines().last().unwrap_or(""));
+        assert!(
+            resp.contains("Hello, WASI!"),
+            "request {i}: expected 'Hello, WASI!' in response, got:\n{resp}"
+        );
+    }
+
+    // Kill wasmtime to unblock LLDB.
+    wt.child.kill().ok();
+    wt.child.wait()?;
+
+    let lldb_output = lldb_handle.join().unwrap()?;
+
+    // Verify LLDB stopped at the breakpoint with the correct function
+    // in the backtrace, and that it happened multiple times.
+    check_output(
+        &lldb_output,
+        r#"
+check: Guest
+check: handle
+check: stop reason
+check: Guest
+check: handle
+check: stop reason
+check: Guest
+check: handle
+"#,
+    )?;
+
     Ok(())
 }

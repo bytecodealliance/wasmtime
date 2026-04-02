@@ -64,3 +64,57 @@ block0(v0: i32, v1: i32):
 
 ; run: %simplify_bor_xyy(1, 2) == 3
 ; run: %simplify_bor_xyy(54, 9) == 63
+
+
+function %test_isub_band_band_bnot_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = band v0, v1
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_band_band_bnot_rt(0, 0) == 0
+; run: %test_isub_band_band_bnot_rt(1, 0) == 1
+; run: %test_isub_band_band_bnot_rt(1, 1) == -1
+
+function %test_bor_band_bnot_to_bxor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = bnot v0
+    v5 = band v4, v1
+    v6 = bor v3, v5
+    return v6
+}
+
+; run: %test_bor_band_bnot_to_bxor(0, 0) == 0
+; run: %test_bor_band_bnot_to_bxor(1, 0) == 1
+; run: %test_bor_band_bnot_to_bxor(0, 1) == 1
+
+function %test_bor_band_bnot_bxor_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = bxor v0, v1
+    v5 = bor v3, v4
+    return v5
+}
+
+; run: %test_bor_band_bnot_bxor_absorb(0, 0) == 0
+; run: %test_bor_band_bnot_bxor_absorb(1, 0) == 1
+; run: %test_bor_band_bnot_bxor_absorb(0, 1) == 1
+
+function %test_bxor_band_bnot_to_bnot_band(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = bnot v0
+    v5 = bxor v3, v4
+    return v5
+}
+
+; run: %test_bxor_band_bnot_to_bnot_band(0, 0) == 0xffffffff
+; run: %test_bxor_band_bnot_to_bnot_band(1, 0) == 0xffffffff
+; run: %test_bxor_band_bnot_to_bnot_band(1, 1) == 0xfffffffe

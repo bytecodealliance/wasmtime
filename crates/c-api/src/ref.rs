@@ -1,7 +1,7 @@
 use crate::{WasmtimeStoreContextMut, abort};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::{num::NonZeroU64, os::raw::c_void, ptr};
-use wasmtime::{AnyRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
+use wasmtime::{AnyRef, EqRef, ExnRef, ExternRef, I31, OwnedRooted, Ref, RootScope, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s
@@ -247,6 +247,12 @@ macro_rules! ref_wrapper {
             }
         }
 
+        impl From<OwnedRooted<$wasmtime>> for $c {
+            fn from(rooted: OwnedRooted<$wasmtime>) -> $c {
+                Self::from(Some(rooted))
+            }
+        }
+
         // SAFETY: The `*const ()` comes from (and is converted back
         // into) an `Arc<()>`, and is only accessed as such, so this
         // type is both Send and Sync. These constraints are necessary
@@ -258,6 +264,8 @@ macro_rules! ref_wrapper {
 
 ref_wrapper!(AnyRef => wasmtime_anyref_t);
 ref_wrapper!(ExternRef => wasmtime_externref_t);
+ref_wrapper!(EqRef => wasmtime_eqref_t);
+ref_wrapper!(ExnRef => wasmtime_exnref_t);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
@@ -309,6 +317,17 @@ pub extern "C" fn wasmtime_anyref_from_i31(
     let anyref = AnyRef::from_i31(&mut scope, I31::wrapping_u32(val));
     let anyref = anyref.to_owned_rooted(&mut scope).expect("in scope");
     crate::initialize(out, Some(anyref).into())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_anyref_is_i31(
+    cx: WasmtimeStoreContextMut<'_>,
+    anyref: Option<&wasmtime_anyref_t>,
+) -> bool {
+    match anyref.and_then(|a| a.as_wasmtime()) {
+        Some(anyref) => anyref.is_i31(&cx).expect("OwnedRooted always in scope"),
+        None => false,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -420,4 +439,104 @@ pub unsafe extern "C" fn wasmtime_externref_from_raw(
     let rooted = ExternRef::from_raw(&mut scope, raw)
         .map(|e| e.to_owned_rooted(&mut scope).expect("in scope"));
     crate::initialize(val, rooted.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_exnref_clone(
+    exnref: Option<&wasmtime_exnref_t>,
+    out: &mut MaybeUninit<wasmtime_exnref_t>,
+) {
+    let exnref = exnref.and_then(|e| e.as_wasmtime());
+    crate::initialize(out, exnref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_exnref_unroot(val: Option<&mut ManuallyDrop<wasmtime_exnref_t>>) {
+    if let Some(val) = val {
+        unsafe {
+            ManuallyDrop::drop(val);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_clone(
+    eqref: Option<&wasmtime_eqref_t>,
+    out: &mut MaybeUninit<wasmtime_eqref_t>,
+) {
+    let eqref = eqref.and_then(|e| e.as_wasmtime());
+    crate::initialize(out, eqref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_unroot(val: Option<&mut ManuallyDrop<wasmtime_eqref_t>>) {
+    if let Some(val) = val {
+        unsafe {
+            ManuallyDrop::drop(val);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_to_anyref(
+    eqref: Option<&wasmtime_eqref_t>,
+    out: &mut MaybeUninit<wasmtime_anyref_t>,
+) {
+    let anyref = eqref.and_then(|e| e.as_wasmtime()).map(|e| e.to_anyref());
+    crate::initialize(out, anyref.into());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_eqref_from_i31(
+    cx: WasmtimeStoreContextMut<'_>,
+    val: u32,
+    out: &mut MaybeUninit<wasmtime_eqref_t>,
+) {
+    let mut scope = RootScope::new(cx);
+    let eqref = EqRef::from_i31(&mut scope, I31::wrapping_u32(val));
+    let eqref = eqref.to_owned_rooted(&mut scope).expect("in scope");
+    crate::initialize(out, Some(eqref).into())
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_is_i31(
+    cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+) -> bool {
+    match eqref.and_then(|e| e.as_wasmtime()) {
+        Some(eqref) => eqref.is_i31(&cx).expect("OwnedRooted always in scope"),
+        None => false,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_i31_get_u(
+    cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+    dst: &mut MaybeUninit<u32>,
+) -> bool {
+    let mut scope = RootScope::new(cx);
+    if let Some(eqref) = eqref.and_then(|e| e.as_wasmtime()) {
+        if let Some(val) = eqref.as_i31(&mut scope).expect("in scope") {
+            crate::initialize(dst, val.get_u32());
+            return true;
+        }
+    }
+    false
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_i31_get_s(
+    cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+    dst: &mut MaybeUninit<i32>,
+) -> bool {
+    let mut scope = RootScope::new(cx);
+    if let Some(eqref) = eqref.and_then(|e| e.as_wasmtime()) {
+        if let Some(val) = eqref.as_i31(&mut scope).expect("in scope") {
+            crate::initialize(dst, val.get_i32());
+            return true;
+        }
+    }
+    false
 }

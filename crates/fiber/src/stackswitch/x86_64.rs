@@ -50,7 +50,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* rdi */) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8,
 ) {
     #[repr(C)]
@@ -72,6 +72,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
     unsafe {
         let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
         initial_stack.write(InitialStack {
+            r13: wasmtime_fiber_switch_ as *mut u8,
             r12: entry_arg0,
             rbx: entry_point as *mut u8,
             rbp: top_of_stack,
@@ -155,12 +156,18 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         // `wasmtime_fiber_init` routine arranged the various values to be
         // materialized into the registers used here. Our job is to then move
         // the values into the ABI-defined registers and call the entry-point.
-        // Note that `call` is used here to leave this frame on the stack so we
-        // can use the dwarf info here for unwinding. The trailing `ud2` is just
-        // for safety.
         mov rdi, r12
         mov rsi, rbp
-        call rbx
+        call rbx      // entry_point
+
+        // Once the entrypoint has returned the final switch for this fiber is
+        // executed. The address of the routine is in `r13` and its argument is
+        // the return value of the startup routine.
+        mov rdi, rax
+        call r13      // wasmtime_fiber_switch_
+
+        // This should never be reached, but in case it accidentally does then
+        // terminate immediately.
         ud2
         .cfi_endproc
         ",

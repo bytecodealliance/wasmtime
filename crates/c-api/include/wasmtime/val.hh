@@ -6,6 +6,7 @@
 #define WASMTIME_VAL_HH
 
 #include <optional>
+#include <wasmtime/gc.h>
 #include <wasmtime/store.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>
@@ -99,6 +100,8 @@ public:
   }
 };
 
+class EqRef;
+
 /**
  * \brief Representation of a WebAssembly `anyref` value.
  */
@@ -173,6 +176,11 @@ public:
       return ret;
     return std::nullopt;
   }
+
+  /// \brief Returns `true` if this anyref is an i31ref.
+  bool is_i31(Store::Context cx) const {
+    return wasmtime_anyref_is_i31(cx.ptr, &val);
+  }
 };
 
 /// \brief Container for the `v128` WebAssembly type.
@@ -205,6 +213,7 @@ class Val {
   friend class Global;
   friend class Table;
   friend class Func;
+  friend class Exn;
 
   wasmtime_val_t val;
 
@@ -317,6 +326,8 @@ public:
       return ValKind::ExternRef;
     case WASMTIME_ANYREF:
       return ValKind::AnyRef;
+    case WASMTIME_EXNREF:
+      return ValKind::ExnRef;
     case WASMTIME_V128:
       return ValKind::V128;
     }

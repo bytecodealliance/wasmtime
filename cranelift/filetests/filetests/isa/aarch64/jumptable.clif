@@ -51,28 +51,27 @@ block5(v5: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #3
-;   b.hs #0x44
+;   b.hs #0x40
 ;   csel x11, xzr, x0, hs
-;   csdb
-;   adr x10, #0x20
+;   adr x10, #0x1c
 ;   ldrsw x11, [x10, w11, uxtw #2]
 ;   add x10, x10, x11
 ;   br x10
 ;   .byte 0x1c, 0x00, 0x00, 0x00
 ;   .byte 0x14, 0x00, 0x00, 0x00
 ;   .byte 0x0c, 0x00, 0x00, 0x00
-; block1: ; offset 0x2c
+; block1: ; offset 0x28
 ;   mov w5, #3
-;   b #0x48
-; block2: ; offset 0x34
+;   b #0x44
+; block2: ; offset 0x30
 ;   mov w5, #2
-;   b #0x48
-; block3: ; offset 0x3c
+;   b #0x44
+; block3: ; offset 0x38
 ;   mov w5, #1
-;   b #0x48
-; block4: ; offset 0x44
+;   b #0x44
+; block4: ; offset 0x40
 ;   mov w5, #4
-; block5: ; offset 0x48
+; block5: ; offset 0x44
 ;   add w0, w0, w5
 ;   ret
 

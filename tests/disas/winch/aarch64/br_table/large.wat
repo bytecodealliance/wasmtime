@@ -749,7 +749,7 @@
 ;;       movk    x17, #0x18
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x1812c
+;;       b.lo    #0x18128
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -759,14 +759,13 @@
 ;;       ldur    w0, [x28, #4]
 ;;       mov     x1, #0x6027
 ;;       cmp     w0, w1, uxtx
-;;       b.hs    #0x18110
+;;       b.hs    #0x1810c
 ;;   54: csel    x1, xzr, x0, hs
-;;       csdb
-;;       adr     x16, #0x6c
+;;       adr     x16, #0x68
 ;;       ldrsw   x1, [x16, w1, uxtw #2]
 ;;       add     x16, x16, x1
 ;;       br      x16
-;;   6c: .byte   0x9c, 0x80, 0x01, 0x00
+;;   68: .byte   0x9c, 0x80, 0x01, 0x00
 ;;       .byte   0xa4, 0x80, 0x01, 0x00
 ;;       .byte   0x9c, 0x80, 0x01, 0x00
 ;;       .byte   0xa4, 0x80, 0x01, 0x00
@@ -25382,12 +25381,12 @@
 ;;       .byte   0xa4, 0x80, 0x01, 0x00
 ;;       .byte   0x9c, 0x80, 0x01, 0x00
 ;;       mov     x0, #0
-;;       b       #0x18114
-;; 18110: mov     x0, #1
+;;       b       #0x18110
+;; 1810c: mov     x0, #1
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;; 1812c: .byte   0x1f, 0xc1, 0x00, 0x00
+;; 18128: .byte   0x1f, 0xc1, 0x00, 0x00

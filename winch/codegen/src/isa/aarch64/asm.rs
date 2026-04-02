@@ -12,6 +12,7 @@ use crate::{
     reg::{Reg, WritableReg, writable},
 };
 
+use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
     ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5,
@@ -112,11 +113,11 @@ pub(crate) struct Assembler {
 
 impl Assembler {
     /// Create a new Aarch64 assembler.
-    pub fn new(shared_flags: settings::Flags) -> Self {
+    pub fn new(shared_flags: settings::Flags, isa_flags: aarch64::settings::Flags) -> Self {
         Self {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
-            emit_info: EmitInfo::new(shared_flags),
+            emit_info: EmitInfo::new(shared_flags, isa_flags),
             pool: ConstantPool::new(),
         }
     }

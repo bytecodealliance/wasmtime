@@ -18,24 +18,36 @@ fn main() {
 
     let mut trials = Vec::new();
 
+    // Check for if we are only running GC-related tests.
+    let gc_keywords = std::env::var("WASMTIME_TEST_GC_KEYWORDS")
+        .ok()
+        .map(|s| s.split(" ").map(|s| s.to_string()).collect::<Vec<_>>());
+
     let mut add_trial = |test: &WastTest, config: WastConfig| {
-        let trial = Trial::test(
-            format!(
-                "{:?}/{}{}{}",
-                config.compiler,
-                if config.pooling { "pooling/" } else { "" },
-                if config.collector != Collector::Auto {
-                    format!("{:?}/", config.collector)
-                } else {
-                    String::new()
-                },
-                test.path.to_str().unwrap()
-            ),
-            {
-                let test = test.clone();
-                move || run_wast(&test, config).map_err(|e| format!("{e:?}").into())
+        let name = format!(
+            "{:?}/{}{}{}",
+            config.compiler,
+            if config.pooling { "pooling/" } else { "" },
+            if config.collector != Collector::Auto {
+                format!("{:?}/", config.collector)
+            } else {
+                String::new()
             },
+            test.path.to_str().unwrap()
         );
+
+        // Don't add this trial if we are only running GC-related tests and it
+        // doesn't look like a GC-related test.
+        if let Some(ks) = &gc_keywords {
+            if config.collector == Collector::Auto && !ks.iter().any(|kw| name.contains(kw)) {
+                return;
+            }
+        }
+
+        let trial = Trial::test(name, {
+            let test = test.clone();
+            move || run_wast(&test, config).map_err(|e| format!("{e:?}").into())
+        });
 
         trials.push(trial);
     };
@@ -255,6 +267,13 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
                 use_shared_memory: true,
                 suppress_prints: true,
             })?;
+            if test
+                .path
+                .to_str()
+                .is_some_and(|s| s.contains("misc_testsuite"))
+            {
+                wast_context.register_wasmtime()?;
+            }
             wast_context
                 .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
                 .with_context(|| format!("failed to run spec test with {desc} engine"))

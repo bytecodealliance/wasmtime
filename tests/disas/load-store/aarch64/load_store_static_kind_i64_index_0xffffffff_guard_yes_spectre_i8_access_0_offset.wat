@@ -27,7 +27,6 @@
 ;;       orr     x7, xzr, #0xffffffff
 ;;       cmp     x4, x7
 ;;       csel    x10, x8, x9, hi
-;;       csdb
 ;;       strb    w5, [x10]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -41,7 +40,6 @@
 ;;       orr     x7, xzr, #0xffffffff
 ;;       cmp     x4, x7
 ;;       csel    x10, x8, x9, hi
-;;       csdb
 ;;       ldrb    w2, [x10]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

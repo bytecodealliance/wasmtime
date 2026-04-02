@@ -36,7 +36,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* r0 */) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8,
 ) {
     #[repr(C)]
@@ -60,6 +60,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
     unsafe {
         let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
         initial_stack.write(InitialStack {
+            r8: wasmtime_fiber_switch_ as *mut u8,
             r9: entry_arg0,
             r10: entry_point as *mut u8,
             r11: top_of_stack,
@@ -103,6 +104,7 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         mov r1, r11
         mov r0, r9
         blx r10
+        blx r8
         .cfi_endproc
         ",
     );
