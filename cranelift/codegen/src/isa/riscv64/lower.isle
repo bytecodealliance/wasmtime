@@ -2126,7 +2126,10 @@
 
 ; fold icmp + trapz
 (rule 2 (lower (trapz (icmp _ cc x @ (value_type (fits_in_64 _)) y) code))
-  (gen_trapif (intcc_complement cc) x y code))
+  (gen_trapif (intcc_complement cc)
+    (put_value_in_reg_for_icmp cc x)
+    (put_value_in_reg_for_icmp cc y)
+    code))
 
 ;;;;;  Rules for `trapnz`;;;;;;;;;
 (rule
@@ -2139,7 +2142,10 @@
 
 ; fold icmp + trapnz
 (rule 2 (lower (trapnz (icmp _ cc x @ (value_type (fits_in_64 _)) y) code))
-  (gen_trapif cc x y code))
+  (gen_trapif cc
+    (put_value_in_reg_for_icmp cc x)
+    (put_value_in_reg_for_icmp cc y)
+    code))
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 _ (little_or_native_endian flags) addr offset))
