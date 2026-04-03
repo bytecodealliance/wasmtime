@@ -4888,6 +4888,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "test-programs-artifacts",
+ "tokio",
  "v8",
  "wasm-compose",
  "wasm-encoder 0.246.1",

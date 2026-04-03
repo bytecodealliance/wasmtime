@@ -33,12 +33,13 @@ use crate::stackswitch::*;
 use crate::{RunResult, RuntimeFiberStack};
 use std::boxed::Box;
 use std::cell::Cell;
-use std::io;
 use std::ops::Range;
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use wasmtime_environ::error::{OutOfMemory, Result};
+use wasmtime_environ::prelude::*;
 
-pub type Error = io::Error;
+pub type Error = wasmtime_environ::error::Error;
 
 pub struct FiberStack {
     base: BasePtr,
@@ -78,7 +79,7 @@ fn host_page_size() -> usize {
 }
 
 impl FiberStack {
-    pub fn new(size: usize, zeroed: bool) -> io::Result<Self> {
+    pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         let page_size = host_page_size();
         // The anonymous `mmap`s we use for `FiberStackStorage` are always
         // zeroed.
@@ -101,7 +102,7 @@ impl FiberStack {
         })
     }
 
-    pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> io::Result<Self> {
+    pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         // See comments in `mod asan` below for why asan has a different stack
         // allocation strategy.
         if cfg!(asan) {
@@ -118,7 +119,7 @@ impl FiberStack {
         matches!(self.storage, FiberStackStorage::Unmanaged(_))
     }
 
-    pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> io::Result<Self> {
+    pub fn from_custom(custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
         let range = custom.range();
         let page_size = host_page_size();
         let start_ptr = range.start as *mut u8;
@@ -168,7 +169,7 @@ unsafe impl Send for MmapFiberStack {}
 unsafe impl Sync for MmapFiberStack {}
 
 impl MmapFiberStack {
-    fn new(size: usize) -> io::Result<Self> {
+    fn new(size: usize) -> Result<Self> {
         // Round up our stack size request to the nearest multiple of the
         // page size.
         let page_size = host_page_size();
@@ -177,7 +178,7 @@ impl MmapFiberStack {
         } else {
             let with_extra = size
                 .checked_add(page_size - 1)
-                .ok_or(io::ErrorKind::OutOfMemory)?;
+                .ok_or_else(|| OutOfMemory::new(usize::MAX))?;
             with_extra & (!(page_size - 1))
         };
 
@@ -243,20 +244,17 @@ where
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
+    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> Result<Self>
     where
         F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
         // On unsupported platforms `wasmtime_fiber_init` is a panicking shim so
         // return an error saying the host architecture isn't supported instead.
         if !SUPPORTED_ARCH {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "fibers not supported on this host architecture",
-            ));
+            bail!("fibers not supported on this host architecture");
         }
         unsafe {
-            let data = Box::into_raw(Box::new(func)).cast();
+            let data = Box::into_raw(try_new::<Box<_>>(func)?).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
         }
 
@@ -330,7 +328,7 @@ impl Suspend {
 /// called around every stack switch with some other fiddly bits as well.
 #[cfg(asan)]
 mod asan {
-    use super::{FiberStack, MmapFiberStack, RuntimeFiberStack, host_page_size};
+    use super::*;
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use std::mem::ManuallyDrop;
@@ -442,11 +440,11 @@ mod asan {
     /// meaning that this should only ever be a relatively small set of stacks.
     static FIBER_STACKS: Mutex<Vec<MmapFiberStack>> = Mutex::new(Vec::new());
 
-    pub fn new_fiber_stack(size: usize) -> std::io::Result<Box<dyn RuntimeFiberStack>> {
+    pub fn new_fiber_stack(size: usize) -> Result<Box<dyn RuntimeFiberStack>> {
         let page_size = host_page_size();
         let needed_size = size
             .checked_add(page_size)
-            .ok_or(std::io::ErrorKind::OutOfMemory)?;
+            .ok_or_else(|| OutOfMemory::new(usize::MAX))?;
         let mut stacks = FIBER_STACKS.lock().unwrap();
 
         let stack = match stacks.iter().position(|i| needed_size <= i.mapping_len) {
@@ -500,7 +498,7 @@ mod asan {
 // Shim module that's the same as above but only has stubs.
 #[cfg(not(asan))]
 mod asan_disabled {
-    use super::{FiberStack, RuntimeFiberStack};
+    use super::*;
     use std::boxed::Box;
 
     #[derive(Default)]
@@ -527,7 +525,7 @@ mod asan_disabled {
         PreviousStack
     }
 
-    pub fn new_fiber_stack(_size: usize) -> std::io::Result<Box<dyn RuntimeFiberStack>> {
+    pub fn new_fiber_stack(_size: usize) -> Result<Box<dyn RuntimeFiberStack>> {
         unimplemented!()
     }
 }

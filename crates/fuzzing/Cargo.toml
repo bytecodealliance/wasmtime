@@ -74,6 +74,7 @@ rand = { version = "0.8.0", features = ["small_rng"] }
 wasmtime-environ = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 
 # Only enable the `build-libinterpret` feature when fuzzing is enabled, enabling
 # commands like `cargo test --workspace` or similar to not need an ocaml
