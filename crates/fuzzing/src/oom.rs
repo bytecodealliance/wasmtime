@@ -4,8 +4,17 @@
 //! https://firefox-source-docs.mozilla.org/js/hacking_tips.html#how-to-debug-oomtest-failures
 
 use backtrace::Backtrace;
-use std::{alloc::GlobalAlloc, cell::Cell, mem, ptr, time};
-use wasmtime_core::error::{Error, OutOfMemory, Result, bail};
+use std::{
+    alloc::GlobalAlloc,
+    cell::Cell,
+    mem,
+    pin::Pin,
+    ptr,
+    task::{Context, Poll, Waker},
+    time,
+};
+use wasmtime::format_err;
+use wasmtime_core::error::{OutOfMemory, Result};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -250,6 +259,21 @@ impl OomTest {
     /// Returns early once the test function returns `Ok(())` before an OOM has
     /// been injected.
     pub fn test(&self, test_func: impl Fn() -> Result<()>) -> Result<()> {
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+        let future = self.test_async(|| async { test_func() });
+        let future = std::pin::pin!(future);
+        match future.poll(&mut cx) {
+            Poll::Ready(r) => r,
+            Poll::Pending => unreachable!(),
+        }
+    }
+
+    /// The same as `test` but `async`.
+    pub async fn test_async<F>(&self, test_func: impl Fn() -> F) -> Result<()>
+    where
+        F: Future<Output = Result<()>>,
+    {
         let start = time::Instant::now();
 
         for i in 0.. {
@@ -260,19 +284,18 @@ impl OomTest {
             }
 
             log::trace!("=== Injecting OOM after {i} allocations ===");
-            let (result, old_state) = {
-                let guard = ScopedOomState::new(OomState::OomOnAlloc {
+
+            let future = std::pin::pin!(test_func());
+            let (result, oom_state) = OomTestFuture::new(
+                future,
+                OomState::OomOnAlloc {
                     counter: i,
                     allow_alloc_after: self.allow_alloc_after_oom,
-                });
-                assert_eq!(guard.prev_state, OomState::OutsideOomTest);
+                },
+            )
+            .await;
 
-                let result = test_func();
-
-                (result, guard.finish())
-            };
-
-            match (result, old_state) {
+            match (result, oom_state) {
                 (_, OomState::OutsideOomTest) => unreachable!(),
 
                 // The test function completed successfully before we ran out of
@@ -281,11 +304,13 @@ impl OomTest {
 
                 // We injected an OOM and the test function handled it
                 // correctly; continue to the next iteration.
-                (Err(e), OomState::DidOom { .. }) if self.is_oom_error(&e) => {}
+                (Err(e), OomState::DidOom { .. }) if e.is::<OutOfMemory>() => continue,
 
                 // Missed OOMs.
                 (Ok(()), OomState::DidOom { .. }) => {
-                    bail!("OOM test function missed an OOM: returned Ok(())");
+                    return Err(format_err!(
+                        "OOM test function missed an OOM: returned Ok(())"
+                    ));
                 }
                 (Err(e), OomState::DidOom { .. }) => {
                     return Err(
@@ -301,11 +326,46 @@ impl OomTest {
                 }
             }
         }
-
         Ok(())
     }
+}
 
-    fn is_oom_error(&self, e: &Error) -> bool {
-        e.is::<OutOfMemory>()
+struct OomTestFuture<'a, F> {
+    inner: Pin<&'a mut F>,
+    state: OomState,
+}
+
+impl<'a, F> OomTestFuture<'a, F> {
+    fn new(inner: Pin<&'a mut F>, state: OomState) -> Self {
+        OomTestFuture { inner, state }
+    }
+}
+
+impl<F> Future for OomTestFuture<'_, F>
+where
+    F: Future<Output = Result<()>>,
+{
+    type Output = (Result<()>, OomState);
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        log::trace!("OomTestFuture::poll: Entered ---");
+
+        let guard = ScopedOomState::new(self.state.clone());
+        assert_eq!(guard.prev_state, OomState::OutsideOomTest);
+
+        let result = self.inner.as_mut().poll(cx);
+        let old_state = guard.finish();
+
+        log::trace!("OomTestFuture::poll: inner result: {result:?}");
+        log::trace!("OomTestFuture::poll: old state: {old_state:?}");
+
+        match result {
+            Poll::Pending => {
+                self.state = set_oom_state(OomState::OutsideOomTest);
+                drop(guard);
+                Poll::Pending
+            }
+            Poll::Ready(result) => Poll::Ready((result, old_state)),
+        }
     }
 }
