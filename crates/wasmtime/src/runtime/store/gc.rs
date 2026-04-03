@@ -4,8 +4,7 @@ use super::*;
 use crate::runtime::vm::VMGcRef;
 
 impl StoreOpaque {
-    /// Attempt to grow the GC heap by `bytes_needed` or, if that fails, perform
-    /// a garbage collection.
+    /// Perform any growth or GC needed to allocate `bytes_needed` bytes.
     ///
     /// Note that even when this function returns it is not guaranteed
     /// that a GC allocation of size `bytes_needed` will succeed. Growing the GC
@@ -28,7 +27,7 @@ impl StoreOpaque {
         let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
 
         scope
-            .grow_or_collect_gc_heap(limiter, bytes_needed, asyncness)
+            .collect_and_maybe_grow_gc_heap(limiter, bytes_needed, asyncness)
             .await;
 
         root.map(|r| {
@@ -50,16 +49,25 @@ impl StoreOpaque {
         }
     }
 
-    async fn grow_or_collect_gc_heap(
+    /// Helper invoked as part of `gc`, whose purpose is to GC and
+    /// maybe grow for a pending allocation of a given size.
+    async fn collect_and_maybe_grow_gc_heap(
         &mut self,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
     ) {
-        // When explicitly called (e.g., from Store::gc), always collect.
-        // If bytes_needed is specified, also try to grow if needed.
+        // First, always collect. Then, if bytes_needed is specified,
+        // also try to grow if that size is greater than GC heap
+        // capacity minus sum of allocated layout sizes.
         self.do_gc(asyncness).await;
-        if let Some(n) = bytes_needed {
+        if let Some(n) = bytes_needed
+            && n > u64::try_from(self.gc_heap_capacity())
+                .unwrap()
+                .saturating_sub(self.gc_store.as_ref().map_or(0, |gc| {
+                    u64::try_from(gc.last_post_gc_allocated_bytes.unwrap_or(0)).unwrap()
+                }))
+        {
             let _ = self.grow_gc_heap(limiter, n).await;
         }
     }

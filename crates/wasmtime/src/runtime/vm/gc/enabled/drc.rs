@@ -180,8 +180,8 @@ impl DrcHeap {
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size();
-        self.allocated_bytes -= size;
         let layout = FreeList::layout(size);
+        self.allocated_bytes -= layout.size();
         self.free_list
             .as_mut()
             .unwrap()
