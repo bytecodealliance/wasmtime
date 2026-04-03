@@ -33,6 +33,7 @@ wat = { workspace = true, optional = true }
 cap-std = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["fs"] }
 wasmtime-wasi = { workspace = true, optional = true, features = ["p1"] }
+wasmtime-wasi-http = { workspace = true, optional = true, features = ["p2", "default-send-request"] }
 wasmtime-wasi-io = { workspace = true, optional = true, features = ["std"] }
 async-trait = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
@@ -47,6 +48,7 @@ profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['cap-std', 'wasmtime-wasi', 'wasmtime-wasi-io', 'tokio', 'async-trait', 'bytes']
+wasi-http = ['wasi', 'wasmtime-wasi-http']
 logging = ['dep:env_logger']
 disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 coredump = ["wasmtime/coredump"]

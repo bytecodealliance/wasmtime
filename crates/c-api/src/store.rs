@@ -84,6 +84,8 @@ pub struct WasmtimeStoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
     pub(crate) wasi: Option<wasmtime_wasi::p1::WasiP1Ctx>,
+    #[cfg(feature = "wasi-http")]
+    pub(crate) wasi_http: Option<wasmtime_wasi_http::WasiHttpCtx>,
 
     /// Temporary storage for usage during a wasm->host call to store values
     /// in a slice we pass to the C API.
@@ -104,6 +106,20 @@ impl wasmtime_wasi::WasiView for WasmtimeStoreData {
     }
 }
 
+#[cfg(all(feature = "component-model", feature = "wasi-http"))]
+impl wasmtime_wasi_http::p2::WasiHttpView for WasmtimeStoreData {
+    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
+        use wasmtime_wasi::WasiView;
+        let ctx = self.wasi_http.as_mut().unwrap();
+        let table = self.wasi.as_mut().unwrap().ctx().table;
+        wasmtime_wasi_http::p2::WasiHttpCtxView {
+            ctx,
+            table,
+            hooks: wasmtime_wasi_http::p2::default_hooks(),
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_store_new(
     engine: &wasm_engine_t,
@@ -117,6 +133,8 @@ pub extern "C" fn wasmtime_store_new(
                 foreign: ForeignData { data, finalizer },
                 #[cfg(feature = "wasi")]
                 wasi: None,
+                #[cfg(feature = "wasi-http")]
+                wasi_http: None,
                 hostcall_val_storage: Vec::new(),
                 wasm_val_storage: Vec::new(),
                 store_limits: StoreLimits::default(),
@@ -222,6 +240,12 @@ pub extern "C" fn wasmtime_context_set_wasi(
     crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
         context.data_mut().wasi = Some(wasi);
     })
+}
+
+#[cfg(feature = "wasi-http")]
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_context_set_wasi_http(mut context: WasmtimeStoreContextMut<'_>) {
+    context.data_mut().wasi_http = Some(wasmtime_wasi_http::WasiHttpCtx::new());
 }
 
 #[unsafe(no_mangle)]

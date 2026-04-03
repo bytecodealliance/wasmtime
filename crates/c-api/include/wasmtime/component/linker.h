@@ -165,6 +165,19 @@ wasmtime_component_linker_add_wasip2(wasmtime_component_linker_t *linker);
 
 #endif // WASMTIME_FEATURE_WASI
 
+#ifdef WASMTIME_FEATURE_WASI_HTTP
+
+/**
+ * \brief Add WASI HTTP interfaces into the \p linker provided.
+ *
+ * This adds `wasi:http/types` and `wasi:http/outgoing-handler` to the linker.
+ * Requires WASI to be added first via #wasmtime_component_linker_add_wasip2.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_add_wasi_http(wasmtime_component_linker_t *linker);
+
+#endif // WASMTIME_FEATURE_WASI_HTTP
+
 /// Type of the callback used in
 /// #wasmtime_component_linker_instance_add_resource
 typedef wasmtime_error_t *(*wasmtime_component_resource_destructor_t)(
