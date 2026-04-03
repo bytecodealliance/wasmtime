@@ -395,7 +395,7 @@ impl GcOps {
             debug_assert!(operand_types.is_empty());
             op.operand_types(&mut operand_types);
             for ty in operand_types.drain(..) {
-                StackType::fixup(ty, &mut stack, &mut new_ops, num_types);
+                StackType::fixup(ty, &mut stack, &mut new_ops, num_types, &self.types);
             }
 
             // Finally, emit the op itself (updates stack abstractly)

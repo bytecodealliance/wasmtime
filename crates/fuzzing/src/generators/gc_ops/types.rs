@@ -199,6 +199,43 @@ impl Types {
             .map(|(gid, _)| *gid)
     }
 
+    /// Returns true iff `sub_index` is the same as or a subtype of `sup_index`.
+    pub fn is_subtype_index(&self, sub_index: u32, sup_index: u32) -> bool {
+        if sub_index == sup_index {
+            return true;
+        }
+
+        let i = match usize::try_from(sub_index) {
+            Ok(i) => i,
+            Err(_) => return false,
+        };
+        let j = match usize::try_from(sup_index) {
+            Ok(j) => j,
+            Err(_) => return false,
+        };
+
+        let mut cur = match self.type_defs.keys().nth(i).copied() {
+            Some(t) => t,
+            None => return false,
+        };
+        let sup = match self.type_defs.keys().nth(j).copied() {
+            Some(t) => t,
+            None => return false,
+        };
+
+        loop {
+            if cur == sup {
+                return true;
+            }
+
+            let next = match self.type_defs.get(&cur).and_then(|d| d.supertype) {
+                Some(t) => t,
+                None => return false,
+            };
+            cur = next;
+        }
+    }
+
     /// Topological sort of types by their supertype (supertype before subtype).
     pub fn sort_types_topo(&self, out: &mut Vec<TypeId>) {
         let graph = SupertypeGraph {
@@ -485,7 +522,7 @@ impl Types {
 }
 
 /// Tracks the required operand type on the abstract value stack.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StackType {
     /// `externref`.
     ExternRef,
@@ -500,33 +537,65 @@ impl StackType {
         stack: &mut Vec<StackType>,
         out: &mut Vec<GcOp>,
         num_types: u32,
+        types: &Types,
     ) {
+        log::trace!(
+            "[StackType::fixup] enter req={req:?} num_types={num_types} stack_len={} stack={stack:?}",
+            stack.len()
+        );
         let mut result_types = Vec::new();
         match req {
             None => {
                 if stack.is_empty() {
+                    log::trace!("[StackType::fixup] None: empty stack -> emit NullExtern");
                     Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
                 }
-                stack.pop();
+                let popped = stack.pop();
+                log::trace!("[StackType::fixup] None: pop -> {popped:?} stack={stack:?}");
             }
             Some(Self::ExternRef) => match stack.last() {
                 Some(Self::ExternRef) => {
+                    log::trace!("[StackType::fixup] ExternRef: top ok -> pop");
                     stack.pop();
                 }
-                _ => {
+                other => {
+                    log::trace!(
+                        "[StackType::fixup] ExternRef: mismatch top={other:?} -> emit NullExtern+pop"
+                    );
                     Self::emit(GcOp::NullExtern, stack, out, num_types, &mut result_types);
-                    stack.pop();
+                    let popped = stack.pop();
+                    log::trace!(
+                        "[StackType::fixup] ExternRef: after emit pop -> {popped:?} stack={stack:?}"
+                    );
                 }
             },
             Some(Self::Struct(wanted)) => {
                 let ok = match (wanted, stack.last()) {
-                    (Some(wanted), Some(Self::Struct(Some(s)))) => *s == wanted,
-                    (None, Some(Self::Struct(_))) => true,
-                    _ => false,
+                    (Some(wanted), Some(Self::Struct(Some(actual)))) => {
+                        let st = types.is_subtype_index(*actual, wanted);
+                        log::trace!(
+                            "[StackType::fixup] Struct: actual={actual} wanted={wanted} is_subtype_index={st}"
+                        );
+                        st
+                    }
+                    (None, Some(Self::Struct(_))) => {
+                        log::trace!(
+                            "[StackType::fixup] Struct: abstract wanted, concrete stack -> ok"
+                        );
+                        true
+                    }
+                    _ => {
+                        log::trace!(
+                            "[StackType::fixup] Struct: no match wanted={wanted:?} last={:?} -> ok=false",
+                            stack.last()
+                        );
+                        false
+                    }
                 };
 
                 if ok {
-                    stack.pop();
+                    let popped = stack.pop();
+                    log::trace!("[StackType::fixup] Struct: ok -> pop {popped:?} stack={stack:?}");
                 } else {
                     match wanted {
                         // When num_types == 0, GcOp::fixup() should have dropped the ops
@@ -536,8 +605,14 @@ impl StackType {
                         // StackType::fixup() should insert GcOp::NullStruct()
                         // to satisfy the undropped ops that work with abstract types.
                         None => {
+                            log::trace!(
+                                "[StackType::fixup] Struct synthesize NullStruct stack_before={stack:?}"
+                            );
                             Self::emit(GcOp::NullStruct, stack, out, num_types, &mut result_types);
-                            stack.pop();
+                            let popped = stack.pop();
+                            log::trace!(
+                                "[StackType::fixup] NullStruct: after emit pop -> {popped:?} stack={stack:?}"
+                            );
                         }
                         Some(t) => {
                             debug_assert_ne!(
@@ -545,6 +620,9 @@ impl StackType {
                                 "typed struct requirement with num_types == 0; op should have been removed"
                             );
                             let t = Self::clamp(t, num_types);
+                            log::trace!(
+                                "[StackType::fixup] Struct synthesize StructNew type_index={t} stack_before={stack:?}"
+                            );
                             Self::emit(
                                 GcOp::StructNew { type_index: t },
                                 stack,
@@ -552,12 +630,23 @@ impl StackType {
                                 num_types,
                                 &mut result_types,
                             );
-                            stack.pop();
+                            log::trace!(
+                                "[StackType::fixup] StructNew: after emit stack={stack:?} (next: pop operand)"
+                            );
+                            let popped = stack.pop();
+                            log::trace!(
+                                "[StackType::fixup] StructNew: pop -> {popped:?} stack={stack:?}"
+                            );
                         }
                     }
                 }
             }
         }
+        log::trace!(
+            "[StackType::fixup] leave stack_len={} stack={stack:?} out_len={}",
+            stack.len(),
+            out.len()
+        );
     }
 
     /// Emit an opcode and update the stack.
@@ -568,6 +657,10 @@ impl StackType {
         num_types: u32,
         result_types: &mut Vec<Self>,
     ) {
+        log::trace!(
+            "[StackType::emit] op={op:?} stack_len_before={} num_types={num_types}",
+            stack.len()
+        );
         out.push(op);
         result_types.clear();
         op.result_types(result_types);
@@ -576,8 +669,10 @@ impl StackType {
                 Self::Struct(Some(t)) => Self::Struct(Some(Self::clamp(*t, num_types))),
                 other => *other,
             };
+            log::trace!("[StackType::emit] push result {clamped_ty:?}");
             stack.push(clamped_ty);
         }
+        log::trace!("[StackType::emit] leave stack={stack:?}");
     }
 
     /// Clamp a type index to the number of types.

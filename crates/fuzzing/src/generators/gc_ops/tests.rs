@@ -1,7 +1,7 @@
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     ops::{GcOp, GcOps, OP_NAMES},
-    types::{RecGroupId, TypeId, Types},
+    types::{RecGroupId, StackType, TypeId, Types},
 };
 use mutatis;
 use rand::rngs::StdRng;
@@ -86,7 +86,6 @@ fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
         session.mutate(&mut ops)?;
 
         let wasm = ops.to_wasm_binary();
-        println!("wasm: {}", wasmprinter::print_bytes(&wasm).unwrap());
         crate::oracles::log_wasm(&wasm);
 
         let mut validator = wasmparser::Validator::new_with_features(features);
@@ -424,6 +423,8 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
 
 #[test]
 fn sort_rec_groups_topo_orders_dependencies_first() {
+    let _ = env_logger::try_init();
+
     let mut types = Types::new();
 
     let g0 = RecGroupId(0);
@@ -463,6 +464,8 @@ fn sort_rec_groups_topo_orders_dependencies_first() {
 
 #[test]
 fn break_rec_group_cycles() {
+    let _ = env_logger::try_init();
+
     let mut types = Types::new();
 
     let g0 = RecGroupId(0);
@@ -554,4 +557,127 @@ fn break_rec_group_cycles() {
     types.sort_rec_groups_topo(&mut topo);
     assert_eq!(topo.len(), 4);
     assert_eq!(topo, vec![g3, g2, g1, g0]);
+}
+
+#[test]
+fn is_subtype_index_accepts_chain() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+    let g0 = RecGroupId(0);
+    let g1 = RecGroupId(1);
+    let g2 = RecGroupId(2);
+    let g3 = RecGroupId(3);
+
+    types.insert_rec_group(g0);
+    types.insert_rec_group(g1);
+    types.insert_rec_group(g2);
+    types.insert_rec_group(g3);
+
+    // Build chain: 1 <- 2 <- 3
+    //
+    // TypeId(1): g0
+    // TypeId(2): subtype of 1
+    // TypeId(3): g2
+    // TypeId(4): g3
+    //
+    // Since type_defs is a BTreeMap, the dense index order used by
+    // is_subtype_index is:
+    //
+    //   0 -> TypeId(1)
+    //   1 -> TypeId(2)
+    //   2 -> TypeId(3)
+    types.insert_empty_struct(TypeId(1), g0, false, None);
+    types.insert_empty_struct(TypeId(2), g1, false, Some(TypeId(1)));
+    types.insert_empty_struct(TypeId(3), g2, false, Some(TypeId(2)));
+    types.insert_empty_struct(TypeId(4), g3, false, Some(TypeId(3)));
+
+    // self
+    assert!(types.is_subtype_index(0, 0)); // 1 <: 1
+    assert!(types.is_subtype_index(1, 1)); // 2 <: 2
+    assert!(types.is_subtype_index(2, 2)); // 3 <: 3
+
+    // requested checks
+    assert!(types.is_subtype_index(1, 0)); // 2 <: 1
+    assert!(types.is_subtype_index(2, 0)); // 3 <: 1
+    assert!(types.is_subtype_index(2, 1)); // 3 <: 2
+
+    // reverse directions must fail
+    assert!(!types.is_subtype_index(0, 1)); // 1 </: 2
+    assert!(!types.is_subtype_index(0, 2)); // 1 </: 3
+    assert!(!types.is_subtype_index(1, 2)); // 2 </: 3
+}
+
+#[test]
+fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
+    let _ = env_logger::try_init();
+    let mut types = Types::new();
+    let g = RecGroupId(0);
+    types.insert_rec_group(g);
+
+    // Same chain: 1 <- 2 <- 3
+    //
+    // Dense indices:
+    //   0 -> TypeId(1)
+    //   1 -> TypeId(2)
+    //   2 -> TypeId(3)
+    types.insert_empty_struct(TypeId(1), g, false, None);
+    types.insert_empty_struct(TypeId(2), g, false, Some(TypeId(1)));
+    types.insert_empty_struct(TypeId(3), g, false, Some(TypeId(2)));
+
+    let num_types = u32::try_from(types.type_defs.len()).unwrap();
+
+    // Case 1: stack has subtype 3, op requires supertype 2.
+    let mut stack = vec![StackType::Struct(Some(2))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(1))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+    );
+
+    // Accepted as-is:
+    // - no fixup ops inserted
+    // - operand consumed from stack
+    assert!(
+        out.is_empty(),
+        "subtype 3 should satisfy required supertype 2"
+    );
+    assert!(stack.is_empty(), "accepted operand should be popped");
+
+    // Case 2: stack has subtype 3, op requires supertype 1.
+    let mut stack = vec![StackType::Struct(Some(2))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(0))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+    );
+    // Accepted as-is:
+    assert!(
+        out.is_empty(),
+        "subtype 3 should satisfy required supertype 1"
+    );
+    assert!(stack.is_empty(), "accepted operand should be popped");
+
+    // Case 3: stack has type 1, op requires subtype 2.
+    let mut stack = vec![StackType::Struct(Some(0))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(1))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+    );
+    // Not accepted. Fixup should synthesize the requested concrete type.
+    assert_eq!(out, vec![GcOp::StructNew { type_index: 1 }]);
+    assert_eq!(stack, vec![StackType::Struct(Some(0))]);
 }
