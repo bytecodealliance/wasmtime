@@ -26,6 +26,7 @@ default = [
   'profiling',
   'wat',
   'wasi',
+  'wasi-http',
   'cache',
   'parallel-compilation',
   'async',
@@ -51,6 +52,7 @@ profiling = ["wasmtime-c-api/profiling"]
 cache = ["wasmtime-c-api/cache"]
 parallel-compilation = ['wasmtime-c-api/parallel-compilation']
 wasi = ['wasmtime-c-api/wasi']
+wasi-http = ['wasmtime-c-api/wasi-http']
 logging = ['wasmtime-c-api/logging']
 disable-logging = ["wasmtime-c-api/disable-logging"]
 coredump = ["wasmtime-c-api/coredump"]

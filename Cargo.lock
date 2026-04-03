@@ -4689,6 +4689,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-internal-c-api-macros",
  "wasmtime-wasi",
+ "wasmtime-wasi-http",
  "wasmtime-wasi-io",
  "wat",
 ]
