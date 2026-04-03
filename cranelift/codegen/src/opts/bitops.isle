@@ -697,3 +697,21 @@
 (rule (simplify (bxor ty (bxor ty x y) (bor ty y (bnot ty x)))) (bor ty x (bnot ty y)))
 (rule (simplify (bxor ty (bor ty y (bnot ty x)) (bxor ty y x))) (bor ty x (bnot ty y)))
 (rule (simplify (bxor ty (bxor ty y x) (bor ty y (bnot ty x)))) (bor ty x (bnot ty y)))
+
+;; (x & ~y) == ~y  <=>  (x | y) == -1
+(rule (simplify (eq rty (band cty (bnot cty y) x) (bnot cty y))) (eq rty (bor cty y x) (iconst_s cty -1)))
+(rule (simplify (eq rty (band cty x (bnot cty y)) (bnot cty y))) (eq rty (bor cty y x) (iconst_s cty -1)))
+(rule (simplify (eq rty (bnot cty y) (band cty (bnot cty y) x))) (eq rty (bor cty y x) (iconst_s cty -1)))
+(rule (simplify (eq rty (bnot cty y) (band cty x (bnot cty y)))) (eq rty (bor cty y x) (iconst_s cty -1)))
+
+;; x >=_u (x & y), and (x & y) <=_u x, are always true.
+(rule (simplify (uge ty x (band ty x y))) (iconst_u ty 1))
+(rule (simplify (uge ty x (band ty y x))) (iconst_u ty 1))
+(rule (simplify (ule ty (band ty x y) x)) (iconst_u ty 1))
+(rule (simplify (ule ty (band ty y x) x)) (iconst_u ty 1))
+
+;; (x | y) >=_u x, and x <=_u (x | y), are always true.
+(rule (simplify (uge ty (bor ty x y) x)) (iconst_u ty 1))
+(rule (simplify (uge ty (bor ty y x) x)) (iconst_u ty 1))
+(rule (simplify (ule ty x (bor ty x y))) (iconst_u ty 1))
+(rule (simplify (ule ty x (bor ty y x))) (iconst_u ty 1))

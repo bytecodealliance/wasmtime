@@ -743,3 +743,54 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_aarch64_extr(1, 0) == 1
 ; run: %test_aarch64_extr(0, 1) == 1
+
+function %test_eq_band_bnot_fullmask(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bnot v1
+    v3 = band v0, v2
+    v4 = icmp eq v3, v2
+    return v4
+}
+
+; run: %test_eq_band_bnot_fullmask(0, 0) == 0
+; run: %test_eq_band_bnot_fullmask(-1, 0) == 1
+
+function %test_uge_x_band(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+
+; run: %test_uge_x_band(0, 0) == 1
+; run: %test_uge_x_band(1, 0) == 1
+
+function %test_ule_band_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; run: %test_ule_band_x(0, 0) == 1
+; run: %test_ule_band_x(1, 0) == 1
+
+function %test_uge_bor_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = icmp uge v2, v0
+    return v3
+}
+
+; run: %test_uge_bor_x(0, 0) == 1
+; run: %test_uge_bor_x(1, 0) == 1
+
+function %test_ule_x_bor(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = icmp ule v0, v2
+    return v3
+}
+
+; run: %test_ule_x_bor(0, 0) == 1
+; run: %test_ule_x_bor(1, 0) == 1

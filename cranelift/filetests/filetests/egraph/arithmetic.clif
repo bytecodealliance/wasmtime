@@ -363,8 +363,8 @@ block0(v0: i16, v1: i16, v2: i16):
     return v8
 }
 
-; check: v12 = iadd v0, v1
-; check: v15 = iadd v12, v2
+; check: v10 = iadd v0, v1
+; check: v15 = iadd v10, v2
 ; check: return v15
 
 ;; or(x, C) + (-C)  -->  and(x, ~C)
