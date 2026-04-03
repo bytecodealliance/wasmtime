@@ -13,6 +13,10 @@
 
 namespace wasmtime {
 
+class EqRef;
+class StructRef;
+class ArrayRef;
+
 /**
  * \brief Representation of a WebAssembly `externref` value.
  *
@@ -181,6 +185,24 @@ public:
   bool is_i31(Store::Context cx) const {
     return wasmtime_anyref_is_i31(cx.ptr, &val);
   }
+
+  /// \brief Returns `true` if this anyref is an eqref.
+  inline bool is_eqref(Store::Context cx) const;
+
+  /// \brief Returns `true` if this anyref is a structref.
+  inline bool is_struct(Store::Context cx) const;
+
+  /// \brief Returns `true` if this anyref is an arrayref.
+  inline bool is_array(Store::Context cx) const;
+
+  /// \brief Downcast to eqref. Returns null eqref if not an eqref.
+  inline std::optional<EqRef> as_eqref(Store::Context cx) const;
+
+  /// \brief Downcast to structref. Returns null structref if not a structref.
+  inline std::optional<StructRef> as_struct(Store::Context cx) const;
+
+  /// \brief Downcast to arrayref. Returns null arrayref if not an arrayref.
+  inline std::optional<ArrayRef> as_array(Store::Context cx) const;
 };
 
 /// \brief Container for the `v128` WebAssembly type.
@@ -214,6 +236,8 @@ class Val {
   friend class Table;
   friend class Func;
   friend class Exn;
+  friend class StructRef;
+  friend class ArrayRef;
 
   wasmtime_val_t val;
 

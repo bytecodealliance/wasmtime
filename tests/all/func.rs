@@ -1425,7 +1425,7 @@ fn wrap_multiple_results(config: &mut Config) -> wasmtime::Result<()> {
     }
 }
 
-#[wasmtime_test(wasm_features(reference_types, gc_types, bulk_memory))]
+#[wasmtime_test(wasm_features(reference_types, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem(config: &mut Config) -> wasmtime::Result<()> {
     let engine = Engine::new(&config)?;

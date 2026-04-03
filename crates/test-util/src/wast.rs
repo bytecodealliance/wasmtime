@@ -507,20 +507,6 @@ impl WastTest {
                 "misc_testsuite/no-mixup-stack-maps.wast",
                 "misc_testsuite/no-panic.wast",
                 "misc_testsuite/simple_ref_is_null.wast",
-                "misc_testsuite/table_grow_with_funcref.wast",
-                "spec_testsuite/br_table.wast",
-                "spec_testsuite/global.wast",
-                "spec_testsuite/ref_func.wast",
-                "spec_testsuite/ref_is_null.wast",
-                "spec_testsuite/ref_null.wast",
-                "spec_testsuite/select.wast",
-                "spec_testsuite/table_fill.wast",
-                "spec_testsuite/table_get.wast",
-                "spec_testsuite/table_grow.wast",
-                "spec_testsuite/table_set.wast",
-                "spec_testsuite/table_size.wast",
-                "spec_testsuite/elem.wast",
-                "spec_testsuite/linking.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

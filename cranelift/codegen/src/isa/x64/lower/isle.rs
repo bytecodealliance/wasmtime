@@ -36,7 +36,8 @@ type BoxCallIndInfo = Box<CallInfo<RegMem>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<Reg>>;
 type VecArgPair = Vec<ArgPair>;
-type BoxSyntheticAmode = Box<SyntheticAmode>;
+type BoxAtomic128RmwSeqArgs = Box<Atomic128RmwSeqArgs>;
+type BoxAtomic128XchgSeqArgs = Box<Atomic128XchgSeqArgs>;
 
 /// When interacting with the external assembler (see `external.rs`), we
 /// need to fix the types we'll use.
@@ -639,7 +640,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn amode_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> SyntheticAmode {
+    fn amode_try_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> Option<SyntheticAmode> {
         addr.offset(offset)
     }
 
@@ -970,8 +971,48 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         WritableGpr::from_reg(reg)
     }
 
-    fn box_synthetic_amode(&mut self, amode: &SyntheticAmode) -> BoxSyntheticAmode {
-        Box::new(amode.clone())
+    fn atomic128_rmw_seq_args(
+        &mut self,
+        op: &Atomic128RmwSeqOp,
+        mem_low: &SyntheticAmode,
+        mem_high: &SyntheticAmode,
+        operand_low: Gpr,
+        operand_high: Gpr,
+        temp_low: WritableGpr,
+        temp_high: WritableGpr,
+        dst_old_low: WritableGpr,
+        dst_old_high: WritableGpr,
+    ) -> BoxAtomic128RmwSeqArgs {
+        Box::new(Atomic128RmwSeqArgs {
+            op: *op,
+            mem_low: mem_low.clone(),
+            mem_high: mem_high.clone(),
+            operand_low,
+            operand_high,
+            temp_low,
+            temp_high,
+            dst_old_low,
+            dst_old_high,
+        })
+    }
+
+    fn atomic128_xchg_seq_args(
+        &mut self,
+        mem_low: &SyntheticAmode,
+        mem_high: &SyntheticAmode,
+        operand_low: Gpr,
+        operand_high: Gpr,
+        dst_old_low: WritableGpr,
+        dst_old_high: WritableGpr,
+    ) -> BoxAtomic128XchgSeqArgs {
+        Box::new(Atomic128XchgSeqArgs {
+            mem_low: mem_low.clone(),
+            mem_high: mem_high.clone(),
+            operand_low,
+            operand_high,
+            dst_old_low,
+            dst_old_high,
+        })
     }
 
     ////////////////////////////////////////////////////////////////////////////

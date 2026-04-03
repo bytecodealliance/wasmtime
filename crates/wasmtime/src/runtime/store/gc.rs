@@ -57,11 +57,11 @@ impl StoreOpaque {
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
     ) {
-        // First, always collect. Then, if bytes_needed is specified,
-        // also try to grow if that size is greater than GC heap
-        // capacity minus sum of allocated layout sizes.
         self.do_gc(asyncness).await;
         if let Some(n) = bytes_needed
+        // The gc_zeal's allocation counter will pass `bytes_needed == 0` to
+        // signify that we shouldn't grow the GC heap, just do a collection.
+            && n > 0
             && n > u64::try_from(self.gc_heap_capacity())
                 .unwrap()
                 .saturating_sub(self.gc_store.as_ref().map_or(0, |gc| {

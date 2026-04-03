@@ -65,7 +65,14 @@ impl StackPool {
             Ok(stack) => Ok(stack),
             Err(e) => {
                 self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                Err(crate::Error::from(e))
+
+                #[allow(
+                    clippy::useless_conversion,
+                    reason = "some `cfg`s have `wasmtime::Error` as the error type, others don't"
+                )]
+                let e = crate::Error::from(e);
+
+                Err(e)
             }
         }
     }

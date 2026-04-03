@@ -3094,7 +3094,7 @@
 (rule -3 (lower (has_type $I128
                        (load _ (little_or_native_endian flags) address offset)))
       (let ((addr_lo SyntheticAmode (to_amode flags address offset))
-            (addr_hi SyntheticAmode (amode_offset addr_lo 8))
+            (addr_hi SyntheticAmode (amode_offset addr_lo flags 8))
             (value_lo Reg (x64_mov addr_lo))
             (value_hi Reg (x64_mov addr_hi)))
         (value_regs value_lo value_hi)))
@@ -3225,7 +3225,7 @@
             (value_lo Gpr (value_regs_get_gpr value_reg 0))
             (value_hi Gpr (value_regs_get_gpr value_reg 1))
             (addr_lo SyntheticAmode (to_amode flags address offset))
-            (addr_hi SyntheticAmode (amode_offset addr_lo 8)))
+            (addr_hi SyntheticAmode (amode_offset addr_lo flags 8)))
       (side_effect
        (side_effect_concat
         (x64_movrm $I64 addr_lo value_lo)
@@ -3450,7 +3450,7 @@
 ;; Lower 128-bit `atomic_store` using `cmpxchg16b`.
 (rule 1 (lower (atomic_store (little_or_native_endian flags) value @ (value_type $I128) address))
       (if-let true (has_cmpxchg16b))
-      (side_effect (x64_atomic_128_store_seq (to_amode flags address (zero_offset)) value)))
+      (side_effect (x64_atomic_128_store_seq (to_amode flags address (zero_offset)) flags value)))
 
 ;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3512,7 +3512,7 @@
 ;; 128-bit integers always use a `lock cmpxchg16b` loop.
 (rule 3 (lower (has_type $I128 (atomic_rmw _ (little_or_native_endian flags) op address input)))
         (if-let true (has_cmpxchg16b))
-        (x64_atomic_128_rmw_seq op (to_amode flags address (zero_offset)) input))
+        (x64_atomic_128_rmw_seq op (to_amode flags address (zero_offset)) flags input))
 
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

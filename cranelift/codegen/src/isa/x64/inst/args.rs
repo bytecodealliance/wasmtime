@@ -439,14 +439,14 @@ impl Amode {
     }
 
     /// Offset the amode by a fixed offset.
-    pub(crate) fn offset(&self, offset: i32) -> Self {
+    pub(crate) fn offset(&self, offset: i32) -> Option<Self> {
         let mut ret = self.clone();
-        match &mut ret {
-            &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
-            &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
+        let simm32 = match &mut ret {
+            Amode::ImmReg { simm32, .. } | Amode::ImmRegRegShift { simm32, .. } => simm32,
             _ => panic!("Cannot offset amode: {self:?}"),
-        }
-        ret
+        };
+        *simm32 = simm32.checked_add(offset)?;
+        Some(ret)
     }
 
     pub(crate) fn aligned(&self) -> bool {
@@ -575,18 +575,18 @@ impl SyntheticAmode {
     }
 
     /// Offset the synthetic amode by a fixed offset.
-    pub(crate) fn offset(&self, offset: i32) -> Self {
+    pub(crate) fn offset(&self, offset: i32) -> Option<Self> {
         let mut ret = self.clone();
         match &mut ret {
-            SyntheticAmode::Real(amode) => *amode = amode.offset(offset),
-            SyntheticAmode::SlotOffset { simm32 } => *simm32 += offset,
+            SyntheticAmode::Real(amode) => *amode = amode.offset(offset)?,
+            SyntheticAmode::SlotOffset { simm32 } => *simm32 = simm32.checked_add(offset)?,
             // `amode_offset` is used only in i128.load/store which
             // takes a synthetic amode from `to_amode`; `to_amode` can
             // only produce Real or SlotOffset amodes, never
             // IncomingArg or ConstantOffset.
             _ => panic!("Cannot offset SyntheticAmode: {self:?}"),
         }
-        ret
+        Some(ret)
     }
 }
 
@@ -1060,4 +1060,35 @@ impl OperandSize {
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
     }
+}
+
+pub use crate::isa::x64::lower::isle::generated_code::Atomic128RmwSeqOp;
+
+/// "Package" of the arguments for the instruction `Atomic128RmwSeq` to avoid
+/// making the `Inst` enum massive.
+#[derive(Debug, Clone)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct Atomic128RmwSeqArgs {
+    pub op: Atomic128RmwSeqOp,
+    pub mem_low: SyntheticAmode,
+    pub mem_high: SyntheticAmode,
+    pub operand_low: Gpr,
+    pub operand_high: Gpr,
+    pub temp_low: WritableGpr,
+    pub temp_high: WritableGpr,
+    pub dst_old_low: WritableGpr,
+    pub dst_old_high: WritableGpr,
+}
+
+/// "Package" of the arguments for the instruction `Atomic128XchgSeq` to avoid
+/// making the `Inst` enum massive.
+#[derive(Debug, Clone)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct Atomic128XchgSeqArgs {
+    pub mem_low: SyntheticAmode,
+    pub mem_high: SyntheticAmode,
+    pub operand_low: Gpr,
+    pub operand_high: Gpr,
+    pub dst_old_low: WritableGpr,
+    pub dst_old_high: WritableGpr,
 }

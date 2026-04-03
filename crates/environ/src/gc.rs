@@ -499,15 +499,8 @@ impl VMGcKind {
     #[inline]
     pub fn from_high_bits_of_u32(val: u32) -> VMGcKind {
         let masked = val & Self::MASK;
-        let result = match masked {
-            x if x == Self::ExternRef.as_u32() => Self::ExternRef,
-            x if x == Self::AnyRef.as_u32() => Self::AnyRef,
-            x if x == Self::EqRef.as_u32() => Self::EqRef,
-            x if x == Self::ArrayRef.as_u32() => Self::ArrayRef,
-            x if x == Self::StructRef.as_u32() => Self::StructRef,
-            x if x == Self::ExnRef.as_u32() => Self::ExnRef,
-            _ => panic!("invalid `VMGcKind`: {masked:#032b}"),
-        };
+        let result = Self::try_from_u32(masked)
+            .unwrap_or_else(|| panic!("invalid `VMGcKind`: {masked:#032b}"));
 
         let poison_kind = u32::from_le_bytes([POISON, POISON, POISON, POISON]) & VMGcKind::MASK;
         debug_assert_ne!(
@@ -530,6 +523,22 @@ impl VMGcKind {
     #[inline]
     pub fn as_u32(self) -> u32 {
         self as u32
+    }
+
+    /// Try to convert a `u32` into a `VMGcKind`.
+    ///
+    /// Returns `None` if the value doesn't match any known kind.
+    #[inline]
+    pub fn try_from_u32(x: u32) -> Option<VMGcKind> {
+        match x {
+            _ if x == Self::ExternRef.as_u32() => Some(Self::ExternRef),
+            _ if x == Self::AnyRef.as_u32() => Some(Self::AnyRef),
+            _ if x == Self::EqRef.as_u32() => Some(Self::EqRef),
+            _ if x == Self::ArrayRef.as_u32() => Some(Self::ArrayRef),
+            _ if x == Self::StructRef.as_u32() => Some(Self::StructRef),
+            _ if x == Self::ExnRef.as_u32() => Some(Self::ExnRef),
+            _ => None,
+        }
     }
 }
 

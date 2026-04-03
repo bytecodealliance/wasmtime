@@ -59,7 +59,10 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
     if t.limits.max_rec_groups > 0 {
         for i in 0..t.limits.max_types {
             let gid = RecGroupId(rng.gen_range(0..t.limits.max_rec_groups));
-            t.types.insert_empty_struct(TypeId(i), gid);
+            let is_final = false;
+            let supertype = None;
+            t.types
+                .insert_empty_struct(TypeId(i), gid, is_final, supertype);
         }
     }
 
@@ -83,6 +86,7 @@ fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
         session.mutate(&mut ops)?;
 
         let wasm = ops.to_wasm_binary();
+        println!("wasm: {}", wasmprinter::print_bytes(&wasm).unwrap());
         crate::oracles::log_wasm(&wasm);
 
         let mut validator = wasmparser::Validator::new_with_features(features);
@@ -192,7 +196,7 @@ fn every_op_generated() -> mutatis::Result<()> {
 }
 
 #[test]
-fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
+fn emits_rec_groups_and_validates() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 
     let mut ops = test_ops(5, 5, 5);
@@ -212,8 +216,16 @@ fn emits_empty_rec_groups_and_validates() -> mutatis::Result<()> {
     let recs = wat.matches("(rec").count();
     let structs = wat.matches("(struct)").count();
 
-    assert_eq!(recs, 7, "expected 2 (rec) blocks, got {recs}");
-    assert_eq!(structs, 10, "expected no struct types, got {structs}");
+    assert_eq!(
+        recs,
+        ops.types.rec_groups.len(),
+        "one (rec) block per rec group"
+    );
+    assert_eq!(
+        structs,
+        ops.types.type_defs.len(),
+        "one (struct) per struct type in type_defs"
+    );
 
     Ok(())
 }
@@ -286,4 +298,260 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     );
 
     Ok(())
+}
+
+#[test]
+fn sort_types_by_supertype_orders_supertype_before_subtype_across_rec_groups() {
+    let mut types = Types::new();
+    let ga = RecGroupId(0);
+    let gb = RecGroupId(1);
+    let gc = RecGroupId(2);
+    let gd = RecGroupId(3);
+    types.insert_rec_group(ga);
+    types.insert_rec_group(gb);
+    types.insert_rec_group(gc);
+    types.insert_rec_group(gd);
+
+    let a = TypeId(0);
+    let b = TypeId(1);
+    let c = TypeId(2);
+    let d = TypeId(3);
+
+    // Cross-rec-group chain: C <: A <: B <: D.
+    types.insert_empty_struct(a, ga, false, Some(b)); // A <: B
+    types.insert_empty_struct(b, gb, false, Some(d)); // B <: D
+    types.insert_empty_struct(c, gc, false, Some(a)); // C <: A
+    types.insert_empty_struct(d, gd, false, None); // D
+
+    let mut sorted = Vec::new();
+    types.sort_types_topo(&mut sorted);
+
+    // Rec-group boundaries do not change topological ordering by supertype.
+    assert_eq!(
+        sorted,
+        [TypeId(3), TypeId(1), TypeId(0), TypeId(2)],
+        "topo order: supertype before subtype across rec groups"
+    );
+}
+
+#[test]
+fn fixup_preserves_subtyping_within_same_rec_group() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+    let g = RecGroupId(0);
+    types.insert_rec_group(g);
+
+    let super_ty = TypeId(0);
+    let sub_ty = TypeId(1);
+
+    // Both types are in the same rec group.
+    // The second subtypes the first.
+    types.insert_empty_struct(super_ty, g, false, None);
+    types.insert_empty_struct(sub_ty, g, false, Some(super_ty));
+
+    let limits = GcOpsLimits {
+        num_params: 0,
+        num_globals: 0,
+        table_size: 0,
+        max_rec_groups: 10,
+        max_types: 10,
+    };
+
+    types.fixup(&limits);
+
+    assert_eq!(types.rec_group_of(super_ty), Some(g));
+    assert_eq!(types.rec_group_of(sub_ty), Some(g));
+    assert_eq!(
+        types.type_defs.get(&sub_ty).unwrap().supertype,
+        Some(super_ty)
+    );
+}
+
+#[test]
+fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+
+    let g_a = RecGroupId(0);
+    let g_bc = RecGroupId(1);
+    let g_d = RecGroupId(2);
+
+    types.insert_rec_group(g_a);
+    types.insert_rec_group(g_bc);
+    types.insert_rec_group(g_d);
+
+    let a = TypeId(0);
+    let b = TypeId(1);
+    let c = TypeId(2);
+    let d = TypeId(3);
+
+    // Rec(a)
+    types.insert_empty_struct(a, g_a, false, Some(d));
+
+    // Rec(b, c)
+    types.insert_empty_struct(b, g_bc, false, None);
+    types.insert_empty_struct(c, g_bc, false, Some(a));
+
+    // Rec(d)
+    types.insert_empty_struct(d, g_d, false, Some(c));
+
+    let limits = GcOpsLimits {
+        num_params: 0,
+        num_globals: 0,
+        table_size: 0,
+        max_rec_groups: 10,
+        max_types: 10,
+    };
+
+    types.fixup(&limits);
+
+    let a_super = types.type_defs.get(&a).unwrap().supertype;
+    let c_super = types.type_defs.get(&c).unwrap().supertype;
+    let d_super = types.type_defs.get(&d).unwrap().supertype;
+
+    let cleared = [a_super, c_super, d_super]
+        .into_iter()
+        .filter(|st| st.is_none())
+        .count();
+
+    assert!(
+        cleared == 1,
+        "fixup should clear exactly one edge to break the cycle"
+    );
+}
+
+#[test]
+fn sort_rec_groups_topo_orders_dependencies_first() {
+    let mut types = Types::new();
+
+    let g0 = RecGroupId(0);
+    let g1 = RecGroupId(1);
+    let g2 = RecGroupId(2);
+    let g3 = RecGroupId(3);
+
+    types.insert_rec_group(g0);
+    types.insert_rec_group(g1);
+    types.insert_rec_group(g2);
+    types.insert_rec_group(g3);
+
+    let a = TypeId(0);
+    let b = TypeId(1);
+    let c = TypeId(2);
+    let d = TypeId(3);
+    let e = TypeId(4);
+    let f = TypeId(5);
+
+    types.insert_empty_struct(a, g0, false, Some(b)); // g0 -> g1
+    types.insert_empty_struct(b, g1, false, Some(c)); // g1 -> g2
+    types.insert_empty_struct(c, g2, false, Some(d)); // g2 ->g3
+    types.insert_empty_struct(d, g3, false, None);
+    types.insert_empty_struct(e, g0, false, None);
+    types.insert_empty_struct(f, g2, false, None);
+
+    let mut sorted = Vec::new();
+    types.sort_rec_groups_topo(&mut sorted);
+
+    // g3 has no deps, g2 depends on g3, g1 on g2, g0 on g1.
+    assert_eq!(
+        sorted,
+        [RecGroupId(3), RecGroupId(2), RecGroupId(1), RecGroupId(0)],
+        "topo order: depended-on groups before dependent groups"
+    );
+}
+
+#[test]
+fn break_rec_group_cycles() {
+    let mut types = Types::new();
+
+    let g0 = RecGroupId(0);
+    let g1 = RecGroupId(1);
+    let g2 = RecGroupId(2);
+    let g3 = RecGroupId(3);
+
+    types.insert_rec_group(g0);
+    types.insert_rec_group(g1);
+    types.insert_rec_group(g2);
+    types.insert_rec_group(g3);
+
+    let a0 = TypeId(0);
+    let a1 = TypeId(1);
+    let b0 = TypeId(2);
+    let b1 = TypeId(3);
+    let c0 = TypeId(4);
+    let c1 = TypeId(5);
+    let c2 = TypeId(6);
+    let d0 = TypeId(7);
+    let d1 = TypeId(8);
+
+    // Before: t
+    //
+    //    ----------------------------------
+    //    |          outer cycle           │
+    //    v                                │
+    //  +----+       +----+       +----+   │
+    //  | g0 |------>| g1 |------>| g2 |---
+    //  +----+       +----+       +----+
+    //                 ^            │
+    //                 │  inner     │
+    //                 │  cycle     v
+    //                 │          +----+
+    //                 -----------| g3 |
+    //                            +----+
+    //
+    // After: back edges dropped, clean chain
+    //
+    //  +----+       +----+       +----+       +----+
+    //  | g0 |------>| g1 |------>| g2 |------>| g3 |
+    //  +----+       +----+       +----+       +----+
+
+    types.insert_empty_struct(a0, g0, false, Some(b0)); // g0 -> g1
+    types.insert_empty_struct(a1, g0, false, None);
+
+    types.insert_empty_struct(b0, g1, false, None);
+    types.insert_empty_struct(b1, g1, false, Some(c0)); // g1 -> g2
+
+    types.insert_empty_struct(c0, g2, false, None);
+    types.insert_empty_struct(c1, g2, false, Some(a1)); // g2 -> g0 (outer back edge)
+    types.insert_empty_struct(c2, g2, false, Some(d0)); // g2 -> g3
+
+    types.insert_empty_struct(d0, g3, false, None);
+    types.insert_empty_struct(d1, g3, false, Some(b0)); // g3 -> g1 (inner back edge)
+
+    // Type graph is acyclic — breaking supertype cycles changes nothing.
+    types.break_supertype_cycles();
+    assert_eq!(types.type_defs.get(&a0).unwrap().supertype, Some(b0));
+    assert_eq!(types.type_defs.get(&b1).unwrap().supertype, Some(c0));
+    assert_eq!(types.type_defs.get(&c1).unwrap().supertype, Some(a1));
+    assert_eq!(types.type_defs.get(&c2).unwrap().supertype, Some(d0));
+    assert_eq!(types.type_defs.get(&d1).unwrap().supertype, Some(b0));
+
+    assert_eq!(types.rec_groups.len(), 4);
+
+    types.break_rec_group_cycles();
+
+    // All four groups preserved.
+    assert_eq!(types.rec_groups.len(), 4);
+    assert!(types.rec_groups.contains_key(&g0));
+    assert!(types.rec_groups.contains_key(&g1));
+    assert!(types.rec_groups.contains_key(&g2));
+    assert!(types.rec_groups.contains_key(&g3));
+
+    // Back edge (g2->g0): c1's supertype cleared.
+    assert_eq!(types.type_defs.get(&c1).unwrap().supertype, None);
+
+    // Back edge (g3->g1): d1's supertype cleared.
+    assert_eq!(types.type_defs.get(&d1).unwrap().supertype, None);
+
+    // All other cross-group supertypes preserved.
+    assert_eq!(types.type_defs.get(&a0).unwrap().supertype, Some(b0));
+    assert_eq!(types.type_defs.get(&b1).unwrap().supertype, Some(c0));
+    assert_eq!(types.type_defs.get(&c2).unwrap().supertype, Some(d0));
+
+    // Result is a clean chain: g0 -> g1 -> g2 -> g3
+    let mut topo = Vec::new();
+    types.sort_rec_groups_topo(&mut topo);
+    assert_eq!(topo.len(), 4);
+    assert_eq!(topo, vec![g3, g2, g1, g0]);
 }

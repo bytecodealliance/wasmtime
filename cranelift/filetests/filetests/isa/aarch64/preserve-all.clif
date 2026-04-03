@@ -53,41 +53,73 @@ block0(v0: i64):
 ;   stp x4, x5, [sp, #-16]!
 ;   stp x2, x3, [sp, #-16]!
 ;   stp x0, x1, [sp, #-16]!
-;   stp d30, d31, [sp, #-16]!
-;   stp d28, d29, [sp, #-16]!
-;   stp d26, d27, [sp, #-16]!
-;   stp d24, d25, [sp, #-16]!
-;   stp d22, d23, [sp, #-16]!
-;   stp d20, d21, [sp, #-16]!
-;   stp d18, d19, [sp, #-16]!
-;   stp d16, d17, [sp, #-16]!
-;   stp d14, d15, [sp, #-16]!
-;   stp d12, d13, [sp, #-16]!
-;   stp d10, d11, [sp, #-16]!
-;   stp d8, d9, [sp, #-16]!
-;   stp d6, d7, [sp, #-16]!
-;   stp d4, d5, [sp, #-16]!
-;   stp d2, d3, [sp, #-16]!
-;   stp d0, d1, [sp, #-16]!
+;   str q31, [sp, #-16]!
+;   str q30, [sp, #-16]!
+;   str q29, [sp, #-16]!
+;   str q28, [sp, #-16]!
+;   str q27, [sp, #-16]!
+;   str q26, [sp, #-16]!
+;   str q25, [sp, #-16]!
+;   str q24, [sp, #-16]!
+;   str q23, [sp, #-16]!
+;   str q22, [sp, #-16]!
+;   str q21, [sp, #-16]!
+;   str q20, [sp, #-16]!
+;   str q19, [sp, #-16]!
+;   str q18, [sp, #-16]!
+;   str q17, [sp, #-16]!
+;   str q16, [sp, #-16]!
+;   str q15, [sp, #-16]!
+;   str q14, [sp, #-16]!
+;   str q13, [sp, #-16]!
+;   str q12, [sp, #-16]!
+;   str q11, [sp, #-16]!
+;   str q10, [sp, #-16]!
+;   str q9, [sp, #-16]!
+;   str q8, [sp, #-16]!
+;   str q7, [sp, #-16]!
+;   str q6, [sp, #-16]!
+;   str q5, [sp, #-16]!
+;   str q4, [sp, #-16]!
+;   str q3, [sp, #-16]!
+;   str q2, [sp, #-16]!
+;   str q1, [sp, #-16]!
+;   str q0, [sp, #-16]!
 ; block0:
 ;   load_ext_name_far x2, TestCase(%libcall)+0
 ;   blr x2
-;   ldp d0, d1, [sp], #16
-;   ldp d2, d3, [sp], #16
-;   ldp d4, d5, [sp], #16
-;   ldp d6, d7, [sp], #16
-;   ldp d8, d9, [sp], #16
-;   ldp d10, d11, [sp], #16
-;   ldp d12, d13, [sp], #16
-;   ldp d14, d15, [sp], #16
-;   ldp d16, d17, [sp], #16
-;   ldp d18, d19, [sp], #16
-;   ldp d20, d21, [sp], #16
-;   ldp d22, d23, [sp], #16
-;   ldp d24, d25, [sp], #16
-;   ldp d26, d27, [sp], #16
-;   ldp d28, d29, [sp], #16
-;   ldp d30, d31, [sp], #16
+;   ldr q0, [sp], #16
+;   ldr q1, [sp], #16
+;   ldr q2, [sp], #16
+;   ldr q3, [sp], #16
+;   ldr q4, [sp], #16
+;   ldr q5, [sp], #16
+;   ldr q6, [sp], #16
+;   ldr q7, [sp], #16
+;   ldr q8, [sp], #16
+;   ldr q9, [sp], #16
+;   ldr q10, [sp], #16
+;   ldr q11, [sp], #16
+;   ldr q12, [sp], #16
+;   ldr q13, [sp], #16
+;   ldr q14, [sp], #16
+;   ldr q15, [sp], #16
+;   ldr q16, [sp], #16
+;   ldr q17, [sp], #16
+;   ldr q18, [sp], #16
+;   ldr q19, [sp], #16
+;   ldr q20, [sp], #16
+;   ldr q21, [sp], #16
+;   ldr q22, [sp], #16
+;   ldr q23, [sp], #16
+;   ldr q24, [sp], #16
+;   ldr q25, [sp], #16
+;   ldr q26, [sp], #16
+;   ldr q27, [sp], #16
+;   ldr q28, [sp], #16
+;   ldr q29, [sp], #16
+;   ldr q30, [sp], #16
+;   ldr q31, [sp], #16
 ;   ldp x0, x1, [sp], #16
 ;   ldp x2, x3, [sp], #16
 ;   ldp x4, x5, [sp], #16
@@ -113,44 +145,76 @@ block0(v0: i64):
 ;   stp x4, x5, [sp, #-0x10]!
 ;   stp x2, x3, [sp, #-0x10]!
 ;   stp x0, x1, [sp, #-0x10]!
-;   stp d30, d31, [sp, #-0x10]!
-;   stp d28, d29, [sp, #-0x10]!
-;   stp d26, d27, [sp, #-0x10]!
-;   stp d24, d25, [sp, #-0x10]!
-;   stp d22, d23, [sp, #-0x10]!
-;   stp d20, d21, [sp, #-0x10]!
-;   stp d18, d19, [sp, #-0x10]!
-;   stp d16, d17, [sp, #-0x10]!
-;   stp d14, d15, [sp, #-0x10]!
-;   stp d12, d13, [sp, #-0x10]!
-;   stp d10, d11, [sp, #-0x10]!
-;   stp d8, d9, [sp, #-0x10]!
-;   stp d6, d7, [sp, #-0x10]!
-;   stp d4, d5, [sp, #-0x10]!
-;   stp d2, d3, [sp, #-0x10]!
-;   stp d0, d1, [sp, #-0x10]!
-; block1: ; offset 0x6c
-;   ldr x2, #0x74
-;   b #0x7c
+;   str q31, [sp, #-0x10]!
+;   str q30, [sp, #-0x10]!
+;   str q29, [sp, #-0x10]!
+;   str q28, [sp, #-0x10]!
+;   str q27, [sp, #-0x10]!
+;   str q26, [sp, #-0x10]!
+;   str q25, [sp, #-0x10]!
+;   str q24, [sp, #-0x10]!
+;   str q23, [sp, #-0x10]!
+;   str q22, [sp, #-0x10]!
+;   str q21, [sp, #-0x10]!
+;   str q20, [sp, #-0x10]!
+;   str q19, [sp, #-0x10]!
+;   str q18, [sp, #-0x10]!
+;   str q17, [sp, #-0x10]!
+;   str q16, [sp, #-0x10]!
+;   str q15, [sp, #-0x10]!
+;   str q14, [sp, #-0x10]!
+;   str q13, [sp, #-0x10]!
+;   str q12, [sp, #-0x10]!
+;   str q11, [sp, #-0x10]!
+;   str q10, [sp, #-0x10]!
+;   str q9, [sp, #-0x10]!
+;   str q8, [sp, #-0x10]!
+;   str q7, [sp, #-0x10]!
+;   str q6, [sp, #-0x10]!
+;   str q5, [sp, #-0x10]!
+;   str q4, [sp, #-0x10]!
+;   str q3, [sp, #-0x10]!
+;   str q2, [sp, #-0x10]!
+;   str q1, [sp, #-0x10]!
+;   str q0, [sp, #-0x10]!
+; block1: ; offset 0xac
+;   ldr x2, #0xb4
+;   b #0xbc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %libcall 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x2
-;   ldp d0, d1, [sp], #0x10
-;   ldp d2, d3, [sp], #0x10
-;   ldp d4, d5, [sp], #0x10
-;   ldp d6, d7, [sp], #0x10
-;   ldp d8, d9, [sp], #0x10
-;   ldp d10, d11, [sp], #0x10
-;   ldp d12, d13, [sp], #0x10
-;   ldp d14, d15, [sp], #0x10
-;   ldp d16, d17, [sp], #0x10
-;   ldp d18, d19, [sp], #0x10
-;   ldp d20, d21, [sp], #0x10
-;   ldp d22, d23, [sp], #0x10
-;   ldp d24, d25, [sp], #0x10
-;   ldp d26, d27, [sp], #0x10
-;   ldp d28, d29, [sp], #0x10
-;   ldp d30, d31, [sp], #0x10
+;   ldr q0, [sp], #0x10
+;   ldr q1, [sp], #0x10
+;   ldr q2, [sp], #0x10
+;   ldr q3, [sp], #0x10
+;   ldr q4, [sp], #0x10
+;   ldr q5, [sp], #0x10
+;   ldr q6, [sp], #0x10
+;   ldr q7, [sp], #0x10
+;   ldr q8, [sp], #0x10
+;   ldr q9, [sp], #0x10
+;   ldr q10, [sp], #0x10
+;   ldr q11, [sp], #0x10
+;   ldr q12, [sp], #0x10
+;   ldr q13, [sp], #0x10
+;   ldr q14, [sp], #0x10
+;   ldr q15, [sp], #0x10
+;   ldr q16, [sp], #0x10
+;   ldr q17, [sp], #0x10
+;   ldr q18, [sp], #0x10
+;   ldr q19, [sp], #0x10
+;   ldr q20, [sp], #0x10
+;   ldr q21, [sp], #0x10
+;   ldr q22, [sp], #0x10
+;   ldr q23, [sp], #0x10
+;   ldr q24, [sp], #0x10
+;   ldr q25, [sp], #0x10
+;   ldr q26, [sp], #0x10
+;   ldr q27, [sp], #0x10
+;   ldr q28, [sp], #0x10
+;   ldr q29, [sp], #0x10
+;   ldr q30, [sp], #0x10
+;   ldr q31, [sp], #0x10
 ;   ldp x0, x1, [sp], #0x10
 ;   ldp x2, x3, [sp], #0x10
 ;   ldp x4, x5, [sp], #0x10
