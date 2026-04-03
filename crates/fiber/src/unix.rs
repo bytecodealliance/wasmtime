@@ -36,6 +36,7 @@ use std::cell::Cell;
 use std::ops::Range;
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use wasmtime_environ::error::{OutOfMemory, Result};
 use wasmtime_environ::prelude::*;
 
 pub type Error = wasmtime_environ::error::Error;
