@@ -67,7 +67,7 @@ impl FiberStack {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
         let mut storage = TryVec::new();
-        storage.try_reserve_exact(size)?;
+        storage.reserve_exact(size)?;
         if zeroed {
             storage.resize(size, 0);
         }
@@ -81,7 +81,7 @@ impl FiberStack {
 
     pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         Ok(FiberStack {
-            storage: vec![],
+            storage: TryVec::default(),
             base: BasePtr(unsafe { base.offset(isize::try_from(guard_size).unwrap()) }),
             len,
         })
