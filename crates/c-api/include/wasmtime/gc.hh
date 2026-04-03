@@ -14,6 +14,7 @@
 namespace wasmtime {
 
 class StructRef;
+class ArrayRef;
 
 /**
  * \brief Representation of a WebAssembly `eqref` value.
@@ -95,6 +96,11 @@ public:
     return wasmtime_eqref_is_struct(cx.capi(), &val);
   }
 
+  /// Returns `true` if this eqref is an arrayref.
+  bool is_array(Store::Context cx) const {
+    return wasmtime_eqref_is_array(cx.capi(), &val);
+  }
+
   /// Upcast this `eqref` to an `anyref`.
   AnyRef to_anyref() const {
     wasmtime_anyref_t out;
@@ -106,6 +112,11 @@ public:
   //
   // as_struct() defined after StructRef below.
   inline StructRef as_struct(Store::Context cx) const;
+
+  /// Downcast this `eqref` into an `arrayref`.
+  //
+  // as_array() defined after ArrayRef below.
+  inline ArrayRef as_array(Store::Context cx) const;
 };
 
 /**
@@ -280,6 +291,158 @@ inline StructRef EqRef::as_struct(Store::Context cx) const {
   wasmtime_structref_t out;
   wasmtime_eqref_as_struct(cx.capi(), &val, &out);
   return StructRef(out);
+}
+
+/**
+ * \brief Owned handle to a WebAssembly array type definition.
+ */
+class ArrayType {
+  struct Deleter {
+    void operator()(wasmtime_array_type_t *p) const {
+      wasmtime_array_type_delete(p);
+    }
+  };
+  std::unique_ptr<wasmtime_array_type_t, Deleter> ptr;
+
+public:
+  /// Create a new array type with the given element type.
+  static ArrayType create(const Engine &engine, const FieldType &field) {
+    static_assert(sizeof(FieldType) == sizeof(wasmtime_field_type_t));
+    auto *raw = wasmtime_array_type_new(
+        engine.capi(), reinterpret_cast<const wasmtime_field_type_t *>(&field));
+    ArrayType ty;
+    ty.ptr.reset(raw);
+    return ty;
+  }
+
+  /// Get the underlying C pointer (non-owning).
+  const wasmtime_array_type_t *capi() const { return ptr.get(); }
+
+private:
+  ArrayType() = default;
+  friend class ArrayRefPre;
+};
+
+/**
+ * \brief Pre-allocated array layout for fast allocation of array instances.
+ *
+ * Created from a ArrayType and a store context. Reusable for allocating
+ * many array instances of the same type.
+ */
+class ArrayRefPre {
+  friend class ArrayRef;
+  WASMTIME_OWN_WRAPPER(ArrayRefPre, wasmtime_array_ref_pre)
+
+public:
+  /// Create a new array pre-allocator.
+  static ArrayRefPre create(Store::Context cx, const ArrayType &ty) {
+    auto *raw = wasmtime_array_ref_pre_new(cx.capi(), ty.capi());
+    ArrayRefPre pre(raw);
+    return pre;
+  }
+};
+
+/**
+ * \brief Representation of a WebAssembly `arrayref` value.
+ *
+ * An `arrayref` is a reference to a GC array instance. It is a subtype
+ * of `eqref` and `anyref`.
+ */
+class ArrayRef {
+  friend class EqRef;
+  friend class Val;
+  friend class AnyRef;
+
+  wasmtime_arrayref_t val;
+
+public:
+  /// Create a `ArrayRef` from its C-API representation.
+  explicit ArrayRef(wasmtime_arrayref_t val) : val(val) {}
+
+  /// Clone a `ArrayRef`.
+  ArrayRef(const ArrayRef &other) { wasmtime_arrayref_clone(&other.val, &val); }
+
+  /// Clone a `ArrayRef` into this one.
+  ArrayRef &operator=(const ArrayRef &other) {
+    wasmtime_arrayref_unroot(&val);
+    wasmtime_arrayref_clone(&other.val, &val);
+    return *this;
+  }
+
+  /// Move a `ArrayRef`.
+  ArrayRef(ArrayRef &&other) {
+    val = other.val;
+    wasmtime_arrayref_set_null(&other.val);
+  }
+
+  /// Move a `ArrayRef` into this one.
+  ArrayRef &operator=(ArrayRef &&other) {
+    wasmtime_arrayref_unroot(&val);
+    val = other.val;
+    wasmtime_arrayref_set_null(&other.val);
+    return *this;
+  }
+
+  /// Unroot this `ArrayRef`.
+  ~ArrayRef() { wasmtime_arrayref_unroot(&val); }
+
+  /// Allocate a new array with all elements set to the same value.
+  static Result<ArrayRef> create(Store::Context cx, const ArrayRefPre &pre,
+                                 const Val &elem, uint32_t len) {
+    wasmtime_arrayref_t out;
+    auto *err =
+        wasmtime_arrayref_new(cx.capi(), pre.capi(), &elem.val, len, &out);
+    if (err)
+      return Result<ArrayRef>(Error(err));
+    return Result<ArrayRef>(ArrayRef(out));
+  }
+
+  /// Get the length of the array.
+  Result<uint32_t> len(Store::Context cx) const {
+    uint32_t out;
+    auto *err = wasmtime_arrayref_len(cx.capi(), &val, &out);
+    if (err)
+      return Result<uint32_t>(Error(err));
+    return Result<uint32_t>(out);
+  }
+
+  /// Read an element from the array.
+  Result<Val> get(Store::Context cx, uint32_t index) const {
+    wasmtime_val_t out;
+    auto *err = wasmtime_arrayref_get(cx.capi(), &val, index, &out);
+    if (err)
+      return Result<Val>(Error(err));
+    return Result<Val>(Val(out));
+  }
+
+  /// Set an element of the array.
+  Result<std::monostate> set(Store::Context cx, uint32_t index,
+                             const Val &value) const {
+    auto *err = wasmtime_arrayref_set(cx.capi(), &val, index, &value.val);
+    if (err)
+      return Result<std::monostate>(Error(err));
+    return Result<std::monostate>(std::monostate{});
+  }
+
+  /// Upcast to anyref.
+  AnyRef to_anyref() const {
+    wasmtime_anyref_t out;
+    wasmtime_arrayref_to_anyref(&val, &out);
+    return AnyRef(out);
+  }
+
+  /// Upcast to eqref.
+  EqRef to_eqref() const {
+    wasmtime_eqref_t out;
+    wasmtime_arrayref_to_eqref(&val, &out);
+    return EqRef(out);
+  }
+};
+
+inline ArrayRef EqRef::as_array(Store::Context cx) const {
+  wasmtime_arrayref_t out;
+  wasmtime_eqref_as_array(cx.capi(), &val, &out);
+  return ArrayRef(out);
 }
 
 } // namespace wasmtime

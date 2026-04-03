@@ -2,8 +2,8 @@ use crate::{WasmtimeStoreContextMut, abort};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::{num::NonZeroU64, os::raw::c_void, ptr};
 use wasmtime::{
-    AnyRef, EqRef, ExnRef, ExternRef, FieldType, I31, Mutability, OwnedRooted, Ref, RootScope,
-    StorageType, StructRef, StructRefPre, StructType, Val, ValType,
+    AnyRef, ArrayRef, ArrayRefPre, ArrayType, EqRef, ExnRef, ExternRef, FieldType, I31, Mutability,
+    OwnedRooted, Ref, RootScope, StorageType, StructRef, StructRefPre, StructType, Val, ValType,
 };
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
@@ -281,6 +281,18 @@ pub struct wasmtime_struct_ref_pre_t {
     pre: StructRefPre,
 }
 wasmtime_c_api_macros::declare_own!(wasmtime_struct_ref_pre_t);
+
+ref_wrapper!(ArrayRef => wasmtime_arrayref_t);
+
+pub struct wasmtime_array_type_t {
+    ty: ArrayType,
+}
+wasmtime_c_api_macros::declare_own!(wasmtime_array_type_t);
+
+pub struct wasmtime_array_ref_pre_t {
+    pre: ArrayRefPre,
+}
+wasmtime_c_api_macros::declare_own!(wasmtime_array_ref_pre_t);
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
@@ -752,5 +764,176 @@ pub unsafe extern "C" fn wasmtime_eqref_as_struct(
         }
     }
     crate::initialize(out, None::<OwnedRooted<StructRef>>.into());
+    false
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_array_type_new(
+    engine: &crate::wasm_engine_t,
+    field: &wasmtime_field_type_t,
+) -> Box<wasmtime_array_type_t> {
+    let ft = field_type_from_c(field);
+    let ty = ArrayType::new(&engine.engine, ft);
+    Box::new(wasmtime_array_type_t { ty })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_array_ref_pre_new(
+    cx: WasmtimeStoreContextMut<'_>,
+    ty: &wasmtime_array_type_t,
+) -> Box<wasmtime_array_ref_pre_t> {
+    let pre = ArrayRefPre::new(cx, ty.ty.clone());
+    Box::new(wasmtime_array_ref_pre_t { pre })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_new(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    pre: &wasmtime_array_ref_pre_t,
+    elem: &crate::wasmtime_val_t,
+    len: u32,
+    out: &mut MaybeUninit<wasmtime_arrayref_t>,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let mut scope = RootScope::new(&mut cx);
+    let val = elem.to_val(&mut scope);
+    match ArrayRef::new(&mut scope, &pre.pre, &val, len) {
+        Ok(arrayref) => {
+            let owned = arrayref
+                .to_owned_rooted(&mut scope)
+                .expect("just allocated");
+            crate::initialize(out, Some(owned).into());
+            None
+        }
+        Err(e) => {
+            crate::initialize(out, None::<OwnedRooted<ArrayRef>>.into());
+            Some(Box::new(e.into()))
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_clone(
+    arrayref: Option<&wasmtime_arrayref_t>,
+    out: &mut MaybeUninit<wasmtime_arrayref_t>,
+) {
+    let arrayref = arrayref.and_then(|a| a.as_wasmtime());
+    crate::initialize(out, arrayref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_unroot(
+    arrayref: Option<&mut ManuallyDrop<wasmtime_arrayref_t>>,
+) {
+    if let Some(arrayref) = arrayref {
+        ManuallyDrop::drop(arrayref);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_to_anyref(
+    arrayref: Option<&wasmtime_arrayref_t>,
+    out: &mut MaybeUninit<wasmtime_anyref_t>,
+) {
+    let anyref = arrayref
+        .and_then(|a| a.as_wasmtime())
+        .map(|a| a.to_anyref());
+    crate::initialize(out, anyref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_to_eqref(
+    arrayref: Option<&wasmtime_arrayref_t>,
+    out: &mut MaybeUninit<wasmtime_eqref_t>,
+) {
+    let eqref = arrayref.and_then(|a| a.as_wasmtime()).map(|a| a.to_eqref());
+    crate::initialize(out, eqref.into());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_len(
+    cx: WasmtimeStoreContextMut<'_>,
+    arrayref: Option<&wasmtime_arrayref_t>,
+    out: &mut MaybeUninit<u32>,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let arrayref = arrayref
+        .and_then(|a| a.as_wasmtime())
+        .expect("non-null arrayref required");
+    match arrayref.len(&cx) {
+        Ok(len) => {
+            crate::initialize(out, len);
+            None
+        }
+        Err(e) => Some(Box::new(e.into())),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_get(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    arrayref: Option<&wasmtime_arrayref_t>,
+    index: u32,
+    out: &mut MaybeUninit<crate::wasmtime_val_t>,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let arrayref = arrayref
+        .and_then(|a| a.as_wasmtime())
+        .expect("non-null arrayref required");
+    let mut scope = RootScope::new(&mut cx);
+    let rooted = arrayref.to_rooted(&mut scope);
+    match rooted.get(&mut scope, index) {
+        Ok(val) => {
+            let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
+            crate::initialize(out, c_val);
+            None
+        }
+        Err(e) => Some(Box::new(e.into())),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_arrayref_set(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    arrayref: Option<&wasmtime_arrayref_t>,
+    index: u32,
+    val: &crate::wasmtime_val_t,
+) -> Option<Box<crate::wasmtime_error_t>> {
+    let arrayref = arrayref
+        .and_then(|a| a.as_wasmtime())
+        .expect("non-null arrayref required");
+    let mut scope = RootScope::new(&mut cx);
+    let rooted = arrayref.to_rooted(&mut scope);
+    let rust_val = val.to_val(&mut scope);
+    match rooted.set(&mut scope, index, rust_val) {
+        Ok(()) => None,
+        Err(e) => Some(Box::new(e.into())),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_is_array(
+    cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+) -> bool {
+    match eqref.and_then(|e| e.as_wasmtime()) {
+        Some(eqref) => eqref.is_array(&cx).expect("OwnedRooted always in scope"),
+        None => false,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_eqref_as_array(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    eqref: Option<&wasmtime_eqref_t>,
+    out: &mut MaybeUninit<wasmtime_arrayref_t>,
+) -> bool {
+    if let Some(eqref) = eqref.and_then(|e| e.as_wasmtime()) {
+        let mut scope = RootScope::new(&mut cx);
+        let rooted = eqref.to_rooted(&mut scope);
+        if let Ok(Some(arrayref)) = rooted.as_array(&scope) {
+            let owned = arrayref.to_owned_rooted(&mut scope).expect("just created");
+            crate::initialize(out, Some(owned).into());
+            return true;
+        }
+    }
+    crate::initialize(out, None::<OwnedRooted<ArrayRef>>.into());
     false
 }

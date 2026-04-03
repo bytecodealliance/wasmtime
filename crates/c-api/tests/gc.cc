@@ -160,3 +160,75 @@ TEST(StructRef, UpcastAndDowncast) {
   AnyRef any = s.to_anyref();
   EXPECT_FALSE(any.is_i31(cx));
 }
+
+TEST(ArrayRef, CreateAndReadElements) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  // Create an array type with mutable i32 elements.
+  auto ty = ArrayType::create(engine, FieldType::mut_(WASMTIME_I32));
+  auto pre = ArrayRefPre::create(cx, ty);
+
+  // Allocate an array of 5 elements, all initialized to 7.
+  auto result = ArrayRef::create(cx, pre, Val(int32_t(7)), 5);
+  ASSERT_TRUE(result);
+  ArrayRef arr = result.ok();
+
+  // Check length.
+  auto len_result = arr.len(cx);
+  ASSERT_TRUE(len_result);
+  EXPECT_EQ(len_result.ok(), 5u);
+
+  // Read elements.
+  for (uint32_t i = 0; i < 5; i++) {
+    auto v = arr.get(cx, i);
+    ASSERT_TRUE(v);
+    EXPECT_EQ(v.ok().i32(), 7);
+  }
+
+  // Write element 2 to 42, read back.
+  auto set_result = arr.set(cx, 2, Val(int32_t(42)));
+  ASSERT_TRUE(set_result);
+
+  auto v2 = arr.get(cx, 2);
+  ASSERT_TRUE(v2);
+  EXPECT_EQ(v2.ok().i32(), 42);
+}
+
+TEST(ArrayRef, UpcastAndDowncast) {
+  Config config;
+  config.wasm_gc(true);
+  Engine engine(std::move(config));
+  Store store(engine);
+  auto cx = store.context();
+
+  auto ty = ArrayType::create(engine, FieldType::const_(WASMTIME_I32));
+  auto pre = ArrayRefPre::create(cx, ty);
+
+  auto result = ArrayRef::create(cx, pre, Val(int32_t(99)), 3);
+  ASSERT_TRUE(result);
+  ArrayRef arr = result.ok();
+
+  // Upcast to eqref.
+  EqRef eq = arr.to_eqref();
+  EXPECT_TRUE(eq.is_array(cx));
+  EXPECT_FALSE(eq.is_struct(cx));
+  EXPECT_FALSE(eq.is_i31(cx));
+
+  // Downcast back to arrayref.
+  ArrayRef arr2 = eq.as_array(cx);
+  auto len = arr2.len(cx);
+  ASSERT_TRUE(len);
+  EXPECT_EQ(len.ok(), 3u);
+
+  auto v = arr2.get(cx, 0);
+  ASSERT_TRUE(v);
+  EXPECT_EQ(v.ok().i32(), 99);
+
+  // Upcast to anyref.
+  AnyRef any = arr.to_anyref();
+  EXPECT_FALSE(any.is_i31(cx));
+}

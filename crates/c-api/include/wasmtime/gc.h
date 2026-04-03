@@ -342,6 +342,199 @@ WASM_API_EXTERN bool wasmtime_eqref_as_struct(wasmtime_context_t *context,
                                               const wasmtime_eqref_t *eqref,
                                               wasmtime_structref_t *out);
 
+/**
+ * \brief An opaque handle to a WebAssembly array type definition.
+ *
+ * An array type describes the element type of an array. It is used to create a
+ * #wasmtime_array_ref_pre_t, which can then allocate array instances.
+ *
+ * Owned. Must be deleted with #wasmtime_array_type_delete.
+ */
+typedef struct wasmtime_array_type wasmtime_array_type_t;
+
+/**
+ * \brief Create a new array type.
+ *
+ * \param engine The engine to register the type with.
+ * \param field The element type descriptor.
+ *
+ * \return Returns a new array type.
+ */
+WASM_API_EXTERN wasmtime_array_type_t *
+wasmtime_array_type_new(const wasm_engine_t *engine,
+                        const wasmtime_field_type_t *field);
+
+/**
+ * \brief Delete an array type.
+ */
+WASM_API_EXTERN void wasmtime_array_type_delete(wasmtime_array_type_t *ty);
+
+/**
+ * \brief An opaque pre-allocated array layout for fast allocation.
+ *
+ * Created from a #wasmtime_array_type_t and a store context. Reusable for
+ * allocating many array instances of the same type.
+ *
+ * Owned. Must be deleted with #wasmtime_array_ref_pre_delete.
+ */
+typedef struct wasmtime_array_ref_pre wasmtime_array_ref_pre_t;
+
+/**
+ * \brief Create a new array pre-allocator.
+ *
+ * \param context The store context.
+ * \param ty The array type (not consumed; caller retains ownership).
+ *
+ * \return Returns a new array ref pre-allocator.
+ */
+WASM_API_EXTERN wasmtime_array_ref_pre_t *
+wasmtime_array_ref_pre_new(wasmtime_context_t *context,
+                           const wasmtime_array_type_t *ty);
+
+/**
+ * \brief Delete an array pre-allocator.
+ */
+WASM_API_EXTERN void
+wasmtime_array_ref_pre_delete(wasmtime_array_ref_pre_t *pre);
+
+/**
+ * \typedef wasmtime_arrayref_t
+ * \brief Convenience alias for #wasmtime_arrayref
+ *
+ * \struct wasmtime_arrayref
+ * \brief A WebAssembly `arrayref` value.
+ *
+ * This structure represents a reference to a GC array. It is a subtype of
+ * `eqref` and `anyref`.
+ *
+ * Values must be explicitly unrooted via #wasmtime_arrayref_unroot.
+ */
+typedef struct wasmtime_arrayref {
+  /// Internal metadata.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_arrayref_t;
+
+/// \brief Initialize the `ref` to a null `arrayref` value.
+static inline void wasmtime_arrayref_set_null(wasmtime_arrayref_t *ref) {
+  ref->store_id = 0;
+}
+
+/// \brief Returns whether the provided `ref` is a null `arrayref` value.
+static inline bool wasmtime_arrayref_is_null(const wasmtime_arrayref_t *ref) {
+  return ref->store_id == 0;
+}
+
+/**
+ * \brief Allocate a new array instance.
+ *
+ * All elements are initialized to the same value.
+ *
+ * \param context The store context.
+ * \param pre The array pre-allocator.
+ * \param elem The initial element value.
+ * \param len The number of elements.
+ * \param out Receives the new arrayref on success.
+ *
+ * \return NULL on success, or a #wasmtime_error_t on failure.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_arrayref_new(
+    wasmtime_context_t *context, const wasmtime_array_ref_pre_t *pre,
+    const wasmtime_val_t *elem, uint32_t len, wasmtime_arrayref_t *out);
+
+/**
+ * \brief Clone an `arrayref`, creating a new root.
+ */
+WASM_API_EXTERN void
+wasmtime_arrayref_clone(const wasmtime_arrayref_t *arrayref,
+                        wasmtime_arrayref_t *out);
+
+/**
+ * \brief Unroot an `arrayref` to allow garbage collection.
+ */
+WASM_API_EXTERN void wasmtime_arrayref_unroot(wasmtime_arrayref_t *ref);
+
+/**
+ * \brief Upcast an `arrayref` to an `anyref`.
+ */
+WASM_API_EXTERN void
+wasmtime_arrayref_to_anyref(const wasmtime_arrayref_t *arrayref,
+                            wasmtime_anyref_t *out);
+
+/**
+ * \brief Upcast an `arrayref` to an `eqref`.
+ */
+WASM_API_EXTERN void
+wasmtime_arrayref_to_eqref(const wasmtime_arrayref_t *arrayref,
+                           wasmtime_eqref_t *out);
+
+/**
+ * \brief Get the length of an array.
+ *
+ * \param context The store context.
+ * \param arrayref The array (not consumed).
+ * \param out Receives the length on success.
+ *
+ * \return NULL on success, or a #wasmtime_error_t on failure.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_arrayref_len(wasmtime_context_t *context,
+                      const wasmtime_arrayref_t *arrayref, uint32_t *out);
+
+/**
+ * \brief Read an element from an array.
+ *
+ * \param context The store context.
+ * \param arrayref The array (not consumed).
+ * \param index The element index.
+ * \param out Receives the element value on success.
+ *
+ * \return NULL on success, or a #wasmtime_error_t on failure.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_arrayref_get(wasmtime_context_t *context,
+                      const wasmtime_arrayref_t *arrayref, uint32_t index,
+                      wasmtime_val_t *out);
+
+/**
+ * \brief Set an element of an array.
+ *
+ * \param context The store context.
+ * \param arrayref The array (not consumed).
+ * \param index The element index.
+ * \param val The value to write.
+ *
+ * \return NULL on success, or a #wasmtime_error_t on failure.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_arrayref_set(wasmtime_context_t *context,
+                      const wasmtime_arrayref_t *arrayref, uint32_t index,
+                      const wasmtime_val_t *val);
+
+/**
+ * \brief Test whether an `eqref` is an `arrayref`.
+ *
+ * Returns `false` for null references.
+ */
+WASM_API_EXTERN bool wasmtime_eqref_is_array(wasmtime_context_t *context,
+                                             const wasmtime_eqref_t *eqref);
+
+/**
+ * \brief Downcast an `eqref` to an `arrayref`.
+ *
+ * If the given `eqref` is an `arrayref`, a new root for it is stored in `out`
+ * and `true` is returned. Otherwise `false` is returned and `out` is set to
+ * null.
+ */
+WASM_API_EXTERN bool wasmtime_eqref_as_array(wasmtime_context_t *context,
+                                             const wasmtime_eqref_t *eqref,
+                                             wasmtime_arrayref_t *out);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
