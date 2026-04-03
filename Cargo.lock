@@ -2452,9 +2452,9 @@ dependencies = [
 
 [[package]]
 name = "mutatis"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31be5d2bfb418a4362eec78ca556ce9a15542a00d389860c3bf3adc132edb1d9"
+checksum = "645a17bdae66c8ee0fdba0004ab864cbd711bec41aae4c466ce0d35e266c946e"
 dependencies = [
  "log",
  "mutatis-derive",
@@ -2463,9 +2463,9 @@ dependencies = [
 
 [[package]]
 name = "mutatis-derive"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04de5ab1983a2194b9189c523d2b0f6f789c17af8fd0830bd173aff20987295c"
+checksum = "0e2c58c651085c4319cd3554f44541dcf1be8daa0481c9089de50926750623e7"
 dependencies = [
  "proc-macro2",
  "quote",
