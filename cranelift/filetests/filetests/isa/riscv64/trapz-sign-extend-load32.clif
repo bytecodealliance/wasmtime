@@ -13,12 +13,20 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   lw a0,0(a0)
+;   slli a0,a0,32
+;   srli a0,a0,32
+;   slli a1,a1,32
+;   srli a1,a1,32
 ;   trap_if user15##(a0 uge a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lw a0, 0(a0)
+;   slli a0, a0, 0x20
+;   srli a0, a0, 0x20
+;   slli a1, a1, 0x20
+;   srli a1, a1, 0x20
 ;   bltu a0, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user15
 ;   ret
