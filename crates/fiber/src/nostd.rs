@@ -42,7 +42,7 @@ pub struct FiberStack {
     len: usize,
     /// Backing storage, if owned. Allocated once at startup and then
     /// not reallocated afterward.
-    storage: Vec<u8>,
+    storage: TryVec<u8>,
 }
 
 struct BasePtr(*mut u8);
@@ -66,10 +66,8 @@ impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
-        let mut storage = Vec::new();
-        storage
-            .try_reserve_exact(size)
-            .map_err(|_| OutOfMemory::new(size))?;
+        let mut storage = TryVec::new();
+        storage.try_reserve_exact(size)?;
         if zeroed {
             storage.resize(size, 0);
         }
