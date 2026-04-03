@@ -67,7 +67,9 @@ impl FiberStack {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
         let mut storage = Vec::new();
-        storage.try_reserve_exact(size)?;
+        storage
+            .try_reserve_exact(size)
+            .map_err(|_| OutOfMemory::new(size))?;
         if zeroed {
             storage.resize(size, 0);
         }
@@ -139,7 +141,7 @@ impl Fiber {
             bail!("fibers unsupported on this host architecture");
         }
         unsafe {
-            let data = Box::into_raw(Box::new(func)).cast();
+            let data = Box::into_raw(try_new::<Box<_>>(func)?).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
         }
 
