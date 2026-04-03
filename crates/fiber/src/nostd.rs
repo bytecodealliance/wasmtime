@@ -28,7 +28,6 @@
 use crate::stackswitch::*;
 use crate::{Result, RunResult, RuntimeFiberStack};
 use alloc::boxed::Box;
-use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use core::ops::Range;
 use wasmtime_environ::prelude::*;
@@ -69,7 +68,7 @@ impl FiberStack {
         let mut storage = TryVec::new();
         storage.reserve_exact(size)?;
         if zeroed {
-            storage.resize(size, 0);
+            storage.resize(size, 0)?;
         }
         let (base, len) = align_ptr(storage.as_mut_ptr(), size, STACK_ALIGN);
         Ok(FiberStack {
