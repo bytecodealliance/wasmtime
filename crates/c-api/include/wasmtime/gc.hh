@@ -323,6 +323,12 @@ private:
   friend class ArrayRefPre;
 };
 
+/**
+ * \brief Pre-allocated array layout for fast allocation of array instances.
+ *
+ * Created from a ArrayType and a store context. Reusable for allocating
+ * many array instances of the same type.
+ */
 class ArrayRefPre {
   friend class ArrayRef;
   WASMTIME_OWN_WRAPPER(ArrayRefPre, wasmtime_array_ref_pre)
