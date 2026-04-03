@@ -984,7 +984,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         dst_old_high: WritableGpr,
     ) -> BoxAtomic128RmwSeqArgs {
         Box::new(Atomic128RmwSeqArgs {
-            op: op.clone(),
+            op: *op,
             mem_low: mem_low.clone(),
             mem_high: mem_high.clone(),
             operand_low,
