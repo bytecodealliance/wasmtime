@@ -380,10 +380,10 @@
 (rule (simplify (iadd ty (iadd ty (isub ty z x) y) x)) (iadd ty y z))
 
 ;; (x + y) == (y + x) --> true
-(rule (simplify (eq ty (iadd cty x y) (iadd cty y x))) (iconst_u ty 1))
-(rule (simplify (eq ty (iadd cty y x) (iadd cty x y))) (iconst_u ty 1))
-(rule (simplify (eq ty (iadd cty x y) (iadd cty x y))) (iconst_u ty 1))
-(rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (iconst_u ty 1))
+(rule (simplify (eq (ty_int ty) (iadd cty x y) (iadd cty y x))) (iconst_u ty 1))
+(rule (simplify (eq (ty_int ty) (iadd cty y x) (iadd cty x y))) (iconst_u ty 1))
+(rule (simplify (eq (ty_int ty) (iadd cty x y) (iadd cty x y))) (iconst_u ty 1))
+(rule (simplify (eq (ty_int ty) (iadd cty y x) (iadd cty y x))) (iconst_u ty 1))
 
 ;; (x - y) != x --> y != 0
 (rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))

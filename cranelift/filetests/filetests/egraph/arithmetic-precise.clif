@@ -234,6 +234,21 @@ block0(v0: i32, v1: i32):
 ;     return v5  ; v5 = 1
 ; }
 
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_vector_icmp_eq_iadd_commute(i32x4, i32x4) -> i32x4 fast {
+block0(v0: i32x4, v1: i32x4):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %simplify_vector_icmp_eq_iadd_commute(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v5 = icmp eq v0, v0
+;     return v5
+; }
+
 ;; (x - y) != x --> y != 0
 function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
 block0(v0: i32, v1: i32):
