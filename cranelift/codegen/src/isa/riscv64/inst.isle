@@ -2020,9 +2020,15 @@
 (decl imm5_from_i64 (Imm5) i64)
 (extern extractor imm5_from_i64 imm5_from_i64)
 
-;; Construct a Imm5 from an i8
+;; Construct a Imm5 from an iNN
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
+(decl pure partial i16_to_imm5 (i16) Imm5)
+(rule (i16_to_imm5 (i8_from_i16 n)) (i8_to_imm5 n))
+(decl pure partial i32_to_imm5 (i32) Imm5)
+(rule (i32_to_imm5 (i8_from_i32 n)) (i8_to_imm5 n))
+(decl pure partial i64_to_imm5 (i64) Imm5)
+(rule (i64_to_imm5 (i8_from_i64 n)) (i8_to_imm5 n))
 
 ;; Helper to go directly from a `Value` to an `Imm5`.
 (decl imm5_from_value (Imm5) Value)
@@ -2037,11 +2043,20 @@
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 (decl pure partial replicated_imm5 (Value) Imm5)
 (rule (replicated_imm5 (splat _ (imm5_from_value n))) n)
-(rule (replicated_imm5 (vconst _ (u128_from_constant n128)))
+(rule (replicated_imm5 (vconst (multi_lane 64 _) (u128_from_constant n128)))
   (if-let (u128_replicated_u64 n64) n128)
-  (if-let (u64_replicated_u32 n32) n64)
-  (if-let (u32_replicated_u16 n16) n32)
-  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i64_to_imm5 (u64_cast_signed n64)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 32 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u32 n32) n128)
+  (if-let n (i32_to_imm5 (u32_cast_signed n32)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 16 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u16 n16) n128)
+  (if-let n (i16_to_imm5 (u16_cast_signed n16)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 8 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u8 n8) n128)
   (if-let n (i8_to_imm5 (u8_cast_signed n8)))
   n)
 

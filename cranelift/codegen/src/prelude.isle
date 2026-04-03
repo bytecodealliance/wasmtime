@@ -115,12 +115,20 @@
 ;; lower half of the input
 (decl u128_replicated_u64 (u64) u128)
 (extern extractor u128_replicated_u64 u128_replicated_u64)
-(decl u64_replicated_u32 (u64) u64)
+(decl u64_replicated_u32 (u32) u64)
 (extern extractor u64_replicated_u32 u64_replicated_u32)
-(decl u32_replicated_u16 (u64) u64)
+(decl u32_replicated_u16 (u16) u32)
 (extern extractor u32_replicated_u16 u32_replicated_u16)
-(decl u16_replicated_u8 (u8) u64)
+(decl u16_replicated_u8 (u8) u16)
 (extern extractor u16_replicated_u8 u16_replicated_u8)
+
+;; Convenience extractors to go directly from u128 to something smaller
+(decl u128_replicated_u32 (u32) u128)
+(extractor (u128_replicated_u32 n) (u128_replicated_u64 (u64_replicated_u32 n)))
+(decl u128_replicated_u16 (u16) u128)
+(extractor (u128_replicated_u16 n) (u128_replicated_u32 (u32_replicated_u16 n)))
+(decl u128_replicated_u8 (u8) u128)
+(extractor (u128_replicated_u8 n) (u128_replicated_u16 (u16_replicated_u8 n)))
 
 ;; Get the low and high bits of a `u128` as `u64`s.
 (decl u128_low_bits (u128) u64)

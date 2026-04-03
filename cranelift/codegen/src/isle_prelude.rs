@@ -792,27 +792,25 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
-        fn u64_replicated_u32(&mut self, val: u64) -> Option<u64> {
+        fn u64_replicated_u32(&mut self, val: u64) -> Option<u32> {
             let low32 = val as u32 as u64;
             if (low32 | (low32 << 32)) == val {
-                Some(low32)
+                Some(val as u32)
             } else {
                 None
             }
         }
 
-        fn u32_replicated_u16(&mut self, val: u64) -> Option<u64> {
-            let val = val as u32;
+        fn u32_replicated_u16(&mut self, val: u32) -> Option<u16> {
             let low16 = val as u16 as u32;
             if (low16 | (low16 << 16)) == val {
-                Some(low16.into())
+                Some(low16 as u16)
             } else {
                 None
             }
         }
 
-        fn u16_replicated_u8(&mut self, val: u64) -> Option<u8> {
-            let val = val as u16;
+        fn u16_replicated_u8(&mut self, val: u16) -> Option<u8> {
             let low8 = val as u8 as u16;
             if (low8 | (low8 << 8)) == val {
                 Some(low8 as u8)
