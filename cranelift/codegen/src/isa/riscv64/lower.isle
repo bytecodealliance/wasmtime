@@ -330,9 +330,10 @@
 
 ;; i32 case (on RV64 use addw to detect 32-bit overflow correctly)
 (rule 1 (lower (has_type $I32 (uadd_overflow _ x y)))
-  (let ((x64 XReg (zext x))                
-        (sum XReg (rv_addw x y))           
-        (overflow XReg (rv_sltu sum x64))) 
+  (let ((x64 XReg (zext x))
+        (y64 XReg (zext y))
+        (sum XReg (rv_add x64 y64))
+        (overflow XReg (rv_srli sum (imm12_const 32))))
     (output_pair sum overflow)))
 
 ;; For i128, we need to handle the high and low parts separately
@@ -347,7 +348,7 @@
         (carry XReg (rv_sltu sum_lo x_lo))
         (sum_hi XReg (rv_add x_hi y_hi))
         (sum_hi_with_carry XReg (rv_add sum_hi carry))
-        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi) 
+        (overflow XReg (rv_or (rv_sltu sum_hi_with_carry x_hi)
                               (rv_and carry (rv_seqz (rv_xor sum_hi_with_carry x_hi))))))
     (output_pair (value_regs sum_lo sum_hi_with_carry) overflow)))
 
