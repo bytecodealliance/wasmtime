@@ -757,17 +757,18 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::Atomic128RmwSeq {
-                op,
-                mem_low,
-                mem_high,
-                operand_low,
-                operand_high,
-                temp_low,
-                temp_high,
-                dst_old_low,
-                dst_old_high,
-            } => {
+            Inst::Atomic128RmwSeq { args } => {
+                let Atomic128RmwSeqArgs {
+                    op,
+                    mem_low,
+                    mem_high,
+                    operand_low,
+                    operand_high,
+                    temp_low,
+                    temp_high,
+                    dst_old_low,
+                    dst_old_high,
+                } = &**args;
                 let operand_low = pretty_print_reg(**operand_low, 8);
                 let operand_high = pretty_print_reg(**operand_high, 8);
                 let temp_low = pretty_print_reg(*temp_low.to_reg(), 8);
@@ -781,14 +782,15 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::Atomic128XchgSeq {
-                mem_low,
-                mem_high,
-                operand_low,
-                operand_high,
-                dst_old_low,
-                dst_old_high,
-            } => {
+            Inst::Atomic128XchgSeq { args } => {
+                let Atomic128XchgSeqArgs {
+                    mem_low,
+                    mem_high,
+                    operand_low,
+                    operand_high,
+                    dst_old_low,
+                    dst_old_high,
+                } = &**args;
                 let operand_low = pretty_print_reg(**operand_low, 8);
                 let operand_high = pretty_print_reg(**operand_high, 8);
                 let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
@@ -1109,17 +1111,18 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             mem.get_operands_late(collector)
         }
 
-        Inst::Atomic128RmwSeq {
-            operand_low,
-            operand_high,
-            temp_low,
-            temp_high,
-            dst_old_low,
-            dst_old_high,
-            mem_low,
-            mem_high,
-            ..
-        } => {
+        Inst::Atomic128RmwSeq { args } => {
+            let Atomic128RmwSeqArgs {
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                temp_low,
+                temp_high,
+                dst_old_low,
+                dst_old_high,
+                op: _,
+            } = &mut **args;
             // All registers are collected in the `Late` position so that they don't overlap.
             collector.reg_late_use(operand_low);
             collector.reg_late_use(operand_high);
@@ -1131,15 +1134,15 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             mem_high.get_operands_late(collector);
         }
 
-        Inst::Atomic128XchgSeq {
-            operand_low,
-            operand_high,
-            dst_old_low,
-            dst_old_high,
-            mem_low,
-            mem_high,
-            ..
-        } => {
+        Inst::Atomic128XchgSeq { args } => {
+            let Atomic128XchgSeqArgs {
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                dst_old_low,
+                dst_old_high,
+            } = &mut **args;
             // All registers are collected in the `Late` position so that they don't overlap.
             collector.reg_fixed_late_use(operand_low, regs::rbx());
             collector.reg_fixed_late_use(operand_high, regs::rcx());

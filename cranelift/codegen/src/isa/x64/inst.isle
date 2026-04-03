@@ -244,15 +244,7 @@
        ;;   the replacement value
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
-       (Atomic128RmwSeq (op Atomic128RmwSeqOp)
-                        (mem_low BoxSyntheticAmode)
-                        (mem_high BoxSyntheticAmode)
-                        (operand_low Gpr)
-                        (operand_high Gpr)
-                        (temp_low WritableGpr)
-                        (temp_high WritableGpr)
-                        (dst_old_low WritableGpr)
-                        (dst_old_high WritableGpr))
+       (Atomic128RmwSeq (args BoxAtomic128RmwSeqArgs))
 
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg16b` instruction.
@@ -268,12 +260,7 @@
        ;; - %rbx (low), %rcx (high)  (read) the replacement value
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
-       (Atomic128XchgSeq (mem_low BoxSyntheticAmode)
-                         (mem_high BoxSyntheticAmode)
-                         (operand_low Gpr)
-                         (operand_high Gpr)
-                         (dst_old_low WritableGpr)
-                         (dst_old_high WritableGpr))
+       (Atomic128XchgSeq (args BoxAtomic128XchgSeqArgs))
 
        ;; =========================================
        ;; Meta-instructions generating no code.
@@ -344,11 +331,8 @@
 (type BoxCallIndInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
 (type BoxReturnCallIndInfo extern (enum))
-(type BoxSyntheticAmode extern (enum))
-
-(decl pure box_synthetic_amode (SyntheticAmode) BoxSyntheticAmode)
-(extern constructor box_synthetic_amode box_synthetic_amode)
-(convert SyntheticAmode BoxSyntheticAmode box_synthetic_amode)
+(type BoxAtomic128RmwSeqArgs extern (enum))
+(type BoxAtomic128XchgSeqArgs extern (enum))
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
@@ -357,6 +341,16 @@
 ;; Get the true `OperandSize` for a given `Type`, with no rounding.
 (decl raw_operand_size_of_type (Type) OperandSize)
 (extern constructor raw_operand_size_of_type raw_operand_size_of_type)
+
+(decl atomic128_rmw_seq_args
+  (Atomic128RmwSeqOp SyntheticAmode SyntheticAmode Gpr Gpr WritableGpr WritableGpr WritableGpr WritableGpr)
+  BoxAtomic128RmwSeqArgs)
+(extern constructor atomic128_rmw_seq_args atomic128_rmw_seq_args)
+
+(decl atomic128_xchg_seq_args
+  (SyntheticAmode SyntheticAmode Gpr Gpr WritableGpr WritableGpr)
+  BoxAtomic128XchgSeqArgs)
+(extern constructor atomic128_xchg_seq_args atomic128_xchg_seq_args)
 
 ;; Get the bit width of an `OperandSize`.
 (decl operand_size_bits (OperandSize) u16)
@@ -3719,7 +3713,8 @@
             (input_low Gpr (value_regs_get_gpr input 0))
             (input_high Gpr (value_regs_get_gpr input 1))
             (mem_high SyntheticAmode (amode_offset mem_low flags 8))
-            (_ Unit (emit (MInst.Atomic128RmwSeq (atomic_128_rmw_seq_op op) mem_low mem_high input_low input_high tmp_low tmp_high dst_low dst_high))))
+            (args BoxAtomic128RmwSeqArgs (atomic128_rmw_seq_args (atomic_128_rmw_seq_op op) mem_low mem_high input_low input_high tmp_low tmp_high dst_low dst_high))
+            (_ Unit (emit (MInst.Atomic128RmwSeq args))))
         (value_regs dst_low dst_high)))
 
 (rule 1 (x64_atomic_128_rmw_seq (AtomicRmwOp.Xchg) mem_low flags input)
@@ -3728,7 +3723,8 @@
               (input_low Gpr (value_regs_get_gpr input 0))
               (input_high Gpr (value_regs_get_gpr input 1))
               (mem_high SyntheticAmode (amode_offset mem_low flags 8))
-              (_ Unit (emit (MInst.Atomic128XchgSeq mem_low mem_high input_low input_high dst_low dst_high))))
+              (args BoxAtomic128XchgSeqArgs (atomic128_xchg_seq_args mem_low mem_high input_low input_high dst_low dst_high))
+              (_ Unit (emit (MInst.Atomic128XchgSeq args))))
           (value_regs dst_low dst_high)))
 
 (decl x64_atomic_128_store_seq (SyntheticAmode MemFlags ValueRegs) SideEffectNoResult)
@@ -3737,8 +3733,9 @@
               (dst_high WritableGpr (temp_writable_gpr))
               (input_low Gpr (value_regs_get_gpr input 0))
               (input_high Gpr (value_regs_get_gpr input 1))
-              (mem_high SyntheticAmode (amode_offset mem_low flags 8)))
-          (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq mem_low mem_high input_low input_high dst_low dst_high))))
+              (mem_high SyntheticAmode (amode_offset mem_low flags 8))
+              (args BoxAtomic128XchgSeqArgs (atomic128_xchg_seq_args mem_low mem_high input_low input_high dst_low dst_high)))
+          (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq args))))
 
 
 (type AtomicRmwSeqOp

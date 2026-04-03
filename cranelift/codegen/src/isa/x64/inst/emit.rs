@@ -1544,17 +1544,18 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128RmwSeq {
-            op,
-            mem_low,
-            mem_high,
-            operand_low,
-            operand_high,
-            temp_low,
-            temp_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128RmwSeq { args } => {
+            let Atomic128RmwSeqArgs {
+                op,
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                temp_low,
+                temp_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let temp_low = *temp_low;
@@ -1666,14 +1667,15 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128XchgSeq {
-            mem_low,
-            mem_high,
-            operand_low,
-            operand_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128XchgSeq { args } => {
+            let Atomic128XchgSeqArgs {
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let dst_old_low = *dst_old_low;
