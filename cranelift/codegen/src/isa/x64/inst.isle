@@ -236,14 +236,17 @@
        ;;
        ;; For `AtomicRmwOp::Xchg`, use `Atomic128XchgSeq` instead.
        ;;
+       ;; This requires that `mem_high` addresses 8 bytes beyond `mem_low`.
+       ;;
        ;; This instruction sequence has fixed register uses as follows:
-       ;; - %rax (low), %rdx (high)  (written) the old value at `mem`
+       ;; - %rax (low), %rdx (high)  (written) the old value at `mem_low`
        ;; - %rbx (low), %rcx (high)  (written) used as temp registers to hold
        ;;   the replacement value
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
        (Atomic128RmwSeq (op Atomic128RmwSeqOp)
-                        (mem BoxSyntheticAmode)
+                        (mem_low BoxSyntheticAmode)
+                        (mem_high BoxSyntheticAmode)
                         (operand_low Gpr)
                         (operand_high Gpr)
                         (temp_low WritableGpr)
@@ -258,12 +261,15 @@
        ;; replacement value is the same every time, this instruction doesn't
        ;; require any temporary registers.
        ;;
+       ;; This requires that `mem_high` addresses 8 bytes beyond `mem_low`.
+       ;;
        ;; This instruction sequence has fixed register uses as follows:
-       ;; - %rax (low), %rdx (high)  (written) the old value at `mem`
+       ;; - %rax (low), %rdx (high)  (written) the old value at `mem_low`
        ;; - %rbx (low), %rcx (high)  (read) the replacement value
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
-       (Atomic128XchgSeq (mem SyntheticAmode)
+       (Atomic128XchgSeq (mem_low BoxSyntheticAmode)
+                         (mem_high BoxSyntheticAmode)
                          (operand_low Gpr)
                          (operand_high Gpr)
                          (dst_old_low WritableGpr)
@@ -588,8 +594,19 @@
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
-(decl amode_offset (SyntheticAmode i32) SyntheticAmode)
-(extern constructor amode_offset amode_offset)
+;;
+;; Note that the input `Amode` might have a static offset that's too large to
+;; add the specified `i32` to so in the case of overflow a new `Amode` is
+;; generated entirely using `lea`
+(decl amode_offset (SyntheticAmode MemFlags i32) SyntheticAmode)
+(rule 1 (amode_offset base _flags offset)
+  (if-let new (amode_try_offset base offset))
+  new)
+(rule 0 (amode_offset base flags offset)
+  (Amode.ImmReg offset (x64_lea $I64 base) flags))
+
+(decl pure partial amode_try_offset (SyntheticAmode i32) SyntheticAmode)
+(extern constructor amode_try_offset amode_try_offset)
 
 ;; Return a zero offset as an `Offset32`.
 (spec (zero_offset) (provide (= result #x00000000)))
@@ -3693,32 +3710,35 @@
             (_ Unit (emit (MInst.AtomicRmwSeq ty op mem input tmp dst))))
         dst))
 
-(decl x64_atomic_128_rmw_seq (AtomicRmwOp SyntheticAmode ValueRegs) ValueRegs)
-(rule (x64_atomic_128_rmw_seq op mem input)
+(decl x64_atomic_128_rmw_seq (AtomicRmwOp SyntheticAmode MemFlags ValueRegs) ValueRegs)
+(rule (x64_atomic_128_rmw_seq op mem_low flags input)
       (let ((dst_low WritableGpr (temp_writable_gpr))
             (dst_high WritableGpr (temp_writable_gpr))
             (tmp_low WritableGpr (temp_writable_gpr))
             (tmp_high WritableGpr (temp_writable_gpr))
             (input_low Gpr (value_regs_get_gpr input 0))
             (input_high Gpr (value_regs_get_gpr input 1))
-            (_ Unit (emit (MInst.Atomic128RmwSeq (atomic_128_rmw_seq_op op) mem input_low input_high tmp_low tmp_high dst_low dst_high))))
+            (mem_high SyntheticAmode (amode_offset mem_low flags 8))
+            (_ Unit (emit (MInst.Atomic128RmwSeq (atomic_128_rmw_seq_op op) mem_low mem_high input_low input_high tmp_low tmp_high dst_low dst_high))))
         (value_regs dst_low dst_high)))
 
-(rule 1 (x64_atomic_128_rmw_seq (AtomicRmwOp.Xchg) mem input)
+(rule 1 (x64_atomic_128_rmw_seq (AtomicRmwOp.Xchg) mem_low flags input)
         (let ((dst_low WritableGpr (temp_writable_gpr))
               (dst_high WritableGpr (temp_writable_gpr))
               (input_low Gpr (value_regs_get_gpr input 0))
               (input_high Gpr (value_regs_get_gpr input 1))
-              (_ Unit (emit (MInst.Atomic128XchgSeq mem input_low input_high dst_low dst_high))))
+              (mem_high SyntheticAmode (amode_offset mem_low flags 8))
+              (_ Unit (emit (MInst.Atomic128XchgSeq mem_low mem_high input_low input_high dst_low dst_high))))
           (value_regs dst_low dst_high)))
 
-(decl x64_atomic_128_store_seq (SyntheticAmode ValueRegs) SideEffectNoResult)
-(rule (x64_atomic_128_store_seq mem input)
+(decl x64_atomic_128_store_seq (SyntheticAmode MemFlags ValueRegs) SideEffectNoResult)
+(rule (x64_atomic_128_store_seq mem_low flags input)
         (let ((dst_low WritableGpr (temp_writable_gpr))
               (dst_high WritableGpr (temp_writable_gpr))
               (input_low Gpr (value_regs_get_gpr input 0))
-              (input_high Gpr (value_regs_get_gpr input 1)))
-          (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq mem input_low input_high dst_low dst_high))))
+              (input_high Gpr (value_regs_get_gpr input 1))
+              (mem_high SyntheticAmode (amode_offset mem_low flags 8)))
+          (SideEffectNoResult.Inst (MInst.Atomic128XchgSeq mem_low mem_high input_low input_high dst_low dst_high))))
 
 
 (type AtomicRmwSeqOp

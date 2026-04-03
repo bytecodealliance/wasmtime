@@ -759,7 +759,8 @@ impl PrettyPrint for Inst {
 
             Inst::Atomic128RmwSeq {
                 op,
-                mem,
+                mem_low,
+                mem_high,
                 operand_low,
                 operand_high,
                 temp_low,
@@ -773,14 +774,16 @@ impl PrettyPrint for Inst {
                 let temp_high = pretty_print_reg(*temp_high.to_reg(), 8);
                 let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
                 let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
-                let mem = mem.pretty_print(16);
+                let mem_low = mem_low.pretty_print(16);
+                let mem_high = mem_high.pretty_print(16);
                 format!(
-                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {temp_high}:{temp_low} = {dst_old_high}:{dst_old_low} {op:?} {operand_high}:{operand_low}; {mem} = {temp_high}:{temp_low} }}"
+                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem_low}:{mem_high}; {temp_high}:{temp_low} = {dst_old_high}:{dst_old_low} {op:?} {operand_high}:{operand_low}; {mem_low}:{mem_high} = {temp_high}:{temp_low} }}"
                 )
             }
 
             Inst::Atomic128XchgSeq {
-                mem,
+                mem_low,
+                mem_high,
                 operand_low,
                 operand_high,
                 dst_old_low,
@@ -790,9 +793,10 @@ impl PrettyPrint for Inst {
                 let operand_high = pretty_print_reg(**operand_high, 8);
                 let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
                 let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
-                let mem = mem.pretty_print(16);
+                let mem_low = mem_low.pretty_print(16);
+                let mem_high = mem_high.pretty_print(16);
                 format!(
-                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {mem} = {operand_high}:{operand_low} }}"
+                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem_low}:{mem_high}; {mem_low}:{mem_high} = {operand_high}:{operand_low} }}"
                 )
             }
 
@@ -1112,7 +1116,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             temp_high,
             dst_old_low,
             dst_old_high,
-            mem,
+            mem_low,
+            mem_high,
             ..
         } => {
             // All registers are collected in the `Late` position so that they don't overlap.
@@ -1122,7 +1127,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_def(temp_high, regs::rcx());
             collector.reg_fixed_def(dst_old_low, regs::rax());
             collector.reg_fixed_def(dst_old_high, regs::rdx());
-            mem.get_operands_late(collector)
+            mem_low.get_operands_late(collector);
+            mem_high.get_operands_late(collector);
         }
 
         Inst::Atomic128XchgSeq {
@@ -1130,7 +1136,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             operand_high,
             dst_old_low,
             dst_old_high,
-            mem,
+            mem_low,
+            mem_high,
             ..
         } => {
             // All registers are collected in the `Late` position so that they don't overlap.
@@ -1138,7 +1145,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_late_use(operand_high, regs::rcx());
             collector.reg_fixed_def(dst_old_low, regs::rax());
             collector.reg_fixed_def(dst_old_high, regs::rdx());
-            mem.get_operands_late(collector)
+            mem_low.get_operands_late(collector);
+            mem_high.get_operands_late(collector);
         }
 
         Inst::Args { args } => {

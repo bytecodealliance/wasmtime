@@ -2225,3 +2225,33 @@ block0(v0: i64, v1: i64):
 ;   popq %rbp
 ;   retq
 
+function %load_huge_offset(i64) -> i64, i64 {
+block0(v0: i64):
+    v4 = load.i128 v0+0x7fffffff
+    v5, v6 = isplit v4
+    return v5, v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   leaq 0x7fffffff(%rdi), %rdx
+;   movq 0x7fffffff(%rdi), %rax
+;   movq 8(%rdx), %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq 0x7fffffff(%rdi), %rdx ; trap: heap_oob
+;   movq 0x7fffffff(%rdi), %rax ; trap: heap_oob
+;   movq 8(%rdx), %rdx ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

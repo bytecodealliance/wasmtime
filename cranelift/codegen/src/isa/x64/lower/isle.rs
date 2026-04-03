@@ -639,7 +639,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn amode_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> SyntheticAmode {
+    fn amode_try_offset(&mut self, addr: &SyntheticAmode, offset: i32) -> Option<SyntheticAmode> {
         addr.offset(offset)
     }
 
