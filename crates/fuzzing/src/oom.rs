@@ -10,11 +10,10 @@ use std::{
     mem,
     pin::Pin,
     ptr,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll},
     time,
 };
-use wasmtime::format_err;
-use wasmtime_core::error::{OutOfMemory, Result};
+use wasmtime_core::error::{OutOfMemory, Result, bail};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -55,28 +54,23 @@ fn set_oom_state(state: OomState) -> OomState {
 
 /// RAII helper to set the OOM state within a block of code and reset it upon
 /// exiting that block (even if exiting via panic unwinding).
-struct ScopedOomState {
-    prev_state: OomState,
+struct ScopedOomState<'a> {
+    state: &'a mut OomState,
 }
 
-impl ScopedOomState {
-    fn new(state: OomState) -> Self {
-        ScopedOomState {
-            prev_state: set_oom_state(state),
-        }
-    }
-
-    /// Finish this OOM state scope early, resetting the OOM state to what it
-    /// was before this scope was created, and returning the previous state that
-    /// was just overwritten by the reset.
-    fn finish(&self) -> OomState {
-        set_oom_state(self.prev_state.clone())
+impl<'a> ScopedOomState<'a> {
+    /// The OOM state will be initialized to `*state` on construction, and then
+    /// `state` will be updated to be the old OOM state that existed when the
+    /// original state is replaced on this type's drop.
+    fn new(state: &'a mut OomState) -> Self {
+        *state = set_oom_state(mem::take(state));
+        ScopedOomState { state }
     }
 }
 
-impl Drop for ScopedOomState {
+impl Drop for ScopedOomState<'_> {
     fn drop(&mut self) {
-        set_oom_state(mem::take(&mut self.prev_state));
+        *self.state = set_oom_state(mem::take(self.state));
     }
 }
 
@@ -259,21 +253,12 @@ impl OomTest {
     /// Returns early once the test function returns `Ok(())` before an OOM has
     /// been injected.
     pub fn test(&self, test_func: impl Fn() -> Result<()>) -> Result<()> {
-        let waker = Waker::noop();
-        let mut cx = Context::from_waker(waker);
         let future = self.test_async(|| async { test_func() });
-        let future = std::pin::pin!(future);
-        match future.poll(&mut cx) {
-            Poll::Ready(r) => r,
-            Poll::Pending => unreachable!(),
-        }
+        crate::block_on(future)
     }
 
     /// The same as `test` but `async`.
-    pub async fn test_async<F>(&self, test_func: impl Fn() -> F) -> Result<()>
-    where
-        F: Future<Output = Result<()>>,
-    {
+    pub async fn test_async(&self, test_func: impl AsyncFn() -> Result<()>) -> Result<()> {
         let start = time::Instant::now();
 
         for i in 0.. {
@@ -304,13 +289,11 @@ impl OomTest {
 
                 // We injected an OOM and the test function handled it
                 // correctly; continue to the next iteration.
-                (Err(e), OomState::DidOom { .. }) if e.is::<OutOfMemory>() => continue,
+                (Err(e), OomState::DidOom { .. }) if e.is::<OutOfMemory>() => {}
 
                 // Missed OOMs.
                 (Ok(()), OomState::DidOom { .. }) => {
-                    return Err(format_err!(
-                        "OOM test function missed an OOM: returned Ok(())"
-                    ));
+                    bail!("OOM test function missed an OOM: returned Ok(())");
                 }
                 (Err(e), OomState::DidOom { .. }) => {
                     return Err(
@@ -326,6 +309,7 @@ impl OomTest {
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -350,22 +334,24 @@ where
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         log::trace!("OomTestFuture::poll: Entered ---");
 
-        let guard = ScopedOomState::new(self.state.clone());
-        assert_eq!(guard.prev_state, OomState::OutsideOomTest);
+        let result = {
+            let OomTestFuture { inner, state } = &mut *self;
 
-        let result = self.inner.as_mut().poll(cx);
-        let old_state = guard.finish();
+            let guard = ScopedOomState::new(state);
+            assert_eq!(*guard.state, OomState::OutsideOomTest);
+
+            inner.as_mut().poll(cx)
+        };
 
         log::trace!("OomTestFuture::poll: inner result: {result:?}");
-        log::trace!("OomTestFuture::poll: old state: {old_state:?}");
+        log::trace!("OomTestFuture::poll: old state: {:?}", self.state);
 
         match result {
             Poll::Pending => {
-                self.state = set_oom_state(OomState::OutsideOomTest);
-                drop(guard);
+                set_oom_state(OomState::OutsideOomTest);
                 Poll::Pending
             }
-            Poll::Ready(result) => Poll::Ready((result, old_state)),
+            Poll::Ready(result) => Poll::Ready((result, mem::take(&mut self.state))),
         }
     }
 }
