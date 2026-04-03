@@ -328,7 +328,7 @@ impl Suspend {
 /// called around every stack switch with some other fiddly bits as well.
 #[cfg(asan)]
 mod asan {
-    use super::{FiberStack, MmapFiberStack, RuntimeFiberStack, host_page_size};
+    use super::*;
     use alloc::boxed::Box;
     use alloc::vec::Vec;
     use std::mem::ManuallyDrop;
