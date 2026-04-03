@@ -179,7 +179,6 @@ private:
  */
 class StructRefPre {
   friend class StructRef;
-  class ArrayRef;
   WASMTIME_OWN_WRAPPER(StructRefPre, wasmtime_struct_ref_pre)
 
 public:
@@ -316,37 +315,25 @@ public:
     return ty;
   }
 
-  const wasmtime_array_type_t *c_ptr() const { return ptr.get(); }
+  /// Get the underlying C pointer (non-owning).
+  const wasmtime_array_type_t *capi() const { return ptr.get(); }
 
 private:
   ArrayType() = default;
   friend class ArrayRefPre;
 };
 
-/**
- * \brief Pre-allocated array layout for fast allocation of array instances.
- */
 class ArrayRefPre {
-  struct Deleter {
-    void operator()(wasmtime_array_ref_pre_t *p) const {
-      wasmtime_array_ref_pre_delete(p);
-    }
-  };
-  std::unique_ptr<wasmtime_array_ref_pre_t, Deleter> ptr;
+  friend class ArrayRef;
+  WASMTIME_OWN_WRAPPER(ArrayRefPre, wasmtime_array_ref_pre)
 
 public:
+  /// Create a new array pre-allocator.
   static ArrayRefPre create(Store::Context cx, const ArrayType &ty) {
-    auto *raw = wasmtime_array_ref_pre_new(cx.capi(), ty.c_ptr());
-    ArrayRefPre pre;
-    pre.ptr.reset(raw);
+    auto *raw = wasmtime_array_ref_pre_new(cx.capi(), ty.capi());
+    ArrayRefPre pre(raw);
     return pre;
   }
-
-  const wasmtime_array_ref_pre_t *c_ptr() const { return ptr.get(); }
-
-private:
-  ArrayRefPre() = default;
-  friend class ArrayRef;
 };
 
 /**
@@ -363,21 +350,26 @@ class ArrayRef {
   wasmtime_arrayref_t val;
 
 public:
+  /// Create a `ArrayRef` from its C-API representation.
   explicit ArrayRef(wasmtime_arrayref_t val) : val(val) {}
 
+  /// Clone a `ArrayRef`.
   ArrayRef(const ArrayRef &other) { wasmtime_arrayref_clone(&other.val, &val); }
 
+  /// Clone a `ArrayRef` into this one.
   ArrayRef &operator=(const ArrayRef &other) {
     wasmtime_arrayref_unroot(&val);
     wasmtime_arrayref_clone(&other.val, &val);
     return *this;
   }
 
+  /// Move a `ArrayRef`.
   ArrayRef(ArrayRef &&other) {
     val = other.val;
     wasmtime_arrayref_set_null(&other.val);
   }
 
+  /// Move a `ArrayRef` into this one.
   ArrayRef &operator=(ArrayRef &&other) {
     wasmtime_arrayref_unroot(&val);
     val = other.val;
@@ -385,6 +377,7 @@ public:
     return *this;
   }
 
+  /// Unroot this `ArrayRef`.
   ~ArrayRef() { wasmtime_arrayref_unroot(&val); }
 
   /// Allocate a new array with all elements set to the same value.
@@ -392,7 +385,7 @@ public:
                                  const Val &elem, uint32_t len) {
     wasmtime_arrayref_t out;
     auto *err =
-        wasmtime_arrayref_new(cx.capi(), pre.c_ptr(), &elem.val, len, &out);
+        wasmtime_arrayref_new(cx.capi(), pre.capi(), &elem.val, len, &out);
     if (err)
       return Result<ArrayRef>(Error(err));
     return Result<ArrayRef>(ArrayRef(out));
