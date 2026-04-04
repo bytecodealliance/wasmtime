@@ -49,7 +49,8 @@ impl GcOps {
     /// fuel. It also is not guaranteed to avoid traps: it may access
     /// out-of-bounds of the table.
     pub fn to_wasm_binary(&mut self) -> Vec<u8> {
-        self.fixup();
+        let mut encoding_order_grouped = Vec::with_capacity(self.types.rec_groups.len());
+        self.fixup(&mut encoding_order_grouped);
 
         let mut module = Module::new();
 
@@ -106,43 +107,15 @@ impl GcOps {
 
         let struct_type_base: u32 = types.len();
 
-        // Sort all types globally so supertypes come before subtypes.
-        // This is used to order types *within* each rec group.
-        let mut type_order = Vec::new();
-        self.types.sort_types_topo(&mut type_order);
-
-        // Build a position map so we can sort each group's members
-        // according to the global type order.
-        let type_position: BTreeMap<TypeId, usize> = type_order
-            .iter()
-            .enumerate()
-            .map(|(i, &id)| (id, i))
-            .collect();
-
-        // Topological sort of rec groups: if a type in group G has a
-        // supertype in group H, then H appears before G.
-        let mut group_order = Vec::new();
-        self.types.sort_rec_groups_topo(&mut group_order);
-
-        // For each group, collect its members sorted by the global type order.
-        let mut group_members: BTreeMap<RecGroupId, Vec<TypeId>> = BTreeMap::new();
-        for &gid in &group_order {
-            if let Some(member_set) = self.types.rec_groups.get(&gid) {
-                let mut members: Vec<TypeId> = member_set.iter().copied().collect();
-                members.sort_by_key(|tid| type_position.get(tid).copied().unwrap_or(usize::MAX));
-                group_members.insert(gid, members);
-            }
-        }
-
-        // Build the type-id-to-wasm-index map directly.
+        // Build the type-id-to-wasm-index map from the pre-computed
+        // encoding order (rec groups in topo order, members sorted by
+        // supertype-first within each group).
         let mut type_ids_to_index: BTreeMap<TypeId, u32> = BTreeMap::new();
         let mut next_idx = struct_type_base;
-        for g in &group_order {
-            if let Some(members) = group_members.get(g) {
-                for &tid in members {
-                    type_ids_to_index.insert(tid, next_idx);
-                    next_idx += 1;
-                }
+        for (_, members) in &encoding_order_grouped {
+            for &tid in members {
+                type_ids_to_index.insert(tid, next_idx);
+                next_idx += 1;
             }
         }
 
@@ -166,12 +139,12 @@ impl GcOps {
 
         let mut struct_count = 0;
 
-        // Emit rec groups in the derived order.
-        for g in &group_order {
-            let type_ids = group_members.get(g).map(|v| v.as_slice()).unwrap_or(&[]);
-            let members: Vec<wasm_encoder::SubType> = type_ids.iter().map(encode_ty_id).collect();
+        // Emit rec groups in the pre-computed order.
+        for (_, group_members) in &encoding_order_grouped {
+            let members: Vec<wasm_encoder::SubType> =
+                group_members.iter().map(encode_ty_id).collect();
             types.ty().rec(members);
-            struct_count += u32::try_from(type_ids.len()).unwrap();
+            struct_count += u32::try_from(group_members.len()).unwrap();
         }
 
         let typed_fn_type_base: u32 = struct_type_base + struct_count;
@@ -378,9 +351,13 @@ impl GcOps {
     /// pre-mutation test cases are even valid! Therefore, we always call this
     /// method before translating this "AST"-style representation into a raw
     /// Wasm binary.
-    pub fn fixup(&mut self) {
+    pub fn fixup(&mut self, encoding_order_grouped: &mut Vec<(RecGroupId, Vec<TypeId>)>) {
         self.limits.fixup();
-        self.types.fixup(&self.limits);
+        self.types.fixup(&self.limits, encoding_order_grouped);
+        let encoding_order: Vec<TypeId> = encoding_order_grouped
+            .iter()
+            .flat_map(|(_, members)| members.iter().copied())
+            .collect();
 
         let mut new_ops = Vec::with_capacity(self.ops.len());
         let mut stack: Vec<StackType> = Vec::new();
@@ -395,7 +372,14 @@ impl GcOps {
             debug_assert!(operand_types.is_empty());
             op.operand_types(&mut operand_types);
             for ty in operand_types.drain(..) {
-                StackType::fixup(ty, &mut stack, &mut new_ops, num_types, &self.types);
+                StackType::fixup(
+                    ty,
+                    &mut stack,
+                    &mut new_ops,
+                    num_types,
+                    &self.types,
+                    &encoding_order,
+                );
             }
 
             // Finally, emit the op itself (updates stack abstractly)

@@ -4,7 +4,7 @@ use crate::generators::gc_ops::limits::GcOpsLimits;
 use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use wasmtime_environ::graphs::{Dfs, DfsEvent, Graph};
 
 /// Identifies a `(rec ...)` group.
@@ -199,40 +199,53 @@ impl Types {
             .map(|(gid, _)| *gid)
     }
 
-    /// Returns true iff `sub_index` is the same as or a subtype of `sup_index`.
-    pub fn is_subtype_index(&self, sub_index: u32, sup_index: u32) -> bool {
-        if sub_index == sup_index {
-            return true;
-        }
-
-        let i = match usize::try_from(sub_index) {
-            Ok(i) => i,
-            Err(_) => return false,
-        };
-        let j = match usize::try_from(sup_index) {
-            Ok(j) => j,
-            Err(_) => return false,
-        };
-
-        let mut cur = match self.type_defs.keys().nth(i).copied() {
-            Some(t) => t,
-            None => return false,
-        };
-        let sup = match self.type_defs.keys().nth(j).copied() {
-            Some(t) => t,
-            None => return false,
-        };
-
+    /// Returns true iff `sub` is the same type as, or a subtype of, `sup`.
+    ///
+    /// Walks the supertype chain from `sub` upward looking for `sup`.
+    pub fn is_subtype(&self, mut sub: TypeId, sup: TypeId) -> bool {
         loop {
-            if cur == sup {
+            if sub == sup {
                 return true;
             }
 
-            let next = match self.type_defs.get(&cur).and_then(|d| d.supertype) {
+            let next = match self.type_defs.get(&sub).and_then(|d| d.supertype) {
                 Some(t) => t,
                 None => return false,
             };
-            cur = next;
+            sub = next;
+        }
+    }
+
+    /// Return the type encoding order grouped by rec group.
+    ///
+    /// Rec groups are emitted in topological order (dependencies first),
+    /// and within each group members are sorted by the global supertype-
+    /// first topological order.
+    pub(crate) fn encoding_order_grouped(
+        &self,
+        out: &mut Vec<(RecGroupId, Vec<TypeId>)>,
+        type_to_group: &BTreeMap<TypeId, RecGroupId>,
+    ) {
+        let mut type_order = Vec::with_capacity(self.type_defs.len());
+        self.sort_types_topo(&mut type_order);
+
+        let type_position: HashMap<TypeId, usize> = type_order
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| (id, i))
+            .collect();
+
+        let mut group_order = Vec::with_capacity(self.rec_groups.len());
+        self.sort_rec_groups_topo(&mut group_order, type_to_group);
+
+        out.clear();
+        out.reserve(group_order.len());
+        for gid in group_order {
+            if let Some(member_set) = self.rec_groups.get(&gid) {
+                let mut members: Vec<TypeId> = member_set.iter().copied().collect();
+                members.sort_by_key(|tid| type_position[tid]);
+                out.push((gid, members));
+            }
         }
     }
 
@@ -263,12 +276,15 @@ impl Types {
 
     /// Topological sort of rec groups: if a type in group G has a
     /// supertype in group H, then H appears before G in the output.
-    pub fn sort_rec_groups_topo(&self, out: &mut Vec<RecGroupId>) {
-        let type_to_group = self.type_to_group_map();
+    pub fn sort_rec_groups_topo(
+        &self,
+        out: &mut Vec<RecGroupId>,
+        type_to_group: &BTreeMap<TypeId, RecGroupId>,
+    ) {
         let graph = RecGroupGraph {
             type_defs: &self.type_defs,
             rec_groups: &self.rec_groups,
-            type_to_group: &type_to_group,
+            type_to_group,
         };
 
         let mut dfs = Dfs::new(graph.nodes());
@@ -326,7 +342,7 @@ impl Types {
     }
 
     /// Build a reverse map from type id to its owning rec group.
-    fn type_to_group_map(&self) -> BTreeMap<TypeId, RecGroupId> {
+    pub(crate) fn type_to_group_map(&self) -> BTreeMap<TypeId, RecGroupId> {
         self.rec_groups
             .iter()
             .flat_map(|(&gid, members)| members.iter().map(move |&tid| (tid, gid)))
@@ -335,12 +351,11 @@ impl Types {
 
     /// Break cycles in the rec-group dependency graph by dropping cross-group
     /// supertype edges that are DFS back edges.
-    pub fn break_rec_group_cycles(&mut self) {
-        let type_to_group = self.type_to_group_map();
+    pub fn break_rec_group_cycles(&mut self, type_to_group: &BTreeMap<TypeId, RecGroupId>) {
         let graph = RecGroupGraph {
             type_defs: &self.type_defs,
             rec_groups: &self.rec_groups,
-            type_to_group: &type_to_group,
+            type_to_group,
         };
 
         let mut seen = BTreeSet::new();
@@ -389,7 +404,11 @@ impl Types {
     }
 
     /// Fix up the types to ensure they are within the limits.
-    pub fn fixup(&mut self, limits: &GcOpsLimits) {
+    pub fn fixup(
+        &mut self,
+        limits: &GcOpsLimits,
+        encoding_order_grouped: &mut Vec<(RecGroupId, Vec<TypeId>)>,
+    ) {
         let max_rec_groups =
             usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
         let max_types = usize::try_from(limits.max_types).expect("max_types is too large");
@@ -463,9 +482,13 @@ impl Types {
 
         // 8. Break supertype cycles and rec-group dependency cycles.
         self.break_supertype_cycles();
-        self.break_rec_group_cycles();
+        let type_to_group = self.type_to_group_map();
+        self.break_rec_group_cycles(&type_to_group);
 
         debug_assert!(self.is_well_formed(limits));
+
+        // 9. Compute encoding order (reuses type_to_group from step 8).
+        self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
     }
 
     /// Check if the types are well-formed and within configured limits, i.e.
@@ -538,6 +561,7 @@ impl StackType {
         out: &mut Vec<GcOp>,
         num_types: u32,
         types: &Types,
+        encoding_order: &[TypeId],
     ) {
         log::trace!(
             "[StackType::fixup] enter req={req:?} num_types={num_types} stack_len={} stack={stack:?}",
@@ -572,9 +596,18 @@ impl StackType {
             Some(Self::Struct(wanted)) => {
                 let ok = match (wanted, stack.last()) {
                     (Some(wanted), Some(Self::Struct(Some(actual)))) => {
-                        let st = types.is_subtype_index(*actual, wanted);
+                        let sub = encoding_order
+                            .get(usize::try_from(*actual).expect("invalid type index"))
+                            .copied();
+                        let sup = encoding_order
+                            .get(usize::try_from(wanted).expect("invalid type index"))
+                            .copied();
+                        let st = match (sub, sup) {
+                            (Some(sub), Some(sup)) => types.is_subtype(sub, sup),
+                            _ => false,
+                        };
                         log::trace!(
-                            "[StackType::fixup] Struct: actual={actual} wanted={wanted} is_subtype_index={st}"
+                            "[StackType::fixup] Struct: actual={actual} wanted={wanted} is_subtype={st}"
                         );
                         st
                     }
