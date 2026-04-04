@@ -4,72 +4,42 @@ use libfuzzer_sys::arbitrary::{Arbitrary, Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::sync::OnceLock;
 
-// Helper macro which takes a static list of fuzzers as input which are then
-// delegated to internally based on the fuzz target selected.
-//
-// In general this fuzz target will execute a number of fuzzers all with the
-// same input. The `FUZZER` environment variable can be used to forcibly disable
-// all but one.
-macro_rules! run_fuzzers {
-    ($($fuzzer:ident)*) => {
-        static ENABLED: OnceLock<u32> = OnceLock::new();
+// The first byte of fuzz input selects which fuzzer to run (via modular
+// arithmetic), and the remaining bytes are passed as input to that fuzzer.
+// Set the `FUZZER` environment variable to a function name (e.g.
+// `FUZZER=stacks`) to run only that fuzzer.
+const FUZZERS: &[(&str, fn(Unstructured<'_>) -> Result<()>)] = &[
+    ("pulley_roundtrip", pulley_roundtrip),
+    ("assembler_roundtrip", assembler_roundtrip),
+    ("memory_accesses", memory_accesses),
+    ("stacks", stacks),
+    ("api_calls", api_calls),
+    ("dominator_tree", dominator_tree),
+];
 
-        fuzz_target!(
-        init: wasmtime_fuzzing::misc_init(),
-        |bytes: &[u8]| {
-            // Use the first byte of input as a discriminant of which fuzzer to
-            // select.
-            let Some((which_fuzzer, bytes)) = bytes.split_first() else {
-                return;
-            };
+static ENABLED: OnceLock<Vec<fn(Unstructured<'_>) -> Result<()>>> = OnceLock::new();
 
-            // Lazily initialize this fuzzer in terms of logging as well as
-            // enabled fuzzers via the `FUZZER` env var. This creates a bitmask
-            // inside of `ENABLED` of enabled fuzzers, returned here as
-            // `enabled`.
-            let enabled = *ENABLED.get_or_init(|| {
-                let configured = std::env::var("FUZZER").ok();
-                let configured = configured.as_deref();
-                let mut enabled = 0;
-                let mut index = 0;
-
-                $(
-                    if configured.is_none() || configured == Some(stringify!($fuzzer)) {
-                        enabled |= 1 << index;
-                    }
-                    index += 1;
-                )*
-                let _ = index;
-
-                enabled
-            });
-
-            // Generate a linear check for each fuzzer. Only run each fuzzer if
-            // the fuzzer is enabled, and also only if the `which_fuzzer`
-            // discriminant matches the fuzzer being run.
-            //
-            // Note that it's a bit wonky here due to rust macros.
-            let mut index = 0;
-            $(
-                if enabled & (1 << index) != 0 && *which_fuzzer == index {
-                    let _: Result<()> = $fuzzer(Unstructured::new(bytes));
-                }
-                index += 1;
-            )*
-            let _ = index;
+fuzz_target!(
+    init: wasmtime_fuzzing::init_fuzzing(),
+    |bytes: &[u8]| {
+        let Some((&which, bytes)) = bytes.split_first() else {
+            return;
+        };
+        let enabled = ENABLED.get_or_init(|| {
+            let filter = std::env::var("FUZZER").ok();
+            FUZZERS
+                .iter()
+                .filter(|(name, _)| filter.as_deref().is_none_or(|f| f == *name))
+                .map(|(_, f)| *f)
+                .collect()
         });
-    };
-}
-
-run_fuzzers! {
-    pulley_roundtrip
-    assembler_roundtrip
-    memory_accesses
-    stacks
-    api_calls
-    dominator_tree
-    component_async
-}
+        if enabled.is_empty() {
+            return;
+        }
+        let fuzzer = enabled[which as usize % enabled.len()];
+        let _ = fuzzer(Unstructured::new(bytes));
+    }
+);
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
     pulley_interpreter_fuzz::roundtrip(Arbitrary::arbitrary_take_rest(u)?);
@@ -179,10 +149,5 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
         }
     }
 
-    Ok(())
-}
-
-fn component_async(u: Unstructured<'_>) -> Result<()> {
-    wasmtime_fuzzing::oracles::component_async::run(Arbitrary::arbitrary_take_rest(u)?);
     Ok(())
 }
