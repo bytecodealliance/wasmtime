@@ -1288,6 +1288,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.macro-string]]
+version = "0.2.0"
+when = "2026-02-24"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.memchr]]
 version = "2.7.6"
 when = "2025-09-25"
@@ -2165,13 +2172,13 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen]]
-version = "0.53.0"
-when = "2026-02-12"
+version = "0.55.0"
+when = "2026-04-03"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.53.0"
-when = "2026-02-12"
+version = "0.55.0"
+when = "2026-04-03"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -2181,13 +2188,13 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.53.0"
-when = "2026-02-12"
+version = "0.55.0"
+when = "2026-04-03"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.53.0"
-when = "2026-02-12"
+version = "0.55.0"
+when = "2026-04-03"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
