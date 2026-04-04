@@ -386,5 +386,5 @@
 (rule (simplify (eq (ty_int ty) (iadd cty y x) (iadd cty y x))) (iconst_u ty 1))
 
 ;; (x - y) != x --> y != 0
-(rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))
-(rule (simplify (ne cty x (isub ty x y))) (ne cty y (iconst_u ty 0)))
+(rule (simplify (ne cty (isub (ty_int ty) x y) x)) (ne cty y (iconst_u ty 0)))
+(rule (simplify (ne cty x (isub (ty_int ty) x y))) (ne cty y (iconst_u ty 0)))

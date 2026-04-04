@@ -263,3 +263,18 @@ block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v1, v4  ; v4 = 0
 ;     return v5
 ; }
+
+;; (x - y) != x --> y != 0 (vector)
+function %simplify_vector_icmp_ne_isub_x(i32x4, i32x4) -> i32x4 fast {
+block0(v0: i32x4, v1: i32x4):
+    v2 = isub v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; function %simplify_vector_icmp_ne_isub_x(i32x4, i32x4) -> i32x4 fast {
+; block0(v0: i32x4, v1: i32x4):
+;     v2 = isub v0, v1
+;     v3 = icmp ne v2, v0
+;     return v3
+; }
