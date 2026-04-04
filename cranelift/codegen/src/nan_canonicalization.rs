@@ -26,6 +26,10 @@ pub fn do_nan_canonicalization(func: &mut Function, has_vector_support: bool) {
 /// Returns true/false based on whether the instruction is a floating-point
 /// arithmetic operation. This ignores operations like `fneg`, `fabs`, or
 /// `fcopysign` that only operate on the sign bit of a floating point value.
+///
+/// Also matches `call` and `call_indirect` instructions that return a single
+/// floating-point result, since external function calls (e.g. libcalls like
+/// `%CeilF32`) can also produce nondeterministic NaN payloads.
 fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
     match pos.func.dfg.insts[inst] {
         InstructionData::Unary { opcode, .. } => {
@@ -48,6 +52,13 @@ fn is_fp_arith(pos: &mut FuncCursor, inst: Inst) -> bool {
                 || opcode == Opcode::Fsub
         }
         InstructionData::Ternary { opcode, .. } => opcode == Opcode::Fma,
+        InstructionData::Call { .. } | InstructionData::CallIndirect { .. } => {
+            let results = pos.func.dfg.inst_results(inst);
+            results.len() == 1 && {
+                let ty = pos.func.dfg.value_type(results[0]);
+                ty.is_float() || ty == types::F32X4 || ty == types::F64X2
+            }
+        }
         _ => false,
     }
 }
