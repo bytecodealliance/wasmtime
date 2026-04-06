@@ -4112,13 +4112,13 @@
 ;; as it will make it easier to create the immediates in the instructions below.
 (rule 5 (splat_const (u64_replicated_u32 n) (VectorSize.Size64x2))
         (splat_const n (VectorSize.Size32x4)))
-(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x4))
+(rule 5 (splat_const (u32_from_u64 (u32_replicated_u16 n)) (VectorSize.Size32x4))
         (splat_const n (VectorSize.Size16x8)))
-(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x2))
+(rule 5 (splat_const (u32_from_u64 (u32_replicated_u16 n)) (VectorSize.Size32x2))
         (splat_const n (VectorSize.Size16x4)))
-(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x8))
+(rule 5 (splat_const (u16_from_u64 (u16_replicated_u8 n)) (VectorSize.Size16x8))
         (splat_const n (VectorSize.Size8x16)))
-(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x4))
+(rule 5 (splat_const (u16_from_u64 (u16_replicated_u8 n)) (VectorSize.Size16x4))
         (splat_const n (VectorSize.Size8x8)))
 
 ;; Special cases for `vec_dup_imm` instructions where the input is either
