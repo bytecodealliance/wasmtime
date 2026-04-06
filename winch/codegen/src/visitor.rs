@@ -594,7 +594,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -606,7 +606,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -618,7 +618,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -630,7 +630,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -642,7 +642,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -654,7 +654,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -666,7 +666,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -678,7 +678,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -690,7 +690,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -702,7 +702,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -714,7 +714,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -726,7 +726,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size)?;
-                masm.canonicalize_nan(writable!(dst), size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -897,7 +897,7 @@ where
     fn visit_f32_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S32)?;
-            masm.canonicalize_nan(writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
@@ -905,7 +905,7 @@ where
     fn visit_f64_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S64)?;
-            masm.canonicalize_nan(writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
     }
@@ -1119,7 +1119,7 @@ where
     fn visit_f32_demote_f64(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.demote(writable!(reg), reg)?;
-            masm.canonicalize_nan(writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
@@ -1127,7 +1127,7 @@ where
     fn visit_f64_promote_f32(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.promote(writable!(reg), reg)?;
-            masm.canonicalize_nan(writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
     }
@@ -4626,7 +4626,7 @@ where
 {
     fn canonicalize_nan_for_round(&mut self, size: OperandSize) -> Result<()> {
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.canonicalize_nan(writable!(result.into()), size)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), size)?;
         self.context.stack.push(result.into());
         Ok(())
     }

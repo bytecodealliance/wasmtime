@@ -686,7 +686,7 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
         if !self.shared_flags.enable_nan_canonicalization() {
             return Ok(());
         }

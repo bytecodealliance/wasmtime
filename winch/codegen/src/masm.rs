@@ -1693,7 +1693,7 @@ pub(crate) trait MacroAssembler {
     fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()>;
 
     /// Canonicalize NaN values in `reg` if the setting is enabled.
-    fn canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()>;
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()>;
 
     /// Perform logical and operation.
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()>;
