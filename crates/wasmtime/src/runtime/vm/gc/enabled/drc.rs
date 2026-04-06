@@ -95,6 +95,7 @@ unsafe impl GcRuntime for DrcCollector {
 }
 
 /// How to trace a GC object.
+#[derive(Clone)]
 enum TraceInfo {
     /// How to trace an array.
     Array {
@@ -111,12 +112,108 @@ enum TraceInfo {
     },
 }
 
+struct TraceInfos {
+    // SAFETY: Self-borrow from `self.trace_infos`, boxed so it won't move,
+    // never exposed externally as `'static`.
+    cache: [Option<(VMSharedTypeIndex, &'static TraceInfo)>; Self::CACHE_CAPACITY],
+
+    trace_infos: HashMap<VMSharedTypeIndex, Box<TraceInfo>>,
+}
+
+impl Default for TraceInfos {
+    fn default() -> Self {
+        Self {
+            cache: [None; 256],
+            trace_infos: HashMap::default(),
+        }
+    }
+}
+
+impl TraceInfos {
+    const CACHE_CAPACITY: usize = 256;
+
+    /// Is this set of trace information empty?
+    pub fn is_empty(&self) -> bool {
+        let is_empty = self.trace_infos.is_empty();
+        if is_empty {
+            debug_assert!(self.cache.iter().all(|x| x.is_none()));
+        }
+        is_empty
+    }
+
+    /// Get the trace information associated with the given type index.
+    pub fn get(&mut self, ty: VMSharedTypeIndex) -> &TraceInfo {
+        if let Some((ty2, info)) = self.cache[Self::cache_index(ty)]
+            && ty == ty2
+        {
+            return info;
+        }
+
+        self.get_slow(ty)
+    }
+
+    #[inline]
+    fn cache_index(ty: VMSharedTypeIndex) -> usize {
+        let bits = ty.bits();
+        let bits = usize::try_from(bits).unwrap();
+        bits % Self::CACHE_CAPACITY
+    }
+
+    fn get_slow(&mut self, ty: VMSharedTypeIndex) -> &TraceInfo {
+        let info = &self.trace_infos[&ty];
+
+        let index = Self::cache_index(ty);
+        debug_assert!(self.cache[index].is_none_or(|(ty2, _)| ty != ty2));
+        self.cache[index] = Some((
+            ty,
+            // SAFETY: Self-borrow, boxed so it won't move, never exposed
+            // externally as `'static`.
+            unsafe { NonNull::from(&**info).as_ref() },
+        ));
+
+        info
+    }
+
+    /// Ensure that we have tracing information for the given type.
+    #[inline]
+    pub fn ensure_trace_info(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        make_trace_info: impl FnMut() -> TraceInfo,
+    ) {
+        if let Some((ty2, _)) = self.cache[Self::cache_index(ty)]
+            && ty == ty2
+        {
+            return;
+        }
+
+        if self.trace_infos.get(&ty).is_some() {
+            return;
+        }
+
+        self.insert_new_trace_info(ty, make_trace_info);
+    }
+
+    fn insert_new_trace_info(
+        &mut self,
+        ty: VMSharedTypeIndex,
+        mut make_trace_info: impl FnMut() -> TraceInfo,
+    ) {
+        debug_assert!(self.cache[Self::cache_index(ty)].is_none());
+        debug_assert!(!self.trace_infos.contains_key(&ty));
+
+        let info = make_trace_info();
+        let old = self.trace_infos.insert(ty, Box::new(info));
+        debug_assert!(old.is_none());
+    }
+}
+
 /// A deferred reference-counting (DRC) heap.
 struct DrcHeap {
     engine: EngineWeak,
 
     /// For every type that we have allocated in this heap, how do we trace it?
-    trace_infos: HashMap<VMSharedTypeIndex, TraceInfo>,
+    trace_infos: TraceInfos,
 
     /// Count of how many no-gc scopes we are currently within.
     no_gc_count: u64,
@@ -163,7 +260,7 @@ impl DrcHeap {
         log::trace!("allocating new DRC heap");
         Ok(Self {
             engine: engine.weak(),
-            trace_infos: HashMap::with_capacity(1),
+            trace_infos: TraceInfos::default(),
             no_gc_count: 0,
             over_approximated_stack_roots: Box::new(None),
             memory: None,
@@ -172,10 +269,6 @@ impl DrcHeap {
             dec_ref_stack: Some(Vec::with_capacity(1)),
             allocated_bytes: 0,
         })
-    }
-
-    fn engine(&self) -> Engine {
-        self.engine.upgrade().unwrap()
     }
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
@@ -249,6 +342,8 @@ impl DrcHeap {
         host_data_table: &mut ExternRefHostDataTable,
         gc_ref: &VMGcRef,
     ) {
+        let mut trace_infos = mem::take(&mut self.trace_infos);
+
         let mut stack = self.dec_ref_stack.take().unwrap();
         debug_assert!(stack.is_empty());
         stack.push(gc_ref.unchecked_copy());
@@ -258,7 +353,7 @@ impl DrcHeap {
                 // The object's reference count reached zero.
                 //
                 // Enqueue any other objects it references for dec-ref'ing.
-                self.trace_gc_ref(&gc_ref, &mut stack);
+                self.trace_gc_ref(&gc_ref, &mut trace_infos, &mut stack);
 
                 // If this object was an `externref`, remove its associated
                 // entry from the host-data table.
@@ -275,50 +370,18 @@ impl DrcHeap {
         debug_assert!(stack.is_empty());
         debug_assert!(self.dec_ref_stack.is_none());
         self.dec_ref_stack = Some(stack);
-    }
 
-    /// Ensure that we have tracing information for the given type.
-    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        if self.trace_infos.contains_key(&ty) {
-            return;
-        }
-
-        self.insert_new_trace_info(ty);
-    }
-
-    fn insert_new_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        debug_assert!(!self.trace_infos.contains_key(&ty));
-
-        let engine = self.engine();
-        let gc_layout = engine
-            .signatures()
-            .layout(ty)
-            .unwrap_or_else(|| panic!("should have a GC layout for {ty:?}"));
-
-        let info = match gc_layout {
-            GcLayout::Array(l) => {
-                if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET,);
-                }
-                TraceInfo::Array {
-                    gc_ref_elems: l.elems_are_gc_refs,
-                }
-            }
-            GcLayout::Struct(l) => TraceInfo::Struct {
-                gc_ref_offsets: l
-                    .fields
-                    .iter()
-                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
-                    .collect(),
-            },
-        };
-
-        let old_entry = self.trace_infos.insert(ty, info);
-        debug_assert!(old_entry.is_none());
+        debug_assert!(self.trace_infos.is_empty());
+        self.trace_infos = trace_infos;
     }
 
     /// Enumerate all of the given `VMGcRef`'s outgoing edges.
-    fn trace_gc_ref(&self, gc_ref: &VMGcRef, stack: &mut Vec<VMGcRef>) {
+    fn trace_gc_ref(
+        &self,
+        gc_ref: &VMGcRef,
+        trace_infos: &mut TraceInfos,
+        stack: &mut Vec<VMGcRef>,
+    ) {
         debug_assert!(!gc_ref.is_i31());
 
         let header = self.header(gc_ref);
@@ -327,11 +390,7 @@ impl DrcHeap {
             return;
         };
 
-        match self
-            .trace_infos
-            .get(&ty)
-            .expect("should have inserted trace info for every GC type allocated in this heap")
-        {
+        match trace_infos.get(ty) {
             TraceInfo::Struct { gc_ref_offsets } => {
                 stack.reserve(gc_ref_offsets.len());
                 let data = self.gc_object_data(gc_ref);
@@ -624,6 +683,36 @@ impl DrcHeap {
                 self.iter_over_approximated_stack_roots(),
             );
         }
+    }
+
+    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
+        let engine = &self.engine;
+        self.trace_infos.ensure_trace_info(ty, || {
+            let gc_layout = engine
+                .upgrade()
+                .unwrap()
+                .signatures()
+                .layout(ty)
+                .unwrap_or_else(|| panic!("should have a GC layout for {ty:?}"));
+
+            match gc_layout {
+                GcLayout::Array(l) => {
+                    if l.elems_are_gc_refs {
+                        debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET);
+                    }
+                    TraceInfo::Array {
+                        gc_ref_elems: l.elems_are_gc_refs,
+                    }
+                }
+                GcLayout::Struct(l) => TraceInfo::Struct {
+                    gc_ref_offsets: l
+                        .fields
+                        .iter()
+                        .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
+                        .collect(),
+                },
+            }
+        });
     }
 }
 
