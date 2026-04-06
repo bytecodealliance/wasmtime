@@ -400,11 +400,11 @@ impl DrcHeap {
                     }
                 }
             } else {
+                // Handle `externref` host data. Only `externref`s have host
+                // data, and `ty` is `None` only for `externref`s, so we skip
+                // this for `struct` and `array` objects entirely.
                 debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
-            }
-
-            // Handle externref host data.
-            if let Some(externref) = gc_ref.as_typed::<VMDrcExternRef>(self) {
+                let externref = gc_ref.as_typed::<VMDrcExternRef>(self).unwrap();
                 let host_data_id = self.index(externref).host_data;
                 host_data_table.dealloc(host_data_id);
             }
