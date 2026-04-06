@@ -674,30 +674,20 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
 #[cfg(feature = "gc-drc")]
 fn gc_alloc_raw(
     store: &mut dyn VMStore,
-    instance: InstanceId,
+    _instance: InstanceId,
     kind_and_reserved: u32,
-    module_interned_type_index: u32,
+    shared_type_index: u32,
     size: u32,
     align: u32,
 ) -> Result<core::num::NonZeroU32> {
     use crate::vm::VMGcHeader;
     use core::alloc::Layout;
-    use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
+    use wasmtime_environ::{VMGcKind, VMSharedTypeIndex};
 
     let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
-    let module = store
-        .instance(instance)
-        .runtime_module()
-        .expect("should never allocate GC types defined in a dummy module");
-
-    let module_interned_type_index = ModuleInternedTypeIndex::from_u32(module_interned_type_index);
-    let shared_type_index = module
-        .signatures()
-        .shared_type(module_interned_type_index)
-        .expect("should have engine type index for module type index");
-
+    let shared_type_index = VMSharedTypeIndex::from_u32(shared_type_index);
     let mut header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
     header.set_reserved_u26(kind_and_reserved & VMGcKind::UNUSED_MASK);
 

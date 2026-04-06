@@ -29,21 +29,22 @@
 ;;       movq    0x18(%r10), %r10
 ;;       addq    $0x60, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0xbe
+;;       ja      0xc2
 ;;   19: subq    $0x50, %rsp
 ;;       movq    %rbx, 0x20(%rsp)
 ;;       movq    %r12, 0x28(%rsp)
 ;;       movq    %r13, 0x30(%rsp)
 ;;       movq    %r14, 0x38(%rsp)
 ;;       movq    %r15, 0x40(%rsp)
-;;       movq    %rdi, 8(%rsp)
 ;;       movl    $0xb0000000, %esi
-;;       xorl    %edx, %edx
+;;       movq    0x28(%rdi), %rax
+;;       movq    %rdi, 8(%rsp)
+;;       movl    (%rax), %edx
 ;;       movl    $0x20, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    8(%rsp), %rbx
 ;;       movq    %rbx, %rdi
-;;       callq   0x215
+;;       callq   0x219
 ;;       movl    %eax, (%rsp)
 ;;       movq    8(%rbx), %rcx
 ;;       movq    0x20(%rcx), %rcx
@@ -56,12 +57,12 @@
 ;;       movq    %rbx, 8(%rsp)
 ;;       callq   *%rax
 ;;       ├─╼ exception frame offset: SP = FP - 0x50
-;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0x86
+;;       ╰─╼ exception handler: default handler, context at [SP+0x8], handler=0x8a
 ;;       movl    (%rsp), %eax
 ;;       ╰─╼ stack_map: frame_size=80, frame_offsets=[0]
 ;;       testl   %eax, %eax
-;;       je      0xc0
-;;   91: movl    %eax, %eax
+;;       je      0xc4
+;;   95: movl    %eax, %eax
 ;;       movq    0x10(%rsp), %rcx
 ;;       movl    0x18(%rcx, %rax), %eax
 ;;       movq    0x20(%rsp), %rbx
@@ -73,7 +74,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   be: ud2
+;;   c2: ud2
 ;;       ╰─╼ trap: StackOverflow
-;;   c0: ud2
+;;   c4: ud2
 ;;       ╰─╼ trap: NullReference

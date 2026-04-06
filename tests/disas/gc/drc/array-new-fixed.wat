@@ -22,29 +22,30 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64):
 ;; @0025                               v14 = iconst.i32 -1476395008
-;; @0025                               v15 = iconst.i32 0
-;;                                     v45 = iconst.i32 56
-;; @0025                               v16 = iconst.i32 8
-;; @0025                               v17 = call fn0(v0, v14, v15, v45, v16)  ; v14 = -1476395008, v15 = 0, v45 = 56, v16 = 8
+;; @0025                               v16 = load.i64 notrap aligned readonly can_move v0+40
+;; @0025                               v17 = load.i32 notrap aligned readonly can_move v16
+;;                                     v47 = iconst.i32 56
+;; @0025                               v18 = iconst.i32 8
+;; @0025                               v19 = call fn0(v0, v14, v17, v47, v18)  ; v14 = -1476395008, v47 = 56, v18 = 8
 ;; @0025                               v6 = iconst.i32 3
-;; @0025                               v30 = load.i64 notrap aligned readonly can_move v0+8
-;; @0025                               v18 = load.i64 notrap aligned readonly can_move v30+32
-;; @0025                               v19 = uextend.i64 v17
-;; @0025                               v20 = iadd v18, v19
-;;                                     v35 = iconst.i64 24
-;; @0025                               v21 = iadd v20, v35  ; v35 = 24
-;; @0025                               store notrap aligned v6, v21  ; v6 = 3
-;;                                     v32 = iconst.i64 32
-;;                                     v52 = iadd v20, v32  ; v32 = 32
-;; @0025                               store notrap aligned little v2, v52
-;;                                     v55 = iconst.i64 40
-;;                                     v61 = iadd v20, v55  ; v55 = 40
-;; @0025                               store notrap aligned little v3, v61
-;;                                     v79 = iconst.i64 48
-;;                                     v85 = iadd v20, v79  ; v79 = 48
-;; @0025                               store notrap aligned little v4, v85
+;; @0025                               v32 = load.i64 notrap aligned readonly can_move v0+8
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move v32+32
+;; @0025                               v21 = uextend.i64 v19
+;; @0025                               v22 = iadd v20, v21
+;;                                     v37 = iconst.i64 24
+;; @0025                               v23 = iadd v22, v37  ; v37 = 24
+;; @0025                               store notrap aligned v6, v23  ; v6 = 3
+;;                                     v34 = iconst.i64 32
+;;                                     v54 = iadd v22, v34  ; v34 = 32
+;; @0025                               store notrap aligned little v2, v54
+;;                                     v57 = iconst.i64 40
+;;                                     v63 = iadd v22, v57  ; v57 = 40
+;; @0025                               store notrap aligned little v3, v63
+;;                                     v81 = iconst.i64 48
+;;                                     v87 = iadd v22, v81  ; v81 = 48
+;; @0025                               store notrap aligned little v4, v87
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               return v17
+;; @0029                               return v19
 ;; }
