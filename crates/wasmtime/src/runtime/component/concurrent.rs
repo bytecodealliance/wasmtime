@@ -3058,13 +3058,21 @@ impl Instance {
 
         log::trace!("drop waitable set {rep} (handle {set})");
 
-        let set = store
+        // Note that we're careful to check for waiters _before_ deleting the
+        // set to avoid dropping any waiters in `WaitMode::Fiber(_)`, which
+        // would panic.  See `drop-waitable-set-with-waiters.wast` for details.
+        if !store
             .concurrent_state_mut()
-            .delete(TableId::<WaitableSet>::new(rep))?;
-
-        if !set.waiting.is_empty() {
+            .get_mut(TableId::<WaitableSet>::new(rep))?
+            .waiting
+            .is_empty()
+        {
             bail!(Trap::WaitableSetDropHasWaiters);
         }
+
+        store
+            .concurrent_state_mut()
+            .delete(TableId::<WaitableSet>::new(rep))?;
 
         Ok(())
     }
