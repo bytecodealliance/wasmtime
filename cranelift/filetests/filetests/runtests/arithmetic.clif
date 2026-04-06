@@ -822,3 +822,129 @@ block0(v0: i32, v1: i32):
 ; run: %simplify_icmp_ne_isub_x(0, 0) == 0
 ; run: %simplify_icmp_ne_isub_x(1, 0) == 0
 ; run: %simplify_icmp_ne_isub_x(1, 1) == 1
+
+function %test_eq_isub_same(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; run: %test_eq_isub_same(0, 0) == 1
+; run: %test_eq_isub_same(1, 0) == 1
+
+function %test_eq_iadd_same_rhs(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+
+; run: %test_eq_iadd_same_rhs(0, 0) == 1
+; run: %test_eq_iadd_same_rhs(0, 7) == 1
+; run: %test_eq_iadd_same_rhs(1, 0) == 0
+
+function %test_eq_ineg_ineg(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %test_eq_ineg_ineg(0, 0) == 1
+; run: %test_eq_ineg_ineg(1, 1) == 1
+; run: %test_eq_ineg_ineg(1, 2) == 0
+
+function %test_ineg_imul_ineg_lhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v2, v0
+    v4 = ineg v3
+    return v4
+}
+
+; run: %test_ineg_imul_ineg_lhs(0, 0) == 0
+; run: %test_ineg_imul_ineg_lhs(1, 2) == 2
+; run: %test_ineg_imul_ineg_lhs(-3, 4) == -12
+; run: %test_ineg_imul_ineg_lhs(7, -5) == -35
+; run: %test_ineg_imul_ineg_lhs(0x1234, 0x10) == 0x12340
+
+function %test_ineg_imul_ineg_rhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v0, v2
+    v4 = ineg v3
+    return v4
+}
+
+; run: %test_ineg_imul_ineg_rhs(0, 0) == 0
+; run: %test_ineg_imul_ineg_rhs(1, 2) == 2
+
+function %test_ireduce_iadd_extends(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = iadd v2, v3
+    v5 = ireduce.i8 v4
+    return v5
+}
+
+; run: %test_ireduce_iadd_extends(0, 0) == 0
+; run: %test_ireduce_iadd_extends(1, 2) == 3
+
+function %test_ireduce_isub_extends(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+    v2 = sextend.i16 v0
+    v3 = uextend.i16 v1
+    v4 = isub v2, v3
+    v5 = ireduce.i8 v4
+    return v5
+}
+
+; run: %test_ireduce_isub_extends(0, 0) == 0
+; run: %test_ireduce_isub_extends(5, 2) == 3
+; run: %test_ireduce_isub_extends(0, 1) == -1
+; run: %test_ireduce_isub_extends(-1, 1) == -2
+; run: %test_ireduce_isub_extends(-128, 1) == 127
+
+function %test_sge_smax_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sge v2, v0
+    return v3
+}
+
+; run: %test_sge_smax_x(0, 0) == 1
+; run: %test_sge_smax_x(1, 2) == 1
+
+function %test_ule_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ule v0, v2
+    return v3
+}
+
+; run: %test_ule_x_umax(0, 0) == 1
+; run: %test_ule_x_umax(1, 2) == 1
+
+function %test_sge_x_smin(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = icmp sge v0, v2
+    return v3
+}
+
+; run: %test_sge_x_smin(0, 0) == 1
+; run: %test_sge_x_smin(1, 2) == 1
+
+function %test_ule_umin_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; run: %test_ule_umin_x(0, 0) == 1
+; run: %test_ule_umin_x(1, 2) == 1
+; run: %test_ule_umin_x(2, 1) == 1
