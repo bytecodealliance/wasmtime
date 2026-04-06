@@ -22,16 +22,16 @@ const NAN64: [u8; 8] = 0x7FF8000000000000u64.to_le_bytes();
 pub(crate) const CANONICAL_NAN_F32X4: [u8; 16] = {
     let n = NAN32;
     [
-        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3],
-        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3],
+        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3], n[0], n[1], n[2],
+        n[3],
     ]
 };
 
 pub(crate) const CANONICAL_NAN_F64X2: [u8; 16] = {
     let n = NAN64;
     [
-        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7],
-        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7],
+        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[0], n[1], n[2], n[3], n[4], n[5], n[6],
+        n[7],
     ]
 };
 

@@ -794,7 +794,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -811,7 +812,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -828,7 +830,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -845,7 +848,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -862,7 +866,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -879,7 +884,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -896,7 +902,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -913,7 +920,8 @@ where
             },
         )?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -4466,7 +4474,8 @@ where
     fn visit_f32x4_mul(&mut self) -> Self::Output {
         self.masm.v128_mul(&mut self.context, V128MulKind::F32x4)?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -4474,7 +4483,8 @@ where
     fn visit_f64x2_mul(&mut self) -> Self::Output {
         self.masm.v128_mul(&mut self.context, V128MulKind::F64x2)?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -4579,7 +4589,8 @@ where
         self.masm
             .v128_trunc(&mut self.context, V128TruncKind::F32x4)?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
         self.context.stack.push(result.into());
         Ok(())
     }
@@ -4588,7 +4599,8 @@ where
         self.masm
             .v128_trunc(&mut self.context, V128TruncKind::F64x2)?;
         let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
         self.context.stack.push(result.into());
         Ok(())
     }
