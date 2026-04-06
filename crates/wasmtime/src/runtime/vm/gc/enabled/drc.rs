@@ -299,34 +299,8 @@ impl DrcHeap {
 
         let drc_ref = drc_ref(gc_ref);
         let header = self.index_mut(&drc_ref);
-        debug_assert_ne!(
-            header.ref_count, 0,
-            "{:#p} is supposedly live; should have nonzero ref count",
-            *gc_ref
-        );
-        header.ref_count += 1;
+        header.inc_ref();
         log::trace!("increment {:#p} ref count -> {}", *gc_ref, header.ref_count);
-    }
-
-    /// Decrement the ref count for the associated object.
-    ///
-    /// Returns `true` if the ref count reached zero and the object should be
-    /// deallocated.
-    fn dec_ref(&mut self, gc_ref: &VMGcRef) -> bool {
-        if gc_ref.is_i31() {
-            return false;
-        }
-
-        let drc_ref = drc_ref(gc_ref);
-        let header = self.index_mut(drc_ref);
-        debug_assert_ne!(
-            header.ref_count, 0,
-            "{:#p} is supposedly live; should have nonzero ref count",
-            *gc_ref
-        );
-        header.ref_count -= 1;
-        log::trace!("decrement {:#p} ref count -> {}", *gc_ref, header.ref_count);
-        header.ref_count == 0
     }
 
     /// Decrement the ref count for the associated object.
@@ -340,110 +314,119 @@ impl DrcHeap {
     fn dec_ref_and_maybe_dealloc(
         &mut self,
         host_data_table: &mut ExternRefHostDataTable,
+        trace_infos: &mut TraceInfos,
         gc_ref: &VMGcRef,
     ) {
-        let mut trace_infos = mem::take(&mut self.trace_infos);
-
         let mut stack = self.dec_ref_stack.take().unwrap();
         debug_assert!(stack.is_empty());
         stack.push(gc_ref.unchecked_copy());
 
         while let Some(gc_ref) = stack.pop() {
-            if self.dec_ref(&gc_ref) {
-                // The object's reference count reached zero.
-                //
-                // Enqueue any other objects it references for dec-ref'ing.
-                self.trace_gc_ref(&gc_ref, &mut trace_infos, &mut stack);
+            debug_assert!(!gc_ref.is_i31());
 
-                // If this object was an `externref`, remove its associated
-                // entry from the host-data table.
-                if let Some(externref) = gc_ref.as_typed::<VMDrcExternRef>(self) {
-                    let host_data_id = self.index(externref).host_data;
-                    host_data_table.dealloc(host_data_id);
-                }
-
-                // Deallocate this GC object!
-                self.dealloc(gc_ref.unchecked_copy());
+            // Read the DRC header once to get ref_count, type, and object_size.
+            let drc_header = self.index_mut(drc_ref(&gc_ref));
+            log::trace!(
+                "decrement {:#p} ref count -> {}",
+                gc_ref,
+                drc_header.ref_count - 1
+            );
+            if !drc_header.dec_ref() {
+                continue;
             }
+            // Ref count reached zero.
+
+            // Extract type and size from the header we already read (avoiding
+            // re-reading from heap).
+            let ty = drc_header.header.ty();
+            let object_size = drc_header.object_size;
+
+            // Trace: enqueue child GC refs for dec-ref'ing.
+            if let Some(ty) = ty {
+                match trace_infos.get(ty) {
+                    TraceInfo::Struct { gc_ref_offsets } => {
+                        stack.reserve(gc_ref_offsets.len());
+
+                        let object_start =
+                            usize::try_from(gc_ref.as_heap_index().unwrap().get()).unwrap();
+                        let heap = self.heap_slice();
+                        for offset in gc_ref_offsets {
+                            let offset = usize::try_from(*offset).unwrap();
+
+                            // Read gc ref fields directly from the heap slice,
+                            // avoiding the overhead of repeatedly indexing into
+                            // the heap via the object header.
+                            let field_start = object_start + offset;
+                            let field_end = field_start + mem::size_of::<VMGcRef>();
+                            debug_assert!(
+                                field_end <= object_start + usize::try_from(object_size).unwrap()
+                            );
+                            let raw: [u8; 4] = heap[field_start..field_end].try_into().unwrap();
+                            let raw = u32::from_le_bytes(raw);
+
+                            if let Some(child) = VMGcRef::from_raw_u32(raw)
+                                && !child.is_i31()
+                            {
+                                debug_assert!({
+                                    let header = self.header(&child);
+                                    let kind = header.kind().as_u32();
+                                    VMGcKind::try_from_u32(kind).is_some()
+                                });
+                                stack.push(child);
+                            }
+                        }
+                    }
+                    TraceInfo::Array { gc_ref_elems } => {
+                        if *gc_ref_elems {
+                            let data = self.gc_object_data(&gc_ref);
+                            let len = self.array_len(gc_ref.as_arrayref_unchecked());
+                            stack.reserve(usize::try_from(len).unwrap());
+                            for i in 0..len {
+                                let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
+                                    + i * u32::try_from(mem::size_of::<u32>()).unwrap();
+                                let raw = data.read_u32(elem_offset);
+                                if let Some(child) = VMGcRef::from_raw_u32(raw)
+                                    && !child.is_i31()
+                                {
+                                    debug_assert!({
+                                        let header = self.header(&child);
+                                        let kind = header.kind().as_u32();
+                                        VMGcKind::try_from_u32(kind).is_some()
+                                    });
+                                    stack.push(child);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
+            }
+
+            // Handle externref host data.
+            if let Some(externref) = gc_ref.as_typed::<VMDrcExternRef>(self) {
+                let host_data_id = self.index(externref).host_data;
+                host_data_table.dealloc(host_data_id);
+            }
+
+            // Deallocate using the object_size we already read.
+            let alloc_size = FreeList::aligned_size(object_size);
+            let index = gc_ref.as_heap_index().unwrap();
+
+            if cfg!(gc_zeal) {
+                let idx = usize::try_from(index.get()).unwrap();
+                self.heap_slice_mut()[idx..][..usize::try_from(alloc_size).unwrap()].fill(POISON);
+            }
+
+            self.free_list
+                .as_mut()
+                .unwrap()
+                .dealloc_fast(index, alloc_size);
         }
 
         debug_assert!(stack.is_empty());
         debug_assert!(self.dec_ref_stack.is_none());
         self.dec_ref_stack = Some(stack);
-
-        debug_assert!(self.trace_infos.is_empty());
-        self.trace_infos = trace_infos;
-    }
-
-    /// Enumerate all of the given `VMGcRef`'s outgoing edges.
-    fn trace_gc_ref(
-        &self,
-        gc_ref: &VMGcRef,
-        trace_infos: &mut TraceInfos,
-        stack: &mut Vec<VMGcRef>,
-    ) {
-        debug_assert!(!gc_ref.is_i31());
-
-        let header = self.header(gc_ref);
-        let Some(ty) = header.ty() else {
-            debug_assert!(header.kind().matches(VMGcKind::ExternRef));
-            return;
-        };
-
-        match trace_infos.get(ty) {
-            TraceInfo::Struct { gc_ref_offsets } => {
-                stack.reserve(gc_ref_offsets.len());
-                let data = self.gc_object_data(gc_ref);
-                for offset in gc_ref_offsets {
-                    let raw = data.read_u32(*offset);
-                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw)
-                        && !gc_ref.is_i31()
-                    {
-                        debug_assert!(
-                            {
-                                let header = self.header(&gc_ref);
-                                let kind = header.kind().as_u32();
-                                VMGcKind::try_from_u32(kind).is_some()
-                            },
-                            "trace_gc_ref: struct field at offset {offset} references object \
-                             with invalid `VMGcKind`",
-                        );
-
-                        stack.push(gc_ref);
-                    }
-                }
-            }
-
-            TraceInfo::Array { gc_ref_elems } => {
-                if !*gc_ref_elems {
-                    return;
-                }
-
-                let data = self.gc_object_data(gc_ref);
-                let len = self.array_len(gc_ref.as_arrayref_unchecked());
-                stack.reserve(usize::try_from(len).unwrap());
-                for i in 0..len {
-                    let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
-                        + i * u32::try_from(mem::size_of::<u32>()).unwrap();
-                    let raw = data.read_u32(elem_offset);
-                    if let Some(gc_ref) = VMGcRef::from_raw_u32(raw)
-                        && !gc_ref.is_i31()
-                    {
-                        debug_assert!(
-                            {
-                                let header = self.header(&gc_ref);
-                                let kind = header.kind().as_u32();
-                                VMGcKind::try_from_u32(kind).is_some()
-                            },
-                            "trace_gc_ref: array element at index {i} references object \
-                             with invalid `VMGcKind`",
-                        );
-
-                        stack.push(gc_ref);
-                    }
-                }
-            }
-        }
     }
 
     /// Iterate over the over-approximated-stack-roots list.
@@ -637,6 +620,8 @@ impl DrcHeap {
             .as_ref()
             .map(|r| r.unchecked_copy());
 
+        let mut trace_infos = mem::take(&mut self.trace_infos);
+
         while let Some(gc_ref) = next {
             log::trace!("sweeping gc ref: {gc_ref:#p}");
 
@@ -672,8 +657,11 @@ impl DrcHeap {
                     .index_mut(drc_ref(prev))
                     .set_next_over_approximated_stack_root(prev_next),
             }
-            self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
+            self.dec_ref_and_maybe_dealloc(host_data_table, &mut trace_infos, &gc_ref);
         }
+
+        debug_assert!(self.trace_infos.is_empty());
+        self.trace_infos = trace_infos;
 
         log::trace!("Done sweeping");
 
@@ -828,6 +816,22 @@ impl VMDrcHeader {
             false
         }
     }
+
+    /// Increment the ref count for this object.
+    fn inc_ref(&mut self) {
+        debug_assert!(self.ref_count > 0);
+        self.ref_count += 1;
+    }
+
+    /// Decrement the ref count for this object.
+    ///
+    /// Returns `true` if the ref count reached zero and the object should be
+    /// deallocated.
+    fn dec_ref(&mut self) -> bool {
+        debug_assert!(self.ref_count > 0);
+        self.ref_count -= 1;
+        self.ref_count == 0
+    }
 }
 
 /// The common header for all arrays in the DRC collector.
@@ -945,7 +949,12 @@ unsafe impl GcHeap for DrcHeap {
         // Decrement the ref count of the value being overwritten and, if
         // necessary, deallocate the GC object.
         if let Some(dest) = destination {
-            self.dec_ref_and_maybe_dealloc(host_data_table, dest);
+            let mut trace_infos = mem::take(&mut self.trace_infos);
+
+            self.dec_ref_and_maybe_dealloc(host_data_table, &mut trace_infos, dest);
+
+            debug_assert!(self.trace_infos.is_empty());
+            self.trace_infos = trace_infos;
         }
 
         // Do the actual write.
