@@ -18,6 +18,33 @@ pub extern "C" fn wasmtime_config_wasm_component_model_map_set(
     c.config.wasm_component_model_map(enable);
 }
 
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
+pub extern "C" fn wasmtime_config_wasm_component_model_async_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_async(enable);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
+pub extern "C" fn wasmtime_config_wasm_component_model_async_builtins_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_async_builtins(enable);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
+pub extern "C" fn wasmtime_config_wasm_component_model_async_stackful_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.wasm_component_model_async_stackful(enable);
+}
+
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct wasmtime_component_t {

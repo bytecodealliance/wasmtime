@@ -24,6 +24,7 @@ const FEATURES: &[&str] = &[
     "WAT",
     "POOLING_ALLOCATOR",
     "COMPONENT_MODEL",
+    "COMPONENT_MODEL_ASYNC",
     "PULLEY",
     "ALL_ARCH",
 ];

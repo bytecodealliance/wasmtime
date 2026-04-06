@@ -3,6 +3,7 @@
 #ifndef WASMTIME_COMPONENT_FUNC_H
 #define WASMTIME_COMPONENT_FUNC_H
 
+#include <wasmtime/async.h>
 #include <wasmtime/component/types/func.h>
 #include <wasmtime/component/val.h>
 #include <wasmtime/conf.h>
@@ -68,6 +69,30 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_func_post_return(const wasmtime_component_func_t *func,
                                     wasmtime_context_t *context);
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+
+/**
+ * \brief Invokes \p func with the \p args given, returning the results
+ * asynchronously.
+ *
+ * This is the same as #wasmtime_component_func_call except that it is
+ * asynchronous. This is only compatible with stores associated with an
+ * asynchronous config.
+ *
+ * The result is a future that is owned by the caller and must be deleted via
+ * #wasmtime_call_future_delete.
+ *
+ * All parameters to this function must be kept alive and not modified until the
+ * returned #wasmtime_call_future_t is deleted.
+ */
+WASM_API_EXTERN wasmtime_call_future_t *wasmtime_component_func_call_async(
+    const wasmtime_component_func_t *func, wasmtime_context_t *context,
+    const wasmtime_component_val_t *args, size_t args_size,
+    wasmtime_component_val_t *results, size_t results_size,
+    wasmtime_error_t **error_ret);
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 
 #ifdef __cplusplus
 } // extern "C"
