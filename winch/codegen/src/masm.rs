@@ -13,6 +13,9 @@ use cranelift_codegen::{
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
 
+pub(crate) const CANONICAL_NAN_F32: &[u8] = &0x7FC00000u32.to_le_bytes();
+pub(crate) const CANONICAL_NAN_F64: &[u8] = &0x7FF8000000000000u64.to_le_bytes();
+
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
 #[derive(Eq, PartialEq)]

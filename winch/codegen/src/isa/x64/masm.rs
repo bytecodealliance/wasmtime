@@ -696,9 +696,9 @@ impl Masm for MacroAssembler {
         self.asm.ucomis(reg.to_reg(), reg.to_reg(), size);
         self.asm.jmp_if(CC::NP, done_label);
 
-        let canonical_nan: &[u8] = match size {
-            OperandSize::S32 => &0x7FC00000u32.to_le_bytes(),
-            OperandSize::S64 => &0x7FF8000000000000u64.to_le_bytes(),
+        let canonical_nan = match size {
+            OperandSize::S32 => crate::masm::CANONICAL_NAN_F32,
+            OperandSize::S64 => crate::masm::CANONICAL_NAN_F64,
             _ => bail!(CodeGenError::unexpected_operand_size()),
         };
         self.asm.load_fp_const(reg, canonical_nan, size);
