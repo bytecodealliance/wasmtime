@@ -212,9 +212,7 @@ fn read_field_at_addr(
                 }
                 WasmHeapTopType::Cont => {
                     // TODO(#10248) GC integration for stack switching
-                    return Err(wasmtime_environ::WasmError::Unsupported(
-                        "Stack switching feature not compatible with GC, yet".to_string(),
-                    ));
+                    return stack_switching_unsupported();
                 }
             },
         },
@@ -290,13 +288,17 @@ fn write_field_at_addr(
         WasmStorageType::I16 => {
             builder.ins().istore16(flags, new_val, field_addr, 0);
         }
-        WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type.top() == WasmHeapTopType::Func => {
-            write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?;
-        }
-        WasmStorageType::Val(WasmValType::Ref(r)) => {
-            gc_compiler(func_env)?
-                .translate_write_gc_reference(func_env, builder, r, field_addr, new_val, flags)?;
-        }
+        WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
+            WasmHeapTopType::Func => {
+                write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?
+            }
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                gc_compiler(func_env)?.translate_write_gc_reference(
+                    func_env, builder, r, field_addr, new_val, flags,
+                )?;
+            }
+            WasmHeapTopType::Cont => return stack_switching_unsupported(),
+        },
         WasmStorageType::Val(_) => {
             assert_eq!(
                 builder.func.dfg.value_type(new_val).bytes(),
@@ -1285,9 +1287,7 @@ pub fn translate_ref_test(
         }
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "Stack switching feature not compatible with GC, yet".to_string(),
-            ));
+            return stack_switching_unsupported();
         }
     };
     builder.ins().jump(continue_block, &[result.into()]);
@@ -1694,4 +1694,10 @@ impl FuncEnvironment<'_> {
 
         result
     }
+}
+
+fn stack_switching_unsupported<T>() -> WasmResult<T> {
+    Err(wasmtime_environ::WasmError::Unsupported(
+        "Stack switching feature not compatible with GC, yet".to_string(),
+    ))
 }
