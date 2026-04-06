@@ -2289,7 +2289,7 @@ impl Instance {
 
                         let state = store.concurrent_state_mut();
                         if !state.get_mut(guest_thread.task)?.result.is_none() {
-                            bail_bug!("task has not yet produced a result");
+                            bail_bug!("task has already produced a result");
                         }
 
                         match state.get_mut(guest_thread.task)?.lift_result.take() {
@@ -3137,7 +3137,7 @@ impl Instance {
                 (
                     Waitable::Guest(id),
                     thread,
-                    concurrent_state.get_mut(id)?.exited,
+                    concurrent_state.get_mut(id)?.ready_to_delete(),
                 )
             } else {
                 bail_bug!("expected guest caller for `subtask.drop`")
