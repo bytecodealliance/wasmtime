@@ -423,16 +423,15 @@ impl Memory {
             });
         match new_size {
             Some(new_size) => {
-                // FIXME(WebAssembly/custom-page-sizes#45) - what should the
-                // behavior here be exactly? A trap? Return -1? A smaller limit?
-                // Unclear!
-                //
-                // Trap for now to make this as noisy/conservative as possible.
+                // Disallow growth to a value which this linear memory's type
+                // cannot represent. For example 1-byte-page memories cannot be
+                // 4GiB in size.
                 if !self.ty().allow_growth_to(new_size) {
-                    bail!(
-                        "disallowing growth to {new_size:#x} bytes based on \
-                         page size"
-                    )
+                    if let Some(limiter) = limiter {
+                        let err = crate::format_err!("memory growth exceeds memory type's limits");
+                        limiter.memory_grow_failed(err)?;
+                    }
+                    return Ok(None);
                 }
             }
 
