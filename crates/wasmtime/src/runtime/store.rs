@@ -2074,6 +2074,12 @@ impl StoreOpaque {
             .expect("attempted to access the store's GC heap before it has been allocated")
     }
 
+    /// Returns a mutable reference to the GC store if it has been allocated.
+    #[inline]
+    pub(crate) fn try_gc_store_mut(&mut self) -> Option<&mut GcStore> {
+        self.gc_store.as_mut()
+    }
+
     #[inline]
     pub(crate) fn gc_roots(&self) -> &RootSet {
         &self.gc_roots

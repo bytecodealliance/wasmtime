@@ -709,6 +709,16 @@ fn gc_alloc_raw(
         err.context(e)
     })?;
 
+    // Fast path: when the GC store already exists, try to allocate directly to
+    // skip the async/fiber machinery.
+    let opaque = store.store_opaque_mut();
+    if let Some(gc_store) = opaque.try_gc_store_mut() {
+        if let Ok(gc_ref) = gc_store.alloc_raw(header, layout)? {
+            let raw = gc_store.expose_gc_ref_to_wasm(gc_ref);
+            return Ok(raw);
+        }
+    }
+
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store, asyncness| {
         let gc_ref = store
