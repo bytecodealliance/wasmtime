@@ -745,6 +745,14 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        _reg: WritableReg,
+        _lane_size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {

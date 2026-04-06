@@ -16,6 +16,25 @@ use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
 pub(crate) const CANONICAL_NAN_F32: &[u8] = &0x7FC00000u32.to_le_bytes();
 pub(crate) const CANONICAL_NAN_F64: &[u8] = &0x7FF8000000000000u64.to_le_bytes();
 
+const NAN32: [u8; 4] = 0x7FC00000u32.to_le_bytes();
+const NAN64: [u8; 8] = 0x7FF8000000000000u64.to_le_bytes();
+
+pub(crate) const CANONICAL_NAN_F32X4: [u8; 16] = {
+    let n = NAN32;
+    [
+        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3],
+        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3],
+    ]
+};
+
+pub(crate) const CANONICAL_NAN_F64X2: [u8; 16] = {
+    let n = NAN64;
+    [
+        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7],
+        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7],
+    ]
+};
+
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
 #[derive(Eq, PartialEq)]
@@ -1697,6 +1716,14 @@ pub(crate) trait MacroAssembler {
 
     /// Canonicalize NaN values in `reg` if the setting is enabled.
     fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Canonicalize NaN lanes in a v128 register if the setting is enabled.
+    /// `lane_size` is S32 for f32x4 or S64 for f64x2.
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        reg: WritableReg,
+        lane_size: OperandSize,
+    ) -> Result<()>;
 
     /// Perform logical and operation.
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()>;

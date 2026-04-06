@@ -3772,6 +3772,7 @@ where
     fn visit_f32x4_demote_f64x2_zero(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_demote(reg, writable!(reg))?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -3779,6 +3780,7 @@ where
     fn visit_f64x2_promote_low_f32x4(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_promote(reg, writable!(reg))?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4429,6 +4431,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_add(dst, src, writable!(dst), V128AddKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4437,6 +4440,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_add(dst, src, writable!(dst), V128AddKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4445,6 +4449,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_sub(dst, src, writable!(dst), V128SubKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4453,22 +4458,32 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_sub(dst, src, writable!(dst), V128SubKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
 
     fn visit_f32x4_mul(&mut self) -> Self::Output {
-        self.masm.v128_mul(&mut self.context, V128MulKind::F32x4)
+        self.masm.v128_mul(&mut self.context, V128MulKind::F32x4)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64x2_mul(&mut self) -> Self::Output {
-        self.masm.v128_mul(&mut self.context, V128MulKind::F64x2)
+        self.masm.v128_mul(&mut self.context, V128MulKind::F64x2)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32x4_div(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
                 masm.v128_div(dst, src, writable!(dst), size)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4477,6 +4492,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
                 masm.v128_div(dst, src, writable!(dst), size)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4491,6 +4507,7 @@ where
     fn visit_f32x4_ceil(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_ceil(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4505,6 +4522,7 @@ where
     fn visit_f64x2_ceil(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_ceil(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4512,6 +4530,7 @@ where
     fn visit_f32x4_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_sqrt(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4519,6 +4538,7 @@ where
     fn visit_f32x4_floor(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_floor(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4526,6 +4546,7 @@ where
     fn visit_f64x2_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_sqrt(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4533,6 +4554,7 @@ where
     fn visit_f64x2_floor(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_floor(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4540,6 +4562,7 @@ where
     fn visit_f32x4_nearest(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_nearest(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4547,18 +4570,27 @@ where
     fn visit_f64x2_nearest(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_nearest(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
 
     fn visit_f32x4_trunc(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc(&mut self.context, V128TruncKind::F32x4)
+            .v128_trunc(&mut self.context, V128TruncKind::F32x4)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64x2_trunc(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc(&mut self.context, V128TruncKind::F64x2)
+            .v128_trunc(&mut self.context, V128TruncKind::F64x2)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_v128_load32_zero(&mut self, memarg: MemArg) -> Self::Output {
@@ -4613,6 +4645,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_min(dst, src, writable!(dst), V128MinKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4621,6 +4654,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_min(dst, src, writable!(dst), V128MinKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4629,6 +4663,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_max(dst, src, writable!(dst), V128MaxKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4637,6 +4672,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_max(dst, src, writable!(dst), V128MaxKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
