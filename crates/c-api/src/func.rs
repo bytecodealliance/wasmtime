@@ -10,12 +10,12 @@ use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-#[cfg(feature = "gc")]
-use wasmtime::RootScope;
 use wasmtime::{
     AsContext, AsContextMut, Error, Extern, Func, Result, StoreContext, StoreContextMut, Trap, Val,
     ValRaw,
 };
+#[cfg(feature = "gc")]
+use wasmtime::{RootScope, ThrownException};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -406,8 +406,18 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     }
 }
 
+#[cfg(feature = "gc")]
+fn is_trap_like_impl(err: &Error) -> bool {
+    err.is::<Trap>() || err.is::<ThrownException>()
+}
+
+#[cfg(not(feature = "gc"))]
+fn is_trap_like_impl(err: &Error) -> bool {
+    err.is::<Trap>()
+}
+
 fn store_err(err: Error, trap_ret: &mut *mut wasm_trap_t) -> Option<Box<wasmtime_error_t>> {
-    if err.is::<Trap>() || err.is::<wasmtime::ThrownException>() {
+    if is_trap_like_impl(&err) {
         *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
         None
     } else {

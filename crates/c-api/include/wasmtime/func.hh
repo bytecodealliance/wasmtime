@@ -103,9 +103,9 @@ template <> struct WasmType<std::optional<ExternRef>> {
       p->externref = 0;
     }
   }
-  
+
   static std::optional<ExternRef> load(Store::Context cx,
-                                      wasmtime_val_raw_t *p) {
+                                       wasmtime_val_raw_t *p) {
     if (p->externref == 0) {
       return std::nullopt;
     }

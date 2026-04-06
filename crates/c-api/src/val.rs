@@ -1,10 +1,8 @@
 #[cfg(feature = "gc")]
 use crate::r#ref::ref_to_val;
-use crate::{
-    WASM_I32, from_valtype, into_valtype, wasm_valkind_t, wasmtime_exnref_t, wasmtime_valkind_t,
-};
+use crate::{WASM_I32, from_valtype, into_valtype, wasm_valkind_t, wasmtime_valkind_t};
 #[cfg(feature = "gc")]
-use crate::{wasm_ref_t, wasmtime_anyref_t, wasmtime_externref_t};
+use crate::{wasm_ref_t, wasmtime_anyref_t, wasmtime_exnref_t, wasmtime_externref_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use wasmtime::{AsContextMut, Func, Val, ValType};
@@ -46,7 +44,10 @@ impl Drop for wasm_val_t {
 
 impl Clone for wasm_val_t {
     fn clone(&self) -> Self {
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "needed for conditional mutation under cfg(feature = \"gc\")"
+        )]
         let mut ret = wasm_val_t {
             kind: self.kind,
             of: self.of,
@@ -166,6 +167,7 @@ pub union wasmtime_val_union {
     pub anyref: ManuallyDrop<wasmtime_anyref_t>,
     #[cfg(feature = "gc")]
     pub externref: ManuallyDrop<wasmtime_externref_t>,
+    #[cfg(feature = "gc")]
     pub exnref: ManuallyDrop<wasmtime_exnref_t>,
     #[cfg(feature = "gc")]
     pub funcref: wasmtime_func_t,
@@ -311,6 +313,7 @@ impl wasmtime_val_t {
                     funcref: func.into(),
                 },
             },
+            #[cfg(feature = "gc")]
             Val::ExnRef(e) => wasmtime_val_t {
                 kind: crate::WASMTIME_EXNREF,
                 of: wasmtime_val_union {
@@ -374,6 +377,7 @@ impl wasmtime_val_t {
             }
             #[cfg(feature = "gc")]
             crate::WASMTIME_FUNCREF => Val::FuncRef(self.of.funcref.as_wasmtime()),
+            #[cfg(feature = "gc")]
             crate::WASMTIME_EXNREF => {
                 Val::ExnRef(self.of.exnref.as_wasmtime().map(|e| e.to_rooted(cx)))
             }
@@ -401,6 +405,7 @@ pub unsafe extern "C" fn wasmtime_val_clone(
         crate::WASMTIME_EXTERNREF => wasmtime_val_union {
             externref: ManuallyDrop::new(src.of.externref.as_wasmtime().into()),
         },
+        #[cfg(feature = "gc")]
         crate::WASMTIME_EXNREF => wasmtime_val_union {
             exnref: ManuallyDrop::new(src.of.exnref.as_wasmtime().into()),
         },

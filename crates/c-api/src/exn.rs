@@ -1,3 +1,4 @@
+#![cfg(feature = "gc")]
 use crate::{
     WasmtimeStoreContextMut, handle_result, wasm_trap_t, wasmtime_error_t, wasmtime_val_t,
 };

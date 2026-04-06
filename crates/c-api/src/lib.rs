@@ -20,6 +20,7 @@ pub use wasmtime;
 mod config;
 mod engine;
 mod error;
+#[cfg(feature = "gc")]
 mod exn;
 mod r#extern;
 mod func;
@@ -44,6 +45,7 @@ mod vec;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::error::*;
+#[cfg(feature = "gc")]
 pub use crate::exn::*;
 pub use crate::r#extern::*;
 pub use crate::func::*;

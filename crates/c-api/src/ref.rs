@@ -3,7 +3,7 @@
 use crate::WasmtimeStoreContextMut;
 use crate::abort;
 use std::mem::{ManuallyDrop, MaybeUninit};
-use std::{num::NonZeroU64, os::raw::c_void, ptr};
+use std::{num::NonZeroU64, os::raw::c_void};
 use wasmtime::{
     AnyRef, ArrayRef, ArrayRefPre, ArrayType, EqRef, ExnRef, ExternRef, FieldType, I31, Mutability,
     OwnedRooted, Ref, RootScope, StorageType, StructRef, StructRefPre, StructType, Val, ValType,

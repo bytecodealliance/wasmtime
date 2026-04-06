@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#ifdef WASMTIME_FEATURE_GC
 struct wasmtime_eqref;
 /// Convenience alias for #wasmtime_eqref
 typedef struct wasmtime_eqref wasmtime_eqref_t;
@@ -56,7 +57,6 @@ typedef struct wasmtime_anyref {
   void *__private3;
 } wasmtime_anyref_t;
 
-#ifdef WASMTIME_FEATURE_GC
 /// \brief Helper function to initialize the `ref` provided to a null anyref
 /// value.
 static inline void wasmtime_anyref_set_null(wasmtime_anyref_t *ref) {
@@ -71,7 +71,6 @@ static inline void wasmtime_anyref_set_null(wasmtime_anyref_t *ref) {
 static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
   return ref->store_id == 0;
 }
-
 
 /**
  * \brief Creates a new reference pointing to the same data that `anyref`
@@ -203,7 +202,6 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
  * `wasmtime_externref_set_null`. Null can be tested for with the
  * `wasmtime_externref_is_null` function.
  */
-#endif // WASMTIME_FEATURE_GC
 
 typedef struct wasmtime_externref {
   /// Internal metadata tracking within the store, embedders should not
@@ -217,7 +215,6 @@ typedef struct wasmtime_externref {
   void *__private3;
 } wasmtime_externref_t;
 
-#ifdef WASMTIME_FEATURE_GC
 /// \brief Helper function to initialize the `ref` provided to a null externref
 /// value.
 static inline void wasmtime_externref_set_null(wasmtime_externref_t *ref) {
@@ -318,7 +315,6 @@ WASM_API_EXTERN void wasmtime_externref_from_raw(wasmtime_context_t *context,
  */
 WASM_API_EXTERN uint32_t wasmtime_externref_to_raw(
     wasmtime_context_t *context, const wasmtime_externref_t *ref);
-#endif // WASMTIME_FEATURE_GC
 
 /**
  * \typedef wasmtime_exnref_t
@@ -399,10 +395,11 @@ typedef uint8_t wasmtime_valkind_t;
 /// exnref
 #define WASMTIME_EXNREF 8
 
+#endif // WASMTIME_FEATURE_GC
+
 /// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
 /// stored in little-endian order.
 typedef uint8_t wasmtime_v128[16];
-
 
 /**
  * \typedef wasmtime_valunion_t
@@ -423,6 +420,7 @@ typedef union wasmtime_valunion {
   float32_t f32;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
   float64_t f64;
+#ifdef WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_ANYREF
   wasmtime_anyref_t anyref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
@@ -434,6 +432,7 @@ typedef union wasmtime_valunion {
   /// Use `wasmtime_funcref_is_null` to test whether this is a null function
   /// reference.
   wasmtime_func_t funcref;
+#endif // WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
   wasmtime_v128 v128;
 } wasmtime_valunion_t;

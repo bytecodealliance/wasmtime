@@ -108,7 +108,6 @@ public:
 
 class EqRef;
 
-
 #ifdef WASMTIME_FEATURE_GC
 /**
  * \brief Representation of a WebAssembly `anyref` value.
