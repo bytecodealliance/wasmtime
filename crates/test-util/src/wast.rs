@@ -369,7 +369,18 @@ impl Compiler {
     /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
-            Compiler::CraneliftNative => config.legacy_exceptions(),
+            Compiler::CraneliftNative => {
+                if config.legacy_exceptions() {
+                    return true;
+                }
+
+                // Stack-switching is only implemented on x86_64 right now.
+                if !cfg!(target_arch = "x86_64") && config.stack_switching() {
+                    return true;
+                }
+
+                false
+            }
 
             Compiler::Winch => {
                 if config.gc()
