@@ -793,7 +793,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S32)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_floor(&mut self) -> Self::Output {
@@ -807,7 +810,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S64)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_ceil(&mut self) -> Self::Output {
@@ -821,7 +827,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S32)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_ceil(&mut self) -> Self::Output {
@@ -835,7 +844,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S64)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_nearest(&mut self) -> Self::Output {
@@ -849,7 +861,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S32)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_nearest(&mut self) -> Self::Output {
@@ -863,7 +878,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S64)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_trunc(&mut self) -> Self::Output {
@@ -877,7 +895,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S32)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_trunc(&mut self) -> Self::Output {
@@ -891,7 +912,10 @@ where
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )?;
-        self.canonicalize_nan_for_round(OperandSize::S64)
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm.maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_sqrt(&mut self) -> Self::Output {
@@ -4624,13 +4648,6 @@ impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
-    fn canonicalize_nan_for_round(&mut self, size: OperandSize) -> Result<()> {
-        let result = self.context.pop_to_reg(self.masm, None)?;
-        self.masm.maybe_canonicalize_nan(writable!(result.into()), size)?;
-        self.context.stack.push(result.into());
-        Ok(())
-    }
-
     fn cmp_i32s(&mut self, kind: IntCmpKind) -> Result<()> {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.cmp_with_set(writable!(dst), src, kind, size)?;
