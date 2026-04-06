@@ -2076,6 +2076,7 @@ impl StoreOpaque {
 
     /// Returns a mutable reference to the GC store if it has been allocated.
     #[inline]
+    #[cfg(feature = "gc-drc")]
     pub(crate) fn try_gc_store_mut(&mut self) -> Option<&mut GcStore> {
         self.gc_store.as_mut()
     }
