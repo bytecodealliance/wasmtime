@@ -853,21 +853,20 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
+        // Read the current list head before borrowing through index_mut.
+        let next = (*self.over_approximated_stack_roots)
+            .as_ref()
+            .map(|r| r.unchecked_copy());
         let header = self.index_mut(drc_ref(&gc_ref));
         if header.is_in_over_approximated_stack_roots() {
             // Already in the over-approximated-stack-roots list, nothing more
             // to do here.
             return;
         }
-
         // Push this object onto the head of the over-approximated-stack-roots
-        // list.
+        // list using a single index_mut call.
         header.set_in_over_approximated_stack_roots_bit(true);
-        let next = (*self.over_approximated_stack_roots)
-            .as_ref()
-            .map(|r| r.unchecked_copy());
-        self.index_mut(drc_ref(&gc_ref))
-            .set_next_over_approximated_stack_root(next);
+        header.set_next_over_approximated_stack_root(next);
         *self.over_approximated_stack_roots = Some(gc_ref);
     }
 
