@@ -374,8 +374,9 @@ impl Compiler {
                     return true;
                 }
 
-                // Stack-switching is only implemented on x86_64 right now.
-                if !cfg!(target_arch = "x86_64") && config.stack_switching() {
+                // Stack-switching is only implemented on x86_64 for unix
+                // platforms right now.
+                if config.stack_switching() && !(cfg!(target_arch = "x86_64") && cfg!(unix)) {
                     return true;
                 }
 
