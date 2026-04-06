@@ -1,3 +1,27 @@
+## 24.0.7
+
+Released 2026-04-09.
+
+### Fixed
+
+* Out-of-bounds write or crash when transcoding component model strings.
+  [GHSA-394w-hwhg-8vgm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-394w-hwhg-8vgm)
+
+* Wasmtime segfault or unused out-of-sandbox load with `f64x2.splat` operator
+  on x86-64.
+  [GHSA-qqfj-4vcm-26hv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-qqfj-4vcm-26hv)
+
+* Panic when transcoding misaligned utf-16 strings.
+  [GHSA-jxhv-7h78-9775](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jxhv-7h78-9775)
+
+* Panic when lifting `flags` component value.
+  [GHSA-m758-wjhj-p3jq](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m758-wjhj-p3jq)
+
+* Heap OOB read in component model UTF-16 to latin1+utf16 string transcoding.
+  [GHSA-hx6p-xpx3-jvvv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hx6p-xpx3-jvvv)
+
+--------------------------------------------------------------------------------
+
 ## 24.0.6
 
 Released 2026-02-24.
