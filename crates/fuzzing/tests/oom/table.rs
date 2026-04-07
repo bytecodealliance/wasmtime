@@ -56,6 +56,25 @@ fn table_grow() -> Result<()> {
     })
 }
 
+#[tokio::test]
+async fn table_grow_async() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let ty = TableType::new(RefType::FUNCREF, 1, None);
+            let table = Table::new_async(&mut store, ty, Ref::Func(None)).await?;
+            let _old_size = table.grow_async(&mut store, 4, Ref::Func(None)).await?;
+            Ok(())
+        })
+        .await
+}
+
 #[test]
 fn table_set() -> Result<()> {
     let mut config = Config::new();
