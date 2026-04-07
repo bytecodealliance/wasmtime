@@ -134,6 +134,8 @@ enum wasmtime_trap_code_enum {
   /// Cannot issue a read/write on a future/stream while there is a
   /// pending operation already.
   WASMTIME_TRAP_CODE_CONCURRENT_FUTURE_STREAM_OP = 45,
+  /// A reference count (for e.g. an `error-context`) overflowed.
+  WASMTIME_TRAP_CODE_REFERENCE_COUNT_OVERFLOW = 46,
 };
 
 /**
