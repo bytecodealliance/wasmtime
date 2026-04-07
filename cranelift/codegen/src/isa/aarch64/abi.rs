@@ -347,15 +347,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;
 
-            let size = if is_apple_cc || is_winch_return {
-                // MacOS and Winch aarch64 allows stack slots with
-                // sizes less than 8 bytes. They still need to be
-                // properly aligned on their natural data alignment,
-                // though.
+            // MacOS and Winch aarch64 allows stack slots with sizes less than 8
+            // bytes. They still need to be properly aligned on their natural
+            // data alignment, though, and this additionally is only applicable
+            // for arguments or when there's no argument extension in play.
+            // Stack slots for return values with argument extension get their
+            // full machine-word-width loaded or stored.
+            //
+            // Otherwise every arg takes a minimum slot of 8 bytes. (16-byte
+            // stack alignment happens separately after all args.)
+            let size = if (is_apple_cc || is_winch_return)
+                && (args_or_rets == ArgsOrRets::Args
+                    || param.extension == ir::ArgumentExtension::None)
+            {
                 size
             } else {
-                // Every arg takes a minimum slot of 8 bytes. (16-byte stack
-                // alignment happens separately after all args.)
                 core::cmp::max(size, 8)
             };
 
