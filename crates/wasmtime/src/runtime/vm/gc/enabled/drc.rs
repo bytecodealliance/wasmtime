@@ -176,17 +176,21 @@ impl DrcHeap {
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
-        let size = self.index(drc_ref).object_size();
-        let layout = FreeList::layout(size);
+        let size = self.index(drc_ref).object_size;
+        let alloc_size = FreeList::aligned_size(size);
         let index = gc_ref.as_heap_index().unwrap();
 
         // Poison the freed memory so that any stale access is detectable.
         if cfg!(gc_zeal) {
             let index = usize::try_from(index.get()).unwrap();
-            self.heap_slice_mut()[index..][..layout.size()].fill(POISON);
+            let alloc_size = usize::try_from(alloc_size).unwrap();
+            self.heap_slice_mut()[index..][..alloc_size].fill(POISON);
         }
 
-        self.free_list.as_mut().unwrap().dealloc(index, layout);
+        self.free_list
+            .as_mut()
+            .unwrap()
+            .dealloc_fast(index, alloc_size);
     }
 
     /// Increment the ref count for the associated object.
@@ -920,6 +924,7 @@ unsafe impl GcHeap for DrcHeap {
     fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
+        debug_assert!(FreeList::can_align_to(layout.align()));
         debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
@@ -933,8 +938,9 @@ unsafe impl GcHeap for DrcHeap {
         }
 
         let object_size = u32::try_from(layout.size()).unwrap();
+        let alloc_size = FreeList::aligned_size(object_size);
 
-        let gc_ref = match self.free_list.as_mut().unwrap().alloc(layout)? {
+        let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };

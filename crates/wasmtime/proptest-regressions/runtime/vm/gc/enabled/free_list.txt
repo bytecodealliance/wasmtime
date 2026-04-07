@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b26e69fbaf46deb79652859039538e422818fd40b9afff63faa7aacbddecfd3d # shrinks to (capacity, ops) = (219544665809630458, [(10, Alloc(Layout { size: 193045289231815352, align: 8 (1 << 3) })), (10, Dealloc(Layout { size: 193045289231815352, align: 8 (1 << 3) }))])
