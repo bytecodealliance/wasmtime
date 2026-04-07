@@ -43,12 +43,16 @@ impl ExternRef {
         None
     }
 
-    pub fn _from_raw(_store: &mut AutoAssertNoGc<'_>, raw: u32) -> Option<Rooted<Self>> {
+    pub(crate) fn _from_raw(_store: &mut AutoAssertNoGc<'_>, raw: u32) -> Option<Rooted<Self>> {
         assert_eq!(raw, 0);
         None
     }
 
     pub fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
+        match *self {}
+    }
+
+    pub(crate) fn _to_raw(&self, _store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         match *self {}
     }
 }

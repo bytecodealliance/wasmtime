@@ -131,10 +131,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn ty(&self, store: impl AsContext) -> TableType {
-        self._ty(store.as_context().0)
+        self.ty_(store.as_context().0)
     }
 
-    fn _ty(&self, store: &StoreOpaque) -> TableType {
+    pub(crate) fn ty_(&self, store: &StoreOpaque) -> TableType {
         TableType::from_wasmtime_table(store.engine(), self.wasmtime_ty(store))
     }
 
@@ -185,7 +185,7 @@ impl Table {
                     .ok()?
                     .map(|r| r.unchecked_copy())
                     .map(|r| store.clone_gc_ref(&r));
-                Some(match self._ty(&store).element().heap_type().top() {
+                Some(match self.ty_(&store).element().heap_type().top() {
                     HeapType::Extern => {
                         Ref::Extern(gc_ref.map(|r| ExternRef::from_cloned_gc_ref(&mut store, r)))
                     }
@@ -220,7 +220,7 @@ impl Table {
     }
 
     pub(crate) fn set_(&self, store: &mut StoreOpaque, index: u64, val: Ref) -> Result<()> {
-        let ty = self._ty(store);
+        let ty = self.ty_(store);
         match element_type(&ty) {
             TableElementType::Func => {
                 let element = val.into_table_func(store, ty.element())?;
@@ -250,10 +250,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn size(&self, store: impl AsContext) -> u64 {
-        self._size(store.as_context().0)
+        self.size_(store.as_context().0)
     }
 
-    pub(crate) fn _size(&self, store: &StoreOpaque) -> u64 {
+    pub(crate) fn size_(&self, store: &StoreOpaque) -> u64 {
         // unwrap here should be ok because the runtime should always guarantee
         // that we can fit the number of elements in a 64-bit integer.
         u64::try_from(store[self.instance].table(self.index).current_elements).unwrap()
@@ -503,7 +503,7 @@ impl Table {
         val: Ref,
         len: u64,
     ) -> Result<()> {
-        let ty = self._ty(&store);
+        let ty = self.ty_(&store);
         match element_type(&ty) {
             TableElementType::Func => {
                 let val = val.into_table_func(store, ty.element())?;
@@ -531,7 +531,7 @@ impl Table {
     #[cfg(feature = "gc")]
     pub(crate) fn trace_roots(&self, store: &mut StoreOpaque, gc_roots_list: &mut vm::GcRootsList) {
         if !self
-            ._ty(store)
+            .ty_(store)
             .element()
             .is_vmgcref_type_and_points_to_object()
         {

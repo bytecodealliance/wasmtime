@@ -265,7 +265,12 @@ impl Val {
     /// The returned [`ValRaw`] does not carry type information and is only safe
     /// to use within the context of this store itself. For more information see
     /// [`ExternRef::to_raw`] and [`Func::to_raw`].
-    pub fn to_raw(&self, store: impl AsContextMut) -> Result<ValRaw> {
+    pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<ValRaw> {
+        let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
+        self.to_raw_(&mut store)
+    }
+
+    pub(crate) fn to_raw_(&self, store: &mut AutoAssertNoGc) -> Result<ValRaw> {
         match self {
             Val::I32(i) => Ok(ValRaw::i32(*i)),
             Val::I64(i) => Ok(ValRaw::i64(*i)),
@@ -274,18 +279,18 @@ impl Val {
             Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
             Val::ExternRef(e) => Ok(ValRaw::externref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::AnyRef(e) => Ok(ValRaw::anyref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::ExnRef(e) => Ok(ValRaw::exnref(match e {
                 None => 0,
-                Some(e) => e.to_raw(store)?,
+                Some(e) => e._to_raw(store)?,
             })),
             Val::FuncRef(f) => Ok(ValRaw::funcref(match f {
-                Some(f) => f.to_raw(store),
+                Some(f) => f.to_raw_(store),
                 None => ptr::null_mut(),
             })),
             Val::ContRef(_) => {

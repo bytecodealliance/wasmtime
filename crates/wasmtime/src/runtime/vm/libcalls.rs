@@ -521,22 +521,7 @@ fn table_init(
 ) -> Result<()> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
-
-    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store, asyncness| {
-        vm::Instance::table_init(
-            store,
-            limiter.as_mut(),
-            asyncness,
-            instance,
-            table_index,
-            elem_index,
-            dst,
-            src,
-            len,
-        )
-        .await
-    })??;
+    vm::Instance::table_init(store, instance, table_index, elem_index, dst, src, len)?;
     Ok(())
 }
 
@@ -972,67 +957,53 @@ fn array_new_elem(
     len: u32,
 ) -> Result<core::num::NonZeroU32> {
     use crate::{
-        ArrayRef, ArrayRefPre, ArrayType, Func, OpaqueRootScope, RootedGcRefImpl, Val,
+        ArrayRef, ArrayRefPre, ArrayType, OpaqueRootScope, RootedGcRefImpl, Val,
         store::AutoAssertNoGc,
-        vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
     };
-    use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
+    use wasmtime_environ::ModuleInternedTypeIndex;
 
     // Convert indices to their typed forms.
     let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
     let elem_index = ElemIndex::from_u32(elem_index);
     let instance = store.instance(instance_id);
 
-    let mut storage = None;
-    let elements = instance.passive_element_segment(&mut storage, elem_index);
+    let elements = instance.passive_element_segment(elem_index);
 
     let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
     let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
+    let elements = elements
+        .get(src..)
+        .and_then(|elements| elements.get(..len))
+        .ok_or_else(|| Trap::TableOutOfBounds)?
+        .iter()
+        .copied()
+        .try_collect::<TryVec<_>, OutOfMemory>()?;
+
     let shared_ty = instance.engine_type_index(array_type_index);
     let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
+    let elem_ty = match array_ty.element_type() {
+        crate::StorageType::ValType(ty) => ty,
+        _ => unreachable!("due to validation"),
+    };
+
     let pre = ArrayRefPre::_new(store, array_ty);
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store, asyncness| {
         let mut store = OpaqueRootScope::new(store);
+
         // Turn the elements into `Val`s.
-        let mut vals = Vec::with_capacity(usize::try_from(elements.len()).unwrap());
-        match elements {
-            TableSegmentElements::Functions(fs) => {
-                let store_id = store.id();
-                let (mut instance, registry) = store.instance_and_module_registry_mut(instance_id);
-                vals.extend(
-                    fs.get(src..)
-                        .and_then(|s| s.get(..len))
-                        .ok_or_else(|| Trap::TableOutOfBounds)?
-                        .iter()
-                        .map(|f| {
-                            let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
-                            let func = unsafe {
-                                raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p))
-                            };
-                            Val::FuncRef(func)
-                        }),
-                );
-            }
-            TableSegmentElements::Expressions(xs) => {
-                let xs = xs
-                    .get(src..)
-                    .and_then(|s| s.get(..len))
-                    .ok_or_else(|| Trap::TableOutOfBounds)?;
-
-                let mut const_context = ConstEvalContext::new(instance_id, asyncness);
-                let mut const_evaluator = ConstExprEvaluator::default();
-
-                for x in xs.iter() {
-                    let val = *const_evaluator
-                        .eval(&mut store, limiter.as_mut(), &mut const_context, x)
-                        .await?;
-                    vals.push(val);
-                }
-            }
-        }
+        //
+        // Safety: Validation ensures that the type is correct; `raw` is valid
+        // because we got it from this instance.
+        let vals = {
+            let mut store = AutoAssertNoGc::new(&mut store);
+            elements
+                .into_iter()
+                .map(|raw| unsafe { Val::_from_raw(&mut store, raw, &elem_ty) })
+                .try_collect::<TryVec<_>, OutOfMemory>()?
+        };
 
         let array =
             ArrayRef::_new_fixed_async(&mut store, limiter.as_mut(), &pre, &vals, asyncness)
@@ -1056,91 +1027,77 @@ fn array_init_elem(
     src: u32,
     len: u32,
 ) -> Result<()> {
-    use crate::{
-        ArrayRef, Func, OpaqueRootScope, Val,
-        store::AutoAssertNoGc,
-        vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
+    use crate::{ArrayRef, OpaqueRootScope, Val, store::AutoAssertNoGc};
+    use wasmtime_environ::ModuleInternedTypeIndex;
+
+    let mut store = OpaqueRootScope::new(store);
+
+    // Convert the indices into their typed forms.
+    let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
+    let elem_index = ElemIndex::from_u32(elem_index);
+
+    log::trace!(
+        "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
+    );
+
+    // Convert the raw GC ref into a `Rooted<ArrayRef>`.
+    let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
+    let array = store.unwrap_gc_store_mut().clone_gc_ref(&array);
+    let array = {
+        let mut no_gc = AutoAssertNoGc::new(&mut store);
+        ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
     };
-    use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
-    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store, asyncness| {
-        let mut store = OpaqueRootScope::new(store);
+    // Bounds check the destination within the array.
+    let array_len = array._len(&store)?;
+    log::trace!("array_len = {array_len}");
+    if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
+        return Err(Trap::ArrayOutOfBounds.into());
+    }
 
-        // Convert the indices into their typed forms.
-        let _array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
-        let elem_index = ElemIndex::from_u32(elem_index);
+    // Get the passive element segment.
+    let instance = store.instance(instance);
+    let elements = instance.passive_element_segment(elem_index);
 
-        log::trace!(
-            "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
-        );
+    // Convert array offsets into `usize`s.
+    let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
+    let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        // Convert the raw GC ref into a `Rooted<ArrayRef>`.
-        let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
-        let array = store.unwrap_gc_store_mut().clone_gc_ref(&array);
-        let array = {
-            let mut no_gc = AutoAssertNoGc::new(&mut store);
-            ArrayRef::from_cloned_gc_ref(&mut no_gc, array)
-        };
+    // Subslice into just the target elements.
+    let elements = elements
+        .get(src..)
+        .and_then(|elements| elements.get(..len))
+        .ok_or_else(|| Trap::TableOutOfBounds)?
+        .iter()
+        .copied()
+        .try_collect::<TryVec<_>, OutOfMemory>()?;
 
-        // Bounds check the destination within the array.
-        let array_len = array._len(&store)?;
-        log::trace!("array_len = {array_len}");
-        if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
-            return Err(Trap::ArrayOutOfBounds.into());
-        }
+    let shared_ty = instance.engine_type_index(array_type_index);
+    let array_ty = crate::ArrayType::from_shared_type_index(store.engine(), shared_ty);
+    let elem_ty = match array_ty.element_type() {
+        crate::StorageType::ValType(ty) => ty,
+        _ => unreachable!("due to validation"),
+    };
 
-        // Get the passive element segment.
-        let mut storage = None;
-        let store_id = store.id();
-        let (mut instance, registry) = store.instance_and_module_registry_mut(instance);
-        let elements = instance.passive_element_segment(&mut storage, elem_index);
+    // Turn the elements into `Val`s.
+    let vals = {
+        let mut store = AutoAssertNoGc::new(&mut store);
+        elements
+            .into_iter()
+            // Safety: Validation ensures that the type is correct; `raw` is
+            // valid because we got it from this instance.
+            .map(|raw| unsafe { Val::_from_raw(&mut store, raw, &elem_ty) })
+            .try_collect::<TryVec<_>, OutOfMemory>()?
+    };
 
-        // Convert array offsets into `usize`s.
-        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
-        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
+    // Copy the values into the array.
+    for (i, val) in vals.into_iter().enumerate() {
+        let i = u32::try_from(i).unwrap();
+        let j = dst.checked_add(i).unwrap();
+        array._set(&mut store, j, val)?;
+    }
 
-        // Turn the elements into `Val`s.
-        let vals = match elements {
-            TableSegmentElements::Functions(fs) => fs
-                .get(src..)
-                .and_then(|s| s.get(..len))
-                .ok_or_else(|| Trap::TableOutOfBounds)?
-                .iter()
-                .map(|f| {
-                    let raw_func_ref = instance.as_mut().get_func_ref(registry, *f);
-                    let func = unsafe { raw_func_ref.map(|p| Func::from_vm_func_ref(store_id, p)) };
-                    Val::FuncRef(func)
-                })
-                .collect::<Vec<_>>(),
-            TableSegmentElements::Expressions(xs) => {
-                let mut const_context = ConstEvalContext::new(instance.id(), asyncness);
-                let mut const_evaluator = ConstExprEvaluator::default();
-
-                let mut vals = Vec::new();
-                for x in xs
-                    .get(src..)
-                    .and_then(|s| s.get(..len))
-                    .ok_or_else(|| Trap::TableOutOfBounds)?
-                {
-                    let val = *const_evaluator
-                        .eval(&mut store, limiter.as_mut(), &mut const_context, x)
-                        .await?;
-                    vals.push(val);
-                }
-                vals
-            }
-        };
-
-        // Copy the values into the array.
-        for (i, val) in vals.into_iter().enumerate() {
-            let i = u32::try_from(i).unwrap();
-            let j = dst.checked_add(i).unwrap();
-            array._set(&mut store, j, val)?;
-        }
-
-        Ok(())
-    })?
+    Ok(())
 }
 
 // TODO: Specialize this libcall for only non-GC array elements, so we never
