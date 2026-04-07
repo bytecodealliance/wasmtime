@@ -4472,7 +4472,11 @@ impl Instance {
             .global_error_context_ref_counts
             .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
             .context("global ref count present for existing (sub)component error context")?;
-        global_ref_count.0 += 1;
+
+        global_ref_count.0 = global_ref_count
+            .0
+            .checked_add(1)
+            .ok_or_else(|| format_err!(Trap::ReferenceCountOverflow))?;
 
         Ok(dst_idx)
     }
