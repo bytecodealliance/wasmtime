@@ -59,6 +59,8 @@ pub(crate) struct MacroAssembler {
     ptr_size: OperandSize,
     /// Scratch register scope.
     scratch_scope: RegAlloc,
+    /// Shared flags.
+    shared_flags: settings::Flags,
 }
 
 impl MacroAssembler {
@@ -71,10 +73,11 @@ impl MacroAssembler {
         Ok(Self {
             sp_max: 0,
             stack_max_use_add: None,
-            asm: Assembler::new(shared_flags, isa_flags),
+            asm: Assembler::new(shared_flags.clone(), isa_flags),
             sp_offset: 0u32,
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
             scratch_scope: RegAlloc::from(scratch_gpr_bitset(), scratch_fpr_bitset()),
+            shared_flags,
         })
     }
 
@@ -711,6 +714,43 @@ impl Masm for MacroAssembler {
     fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         self.asm.fsqrt_rr(src, dst, size);
         Ok(())
+    }
+
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        let done_label = self.asm.buffer_mut().get_label();
+
+        self.asm.fcmp(reg.to_reg(), reg.to_reg(), size);
+        self.asm.jmp_if(Cond::Vc, done_label);
+
+        let canonical_nan = match size {
+            OperandSize::S32 => crate::masm::CANONICAL_NAN_F32,
+            OperandSize::S64 => crate::masm::CANONICAL_NAN_F64,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        let constant = self.asm.add_constant(canonical_nan);
+        self.asm.uload(
+            inst::AMode::Const { addr: constant },
+            reg,
+            size,
+            TRUSTED_FLAGS,
+        );
+
+        self.asm
+            .buffer_mut()
+            .bind_label(done_label, &mut Default::default());
+        Ok(())
+    }
+
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        _reg: WritableReg,
+        _lane_size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {

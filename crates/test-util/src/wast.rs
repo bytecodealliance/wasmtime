@@ -620,16 +620,6 @@ impl WastTest {
 
             #[cfg(target_arch = "x86_64")]
             {
-                let unsupported = [
-                    // externref/reference-types related
-                    // simd-related failures
-                    "misc_testsuite/simd/canonicalize-nan.wast",
-                ];
-
-                if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                    return true;
-                }
-
                 // SIMD on Winch requires AVX instructions.
                 #[cfg(target_arch = "x86_64")]
                 if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2"))
@@ -640,6 +630,7 @@ impl WastTest {
                         "misc_testsuite/int-to-float-splat.wast",
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
+                        "misc_testsuite/simd/canonicalize-nan.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
                         "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
