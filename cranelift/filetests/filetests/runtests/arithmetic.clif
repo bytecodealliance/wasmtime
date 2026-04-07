@@ -948,3 +948,121 @@ block0(v0: i32, v1: i32):
 ; run: %test_ule_umin_x(0, 0) == 1
 ; run: %test_ule_umin_x(1, 2) == 1
 ; run: %test_ule_umin_x(2, 1) == 1
+
+function %test_umin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umin v0, v0
+    return v1
+}
+
+; run: %test_umin_same(0) == 0
+; run: %test_umin_same(1) == 1
+
+function %test_smin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smin v0, v0
+    return v1
+}
+
+; run: %test_smin_same(0) == 0
+; run: %test_smin_same(1) == 1
+
+function %test_umax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umax v0, v0
+    return v1
+}
+
+; run: %test_umax_same(0) == 0
+; run: %test_umax_same(1) == 1
+
+function %test_smax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smax v0, v0
+    return v1
+}
+
+; run: %test_smax_same(0) == 0
+; run: %test_smax_same(1) == 1
+
+function %test_smax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smax v2, v0
+    return v3
+}
+
+; run: %test_smax_nested_absorb(0, 0) == 0
+; run: %test_smax_nested_absorb(1, 2) == 2
+; run: %test_smax_nested_absorb(2, 1) == 2
+
+function %test_umax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = umax v2, v0
+    return v3
+}
+
+; run: %test_umax_nested_absorb(0, 0) == 0
+; run: %test_umax_nested_absorb(1, 2) == 2
+
+function %test_smin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smin v2, v0
+    return v3
+}
+
+; run: %test_smin_nested_absorb(0, 0) == 0
+; run: %test_smin_nested_absorb(1, 2) == 1
+; run: %test_smin_nested_absorb(2, 1) == 1
+
+function %test_umin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umin v2, v0
+    return v3
+}
+
+; run: %test_umin_nested_absorb(0, 0) == 0
+; run: %test_umin_nested_absorb(1, 2) == 1
+; run: %test_umin_nested_absorb(2, 1) == 1
+
+function %test_smin_smax_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smin v2, v1
+    return v3
+}
+
+; run: %test_smin_smax_absorb(0, 0) == 0
+; run: %test_smin_smax_absorb(1, 2) == 2
+
+function %test_umax_umin_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v2, v1
+    return v3
+}
+
+; run: %test_umax_umin_absorb(0, 0) == 0
+; run: %test_umax_umin_absorb(1, 2) == 2
+
+function %test_sgt_x_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sgt v0, v2
+    return v3
+}
+
+; run: %test_sgt_x_smax(0, 0) == 0
+; run: %test_sgt_x_smax(1, 2) == 0
+function %test_ugt_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+
+; run: %test_ugt_x_umax(0, 0) == 0
+; run: %test_ugt_x_umax(1, 2) == 0
