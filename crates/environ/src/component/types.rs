@@ -381,6 +381,225 @@ impl ComponentTypes {
         }
     }
 
+    /// Returns the flat representation of a function's params and returns for
+    /// the underlying core wasm function according to the Canonical ABI
+    ///
+    /// As per the Canonical ABI, when the representation is larger than MAX_FLAT_RESULTS
+    /// or MAX_FLAT_PARAMS, the core wasm function will take a pointer to the arg/result list.
+    /// Returns (param_storage, result_storage)
+    pub fn flat_func_type(
+        &self,
+        ty: &TypeFunc,
+        context: FlatFuncTypeContext,
+    ) -> (
+        FlatTypesStorage<MAX_FLAT_PARAMS_ABI>,
+        FlatTypesStorage<MAX_FLAT_RESULTS_ABI>,
+    ) {
+        let mut params_storage = self
+            .flat_interface_type(&InterfaceType::Tuple(ty.params), MAX_FLAT_PARAMS)
+            .unwrap_or_else(|| {
+                let mut flat = FlatTypesStorage::new();
+                flat.push(FlatType::I32, FlatType::I64);
+                flat
+            });
+        let results_storage = self
+            .flat_interface_type(&InterfaceType::Tuple(ty.results), MAX_FLAT_RESULTS)
+            .unwrap_or_else(|| {
+                let mut flat = FlatTypesStorage::new();
+                match context {
+                    FlatFuncTypeContext::Lift => {
+                        flat.push(FlatType::I32, FlatType::I64);
+                    }
+                    // For lowers, the retptr is passed as the last parameter
+                    FlatFuncTypeContext::Lower => {
+                        params_storage.push(FlatType::I32, FlatType::I64);
+                    }
+                }
+                flat
+            });
+        (params_storage, results_storage)
+    }
+
+    fn flat_interface_type<const N: usize>(
+        &self,
+        ty: &InterfaceType,
+        limit: usize,
+    ) -> Option<FlatTypesStorage<N>> {
+        // Helper routines
+        let push = |storage: &mut FlatTypesStorage<N>, t32: FlatType, t64: FlatType| -> bool {
+            storage.push(t32, t64);
+            (storage.len as usize) <= limit
+        };
+
+        let push_discrim = |storage: &mut FlatTypesStorage<N>| -> bool {
+            push(storage, FlatType::I32, FlatType::I32)
+        };
+
+        let push_storage =
+            |storage: &mut FlatTypesStorage<N>, other: Option<FlatTypesStorage<N>>| -> bool {
+                other
+                    .and_then(|other| {
+                        let len = usize::from(storage.len);
+                        let other_len = usize::from(other.len);
+                        (len + other_len <= limit).then(|| {
+                            storage.memory32[len..len + other_len]
+                                .copy_from_slice(&other.memory32[..other_len]);
+                            storage.memory64[len..len + other_len]
+                                .copy_from_slice(&other.memory64[..other_len]);
+                            storage.len += other.len;
+                        })
+                    })
+                    .is_some()
+            };
+
+        let push_storage_n = |storage: &mut FlatTypesStorage<N>,
+                              other: Option<FlatTypesStorage<N>>,
+                              n: usize|
+         -> bool {
+            other
+                .and_then(|other| {
+                    let len = usize::from(storage.len);
+                    let other_len = usize::from(other.len);
+                    let other_total_len = other_len * n;
+                    (len + other_total_len <= limit).then(|| {
+                        for _ in 0..n {
+                            storage
+                                .memory32
+                                .copy_from_slice(&other.memory32[..other_len]);
+                            storage
+                                .memory64
+                                .copy_from_slice(&other.memory64[..other_len]);
+                        }
+                        storage.len += other_total_len as u8;
+                    })
+                })
+                .is_some()
+        };
+
+        // Case is broken down as:
+        // * None => No field
+        // * Some(None) => Invalid storage (overflow)
+        // * Some(storage) => Valid storage
+        let push_storage_variant_case = |storage: &mut FlatTypesStorage<N>,
+                                         case: Option<Option<FlatTypesStorage<N>>>|
+         -> bool {
+            match case {
+                None => true,
+                Some(case) => {
+                    case.and_then(|case| {
+                        // Discriminant will make size[case] = limit overshoot
+                        ((1 + case.len as usize) <= limit).then(|| {
+                            // Skip 1 for discriminant
+                            let dst = storage
+                                .memory32
+                                .iter_mut()
+                                .zip(&mut storage.memory64)
+                                .skip(1);
+                            for (i, ((t32, t64), (dst32, dst64))) in case
+                                .memory32
+                                .iter()
+                                .take(case.len as usize)
+                                .zip(case.memory64.iter())
+                                .zip(dst)
+                                .enumerate()
+                            {
+                                if i + 1 < usize::from(storage.len) {
+                                    // Populated Index
+                                    dst32.join(*t32);
+                                    dst64.join(*t64);
+                                } else {
+                                    // New Index
+                                    storage.len += 1;
+                                    *dst32 = *t32;
+                                    *dst64 = *t64;
+                                }
+                            }
+                        })
+                    })
+                    .is_some()
+                }
+            }
+        };
+
+        // Logic
+        let mut storage_buf = FlatTypesStorage::new();
+        let storage = &mut storage_buf;
+
+        match ty {
+            InterfaceType::U8
+            | InterfaceType::S8
+            | InterfaceType::Bool
+            | InterfaceType::U16
+            | InterfaceType::S16
+            | InterfaceType::U32
+            | InterfaceType::S32
+            | InterfaceType::Char
+            | InterfaceType::Own(_)
+            | InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_)
+            | InterfaceType::Borrow(_)
+            | InterfaceType::Enum(_) => push(storage, FlatType::I32, FlatType::I32),
+
+            InterfaceType::U64 | InterfaceType::S64 => push(storage, FlatType::I64, FlatType::I64),
+            InterfaceType::Float32 => push(storage, FlatType::F32, FlatType::F32),
+            InterfaceType::Float64 => push(storage, FlatType::F64, FlatType::F64),
+            InterfaceType::String | InterfaceType::List(_) | InterfaceType::Map(_) => {
+                // Pointer pair
+                push(storage, FlatType::I32, FlatType::I64)
+                    && push(storage, FlatType::I32, FlatType::I64)
+            }
+
+            InterfaceType::Record(i) => self[*i]
+                .fields
+                .iter()
+                .all(|field| push_storage(storage, self.flat_interface_type(&field.ty, limit))),
+            InterfaceType::Tuple(i) => self[*i]
+                .types
+                .iter()
+                .all(|field| push_storage(storage, self.flat_interface_type(field, limit))),
+            InterfaceType::Flags(i) => match FlagsSize::from_count(self[*i].names.len()) {
+                FlagsSize::Size0 => true,
+                FlagsSize::Size1 | FlagsSize::Size2 => push(storage, FlatType::I32, FlatType::I32),
+                FlagsSize::Size4Plus(n) => (0..n)
+                    .into_iter()
+                    .all(|_| push(storage, FlatType::I32, FlatType::I32)),
+            },
+            InterfaceType::Variant(i) => {
+                push_discrim(storage)
+                    && self[*i].cases.values().all(|case| {
+                        let case_flat = case.as_ref().map(|ty| self.flat_interface_type(ty, limit));
+                        push_storage_variant_case(storage, case_flat)
+                    })
+            }
+            InterfaceType::Option(i) => {
+                push_discrim(storage)
+                    && push_storage_variant_case(storage, None)
+                    && push_storage_variant_case(
+                        storage,
+                        Some(self.flat_interface_type(&self[*i].ty, limit)),
+                    )
+            }
+            InterfaceType::Result(i) => {
+                push_discrim(storage)
+                    && push_storage_variant_case(
+                        storage,
+                        self[*i].ok.map(|ty| self.flat_interface_type(&ty, limit)),
+                    )
+                    && push_storage_variant_case(
+                        storage,
+                        self[*i].err.map(|ty| self.flat_interface_type(&ty, limit)),
+                    )
+            }
+            InterfaceType::FixedLengthList(i) => push_storage_n(
+                storage,
+                self.flat_interface_type(&self[*i].element, limit),
+                self[*i].size as usize,
+            ),
+        }
+        .then_some(storage_buf)
+    }
+
     /// Adds a new `table` to the list of resource tables for this component.
     pub fn push_resource_table(&mut self, table: TypeResourceTable) -> TypeResourceTableIndex {
         self.resource_tables.push(table)
@@ -1223,6 +1442,15 @@ pub const MAX_FLAT_TYPES: usize = if MAX_FLAT_PARAMS > MAX_FLAT_RESULTS {
     MAX_FLAT_RESULTS
 };
 
+/// Maximum number of parameters that a core wasm function exported/imports through
+/// components can contain according to the Canonical ABI. In particular, this
+/// can includes one potential extra return pointer for canon.lower methods.
+pub const MAX_FLAT_PARAMS_ABI: usize = MAX_FLAT_PARAMS + 1;
+
+/// Maximum number of results that a core wasm function exported/imports through
+/// components can contain according to the Canonical ABI.
+pub const MAX_FLAT_RESULTS_ABI: usize = MAX_FLAT_RESULTS;
+
 const fn add_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
     const MAX: u8 = MAX_FLAT_TYPES as u8;
     let sum = match (a, b) {
@@ -1245,6 +1473,82 @@ const fn max_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
             }
         }
         _ => None,
+    }
+}
+
+/// Representation of flat types in 32-bit and 64-bit memory
+///
+/// This could be represented as `Vec<FlatType>` but on 64-bit architectures
+/// that's 24 bytes. Otherwise `FlatType` is 1 byte large and
+/// `MAX_FLAT_TYPES` is 16, so it should ideally be more space-efficient to
+/// use a flat array instead of a heap-based vector.
+pub struct FlatTypesStorage<const N: usize> {
+    /// Representation for 32-bit memory
+    pub memory32: [FlatType; N],
+    /// Representation for 64-bit memory
+    pub memory64: [FlatType; N],
+
+    /// Tracks the number of flat types pushed into this storage. If this is
+    /// `MAX_FLAT_TYPES + 1` then this storage represents an un-reprsentable
+    /// type in flat types.
+    ///
+    /// This value should be the same on both `memory32` and `memory64`
+    pub len: u8,
+}
+
+impl<const N: usize> FlatTypesStorage<N> {
+    /// Create a new, empty storage for flat types
+    pub const fn new() -> FlatTypesStorage<N> {
+        FlatTypesStorage {
+            memory32: [FlatType::I32; N],
+            memory64: [FlatType::I32; N],
+            len: 0,
+        }
+    }
+
+    /// Returns a reference to flat type representation
+    pub fn as_flat_types(&self) -> Option<FlatTypes<'_>> {
+        let len = usize::from(self.len);
+        if len > N {
+            assert_eq!(len, N + 1);
+            None
+        } else {
+            Some(FlatTypes {
+                memory32: &self.memory32[..len],
+                memory64: &self.memory64[..len],
+            })
+        }
+    }
+
+    /// Pushes a new flat type into this list using `t32` for 32-bit memories
+    /// and `t64` for 64-bit memories.
+    ///
+    /// Returns whether the type was actually pushed or whether this list of
+    /// flat types just exceeded the maximum meaning that it is now
+    /// unrepresentable with a flat list of types.
+    pub fn push(&mut self, t32: FlatType, t64: FlatType) -> bool {
+        let len = usize::from(self.len);
+        if len < N {
+            self.memory32[len] = t32;
+            self.memory64[len] = t64;
+            self.len += 1;
+            true
+        } else {
+            // If this was the first one to go over then flag the length as
+            // being incompatible with a flat representation.
+            if len == N {
+                self.len += 1;
+            }
+            false
+        }
+    }
+
+    /// Generate an iterator over the 32-bit flat encoding
+    pub fn iter32(&self) -> impl Iterator<Item = u8> {
+        self.memory32
+            .iter()
+            .take(self.len as usize)
+            .map(|f| f.byte_size())
     }
 }
 
@@ -1276,4 +1580,36 @@ pub enum FlatType {
     I64,
     F32,
     F64,
+}
+
+impl FlatType {
+    /// Constructs the "joined" representation for two flat types
+    pub fn join(&mut self, other: FlatType) {
+        if *self == other {
+            return;
+        }
+        *self = match (*self, other) {
+            (FlatType::I32, FlatType::F32) | (FlatType::F32, FlatType::I32) => FlatType::I32,
+            _ => FlatType::I64,
+        };
+    }
+
+    /// Return the size in bytes for this flat type
+    pub const fn byte_size(&self) -> u8 {
+        match self {
+            FlatType::I32 | FlatType::F32 => 4,
+            FlatType::I64 | FlatType::F64 => 8,
+        }
+    }
+}
+
+/// Context under which the flat ABI is considered for functypes.
+///
+/// Note that this is necessary since the same signature can have different
+/// ABIs depending on whether it is a lifted function or a lowered function.
+pub enum FlatFuncTypeContext {
+    /// Flattening args for a lifted function
+    Lift,
+    /// Flattening args for a lowered function
+    Lower,
 }

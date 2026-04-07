@@ -925,78 +925,6 @@ where
     return idx;
 }
 
-struct FlatTypesStorage {
-    // This could be represented as `Vec<FlatType>` but on 64-bit architectures
-    // that's 24 bytes. Otherwise `FlatType` is 1 byte large and
-    // `MAX_FLAT_TYPES` is 16, so it should ideally be more space-efficient to
-    // use a flat array instead of a heap-based vector.
-    memory32: [FlatType; MAX_FLAT_TYPES],
-    memory64: [FlatType; MAX_FLAT_TYPES],
-
-    // Tracks the number of flat types pushed into this storage. If this is
-    // `MAX_FLAT_TYPES + 1` then this storage represents an un-reprsentable
-    // type in flat types.
-    len: u8,
-}
-
-impl FlatTypesStorage {
-    const fn new() -> FlatTypesStorage {
-        FlatTypesStorage {
-            memory32: [FlatType::I32; MAX_FLAT_TYPES],
-            memory64: [FlatType::I32; MAX_FLAT_TYPES],
-            len: 0,
-        }
-    }
-
-    fn as_flat_types(&self) -> Option<FlatTypes<'_>> {
-        let len = usize::from(self.len);
-        if len > MAX_FLAT_TYPES {
-            assert_eq!(len, MAX_FLAT_TYPES + 1);
-            None
-        } else {
-            Some(FlatTypes {
-                memory32: &self.memory32[..len],
-                memory64: &self.memory64[..len],
-            })
-        }
-    }
-
-    /// Pushes a new flat type into this list using `t32` for 32-bit memories
-    /// and `t64` for 64-bit memories.
-    ///
-    /// Returns whether the type was actually pushed or whether this list of
-    /// flat types just exceeded the maximum meaning that it is now
-    /// unrepresentable with a flat list of types.
-    fn push(&mut self, t32: FlatType, t64: FlatType) -> bool {
-        let len = usize::from(self.len);
-        if len < MAX_FLAT_TYPES {
-            self.memory32[len] = t32;
-            self.memory64[len] = t64;
-            self.len += 1;
-            true
-        } else {
-            // If this was the first one to go over then flag the length as
-            // being incompatible with a flat representation.
-            if len == MAX_FLAT_TYPES {
-                self.len += 1;
-            }
-            false
-        }
-    }
-}
-
-impl FlatType {
-    fn join(&mut self, other: FlatType) {
-        if *self == other {
-            return;
-        }
-        *self = match (*self, other) {
-            (FlatType::I32, FlatType::F32) | (FlatType::F32, FlatType::I32) => FlatType::I32,
-            _ => FlatType::I64,
-        };
-    }
-}
-
 #[derive(Default)]
 struct TypeInformationCache {
     records: PrimaryMap<TypeRecordIndex, TypeInformation>,
@@ -1013,7 +941,7 @@ struct TypeInformationCache {
 
 struct TypeInformation {
     depth: u32,
-    flat: FlatTypesStorage,
+    flat: FlatTypesStorage<MAX_FLAT_TYPES>,
     has_borrow: bool,
 }
 
