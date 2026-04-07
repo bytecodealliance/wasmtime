@@ -17,8 +17,8 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
-    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    GlobalInitializer, InstantiateModule, OptionsIndex, StaticModuleIndex, TrampolineIndex,
+    TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -856,7 +856,7 @@ impl Component {
             }
             None => &info.exports,
         };
-        exports.get(name, &NameMapNoIntern).copied()
+        exports.get_by_str(name).copied()
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {

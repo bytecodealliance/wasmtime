@@ -140,6 +140,21 @@ where
     }
 }
 
+impl<V> NameMap<String, V> {
+    /// Like [`NameMap::get`] but specialized for `String` keys to avoid
+    /// allocating a `String` for the lookup by using borrowed `&str` keys
+    /// directly on the underlying `IndexMap`.
+    pub fn get_by_str(&self, name: &str) -> Option<&V> {
+        let candidate = self.definitions.get(name);
+        if let Some(def) = candidate {
+            return Some(def);
+        }
+        let (alternate_name, _version) = alternate_lookup_key(name)?;
+        let (exact_key, _version) = self.alternate_lookups.get(alternate_name)?;
+        self.definitions.get(exact_key.as_str())
+    }
+}
+
 impl<K, V> Default for NameMap<K, V>
 where
     K: Clone + Hash + Eq + Ord,
