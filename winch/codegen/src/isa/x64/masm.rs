@@ -686,6 +686,8 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    // NOTE: if a branchless version is needed, a single-lane variant of
+    // `maybe_canonicalize_v128_nan` could be used when AVX is available.
     fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
         if !self.shared_flags.enable_nan_canonicalization() {
             return Ok(());
