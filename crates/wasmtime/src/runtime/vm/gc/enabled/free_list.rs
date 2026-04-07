@@ -232,7 +232,6 @@ impl FreeList {
             debug_assert_ne!(result, 0);
             debug_assert_eq!(result % ALIGN_U32, 0);
 
-            #[cfg(debug_assertions)]
             self.check_integrity();
 
             log::trace!("FreeList::alloc -> {result:#x}");
@@ -240,14 +239,12 @@ impl FreeList {
         }
 
         // After we've mutated the free list, double check its integrity.
-        #[cfg(debug_assertions)]
         self.check_integrity();
 
         // Slow path: find a block in the blocks list, then set it as bump region.
         self.alloc_slow(alloc_size)
     }
 
-    #[inline(never)]
     #[cold]
     fn alloc_slow(&mut self, alloc_size: u32) -> Option<NonZeroU32> {
         // Put the remaining bump region back into blocks if non-empty.
@@ -274,7 +271,6 @@ impl FreeList {
         self.bump_end = block_index + block_len;
 
         debug_assert_ne!(block_index, 0);
-        #[cfg(debug_assertions)]
         self.check_integrity();
 
         Some(unsafe { NonZeroU32::new_unchecked(block_index) })
@@ -317,9 +313,7 @@ impl FreeList {
                 }
             }
 
-            #[cfg(debug_assertions)]
             self.check_integrity();
-
             return;
         }
 
@@ -333,9 +327,7 @@ impl FreeList {
                 self.bump_end += block_len;
             }
 
-            #[cfg(debug_assertions)]
             self.check_integrity();
-
             return;
         }
 
@@ -420,7 +412,6 @@ impl FreeList {
 
         // After we've added to/mutated the free list, double check its
         // integrity.
-        #[cfg(debug_assertions)]
         self.check_integrity();
     }
 
@@ -454,8 +445,11 @@ impl FreeList {
     /// 3. All blocks are aligned to `ALIGN`
     ///
     /// 4. All block sizes are a multiple of `ALIGN`
-    #[cfg(debug_assertions)]
     fn check_integrity(&self) {
+        if !cfg!(gc_zeal) {
+            return;
+        }
+
         let mut prev_end = None;
         for (&index, &len) in self.free_block_index_to_len.iter() {
             // (1)
