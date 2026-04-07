@@ -7,11 +7,11 @@ Wasmtime is used in many different production use-cases. This list has grown sig
 
 | Organization | Contact | Status | Description of Use |
 | - | - | - | - |
+| [Akamai](https://akamai.com) | [@tschneidereit](https://github.com/tschneidereit) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Build and run modern apps and AI with rapid, highly distributed serverless functions. |
 | [Cosmonic](https://www.cosmonic.com) | [@ricochet](https://github.com/ricochet) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Cosmonic is a distributed app platform built on CNCF wasmCloud for wasmCloud apps. |
 | [DFINITY](https://dfinity.org/) | [@ulan](https://github.com/ulan) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Internet Computer blockchain uses Wasmtime to run canister smart contracts. |
 | [Embark Studios](https://www.embark-studios.com/) | [@repi](https://github.com/repi) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Rust game engine |
 | [Fastly](https://fastly.com/) | [@sunfishcode](https://github.com/dgohman-fastly) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | The Fastly Compute platform helps you compile your custom code to WebAssembly and runs it at the Fastly edge using the WebAssembly System Interface for each compute request. |
-| [Fermyon](https://fermyon.com) | [@tschneidereit](https://github.com/tschneidereit) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Fermyon Cloud is a cloud application platform for WebAssembly-based serverless functions and microservices. |
 | [Huawei](https://www.huawei.com) | [@mohrobati](https://github.com/mohrobati) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Huawei Cloud uses Wasmtime to run WebAssembly functions in both serverless cloud and on the edge. |
 | [InfinyOn](https://infinyon.com/) | [@sehz](https://github.com/sehz) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | InfinyOn leverages the power of WebAssembly SmartModules to execute real-time data transformations. |
 | [Microsoft](https://microsoft.com/) | [@devigned](https://gist.github.com/devigned) | ![production](https://img.shields.io/badge/-production-blue?style=flat) | Microsoft has had Wasmtime in preview for its WebAssembly System Interface (WASI) node pools in Azure Kubernetes Service since October 2021. |
