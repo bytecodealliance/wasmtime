@@ -267,6 +267,34 @@ fn linker_define_name() -> Result<()> {
     })
 }
 
+#[tokio::test]
+async fn linker_module_async() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"(module (func (export "f")) (memory (export "m") 1))"#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+
+    OomTest::new()
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let mut linker = Linker::<()>::new(&engine);
+            linker.module_async(&mut store, "m", &module).await?;
+            Ok(())
+        })
+        .await
+}
+
 // Note: linker_define_unknown_imports_as_traps and
 // linker_define_unknown_imports_as_default_values are not tested under OOM
 // because UnknownImportError::new uses infallible String allocations
