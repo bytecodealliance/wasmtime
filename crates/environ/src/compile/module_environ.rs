@@ -3,7 +3,6 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
 };
-use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
@@ -12,6 +11,7 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
     WasmValType, WasmparserTypeConverter,
 };
+use crate::{NeedsGcRooting, prelude::*};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -531,7 +531,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             }
                             TableSegmentElements::Functions(elems.into())
                         }
-                        ElementItems::Expressions(_ty, items) => {
+                        ElementItems::Expressions(ty, items) => {
+                            let ty = self.convert_ref_type(ty)?;
                             let mut exprs =
                                 Vec::with_capacity(usize::try_from(items.count()).unwrap());
                             for expr in items {
@@ -541,7 +542,14 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     self.flag_func_escaped(func);
                                 }
                             }
-                            TableSegmentElements::Expressions(exprs.into())
+                            TableSegmentElements::Expressions {
+                                needs_gc_rooting: if ty.is_vmgcref_type_and_not_i31() {
+                                    NeedsGcRooting::Yes
+                                } else {
+                                    NeedsGcRooting::No
+                                },
+                                exprs: exprs.into(),
+                            }
                         }
                     };
 
@@ -565,12 +573,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
                         ElementKind::Passive => {
                             let elem_index = ElemIndex::from_u32(index as u32);
-                            let index = self.result.module.passive_elements.len();
-                            self.result.module.passive_elements.push(elements)?;
+                            let passive_index =
+                                self.result.module.passive_elements.push(elements)?;
                             self.result
                                 .module
                                 .passive_elements_map
-                                .insert(elem_index, index);
+                                .insert(elem_index, passive_index);
                         }
 
                         ElementKind::Declared => {}
@@ -1309,7 +1317,7 @@ impl ModuleTranslation<'_> {
             // expressions are deferred to get evaluated at runtime.
             let function_elements = match &segment.elements {
                 TableSegmentElements::Functions(indices) => indices,
-                TableSegmentElements::Expressions(_) => break,
+                TableSegmentElements::Expressions { .. } => break,
             };
 
             let precomputed =

@@ -266,6 +266,15 @@ pub struct TableSegment {
     pub elements: TableSegmentElements,
 }
 
+/// Does something need GC rooting?
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NeedsGcRooting {
+    /// GC rooting is needed.
+    Yes,
+    /// GC rooting is not needed.
+    No,
+}
+
 /// Elements of a table segment, either a list of functions or list of arbitrary
 /// expressions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -274,7 +283,13 @@ pub enum TableSegmentElements {
     /// indicates a null function.
     Functions(Box<[FuncIndex]>),
     /// Arbitrary expressions, aka either functions, null or a load of a global.
-    Expressions(Box<[ConstExpr]>),
+    Expressions {
+        /// Is this expression's result of a type that needs GC rooting and
+        /// tracing?
+        needs_gc_rooting: NeedsGcRooting,
+        /// The const expressions for this segment's elements.
+        exprs: Box<[ConstExpr]>,
+    },
 }
 
 impl TableSegmentElements {
@@ -282,7 +297,7 @@ impl TableSegmentElements {
     pub fn len(&self) -> u64 {
         match self {
             Self::Functions(s) => u64::try_from(s.len()).unwrap(),
-            Self::Expressions(s) => u64::try_from(s.len()).unwrap(),
+            Self::Expressions { exprs, .. } => u64::try_from(exprs.len()).unwrap(),
         }
     }
 }
@@ -316,10 +331,11 @@ pub struct Module {
     pub memory_initialization: MemoryInitialization,
 
     /// WebAssembly passive elements.
-    pub passive_elements: TryVec<TableSegmentElements>,
+    pub passive_elements: TryPrimaryMap<PassiveElemIndex, TableSegmentElements>,
 
-    /// The map from passive element index (element segment index space) to index in `passive_elements`.
-    pub passive_elements_map: BTreeMap<ElemIndex, usize>,
+    /// The map from passive element index (element segment index space) to
+    /// index in `passive_elements`.
+    pub passive_elements_map: BTreeMap<ElemIndex, PassiveElemIndex>,
 
     /// The map from passive data index (data segment index space) to index in `passive_data`.
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
