@@ -7,13 +7,13 @@ use crate::runtime::vm;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
+    CallContext, ComponentInstance, HandleTable, InstanceState, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
 use core::pin::Pin;
-use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
+use wasmtime_environ::prelude::TryPrimaryMap;
 
 /// Default amount of fuel allowed for all guest-to-host calls in the component
 /// model.
@@ -29,7 +29,7 @@ const DEFAULT_HOSTCALL_FUEL: usize = 128 << 20;
 pub struct ComponentStoreData {
     /// All component instances, in a similar manner to how core wasm instances
     /// are managed.
-    instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
+    instances: TryPrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 
     /// Whether an instance belonging to this store has trapped.
     trapped: bool,
@@ -151,15 +151,10 @@ impl ComponentStoreData {
                 continue;
             };
 
-            assert!(
-                instance
-                    .get_mut()
-                    .instance_states()
-                    .0
-                    .iter_mut()
-                    .all(|(_, state)| state.handle_table().is_empty()
-                        && state.concurrent_state().pending_is_empty())
-            );
+            assert!(instance.get_mut().instance_states().0.iter_mut().all(
+                |(_, state): (_, &mut InstanceState)| state.handle_table().is_empty()
+                    && state.concurrent_state().pending_is_empty()
+            ));
         }
     }
 
@@ -259,11 +254,11 @@ impl StoreData {
     pub(crate) fn push_component_instance(
         &mut self,
         data: OwnedComponentInstance,
-    ) -> ComponentInstanceId {
+    ) -> Result<ComponentInstanceId, OutOfMemory> {
         let expected = data.get().id();
-        let ret = self.components.instances.push(Some(data));
+        let ret = self.components.instances.push(Some(data))?;
         assert_eq!(expected, ret);
-        ret
+        Ok(ret)
     }
 
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
@@ -394,12 +389,13 @@ impl StoreOpaque {
         )
     }
 
-    pub(crate) fn enter_call_not_concurrent(&mut self) {
+    pub(crate) fn enter_call_not_concurrent(&mut self) -> Result<()> {
         let state = match &mut self.component_data_mut().task_state {
             ComponentTaskState::NotConcurrent(state) => state,
             ComponentTaskState::Concurrent(_) => unreachable!(),
         };
-        state.scopes.push(CallContext::default());
+        state.scopes.push(CallContext::default())?;
+        Ok(())
     }
 
     pub(crate) fn exit_call_not_concurrent(&mut self) {
@@ -499,7 +495,7 @@ impl<T> StoreContextMut<'_, T> {
 
 #[derive(Default)]
 pub struct ComponentTasksNotConcurrent {
-    scopes: Vec<CallContext>,
+    scopes: TryVec<CallContext>,
 }
 
 impl ComponentTaskState {

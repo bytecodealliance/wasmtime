@@ -26,10 +26,10 @@ use crate::prelude::*;
 use core::error::Error;
 use core::fmt;
 use core::mem;
-use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
 };
+use wasmtime_environ::prelude::TryPrimaryMap;
 
 /// Contextual state necessary to perform resource-related operations.
 ///
@@ -55,7 +55,7 @@ pub struct ResourceTables<'a> {
     /// `ResourceAny::resource_drop` which won't consult this table as it's
     /// only operating over the host table.
     pub guest: Option<(
-        &'a mut PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+        &'a mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &'a ComponentTypes,
     )>,
 

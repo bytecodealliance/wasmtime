@@ -771,15 +771,15 @@ impl Func {
         };
         if results_ty.abi.flat_count(max_flat).is_some() {
             let mut flat = src.iter();
-            Ok(Box::new(
+            Ok(try_new::<Box<_>>(
                 results_ty
                     .types
                     .iter()
                     .map(move |ty| Val::lift(cx, *ty, &mut flat)),
-            ))
+            )?)
         } else {
             let iter = Self::load_results(cx, results_ty, &mut src.iter())?;
-            Ok(Box::new(iter))
+            Ok(try_new::<Box<_>>(iter)?)
         }
     }
 
