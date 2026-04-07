@@ -33,6 +33,10 @@ impl Default for ConstExprEvaluator {
 /// The context within which a particular const expression is evaluated.
 pub struct ConstEvalContext {
     pub(crate) instance: InstanceId,
+    #[cfg_attr(
+        not(feature = "gc"),
+        expect(dead_code, reason = "easier than conditionally compiling this field")
+    )]
     pub(crate) asyncness: Asyncness,
 }
 

@@ -879,7 +879,6 @@ async fn initialize_passive_elements(
             } => {
                 let mut vals = TryVec::with_capacity(exprs.len())?;
                 for expr in exprs {
-                    // TODO FITZGEN: we need the GC refs not LIFO-rooted...
                     let mut store = OpaqueRootScope::new(&mut *store);
 
                     let val = const_evaluator
