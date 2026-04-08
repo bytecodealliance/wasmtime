@@ -1047,7 +1047,9 @@ unsafe impl GcHeap for DrcHeap {
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
-            Some(index) => VMGcRef::from_heap_index(index).unwrap(),
+            Some(index) => VMGcRef::from_heap_index(index).unwrap_or_else(|| {
+                panic!("invalid GC heap index returned from free list alloc: {index:#x}")
+            }),
         };
 
         // Assert that the newly-allocated memory is still filled with the

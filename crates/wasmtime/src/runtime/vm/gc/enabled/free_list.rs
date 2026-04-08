@@ -73,12 +73,17 @@ impl FreeList {
     pub fn new(capacity: usize) -> Self {
         log::debug!("FreeList::new({capacity})");
 
+        // Don't start at `0`. Reserve that for "null pointers" and free_list way we
+        // can use `NonZeroU32` as out pointer type, giving us some more
+        // bitpacking opportunities.
+        let start = ALIGN_U32;
+
         let mut free_list = FreeList {
             capacity,
             free_block_index_to_len: BTreeMap::new(),
             free_block_len_to_indices: BTreeMap::new(),
-            bump_ptr: 0,
-            bump_end: 0,
+            bump_ptr: start,
+            bump_end: start,
         };
 
         let end = u32::try_from(free_list.capacity).unwrap_or_else(|_| {
@@ -86,19 +91,14 @@ impl FreeList {
             u32::MAX
         });
 
-        // Don't start at `0`. Reserve that for "null pointers" and free_list way we
-        // can use `NonZeroU32` as out pointer type, giving us some more
-        // bitpacking opportunities.
-        let start = ALIGN_U32;
-
         let len = round_u32_down_to_pow2(end.saturating_sub(start), ALIGN_U32);
 
         if len >= ALIGN_U32 {
             // Initialize bump allocator with the entire range.
-            free_list.bump_ptr = start;
             free_list.bump_end = start + len;
         }
 
+        free_list.check_integrity();
         free_list
     }
 
@@ -236,8 +236,9 @@ impl FreeList {
         debug_assert_eq!(alloc_size % ALIGN_U32, 0);
 
         // Fast path: bump allocate from the current region.
-        let new_ptr = self.bump_ptr + alloc_size;
-        if new_ptr <= self.bump_end {
+        if let Some(new_ptr) = self.bump_ptr.checked_add(alloc_size)
+            && new_ptr <= self.bump_end
+        {
             let result = self.bump_ptr;
             self.bump_ptr = new_ptr;
             debug_assert_ne!(result, 0);
@@ -261,8 +262,8 @@ impl FreeList {
         // Put the remaining bump region back into blocks if non-empty.
         let remaining_ptr = self.bump_ptr;
         let remaining = self.bump_end - self.bump_ptr;
-        self.bump_ptr = 0;
-        self.bump_end = 0;
+        self.bump_ptr = ALIGN_U32;
+        self.bump_end = ALIGN_U32;
         if remaining >= ALIGN_U32 {
             self.insert_free_block(remaining_ptr, remaining);
         }
@@ -290,6 +291,8 @@ impl FreeList {
 
         debug_assert_eq!(block_index % ALIGN_U32, 0);
         debug_assert_eq!(block_len % ALIGN_U32, 0);
+        debug_assert_ne!(block_len, 0);
+        debug_assert!(block_len >= alloc_size);
 
         // Set this block as the new bump region and allocate from it.
         self.bump_ptr = block_index + alloc_size;
@@ -557,6 +560,7 @@ impl FreeList {
 
         // Check that every entry in our size buckets is correct.
         for (len, indices) in &self.free_block_len_to_indices {
+            assert!(!indices.is_empty());
             for idx in indices {
                 assert!(self.free_block_index_to_len.contains_key(idx));
                 assert_eq!(self.free_block_index_to_len[idx], *len);
@@ -565,10 +569,14 @@ impl FreeList {
 
         // Check bump region validity.
         assert!(self.bump_ptr <= self.bump_end);
+        assert_ne!(self.bump_ptr, 0);
+        assert_ne!(self.bump_end, 0);
         if self.bump_ptr < self.bump_end {
             assert_eq!(self.bump_ptr % ALIGN_U32, 0);
             assert_eq!(self.bump_end % ALIGN_U32, 0);
+
             assert!(usize::try_from(self.bump_end).unwrap() <= self.capacity);
+
             // Bump region should not overlap with any block.
             for (&index, &len) in self.free_block_index_to_len.iter() {
                 let block_end = index + len;
@@ -671,19 +679,23 @@ mod tests {
             assert_eq!(initial_size.unwrap_or(0), free_list.max_size());
 
             // Run through the generated ops and perform each operation.
-            for (id, op) in ops {
+            for op in ops {
                 match op {
-                    Op::Alloc(layout) => {
+                    Op::Alloc(id, layout) => {
                         if let Ok(Some(ptr)) = free_list.alloc(layout) {
+                            assert_eq!(usize::try_from(ptr.get()).unwrap() % layout.align(), 0);
                             live.insert(id, ptr);
                         }
                     }
-                    Op::Dealloc(layout) => {
+                    Op::Dealloc(id, layout) => {
                         if let Some(ptr) = live.remove(&id) {
                             free_list.dealloc(ptr, layout);
                         } else {
                             deferred.push((id, layout));
                         }
+                    }
+                    Op::AddCapacity(capacity) => {
+                        free_list.add_capacity(capacity);
                     }
                 }
             }
@@ -718,8 +730,9 @@ mod tests {
 
     #[derive(Clone, Debug)]
     enum Op {
-        Alloc(Layout),
-        Dealloc(Layout),
+        AddCapacity(usize),
+        Alloc(usize, Layout),
+        Dealloc(usize, Layout),
     }
 
     /// Map an arbitrary `x` to a power of 2 that is less than or equal to
@@ -772,19 +785,25 @@ mod tests {
 
     /// Proptest strategy to generate a free list capacity and a series of
     /// allocation operations to perform in a free list of that capacity.
-    fn ops() -> impl Strategy<Value = (NonZeroUsize, Vec<(usize, Op)>)> {
+    fn ops() -> impl Strategy<Value = (NonZeroUsize, Vec<Op>)> {
         any::<usize>().prop_flat_map(|capacity| {
             let capacity =
                 NonZeroUsize::new(capacity).unwrap_or_else(|| NonZeroUsize::new(1 << 31).unwrap());
 
             (
                 Just(capacity),
-                (any::<usize>(), any::<usize>(), any::<usize>())
-                    .prop_flat_map(move |(id, size, align)| {
+                (
+                    any::<usize>(),
+                    any::<usize>(),
+                    any::<usize>(),
+                    any::<usize>(),
+                )
+                    .prop_flat_map(move |(id, size, align, additional)| {
                         let layout = arbitrary_layout(capacity, size, align);
                         vec![
-                            Just((id, Op::Alloc(layout))),
-                            Just((id, Op::Dealloc(layout))),
+                            Just(Op::Alloc(id, layout)),
+                            Just(Op::Dealloc(id, layout)),
+                            Just(Op::AddCapacity(additional)),
                         ]
                     })
                     .prop_shuffle(),
@@ -1159,5 +1178,57 @@ mod tests {
             free_list.alloc(layout).unwrap().is_none(),
             "but not enough capacity for two"
         );
+    }
+
+    #[test]
+    fn bump_ptr_overflow() {
+        let capacity = usize::try_from(u32::MAX).unwrap();
+        let len = round_usize_down_to_pow2(capacity, ALIGN_USIZE) - ALIGN_USIZE;
+        let mut free_list = FreeList::new(capacity);
+        println!("Initial:");
+        free_list
+            .iter_free_blocks()
+            .for_each(|(idx, len)| println!("- free block: {idx}..{}", idx + len));
+        assert_eq!(free_list.num_free_blocks(), 1);
+
+        // Allocate everything except one `ALIGN_USIZE` block.
+        let layout = Layout::from_size_align(len - ALIGN_USIZE, ALIGN_USIZE).unwrap();
+        let p = free_list.alloc(layout).unwrap().unwrap();
+        println!("Allocated {p}..{}", p.get() as usize + (len - ALIGN_USIZE));
+        println!("After big alloc:");
+        free_list
+            .iter_free_blocks()
+            .for_each(|(idx, len)| println!("- free block: {idx}..{}", idx + len));
+        assert_eq!(free_list.num_free_blocks(), 1);
+
+        // Allocating a `2 * ALIGN_USIZE` block fails. We don't have capacity
+        // and this would overflow the bump pointer.
+        assert!(free_list.bump_ptr.checked_add(2 * ALIGN_U32).is_none());
+        let layout = Layout::from_size_align(2 * ALIGN_USIZE, ALIGN_USIZE).unwrap();
+        assert!(free_list.alloc(layout).unwrap().is_none());
+        println!("After alloc failure:");
+        free_list
+            .iter_free_blocks()
+            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
+        assert_eq!(free_list.num_free_blocks(), 1);
+
+        // Allocating an `ALIGN_USIZE` block succeeds. Everything is allocated
+        // now.
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
+        free_list.alloc(layout).unwrap().unwrap();
+        println!("After alloc success:");
+        free_list
+            .iter_free_blocks()
+            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
+        assert_eq!(free_list.num_free_blocks(), 0);
+
+        // Allocating another `ALIGN_USIZE` block fails.
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
+        println!("After second alloc failure:");
+        free_list
+            .iter_free_blocks()
+            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
+        assert!(free_list.alloc(layout).unwrap().is_none());
+        assert_eq!(free_list.num_free_blocks(), 0);
     }
 }
