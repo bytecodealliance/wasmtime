@@ -6,7 +6,9 @@
 #define WASMTIME_VAL_HH
 
 #include <optional>
+#ifdef WASMTIME_FEATURE_GC
 #include <wasmtime/gc.h>
+#endif // WASMTIME_FEATURE_GC
 #include <wasmtime/store.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>

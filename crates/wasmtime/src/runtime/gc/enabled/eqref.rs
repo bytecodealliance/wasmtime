@@ -1,5 +1,5 @@
 //! Working with GC `eqref`s.
-
+#![cfg(feature = "gc")]
 use crate::{
     AnyRef, ArrayRef, ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, I31,
     OwnedRooted, RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,

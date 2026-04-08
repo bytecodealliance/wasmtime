@@ -369,6 +369,7 @@ WASM_API_EXTERN void wasmtime_exnref_clone(const wasmtime_exnref_t *ref,
  * After this call, `ref` is left in an undefined state and should not be used.
  */
 WASM_API_EXTERN void wasmtime_exnref_unroot(wasmtime_exnref_t *ref);
+#endif // WASMTIME_FEATURE_GC
 
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
@@ -394,8 +395,6 @@ typedef uint8_t wasmtime_valkind_t;
 /// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
 /// exnref
 #define WASMTIME_EXNREF 8
-
-#endif // WASMTIME_FEATURE_GC
 
 /// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
 /// stored in little-endian order.

@@ -11,6 +11,8 @@
 #ifndef WASMTIME_GC_H
 #define WASMTIME_GC_H
 
+#ifdef WASMTIME_FEATURE_GC
+
 #include <wasmtime/val.h>
 
 #ifdef __cplusplus
@@ -593,4 +595,5 @@ WASM_API_EXTERN bool wasmtime_anyref_as_array(wasmtime_context_t *context,
 } // extern "C"
 #endif
 
+#endif // WASMTIME_FEATURE_GC
 #endif // WASMTIME_GC_H
