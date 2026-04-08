@@ -75,7 +75,7 @@ impl StoreOpaque {
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
     ///
     /// Returns an error if growing the GC heap fails.
-    async fn grow_gc_heap(
+    pub(crate) async fn grow_gc_heap(
         &mut self,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: u64,
