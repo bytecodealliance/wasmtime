@@ -352,7 +352,7 @@ impl WastContext {
                     Outcome::Trap(e) => return Err(e).context("instantiation failed"),
                 };
                 if let Some(name) = name {
-                    let ty = component.component_type();
+                    let ty = component.component_type()?;
                     let engine = self.engine().clone();
                     let mut linker = self.component_linker.instance(name)?;
                     for (name, item) in ty.exports(&engine) {

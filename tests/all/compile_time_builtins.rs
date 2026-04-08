@@ -254,7 +254,7 @@ fn import_erased() -> Result<()> {
             .compile_component()?
     };
 
-    let component_type = component.component_type();
+    let component_type = component.component_type()?;
     let imports = component_type
         .imports(&engine)
         .map(|(name, _ty)| name)

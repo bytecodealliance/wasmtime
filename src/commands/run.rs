@@ -798,7 +798,7 @@ impl RunCommand {
 
         let name = untyped_call.name();
         let matches =
-            Self::search_component_funcs(store.engine(), component.component_type(), name);
+            Self::search_component_funcs(store.engine(), component.component_type()?, name);
         let (names, func_type) = match matches.len() {
             0 => bail!("No exported func named `{name}` in component."),
             1 => &matches[0],

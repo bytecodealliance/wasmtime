@@ -112,7 +112,13 @@ pub unsafe extern "C" fn wasmtime_component_deserialize_file(
 pub extern "C" fn wasmtime_component_type(
     component: &wasmtime_component_t,
 ) -> Box<wasmtime_component_type_t> {
-    Box::new(component.component.component_type().into())
+    Box::new(
+        component
+            .component
+            .component_type()
+            .expect("failed to get component type")
+            .into(),
+    )
 }
 
 #[unsafe(no_mangle)]

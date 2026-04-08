@@ -304,7 +304,7 @@ fn intrinsics_not_listed_in_imports() -> Result<()> {
     }
     let component = code_builder.compile_component()?;
 
-    let component_type = component.component_type();
+    let component_type = component.component_type()?;
     let imports = component_type.imports(&engine);
     assert_eq!(imports.count(), 0);
 

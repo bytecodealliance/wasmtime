@@ -288,8 +288,8 @@ impl Component {
     ///     (component (import "x" (type (sub resource))))
     /// "#)?;
     ///
-    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    /// let (_, a_ty) = a.component_type()?.imports(&engine).next().unwrap();
+    /// let (_, b_ty) = b.component_type()?.imports(&engine).next().unwrap();
     ///
     /// let a_ty = match a_ty {
     ///     ComponentItem::Resource(ty) => ty,
@@ -323,8 +323,8 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    /// let (_, import) = a.component_type()?.imports(&engine).next().unwrap();
+    /// let (_, export) = a.component_type()?.exports(&engine).next().unwrap();
     ///
     /// let import = match import {
     ///     ComponentItem::Resource(ty) => ty,
@@ -383,16 +383,19 @@ impl Component {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn component_type(&self) -> types::Component {
-        self.with_uninstantiated_instance_type(|ty| types::Component::from(self.inner.ty, ty))
+    pub fn component_type(&self) -> Result<types::Component> {
+        Ok(self.with_uninstantiated_instance_type(|ty| types::Component::from(self.inner.ty, ty))?)
     }
 
-    fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
-        let resources = Arc::new(TryPrimaryMap::new());
-        f(&InstanceType {
+    fn with_uninstantiated_instance_type<R>(
+        &self,
+        f: impl FnOnce(&InstanceType<'_>) -> R,
+    ) -> Result<R, OutOfMemory> {
+        let resources = try_new::<Arc<_>>(TryPrimaryMap::new())?;
+        Ok(f(&InstanceType {
             types: self.types(),
             resources: &resources,
-        })
+        }))
     }
 
     /// Final assembly step for a component from its in-memory representation.
@@ -851,13 +854,15 @@ impl Component {
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
         let index = self.lookup_export_index(instance, name)?;
-        let item = self.with_uninstantiated_instance_type(|instance| {
-            types::ComponentItem::from_export(
-                &self.inner.engine,
-                &info.export_items[index],
-                instance,
-            )
-        });
+        let item = self
+            .with_uninstantiated_instance_type(|instance| {
+                types::ComponentItem::from_export(
+                    &self.inner.engine,
+                    &info.export_items[index],
+                    instance,
+                )
+            })
+            .ok()?;
         Some((
             item,
             ComponentExportIndex {

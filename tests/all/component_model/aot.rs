@@ -148,7 +148,7 @@ fn reflect_resource_import() -> Result<()> {
         )
         "#,
     )?;
-    let ty = c.component_type();
+    let ty = c.component_type()?;
     let mut imports = ty.imports(&engine);
     let (_, x) = imports.next().unwrap();
     let (_, y) = imports.next().unwrap();
