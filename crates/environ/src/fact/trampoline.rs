@@ -31,7 +31,7 @@ use crate::fact::{
     LinearMemoryOptions, Module, Options,
 };
 use crate::prelude::*;
-use crate::{FuncIndex, GlobalIndex, Trap};
+use crate::{FuncIndex, GlobalIndex, IndexType, Trap};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
@@ -536,7 +536,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             &lower_sig.params,
             match adapter.lift.options.data_model {
                 DataModel::Gc {} => todo!("CM+GC"),
-                DataModel::LinearMemory(LinearMemoryOptions { memory, .. }) => memory,
+                DataModel::LinearMemory(LinearMemoryOptions { memory, .. }) => memory.map(|m| m.0),
             },
         );
 
@@ -957,13 +957,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             let abi = CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
             match lift_opts.data_model {
                 DataModel::Gc {} => todo!("CM+GC"),
-                DataModel::LinearMemory(LinearMemoryOptions { memory64, .. }) => {
-                    let (size, align) = if memory64 {
-                        (abi.size64, abi.align64)
-                    } else {
-                        (abi.size32, abi.align32)
-                    };
-
+                DataModel::LinearMemory(opts) => {
+                    let (size, align) = opts.sizealign(&abi);
                     // If there are too many parameters then space is allocated in the
                     // destination module for the parameters via its `realloc` function.
                     let size = MallocSize::Const(size);
@@ -2421,22 +2416,24 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
             (
                 DataModel::LinearMemory(LinearMemoryOptions {
-                    memory64: src64,
-                    memory: src_mem,
+                    memory: Some((src_mem, src_ty)),
                     realloc: _,
                 }),
                 DataModel::LinearMemory(LinearMemoryOptions {
-                    memory64: dst64,
-                    memory: dst_mem,
+                    memory: Some((dst_mem, dst_ty)),
                     realloc: _,
                 }),
             ) => self.module.import_transcoder(Transcoder {
-                from_memory: src_mem.unwrap(),
-                from_memory64: src64,
-                to_memory: dst_mem.unwrap(),
-                to_memory64: dst64,
+                from_memory: src_mem,
+                from_memory64: src_ty.idx_type == IndexType::I64,
+                to_memory: dst_mem,
+                to_memory64: dst_ty.idx_type == IndexType::I64,
                 op,
             }),
+            (DataModel::LinearMemory(LinearMemoryOptions { memory: None, .. }), _)
+            | (_, DataModel::LinearMemory(LinearMemoryOptions { memory: None, .. })) => {
+                unreachable!()
+            }
         }
     }
 
@@ -2457,21 +2454,22 @@ impl<'a, 'b> Compiler<'a, 'b> {
         trap: Trap,
     ) {
         let extend_to_64 = |me: &mut Self| {
-            if !opts.memory64 {
+            if !opts.memory64() {
                 me.instruction(I64ExtendI32U);
             }
         };
 
         self.instruction(Block(BlockType::Empty));
         self.instruction(Block(BlockType::Empty));
+        let (memory, ty) = opts.memory.unwrap();
 
         // Calculate the full byte size of memory with `memory.size`. Note that
         // arithmetic here is done always in 64-bits to accommodate 4G memories.
         // Additionally it's assumed that 64-bit memories never fill up
         // entirely.
-        self.instruction(MemorySize(opts.memory.unwrap().as_u32()));
+        self.instruction(MemorySize(memory.as_u32()));
         extend_to_64(self);
-        self.instruction(I64Const(16));
+        self.instruction(I64Const(ty.page_size_log2.into()));
         self.instruction(I64Shl);
 
         // Calculate the end address of the string. This is done by adding the
@@ -2483,7 +2481,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(LocalGet(byte_len_local));
         extend_to_64(self);
         self.instruction(I64Add);
-        if opts.memory64 {
+        if opts.memory64() {
             let tmp = self.local_tee_new_tmp(ValType::I64);
             self.instruction(LocalGet(ptr_local));
             self.ptr_lt_u(opts);
@@ -2783,14 +2781,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let src_entry_abi = CanonicalAbiInfo::record([src_key_abi, src_value_abi].into_iter());
         let (_, src_key_align) = self.types.size_align(src_mem_opts, &src_map_ty.key);
         let (_, src_value_align) = self.types.size_align(src_mem_opts, &src_map_ty.value);
-        let (src_tuple_size, src_entry_align) = if src_mem_opts.memory64 {
-            (src_entry_abi.size64, src_entry_abi.align64)
-        } else {
-            (src_entry_abi.size32, src_entry_abi.align32)
-        };
+        let (src_tuple_size, src_entry_align) = src_mem_opts.sizealign(&src_entry_abi);
         let src_value_offset = {
             let mut offset = 0u32;
-            if src_mem_opts.memory64 {
+            if src_mem_opts.memory64() {
                 src_key_abi.next_field64(&mut offset);
                 src_value_abi.next_field64(&mut offset)
             } else {
@@ -2804,14 +2798,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let dst_entry_abi = CanonicalAbiInfo::record([dst_key_abi, dst_value_abi].into_iter());
         let (_, dst_key_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.key);
         let (_, dst_value_align) = self.types.size_align(dst_mem_opts, &dst_map_ty.value);
-        let (dst_tuple_size, dst_entry_align) = if dst_mem_opts.memory64 {
-            (dst_entry_abi.size64, dst_entry_abi.align64)
-        } else {
-            (dst_entry_abi.size32, dst_entry_abi.align32)
-        };
+        let (dst_tuple_size, dst_entry_align) = dst_mem_opts.sizealign(&dst_entry_abi);
         let dst_value_offset = {
             let mut offset = 0u32;
-            if dst_mem_opts.memory64 {
+            if dst_mem_opts.memory64() {
                 dst_key_abi.next_field64(&mut offset);
                 dst_value_abi.next_field64(&mut offset)
             } else {
@@ -3973,7 +3963,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_load(&mut self, mem: &Memory) {
-        if mem.mem_opts().memory64 {
+        if mem.mem_opts().memory64() {
             self.i64_load(mem);
         } else {
             self.i32_load(mem);
@@ -3981,7 +3971,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_add(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Add);
         } else {
             self.instruction(I32Add);
@@ -3989,7 +3979,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_sub(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Sub);
         } else {
             self.instruction(I32Sub);
@@ -3997,7 +3987,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_mul(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Mul);
         } else {
             self.instruction(I32Mul);
@@ -4005,7 +3995,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_gt_u(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64GtU);
         } else {
             self.instruction(I32GtU);
@@ -4013,7 +4003,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_lt_u(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64LtU);
         } else {
             self.instruction(I32LtU);
@@ -4021,7 +4011,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_shl(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Shl);
         } else {
             self.instruction(I32Shl);
@@ -4029,7 +4019,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_eqz(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Eqz);
         } else {
             self.instruction(I32Eqz);
@@ -4037,7 +4027,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_uconst(&mut self, opts: &LinearMemoryOptions, val: u32) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Const(val.into()));
         } else {
             self.instruction(I32Const(val.cast_signed()));
@@ -4045,7 +4035,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_iconst(&mut self, opts: &LinearMemoryOptions, val: i32) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Const(val.into()));
         } else {
             self.instruction(I32Const(val));
@@ -4053,7 +4043,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_eq(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Eq);
         } else {
             self.instruction(I32Eq);
@@ -4061,7 +4051,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_ne(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Ne);
         } else {
             self.instruction(I32Ne);
@@ -4069,7 +4059,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_and(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64And);
         } else {
             self.instruction(I32And);
@@ -4077,7 +4067,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_or(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Or);
         } else {
             self.instruction(I32Or);
@@ -4085,7 +4075,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_xor(&mut self, opts: &LinearMemoryOptions) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Xor);
         } else {
             self.instruction(I32Xor);
@@ -4093,7 +4083,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_if(&mut self, opts: &LinearMemoryOptions, ty: BlockType) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Const(0));
             self.instruction(I64Ne);
         }
@@ -4101,7 +4091,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_br_if(&mut self, opts: &LinearMemoryOptions, depth: u32) {
-        if opts.memory64 {
+        if opts.memory64() {
             self.instruction(I64Const(0));
             self.instruction(I64Ne);
         }
@@ -4141,7 +4131,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     fn ptr_store(&mut self, mem: &Memory) {
-        if mem.mem_opts().memory64 {
+        if mem.mem_opts().memory64() {
             self.i64_store(mem);
         } else {
             self.i32_store(mem);
@@ -4204,7 +4194,7 @@ impl<'a> Source<'a> {
                 Source::Stack(s.slice(1..s.locals.len()).slice(0..flat_len))
             }
             Source::Memory(mem) => {
-                let mem = if mem.mem_opts().memory64 {
+                let mem = if mem.mem_opts().memory64() {
                     mem.bump(info.payload_offset64)
                 } else {
                     mem.bump(info.payload_offset32)
@@ -4268,7 +4258,7 @@ impl<'a> Destination<'a> {
                 Destination::Stack(&s[1..][..flat_len], opts)
             }
             Destination::Memory(mem) => {
-                let mem = if mem.mem_opts().memory64 {
+                let mem = if mem.mem_opts().memory64() {
                     mem.bump(info.payload_offset64)
                 } else {
                     mem.bump(info.payload_offset32)
@@ -4296,7 +4286,7 @@ fn next_field_offset<'a>(
     mem: &Memory<'a>,
 ) -> Memory<'a> {
     let abi = types.canonical_abi(field);
-    let offset = if mem.mem_opts().memory64 {
+    let offset = if mem.mem_opts().memory64() {
         abi.next_field64(offset)
     } else {
         abi.next_field32(offset)
@@ -4309,7 +4299,7 @@ impl<'a> Memory<'a> {
         MemArg {
             offset: u64::from(self.offset),
             align,
-            memory_index: self.mem_opts().memory.unwrap().as_u32(),
+            memory_index: self.mem_opts().memory.unwrap().0.as_u32(),
         }
     }
 

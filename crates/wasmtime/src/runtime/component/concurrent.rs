@@ -2289,7 +2289,7 @@ impl Instance {
 
                         let state = store.concurrent_state_mut();
                         if !state.get_mut(guest_thread.task)?.result.is_none() {
-                            bail_bug!("task has not yet produced a result");
+                            bail_bug!("task has already produced a result");
                         }
 
                         match state.get_mut(guest_thread.task)?.lift_result.take() {
@@ -3058,13 +3058,21 @@ impl Instance {
 
         log::trace!("drop waitable set {rep} (handle {set})");
 
-        let set = store
+        // Note that we're careful to check for waiters _before_ deleting the
+        // set to avoid dropping any waiters in `WaitMode::Fiber(_)`, which
+        // would panic.  See `drop-waitable-set-with-waiters.wast` for details.
+        if !store
             .concurrent_state_mut()
-            .delete(TableId::<WaitableSet>::new(rep))?;
-
-        if !set.waiting.is_empty() {
+            .get_mut(TableId::<WaitableSet>::new(rep))?
+            .waiting
+            .is_empty()
+        {
             bail!(Trap::WaitableSetDropHasWaiters);
         }
+
+        store
+            .concurrent_state_mut()
+            .delete(TableId::<WaitableSet>::new(rep))?;
 
         Ok(())
     }
@@ -3137,7 +3145,7 @@ impl Instance {
                 (
                     Waitable::Guest(id),
                     thread,
-                    concurrent_state.get_mut(id)?.exited,
+                    concurrent_state.get_mut(id)?.ready_to_delete(),
                 )
             } else {
                 bail_bug!("expected guest caller for `subtask.drop`")

@@ -2,11 +2,8 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
-use crate::OpaqueRootScope;
 use crate::code::ModuleWithCode;
 use crate::module::ModuleRegistry;
-use crate::prelude::*;
-use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::{Export, ExportMemory};
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElementType};
@@ -20,9 +17,11 @@ use crate::runtime::vm::{
     VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
 use crate::store::{
-    Asyncness, InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
+    AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
 };
-use crate::vm::VMWasmCallFunction;
+use crate::vm::{VMWasmCallFunction, ValRaw};
+use crate::{OpaqueRootScope, Val};
+use crate::{ValType, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -37,8 +36,8 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
-    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PtrSize,
-    TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap, VMCONTEXT_MAGIC,
+    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
+    NeedsGcRooting, PtrSize, TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC,
     VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
@@ -128,9 +127,13 @@ pub struct Instance {
     /// table.
     tables: TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
 
-    /// Stores the dropped passive element segments in this instantiation by index.
-    /// If the index is present in the set, the segment has been dropped.
-    dropped_elements: TryEntitySet<ElemIndex>,
+    /// Evaluated passive element segments.
+    ///
+    /// If an entry is none, then it has been dropped.
+    //
+    // TODO(#12621): This should be a `TrySecondaryMap<PassiveElemIndex, _>`
+    // but that type is currently footgun-y / isn't actually OOM-safe yet.
+    passive_elements: TryVec<Option<(NeedsGcRooting, TryVec<ValRaw>)>>,
 
     /// Stores the dropped passive data segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
@@ -171,7 +174,7 @@ impl Instance {
     ) -> Result<InstanceHandle, OutOfMemory> {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
-        let dropped_elements = TryEntitySet::with_capacity(module.passive_elements.len())?;
+        let passive_elements = TryVec::with_capacity(module.passive_elements.len())?;
         let dropped_data = TryEntitySet::with_capacity(module.passive_data_map.len())?;
 
         #[cfg(feature = "wmemcheck")]
@@ -195,7 +198,7 @@ impl Instance {
             runtime_info: req.runtime_info.clone(),
             memories,
             tables,
-            dropped_elements,
+            passive_elements,
             dropped_data,
             #[cfg(feature = "wmemcheck")]
             wmemcheck_state,
@@ -209,6 +212,35 @@ impl Instance {
             ret.get_mut().initialize_vmctx(req.store, req.imports);
         }
         Ok(ret)
+    }
+
+    /// Trace GC roots inside this `Instance`.
+    ///
+    /// NB: This instance's `vmctx` roots are traced separately in
+    /// `Store::trace_vmctx_roots`.
+    ///
+    /// # Safety
+    ///
+    /// This instance must live for the duration of the associated GC cycle.
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn trace_roots(self: Pin<&mut Self>, gc_roots: &mut crate::vm::GcRootsList) {
+        // SAFETY: not moving data out of `self`.
+        let passive_elements = &mut unsafe { self.get_unchecked_mut() }.passive_elements;
+
+        for segment in passive_elements {
+            if let Some((wasmtime_environ::NeedsGcRooting::Yes, elems)) = segment {
+                for e in elems {
+                    let root: SendSyncPtr<ValRaw> = SendSyncPtr::from(e);
+                    let root: SendSyncPtr<super::VMGcRef> = root.cast();
+
+                    // Safety: We know this is a type that needs GC rooting and
+                    // the lifetime is implied by our safety contract.
+                    unsafe {
+                        gc_roots.add_root(root, "passive element segment");
+                    }
+                }
+            }
+        }
     }
 
     /// Converts a raw `VMContext` pointer into a raw `Instance` pointer.
@@ -902,38 +934,28 @@ impl Instance {
     }
 
     /// Get the passive elements segment at the given index.
-    ///
-    /// Returns an empty segment if the index is out of bounds or if the segment
-    /// has been dropped.
-    ///
-    /// The `storage` parameter should always be `None`; it is a bit of a hack
-    /// to work around lifetime issues.
-    pub(crate) fn passive_element_segment<'a>(
-        &self,
-        storage: &'a mut Option<(Arc<wasmtime_environ::Module>, TableSegmentElements)>,
-        elem_index: ElemIndex,
-    ) -> &'a TableSegmentElements {
-        debug_assert!(storage.is_none());
-        *storage = Some((
-            // TODO: this `clone()` shouldn't be necessary but is used for now to
-            // inform `rustc` that the lifetime of the elements here are
-            // disconnected from the lifetime of `self`.
-            self.env_module().clone(),
-            // NB: fall back to an expressions-based list of elements which
-            // doesn't have static type information (as opposed to
-            // `TableSegmentElements::Functions`) since we don't know what type
-            // is needed in the caller's context. Let the type be inferred by
-            // how they use the segment.
-            TableSegmentElements::Expressions(Box::new([])),
-        ));
-        let (module, empty) = storage.as_ref().unwrap();
+    pub(crate) fn passive_element_segment(&self, elem_index: ElemIndex) -> &[ValRaw] {
+        let Some(passive) = self
+            .env_module()
+            .passive_elements_map
+            .get(&elem_index)
+            .copied()
+        else {
+            return &[];
+        };
 
-        match module.passive_elements_map.get(&elem_index) {
-            Some(index) if !self.dropped_elements.contains(elem_index) => {
-                &module.passive_elements[*index]
-            }
-            _ => empty,
-        }
+        let Some((_, seg)) = &self.passive_elements[passive.index()] else {
+            return &[];
+        };
+
+        &**seg
+    }
+
+    pub(crate) fn passive_elements_mut(
+        self: Pin<&mut Self>,
+    ) -> Pin<&mut TryVec<Option<(NeedsGcRooting, TryVec<ValRaw>)>>> {
+        // SAFETY: Not moving data out of `self`.
+        Pin::new(&mut unsafe { self.get_unchecked_mut() }.passive_elements)
     }
 
     /// The `table.init` operation: initializes a portion of a table with a
@@ -943,99 +965,61 @@ impl Instance {
     ///
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
-    pub(crate) async fn table_init(
+    pub(crate) fn table_init(
         store: &mut StoreOpaque,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        asyncness: Asyncness,
-        instance: InstanceId,
+        instance_id: InstanceId,
         table_index: TableIndex,
         elem_index: ElemIndex,
         dst: u64,
         src: u64,
         len: u64,
     ) -> Result<()> {
-        let mut storage = None;
-        let elements = store
-            .instance(instance)
-            .passive_element_segment(&mut storage, elem_index);
-        let mut const_evaluator = ConstExprEvaluator::default();
-        Self::table_init_segment(
-            store,
-            limiter,
-            asyncness,
-            instance,
-            &mut const_evaluator,
-            table_index,
-            elements,
-            dst,
-            src,
-            len,
-        )
-        .await
-    }
-
-    pub(crate) async fn table_init_segment(
-        store: &mut StoreOpaque,
-        mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-        asyncness: Asyncness,
-        elements_instance_id: InstanceId,
-        const_evaluator: &mut ConstExprEvaluator,
-        table_index: TableIndex,
-        elements: &TableSegmentElements,
-        dst: u64,
-        src: u64,
-        len: u64,
-    ) -> Result<()> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
-
+        let mut store = OpaqueRootScope::new(store);
         let store_id = store.id();
-        let elements_instance = store.instance_mut(elements_instance_id);
-        let table = elements_instance.get_exported_table(store_id, table_index);
-        let table_size = table._size(store);
+        let instance = store.instance(instance_id);
+        let elements = instance.passive_element_segment(elem_index);
 
-        // Perform a bounds check on the table being written to. This is done by
-        // ensuring that `dst + len <= table.size()` via checked arithmetic.
-        //
-        // Note that the bounds check for the element segment happens below when
-        // the original segment is sliced via `src` and `len`.
-        table_size
-            .checked_sub(dst)
-            .and_then(|i| i.checked_sub(len))
-            .ok_or(Trap::TableOutOfBounds)?;
-
+        let end = dst.checked_add(len).ok_or_else(|| Trap::TableOutOfBounds)?;
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
 
-        let positions = dst..dst + u64::try_from(len).unwrap();
-        match elements {
-            TableSegmentElements::Functions(funcs) => {
-                let elements = funcs
-                    .get(src..)
-                    .and_then(|s| s.get(..len))
-                    .ok_or(Trap::TableOutOfBounds)?;
-                for (i, func_idx) in positions.zip(elements) {
-                    let (instance, registry) =
-                        store.instance_and_module_registry_mut(elements_instance_id);
-                    // SAFETY: the `store_id` passed to `get_exported_func` is
-                    // indeed the store that owns the function.
-                    let func = unsafe { instance.get_exported_func(registry, store_id, *func_idx) };
-                    table.set_(store, i, func.into()).unwrap();
-                }
-            }
-            TableSegmentElements::Expressions(exprs) => {
-                let mut store = OpaqueRootScope::new(store);
-                let exprs = exprs
-                    .get(src..)
-                    .and_then(|s| s.get(..len))
-                    .ok_or(Trap::TableOutOfBounds)?;
-                let mut context = ConstEvalContext::new(elements_instance_id, asyncness);
-                for (i, expr) in positions.zip(exprs) {
-                    let element = const_evaluator
-                        .eval(&mut store, limiter.as_deref_mut(), &mut context, expr)
-                        .await?;
-                    table.set_(&mut store, i, element.ref_().unwrap()).unwrap();
-                }
-            }
+        let table = instance.get_exported_table(store_id, table_index);
+        if end > table.size_(&store) {
+            return Err(Trap::TableOutOfBounds.into());
+        }
+
+        // Subslice into just the target elements.
+        let elements = elements
+            .get(src..)
+            .and_then(|elements| elements.get(..len))
+            .ok_or_else(|| Trap::TableOutOfBounds)?
+            .iter()
+            .copied()
+            .try_collect::<TryVec<_>, OutOfMemory>()?;
+
+        let elem_ty = ValType::from(table.ty_(&store).element().clone());
+
+        let refs = {
+            let mut store = AutoAssertNoGc::new(&mut store);
+            elements
+                .into_iter()
+                // SAFETY: the raw elements are valid because we got them from
+                // this instance.
+                .map(|raw| unsafe { Val::_from_raw(&mut store, raw, &elem_ty) })
+                .map(|v| v.ref_().expect("due to validation"))
+                .try_collect::<TryVec<_>, OutOfMemory>()?
+        };
+
+        let instance = store.instance(instance_id);
+        let table = instance.get_exported_table(store_id, table_index);
+
+        for (i, r) in refs.into_iter().enumerate() {
+            let i = u64::try_from(i)
+                .expect("okay because of `src` and `len` conversions to `usize` up above");
+            let j = i
+                .checked_add(dst)
+                .expect("okay because of `checked_add` up above");
+            table.set_(&mut store, j, r)?;
         }
 
         Ok(())
@@ -1048,11 +1032,17 @@ impl Instance {
     ) -> Result<(), OutOfMemory> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
-        self.dropped_elements_mut().insert(elem_index)?;
+        let Some(passive_index) = self
+            .env_module()
+            .passive_elements_map
+            .get(&elem_index)
+            .copied()
+        else {
+            // Note: dropping a non-passive segment is a no-op (not a trap).
+            return Ok(());
+        };
 
-        // Note that we don't check that we actually removed a segment because
-        // dropping a non-passive segment is a no-op (not a trap).
-
+        self.passive_elements_mut()[passive_index.index()] = None;
         Ok(())
     }
 
@@ -1624,11 +1614,6 @@ impl Instance {
         // internal field and is safe so long as the `&mut Self` temporarily
         // created is not overwritten, which it isn't here.
         unsafe { &mut self.get_unchecked_mut().store }
-    }
-
-    fn dropped_elements_mut(self: Pin<&mut Self>) -> &mut TryEntitySet<ElemIndex> {
-        // SAFETY: see `store_mut` above.
-        unsafe { &mut self.get_unchecked_mut().dropped_elements }
     }
 
     fn dropped_data_mut(self: Pin<&mut Self>) -> &mut TryEntitySet<DataIndex> {

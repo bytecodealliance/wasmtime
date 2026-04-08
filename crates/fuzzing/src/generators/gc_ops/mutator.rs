@@ -14,7 +14,8 @@ use std::collections::BTreeMap;
 pub struct TypesMutator;
 
 impl TypesMutator {
-    /// Add an empty struct type to a random existing rec group.
+    /// Add an empty struct in a random existing rec group, or create a rec group
+    /// and add there when `rec_groups` is empty (if `limits.max_rec_groups` allows).
     fn add_struct(
         &mut self,
         c: &mut Candidates<'_>,
@@ -22,16 +23,30 @@ impl TypesMutator {
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
         if c.shrink()
-            || types.rec_groups.is_empty()
             || types.type_defs.len()
                 >= usize::try_from(limits.max_types).expect("max_types is too large")
         {
             return Ok(());
         }
+
+        let max_rec_groups =
+            usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
+        if types.rec_groups.is_empty() && max_rec_groups == 0 {
+            return Ok(());
+        }
+
         c.mutation(|ctx| {
-            let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
-                return Ok(());
+            let gid = if types.rec_groups.is_empty() {
+                let new_gid = types.fresh_rec_group_id(ctx.rng());
+                types.insert_rec_group(new_gid);
+                new_gid
+            } else {
+                let Some(gid) = ctx.rng().choose(types.rec_groups.keys()).copied() else {
+                    return Ok(());
+                };
+                gid
             };
+
             let tid = types.fresh_type_id(ctx.rng());
             let is_final = (ctx.rng().gen_u32() % 4) == 0;
             let supertype = if (ctx.rng().gen_u32() % 4) == 0 {

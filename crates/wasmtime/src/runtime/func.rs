@@ -1057,7 +1057,15 @@ impl Func {
     /// This value is safe to pass to [`Func::from_raw`] so long as the same
     /// `store` is provided.
     pub fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.vm_func_ref(store.as_context_mut().0).as_ptr().cast()
+        self.to_raw_(store.as_context_mut().0)
+    }
+
+    pub(crate) fn to_raw_(&self, store: &mut StoreOpaque) -> *mut c_void {
+        self.vm_func_ref(store).as_ptr().cast()
+    }
+
+    pub(crate) fn to_val_raw(&self, store: &mut StoreOpaque) -> ValRaw {
+        ValRaw::funcref(self.to_raw_(store))
     }
 
     /// Invokes this function with the `params` given, returning the results

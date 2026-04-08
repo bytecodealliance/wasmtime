@@ -180,18 +180,22 @@ impl DrcHeap {
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
-        let size = self.index(drc_ref).object_size();
-        let layout = FreeList::layout(size);
+        let size = self.index(drc_ref).object_size;
+        let alloc_size = FreeList::aligned_size(size);
         let index = gc_ref.as_heap_index().unwrap();
 
         // Poison the freed memory so that any stale access is detectable.
         if cfg!(gc_zeal) {
             let index = usize::try_from(index.get()).unwrap();
-            self.heap_slice_mut()[index..][..layout.size()].fill(POISON);
+            let alloc_size = usize::try_from(alloc_size).unwrap();
+            self.heap_slice_mut()[index..][..alloc_size].fill(POISON);
         }
 
         self.allocated_bytes -= layout.size();
-        self.free_list.as_mut().unwrap().dealloc(index, layout);
+        self.free_list
+            .as_mut()
+            .unwrap()
+            .dealloc_fast(index, alloc_size);
     }
 
     /// Increment the ref count for the associated object.
@@ -860,21 +864,20 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
+        // Read the current list head before borrowing through index_mut.
+        let next = (*self.over_approximated_stack_roots)
+            .as_ref()
+            .map(|r| r.unchecked_copy());
         let header = self.index_mut(drc_ref(&gc_ref));
         if header.is_in_over_approximated_stack_roots() {
             // Already in the over-approximated-stack-roots list, nothing more
             // to do here.
             return;
         }
-
         // Push this object onto the head of the over-approximated-stack-roots
-        // list.
+        // list using a single index_mut call.
         header.set_in_over_approximated_stack_roots_bit(true);
-        let next = (*self.over_approximated_stack_roots)
-            .as_ref()
-            .map(|r| r.unchecked_copy());
-        self.index_mut(drc_ref(&gc_ref))
-            .set_next_over_approximated_stack_root(next);
+        header.set_next_over_approximated_stack_root(next);
         *self.over_approximated_stack_roots = Some(gc_ref);
     }
 
@@ -928,6 +931,7 @@ unsafe impl GcHeap for DrcHeap {
     fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
+        debug_assert!(FreeList::can_align_to(layout.align()));
         debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
@@ -941,8 +945,9 @@ unsafe impl GcHeap for DrcHeap {
         }
 
         let object_size = u32::try_from(layout.size()).unwrap();
+        let alloc_size = FreeList::aligned_size(object_size);
 
-        let gc_ref = match self.free_list.as_mut().unwrap().alloc(layout)? {
+        let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };

@@ -1,13 +1,56 @@
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     ops::{GcOp, GcOps, OP_NAMES},
-    types::{RecGroupId, TypeId, Types},
+    types::{RecGroupId, StackType, TypeId, Types},
 };
 use mutatis;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use wasmparser;
 use wasmprinter;
+
+/// Flattened encoding order for use in tests.
+fn encoding_order(types: &Types) -> Vec<TypeId> {
+    let type_to_group = types.type_to_group_map();
+    let mut grouped = Vec::new();
+    types.encoding_order_grouped(&mut grouped, &type_to_group);
+    grouped
+        .into_iter()
+        .flat_map(|(_, members)| members)
+        .collect()
+}
+
+/// Returns true iff `sub_index` is the same as or a subtype of `sup_index`.
+///
+/// The `encoding_order` slice maps dense indices (0, 1, 2, …) to
+/// [`TypeId`]s in the same order they appear in the encoded Wasm binary.
+fn is_subtype_index(
+    types: &Types,
+    sub_index: u32,
+    sup_index: u32,
+    encoding_order: &[TypeId],
+) -> bool {
+    if sub_index == sup_index {
+        return true;
+    }
+
+    let sub = match encoding_order
+        .get(usize::try_from(sub_index).expect("sub_index is out of bounds"))
+        .copied()
+    {
+        Some(t) => t,
+        None => return false,
+    };
+    let sup = match encoding_order
+        .get(usize::try_from(sup_index).expect("sup_index is out of bounds"))
+        .copied()
+    {
+        Some(t) => t,
+        None => return false,
+    };
+
+    types.is_subtype(sub, sup)
+}
 
 /// Creates empty GcOps
 fn empty_test_ops() -> GcOps {
@@ -86,7 +129,6 @@ fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
         session.mutate(&mut ops)?;
 
         let wasm = ops.to_wasm_binary();
-        println!("wasm: {}", wasmprinter::print_bytes(&wasm).unwrap());
         crate::oracles::log_wasm(&wasm);
 
         let mut validator = wasmparser::Validator::new_with_features(features);
@@ -121,7 +163,7 @@ fn struct_new_removed_when_no_types() -> mutatis::Result<()> {
     ops.limits.max_types = 0;
     ops.ops = vec![GcOp::StructNew { type_index: 42 }];
 
-    ops.fixup();
+    ops.fixup(&mut Vec::new());
     assert!(
         ops.ops
             .iter()
@@ -142,7 +184,7 @@ fn local_ops_removed_when_no_params() -> mutatis::Result<()> {
         GcOp::LocalSet { local_index: 99 },
     ];
 
-    ops.fixup();
+    ops.fixup(&mut Vec::new());
     assert!(
         ops.ops
             .iter()
@@ -163,7 +205,7 @@ fn global_ops_removed_when_no_globals() -> mutatis::Result<()> {
         GcOp::GlobalSet { global_index: 99 },
     ];
 
-    ops.fixup();
+    ops.fixup(&mut Vec::new());
     assert!(
         ops.ops
             .iter()
@@ -258,7 +300,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     // Call `fixup` to insert missing types, rewrite the immediates such that
     // they are within their bounds, insert missing operands, and drop unused
     // results.
-    ops.fixup();
+    ops.fixup(&mut Vec::new());
 
     // Check that we got the expected `GcOp` sequence after `fixup`:
     assert_eq!(
@@ -358,7 +400,7 @@ fn fixup_preserves_subtyping_within_same_rec_group() {
         max_types: 10,
     };
 
-    types.fixup(&limits);
+    types.fixup(&limits, &mut Vec::new());
 
     assert_eq!(types.rec_group_of(super_ty), Some(g));
     assert_eq!(types.rec_group_of(sub_ty), Some(g));
@@ -405,7 +447,7 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
         max_types: 10,
     };
 
-    types.fixup(&limits);
+    types.fixup(&limits, &mut Vec::new());
 
     let a_super = types.type_defs.get(&a).unwrap().supertype;
     let c_super = types.type_defs.get(&c).unwrap().supertype;
@@ -424,6 +466,8 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
 
 #[test]
 fn sort_rec_groups_topo_orders_dependencies_first() {
+    let _ = env_logger::try_init();
+
     let mut types = Types::new();
 
     let g0 = RecGroupId(0);
@@ -450,8 +494,9 @@ fn sort_rec_groups_topo_orders_dependencies_first() {
     types.insert_empty_struct(e, g0, false, None);
     types.insert_empty_struct(f, g2, false, None);
 
+    let type_to_group = types.type_to_group_map();
     let mut sorted = Vec::new();
-    types.sort_rec_groups_topo(&mut sorted);
+    types.sort_rec_groups_topo(&mut sorted, &type_to_group);
 
     // g3 has no deps, g2 depends on g3, g1 on g2, g0 on g1.
     assert_eq!(
@@ -463,6 +508,8 @@ fn sort_rec_groups_topo_orders_dependencies_first() {
 
 #[test]
 fn break_rec_group_cycles() {
+    let _ = env_logger::try_init();
+
     let mut types = Types::new();
 
     let g0 = RecGroupId(0);
@@ -529,7 +576,8 @@ fn break_rec_group_cycles() {
 
     assert_eq!(types.rec_groups.len(), 4);
 
-    types.break_rec_group_cycles();
+    let type_to_group = types.type_to_group_map();
+    types.break_rec_group_cycles(&type_to_group);
 
     // All four groups preserved.
     assert_eq!(types.rec_groups.len(), 4);
@@ -550,8 +598,187 @@ fn break_rec_group_cycles() {
     assert_eq!(types.type_defs.get(&c2).unwrap().supertype, Some(d0));
 
     // Result is a clean chain: g0 -> g1 -> g2 -> g3
+    let type_to_group = types.type_to_group_map();
     let mut topo = Vec::new();
-    types.sort_rec_groups_topo(&mut topo);
+    types.sort_rec_groups_topo(&mut topo, &type_to_group);
     assert_eq!(topo.len(), 4);
     assert_eq!(topo, vec![g3, g2, g1, g0]);
+}
+
+#[test]
+fn is_subtype_index_accepts_chain() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+    let g0 = RecGroupId(0);
+    let g1 = RecGroupId(1);
+    let g2 = RecGroupId(2);
+    let g3 = RecGroupId(3);
+
+    types.insert_rec_group(g0);
+    types.insert_rec_group(g1);
+    types.insert_rec_group(g2);
+    types.insert_rec_group(g3);
+
+    // Build chain: 1 <- 2 <- 3
+    //
+    // TypeId(1): g0
+    // TypeId(2): subtype of 1
+    // TypeId(3): g2
+    // TypeId(4): g3
+    //
+    // Since type_defs is a BTreeMap, the dense index order used by
+    // is_subtype_index is:
+    //
+    //   0 -> TypeId(1)
+    //   1 -> TypeId(2)
+    //   2 -> TypeId(3)
+    types.insert_empty_struct(TypeId(1), g0, false, None);
+    types.insert_empty_struct(TypeId(2), g1, false, Some(TypeId(1)));
+    types.insert_empty_struct(TypeId(3), g2, false, Some(TypeId(2)));
+    types.insert_empty_struct(TypeId(4), g3, false, Some(TypeId(3)));
+
+    let order = encoding_order(&types);
+
+    // self
+    assert!(is_subtype_index(&types, 0, 0, &order)); // 1 <: 1
+    assert!(is_subtype_index(&types, 1, 1, &order)); // 2 <: 2
+    assert!(is_subtype_index(&types, 2, 2, &order)); // 3 <: 3
+
+    // requested checks
+    assert!(is_subtype_index(&types, 1, 0, &order)); // 2 <: 1
+    assert!(is_subtype_index(&types, 2, 0, &order)); // 3 <: 1
+    assert!(is_subtype_index(&types, 2, 1, &order)); // 3 <: 2
+
+    // reverse directions must fail
+    assert!(!is_subtype_index(&types, 0, 1, &order)); // 1 </: 2
+    assert!(!is_subtype_index(&types, 0, 2, &order)); // 1 </: 3
+    assert!(!is_subtype_index(&types, 1, 2, &order)); // 2 </: 3
+}
+
+/// Encoding order can differ from BTreeMap key order when a higher-numbered
+/// TypeId lives in a group that must be emitted *before* a lower-numbered
+/// TypeId's group (because of cross-group supertype dependencies).
+///
+/// With plain BTreeMap key order the dense indices would be:
+///   0 -> TypeId(1)   1 -> TypeId(10)
+///
+/// But the correct encoding order (group topo sort) is:
+///   0 -> TypeId(10)  1 -> TypeId(1)
+///
+/// A naive key-order approach would conclude "index 0 (TypeId(1)) <: index 1
+/// (TypeId(10))" is false (they're unrelated), while the real encoding order
+/// says "index 1 (TypeId(1)) <: index 0 (TypeId(10))" is true.
+#[test]
+fn is_subtype_index_encoding_order_differs_from_key_order() {
+    let _ = env_logger::try_init();
+
+    let mut types = Types::new();
+    let g0 = RecGroupId(0);
+    let g1 = RecGroupId(1);
+
+    types.insert_rec_group(g0);
+    types.insert_rec_group(g1);
+
+    // TypeId(10) in g0: the supertype (no parent).
+    // TypeId(1)  in g1: subtype of TypeId(10).
+    //
+    // BTreeMap key order:  [TypeId(1), TypeId(10)]  -> dense 0=TypeId(1), 1=TypeId(10)
+    // Encoding order:      [TypeId(10), TypeId(1)]  -> dense 0=TypeId(10), 1=TypeId(1)
+    //   (g0 must come before g1 because g1's type has a supertype in g0)
+    types.insert_empty_struct(TypeId(10), g0, false, None);
+    types.insert_empty_struct(TypeId(1), g1, false, Some(TypeId(10)));
+
+    let order = encoding_order(&types);
+
+    // Verify that encoding order is indeed reversed from key order.
+    assert_eq!(order, vec![TypeId(10), TypeId(1)]);
+
+    // index 1 (TypeId(1)) is a subtype of index 0 (TypeId(10))
+    assert!(is_subtype_index(&types, 1, 0, &order));
+
+    // index 0 (TypeId(10)) is NOT a subtype of index 1 (TypeId(1))
+    assert!(!is_subtype_index(&types, 0, 1, &order));
+
+    // Also verify the direct TypeId-based method works.
+    assert!(types.is_subtype(TypeId(1), TypeId(10)));
+    assert!(!types.is_subtype(TypeId(10), TypeId(1)));
+}
+
+#[test]
+fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
+    let _ = env_logger::try_init();
+    let mut types = Types::new();
+    let g = RecGroupId(0);
+    types.insert_rec_group(g);
+
+    // Same chain: 1 <- 2 <- 3
+    //
+    // Dense indices:
+    //   0 -> TypeId(1)
+    //   1 -> TypeId(2)
+    //   2 -> TypeId(3)
+    types.insert_empty_struct(TypeId(1), g, false, None);
+    types.insert_empty_struct(TypeId(2), g, false, Some(TypeId(1)));
+    types.insert_empty_struct(TypeId(3), g, false, Some(TypeId(2)));
+
+    let num_types = u32::try_from(types.type_defs.len()).unwrap();
+    let order = encoding_order(&types);
+
+    // Case 1: stack has subtype 3, op requires supertype 2.
+    let mut stack = vec![StackType::Struct(Some(2))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(1))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+        &order,
+    );
+
+    // Accepted as-is:
+    // - no fixup ops inserted
+    // - operand consumed from stack
+    assert!(
+        out.is_empty(),
+        "subtype 3 should satisfy required supertype 2"
+    );
+    assert!(stack.is_empty(), "accepted operand should be popped");
+
+    // Case 2: stack has subtype 3, op requires supertype 1.
+    let mut stack = vec![StackType::Struct(Some(2))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(0))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+        &order,
+    );
+    // Accepted as-is:
+    assert!(
+        out.is_empty(),
+        "subtype 3 should satisfy required supertype 1"
+    );
+    assert!(stack.is_empty(), "accepted operand should be popped");
+
+    // Case 3: stack has type 1, op requires subtype 2.
+    let mut stack = vec![StackType::Struct(Some(0))];
+    let mut out = vec![];
+
+    StackType::fixup(
+        Some(StackType::Struct(Some(1))),
+        &mut stack,
+        &mut out,
+        num_types,
+        &types,
+        &order,
+    );
+    // Not accepted. Fixup should synthesize the requested concrete type.
+    assert_eq!(out, vec![GcOp::StructNew { type_index: 1 }]);
+    assert_eq!(stack, vec![StackType::Struct(Some(0))]);
 }

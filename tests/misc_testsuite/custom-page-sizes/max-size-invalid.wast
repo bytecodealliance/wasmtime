@@ -26,8 +26,8 @@
     memory.grow)
 )
 
-(assert_trap (invoke "grow" (i32.const 1)) "disallowing growth to 0xffffffff bytes based on page size")
-(assert_trap (invoke "grow" (i32.const 2)) "disallowing growth to 0x100000000 bytes based on page size")
-(assert_trap (invoke "grow" (i32.const 100)) "disallowing growth to 0x100000062 bytes based on page size")
-(assert_trap (invoke "grow" (i32.const -1)) "disallowing growth to 0x1fffffffd bytes based on page size")
+(assert_return (invoke "grow" (i32.const 1)) (i32.const -1))
+(assert_return (invoke "grow" (i32.const 2)) (i32.const -1))
+(assert_return (invoke "grow" (i32.const 100)) (i32.const -1))
+(assert_return (invoke "grow" (i32.const -1)) (i32.const -1))
 (assert_return (invoke "grow" (i32.const 0)) (i32.const -2))

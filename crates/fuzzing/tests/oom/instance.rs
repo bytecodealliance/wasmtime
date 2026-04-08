@@ -67,6 +67,34 @@ fn instance_new() -> Result<()> {
     })
 }
 
+#[tokio::test]
+async fn instance_new_async() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            "(module (import \"\" \"f\" (func)) (func (export \"g\") (call 0)))",
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+
+    OomTest::new()
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let func = Func::try_wrap(&mut store, || {})?;
+            let _instance = Instance::new_async(&mut store, &module, &[func.into()]).await?;
+            Ok(())
+        })
+        .await
+}
+
 #[test]
 fn instance_get_export() -> Result<()> {
     let module_bytes = {

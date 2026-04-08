@@ -3295,7 +3295,9 @@ impl Instance {
 
                     assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
-                    if write_caller_instance == read_caller_instance {
+                    if self.options_memory(store_opaque, read_options).as_ptr()
+                        == self.options_memory(store_opaque, write_options).as_ptr()
+                    {
                         let memory = self.options_memory_mut(store_opaque, read_options);
                         memory.copy_within(
                             write_address..write_address + write_length_in_bytes,
@@ -3313,9 +3315,9 @@ impl Instance {
                         // above to be valid pointers as they're derived from
                         // slices that have the desired length with the desired
                         // read/write permission. The `unsafe` bit here is that
-                        // the memories are disjoint (present in different
-                        // instances) and there's no easy way to borrow both
-                        // simultaneously from the store. Different instances
+                        // the memories are disjoint (different base pointers)
+                        // and there's no easy way to borrow both
+                        // simultaneously from the store. Different memories
                         // are guaranteed to be disjoint, however, so the
                         // `unsafe` here should be ok.
                         unsafe {
@@ -4470,7 +4472,11 @@ impl Instance {
             .global_error_context_ref_counts
             .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
             .context("global ref count present for existing (sub)component error context")?;
-        global_ref_count.0 += 1;
+
+        global_ref_count.0 = global_ref_count
+            .0
+            .checked_add(1)
+            .ok_or_else(|| format_err!(Trap::ReferenceCountOverflow))?;
 
         Ok(dst_idx)
     }

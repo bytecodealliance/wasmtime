@@ -217,14 +217,15 @@ impl DrcCompiler {
         let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
 
         match ty {
-            WasmStorageType::Val(WasmValType::Ref(r))
-                if r.heap_type.top() == WasmHeapTopType::Func =>
-            {
-                write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?;
-            }
-            WasmStorageType::Val(WasmValType::Ref(r)) => {
-                self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?;
-            }
+            WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
+                WasmHeapTopType::Func => {
+                    write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?
+                }
+                WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                    self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?
+                }
+                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
+            },
             WasmStorageType::I8 => {
                 assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
                 builder.ins().istore8(flags, val, field_addr, 0);

@@ -686,6 +686,70 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    // NOTE: if a branchless version is needed, a single-lane variant of
+    // `maybe_canonicalize_v128_nan` could be used when AVX is available.
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        let done_label = self.asm.buffer_mut().get_label();
+
+        self.asm.ucomis(reg.to_reg(), reg.to_reg(), size);
+        self.asm.jmp_if(CC::NP, done_label);
+
+        let canonical_nan = match size {
+            OperandSize::S32 => crate::masm::CANONICAL_NAN_F32,
+            OperandSize::S64 => crate::masm::CANONICAL_NAN_F64,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        self.asm.load_fp_const(reg, canonical_nan, size);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(done_label, &mut Default::default());
+        Ok(())
+    }
+
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        reg: WritableReg,
+        lane_size: OperandSize,
+    ) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        self.ensure_has_avx()?;
+
+        self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+            // scratch = NaN mask (all-1s for NaN lanes)
+            masm.asm.xmm_vcmpp_rrr(
+                scratch.writable(),
+                reg.to_reg(),
+                reg.to_reg(),
+                lane_size,
+                VcmpKind::Unord,
+            );
+            // reg = ~mask & original (zero out NaN lanes, keep non-NaN)
+            masm.asm
+                .xmm_vandnp_rrr(scratch.inner(), reg.to_reg(), reg, lane_size);
+            // scratch = mask & splatted canonical NaN = canonical NaN in NaN lanes only
+            let canon_nan = match lane_size {
+                OperandSize::S32 => &crate::masm::CANONICAL_NAN_F32X4[..],
+                OperandSize::S64 => &crate::masm::CANONICAL_NAN_F64X2[..],
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            };
+            let addr = masm.asm.add_constant(canon_nan);
+            masm.asm
+                .xmm_vandp_rrm(scratch.inner(), &addr, scratch.writable(), lane_size);
+            // reg = non-NaN values | canonical NaN for NaN lanes
+            masm.asm
+                .xmm_vorp_rrr(scratch.inner(), reg.to_reg(), reg, lane_size);
+            Ok(())
+        })
+    }
+
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
         match (rhs, dst) {

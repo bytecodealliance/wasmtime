@@ -220,6 +220,9 @@ generate_trap_type! {
         /// pending operation already.
         ConcurrentFutureStreamOp = "cannot have concurrent operations active on a future/stream",
 
+        /// A reference count (for e.g. an `error-context`) overflowed.
+        ReferenceCountOverflow = "reference count overflow",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }

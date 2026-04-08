@@ -369,7 +369,19 @@ impl Compiler {
     /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
-            Compiler::CraneliftNative => config.legacy_exceptions(),
+            Compiler::CraneliftNative => {
+                if config.legacy_exceptions() {
+                    return true;
+                }
+
+                // Stack-switching is only implemented on x86_64 for unix
+                // platforms right now.
+                if config.stack_switching() && !(cfg!(target_arch = "x86_64") && cfg!(unix)) {
+                    return true;
+                }
+
+                false
+            }
 
             Compiler::Winch => {
                 if config.gc()
@@ -608,16 +620,6 @@ impl WastTest {
 
             #[cfg(target_arch = "x86_64")]
             {
-                let unsupported = [
-                    // externref/reference-types related
-                    // simd-related failures
-                    "misc_testsuite/simd/canonicalize-nan.wast",
-                ];
-
-                if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                    return true;
-                }
-
                 // SIMD on Winch requires AVX instructions.
                 #[cfg(target_arch = "x86_64")]
                 if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2"))
@@ -628,6 +630,7 @@ impl WastTest {
                         "misc_testsuite/int-to-float-splat.wast",
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
+                        "misc_testsuite/simd/canonicalize-nan.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
                         "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
@@ -637,6 +640,7 @@ impl WastTest {
                         "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                         "misc_testsuite/winch/issue-10331.wast",
                         "misc_testsuite/winch/replace_lane.wast",
+                        "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
                         "spec_testsuite/simd_align.wast",
                         "spec_testsuite/simd_boolean.wast",
                         "spec_testsuite/simd_conversions.wast",

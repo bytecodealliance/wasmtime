@@ -100,6 +100,38 @@ async fn func_call_async() -> Result<()> {
         .await
 }
 
+#[tokio::test]
+async fn typed_func_call_async() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"(module (func (export "id") (param i32) (result i32) (local.get 0)))"#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let linker = Linker::<()>::new(&engine);
+    let instance_pre = linker.instantiate_pre(&module)?;
+
+    OomTest::new()
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let instance = instance_pre.instantiate_async(&mut store).await?;
+            let id = instance.get_typed_func::<i32, i32>(&mut store, "id")?;
+            let result = id.call_async(&mut store, 42).await?;
+            assert_eq!(result, 42);
+            Ok(())
+        })
+        .await
+}
+
 #[test]
 fn func_typed() -> Result<()> {
     let module_bytes = {
