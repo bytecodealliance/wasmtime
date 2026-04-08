@@ -4876,7 +4876,7 @@
 ;; on AVX2 to leverage that specific instruction for this operation.
 (rule 0 (lower (has_type $F32X4 (splat _ src)))
         (let ((tmp Xmm src))
-          (x64_shufps src src 0)))
+          (x64_shufps tmp tmp 0)))
 (rule 1 (lower (has_type $F32X4 (splat _ src)))
         (if-let true (use_avx2))
         (x64_vbroadcastss src))
