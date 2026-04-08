@@ -177,3 +177,19 @@ fn component_linker_define_unknown_imports_as_traps() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn component_linker_instance_func_wrap() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    // Error propagation via anyhow allocates after OOM.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut linker = Linker::<()>::new(&engine);
+        linker
+            .root()
+            .func_wrap("f", |_cx: wasmtime::StoreContextMut<'_, ()>, (): ()| Ok(()))?;
+        Ok(())
+    })
+}
