@@ -1781,23 +1781,20 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         // `cmpxchg` expects `expected` to be in the `*a*` register.
         // reserve rax for the expected argument.
-        let rax = context.reg(regs::rax(), self)?;
 
-        let replacement = context.pop_to_reg(self, None)?;
+        let replacement =
+            context.without::<Result<TypedReg>, _, _>(&[regs::rax()], self, |cx, masm| {
+                cx.pop_to_reg(masm, None)
+            })??;
 
-        // mark `rax` as allocatable again.
-        context.free_reg(rax);
         let expected = context.pop_to_reg(self, Some(regs::rax()))?;
 
         self.asm
             .cmpxchg(addr, replacement.reg, writable!(expected.reg), size, flags);
 
         if let Some(extend) = extend {
-            // We don't need to zero-extend from 32 to 64bits.
-            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm
-                    .movzx_rr(expected.reg, writable!(expected.reg), extend);
-            }
+            self.asm
+                .movzx_rr(expected.reg, writable!(expected.reg), extend);
         }
 
         context.stack.push(expected.into());
