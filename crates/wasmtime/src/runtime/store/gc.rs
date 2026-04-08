@@ -59,8 +59,8 @@ impl StoreOpaque {
     ) {
         self.do_gc(asyncness).await;
         if let Some(n) = bytes_needed
-        // The gc_zeal's allocation counter will pass `bytes_needed == 0` to
-        // signify that we shouldn't grow the GC heap, just do a collection.
+            // The gc_zeal's allocation counter will pass `bytes_needed == 0` to
+            // signify that we shouldn't grow the GC heap, just do a collection.
             && n > 0
             && n > u64::try_from(self.gc_heap_capacity())
                 .unwrap()
