@@ -147,3 +147,33 @@ fn component_linker_substituted_component_type() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn component_linker_define_unknown_imports_as_traps() -> Result<()> {
+    let component_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "f" (func))
+                )
+            "#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let component = unsafe { Component::deserialize(&engine, &component_bytes)? };
+
+    // Error propagation via anyhow allocates after OOM.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut linker = Linker::<()>::new(&engine);
+        linker.define_unknown_imports_as_traps(&component)?;
+        Ok(())
+    })
+}
