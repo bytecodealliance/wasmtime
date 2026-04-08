@@ -191,7 +191,7 @@ impl DrcHeap {
             self.heap_slice_mut()[index..][..alloc_size].fill(POISON);
         }
 
-        self.allocated_bytes -= layout.size();
+        self.allocated_bytes -= usize::try_from(alloc_size).unwrap();
         self.free_list
             .as_mut()
             .unwrap()
