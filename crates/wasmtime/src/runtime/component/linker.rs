@@ -757,10 +757,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
         ty: ResourceType,
         dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
-        let dtor = Arc::new(crate::func::HostFunc::wrap(
+        let dtor = try_new::<Arc<_>>(crate::func::HostFunc::wrap(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.as_context_mut(), param),
-        )?);
+        )?)?;
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }
@@ -775,10 +775,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        let dtor = Arc::new(crate::func::HostFunc::wrap_async(
+        let dtor = try_new::<Arc<_>>(crate::func::HostFunc::wrap_async(
             &self.engine,
             move |cx: crate::Caller<'_, T>, (param,): (u32,)| dtor(cx.into(), param),
-        )?);
+        )?)?;
         self.insert(name, Definition::Resource(ty, dtor))?;
         Ok(())
     }

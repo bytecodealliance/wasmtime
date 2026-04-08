@@ -1,6 +1,6 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, Linker, ResourceType};
 use wasmtime::{Config, Engine, Module, Result, Store};
 use wasmtime_fuzzing::oom::OomTest;
 
@@ -228,6 +228,22 @@ fn component_linker_instance_module() -> Result<()> {
     OomTest::new().allow_alloc_after_oom(true).test(|| {
         let mut linker = Linker::<()>::new(&engine);
         linker.root().module("m", &module)?;
+        Ok(())
+    })
+}
+
+#[test]
+fn component_linker_instance_resource() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    // Error propagation from HostFunc::wrap allocates via anyhow.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut linker = Linker::<()>::new(&engine);
+        linker
+            .root()
+            .resource("r", ResourceType::host::<()>(), |_, _| Ok(()))?;
         Ok(())
     })
 }
