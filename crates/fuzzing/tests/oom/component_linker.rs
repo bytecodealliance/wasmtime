@@ -1,7 +1,7 @@
 #![cfg(arc_try_new)]
 
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Config, Engine, Result, Store};
+use wasmtime::{Config, Engine, Module, Result, Store};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[tokio::test]
@@ -206,6 +206,28 @@ fn component_linker_instance_func_new() -> Result<()> {
         linker
             .root()
             .func_new("f", |_cx, _func_ty, _params, _results| Ok(()))?;
+        Ok(())
+    })
+}
+
+#[test]
+fn component_linker_instance_module() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(&engine, "(module)")?.serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+
+    // Error propagation via anyhow allocates after OOM.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut linker = Linker::<()>::new(&engine);
+        linker.root().module("m", &module)?;
         Ok(())
     })
 }
