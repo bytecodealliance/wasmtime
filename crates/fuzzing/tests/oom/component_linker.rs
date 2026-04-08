@@ -193,3 +193,19 @@ fn component_linker_instance_func_wrap() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn component_linker_instance_func_new() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    // Error propagation via anyhow allocates after OOM.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut linker = Linker::<()>::new(&engine);
+        linker
+            .root()
+            .func_new("f", |_cx, _func_ty, _params, _results| Ok(()))?;
+        Ok(())
+    })
+}
