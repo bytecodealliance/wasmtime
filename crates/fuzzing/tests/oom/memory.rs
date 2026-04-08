@@ -21,6 +21,23 @@ fn memory_new() -> Result<()> {
         })
 }
 
+#[tokio::test]
+async fn memory_new_async() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let _memory = Memory::new_async(&mut store, MemoryType::new(1, None)).await?;
+            Ok(())
+        })
+        .await
+}
+
 #[test]
 fn memory_grow() -> Result<()> {
     let mut config = Config::new();
@@ -34,6 +51,24 @@ fn memory_grow() -> Result<()> {
         let _old_size = memory.grow(&mut store, 1)?;
         Ok(())
     })
+}
+
+#[tokio::test]
+async fn memory_grow_async() -> Result<()> {
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .test_async(|| async {
+            let mut store = Store::try_new(&engine, ())?;
+            let memory = Memory::new_async(&mut store, MemoryType::new(1, None)).await?;
+            let _old_size = memory.grow_async(&mut store, 1).await?;
+            Ok(())
+        })
+        .await
 }
 
 #[test]
