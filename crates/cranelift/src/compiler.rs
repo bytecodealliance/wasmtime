@@ -300,17 +300,23 @@ impl wasmtime_environ::Compiler for Compiler {
             let vmctx = context
                 .func
                 .create_global_value(ir::GlobalValueData::VMContext);
+            let flags = context
+                .func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly());
             let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
                 global_type: isa.pointer_type(),
-                flags: MemFlagsData::trusted().with_readonly(),
+                flags,
             });
+            let flags = context.func.dfg.mem_flags.insert(MemFlagsData::trusted());
             let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: interrupts_ptr,
                 offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
                 global_type: isa.pointer_type(),
-                flags: MemFlagsData::trusted(),
+                flags,
             });
             if self.tunables.signals_based_traps {
                 context.func.stack_limit = Some(stack_limit);

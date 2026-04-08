@@ -10,6 +10,8 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) tail {
+;;     region0 = 1 "table"
+;;     region1 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -21,11 +23,11 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0027                               v2 = iconst.i32 0
 ;; @0029                               v3 = iconst.i32 0
-;; @002b                               v5 = load.i32 notrap aligned table v0+80
+;; @002b                               v5 = load.i32 notrap aligned region0 v0+80
 ;; @002d                               v6 = uextend.i64 v3  ; v3 = 0
 ;; @002d                               v7 = load.i64 notrap aligned readonly can_move v0+56
 ;; @002d                               v8 = iadd v7, v6
-;; @002d                               store little heap v5, v8
+;; @002d                               store little region1 v5, v8
 ;; @0030                               jump block1
 ;;
 ;;                                 block1:

@@ -61,6 +61,10 @@ fn gen_common_isle(
     for ty in others.keys() {
         fmtln!(fmt, "(type {} (primitive {}))", ty, ty);
     }
+    // Also declare the MemFlagsData type, which is the resolved form of MemFlags.
+    // MemFlags is an entity index into the DFG's MemFlagsSet, while MemFlagsData
+    // contains the actual flag bits. Backend MachInst types use MemFlagsData.
+    fmt.line("(type MemFlagsData (primitive MemFlagsData))");
     fmt.empty_line();
 
     // Generate the `enum` immediates, expanding all of the available variants

@@ -92,6 +92,7 @@
 ;; }
 ;;
 ;; function u2:0(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -105,7 +106,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0077                               v5 = load.i64 notrap aligned readonly can_move v0+136
-;; @0077                               v6 = load.i32 notrap aligned table v5
+;; @0077                               v6 = load.i32 notrap aligned region0 v5
 ;; @0079                               v7 = iconst.i32 1
 ;; @007b                               v8 = band v6, v7  ; v7 = 1
 ;; @0075                               v4 = iconst.i32 0
@@ -122,20 +123,20 @@
 ;;
 ;;                                 block3:
 ;; @0085                               v15 = load.i64 notrap aligned readonly can_move v0+112
-;; @0085                               v16 = load.i32 notrap aligned table v15
+;; @0085                               v16 = load.i32 notrap aligned region0 v15
 ;; @0087                               v17 = iconst.i32 -2
 ;; @0089                               v18 = band v16, v17  ; v17 = -2
-;; @008a                               store notrap aligned table v18, v15
+;; @008a                               store notrap aligned region0 v18, v15
 ;;                                     v52 = iconst.i32 1
 ;;                                     v53 = bor v16, v52  ; v52 = 1
-;; @0093                               store notrap aligned table v53, v15
+;; @0093                               store notrap aligned region0 v53, v15
 ;; @0095                               v26 = load.i64 notrap aligned readonly can_move v0+72
 ;; @0095                               v27 = call fn0(v26, v0, v2)
-;; @0099                               v29 = load.i32 notrap aligned table v5
+;; @0099                               v29 = load.i32 notrap aligned region0 v5
 ;; @009d                               v31 = band v29, v17  ; v17 = -2
-;; @009e                               store notrap aligned table v31, v5
+;; @009e                               store notrap aligned region0 v31, v5
 ;;                                     v54 = bor v29, v52  ; v52 = 1
-;; @00a7                               store notrap aligned table v54, v5
+;; @00a7                               store notrap aligned region0 v54, v5
 ;; @00a9                               jump block1
 ;;
 ;;                                 block1:

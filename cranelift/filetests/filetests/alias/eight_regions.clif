@@ -1,0 +1,56 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Test that eight distinct alias regions are tracked independently.
+
+function %eight_regions(i64, i64, i64, i64, i64, i64, i64, i64) -> i32, i32, i32, i32, i32, i32, i32, i32 {
+    region0 = 0 "region A"
+    region1 = 1 "region B"
+    region2 = 2 "region C"
+    region3 = 3 "region D"
+    region4 = 4 "region E"
+    region5 = 5 "region F"
+    region6 = 6 "region G"
+    region7 = 7 "region H"
+
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64):
+    v100 = iconst.i32 10
+    v101 = iconst.i32 11
+    v102 = iconst.i32 12
+    v103 = iconst.i32 13
+    v104 = iconst.i32 14
+    v105 = iconst.i32 15
+    v106 = iconst.i32 16
+    v107 = iconst.i32 17
+
+    ;; Store to each region.
+    store.i32 region0 v100, v0
+    store.i32 region1 v101, v1
+    store.i32 region2 v102, v2
+    store.i32 region3 v103, v3
+    store.i32 region4 v104, v4
+    store.i32 region5 v105, v5
+    store.i32 region6 v106, v6
+    store.i32 region7 v107, v7
+
+    ;; Load from each region: should alias the corresponding store.
+    v200 = load.i32 region0 v0
+    ; check: v200 -> v100
+    v201 = load.i32 region1 v1
+    ; check: v201 -> v101
+    v202 = load.i32 region2 v2
+    ; check: v202 -> v102
+    v203 = load.i32 region3 v3
+    ; check: v203 -> v103
+    v204 = load.i32 region4 v4
+    ; check: v204 -> v104
+    v205 = load.i32 region5 v5
+    ; check: v205 -> v105
+    v206 = load.i32 region6 v6
+    ; check: v206 -> v106
+    v207 = load.i32 region7 v7
+    ; check: v207 -> v107
+
+    return v200, v201, v202, v203, v204, v205, v206, v207
+}

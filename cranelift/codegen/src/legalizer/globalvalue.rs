@@ -115,7 +115,7 @@ fn load_addr(
     base: ir::GlobalValue,
     offset: ir::immediates::Offset32,
     global_type: ir::Type,
-    flags: ir::MemFlagsData,
+    flags: ir::MemFlags,
     isa: &dyn TargetIsa,
 ) -> WalkCommand {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`
@@ -129,11 +129,14 @@ fn load_addr(
     // Get the value for the base.
     let base_addr = pos.ins().global_value(ptr_ty, base);
 
+    // Resolve flags entity to data for the load instruction.
+    let flags_data = pos.func.dfg.mem_flags[flags];
+
     // Perform the load.
     pos.func
         .dfg
         .replace(inst)
-        .load(global_type, flags, base_addr, offset);
+        .load(global_type, flags_data, base_addr, offset);
 
     // Need to legalize the `global_value` for the base address.
     WalkCommand::Revisit

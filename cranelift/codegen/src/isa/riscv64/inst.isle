@@ -85,13 +85,13 @@
     (Load
       (rd WritableReg)
       (op LoadOP)
-      (flags MemFlagsData)
+      (flags MemFlags)
       (from AMode))
     ;; An Store
     (Store
       (to AMode)
       (op StoreOP)
-      (flags MemFlagsData)
+      (flags MemFlags)
       (src Reg))
 
     ;; A pseudo-instruction that captures register arguments in vregs.
@@ -344,7 +344,7 @@
       (eew VecElementWidth)
       (to WritableReg)
       (from VecAMode)
-      (flags MemFlagsData)
+      (flags MemFlags)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -352,7 +352,7 @@
       (eew VecElementWidth)
       (to VecAMode)
       (from Reg)
-      (flags MemFlagsData)
+      (flags MemFlags)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -1939,7 +1939,7 @@
   (gen_load
     (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
-    (mem_flags_trusted)))
+    (mem_flags_trusted_data)))
 
 ;; Imm12 Rules
 
@@ -2501,7 +2501,7 @@
 (decl rec gen_load (AMode LoadOP MemFlagsData) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
-      (_ Unit (emit (MInst.Load dst op flags amode))))
+      (_ Unit (emit (MInst.Load dst op (mem_flags_intern flags) amode))))
     dst))
 (rule 1 (gen_load amode (LoadOP.Flh) flags)
   (if-let false (has_zfhmin))
@@ -2538,7 +2538,7 @@
 ;; specified.
 (decl rv_store (AMode StoreOP MemFlagsData Reg) InstOutput)
 (rule (rv_store amode op flags src)
-  (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
+  (side_effect (SideEffectNoResult.Inst (MInst.Store amode op (mem_flags_intern flags) src))))
 
 
 

@@ -18,7 +18,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::bitset::ScalarBitSet;
 use crate::entity;
 use crate::ir::{
-    self, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlagsData, SigRef, StackSlot, Type,
+    self, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlags, SigRef, StackSlot, Type,
     Value,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
@@ -557,7 +557,7 @@ impl InstructionData {
     }
 
     /// If this is a load/store instruction, return its memory flags.
-    pub fn memflags(&self) -> Option<MemFlagsData> {
+    pub fn memflags(&self) -> Option<MemFlags> {
         match self {
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
@@ -567,6 +567,12 @@ impl InstructionData {
             | &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             _ => None,
         }
+    }
+
+    /// If this is a load/store instruction, resolve its memory flags to data
+    /// through the DFG.
+    pub fn memflags_data(&self, dfg: &super::dfg::DataFlowGraph) -> Option<super::MemFlagsData> {
+        self.memflags().map(|f| dfg.mem_flags[f])
     }
 
     /// If this instruction references a stack slot, return it
@@ -1084,6 +1090,15 @@ pub trait InstructionMapper {
 
     /// Map a function over an `Immediate`.
     fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate;
+
+    /// Map a function over a `MemFlags` entity.
+    ///
+    /// The default implementation returns the flags unchanged, which is correct
+    /// for mappers within a single function. Override this when mapping between
+    /// functions (e.g. inlining) to re-insert the flags data into the target DFG.
+    fn map_mem_flags(&mut self, flags: ir::MemFlags) -> ir::MemFlags {
+        flags
+    }
 }
 
 impl<'a, T> InstructionMapper for &'a mut T
@@ -1143,6 +1158,10 @@ where
 
     fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
         (**self).map_immediate(immediate)
+    }
+
+    fn map_mem_flags(&mut self, flags: ir::MemFlags) -> ir::MemFlags {
+        (**self).map_mem_flags(flags)
     }
 }
 

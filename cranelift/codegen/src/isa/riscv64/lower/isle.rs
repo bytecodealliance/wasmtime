@@ -286,7 +286,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
-                flags: MemFlagsData::trusted(),
+                flags: crate::ir::MemFlags::trusted(),
                 from: AMode::FPOffset(8),
             });
             tmp.to_reg()

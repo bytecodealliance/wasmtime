@@ -3,11 +3,11 @@
 //! that will replace nondeterministic NaN's with a single canonical NaN value.
 
 use crate::cursor::{Cursor, FuncCursor};
+use crate::ir::MemFlagsData;
 use crate::ir::condcodes::FloatCC;
 use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
 use crate::ir::types::{self};
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
-use crate::opts::MemFlagsData;
 use crate::timing;
 
 /// Perform the NaN canonicalization pass.

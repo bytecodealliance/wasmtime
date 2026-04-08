@@ -127,8 +127,8 @@ fn is_mergeable_load(
     }
 
     // If the load's flags specify big-endian, we can't merge.
-    if let Some(flags) = ctx.memflags(src_insn) {
-        if flags.explicit_endianness() == Some(Endianness::Big) {
+    if let Some(flags_data) = ctx.data(src_insn).memflags_data(ctx.dfg()) {
+        if flags_data.explicit_endianness() == Some(Endianness::Big) {
             return None;
         }
     }
@@ -234,6 +234,7 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
     let flags = ctx
         .memflags(spec.insn)
         .expect("Instruction with amode should have memflags");
+    let flags = ctx.dfg().mem_flags[flags];
 
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.

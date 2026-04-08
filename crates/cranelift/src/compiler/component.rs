@@ -2,7 +2,9 @@
 
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
-use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::{
+    TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, VMCTX_ALIAS_REGION_DATA, compiler::Compiler,
+};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlagsData, Value};
@@ -1540,11 +1542,17 @@ impl<'a> TrampolineCompiler<'a> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self) -> ir::Value {
         let caller_vmctx = self.abi_load_params()[1];
+        let vmctx_region = self
+            .builder
+            .func
+            .dfg
+            .alias_regions
+            .insert(VMCTX_ALIAS_REGION_DATA);
         self.builder.ins().load(
             self.isa.pointer_type(),
             ir::MemFlagsData::trusted()
                 .with_readonly()
-                .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                .with_alias_region(Some(vmctx_region))
                 .with_can_move(),
             caller_vmctx,
             i32::from(self.offsets.ptr.vmctx_store_context()),
@@ -1698,14 +1706,18 @@ impl ComponentCompiler for Compiler {
             &types,
             &wasm_func_ty,
         );
+
         let params = c.abi_load_params();
-        let result = UnsafeIntrinsicCompiler {
-            isa: c.isa,
-            ptr: &c.offsets.ptr,
-            cursor: c.builder.cursor(),
-        }
-        .translate(intrinsic, &params)?;
-        c.abi_store_results(result.as_slice());
+        let result = {
+            UnsafeIntrinsicCompiler {
+                isa: c.isa,
+                cursor: c.builder.cursor(),
+                ptr: &c.offsets.ptr,
+            }
+            .translate(intrinsic, &params)?
+        };
+        let results = result.into_iter().collect::<Vec<_>>();
+        c.abi_store_results(&results);
 
         c.builder.finalize();
         compiler.cx.abi = Some(abi);
@@ -1986,12 +1998,18 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
                 // Load the `*mut VMStoreContext` out of our vmctx.
                 let store_ctx = self.load_vm_store_context(params);
 
+                let vmctx_region = self
+                    .cursor
+                    .func
+                    .dfg
+                    .alias_regions
+                    .insert(VMCTX_ALIAS_REGION_DATA);
                 // Load the `*mut T` out of the `VMStoreContext`.
                 let data_address = self.cursor.ins().load(
                     pointer_type,
                     ir::MemFlagsData::trusted()
                         .with_readonly()
-                        .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                        .with_alias_region(Some(vmctx_region))
                         .with_can_move(),
                     store_ctx,
                     i32::from(self.ptr.vmstore_context_store_data()),
@@ -2159,11 +2177,17 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self, params: &[ir::Value]) -> ir::Value {
         let caller_vmctx = params[1];
+        let vmctx_region = self
+            .cursor
+            .func
+            .dfg
+            .alias_regions
+            .insert(VMCTX_ALIAS_REGION_DATA);
         self.cursor.ins().load(
             self.isa.pointer_type(),
             ir::MemFlagsData::trusted()
                 .with_readonly()
-                .with_alias_region(Some(ir::AliasRegion::Vmctx))
+                .with_alias_region(Some(vmctx_region))
                 .with_can_move(),
             caller_vmctx,
             i32::from(self.ptr.vmctx_store_context()),

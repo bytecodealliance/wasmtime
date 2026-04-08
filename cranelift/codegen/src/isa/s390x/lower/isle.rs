@@ -17,7 +17,7 @@ use crate::machinst::{CallInfo, MachLabel, Reg, TryCallInfo, non_writable_value_
 use crate::{
     ir::{
         AtomicRmwOp, BlockCall, Endianness, Inst, InstructionData, KnownSymbol, MemFlagsData,
-        Opcode, TrapCode, Value, ValueList, condcodes::*, immediates::*, types::*,
+        MemFlagsSet, Opcode, TrapCode, Value, ValueList, condcodes::*, immediates::*, types::*,
     },
     isa::CallConv,
     machinst::{
@@ -87,8 +87,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             if arg_space > 0 {
                 if self.backend.flags.preserve_frame_pointers() {
                     let tmp = self.lower_ctx.alloc_tmp(I64).only_reg().unwrap();
-                    let src_mem = MemArg::reg(stack_reg(), MemFlagsData::trusted());
-                    let dst_mem = MemArg::reg(stack_reg(), MemFlagsData::trusted());
+                    let src_mem = MemArg::reg(stack_reg(), MemFlagsSet::TRUSTED);
+                    let dst_mem = MemArg::reg(stack_reg(), MemFlagsSet::TRUSTED);
                     self.emit(&MInst::Load64 {
                         rd: tmp,
                         mem: src_mem,
@@ -684,6 +684,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn memarg_reg_plus_reg(&mut self, x: Reg, y: Reg, bias: u8, flags: MemFlagsData) -> MemArg {
+        let flags = self.lower_ctx.dfg().mem_flags.intern_existing(flags);
         MemArg::BXD12 {
             base: x,
             index: y,
@@ -700,6 +701,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         offset: &SImm20,
         flags: MemFlagsData,
     ) -> MemArg {
+        let flags = self.lower_ctx.dfg().mem_flags.intern_existing(flags);
         if let Some(imm) = UImm12::maybe_from_simm20(*offset) {
             MemArg::BXD12 {
                 base: x,
@@ -719,11 +721,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn memarg_reg_plus_off(&mut self, reg: Reg, off: i64, bias: u8, flags: MemFlagsData) -> MemArg {
+        let flags = self.lower_ctx.dfg().mem_flags.intern_existing(flags);
         MemArg::reg_plus_off(reg, off + (bias as i64), flags)
     }
 
     #[inline]
     fn memarg_symbol(&mut self, name: ExternalName, offset: i32, flags: MemFlagsData) -> MemArg {
+        let flags = self.lower_ctx.dfg().mem_flags.intern_existing(flags);
         MemArg::Symbol {
             name: Box::new(name),
             offset,
@@ -736,7 +740,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         MemArg::Symbol {
             name: Box::new(ExternalName::KnownSymbol(KnownSymbol::ElfGlobalOffsetTable)),
             offset: 0,
-            flags: MemFlagsData::trusted(),
+            flags: MemFlagsSet::TRUSTED,
         }
     }
 
@@ -754,7 +758,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn memarg_frame_pointer_offset(&mut self) -> MemArg {
         // The frame pointer (back chain) is stored directly at SP.
-        MemArg::reg(stack_reg(), MemFlagsData::trusted())
+        MemArg::reg(stack_reg(), MemFlagsSet::TRUSTED)
     }
 
     #[inline]

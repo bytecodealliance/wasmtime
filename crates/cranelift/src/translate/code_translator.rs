@@ -3640,7 +3640,8 @@ fn prepare_addr(
     // state. This may allow alias analysis to merge redundant loads,
     // etc. when heap accesses occur interleaved with other (table,
     // vmctx, stack) accesses.
-    flags.set_alias_region(Some(ir::AliasRegion::Heap));
+    let region = environ.get_heap_alias_region(builder.func);
+    flags.set_alias_region(Some(region));
 
     Ok(Reachability::Reachable((flags, index, addr)))
 }
@@ -3708,9 +3709,11 @@ fn translate_load(
 
     environ.before_load(builder, mem_op_size, wasm_index, memarg.offset);
 
+    let flags_entity = builder.func.dfg.mem_flags.insert(flags);
+
     let (load, dfg) = builder
         .ins()
-        .Load(opcode, result_ty, flags, Offset32::new(0), base);
+        .Load(opcode, result_ty, flags_entity, Offset32::new(0), base);
     environ.stacks.push1(dfg.first_result(load));
     Ok(Reachability::Reachable(()))
 }
@@ -3733,9 +3736,11 @@ fn translate_store(
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
 
+    let flags_entity = builder.func.dfg.mem_flags.insert(flags);
+
     builder
         .ins()
-        .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
+        .Store(opcode, val_ty, flags_entity, Offset32::new(0), val, base);
     Ok(())
 }
 

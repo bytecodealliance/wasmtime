@@ -20,7 +20,7 @@ use cranelift_codegen::isa::aarch64::inst::{
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
-    ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
+    ir::{ExternalName, MemFlags, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self, ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp,
         FPULeftShiftImm, FPUOp1, FPUOp2,
@@ -163,13 +163,14 @@ impl Assembler {
             rt: xt1.into(),
             rt2: xt2.into(),
             mem,
-            flags: MemFlagsData::trusted(),
+            flags: MemFlags::trusted(),
         });
     }
 
     /// Store a register.
     pub fn str(&mut self, reg: Reg, mem: AMode, size: OperandSize, flags: MemFlagsData) {
         use OperandSize::*;
+        let flags = flags.into();
         let inst = match (reg.is_int(), size) {
             (_, S8) => Inst::Store8 {
                 rd: reg.into(),
@@ -231,6 +232,7 @@ impl Assembler {
         flags: MemFlagsData,
     ) {
         use OperandSize::*;
+        let flags = flags.into();
         let writable_reg = rd.map(Into::into);
 
         let inst = match (rd.to_reg().is_int(), signed, size) {
@@ -298,7 +300,7 @@ impl Assembler {
             rt: writable_xt1,
             rt2: writable_xt2,
             mem,
-            flags: MemFlagsData::trusted(),
+            flags: MemFlags::trusted(),
         });
     }
 

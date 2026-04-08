@@ -88,13 +88,13 @@ block2(v1: i32):
 ; VCode:
 ;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
-;   xstore64 Slot(0), x0 // flags =  notrap aligned
-;   x1 = xload64 Slot(0) // flags = notrap aligned
-;   x2 = xload64 Slot(0) // flags = notrap aligned
-;   x3 = xload64 Slot(0) // flags = notrap aligned
+;   xstore64 Slot(0), x0 // flags = memflags0
+;   x1 = xload64 Slot(0) // flags =memflags0
+;   x2 = xload64 Slot(0) // flags =memflags0
+;   x3 = xload64 Slot(0) // flags =memflags0
 ;   call CallInfo { dest: PulleyCall { name: TestCase(%f), args: [] }, uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967295, 4294967295, 0] }, callee_conv: PreserveAll, caller_conv: SystemV, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: true }; jump MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
-;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   x0 = xload64 Slot(0) // flags =memflags0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ; block2:

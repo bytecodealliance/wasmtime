@@ -132,13 +132,13 @@ block0:
 ;   push_frame_save 64, {}
 ; block0:
 ;   xzero x14
-;   xstore64 OutgoingArg(0), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(8), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(16), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(24), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(32), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(40), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(48), x14 // flags =  notrap aligned
+;   xstore64 OutgoingArg(0), x14 // flags = memflags0
+;   xstore64 OutgoingArg(8), x14 // flags = memflags0
+;   xstore64 OutgoingArg(16), x14 // flags = memflags0
+;   xstore64 OutgoingArg(24), x14 // flags = memflags0
+;   xstore64 OutgoingArg(32), x14 // flags = memflags0
+;   xstore64 OutgoingArg(40), x14 // flags = memflags0
+;   xstore64 OutgoingArg(48), x14 // flags = memflags0
 ;   xmov x4, x14
 ;   xmov x5, x14
 ;   xmov x6, x14

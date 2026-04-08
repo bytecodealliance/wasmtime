@@ -1,4 +1,5 @@
 //! Instruction predicates/properties, shared by various analyses.
+use crate::ir::dfg::DataFlowGraph;
 use crate::ir::immediates::Offset32;
 use crate::ir::{self, Block, Function, Inst, InstructionData, Opcode, Type, Value};
 
@@ -18,13 +19,17 @@ fn trivially_has_side_effects(opcode: Opcode) -> bool {
 /// operating on inaccessible memory, so we can't treat them as side-effect-free even if the loaded
 /// value is unused.
 #[inline(always)]
-fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool {
+fn is_load_with_defined_trapping(
+    opcode: Opcode,
+    data: &InstructionData,
+    dfg: &DataFlowGraph,
+) -> bool {
     if !opcode.can_load() {
         return false;
     }
     match *data {
         InstructionData::StackLoad { .. } => false,
-        InstructionData::Load { flags, .. } => !flags.notrap(),
+        InstructionData::Load { flags, .. } => !dfg.mem_flags[flags].notrap(),
         _ => true,
     }
 }
@@ -35,7 +40,7 @@ fn is_load_with_defined_trapping(opcode: Opcode, data: &InstructionData) -> bool
 fn has_side_effect(func: &Function, inst: Inst) -> bool {
     let data = &func.dfg.insts[inst];
     let opcode = data.opcode();
-    trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
+    trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data, &func.dfg)
 }
 
 /// Does the given instruction behave as a "pure" node with respect to
@@ -49,7 +54,10 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
             opcode: Opcode::Load,
             flags,
             ..
-        } => flags.readonly() && flags.notrap() && flags.can_move(),
+        } => {
+            let flags = func.dfg.mem_flags[flags];
+            flags.readonly() && flags.notrap() && flags.can_move()
+        }
         _ => false,
     };
 

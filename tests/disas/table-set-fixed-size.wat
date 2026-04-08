@@ -17,6 +17,7 @@
     local.get 1
     table.set 0))
 ;; function u0:0(i64 vmctx, i64, i32) tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -40,7 +41,7 @@
 ;; @0056                               v9 = iadd v7, v8
 ;; @0056                               v10 = iconst.i64 0
 ;; @0056                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @0056                               v12 = load.i32 user6 aligned table v11
+;; @0056                               v12 = load.i32 user6 aligned region0 v11
 ;;                                     v61 = iconst.i32 1
 ;; @0056                               v13 = band v2, v61  ; v61 = 1
 ;;                                     v60 = iconst.i32 0
@@ -69,7 +70,7 @@
 ;; @0056                               jump block3
 ;;
 ;;                                 block3:
-;; @0056                               store.i32 user6 aligned table v2, v11
+;; @0056                               store.i32 user6 aligned region0 v2, v11
 ;;                                     v54 = iconst.i32 1
 ;; @0056                               v29 = band.i32 v12, v54  ; v54 = 1
 ;;                                     v53 = iconst.i32 0
@@ -114,6 +115,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32) tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -136,7 +138,7 @@
 ;; @005f                               v9 = iadd v7, v8
 ;; @005f                               v10 = iconst.i64 0
 ;; @005f                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @005f                               v12 = load.i32 user6 aligned table v11
+;; @005f                               v12 = load.i32 user6 aligned region0 v11
 ;;                                     v61 = iconst.i32 1
 ;; @005f                               v13 = band v3, v61  ; v61 = 1
 ;;                                     v60 = iconst.i32 0
@@ -165,7 +167,7 @@
 ;; @005f                               jump block3
 ;;
 ;;                                 block3:
-;; @005f                               store.i32 user6 aligned table v3, v11
+;; @005f                               store.i32 user6 aligned region0 v3, v11
 ;;                                     v54 = iconst.i32 1
 ;; @005f                               v29 = band.i32 v12, v54  ; v54 = 1
 ;;                                     v53 = iconst.i32 0

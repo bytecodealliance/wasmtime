@@ -12,6 +12,7 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
+;;     region0 = 2 "vmctx"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -42,7 +43,7 @@
 ;;                                 block2:
 ;;                                     v189 = iconst.i32 32
 ;;                                     v95 = iadd.i32 v15, v189  ; v189 = 32
-;; @0025                               store notrap aligned vmctx v95, v14
+;; @0025                               store notrap aligned region0 v95, v14
 ;;                                     v190 = iconst.i32 -1476395008
 ;;                                     v191 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v192 = load.i64 notrap aligned readonly can_move v191+32

@@ -74,14 +74,14 @@
     ;;
     ;; How much is written to the register is defined by `ExtKind`. The `flags`
     ;; control behavior such as endianness.
-    (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlagsData))
-    (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlagsData))
-    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlagsData))
+    (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags))
+    (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
+    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags))
 
     ;; Stores.
-    (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlagsData))
-    (FStore (mem Amode) (src FReg) (ty Type) (flags MemFlagsData))
-    (VStore (mem Amode) (src VReg) (ty Type) (flags MemFlagsData))
+    (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
+    (FStore (mem Amode) (src FReg) (ty Type) (flags MemFlags))
+    (VStore (mem Amode) (src VReg) (ty Type) (flags MemFlags))
 
     ;; A raw pulley instruction generated at compile-time via Pulley's
     ;; `for_each_op!` macro. This variant has `pulley_*` constructors to
@@ -270,7 +270,7 @@
 (type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
 (decl pure partial sinkable_load (Value) SinkableLoad)
 (rule (sinkable_load value @ (value_type ty))
-  (if-let inst @ (load _ flags addr (offset32 offset)) (is_sinkable_inst value))
+  (if-let inst @ (load _ (mem_flags_data flags) addr (offset32 offset)) (is_sinkable_inst value))
   (if-let true (is_native_endianness (endianness flags)))
   (if-let true (memflags_nontrapping flags))
   (if-let offset8 (i32_try_into_u8 offset))
@@ -668,32 +668,32 @@
 (decl pulley_xload (Amode Type MemFlagsData) XReg)
 (rule (pulley_xload amode ty flags)
       (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.XLoad dst amode ty flags))))
+            (_ Unit (emit (MInst.XLoad dst amode ty (mem_flags_intern flags)))))
         dst))
 
 (decl pulley_xstore (Amode XReg Type MemFlagsData) SideEffectNoResult)
 (rule (pulley_xstore amode src ty flags)
-      (SideEffectNoResult.Inst (MInst.XStore amode src ty flags)))
+      (SideEffectNoResult.Inst (MInst.XStore amode src ty (mem_flags_intern flags))))
 
 (decl pulley_fload (Amode Type MemFlagsData) FReg)
 (rule (pulley_fload amode ty flags)
       (let ((dst WritableFReg (temp_writable_freg))
-            (_ Unit (emit (MInst.FLoad dst amode ty flags))))
+            (_ Unit (emit (MInst.FLoad dst amode ty (mem_flags_intern flags)))))
         dst))
 
 (decl pulley_fstore (Amode FReg Type MemFlagsData) SideEffectNoResult)
 (rule (pulley_fstore amode src ty flags)
-      (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
+      (SideEffectNoResult.Inst (MInst.FStore amode src ty (mem_flags_intern flags))))
 
 (decl pulley_vload (Amode Type MemFlagsData) VReg)
 (rule (pulley_vload amode ty flags)
       (let ((dst WritableVReg (temp_writable_vreg))
-            (_ Unit (emit (MInst.VLoad dst amode ty flags))))
+            (_ Unit (emit (MInst.VLoad dst amode ty (mem_flags_intern flags)))))
         dst))
 
 (decl pulley_vstore (Amode VReg Type MemFlagsData) SideEffectNoResult)
 (rule (pulley_vstore amode src ty flags)
-      (SideEffectNoResult.Inst (MInst.VStore amode src ty flags)))
+      (SideEffectNoResult.Inst (MInst.VStore amode src ty (mem_flags_intern flags))))
 
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)

@@ -557,6 +557,11 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                                     OperandKindFields::VariableArgs => {
                                         fmtln!(fmt, "{member}: mapper.map_value_list({member}),");
                                     }
+                                    OperandKindFields::ImmValue
+                                        if field.kind.rust_type == "ir::MemFlags" =>
+                                    {
+                                        fmtln!(fmt, "{member}: mapper.map_mem_flags({member}),");
+                                    }
                                     OperandKindFields::ImmValue |
                                     OperandKindFields::ImmEnum(_) |
                                     OperandKindFields::TypeVar(_) => fmtln!(fmt, "{member},"),
@@ -1153,7 +1158,14 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         } else {
             let t = if op.is_immediate() {
                 let t = format!("T{}", tmpl_types.len() + 1);
-                tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
+                // For memflags, the public API type is MemFlagsData (the data),
+                // while InstructionData stores MemFlags (the entity index).
+                let api_type = if op.kind.rust_type == "ir::MemFlags" {
+                    "ir::MemFlagsData"
+                } else {
+                    op.kind.rust_type
+                };
+                tmpl_types.push(format!("{}: Into<{}>", t, api_type));
                 into_args.push(op.name);
                 t
             } else {
@@ -1164,9 +1176,15 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         }
     }
 
-    // We need to mutate `self` if this instruction accepts a value list, or will construct
-    // BlockCall values.
-    if format.has_value_list || !block_args.is_empty() {
+    // We need to mutate `self` if this instruction accepts a value list, will construct
+    // BlockCall values, or has memflags operands (which need DFG insertion).
+    // We need to mutate `self` if this instruction accepts a value list, will construct
+    // BlockCall values, or has memflags operands (which need DFG insertion).
+    let has_memflags = inst
+        .operands_in
+        .iter()
+        .any(|op| op.kind.rust_type == "ir::MemFlags");
+    if format.has_value_list || !block_args.is_empty() || has_memflags {
         args[0].push_str("mut self");
     } else {
         args[0].push_str("self");
@@ -1219,6 +1237,17 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         // Convert all of the `Into<>` arguments.
         for arg in into_args {
             fmtln!(fmt, "let {} = {}.into();", arg, arg);
+        }
+
+        // Insert memflags data into the DFG to get entity indices.
+        for op in &inst.operands_in {
+            if op.kind.rust_type == "ir::MemFlags" && op.is_immediate() {
+                fmtln!(
+                    fmt,
+                    "let {0} = self.data_flow_graph_mut().mem_flags.insert({0});",
+                    op.name
+                );
+            }
         }
 
         // Convert block references

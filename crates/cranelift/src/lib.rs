@@ -22,6 +22,7 @@ use cranelift_codegen::{
     settings,
 };
 use cranelift_entity::PrimaryMap;
+use std::borrow::Cow;
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
@@ -74,6 +75,18 @@ pub const TRAP_CONTINUATION_ALREADY_CONSUMED: TrapCode =
     TrapCode::unwrap_user(Trap::ContinuationAlreadyConsumed as u8 + TRAP_OFFSET);
 pub const TRAP_CAST_FAILURE: TrapCode =
     TrapCode::unwrap_user(Trap::CastFailure as u8 + TRAP_OFFSET);
+pub(crate) const HEAP_ALIAS_REGION_DATA: ir::AliasRegionData = ir::AliasRegionData {
+    user_id: 0,
+    description: Cow::Borrowed("heap"),
+};
+pub(crate) const TABLE_ALIAS_REGION_DATA: ir::AliasRegionData = ir::AliasRegionData {
+    user_id: 1,
+    description: Cow::Borrowed("table"),
+};
+pub(crate) const VMCTX_ALIAS_REGION_DATA: ir::AliasRegionData = ir::AliasRegionData {
+    user_id: 2,
+    description: Cow::Borrowed("vmctx"),
+};
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.

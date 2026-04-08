@@ -7,9 +7,9 @@
 //! collector can find and update roots when it relocates objects.
 
 use super::*;
-use crate::TRAP_INTERNAL_ASSERT;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::TargetEnvironment;
+use crate::{TRAP_INTERNAL_ASSERT, VMCTX_ALIAS_REGION_DATA};
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::copying::{
@@ -153,8 +153,13 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
+            let vmctx_region = builder
+                .func
+                .dfg
+                .alias_regions
+                .insert(VMCTX_ALIAS_REGION_DATA);
             builder.ins().store(
-                ir::MemFlagsData::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
+                ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                 end_of_object,
                 ptr_to_heap_data,
                 i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),

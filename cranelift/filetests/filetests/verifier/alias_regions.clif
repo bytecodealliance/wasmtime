@@ -1,0 +1,10 @@
+test verifier
+
+; Invalid alias region reference in a load instruction.
+; region0 is used but never declared.
+function %invalid_region_in_load(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 notrap region0 v0
+    ; error: undefined alias region region0
+    return v1
+}

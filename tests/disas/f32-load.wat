@@ -7,6 +7,7 @@
     f32.load))
 
 ;; function u0:0(i64 vmctx, i64, i32) -> f32 tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -19,7 +20,7 @@
 ;; @002e                               v4 = uextend.i64 v2
 ;; @002e                               v5 = load.i64 notrap aligned readonly can_move v0+56
 ;; @002e                               v6 = iadd v5, v4
-;; @002e                               v7 = load.f32 little heap v6
+;; @002e                               v7 = load.f32 little region0 v6
 ;; @0031                               jump block1
 ;;
 ;;                                 block1:

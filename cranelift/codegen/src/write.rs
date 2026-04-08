@@ -52,9 +52,24 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, ss.into(), slot)?;
         }
 
+        for (ar, ar_data) in func.dfg.alias_regions.iter() {
+            any = true;
+            self.write_entity_definition(
+                w,
+                func,
+                ar.into(),
+                &format_args!("{} \"{}\"", ar_data.user_id, ar_data.description),
+            )?;
+        }
+
         for (gv, gv_data) in &func.global_values {
             any = true;
-            self.write_entity_definition(w, func, gv.into(), gv_data)?;
+            self.write_entity_definition(
+                w,
+                func,
+                gv.into(),
+                &gv_data.display(&func.dfg.mem_flags),
+            )?;
         }
 
         // Write out all signatures before functions since function declarations can refer to
@@ -381,8 +396,14 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
     match dfg.insts[inst] {
         AtomicRmw { op, args, .. } => write!(w, " {} {}, {}", op, args[0], args[1]),
         AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
-        LoadNoOffset { flags, arg, .. } => write!(w, "{flags} {arg}"),
-        StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
+        LoadNoOffset { flags, arg, .. } => {
+            let flags = &dfg.mem_flags[flags];
+            write!(w, "{flags} {arg}")
+        }
+        StoreNoOffset { flags, args, .. } => {
+            let flags = &dfg.mem_flags[flags];
+            write!(w, "{} {}, {}", flags, args[0], args[1])
+        }
         Unary { arg, .. } => write!(w, " {arg}"),
         UnaryImm { imm, .. } => write!(w, " {}", {
             let mut imm = imm;
@@ -516,13 +537,19 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         } => write!(w, " {arg}, {dynamic_stack_slot}"),
         Load {
             flags, arg, offset, ..
-        } => write!(w, "{flags} {arg}{offset}"),
+        } => {
+            let flags = &dfg.mem_flags[flags];
+            write!(w, "{flags} {arg}{offset}")
+        }
         Store {
             flags,
             args,
             offset,
             ..
-        } => write!(w, "{} {}, {}{}", flags, args[0], args[1], offset),
+        } => {
+            let flags = &dfg.mem_flags[flags];
+            write!(w, "{} {}, {}{}", flags, args[0], args[1], offset)
+        }
         Trap { code, .. } => write!(w, " {code}"),
         CondTrap { arg, code, .. } => write!(w, " {arg}, {code}"),
         ExceptionHandlerAddress { block, imm, .. } => write!(w, " {block}, {imm}"),
