@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 use core::{alloc::Layout, num::NonZeroU32};
 
 /// A free list for use by our garbage collectors, using a sorted Vec of
@@ -23,12 +23,22 @@ pub(crate) struct FreeList {
     /// even though it would have enough capacity for many allocations after
     /// enough iterations of the loop.
     capacity: usize,
+
     /// Our free blocks, as a map from index to length of the free block at that
     /// index.
     free_block_index_to_len: BTreeMap<u32, u32>,
+
+    /// A map from a block length to the set of free block indices for that
+    /// length.
+    ///
+    /// This is necessary to avoid `O(n)` search for a block of a certain size
+    /// in the worst case.
+    free_block_len_to_indices: BTreeMap<u32, BTreeSet<u32>>,
+
     /// Bump allocator: current position in the active free block.
     /// Allocations bump this forward. When exhausted, refilled from blocks.
     bump_ptr: u32,
+
     /// End of the current bump allocation region.
     bump_end: u32,
 }
@@ -66,6 +76,7 @@ impl FreeList {
         let mut free_list = FreeList {
             capacity,
             free_block_index_to_len: BTreeMap::new(),
+            free_block_len_to_indices: BTreeMap::new(),
             bump_ptr: 0,
             bump_end: 0,
         };
@@ -257,11 +268,25 @@ impl FreeList {
         }
 
         // Find a block big enough.
-        let (&block_index, &block_len) = self
-            .free_block_index_to_len
-            .iter()
-            .find(|(_, len)| **len >= alloc_size)?;
-        self.free_block_index_to_len.remove(&block_index);
+        let (block_index, block_len) = self
+            .free_block_len_to_indices
+            .range_mut(alloc_size..)
+            .find_map(|(&block_len, indices)| {
+                debug_assert!(block_len >= alloc_size);
+                debug_assert_eq!(block_len % ALIGN_U32, 0);
+                let block_index = indices.pop_first()?;
+                Some((block_index, block_len))
+            })?;
+
+        let Entry::Occupied(entry) = self.free_block_len_to_indices.entry(block_len) else {
+            unreachable!()
+        };
+        if entry.get().is_empty() {
+            entry.remove();
+        }
+
+        let block_len2 = self.free_block_index_to_len.remove(&block_index);
+        debug_assert_eq!(block_len, block_len2.unwrap());
 
         debug_assert_eq!(block_index % ALIGN_U32, 0);
         debug_assert_eq!(block_len % ALIGN_U32, 0);
@@ -306,10 +331,15 @@ impl FreeList {
 
             // Also check if the last block in the list is now contiguous with
             // the extended bump region.
-            if let Some((&bi, &bl)) = self.free_block_index_to_len.last_key_value() {
-                if bi + bl == self.bump_ptr {
-                    self.bump_ptr = bi;
-                    self.free_block_index_to_len.pop_last();
+            if let Some((&block_index, &block_len)) = self.free_block_index_to_len.last_key_value()
+            {
+                if block_index + block_len == self.bump_ptr {
+                    self.bump_ptr = block_index;
+
+                    let last = self.free_block_index_to_len.pop_last();
+                    debug_assert_eq!((block_index, block_len), last.unwrap());
+
+                    self.remove_from_block_len_to_index(block_index, block_len);
                 }
             }
 
@@ -324,6 +354,7 @@ impl FreeList {
             // Also check if the first block above the bump region is now
             // contiguous.
             if let Some(block_len) = self.free_block_index_to_len.remove(&self.bump_end) {
+                self.remove_from_block_len_to_index(self.bump_end, block_len);
                 self.bump_end += block_len;
             }
 
@@ -358,10 +389,20 @@ impl FreeList {
                     index_end = index + alloc_size,
                     next_end = next_index + next_len,
                 );
-                self.free_block_index_to_len.remove(&next_index);
+
+                let next_len2 = self.free_block_index_to_len.remove(&next_index);
+                debug_assert_eq!(next_len, next_len2.unwrap());
+                self.remove_from_block_len_to_index(next_index, next_len);
+
                 let merged_block_len = next_index + next_len - prev_index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
                 *self.free_block_index_to_len.get_mut(&prev_index).unwrap() = merged_block_len;
+
+                self.remove_from_block_len_to_index(prev_index, prev_len);
+                self.free_block_len_to_indices
+                    .entry(merged_block_len)
+                    .or_default()
+                    .insert(prev_index);
             }
 
             // The prev and this blocks are contiguous: merge this into prev.
@@ -373,9 +414,16 @@ impl FreeList {
                     prev_end = prev_index + prev_len,
                     index_end = index + alloc_size,
                 );
+
                 let merged_block_len = index + alloc_size - prev_index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
                 *self.free_block_index_to_len.get_mut(&prev_index).unwrap() = merged_block_len;
+
+                self.remove_from_block_len_to_index(prev_index, prev_len);
+                self.free_block_len_to_indices
+                    .entry(merged_block_len)
+                    .or_default()
+                    .insert(prev_index);
             }
 
             // The this and next blocks are contiguous: merge next into this.
@@ -387,10 +435,18 @@ impl FreeList {
                     index_end = index + alloc_size,
                     next_end = next_index + next_len,
                 );
-                self.free_block_index_to_len.remove(&next_index);
+
+                let next_len2 = self.free_block_index_to_len.remove(&next_index);
+                debug_assert_eq!(next_len, next_len2.unwrap());
+                self.remove_from_block_len_to_index(next_index, next_len);
+
                 let merged_block_len = next_index + next_len - index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
                 self.free_block_index_to_len.insert(index, merged_block_len);
+                self.free_block_len_to_indices
+                    .entry(merged_block_len)
+                    .or_default()
+                    .insert(index);
             }
 
             // None of the blocks are contiguous: insert this block into the
@@ -398,6 +454,10 @@ impl FreeList {
             (_, _) => {
                 log::trace!("cannot merge blocks");
                 self.free_block_index_to_len.insert(index, alloc_size);
+                self.free_block_len_to_indices
+                    .entry(alloc_size)
+                    .or_default()
+                    .insert(index);
             }
         }
 
@@ -406,13 +466,29 @@ impl FreeList {
         if let Some((&block_index, &block_len)) = self.free_block_index_to_len.last_key_value() {
             if block_index + block_len == self.bump_ptr {
                 self.bump_ptr = block_index;
-                self.free_block_index_to_len.pop_last();
+
+                let last = self.free_block_index_to_len.pop_last();
+                debug_assert_eq!((block_index, block_len), last.unwrap());
+
+                self.remove_from_block_len_to_index(block_index, block_len);
             }
         }
 
         // After we've added to/mutated the free list, double check its
         // integrity.
         self.check_integrity();
+    }
+
+    #[track_caller]
+    fn remove_from_block_len_to_index(&mut self, block_index: u32, block_len: u32) {
+        let Entry::Occupied(mut entry) = self.free_block_len_to_indices.entry(block_len) else {
+            unreachable!()
+        };
+        let was_present = entry.get_mut().remove(&block_index);
+        debug_assert!(was_present);
+        if entry.get().is_empty() {
+            entry.remove();
+        }
     }
 
     /// Iterate over all free blocks as `(index, len)` pairs.
@@ -472,7 +548,19 @@ impl FreeList {
             // (4)
             assert_eq!(len % ALIGN_U32, 0);
 
+            // Check that this block is also in the correct size bucket.
+            assert!(self.free_block_len_to_indices.contains_key(&len));
+            assert!(self.free_block_len_to_indices[&len].contains(&index));
+
             prev_end = Some(end);
+        }
+
+        // Check that every entry in our size buckets is correct.
+        for (len, indices) in &self.free_block_len_to_indices {
+            for idx in indices {
+                assert!(self.free_block_index_to_len.contains_key(idx));
+                assert_eq!(self.free_block_index_to_len[idx], *len);
+            }
         }
 
         // Check bump region validity.
