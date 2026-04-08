@@ -177,7 +177,7 @@ impl<T: 'static> Linker<T> {
             engine: &self.engine,
             types: component.types(),
             strings: &self.strings,
-            imported_resources: Default::default(),
+            imported_resources: try_new::<Arc<_>>(Default::default())?,
         };
 
         // Walk over the component's list of import names and use that to lookup
@@ -267,7 +267,11 @@ impl<T: 'static> Linker<T> {
             assert_eq!(i, idx);
         }
         Ok(unsafe {
-            InstancePre::new_unchecked(component.clone(), Arc::new(imports), imported_resources)
+            InstancePre::new_unchecked(
+                component.clone(),
+                try_new::<Arc<_>>(imports)?,
+                imported_resources,
+            )
         })
     }
 
