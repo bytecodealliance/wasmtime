@@ -62,7 +62,7 @@ pub struct HostResourceTables<'a> {
 #[derive(Default)]
 pub struct HostResourceData {
     cur_generation: u32,
-    table_slot_metadata: Vec<TableSlot>,
+    table_slot_metadata: TryVec<TableSlot>,
 }
 
 #[derive(Copy, Clone)]
@@ -145,7 +145,7 @@ impl<'a> HostResourceTables<'a> {
         instance: Option<RuntimeInstance>,
     ) -> Result<HostResourceIndex> {
         let idx = self.tables.resource_lower_own(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, dtor, instance))
+        Ok(self.new_host_index(idx, dtor, instance)?)
     }
 
     /// See [`HostResourceTables::host_resource_lower_own`].
@@ -153,7 +153,7 @@ impl<'a> HostResourceTables<'a> {
         let idx = self
             .tables
             .resource_lower_borrow(TypedResource::Host(rep))?;
-        Ok(self.new_host_index(idx, None, None))
+        Ok(self.new_host_index(idx, None, None)?)
     }
 
     /// Validates that `idx` is still valid for the host tables, notably
@@ -201,7 +201,7 @@ impl<'a> HostResourceTables<'a> {
         idx: u32,
         dtor: Option<NonNull<VMFuncRef>>,
         instance: Option<RuntimeInstance>,
-    ) -> HostResourceIndex {
+    ) -> Result<HostResourceIndex> {
         let list = &mut self.host_resource_data.table_slot_metadata;
         let info = TableSlot {
             generation: self.host_resource_data.cur_generation,
@@ -219,14 +219,14 @@ impl<'a> HostResourceTables<'a> {
                         generation: 0,
                         instance: None,
                         dtor: None,
-                    });
+                    })?;
                 }
                 assert_eq!(idx as usize, list.len());
-                list.push(info);
+                list.push(info)?;
             }
         }
 
-        HostResourceIndex::new(idx, info.generation)
+        Ok(HostResourceIndex::new(idx, info.generation))
     }
 
     /// Drops a host-owned resource from host tables.

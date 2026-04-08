@@ -388,7 +388,7 @@ impl Component {
     }
 
     fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
-        let resources = Arc::new(PrimaryMap::new());
+        let resources = Arc::new(TryPrimaryMap::new());
         f(&InstanceType {
             types: self.types(),
             resources: &resources,

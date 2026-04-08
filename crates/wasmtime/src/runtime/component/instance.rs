@@ -715,7 +715,7 @@ pub(crate) enum RuntimeImport {
     },
 }
 
-pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
+pub type ImportedResources = TryPrimaryMap<ResourceIndex, ResourceType>;
 
 impl<'a> Instantiator<'a> {
     fn new(
@@ -727,7 +727,7 @@ impl<'a> Instantiator<'a> {
         let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
         modules.register_component(component, engine, breakpoints)?;
         let imported_resources: ImportedResources =
-            PrimaryMap::with_capacity(env_component.imported_resources.len());
+            TryPrimaryMap::with_capacity(env_component.imported_resources.len())?;
 
         let instance = ComponentInstance::new(
             store.store_data().components.next_component_instance_id(),
@@ -763,7 +763,7 @@ impl<'a> Instantiator<'a> {
                 } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
             };
-            let i = self.instance_resource_types_mut(store.0).push(ty);
+            let i = self.instance_resource_types_mut(store.0).push(ty)?;
             assert_eq!(i, idx);
             self.instance_mut(store.0)
                 .set_resource_destructor(idx, Some(func_ref));
@@ -906,13 +906,13 @@ impl<'a> Instantiator<'a> {
                     self.extract_post_return(store.0, post_return)
                 }
 
-                GlobalInitializer::Resource(r) => self.resource(store.0, r),
+                GlobalInitializer::Resource(r) => self.resource(store.0, r)?,
             }
         }
         Ok(())
     }
 
-    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) -> Result<()> {
         let dtor = resource
             .dtor
             .as_ref()
@@ -929,8 +929,9 @@ impl<'a> Instantiator<'a> {
         let ty = ResourceType::guest(store.id(), instance, resource.index);
         self.instance_mut(store)
             .set_resource_destructor(index, dtor);
-        let i = self.instance_resource_types_mut(store).push(ty);
+        let i = self.instance_resource_types_mut(store).push(ty)?;
         debug_assert_eq!(i, index);
+        Ok(())
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
@@ -1088,7 +1089,7 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
     asyncness: Asyncness,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -1116,7 +1117,7 @@ impl<T: 'static> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
         let mut asyncness = Asyncness::No;
         for (_, import) in imports.iter() {

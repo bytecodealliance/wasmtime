@@ -306,7 +306,7 @@ impl Backtrace {
         entry_trampoline_fp: usize,
         mut f: impl FnMut(Activation) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
-        use crate::runtime::vm::stack_switching::{VMContRef, VMStackLimits};
+        use crate::runtime::vm::stack_switching::VMStackLimits;
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).
@@ -321,38 +321,28 @@ impl Backtrace {
         // trace through: the initial stack)
 
         assert_ne!(chain, VMStackChain::Absent);
-        let stack_limits_vec: Vec<*mut VMStackLimits> =
-            unsafe { chain.clone().into_stack_limits_iter().collect() };
-        let continuations_vec: Vec<*mut VMContRef> =
-            unsafe { chain.clone().into_continuation_iter().collect() };
 
-        // The VMStackLimits of the currently running stack (whether that's a
-        // continuation or the initial stack) contains undefined data, the
-        // information about that stack is saved in the Store's
-        // `VMStoreContext` and handled at the top of this function
-        // already. That's why we ignore `stack_limits_vec[0]`.
-        //
-        // Note that a continuation stack's control context stores
-        // information about how to resume execution *in its parent*. Thus,
-        // we combine the information from continuations_vec[i] with
-        // stack_limits_vec[i + 1] below to get information about a
-        // particular stack.
-        //
-        // There must be exactly one more `VMStackLimits` object than there
-        // are continuations, due to the initial stack having one, too.
-        assert_eq!(stack_limits_vec.len(), continuations_vec.len() + 1);
+        // Iterate through the continuation chain without collecting into Vecs,
+        // avoiding allocation. The stack_limits iterator starts one ahead of
+        // continuations (we skip the first entry, which belongs to the
+        // currently running stack already handled above). Each continuation's
+        // control context describes how to resume in its parent stack, so we
+        // pair continuations[i] with stack_limits[i + 1].
+        let mut stack_limits_iter = unsafe { chain.clone().into_stack_limits_iter() };
+        // Skip the first stack limits (current running stack, handled above).
+        let _current: Option<*mut VMStackLimits> = stack_limits_iter.next();
 
-        for i in 0..continuations_vec.len() {
-            // The continuation whose control context we want to
-            // access, to get information about how to continue
-            // execution in its parent.
-            let continuation = unsafe { &*continuations_vec[i] };
+        let mut continuations_iter = unsafe { chain.into_continuation_iter() }.peekable();
 
-            // The stack limits describing the parent of `continuation`.
-            let parent_limits = unsafe { &*stack_limits_vec[i + 1] };
+        while let Some(continuation_ptr) = continuations_iter.next() {
+            let parent_limits_ptr = stack_limits_iter
+                .next()
+                .expect("expected one more VMStackLimits than continuations");
+            let continuation = unsafe { &*continuation_ptr };
+            let parent_limits = unsafe { &*parent_limits_ptr };
 
-            // The parent of `continuation` if present not the last in the chain.
-            let parent_continuation = continuations_vec.get(i + 1).map(|&c| unsafe { &*c });
+            // The parent of `continuation` if present and not the last in the chain.
+            let parent_continuation = continuations_iter.peek().map(|&c| unsafe { &*c });
 
             let fiber_stack = continuation.fiber_stack();
             let resume_pc = fiber_stack.control_context_instruction_pointer();
