@@ -46,7 +46,7 @@
 //! final `Component`.
 
 use crate::component::translate::*;
-use crate::{EntityType, IndexType};
+use crate::{EntityType, Memory};
 use core::str::FromStr;
 use std::borrow::Cow;
 use wasmparser::component_types::{ComponentAnyTypeId, ComponentCoreModuleTypeId};
@@ -1520,34 +1520,25 @@ impl<'a> Inliner<'a> {
         frame: &InlinerFrame<'a>,
         types: &ComponentTypesBuilder,
         memory: MemoryIndex,
-    ) -> (dfg::CoreExport<MemoryIndex>, bool) {
+    ) -> (dfg::CoreExport<MemoryIndex>, Memory) {
         let memory = frame.memories[memory].clone().map_index(|i| match i {
             EntityIndex::Memory(i) => i,
             _ => unreachable!(),
         });
-        let memory64 = match &self.runtime_instances[memory.instance] {
+        let ty = match &self.runtime_instances[memory.instance] {
             InstanceModule::Static(idx) => match &memory.item {
-                ExportItem::Index(i) => {
-                    let ty = &self.nested_modules[*idx].module.memories[*i];
-                    match ty.idx_type {
-                        IndexType::I32 => false,
-                        IndexType::I64 => true,
-                    }
-                }
+                ExportItem::Index(i) => self.nested_modules[*idx].module.memories[*i],
                 ExportItem::Name(_) => unreachable!(),
             },
             InstanceModule::Import(ty) => match &memory.item {
                 ExportItem::Name(name) => match types[*ty].exports[name] {
-                    EntityType::Memory(m) => match m.idx_type {
-                        IndexType::I32 => false,
-                        IndexType::I64 => true,
-                    },
+                    EntityType::Memory(m) => m,
                     _ => unreachable!(),
                 },
                 ExportItem::Index(_) => unreachable!(),
             },
         };
-        (memory, memory64)
+        (memory, ty)
     }
 
     /// Translates a `LocalCanonicalOptions` which indexes into the `frame`
@@ -1562,18 +1553,9 @@ impl<'a> Inliner<'a> {
         let data_model = match options.data_model {
             LocalDataModel::Gc {} => DataModel::Gc {},
             LocalDataModel::LinearMemory { memory, realloc } => {
-                let (memory, memory64) = memory
-                    .map(|i| {
-                        let (memory, memory64) = self.memory(frame, types, i);
-                        (Some(memory), memory64)
-                    })
-                    .unwrap_or((None, false));
+                let memory = memory.map(|i| self.memory(frame, types, i));
                 let realloc = realloc.map(|i| frame.funcs[i].1.clone());
-                DataModel::LinearMemory {
-                    memory,
-                    memory64,
-                    realloc,
-                }
+                DataModel::LinearMemory { memory, realloc }
             }
         };
         let callback = options.callback.map(|i| frame.funcs[i].1.clone());
@@ -1603,14 +1585,12 @@ impl<'a> Inliner<'a> {
     fn canonical_options(&mut self, options: AdapterOptions) -> dfg::OptionsId {
         let data_model = match options.data_model {
             DataModel::Gc {} => dfg::CanonicalOptionsDataModel::Gc {},
-            DataModel::LinearMemory {
-                memory,
-                memory64: _,
-                realloc,
-            } => dfg::CanonicalOptionsDataModel::LinearMemory {
-                memory: memory.map(|export| self.result.memories.push(export)),
-                realloc: realloc.map(|def| self.result.reallocs.push(def)),
-            },
+            DataModel::LinearMemory { memory, realloc } => {
+                dfg::CanonicalOptionsDataModel::LinearMemory {
+                    memory: memory.map(|(export, _)| self.result.memories.push(export)),
+                    realloc: realloc.map(|def| self.result.reallocs.push(def)),
+                }
+            }
         };
         let callback = options.callback.map(|def| self.result.callbacks.push(def));
         let post_return = options
