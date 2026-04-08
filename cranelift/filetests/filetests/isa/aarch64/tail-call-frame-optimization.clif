@@ -4,7 +4,7 @@ set preserve_frame_pointers=false
 target aarch64
 
 ;; Test 1: Tail calling convention with tail-only calls
-;; FunctionCalls::TailOnly → setup_area_size = 8 → optimized frame
+;; FunctionCalls::TailOnly → setup_area_size = 0 → no frame setup
 function %tail_only_function() -> i64 tail {
     fn0 = colocated %target_func() -> i64 tail
 
@@ -13,18 +13,12 @@ block0:
 }
 
 ; VCode:
-;   str fp, [sp, #-8]!
-;   mov fp, sp
 ; block0:
 ;   return_call TestCase(%target_func) new_stack_arg_size:0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   str x29, [sp, #-8]!
-;   mov x29, sp
-; block1: ; offset 0x8
-;   ldr x29, [sp], #8
-;   b #0xc ; reloc_external Call %target_func 0
+;   b #0 ; reloc_external Call %target_func 0
 
 ;; Test 2: SystemV calling convention with regular calls
 ;; FunctionCalls::Regular → setup_area_size = 16 → standard frame
@@ -54,7 +48,7 @@ block0:
 ;   ret
 
 ;; Test 3: Tail calling convention with conditional tail calls
-;; Multiple return_call instructions still → FunctionCalls::TailOnly → optimized frame
+;; Multiple return_call instructions still → FunctionCalls::TailOnly → no frame setup
 function %tail_only_conditional(i64) -> i64 tail {
     fn0 = colocated %target_func() -> i64 tail
     fn1 = colocated %other_func() -> i64 tail
@@ -72,8 +66,6 @@ block2:
 }
 
 ; VCode:
-;   str fp, [sp, #-8]!
-;   mov fp, sp
 ; block0:
 ;   subs xzr, x2, #0
 ;   b.gt label2 ; b label1
@@ -84,17 +76,12 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   str x29, [sp, #-8]!
-;   mov x29, sp
-; block1: ; offset 0x8
 ;   cmp x2, #0
-;   b.gt #0x18
-; block2: ; offset 0x10
-;   ldr x29, [sp], #8
-;   b #0x14 ; reloc_external Call %other_func 0
-; block3: ; offset 0x18
-;   ldr x29, [sp], #8
-;   b #0x1c ; reloc_external Call %target_func 0
+;   b.gt #0xc
+; block1: ; offset 0x8
+;   b #8 ; reloc_external Call %other_func 0
+; block2: ; offset 0xc
+;   b #0xc ; reloc_external Call %target_func 0
 
 ;; Target functions for testing
 function %target_func() -> i64 {
