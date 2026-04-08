@@ -4,6 +4,7 @@
 #define WASMTIME_COMPONENT_LINKER_H
 
 #include <wasm.h>
+#include <wasmtime/async.h>
 #include <wasmtime/component/component.h>
 #include <wasmtime/component/instance.h>
 #include <wasmtime/component/types/func.h>
@@ -208,6 +209,87 @@ wasmtime_component_linker_instance_add_resource(
  */
 WASM_API_EXTERN void wasmtime_component_linker_instance_delete(
     wasmtime_component_linker_instance_t *linker_instance);
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+
+/**
+ * \brief Instantiate a component in \p linker asynchronously.
+ *
+ * This is the same as #wasmtime_component_linker_instantiate except that it
+ * is asynchronous. This is only compatible with stores associated with an
+ * asynchronous config.
+ *
+ * The result is a future that is owned by the caller and must be deleted via
+ * #wasmtime_call_future_delete.
+ *
+ * All parameters to this function must be kept alive and not modified until the
+ * returned #wasmtime_call_future_t is deleted.
+ *
+ * \param linker the linker to instantiate with
+ * \param context the store context
+ * \param component the component to instantiate
+ * \param instance_out where to store the returned instance
+ * \param error_ret where to store the returned error
+ */
+WASM_API_EXTERN wasmtime_call_future_t *
+wasmtime_component_linker_instantiate_async(
+    const wasmtime_component_linker_t *linker, wasmtime_context_t *context,
+    const wasmtime_component_t *component,
+    wasmtime_component_instance_t *instance_out, wasmtime_error_t **error_ret);
+
+/// Type of the async callback used in
+/// #wasmtime_component_linker_instance_add_func_async
+typedef void (*wasmtime_component_func_async_callback_t)(
+    void *env, wasmtime_context_t *context,
+    const wasmtime_component_func_type_t *ty, wasmtime_component_val_t *args,
+    size_t nargs, wasmtime_component_val_t *results, size_t nresults,
+    wasmtime_error_t **error_ret,
+    wasmtime_async_continuation_t *continuation_ret);
+
+/**
+ * \brief Define an async function within this instance.
+ *
+ * This is the same as #wasmtime_component_linker_instance_add_func except
+ * that it supports async callbacks.
+ *
+ * \param linker_instance the instance to define the function in
+ * \param name the function name
+ * \param name_len length of \p name in bytes
+ * \param callback the async callback when this function gets called
+ * \param data host-specific data passed to the callback invocation, can be
+ * `NULL`
+ * \param finalizer optional finalizer for \p data, can be `NULL`
+ * \return on success `NULL`, otherwise an error
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_instance_add_func_async(
+    wasmtime_component_linker_instance_t *linker_instance, const char *name,
+    size_t name_len, wasmtime_component_func_async_callback_t callback,
+    void *data, void (*finalizer)(void *));
+
+#ifdef WASMTIME_FEATURE_WASI
+
+/**
+ * \brief Add all WASI interfaces into the \p linker provided using async
+ * bindings.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_add_wasip2_async(wasmtime_component_linker_t *linker);
+
+#endif // WASMTIME_FEATURE_WASI
+
+#ifdef WASMTIME_FEATURE_WASI_HTTP
+
+/**
+ * \brief Add WASI HTTP interfaces into the \p linker provided using async
+ * bindings.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_add_wasi_http_async(
+    wasmtime_component_linker_t *linker);
+
+#endif // WASMTIME_FEATURE_WASI_HTTP
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 
 #ifdef __cplusplus
 } // extern "C"

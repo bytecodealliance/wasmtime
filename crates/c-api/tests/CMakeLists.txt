@@ -40,6 +40,8 @@ add_capi_test(tests FILES
   component/values.cc
   component/linker.cc
   component/types.cc
+  component/async.cc
+  async.cc
   error.cc
   config.cc
   wat.cc

@@ -276,6 +276,10 @@ pub enum wasmtime_component_val_t {
     Map(wasmtime_component_valmap_t),
 }
 
+// Safety: the C API async contract (documented in async.h) guarantees that
+// values are not concurrently accessed while a future is alive.
+unsafe impl Send for wasmtime_component_val_t {}
+
 impl Default for wasmtime_component_val_t {
     fn default() -> Self {
         Self::Bool(false)

@@ -42,6 +42,7 @@ default = [
   'debug-builtins',
   'pooling-allocator',
   'component-model',
+  'component-model-async',
   'pulley',
   # 'all-arch', # intentionally off-by-default
   # ... if you add a line above this be sure to change the other locations
@@ -68,6 +69,7 @@ winch = ["wasmtime-c-api/winch"]
 debug-builtins = ["wasmtime-c-api/debug-builtins"]
 pooling-allocator = ["wasmtime-c-api/pooling-allocator"]
 component-model = ["wasmtime-c-api/component-model"]
+component-model-async = ["wasmtime-c-api/component-model-async"]
 pulley = ["wasmtime-c-api/pulley"]
 all-arch = ["wasmtime-c-api/all-arch"]
 # ... if you add a line above this be sure to read the comment at the end of

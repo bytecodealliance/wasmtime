@@ -189,6 +189,12 @@ pub struct wasmtime_call_future_t<'a> {
     underlying: Pin<Box<dyn Future<Output = ()> + 'a>>,
 }
 
+impl<'a> wasmtime_call_future_t<'a> {
+    pub(crate) fn new(future: Pin<Box<dyn Future<Output = ()> + 'a>>) -> Self {
+        Self { underlying: future }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_call_future_delete(_future: Box<wasmtime_call_future_t>) {}
 
@@ -265,7 +271,7 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
         trap_ret,
         err_ret,
     ));
-    Box::new(wasmtime_call_future_t { underlying: fut })
+    Box::new(wasmtime_call_future_t::new(fut))
 }
 
 #[unsafe(no_mangle)]
@@ -323,7 +329,7 @@ pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
         trap_ret,
         err_ret,
     ));
-    Box::new(crate::wasmtime_call_future_t { underlying: fut })
+    Box::new(crate::wasmtime_call_future_t::new(fut))
 }
 
 async fn do_instance_pre_instantiate_async(
@@ -355,7 +361,7 @@ pub extern "C" fn wasmtime_instance_pre_instantiate_async<'a>(
         trap_ret,
         err_ret,
     ));
-    Box::new(crate::wasmtime_call_future_t { underlying: fut })
+    Box::new(crate::wasmtime_call_future_t::new(fut))
 }
 
 pub type wasmtime_stack_memory_get_callback_t =

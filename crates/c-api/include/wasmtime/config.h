@@ -844,6 +844,37 @@ WASMTIME_CONFIG_PROP(void, wasm_component_model_map, bool)
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+
+/**
+ * \brief Configures whether the WebAssembly component-model async support will
+ * be enabled.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_async, bool)
+
+/**
+ * \brief Configures whether async built-in intrinsics are enabled for the
+ * component model.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_builtins.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_async_builtins, bool)
+
+/**
+ * \brief Configures whether stackful coroutine support is enabled for async
+ * components.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_stackful.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_async_stackful, bool)
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
