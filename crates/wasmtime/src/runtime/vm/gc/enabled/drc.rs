@@ -54,6 +54,7 @@ use crate::runtime::vm::{
 };
 use crate::vm::VMMemoryDefinition;
 use crate::{Engine, EngineWeak, prelude::*};
+use core::hash::BuildHasher;
 use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
@@ -111,12 +112,66 @@ enum TraceInfo {
     },
 }
 
+/// A hasher that doesn't hash, for use in the trace-info hash map, where we are
+/// just using scalar keys and aren't overly concerned with collision-based DoS.
+#[derive(Default)]
+struct NopHasher(u64);
+
+impl BuildHasher for NopHasher {
+    type Hasher = Self;
+
+    #[inline]
+    fn build_hasher(&self) -> Self::Hasher {
+        NopHasher::default()
+    }
+}
+
+impl core::hash::Hasher for NopHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut hash = self.0.to_ne_bytes();
+        let n = hash.len().min(bytes.len());
+        hash[..n].copy_from_slice(bytes);
+        self.0 = u64::from_ne_bytes(hash);
+    }
+
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.write_u64(i.into());
+    }
+
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.write_u64(i.into())
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.write_u64(i.into())
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0 = i;
+    }
+
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.write_u64(i.try_into().unwrap());
+    }
+}
+
 /// A deferred reference-counting (DRC) heap.
 struct DrcHeap {
     engine: EngineWeak,
 
     /// For every type that we have allocated in this heap, how do we trace it?
-    trace_infos: HashMap<VMSharedTypeIndex, TraceInfo>,
+    trace_infos: HashMap<VMSharedTypeIndex, TraceInfo, NopHasher>,
 
     /// Count of how many no-gc scopes we are currently within.
     no_gc_count: u64,
@@ -161,9 +216,11 @@ impl DrcHeap {
     /// Construct a new, default DRC heap.
     fn new(engine: &Engine) -> Result<Self> {
         log::trace!("allocating new DRC heap");
+        let mut trace_infos = HashMap::default();
+        trace_infos.reserve(1);
         Ok(Self {
             engine: engine.weak(),
-            trace_infos: HashMap::with_capacity(1),
+            trace_infos,
             no_gc_count: 0,
             over_approximated_stack_roots: Box::new(None),
             memory: None,
