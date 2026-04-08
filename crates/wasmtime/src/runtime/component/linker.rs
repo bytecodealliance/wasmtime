@@ -12,6 +12,7 @@ use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
+use core::mem::size_of;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
@@ -83,8 +84,8 @@ impl<T: 'static> Clone for Linker<T> {
 
 #[derive(Clone, Default)]
 pub struct Strings {
-    string2idx: HashMap<Arc<str>, usize>,
-    strings: Vec<Arc<str>>,
+    string2idx: HashMap<Box<str>, usize>,
+    strings: Vec<Box<str>>,
 }
 
 /// Structure representing an "instance" being defined within a linker.
@@ -345,9 +346,20 @@ impl<T: 'static> Linker<T> {
 
             match item_def {
                 TypeDef::ComponentFunc(_) => {
-                    let fully_qualified_name = parent_instance
-                        .map(|parent| format!("{parent}#{item_name}"))
-                        .unwrap_or_else(|| item_name.to_owned());
+                    let fully_qualified_name = match parent_instance {
+                        Some(parent) => {
+                            let mut s = TryString::new();
+                            s.push_str(parent)?;
+                            s.push('#')?;
+                            s.push_str(item_name)?;
+                            s
+                        }
+                        None => {
+                            let mut s = TryString::new();
+                            s.push_str(item_name)?;
+                            s
+                        }
+                    };
                     linker.func_new(&item_name, move |_, _, _, _| {
                         bail!("unknown import: `{fully_qualified_name}` has not been defined")
                     })?;
@@ -438,7 +450,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_wrap(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap(func)?))?;
         Ok(())
     }
 
@@ -485,7 +497,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap_async(f)?))?;
         Ok(())
     }
 
@@ -550,7 +562,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         if !self.engine.tunables().concurrency_support {
             bail!("concurrent host functions require `Config::concurrency_support`");
         }
-        self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)))?;
+        self.insert(name, Definition::Func(HostFunc::func_wrap_concurrent(f)?))?;
         Ok(())
     }
 
@@ -661,7 +673,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         + Sync
         + 'static,
     ) -> Result<()> {
-        self.insert(name, Definition::Func(HostFunc::func_new(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new(func)?))?;
         Ok(())
     }
 
@@ -684,7 +696,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
     {
-        self.insert(name, Definition::Func(HostFunc::func_new_async(func)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new_async(func)?))?;
         Ok(())
     }
 
@@ -712,7 +724,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
         if !self.engine.tunables().concurrency_support {
             bail!("concurrent host functions require `Config::concurrency_support`");
         }
-        self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)))?;
+        self.insert(name, Definition::Func(HostFunc::func_new_concurrent(f)?))?;
         Ok(())
     }
 
@@ -859,10 +871,21 @@ impl NameMapIntern for Strings {
         if let Some(idx) = self.string2idx.get(string) {
             return Ok(*idx);
         }
-        let string: Arc<str> = string.into();
+        let mut ts = TryString::new();
+        ts.push_str(string)?;
+        let key = ts.into_boxed_str()?;
+        let mut ts2 = TryString::new();
+        ts2.push_str(string)?;
+        let key2 = ts2.into_boxed_str()?;
         let idx = self.strings.len();
-        self.strings.push(string.clone());
-        self.string2idx.insert(string, idx);
+        self.strings
+            .try_reserve(1)
+            .map_err(|_| OutOfMemory::new(size_of::<Box<str>>()))?;
+        self.strings.push(key);
+        self.string2idx
+            .try_reserve(1)
+            .map_err(|_| OutOfMemory::new(size_of::<(Box<str>, usize)>()))?;
+        self.string2idx.insert(key2, idx);
         Ok(idx)
     }
 

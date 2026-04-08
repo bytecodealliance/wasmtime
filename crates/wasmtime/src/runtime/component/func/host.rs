@@ -76,22 +76,22 @@ impl HostFunc {
     ///
     /// Note that if `asyncness` is mistaken then that'll result in panics
     /// in Wasmtime, but not memory unsafety.
-    fn new<T, F, P, R>(asyncness: Asyncness, func: F) -> Arc<HostFunc>
+    fn new<T, F, P, R>(asyncness: Asyncness, func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         R: Send + Sync + 'static,
         F: HostFn<T, P, R> + Send + Sync + 'static,
     {
-        Arc::new(HostFunc {
+        Ok(try_new::<Arc<_>>(HostFunc {
             entrypoint: F::cabi_entrypoint,
             typecheck: F::typecheck,
-            func: Box::new(func),
+            func: try_new::<Box<_>>(func)?,
             asyncness,
-        })
+        })?)
     }
 
     /// Equivalent for `Linker::func_wrap`
-    pub(crate) fn func_wrap<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
@@ -108,7 +108,7 @@ impl HostFunc {
 
     /// Equivalent for `Linker::func_wrap_async`
     #[cfg(feature = "async")]
-    pub(crate) fn func_wrap_async<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap_async<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, P) -> Box<dyn Future<Output = Result<R>> + Send + '_>
@@ -132,7 +132,7 @@ impl HostFunc {
 
     /// Equivalent for `Linker::func_wrap_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn func_wrap_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap_concurrent<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
@@ -155,7 +155,7 @@ impl HostFunc {
     }
 
     /// Equivalent of `Linker::func_new`
-    pub(crate) fn func_new<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, ComponentFunc, &[Val], &mut [Val]) -> Result<()>
@@ -177,7 +177,7 @@ impl HostFunc {
 
     /// Equivalent of `Linker::func_new_async`
     #[cfg(feature = "async")]
-    pub(crate) fn func_new_async<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new_async<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: for<'a> Fn(
@@ -209,7 +209,7 @@ impl HostFunc {
 
     /// Equivalent of `Linker::func_new_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn func_new_concurrent<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new_concurrent<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: for<'a> Fn(
