@@ -39,7 +39,7 @@
 
 # Cranelift/Winch compilers
 /cranelift/                       @bytecodealliance/wasmtime-compiler-reviewers
-/cranelift/codegen/src/isa/s390x/ @bytecodealliance/wasmtime-compiler-reviewers/wasmtime-compiler-s390x-reviewers
+/cranelift/codegen/src/isa/s390x/ @bytecodealliance/wasmtime-compiler-s390x-reviewers
 /winch/                           @bytecodealliance/wasmtime-compiler-reviewers
 /crates/cranelift                 @bytecodealliance/wasmtime-compiler-reviewers
 /crates/winch                     @bytecodealliance/wasmtime-compiler-reviewers
