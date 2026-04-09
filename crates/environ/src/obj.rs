@@ -98,6 +98,25 @@ pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
 /// to the 32-bit encodings for offsets this doesn't support images >=4gb.
 pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 
+/// A custom section which contains the offsets of instructions which check for
+/// the end of epochs when using `--epoch-interruption-via-mmu`.
+///
+/// The contents are examined at runtime by the signal handler to determine
+/// whether a segfault is due to an epoch ending (vs. a legitimate crash).
+///
+/// This section has a custom binary encoding:
+///
+/// * The section starts with a 32-bit little-endian integer which tell the
+///   number of items in the following array.
+/// * Next comes a sorted array of 32-bit unsigned little-endian integers which
+///   represent offsets from the beginning of the text section to the
+///   instruction following the load which triggers epoch-ending segfaults.
+///   TODO: We may point elsewhere if it's more useful to the signal handler. Be
+///   careful if this could end up pointing off the end of the text section.
+///
+/// The 32-bit encodings herein mean that >=4gb text sections are not supported.
+pub const ELF_WASMTIME_EPOCH_CHECKS: &str = ".wasmtime.epochchecks";
+
 /// A custom binary-encoded section of the wasmtime compilation
 /// artifacts which encodes exception tables.
 ///

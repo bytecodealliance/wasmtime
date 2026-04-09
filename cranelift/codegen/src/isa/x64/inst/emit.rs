@@ -649,8 +649,7 @@ pub(crate) fn emit(
             // The ISLE has already emitted the dead load. Put the address of
             // this instruction aside so we can later distinguish whether a
             // segfault is its fault.
-
-            // Search for "let pc_offset = layout.ip_offset as i32;" as a string to pull on.
+            sink.add_epoch_check();
         }
 
         Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),

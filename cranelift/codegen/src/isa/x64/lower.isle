@@ -3592,7 +3592,7 @@
                                              load_ptr
                                              (zero_offset))
                                   (ExtKind.None)))
-            (_ SideEffectNoResult (x64_dead_load_with_context load_ptr context)))
+            (_ Unit (emit_side_effect (x64_dead_load_with_context load_ptr context))))
        (output_none)))
 
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;

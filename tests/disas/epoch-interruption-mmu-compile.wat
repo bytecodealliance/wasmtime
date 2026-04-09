@@ -11,7 +11,7 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %rdx
 ;;       movq    0x10(%rdx), %rdx
-;;       movq    (%rdx), %rdx
+;;       movq    (%rdx), %r8
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

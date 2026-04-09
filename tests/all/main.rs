@@ -15,6 +15,7 @@ mod debug;
 mod defaults;
 mod engine;
 mod epoch_interruption;
+mod epoch_mmu;
 mod eqref;
 mod exceptions;
 mod exnrefs;

@@ -35,10 +35,11 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
-    DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
-    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, InliningCompiler,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection, StaticModuleIndex,
-    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType, WasmValType,
+    DefinedFuncIndex, EpochCheckSection, FlagValue, FrameInstPos, FrameStackShape,
+    FrameStateSlotBuilder, FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall,
+    InliningCompiler, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
+    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType,
+    WasmValType,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -468,6 +469,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut stack_maps = StackMapSection::default();
         let mut exception_tables = ExceptionTableBuilder::default();
         let mut frame_tables = FrameTableBuilder::default();
+        let mut epoch_checks = EpochCheckSection::default();
 
         let funcs = funcs
             .iter()
@@ -536,6 +538,9 @@ impl wasmtime_environ::Compiler for Compiler {
                 )?;
                 nop_units.get_or_insert_with(|| func.buffer.nop_units.clone());
             }
+            if self.tunables.epoch_interruption_via_mmu {
+                epoch_checks.push(range.clone(), &func.buffer.epoch_checks);
+            }
             builder.append_padding(self.linkopts.padding_between_functions);
 
             let info = FunctionLoc {
@@ -582,6 +587,9 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         stack_maps.append_to(obj);
         traps.append_to(obj);
+        if self.tunables.epoch_interruption_via_mmu {
+            epoch_checks.append_to(obj);
+        }
 
         let exception_section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
