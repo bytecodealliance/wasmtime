@@ -334,6 +334,11 @@ impl Config {
 
         cfg.codegen.inlining = self.wasmtime.inlining;
 
+        // If the wasm-smith-generated module use nan canonicalization then we
+        // don't need to enable it, but if it doesn't enable it already then we
+        // enable this codegen option.
+        cfg.wasm.nan_canonicalization = Some(!self.module_config.config.canonicalize_nans);
+
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
@@ -357,11 +362,6 @@ impl Config {
                     Some(std::cmp::min(1000, size).to_string()),
                 ));
             }
-
-            // If the wasm-smith-generated module use nan canonicalization then we
-            // don't need to enable it, but if it doesn't enable it already then we
-            // enable this codegen option.
-            cfg.wasm.nan_canonicalization = Some(!self.module_config.config.canonicalize_nans);
 
             // Enabling the verifier will at-least-double compilation time, which
             // with a 20-30x slowdown in fuzzing can cause issues related to
