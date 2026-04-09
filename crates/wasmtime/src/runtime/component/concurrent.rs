@@ -1450,7 +1450,7 @@ impl StoreOpaque {
     ) -> Result<()> {
         log::trace!("enter sync call {callee:?}");
         if !self.concurrency_support() {
-            return Ok(self.enter_call_not_concurrent());
+            return self.enter_call_not_concurrent();
         }
 
         let state = self.concurrent_state_mut();
@@ -1548,7 +1548,7 @@ impl StoreOpaque {
     /// situations.
     pub(crate) fn host_task_create(&mut self) -> Result<Option<TableId<HostTask>>> {
         if !self.concurrency_support() {
-            self.enter_call_not_concurrent();
+            self.enter_call_not_concurrent()?;
             return Ok(None);
         }
         let state = self.concurrent_state_mut();

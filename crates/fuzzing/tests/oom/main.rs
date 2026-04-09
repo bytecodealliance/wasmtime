@@ -5,6 +5,7 @@ mod bit_set;
 mod boxed;
 mod btree_map;
 mod caller;
+mod component_func;
 mod config;
 mod engine;
 mod entity_set;

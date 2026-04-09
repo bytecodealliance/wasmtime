@@ -168,7 +168,7 @@ impl StoreOpaque {
         _callee_async: bool,
         _callee: RuntimeInstance,
     ) -> Result<()> {
-        Ok(self.enter_call_not_concurrent())
+        self.enter_call_not_concurrent()
     }
 
     pub(crate) fn exit_guest_sync_call(&mut self) -> Result<()> {
@@ -176,7 +176,7 @@ impl StoreOpaque {
     }
 
     pub(crate) fn host_task_create(&mut self) -> Result<()> {
-        Ok(self.enter_call_not_concurrent())
+        self.enter_call_not_concurrent()
     }
 
     pub(crate) fn host_task_reenter_caller(&mut self) -> Result<()> {
