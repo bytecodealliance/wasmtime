@@ -637,6 +637,7 @@ mod tests {
 
     fn free_list_block_len_and_size(free_list: &FreeList) -> (usize, Option<usize>) {
         let len = free_list.num_free_blocks();
+        assert!(len <= 1);
         let size = if free_list.bump_end > free_list.bump_ptr {
             Some(usize::try_from(free_list.bump_end - free_list.bump_ptr).unwrap())
         } else {
@@ -661,6 +662,7 @@ mod tests {
         #[cfg_attr(miri, ignore)]
         fn check_no_fragmentation((initial_capacity, ops) in ops()) {
             let _ = env_logger::try_init();
+            log::trace!("------------------------------------------------------------------------");
 
             // Map from allocation id to ptr.
             let mut live = HashMap::new();
@@ -697,8 +699,10 @@ mod tests {
                         }
                     }
                     Op::AddCapacity(additional) => {
+                        assert_eq!(capacity, free_list.current_capacity());
                         capacity = capacity.saturating_add(additional);
-                        free_list.add_capacity(capacity);
+                        free_list.add_capacity(additional);
+                        assert_eq!(capacity, free_list.current_capacity());
                     }
                 }
             }
