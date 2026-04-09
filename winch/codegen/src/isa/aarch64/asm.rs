@@ -390,12 +390,24 @@ impl Assembler {
 
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size, ExtendOp::UXTX);
+    }
+
+    /// Add with three registers and explicit extend operation.
+    pub fn add_rrr_with_extend(
+        &mut self,
+        rm: Reg,
+        rn: Reg,
+        rd: WritableReg,
+        size: OperandSize,
+        extendop: ExtendOp,
+    ) {
+        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size, extendop);
     }
 
     /// Add with three registers, setting overflow flags.
     pub fn adds_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::AddS, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::AddS, rm, rn, rd, size, ExtendOp::UXTX);
     }
 
     /// Add across Vector.
@@ -420,12 +432,19 @@ impl Assembler {
 
     /// Subtract with three registers.
     pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size, ExtendOp::UXTX);
     }
 
     /// Subtract with three registers, setting flags.
     pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::SubS, rm, rn, writable!(regs::zero()), size);
+        self.alu_rrr_extend(
+            ALUOp::SubS,
+            rm,
+            rn,
+            writable!(regs::zero()),
+            size,
+            ExtendOp::UXTX,
+        );
     }
 
     /// Multiply with three registers.
@@ -993,14 +1012,22 @@ impl Assembler {
         });
     }
 
-    fn alu_rrr_extend(&mut self, op: ALUOp, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+    fn alu_rrr_extend(
+        &mut self,
+        op: ALUOp,
+        rm: Reg,
+        rn: Reg,
+        rd: WritableReg,
+        size: OperandSize,
+        extendop: ExtendOp,
+    ) {
         self.emit(Inst::AluRRRExtend {
             alu_op: op,
             size: size.into(),
             rd: rd.map(Into::into),
             rn: rn.into(),
             rm: rm.into(),
-            extendop: ExtendOp::UXTX,
+            extendop,
         });
     }
 
