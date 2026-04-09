@@ -65,3 +65,39 @@
   (invoke "fill" (i32.const 8) (i32.const 0) (i32.const 3))
   "out of bounds table access"
 )
+
+(module $t
+  (table (export "t") 1 funcref)
+)
+
+(module
+  (import "t" "t" (table $t1 1 funcref))
+  (table $t2 2 funcref)
+
+  (func (export "fill1") (param i32 funcref i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    table.fill $t1)
+
+  (func (export "fill2") (param i32 funcref i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    table.fill $t2)
+)
+
+(assert_return (invoke "fill1" (i32.const 0) (ref.null func) (i32.const 0)))
+(assert_return (invoke "fill1" (i32.const 0) (ref.null func) (i32.const 1)))
+(assert_return (invoke "fill1" (i32.const 1) (ref.null func) (i32.const 0)))
+(assert_trap (invoke "fill1" (i32.const 2) (ref.null func) (i32.const 0))
+  "out of bounds table access")
+
+(assert_return (invoke "fill2" (i32.const 0) (ref.null func) (i32.const 0)))
+(assert_return (invoke "fill2" (i32.const 0) (ref.null func) (i32.const 1)))
+(assert_return (invoke "fill2" (i32.const 0) (ref.null func) (i32.const 2)))
+(assert_return (invoke "fill2" (i32.const 1) (ref.null func) (i32.const 0)))
+(assert_return (invoke "fill2" (i32.const 1) (ref.null func) (i32.const 1)))
+(assert_return (invoke "fill2" (i32.const 2) (ref.null func) (i32.const 0)))
+(assert_trap (invoke "fill2" (i32.const 3) (ref.null func) (i32.const 0))
+  "out of bounds table access")
