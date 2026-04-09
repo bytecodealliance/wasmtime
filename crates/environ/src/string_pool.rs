@@ -77,10 +77,20 @@ impl fmt::Debug for StringPool {
 
 impl TryClone for StringPool {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(StringPool {
-            map: self.map.try_clone()?,
-            strings: self.strings.try_clone()?,
-        })
+        let mut new_pool = StringPool::new();
+        // Re-intern strings in index order so that each Atom value is
+        // identical in the clone — callers that hold Atoms from the original
+        // can use them interchangeably with the clone.
+        //
+        // Directly cloning `self.map` would copy &'static str keys that point
+        // into the *original* pool's `strings` allocation. Those pointers
+        // become dangling once the original is dropped, leading to UB on any
+        // subsequent lookup. Re-interning ensures the cloned map's keys point
+        // into the clone's own `strings`.
+        for s in self.strings.iter() {
+            new_pool.insert(s)?;
+        }
+        Ok(new_pool)
     }
 }
 
