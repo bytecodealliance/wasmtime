@@ -1167,9 +1167,9 @@
 (rule 17 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ y (bnot _ z)))))
       (vec_eval ty 0b00000010 x y z))
 (rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x (bnot _ y)) z)))
-      (vec_eval ty 0b00000100 y x z))
+      (vec_eval ty 0b00000100 x y z))
 (rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ (bnot _ y) z))))
-      (vec_eval ty 0b00000100 z x y))
+      (vec_eval ty 0b00000100 x y z))
 
 ;; Not-and three vector registers
 (rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ (band _ x y) z))))
