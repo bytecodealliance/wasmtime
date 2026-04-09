@@ -211,8 +211,8 @@ macro_rules! foreach_builtin_component_function {
             latin1_to_latin1(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8) -> bool;
             latin1_to_utf16(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u16) -> bool;
             utf8_to_utf16(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u16) -> size;
-            utf16_to_utf8(vmctx: vmctx, src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
-            latin1_to_utf8(vmctx: vmctx, src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
+            utf16_to_utf8(vmctx: vmctx, src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size, first_pass: u32, ret2: ptr_size) -> size;
+            latin1_to_utf8(vmctx: vmctx, src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size, first_pass: u32, ret2: ptr_size) -> size;
             utf16_to_compact_probably_utf16(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u16) -> size;
             utf8_to_latin1(vmctx: vmctx, src: ptr_u8, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
             utf16_to_latin1(vmctx: vmctx, src: ptr_u16, len: size, dst: ptr_u8, ret2: ptr_size) -> size;

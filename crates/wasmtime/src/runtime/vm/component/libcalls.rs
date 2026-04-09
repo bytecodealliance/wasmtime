@@ -341,6 +341,7 @@ unsafe fn utf16_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
+    first_pass: u32,
 ) -> Result<SizePair> {
     let src = unsafe { slice::from_raw_parts(src, src_len) };
     let mut dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
@@ -360,6 +361,12 @@ unsafe fn utf16_to_utf8(
 
     for ch in core::char::decode_utf16(src_iter) {
         let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
+
+        // The spec mandates that the first pass of transcoding bails out on the
+        // first multibyte character.
+        if first_pass != 0 && u32::from(ch) >= 0x80 {
+            break;
+        }
 
         // If the destination doesn't have enough space for this character
         // then the loop is ended and this function will be called later with a
@@ -396,11 +403,19 @@ unsafe fn latin1_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
+    first_pass: u32,
 ) -> Result<SizePair> {
     let src = unsafe { slice::from_raw_parts(src, src_len) };
     let dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
-    let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(src, dst);
+    // The spec mandates that this transcoding in the first pass halts when a
+    // multi-byte utf8 code point is encountered, so handle that here.
+    let stop = if first_pass != 0 {
+        src.iter().position(|i| *i >= 0x80).unwrap_or(src.len())
+    } else {
+        src.len()
+    };
+    let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(&src[..stop], dst);
     log::trace!("latin1-to-utf8 {src_len}/{dst_len} => ({read}, {written})");
     Ok(SizePair {
         src_read: read,
