@@ -1,3 +1,46 @@
+## 36.0.7
+
+Released 2026-04-09.
+
+### Fixed
+
+* Miscompiled guest heap access enables sandbox escape on aarch64 Cranelift.
+  [GHSA-jhxm-h53p-jm7w](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jhxm-h53p-jm7w)
+
+* Wasmtime with Winch compiler backend may allow a sandbox-escaping memory
+  access.
+  [GHSA-xx5w-cvp6-jv83](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xx5w-cvp6-jv83)
+
+* Out-of-bounds write or crash when transcoding component model strings.
+  [GHSA-394w-hwhg-8vgm](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-394w-hwhg-8vgm)
+
+* Host panic when Winch compiler executes `table.fill`.
+  [GHSA-q49f-xg75-m9xw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q49f-xg75-m9xw)
+
+* Wasmtime segfault or unused out-of-sandbox load with `f64x2.splat` operator
+  on x86-64.
+  [GHSA-qqfj-4vcm-26hv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-qqfj-4vcm-26hv)
+
+* Improperly masked return value from `table.grow` with Winch compiler backend.
+  [GHSA-f984-pcp8-v2p7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-f984-pcp8-v2p7)
+
+* Panic when transcoding misaligned utf-16 strings.
+  [GHSA-jxhv-7h78-9775](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-jxhv-7h78-9775)
+
+* Panic when lifting `flags` component value.
+  [GHSA-m758-wjhj-p3jq](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m758-wjhj-p3jq)
+
+* Heap OOB read in component model UTF-16 to latin1+utf16 string transcoding.
+  [GHSA-hx6p-xpx3-jvvv](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-hx6p-xpx3-jvvv)
+
+* Data leakage between pooling allocator instances.
+  [GHSA-6wgr-89rj-399p](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-6wgr-89rj-399p)
+
+* Host data leakage with 64-bit tables and Winch.
+  [GHSA-m9w2-8782-2946](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-m9w2-8782-2946)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.6
 
 Released 2026-02-24.
