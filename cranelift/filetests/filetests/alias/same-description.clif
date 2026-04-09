@@ -1,0 +1,30 @@
+test alias-analysis
+set opt_level=speed
+target aarch64
+
+;; Check that two alias regions with the same description are NOT treated as
+;; identical. Even though region0 and region1 both have the description "",
+;; they are different entities and stores to one should not be considered to
+;; alias loads from the other.
+
+function %same_description_different_regions(i64, i64) -> i32 {
+
+    region0 = 0 ""
+    region1 = 1 ""
+
+block0(v0: i64, v1: i64):
+    v2 = iconst.i32 42
+    store.i32 region0 v2, v0
+
+    v3 = iconst.i32 99
+    store.i32 region1 v3, v1
+
+    ;; This load is from region0. The intervening store was to region1.
+    ;; Because region0 and region1 are different entities (even though they
+    ;; share the same description), the store to region1 does NOT invalidate
+    ;; the load from region0. So this load should be optimized to v2.
+    v4 = load.i32 region0 v0
+    ; check: v4 -> v2
+
+    return v4
+}

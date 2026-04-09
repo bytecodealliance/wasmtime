@@ -1,0 +1,52 @@
+test inline precise-output
+target x86_64
+
+;; The callee uses region0 (user_id 100, same as caller's region0) and
+;; region1 (user_id 200, not in caller). After inlining, region0 should be
+;; deduplicated and region1 should be added to the caller.
+
+function %callee(i64, i64) -> i32 {
+    region0 = 100 "shared region"
+    region1 = 200 "callee-only region"
+block0(v0: i64, v1: i64):
+    v2 = load.i32 notrap aligned region0 v0
+    v3 = load.i32 notrap aligned region1 v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; (no functions inlined into %callee)
+
+function %caller(i64, i64) -> i32 {
+    region0 = 100 "shared region"
+    fn0 = %callee(i64, i64) -> i32
+block0(v0: i64, v1: i64):
+    ;; Uses the same region (user_id 100) as the callee.
+    v2 = load.i32 notrap aligned region0 v0
+    v3 = call fn0(v0, v1)
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %caller(i64, i64) -> i32 fast {
+;     region0 = 100 "shared region"
+;     region1 = 200 "callee-only region"
+;     sig0 = (i64, i64) -> i32 fast
+;     fn0 = %callee sig0
+;
+; block0(v0: i64, v1: i64):
+;     v2 = load.i32 notrap aligned region0 v0
+;     jump block1
+;
+; block1:
+;     v6 = load.i32 notrap aligned region0 v0
+;     v7 = load.i32 notrap aligned region1 v1
+;     v8 = iadd v6, v7
+;     jump block2(v8)
+;
+; block2(v5: i32):
+;     v3 -> v5
+;     v4 = iadd.i32 v2, v3
+;     return v4
+; }
+

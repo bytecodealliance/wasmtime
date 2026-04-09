@@ -11,7 +11,7 @@
 #![warn(clippy::cast_sign_loss)]
 #![no_std]
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 #[macro_use]
 extern crate std;
 extern crate alloc;

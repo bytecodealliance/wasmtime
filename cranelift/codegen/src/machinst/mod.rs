@@ -61,6 +61,8 @@ use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
 use smallvec::{SmallVec, smallvec};
 
+pub use crate::ir::MachMemFlags;
+
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 

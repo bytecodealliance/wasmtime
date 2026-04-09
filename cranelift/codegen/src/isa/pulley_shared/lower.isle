@@ -960,73 +960,73 @@
 
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_int (fits_in_64 ty)) (load _ flags addr offset)))
+(rule (lower (has_type (ty_int (fits_in_64 ty)) (load _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags ty (ExtKind.None)))
 
-(rule 1 (lower (has_type (ty_scalar_float ty) (load _ flags addr offset)))
+(rule 1 (lower (has_type (ty_scalar_float ty) (load _ (mem_flags_data flags) addr offset)))
   (gen_fload addr offset flags ty))
 
-(rule 3 (lower (has_type $I128 (load _ flags addr offset)))
+(rule 3 (lower (has_type $I128 (load _ (mem_flags_data flags) addr offset)))
   (if-let offsetp8 (i32_checked_add offset 8))
   (let ((lo XReg (pulley_xload (amode addr offset) $I64 flags))
         (hi XReg (pulley_xload (amode addr offsetp8) $I64 flags)))
     (value_regs lo hi)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload8 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload8 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I8 (ExtKind.Zero32)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload16 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload16 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I16 (ExtKind.Zero32)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload32 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload32 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I32 (ExtKind.None)))
 
-(rule 1 (lower (has_type $I64 (uload8 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (uload8 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I8 (ExtKind.Zero64)))
 
-(rule 1 (lower (has_type $I64 (uload16 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (uload16 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I16 (ExtKind.Zero64)))
 
-(rule 1 (lower (has_type $I64 (uload32 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (uload32 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I32 (ExtKind.Zero64)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload8 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload8 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I8 (ExtKind.Sign32)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload16 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload16 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I16 (ExtKind.Sign32)))
 
-(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload32 _ flags addr offset)))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload32 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I32 (ExtKind.None)))
 
-(rule 1 (lower (has_type $I64 (sload8 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (sload8 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I8 (ExtKind.Sign64)))
 
-(rule 1 (lower (has_type $I64 (sload16 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (sload16 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I16 (ExtKind.Sign64)))
 
-(rule 1 (lower (has_type $I64 (sload32 _ flags addr offset)))
+(rule 1 (lower (has_type $I64 (sload32 _ (mem_flags_data flags) addr offset)))
   (gen_xload addr offset flags $I32 (ExtKind.Sign64)))
 
-(rule 2 (lower (has_type (ty_vec128 ty) (load _ flags addr offset)))
+(rule 2 (lower (has_type (ty_vec128 ty) (load _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.None)))
 
-(rule (lower (has_type ty (sload8x8 _ flags addr offset)))
+(rule (lower (has_type ty (sload8x8 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.S8x8)))
 
-(rule (lower (has_type ty (uload8x8 _ flags addr offset)))
+(rule (lower (has_type ty (uload8x8 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.U8x8)))
 
-(rule (lower (has_type ty (sload16x4 _ flags addr offset)))
+(rule (lower (has_type ty (sload16x4 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.S16x4)))
 
-(rule (lower (has_type ty (uload16x4 _ flags addr offset)))
+(rule (lower (has_type ty (uload16x4 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.U16x4)))
 
-(rule (lower (has_type ty (sload32x2 _ flags addr offset)))
+(rule (lower (has_type ty (sload32x2 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.S32x2)))
 
-(rule (lower (has_type ty (uload32x2 _ flags addr offset)))
+(rule (lower (has_type ty (uload32x2 _ (mem_flags_data flags) addr offset)))
   (gen_vload addr offset flags ty (VExtKind.U32x2)))
 
 ;; Helper to generate an `xload*` instruction, of which there are many. This
@@ -1255,27 +1255,27 @@
 
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (store flags src @ (value_type (ty_int (fits_in_64 ty))) addr offset))
+(rule (lower (store (mem_flags_data flags) src @ (value_type (ty_int (fits_in_64 ty))) addr offset))
   (side_effect (gen_store src addr offset flags ty)))
 
-(rule 1 (lower (store flags src @ (value_type (ty_scalar_float ty)) addr offset))
+(rule 1 (lower (store (mem_flags_data flags) src @ (value_type (ty_scalar_float ty)) addr offset))
   (side_effect (gen_store src addr offset flags ty)))
 
-(rule (lower (istore8 flags src addr offset))
+(rule (lower (istore8 (mem_flags_data flags) src addr offset))
   (side_effect (gen_store src addr offset flags $I8)))
 
-(rule (lower (istore16 flags src addr offset))
+(rule (lower (istore16 (mem_flags_data flags) src addr offset))
   (side_effect (gen_store src addr offset flags $I16)))
 
-(rule (lower (istore32 flags src addr offset))
+(rule (lower (istore32 (mem_flags_data flags) src addr offset))
   (side_effect (gen_store src addr offset flags $I32)))
 
-(rule 2 (lower (store flags src @ (value_type (ty_vec128 ty)) addr offset))
+(rule 2 (lower (store (mem_flags_data flags) src @ (value_type (ty_vec128 ty)) addr offset))
   (side_effect (gen_store src addr offset flags ty)))
 
 ;; i128 stores
 
-(rule 3 (lower (store flags src @ (value_type $I128) addr offset))
+(rule 3 (lower (store (mem_flags_data flags) src @ (value_type $I128) addr offset))
   (let
     ((src_regs ValueRegs src)
       (src_lo XReg (value_regs_get src_regs 0))

@@ -526,7 +526,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                     base: from_reg,
                     index: zero_reg(),
                     disp: imm,
-                    flags: MemFlagsData::trusted(),
+                    flags: MemFlagsData::trusted().into(),
                 },
             });
         } else if let Some(imm) = SImm20::maybe_from_i64(imm as i64) {
@@ -536,7 +536,7 @@ impl ABIMachineSpec for S390xMachineDeps {
                     base: from_reg,
                     index: zero_reg(),
                     disp: imm,
-                    flags: MemFlagsData::trusted(),
+                    flags: MemFlagsData::trusted().into(),
                 },
             });
         } else {

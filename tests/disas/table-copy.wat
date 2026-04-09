@@ -63,6 +63,7 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -136,7 +137,7 @@
 ;; @0090                               v48 = iadd v46, v47
 ;; @0090                               v49 = iconst.i64 0
 ;; @0090                               v50 = select_spectre_guard v44, v49, v48  ; v49 = 0
-;; @0090                               v51 = load.i64 user6 aligned table v50
+;; @0090                               v51 = load.i64 user6 aligned region0 v50
 ;;                                     v97 = iconst.i64 -2
 ;; @0090                               v52 = band v51, v97  ; v97 = -2
 ;; @0090                               brif v51, block7(v52), block6
@@ -157,7 +158,7 @@
 ;; @0090                               v77 = iadd v75, v76
 ;; @0090                               v78 = iconst.i64 0
 ;; @0090                               v79 = select_spectre_guard v73, v78, v77  ; v78 = 0
-;; @0090                               v80 = load.i64 user6 aligned table v79
+;; @0090                               v80 = load.i64 user6 aligned region0 v79
 ;;                                     v94 = iconst.i64 -2
 ;; @0090                               v81 = band v80, v94  ; v94 = -2
 ;; @0090                               brif v80, block9(v81), block8
@@ -202,6 +203,7 @@
 ;; }
 ;;
 ;; function u0:4(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -278,7 +280,7 @@
 ;; @009f                               v49 = iadd v47, v48
 ;; @009f                               v50 = iconst.i64 0
 ;; @009f                               v51 = select_spectre_guard v45, v50, v49  ; v50 = 0
-;; @009f                               v52 = load.i64 user6 aligned table v51
+;; @009f                               v52 = load.i64 user6 aligned region0 v51
 ;;                                     v102 = iconst.i64 -2
 ;; @009f                               v53 = band v52, v102  ; v102 = -2
 ;; @009f                               brif v52, block7(v53), block6
@@ -302,7 +304,7 @@
 ;; @009f                               v79 = iadd v77, v78
 ;; @009f                               v80 = iconst.i64 0
 ;; @009f                               v81 = select_spectre_guard v75, v80, v79  ; v80 = 0
-;; @009f                               v82 = load.i64 user6 aligned table v81
+;; @009f                               v82 = load.i64 user6 aligned region0 v81
 ;;                                     v96 = iconst.i64 -2
 ;; @009f                               v83 = band v82, v96  ; v96 = -2
 ;; @009f                               brif v82, block9(v83), block8

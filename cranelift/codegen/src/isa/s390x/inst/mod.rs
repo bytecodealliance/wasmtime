@@ -3553,7 +3553,7 @@ impl Inst {
                     base,
                     index,
                     disp: offset,
-                    flags,
+                    flags: flags.into(),
                 };
                 let mem = mem.pretty_print_default();
                 format!("{op} {rd}, {mem}")
@@ -3578,7 +3578,7 @@ impl Inst {
                     base,
                     index,
                     disp: offset,
-                    flags,
+                    flags: flags.into(),
                 };
                 let mem = mem.pretty_print_default();
                 format!("{op} {rd}, {mem}")

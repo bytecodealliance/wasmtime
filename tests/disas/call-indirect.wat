@@ -8,6 +8,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -30,7 +31,7 @@
 ;; @0035                               v11 = iadd v9, v10
 ;; @0035                               v12 = iconst.i64 0
 ;; @0035                               v13 = select_spectre_guard v7, v12, v11  ; v12 = 0
-;; @0035                               v14 = load.i64 user6 aligned table v13
+;; @0035                               v14 = load.i64 user6 aligned region0 v13
 ;;                                     v29 = iconst.i64 -2
 ;; @0035                               v15 = band v14, v29  ; v29 = -2
 ;; @0035                               brif v14, block3(v15), block2

@@ -1939,7 +1939,7 @@
   (gen_load
     (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
-    (mem_flags_trusted)))
+    (mem_flags_trusted_data)))
 
 ;; Imm12 Rules
 

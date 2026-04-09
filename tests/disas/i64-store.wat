@@ -10,6 +10,7 @@
     i64.store))
 
 ;; function u0:0(i64 vmctx, i64, i32, i64) tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -22,7 +23,7 @@
 ;; @0031                               v4 = uextend.i64 v2
 ;; @0031                               v5 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0031                               v6 = iadd v5, v4
-;; @0031                               store little heap v3, v6
+;; @0031                               store little region0 v3, v6
 ;; @0034                               jump block1
 ;;
 ;;                                 block1:

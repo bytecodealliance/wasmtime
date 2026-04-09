@@ -1552,7 +1552,7 @@
   (vec_load
     (element_width_from_type ty)
     (VecAMode.UnitStride (gen_const_amode n))
-    (mem_flags_trusted)
+    (mem_flags_trusted_data)
     (unmasked)
     ty))
 

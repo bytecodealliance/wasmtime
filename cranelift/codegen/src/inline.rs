@@ -174,7 +174,7 @@ pub(crate) fn do_inlining(
                                 opcode,
                                 &callee,
                                 None,
-                            );
+                            )?;
                             inlined_any = true;
                             if visit_callee {
                                 cursor.set_position(prev_pos);
@@ -216,7 +216,7 @@ pub(crate) fn do_inlining(
                                 opcode,
                                 &callee,
                                 Some(exception),
-                            );
+                            )?;
                             inlined_any = true;
                             if visit_callee {
                                 cursor.set_position(prev_pos);
@@ -346,7 +346,7 @@ fn inline_one(
     call_opcode: ir::Opcode,
     callee: &ir::Function,
     call_exception_table: Option<ir::ExceptionTable>,
-) -> ir::Block {
+) -> CodegenResult<ir::Block> {
     trace!(
         "Inlining call {call_inst:?}: {}\n\
          with callee = {callee:?}",
@@ -362,7 +362,7 @@ fn inline_one(
 
     // First, append various callee entity arenas to the end of the caller's
     // entity arenas.
-    let entity_map = create_entities(allocs, func, callee);
+    let entity_map = create_entities(allocs, func, callee)?;
 
     // Inlined prologue: split the call instruction's block at the point of the
     // call and replace the call with a jump.
@@ -409,12 +409,17 @@ fn inline_one(
 
             // Remap the callee instruction's entities and insert it into the
             // caller's DFG.
-            let inlined_inst_data = callee.dfg.insts[callee_inst].map(InliningInstRemapper {
+            let mut inst_remapper = InliningInstRemapper {
                 allocs: &allocs,
                 func,
                 callee,
                 entity_map: &entity_map,
-            });
+                error: None,
+            };
+            let inlined_inst_data = callee.dfg.insts[callee_inst].map(&mut inst_remapper);
+            if let Some(err) = inst_remapper.error.take() {
+                return Err(err);
+            }
             let inlined_inst = func.dfg.make_inst(inlined_inst_data);
             func.layout.append_inst(inlined_inst, inlined_block);
 
@@ -571,7 +576,7 @@ fn inline_one(
         func.layout.is_block_inserted(last_inlined_block),
         "last_inlined_block={last_inlined_block} should be inserted in the layout"
     );
-    last_inlined_block
+    Ok(last_inlined_block)
 }
 
 /// Append stack map entries from the caller and callee to the given inlined
@@ -906,6 +911,7 @@ struct InliningInstRemapper<'a> {
     func: &'a mut ir::Function,
     callee: &'a ir::Function,
     entity_map: &'a EntityMap,
+    error: Option<crate::result::CodegenError>,
 }
 
 impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
@@ -1018,6 +1024,26 @@ impl<'a> ir::instructions::InstructionMapper for InliningInstRemapper<'a> {
 
     fn map_immediate(&mut self, immediate: ir::Immediate) -> ir::Immediate {
         self.entity_map.inlined_immediate(immediate)
+    }
+    fn map_mem_flags(&mut self, flags: ir::MemFlags) -> ir::MemFlags {
+        let mut flags_data = self.callee.dfg.mem_flags[flags];
+        // Remap the alias region entity from callee to caller.
+        if let Some(callee_region) = flags_data.alias_region() {
+            let region_data = self.callee.dfg.alias_regions[callee_region].clone();
+            let caller_region = self.func.dfg.alias_regions.insert(region_data);
+            flags_data.set_alias_region(Some(caller_region));
+        }
+        match self.func.dfg.mem_flags.insert(flags_data) {
+            Ok(flags) => flags,
+            Err(_) => {
+                self.error = Some(crate::result::CodegenError::ImplLimitExceeded);
+                self.func
+                    .dfg
+                    .mem_flags
+                    .insert(ir::MemFlagsData::trusted())
+                    .unwrap()
+            }
+        }
     }
 }
 
@@ -1342,11 +1368,11 @@ fn create_entities(
     allocs: &mut InliningAllocs,
     func: &mut ir::Function,
     callee: &ir::Function,
-) -> EntityMap {
+) -> CodegenResult<EntityMap> {
     let mut entity_map = EntityMap::default();
 
     entity_map.block_offset = Some(create_blocks(allocs, func, callee));
-    entity_map.global_value_offset = Some(create_global_values(func, callee));
+    entity_map.global_value_offset = Some(create_global_values(func, callee)?);
     entity_map.sig_ref_offset = Some(create_sig_refs(func, callee));
     create_user_external_name_refs(allocs, func, callee);
     entity_map.func_ref_offset = Some(create_func_refs(allocs, func, callee, &entity_map));
@@ -1361,7 +1387,7 @@ fn create_entities(
     // now, at the same time as the rest of our entities.
     create_constants(allocs, func, callee);
 
-    entity_map
+    Ok(entity_map)
 }
 
 /// Create inlined blocks in the caller for every block in the callee.
@@ -1399,12 +1425,32 @@ fn create_blocks(
 }
 
 /// Copy and translate global values from the callee into the caller.
-fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> u32 {
+fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> CodegenResult<u32> {
     let gv_offset = func.global_values.len();
     let gv_offset = u32::try_from(gv_offset).unwrap();
 
     func.global_values.reserve(callee.global_values.len());
     for gv in callee.global_values.values() {
+        // Re-insert callee mem flags into the caller's DFG before constructing
+        // the global value data, to avoid borrow conflicts.
+        let remapped_flags = match gv {
+            ir::GlobalValueData::Load { flags, .. } => {
+                let mut flags_data = callee.dfg.mem_flags[*flags];
+                // Remap alias region entity from callee to caller.
+                if let Some(callee_region) = flags_data.alias_region() {
+                    let region_data = callee.dfg.alias_regions[callee_region].clone();
+                    let caller_region = func.dfg.alias_regions.insert(region_data);
+                    flags_data.set_alias_region(Some(caller_region));
+                }
+                Some(
+                    func.dfg
+                        .mem_flags
+                        .insert(flags_data)
+                        .map_err(|_| crate::result::CodegenError::ImplLimitExceeded)?,
+                )
+            }
+            _ => None,
+        };
         func.global_values.push(match gv {
             // These kinds of global values reference other global values, so we
             // need to fixup that reference.
@@ -1412,12 +1458,12 @@ fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> u32 {
                 base,
                 offset,
                 global_type,
-                flags,
+                flags: _,
             } => ir::GlobalValueData::Load {
                 base: ir::GlobalValue::from_u32(base.as_u32() + gv_offset),
                 offset: *offset,
                 global_type: *global_type,
-                flags: *flags,
+                flags: remapped_flags.unwrap(),
             },
             ir::GlobalValueData::IAddImm {
                 base,
@@ -1437,7 +1483,7 @@ fn create_global_values(func: &mut ir::Function, callee: &ir::Function) -> u32 {
         });
     }
 
-    gv_offset
+    Ok(gv_offset)
 }
 
 /// Copy `ir::SigRef`s from the callee into the caller.
