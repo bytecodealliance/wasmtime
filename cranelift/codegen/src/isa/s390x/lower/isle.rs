@@ -548,6 +548,12 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn simm20_from_value(&mut self, val: Value) -> Option<SImm20> {
+        let constant = self.u64_from_signed_value(val)? as i64;
+        SImm20::maybe_from_i64(constant)
+    }
+
+    #[inline]
     fn uimm32shifted_from_value(&mut self, val: Value) -> Option<UImm32Shifted> {
         let constant = self.u64_from_value(val)?;
         UImm32Shifted::maybe_from_u64(constant)
