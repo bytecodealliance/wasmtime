@@ -1154,7 +1154,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // register restores" for this ABI (so as to work with
             // Wasmtime).
             (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
-            (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            (isa::CallConv::SystemV | isa::CallConv::AppleAarch64, _) => DEFAULT_AAPCS_CLOBBERS,
             (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
             (_, false) => DEFAULT_AAPCS_CLOBBERS,
             (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
@@ -1237,9 +1237,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::xreg(0), regs::xreg(1)];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
-                PAYLOAD_REGS
-            }
+            isa::CallConv::SystemV
+            | isa::CallConv::AppleAarch64
+            | isa::CallConv::Tail
+            | isa::CallConv::PreserveAll => PAYLOAD_REGS,
             _ => &[],
         }
     }

@@ -1,0 +1,40 @@
+test compile
+target aarch64
+
+;; Test that exception handling works with the apple_aarch64 calling convention.
+;; The callee uses apple_aarch64, which must be supported in:
+;; - supports_exceptions
+;; - get_regs_clobbered_by_call (with is_exception=true)
+;; - exception_payload_regs
+;; - exception_payload_types
+
+function %try_call_apple_aarch64(i32) -> i32 apple_aarch64 {
+    sig0 = (i32) -> i32 apple_aarch64
+    fn0 = colocated %callee(i32) -> i32 apple_aarch64
+
+    block0(v0: i32):
+        try_call fn0(v0), sig0, block1(ret0), [ default: block2(exn0) ]
+
+    block1(v1: i32):
+        return v1
+
+    block2(v2: i64):
+        v3 = ireduce.i32 v2
+        return v3
+}
+
+function %try_call_indirect_apple_aarch64(i32) -> i32 apple_aarch64 {
+    sig0 = (i32) -> i32 apple_aarch64
+    fn0 = %callee(i32) -> i32 apple_aarch64
+
+    block0(v0: i32):
+        v1 = func_addr.i64 fn0
+        try_call_indirect v1(v0), sig0, block1(ret0), [ default: block2(exn0) ]
+
+    block1(v2: i32):
+        return v2
+
+    block2(v3: i64):
+        v4 = ireduce.i32 v3
+        return v4
+}
