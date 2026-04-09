@@ -708,6 +708,106 @@ impl StackType {
         log::trace!("[StackType::emit] leave stack={stack:?}");
     }
 
+    /// Fixup for cast ops: ensures the sub/super type relationship actually
+    /// holds. Always repairs the op rather than dropping it.
+    ///
+    /// For upcast the operand (sub) is on the stack, so we keep sub fixed
+    /// and adjust super. For downcast the operand (super) is on the stack,
+    /// so we keep super fixed and adjust sub.
+    pub fn fixup_cast(op: GcOp, types: &Types, encoding_order: &[TypeId]) -> GcOp {
+        match op {
+            GcOp::RefCastUpward {
+                sub_type_index,
+                super_type_index,
+            } => {
+                // Operand is sub (on the stack) — keep it, fix super.
+                let super_type_index = Self::find_supertype_of(
+                    sub_type_index,
+                    super_type_index,
+                    types,
+                    encoding_order,
+                );
+                GcOp::RefCastUpward {
+                    sub_type_index,
+                    super_type_index,
+                }
+            }
+            GcOp::RefCastDownward {
+                sub_type_index,
+                super_type_index,
+            } => {
+                // Operand is super (on the stack) — keep it, fix sub.
+                let sub_type_index =
+                    Self::find_subtype_of(super_type_index, sub_type_index, types, encoding_order);
+                GcOp::RefCastDownward {
+                    sub_type_index,
+                    super_type_index,
+                }
+            }
+            other => other,
+        }
+    }
+
+    /// Given a sub type on the stack, find a valid super_type_index such
+    /// that sub <: super. Keeps sub fixed. Falls back to self-cast.
+    fn find_supertype_of(
+        sub_type_index: u32,
+        super_type_index: u32,
+        types: &Types,
+        encoding_order: &[TypeId],
+    ) -> u32 {
+        if let (Some(&sub_tid), Some(&super_tid)) = (
+            encoding_order
+                .get(usize::try_from(sub_type_index).expect("sub_type_index is out of bounds")),
+            encoding_order
+                .get(usize::try_from(super_type_index).expect("super_type_index is out of bounds")),
+        ) {
+            // Already valid.
+            if types.is_subtype(sub_tid, super_tid) {
+                return super_type_index;
+            }
+            // Try sub's direct supertype.
+            if let Some(actual_super) = types.type_defs.get(&sub_tid).and_then(|d| d.supertype) {
+                if let Some(idx) = encoding_order.iter().position(|&t| t == actual_super) {
+                    return u32::try_from(idx).expect("too many types for index");
+                }
+            }
+        }
+        // Self-cast.
+        sub_type_index
+    }
+
+    /// Given a super type on the stack, find a valid sub_type_index such
+    /// that sub <: super. Keeps super fixed. Falls back to self-cast.
+    fn find_subtype_of(
+        super_type_index: u32,
+        sub_type_index: u32,
+        types: &Types,
+        encoding_order: &[TypeId],
+    ) -> u32 {
+        if let (Some(&sub_tid), Some(&super_tid)) = (
+            encoding_order
+                .get(usize::try_from(sub_type_index).expect("sub_type_index is out of bounds")),
+            encoding_order
+                .get(usize::try_from(super_type_index).expect("super_type_index is out of bounds")),
+        ) {
+            // Already valid.
+            if types.is_subtype(sub_tid, super_tid) {
+                return sub_type_index;
+            }
+            // Try to find any direct subtype of super.
+            for (idx, tid) in encoding_order.iter().enumerate() {
+                if let Some(def) = types.type_defs.get(tid) {
+                    if def.supertype == Some(super_tid) {
+                        return u32::try_from(idx).expect("too many types for index");
+                    }
+                }
+            }
+        }
+        // Self-cast.
+        super_type_index
+    }
+
     /// Clamp a type index to the number of types.
     fn clamp(t: u32, n: u32) -> u32 {
         if n == 0 { 0 } else { t % n }
