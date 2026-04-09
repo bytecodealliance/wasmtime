@@ -1754,7 +1754,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst_enc: FE,
     ) -> WasmString<'c> {
         assert!(dst_enc.width() >= src_enc.width());
-        self.validate_string_length(src, dst_enc);
 
         let src_mem_opts = {
             match &src.opts.data_model {
@@ -1769,22 +1768,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
         };
 
-        // Calculate the source byte length given the size of each code
-        // unit. Note that this shouldn't overflow given
-        // `validate_string_length` above.
-        let mut src_byte_len_tmp = None;
-        let src_byte_len = if src_enc.width() == 1 {
-            src.len.idx
-        } else {
-            assert_eq!(src_enc.width(), 2);
-            self.instruction(LocalGet(src.len.idx));
-            self.ptr_uconst(src_mem_opts, 1);
-            self.ptr_shl(src_mem_opts);
-            let tmp = self.local_set_new_tmp(src.opts.data_model.unwrap_memory().ptr());
-            let ret = tmp.idx;
-            src_byte_len_tmp = Some(tmp);
-            ret
-        };
+        let (src_byte_len_tmp, src_byte_len) =
+            self.source_string_byte_len(src, src_enc, src_mem_opts);
 
         // Convert the source code units length to the destination byte
         // length type.
@@ -1846,6 +1831,39 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         dst
     }
+
+    /// Calculate the source byte length given the size of each code
+    /// unit.
+    ///
+    /// Returns an optional temporary local if it was needed, which the caller
+    /// needs to deallocate with `free_temp_local`. Additionally returns the
+    /// index of the local which contains the byte length of the string, which
+    /// may point to the temporary local passed in.
+    fn source_string_byte_len(
+        &mut self,
+        src: &WasmString<'_>,
+        src_enc: FE,
+        src_mem_opts: &LinearMemoryOptions,
+    ) -> (Option<TempLocal>, u32) {
+        self.validate_string_length(src, src_enc);
+
+        if src_enc.width() == 1 {
+            (None, src.len.idx)
+        } else {
+            assert_eq!(src_enc.width(), 2);
+
+            // Note that this shouldn't overflow given `validate_string_length`
+            // above.
+            self.instruction(LocalGet(src.len.idx));
+            self.ptr_uconst(src_mem_opts, 1);
+            self.ptr_shl(src_mem_opts);
+            let tmp = self.local_set_new_tmp(src.opts.data_model.unwrap_memory().ptr());
+
+            let idx = tmp.idx;
+            (Some(tmp), idx)
+        }
+    }
+
     // Corresponding function for `store_string_to_utf8` in the spec.
     //
     // This translation works by possibly performing a number of
@@ -2123,6 +2141,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
         }));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
         self.instruction(End); // end of shrink-to-fit
 
         self.free_temp_local(dst_byte_len);
@@ -2217,6 +2236,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(LocalGet(dst.len.idx)); // new_size
         self.instruction(Call(dst_mem_opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
 
         self.free_temp_local(dst_byte_len);
         self.free_temp_local(src_byte_len);
@@ -2245,7 +2265,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
             DataModel::LinearMemory(opts) => opts,
         };
 
-        self.validate_string_length(src, src_enc);
+        let (src_byte_len_tmp, src_byte_len) =
+            self.source_string_byte_len(src, src_enc, src_mem_opts);
+
         self.convert_src_len_to_dst(src.len.idx, src_mem_opts.ptr(), dst_mem_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_mem_opts.ptr());
         let dst_byte_len = self.local_set_new_tmp(dst_mem_opts.ptr());
@@ -2258,7 +2280,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             }
         };
 
-        self.validate_string_inbounds(src, src.len.idx);
+        self.validate_string_inbounds(src, src_byte_len);
         self.validate_string_inbounds(&dst, dst_byte_len.idx);
 
         // Perform the initial latin1 transcode. This returns the number of
@@ -2298,6 +2320,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(LocalGet(dst.len.idx)); // new_size
         self.instruction(Call(dst_mem_opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
         self.instruction(End);
 
         // In this block the latin1 encoding failed. The host transcode
@@ -2323,6 +2346,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(LocalTee(dst_byte_len.idx));
         self.instruction(Call(dst_mem_opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
+        self.validate_string_inbounds(&dst, dst_byte_len.idx);
 
         // Call the host utf16 transcoding function. This will inflate the
         // prior latin1 bytes and then encode the rest of the source string
@@ -2362,6 +2387,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.ptr_shl(dst_mem_opts);
         self.instruction(Call(dst_mem_opts.realloc.unwrap().as_u32()));
         self.instruction(LocalSet(dst.ptr.idx));
+        self.verify_aligned(dst_opts.data_model.unwrap_memory(), dst.ptr.idx, 2);
         self.instruction(End);
 
         // Tag the returned pointer as utf16
@@ -2374,6 +2400,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         self.free_temp_local(src_len_tmp);
         self.free_temp_local(dst_byte_len);
+        if let Some(tmp) = src_byte_len_tmp {
+            self.free_temp_local(tmp);
+        }
 
         dst
     }
