@@ -745,7 +745,7 @@ mod tests {
                 if let Some(final_size) = final_size {
                     // The chunk's final size cannot be larger than the free
                     // list capacity.
-                    assert!(final_size < capacity);
+                    assert!(final_size <= capacity);
 
                     if capacity >= 2 * ALIGN_USIZE {
                         // We should not waste more than one `ALIGN` at the
