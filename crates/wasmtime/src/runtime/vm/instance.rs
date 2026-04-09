@@ -214,24 +214,23 @@ impl Instance {
         Ok(ret)
     }
 
-    /// Trace GC roots inside this `Instance`.
-    ///
-    /// NB: This instance's `vmctx` roots are traced separately in
-    /// `Store::trace_vmctx_roots`.
+    /// Trace element segment GC roots inside this `Instance`.
     ///
     /// # Safety
     ///
     /// This instance must live for the duration of the associated GC cycle.
     #[cfg(feature = "gc")]
-    pub(crate) unsafe fn trace_roots(self: Pin<&mut Self>, gc_roots: &mut crate::vm::GcRootsList) {
-        // SAFETY: not moving data out of `self`.
-        let passive_elements = &mut unsafe { self.get_unchecked_mut() }.passive_elements;
-
-        for segment in passive_elements {
+    pub(crate) unsafe fn trace_element_segment_roots(
+        self: Pin<&mut Self>,
+        gc_roots: &mut crate::vm::GcRootsList,
+    ) {
+        for segment in self.passive_elements_mut().iter_mut() {
             if let Some((wasmtime_environ::NeedsGcRooting::Yes, elems)) = segment {
                 for e in elems {
-                    let root: SendSyncPtr<ValRaw> = SendSyncPtr::from(e);
-                    let root: SendSyncPtr<super::VMGcRef> = root.cast();
+                    let Some(root) = e.as_vmgc_ref_ptr() else {
+                        continue;
+                    };
+                    let root: SendSyncPtr<super::VMGcRef> = root.into();
 
                     // Safety: We know this is a type that needs GC rooting and
                     // the lifetime is implied by our safety contract.
