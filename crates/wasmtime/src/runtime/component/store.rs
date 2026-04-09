@@ -5,16 +5,17 @@ use crate::runtime::vm;
 use crate::runtime::vm::component::{
     CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
 };
-#[cfg(feature = "component-model-async")]
-use crate::runtime::vm::{
-    VMStore,
-    component::{InstanceState, ResourceTable},
-};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
 use core::pin::Pin;
 use wasmtime_environ::component::RuntimeComponentInstanceIndex;
 use wasmtime_environ::prelude::TryPrimaryMap;
+
+#[cfg(feature = "component-model-async")]
+use crate::{
+    component::ResourceTable,
+    runtime::vm::{VMStore, component::InstanceState},
+};
 
 /// Default amount of fuel allowed for all guest-to-host calls in the component
 /// model.
