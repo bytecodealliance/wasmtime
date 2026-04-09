@@ -7,7 +7,7 @@ use crate::runtime::vm;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::VMStore;
 use crate::runtime::vm::component::{
-    CallContext, ComponentInstance, HandleTable, InstanceState, OwnedComponentInstance,
+    CallContext, ComponentInstance, HandleTable, OwnedComponentInstance,
 };
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Store, StoreContextMut};
