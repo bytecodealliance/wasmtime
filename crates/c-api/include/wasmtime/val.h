@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#ifdef WASMTIME_FEATURE_GC
 struct wasmtime_eqref;
 /// Convenience alias for #wasmtime_eqref
 typedef struct wasmtime_eqref wasmtime_eqref_t;
@@ -201,6 +202,7 @@ WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
  * `wasmtime_externref_set_null`. Null can be tested for with the
  * `wasmtime_externref_is_null` function.
  */
+
 typedef struct wasmtime_externref {
   /// Internal metadata tracking within the store, embedders should not
   /// configure or modify these fields.
@@ -367,6 +369,7 @@ WASM_API_EXTERN void wasmtime_exnref_clone(const wasmtime_exnref_t *ref,
  * After this call, `ref` is left in an undefined state and should not be used.
  */
 WASM_API_EXTERN void wasmtime_exnref_unroot(wasmtime_exnref_t *ref);
+#endif // WASMTIME_FEATURE_GC
 
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
@@ -416,6 +419,7 @@ typedef union wasmtime_valunion {
   float32_t f32;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
   float64_t f64;
+#ifdef WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_ANYREF
   wasmtime_anyref_t anyref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
@@ -427,6 +431,7 @@ typedef union wasmtime_valunion {
   /// Use `wasmtime_funcref_is_null` to test whether this is a null function
   /// reference.
   wasmtime_func_t funcref;
+#endif // WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
   wasmtime_v128 v128;
 } wasmtime_valunion_t;

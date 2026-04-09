@@ -7,6 +7,9 @@
 #ifndef WASMTIME_GC_HH
 #define WASMTIME_GC_HH
 
+#include <wasmtime/config.hh>
+
+#ifdef WASMTIME_FEATURE_GC
 #include <vector>
 #include <wasmtime/gc.h>
 #include <wasmtime/val.hh>
@@ -475,5 +478,7 @@ inline std::optional<ArrayRef> AnyRef::as_array(Store::Context cx) const {
 }
 
 } // namespace wasmtime
+
+#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_GC_HH

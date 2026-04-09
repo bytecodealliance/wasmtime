@@ -94,6 +94,7 @@ public:
     /// Creates a context referencing the provided `Caller`.
     Context(Caller *caller);
 
+#ifdef WASMTIME_FEATURE_GC
     /// Runs a garbage collection pass in the referenced store to collect loose
     /// `externref` values, if any are available.
     Result<std::monostate> gc() {
@@ -103,6 +104,7 @@ public:
       }
       return std::monostate();
     }
+#endif
 
     /// Injects fuel to be consumed within this store.
     ///
@@ -253,9 +255,11 @@ public:
   /// Explicit function to acquire a `Context` from this store.
   Context context() { return this; }
 
+#ifdef WASMTIME_FEATURE_GC
   /// Runs a garbage collection pass in the referenced store to collect loose
   /// GC-managed objects, if any are available.
   Result<std::monostate> gc() { return context().gc(); }
+#endif
 
 private:
   template <typename F>

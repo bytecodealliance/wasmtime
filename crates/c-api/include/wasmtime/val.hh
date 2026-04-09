@@ -6,7 +6,9 @@
 #define WASMTIME_VAL_HH
 
 #include <optional>
+#ifdef WASMTIME_FEATURE_GC
 #include <wasmtime/gc.h>
+#endif // WASMTIME_FEATURE_GC
 #include <wasmtime/store.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>
@@ -17,6 +19,7 @@ class EqRef;
 class StructRef;
 class ArrayRef;
 
+#ifdef WASMTIME_FEATURE_GC
 /**
  * \brief Representation of a WebAssembly `externref` value.
  *
@@ -103,9 +106,11 @@ public:
     return wasmtime_externref_to_raw(cx.capi(), &val);
   }
 };
+#endif // WASMTIME_FEATURE_GC
 
 class EqRef;
 
+#ifdef WASMTIME_FEATURE_GC
 /**
  * \brief Representation of a WebAssembly `anyref` value.
  */
@@ -204,6 +209,7 @@ public:
   /// \brief Downcast to arrayref. Returns null arrayref if not an arrayref.
   inline std::optional<ArrayRef> as_array(Store::Context cx) const;
 };
+#endif // WASMTIME_FEATURE_GC
 
 /// \brief Container for the `v128` WebAssembly type.
 struct V128 {

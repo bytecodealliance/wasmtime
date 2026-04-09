@@ -1,4 +1,5 @@
 //! Working with GC `struct` objects.
+#![cfg(feature = "gc")]
 
 use crate::runtime::vm::VMGcRef;
 use crate::store::{Asyncness, StoreId};

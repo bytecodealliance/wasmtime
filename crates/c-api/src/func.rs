@@ -11,9 +11,11 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
 use wasmtime::{
-    AsContext, AsContextMut, Error, Extern, Func, Result, RootScope, StoreContext, StoreContextMut,
-    Trap, Val, ValRaw,
+    AsContext, AsContextMut, Error, Extern, Func, Result, StoreContext, StoreContextMut, Trap, Val,
+    ValRaw,
 };
+#[cfg(feature = "gc")]
+use wasmtime::{RootScope, ThrownException};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -351,13 +353,15 @@ pub unsafe extern "C" fn wasmtime_func_call(
     nresults: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut scope = RootScope::new(&mut store);
-    let mut params = mem::take(&mut scope.as_context_mut().data_mut().wasm_val_storage);
+    #[cfg(feature = "gc")]
+    let mut store = RootScope::new(&mut store);
+    let mut params = mem::take(&mut store.as_context_mut().data_mut().wasm_val_storage);
+
     let (wt_params, wt_results) = translate_args(
         &mut params,
         crate::slice_from_raw_parts(args, nargs)
             .iter()
-            .map(|i| i.to_val(&mut scope)),
+            .map(|i| i.to_val(&mut store)),
         nresults,
     );
 
@@ -366,16 +370,16 @@ pub unsafe extern "C" fn wasmtime_func_call(
     // can. As a result we catch panics here and transform them to traps to
     // allow the caller to have any insulation possible against Rust panics.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        func.call(&mut scope, wt_params, wt_results)
+        func.call(&mut store, wt_params, wt_results)
     }));
     match result {
         Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(&mut scope, *val));
+                crate::initialize(slot, wasmtime_val_t::from_val(&mut store, *val));
             }
             params.truncate(0);
-            scope.as_context_mut().data_mut().wasm_val_storage = params;
+            store.as_context_mut().data_mut().wasm_val_storage = params;
             None
         }
         Ok(Err(trap)) => store_err(trap, trap_ret),
@@ -402,8 +406,18 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     }
 }
 
+#[cfg(feature = "gc")]
+fn is_trap_like_impl(err: &Error) -> bool {
+    err.is::<Trap>() || err.is::<ThrownException>()
+}
+
+#[cfg(not(feature = "gc"))]
+fn is_trap_like_impl(err: &Error) -> bool {
+    err.is::<Trap>()
+}
+
 fn store_err(err: Error, trap_ret: &mut *mut wasm_trap_t) -> Option<Box<wasmtime_error_t>> {
-    if err.is::<Trap>() || err.is::<wasmtime::ThrownException>() {
+    if is_trap_like_impl(&err) {
         *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
         None
     } else {

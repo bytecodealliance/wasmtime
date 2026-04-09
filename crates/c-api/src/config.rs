@@ -90,11 +90,13 @@ pub extern "C" fn wasmtime_config_wasm_tail_call_set(c: &mut wasm_config_t, enab
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_reference_types_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_reference_types(enable);
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_function_references_set(
     c: &mut wasm_config_t,
     enable: bool,
@@ -103,6 +105,7 @@ pub extern "C" fn wasmtime_config_wasm_function_references_set(
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_gc_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_gc(enable);
 }
@@ -476,6 +479,7 @@ pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_exceptions_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_exceptions(enable);
 }
