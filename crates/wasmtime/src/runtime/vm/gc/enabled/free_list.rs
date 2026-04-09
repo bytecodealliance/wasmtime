@@ -659,7 +659,7 @@ mod tests {
         /// what we started with when we initially created the `FreeList`).
         #[test]
         #[cfg_attr(miri, ignore)]
-        fn check_no_fragmentation((capacity, ops) in ops()) {
+        fn check_no_fragmentation((initial_capacity, ops) in ops()) {
             let _ = env_logger::try_init();
 
             // Map from allocation id to ptr.
@@ -671,12 +671,14 @@ mod tests {
             let mut deferred = vec![];
 
             // The free list we are testing.
-            let mut free_list = FreeList::new(capacity.get());
+            let mut free_list = FreeList::new(initial_capacity.get());
 
             let (initial_len, initial_size) = free_list_block_len_and_size(&free_list);
             assert!(initial_len == 0 || initial_len == 1);
-            assert!(initial_size.unwrap_or(0) <= capacity.get());
+            assert!(initial_size.unwrap_or(0) <= initial_capacity.get());
             assert_eq!(initial_size.unwrap_or(0), free_list.max_size());
+
+            let mut capacity = initial_capacity.get();
 
             // Run through the generated ops and perform each operation.
             for op in ops {
@@ -694,7 +696,8 @@ mod tests {
                             deferred.push((id, layout));
                         }
                     }
-                    Op::AddCapacity(capacity) => {
+                    Op::AddCapacity(additional) => {
+                        capacity = capacity.saturating_add(additional);
                         free_list.add_capacity(capacity);
                     }
                 }
@@ -719,12 +722,41 @@ mod tests {
 
             let (final_len, final_size) = free_list_block_len_and_size(&free_list);
 
-            // The free list should have a single chunk again (or no chunks if
-            // the capacity was too small).
-            assert_eq!(final_len, initial_len);
+            if capacity == initial_capacity.get() {
+                // The free list should have a single chunk again (or no chunks
+                // if the capacity was too small).
+                assert_eq!(final_len, initial_len);
+                // And the size of that chunk should be the same as the initial
+                // size.
+                assert_eq!(final_size, initial_size);
+            } else {
+                // Capacity only grew.
+                assert!(capacity > initial_capacity.get());
 
-            // And the size of that chunk should be the same as the initial size.
-            assert_eq!(final_size, initial_size);
+                // The free list should have a single chunk (or no chunks if
+                // capacity was too small).
+                assert!(final_len >= initial_len);
+                assert!(final_len <= 1);
+
+                // The chunk's final size should be larger than the initial
+                // size.
+                assert!(final_size >= initial_size);
+
+                if let Some(final_size) = final_size {
+                    // The chunk's final size cannot be larger than the free
+                    // list capacity.
+                    assert!(final_size < capacity);
+
+                    if capacity >= 2 * ALIGN_USIZE {
+                        // We should not waste more than one `ALIGN` at the
+                        // start on making indices non-null and another at the
+                        // end to keep blocks' sizes rounded to multiples of
+                        // `ALIGN`.
+                        let usable = capacity.min(usize::try_from(u32::MAX).unwrap());
+                        assert!(final_size >= usable - 2 * ALIGN_USIZE, "assertion failed: {final_size} >= {usable} - 2 * {ALIGN_USIZE}");
+                    }
+                }
+            }
         }
     }
 
@@ -1182,23 +1214,20 @@ mod tests {
 
     #[test]
     fn bump_ptr_overflow() {
+        if core::mem::size_of::<usize>() < core::mem::size_of::<u64>() {
+            // Cannot create `Layout`s of size ~`u32::MAX` on less-than-64-bit
+            // targets.
+            return;
+        }
+
         let capacity = usize::try_from(u32::MAX).unwrap();
         let len = round_usize_down_to_pow2(capacity, ALIGN_USIZE) - ALIGN_USIZE;
         let mut free_list = FreeList::new(capacity);
-        println!("Initial:");
-        free_list
-            .iter_free_blocks()
-            .for_each(|(idx, len)| println!("- free block: {idx}..{}", idx + len));
         assert_eq!(free_list.num_free_blocks(), 1);
 
         // Allocate everything except one `ALIGN_USIZE` block.
         let layout = Layout::from_size_align(len - ALIGN_USIZE, ALIGN_USIZE).unwrap();
-        let p = free_list.alloc(layout).unwrap().unwrap();
-        println!("Allocated {p}..{}", p.get() as usize + (len - ALIGN_USIZE));
-        println!("After big alloc:");
-        free_list
-            .iter_free_blocks()
-            .for_each(|(idx, len)| println!("- free block: {idx}..{}", idx + len));
+        free_list.alloc(layout).unwrap().unwrap();
         assert_eq!(free_list.num_free_blocks(), 1);
 
         // Allocating a `2 * ALIGN_USIZE` block fails. We don't have capacity
@@ -1206,28 +1235,16 @@ mod tests {
         assert!(free_list.bump_ptr.checked_add(2 * ALIGN_U32).is_none());
         let layout = Layout::from_size_align(2 * ALIGN_USIZE, ALIGN_USIZE).unwrap();
         assert!(free_list.alloc(layout).unwrap().is_none());
-        println!("After alloc failure:");
-        free_list
-            .iter_free_blocks()
-            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
         assert_eq!(free_list.num_free_blocks(), 1);
 
         // Allocating an `ALIGN_USIZE` block succeeds. Everything is allocated
         // now.
         let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
         free_list.alloc(layout).unwrap().unwrap();
-        println!("After alloc success:");
-        free_list
-            .iter_free_blocks()
-            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
         assert_eq!(free_list.num_free_blocks(), 0);
 
         // Allocating another `ALIGN_USIZE` block fails.
         let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
-        println!("After second alloc failure:");
-        free_list
-            .iter_free_blocks()
-            .for_each(|(idx, len)| println!("free block: {idx}..{}", idx + len));
         assert!(free_list.alloc(layout).unwrap().is_none());
         assert_eq!(free_list.num_free_blocks(), 0);
     }
