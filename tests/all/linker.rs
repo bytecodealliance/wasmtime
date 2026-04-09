@@ -781,6 +781,7 @@ fn linker_defines_table_subtype_err() -> Result<()> {
 // storage. After the original was dropped those keys became dangling, causing
 // get_atom() on the clone to silently fail to find registered imports.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn linker_clone_drop_original_then_instantiate() -> Result<()> {
     let engine = Engine::default();
     let wat = r#"(module
