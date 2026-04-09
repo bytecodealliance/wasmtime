@@ -682,7 +682,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
 
             let engine = Engine::new(&config)?;
 
-            let module = Module::new(
+            let Ok(module) = Module::new(
                 &engine,
                 r#"
                     (module
@@ -707,7 +707,12 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
                         (data (i32.const 100) "x")
                     )
                  "#,
-            )?;
+            ) else {
+                // Ignore invalid configurations on 32-bit which can't run with
+                // signals-based-traps.
+                assert!(cfg!(target_pointer_width = "32") && signals_based_traps);
+                continue;
+            };
 
             let mut store = Store::new(&engine, ());
             let instance = Instance::new(&mut store, &module, &[])?;
