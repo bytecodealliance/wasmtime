@@ -1,5 +1,6 @@
 //! Compilation support for the component model.
 
+use crate::alias_region_key::AliasRegionKey;
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
@@ -1724,15 +1725,18 @@ impl ComponentCompiler for Compiler {
                 let pointer_type = self.isa.pointer_type();
 
                 // Load the `*mut VMStoreContext` out of our vmctx.
-                let vmctx_region = c
-                    .builder
-                    .func
-                    .dfg
-                    .alias_regions
-                    .insert(ir::AliasRegionData {
-                        user_id: 2,
-                        description: "vmctx".into(),
-                    });
+                let vmctx_region = c.builder.func.dfg.alias_regions.insert(
+                    AliasRegionKey::VMContext {
+                        offset: c.offsets.vm_store_context(),
+                    }
+                    .into(),
+                );
+                let store_ctx_region = c.builder.func.dfg.alias_regions.insert(
+                    AliasRegionKey::VMStoreContext {
+                        offset: u32::from(c.offsets.ptr.vmstore_context_store_data()),
+                    }
+                    .into(),
+                );
                 let store_ctx = c.builder.ins().load(
                     pointer_type,
                     ir::MemFlagsData::trusted()
@@ -1748,7 +1752,7 @@ impl ComponentCompiler for Compiler {
                     pointer_type,
                     ir::MemFlagsData::trusted()
                         .with_readonly()
-                        .with_alias_region(Some(vmctx_region))
+                        .with_alias_region(Some(store_ctx_region))
                         .with_can_move(),
                     store_ctx,
                     i32::from(c.offsets.ptr.vmstore_context_store_data()),

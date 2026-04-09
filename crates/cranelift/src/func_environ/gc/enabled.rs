@@ -1,5 +1,6 @@
 use super::GcCompiler;
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
+use crate::alias_region_key::AliasRegionKey;
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
@@ -27,15 +28,6 @@ mod null;
 
 #[cfg(feature = "gc-copying")]
 mod copying;
-
-/// Flags to use for general-purpose GC loads/stores.
-///
-/// This is used for accesses to the GC heap which aren't expected to trap, but
-/// retain internal assertion metadata to report if such a trap happens. This
-/// is here to ensure that in the face of heap corruption that there's no
-/// possible UB within Cranelift and/or the runtime.
-const GC_MEMFLAGS: ir::MemFlagsData =
-    ir::MemFlagsData::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
 
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
@@ -172,9 +164,8 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let kind_and_reserved_bits = builder
-        .ins()
-        .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
+    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let kind_and_reserved_bits = builder.ins().load(ir::types::I32, flags, kind_addr, 0);
     let kind_mask = builder
         .ins()
         .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
@@ -210,7 +201,9 @@ pub fn read_field_at_addr(
     );
 
     // Data inside GC objects is always little endian.
-    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+    let flags = func_env
+        .gc_memflags(&mut builder.func)
+        .with_endianness(ir::Endianness::Little);
 
     let value = match ty {
         WasmStorageType::I8 => builder.ins().load(ir::types::I8, flags, addr, 0),
@@ -350,7 +343,9 @@ pub fn write_field_at_addr(
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
-    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+    let flags = func_env
+        .gc_memflags(&mut builder.func)
+        .with_endianness(ir::Endianness::Little);
 
     match field_ty {
         WasmStorageType::I8 => {
@@ -754,9 +749,8 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let result = builder
-        .ins()
-        .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), len_field, 0);
+    let flags = func_env.gc_memflags(&mut builder.func).with_readonly();
+    let result = builder.ins().load(ir::types::I32, flags, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
 }
@@ -1067,10 +1061,11 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
+        let gc_memflags = func_env.gc_memflags(&mut builder.func);
         let actual_kind =
             builder
                 .ins()
-                .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), kind_addr, 0);
+                .load(ir::types::I32, gc_memflags.with_readonly(), kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1122,10 +1117,11 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
+            let gc_memflags = func_env.gc_memflags(&mut builder.func);
             let actual_shared_ty =
                 builder
                     .ins()
-                    .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), ty_addr, 0);
+                    .load(ir::types::I32, gc_memflags.with_readonly(), ty_addr, 0);
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
@@ -1138,9 +1134,10 @@ pub fn translate_ref_test(
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
 
+            let gc_memflags = func_env.gc_memflags(&mut builder.func);
             let actual_shared_ty = func_env.load_funcref_type_index(
                 &mut builder.cursor(),
-                GC_MEMFLAGS.with_readonly(),
+                gc_memflags.with_readonly(),
                 val,
             );
 
@@ -1268,6 +1265,23 @@ fn initialize_struct_fields(
 }
 
 impl FuncEnvironment<'_> {
+    pub(crate) fn gc_heap_alias_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.alias_region(func, AliasRegionKey::GcHeap)
+    }
+
+    /// Flags to use for general-purpose GC loads/stores.
+    ///
+    /// This is used for accesses to the GC heap which aren't expected to trap, but
+    /// retain internal assertion metadata to report if such a trap happens. This
+    /// is here to ensure that in the face of heap corruption that there's no
+    /// possible UB within Cranelift and/or the runtime.
+    fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
+        let region = self.gc_heap_alias_region(func);
+        ir::MemFlagsData::new()
+            .with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT))
+            .with_alias_region(Some(region))
+    }
+
     fn gc_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcLayout {
         // Lazily compute and cache the layout.
         if !self.ty_to_gc_layout.contains_key(&type_index) {

@@ -12,6 +12,7 @@
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32, i32) tail {
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -51,7 +52,7 @@
 ;; @002b                               v24 = iadd v23, v22
 ;; @002b                               v25 = iconst.i64 16
 ;; @002b                               v26 = iadd v24, v25  ; v25 = 16
-;; @002b                               v27 = load.i32 user2 readonly v26
+;; @002b                               v27 = load.i32 user2 readonly region0 v26
 ;; @002b                               v29 = uextend.i64 v3
 ;; @002b                               v30 = uextend.i64 v6
 ;; @002b                               v32 = iadd v29, v30
@@ -63,7 +64,7 @@
 ;; @002b                               v41 = uextend.i64 v137
 ;; @002b                               v43 = iadd v23, v41
 ;; @002b                               v45 = iadd v43, v25  ; v25 = 16
-;; @002b                               v46 = load.i32 user2 readonly v45
+;; @002b                               v46 = load.i32 user2 readonly region0 v45
 ;; @002b                               v48 = uextend.i64 v5
 ;; @002b                               v51 = iadd v48, v30
 ;; @002b                               v47 = uextend.i64 v46
@@ -130,8 +131,8 @@
 ;; @002b                               jump block9(v95)
 ;;
 ;;                                 block9(v123: i64):
-;; @002b                               v96 = load.i32 user2 little v83
-;; @002b                               store user2 little v96, v82
+;; @002b                               v96 = load.i32 user2 little region0 v83
+;; @002b                               store user2 little region0 v96, v82
 ;;                                     v127 = load.i32 notrap v201
 ;;                                     v128 = load.i32 notrap v200
 ;;                                     v225 = iconst.i64 4
@@ -151,9 +152,9 @@
 ;;                                 block11(v124: i64):
 ;;                                     v216 = iconst.i64 4
 ;;                                     v217 = isub.i64 v102, v216  ; v216 = 4
-;; @002b                               v121 = load.i32 user2 little v217
+;; @002b                               v121 = load.i32 user2 little region0 v217
 ;;                                     v218 = isub.i64 v101, v216  ; v216 = 4
-;; @002b                               store user2 little v121, v218
+;; @002b                               store user2 little region0 v121, v218
 ;;                                     v129 = load.i32 notrap v200
 ;;                                     v130 = load.i32 notrap v201
 ;; @002b                               v122 = icmp eq v217, v59

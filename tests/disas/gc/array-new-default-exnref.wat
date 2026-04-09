@@ -10,7 +10,8 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 2 "vmctx"
+;;     region0 = 32 "VMContext+0x20"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -81,14 +82,14 @@
 ;;                                 block4(v41: i32, v42: i64):
 ;;                                     v91 = iconst.i64 16
 ;; @001f                               v43 = iadd v42, v91  ; v91 = 16
-;; @001f                               store.i32 user2 v2, v43
+;; @001f                               store.i32 user2 region1 v2, v43
 ;; @001f                               trapz v41, user16
 ;;                                     v143 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v144 = load.i64 notrap aligned readonly can_move v143+32
 ;; @001f                               v46 = uextend.i64 v41
 ;; @001f                               v48 = iadd v144, v46
 ;; @001f                               v50 = iadd v48, v91  ; v91 = 16
-;; @001f                               v51 = load.i32 user2 readonly v50
+;; @001f                               v51 = load.i32 user2 readonly region1 v50
 ;; @001f                               v52 = uextend.i64 v51
 ;; @001f                               v57 = icmp.i64 ugt v5, v52
 ;; @001f                               trapnz v57, user17
@@ -108,7 +109,7 @@
 ;;
 ;;                                 block5(v74: i64):
 ;;                                     v145 = iconst.i32 0
-;; @001f                               store user2 little v145, v74  ; v145 = 0
+;; @001f                               store user2 little region1 v145, v74  ; v145 = 0
 ;;                                     v146 = iconst.i64 4
 ;;                                     v147 = iadd v74, v146  ; v146 = 4
 ;; @001f                               v76 = icmp eq v147, v72

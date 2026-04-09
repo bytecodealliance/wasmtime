@@ -19,7 +19,7 @@
     i32.load offset=0xffff0000))
 
 ;; function u0:0(i64 vmctx, i64, i64, i32) tail {
-;;     region0 = 0 "heap"
+;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -44,7 +44,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i64) -> i32 tail {
-;;     region0 = 0 "heap"
+;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24

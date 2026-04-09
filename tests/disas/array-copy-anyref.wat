@@ -10,6 +10,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -27,7 +28,7 @@
 ;; @002b                               v9 = iadd v8, v7
 ;; @002b                               v10 = iconst.i64 16
 ;; @002b                               v11 = iadd v9, v10  ; v10 = 16
-;; @002b                               v12 = load.i32 user2 readonly v11
+;; @002b                               v12 = load.i32 user2 readonly region0 v11
 ;; @002b                               v14 = uextend.i64 v3
 ;; @002b                               v15 = uextend.i64 v6
 ;; @002b                               v17 = iadd v14, v15
@@ -38,7 +39,7 @@
 ;; @002b                               v26 = uextend.i64 v4
 ;; @002b                               v28 = iadd v8, v26
 ;; @002b                               v30 = iadd v28, v10  ; v10 = 16
-;; @002b                               v31 = load.i32 user2 readonly v30
+;; @002b                               v31 = load.i32 user2 readonly region0 v30
 ;; @002b                               v33 = uextend.i64 v5
 ;; @002b                               v36 = iadd v33, v15
 ;; @002b                               v32 = uextend.i64 v31
@@ -73,8 +74,8 @@
 ;; @002b                               brif v58, block3(v25, v44, v5), block4(v61, v62, v64)
 ;;
 ;;                                 block3(v65: i64, v66: i64, v67: i32):
-;; @002b                               v70 = load.i32 user2 little v66
-;; @002b                               store user2 little v70, v65
+;; @002b                               v70 = load.i32 user2 little region0 v66
+;; @002b                               store user2 little region0 v70, v65
 ;;                                     v131 = iconst.i64 4
 ;;                                     v132 = iadd v66, v131  ; v131 = 4
 ;; @002b                               v74 = icmp eq v132, v62
@@ -86,9 +87,9 @@
 ;;                                 block4(v75: i64, v76: i64, v77: i32):
 ;;                                     v126 = iconst.i64 4
 ;;                                     v127 = isub v76, v126  ; v126 = 4
-;; @002b                               v86 = load.i32 user2 little v127
+;; @002b                               v86 = load.i32 user2 little region0 v127
 ;;                                     v128 = isub v75, v126  ; v126 = 4
-;; @002b                               store user2 little v86, v128
+;; @002b                               store user2 little region0 v86, v128
 ;; @002b                               v87 = icmp eq v127, v44
 ;;                                     v129 = iconst.i32 1
 ;;                                     v130 = isub v77, v129  ; v129 = 1

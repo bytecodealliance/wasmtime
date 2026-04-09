@@ -31,7 +31,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1610612736 "ImportedGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -49,7 +49,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1610612736 "ImportedGlobal"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -81,7 +81,7 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1879048193 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(1))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24

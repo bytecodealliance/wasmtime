@@ -10,6 +10,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i32) -> i32 tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -43,7 +44,7 @@
 ;; @0022                               v20 = iadd v18, v19
 ;;                                     v68 = iconst.i64 24
 ;; @0022                               v21 = iadd v20, v68  ; v68 = 24
-;; @0022                               store user2 v3, v21
+;; @0022                               store user2 region0 v3, v21
 ;; @0022                               trapz v17, user16
 ;; @0022                               v45 = load.i64 notrap aligned v69+40
 ;; @0022                               v38 = iadd v20, v71  ; v71 = 32
@@ -58,7 +59,7 @@
 ;; @0022                               brif v50, block3, block2(v38)
 ;;
 ;;                                 block2(v51: i64):
-;; @0022                               store.i64 user2 little v2, v51
+;; @0022                               store.i64 user2 little region0 v2, v51
 ;;                                     v99 = iconst.i64 8
 ;;                                     v100 = iadd v51, v99  ; v99 = 8
 ;; @0022                               v53 = icmp eq v100, v49

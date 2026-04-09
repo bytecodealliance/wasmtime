@@ -11,7 +11,8 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
-;;     region0 = 2 "vmctx"
+;;     region0 = 32 "VMContext+0x20"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -86,15 +87,14 @@
 ;;                                     store notrap v41, v95
 ;;                                     v94 = iconst.i64 16
 ;; @001f                               v43 = iadd v42, v94  ; v94 = 16
-;; @001f                               store.i32 user2 v2, v43
-;;                                     v77 = load.i32 notrap v95
-;; @001f                               trapz v77, user16
+;; @001f                               store.i32 user2 region1 v2, v43
+;; @001f                               trapz v41, user16
 ;;                                     v146 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v147 = load.i64 notrap aligned readonly can_move v146+32
-;; @001f                               v46 = uextend.i64 v77
+;; @001f                               v46 = uextend.i64 v41
 ;; @001f                               v48 = iadd v147, v46
 ;; @001f                               v50 = iadd v48, v94  ; v94 = 16
-;; @001f                               v51 = load.i32 user2 readonly v50
+;; @001f                               v51 = load.i32 user2 readonly region1 v50
 ;; @001f                               v52 = uextend.i64 v51
 ;; @001f                               v57 = icmp.i64 ugt v5, v52
 ;; @001f                               trapnz v57, user17

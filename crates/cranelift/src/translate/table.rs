@@ -4,6 +4,7 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, InstBuilder, condcodes::IntCC, immediates::Imm64};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_frontend::FunctionBuilder;
+use wasmtime_environ::TableIndex;
 
 /// Size of a WebAssembly table, in elements.
 #[derive(Clone)]
@@ -63,6 +64,7 @@ impl TableData {
         env: &mut FuncEnvironment<'_>,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
+        table_index: TableIndex,
     ) -> (ir::Value, ir::MemFlagsData) {
         let index_ty = pos.func.dfg.value_type(index);
         let addr_ty = env.pointer_type();
@@ -104,7 +106,7 @@ impl TableData {
 
         let element_addr = pos.ins().iadd(base, offset);
 
-        let region = env.get_table_alias_region(pos.func);
+        let region = env.table_alias_region(pos.func, table_index);
         let base_flags = ir::MemFlagsData::new()
             .with_aligned()
             .with_alias_region(Some(region));

@@ -16,6 +16,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -33,7 +34,7 @@
 ;; @002a                               v9 = iadd v8, v7
 ;; @002a                               v10 = iconst.i64 16
 ;; @002a                               v11 = iadd v9, v10  ; v10 = 16
-;; @002a                               v12 = load.i32 user2 readonly v11
+;; @002a                               v12 = load.i32 user2 readonly region0 v11
 ;; @002a                               v14 = uextend.i64 v3
 ;;                                     v85 = iconst.i64 7
 ;; @002a                               v17 = iadd v14, v85  ; v85 = 7
@@ -44,7 +45,7 @@
 ;; @002a                               v26 = uextend.i64 v4
 ;; @002a                               v28 = iadd v8, v26
 ;; @002a                               v30 = iadd v28, v10  ; v10 = 16
-;; @002a                               v31 = load.i32 user2 readonly v30
+;; @002a                               v31 = load.i32 user2 readonly region0 v30
 ;; @002a                               v33 = uextend.i64 v5
 ;; @002a                               v36 = iadd v33, v85  ; v85 = 7
 ;; @002a                               v32 = uextend.i64 v31

@@ -33,6 +33,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u805306368:4 sig0
@@ -41,10 +42,10 @@
 ;;     v3 = iconst.i32 0
 ;;     v4 = call fn0(v0, v3)  ; v3 = 0
 ;;     v18 = iconst.i32 1
-;;     store user2 little v18, v4  ; v18 = 1
+;;     store user2 little region0 v18, v4  ; v18 = 1
 ;;     v25 = iconst.i32 3
 ;;     v13 = iconst.i64 16
 ;;     v12 = iadd v4, v13  ; v13 = 16
-;;     store user2 little v25, v12  ; v25 = 3
+;;     store user2 little region0 v25, v12  ; v25 = 3
 ;;     return
 ;; }
