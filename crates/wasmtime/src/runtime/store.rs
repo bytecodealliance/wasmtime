@@ -2269,7 +2269,10 @@ impl StoreOpaque {
             // SAFETY: the instance's GC roots will remain valid for the
             // duration of this GC cycle.
             unsafe {
-                instance.handle.get_mut().trace_roots(gc_roots_list);
+                instance
+                    .handle
+                    .get_mut()
+                    .trace_element_segment_roots(gc_roots_list);
             }
         }
         log::trace!("End trace GC roots :: instance");

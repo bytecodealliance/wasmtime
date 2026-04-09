@@ -1738,6 +1738,17 @@ impl ValRaw {
         assert!(cfg!(feature = "gc") || exnref == 0);
         exnref
     }
+
+    /// Convert this `&ValRaw` into a pointer to its inner `VMGcRef`.
+    #[cfg(feature = "gc")]
+    pub(crate) fn as_vmgc_ref_ptr(&self) -> Option<NonNull<crate::vm::VMGcRef>> {
+        if self.get_anyref() == 0 {
+            return None;
+        }
+        let ptr = &raw const self.anyref;
+        let ptr = NonNull::new(ptr.cast_mut()).unwrap();
+        Some(ptr.cast())
+    }
 }
 
 /// An "opaque" version of `VMContext` which must be explicitly casted to a
