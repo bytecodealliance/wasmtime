@@ -721,14 +721,14 @@
                                (trap_code_integer_overflow))))
 (rule 1 (maybe_trap_if_sdiv_overflow true $I128 $I128 x y)
       (let (
-            ;; We need to trap when y == INT_MIN && x == -1
-            ;; y == INT_MIN is implemented as y == -y, as -INT_MIN == INT_MIN.
-            ;; This checks that y == -y, by using Not-Xor for bitwise
-            ;; equality, producing all 0b1's (-1u128) when y == -y.
-            ;; Then it uses band to include the x == -1 check as well.
-            ;; using (band x (bnot (bxor y neg_division))) variant of vec eval
-            (neg_divisor Reg (vec_neg $I128 y))
-            (reg Reg (vec_eval $I128 0b00001001 x y neg_divisor))
+            ;; We need to trap when x == INT_MIN && y == -1
+            ;; y == INT_MIN is implemented as x == -x, as -INT_MIN == INT_MIN.
+            ;; This checks that x == -x, by using Not-Xor for bitwise
+            ;; equality, producing all 0b1's (-1u128) when x == -x.
+            ;; Then it uses band to include the y == -1 check as well.
+            ;; using (band y (bnot (bxor x neg_division))) variant of vec eval
+            (neg_dividend Reg (vec_neg $I128 x))
+            (reg Reg (vec_eval $I128 0b00001001 y x neg_dividend))
             ;; finally, we check that the combination of x & y == -y is -1
             (flags ProducesFlags (vec_elt_icmps reg (vec_imm $I128 -1))))
         (trap_if flags
