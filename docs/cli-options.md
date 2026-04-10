@@ -200,6 +200,25 @@ wasmtime config new
 
 And that'll print out the path to the file you can edit.
 
+## `completion`
+
+This subcommand generates shell completion scripts for the `wasmtime` CLI.
+Shells install completion scripts in different locations, so refer to your
+shell's documentation for the right place to store or evaluate the generated
+output.
+
+For example, to install completions for the `fish` shell:
+
+```console
+wasmtime completion fish > ~/.config/fish/completions/wasmtime.fish
+```
+
+For shells such as `zsh`, the generated script can also be evaluated directly:
+
+```console
+eval "$(wasmtime completion zsh)"
+```
+
 ## `compile`
 
 This subcommand is used to Ahead-Of-Time (AOT) compile a WebAssembly module to produce
