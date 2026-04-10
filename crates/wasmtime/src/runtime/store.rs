@@ -1016,6 +1016,13 @@ impl<T> Store<T> {
         StoreContextMut(&mut self.inner).gc(why)
     }
 
+    /// Returns the current capacity of the GC heap in bytes, or 0 if the GC
+    /// heap has not been initialized yet.
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_capacity(&self) -> usize {
+        self.inner.gc_heap_capacity()
+    }
+
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
     /// be configured via [`Store::set_fuel`].
     ///
@@ -2029,6 +2036,16 @@ impl StoreOpaque {
             None
         } else {
             self.gc_store.as_mut()
+        }
+    }
+
+    /// Returns the current capacity of the GC heap in bytes, or 0 if the GC
+    /// heap has not been initialized yet.
+    #[cfg(feature = "gc")]
+    pub(crate) fn gc_heap_capacity(&self) -> usize {
+        match self.gc_store.as_ref() {
+            Some(gc_store) => gc_store.gc_heap_capacity(),
+            None => 0,
         }
     }
 

@@ -1708,3 +1708,57 @@ fn select_gc_ref_stack_map() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn gc_heap_does_not_grow_unboundedly() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $small (struct (field i32)))
+                (import "" "check" (func $check))
+
+                (func (export "run") (param i32)
+                    (local $i i32)
+                    (local $tmp (ref null $small))
+                    (loop $loop
+                        (local.set $tmp (struct.new $small (i32.const 42)))
+
+                        ;; Call the host to check heap size.
+                        (call $check)
+
+                        ;; Loop counter.
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $loop (i32.lt_u (local.get $i) (local.get 0)))
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+
+    let check = Func::wrap(&mut store, |caller: Caller<'_, _>| {
+        let heap_size = caller.gc_heap_capacity();
+        assert!(
+            heap_size <= 65536,
+            "GC heap grew too large: {heap_size} bytes (limit: 64KiB)"
+        );
+    });
+
+    let instance = Instance::new(&mut store, &module, &[check.into()])?;
+    let run = instance.get_typed_func::<(i32,), ()>(&mut store, "run")?;
+    run.call(&mut store, (100_000,))?;
+
+    Ok(())
+}

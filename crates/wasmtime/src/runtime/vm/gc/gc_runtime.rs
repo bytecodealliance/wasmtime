@@ -342,6 +342,12 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ////////////////////////////////////////////////////////////////////////////
     // Garbage Collection Methods
 
+    /// Get the total number of bytes currently allocated (live or
+    /// dead-but-not-collected) in this heap.
+    ///
+    /// This is distinct from the heap capacity.
+    fn allocated_bytes(&self) -> usize;
+
     /// Start a new garbage collection process.
     ///
     /// The given `roots` are GC roots and should not be collected (nor anything
