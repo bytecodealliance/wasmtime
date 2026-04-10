@@ -112,45 +112,39 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
     t
 }
 
+/// Validate that a GcOps produces a valid Wasm binary.
+fn assert_valid_wasm(ops: &mut GcOps) {
+    let wasm = ops.to_wasm_binary();
+    let feats = wasmparser::WasmFeatures::default();
+    feats.reference_types();
+    feats.gc();
+    let mut validator = wasmparser::Validator::new_with_features(feats);
+
+    if let Err(e) = validator.validate_all(&wasm) {
+        let wat =
+            wasmprinter::print_bytes(&wasm).unwrap_or_else(|e| format!("<disasm failed: {e}>"));
+        panic!(
+            "Emitted Wasm binary is not valid!\n\n\
+             === Validation Error ===\n\n\
+             {e}\n\n\
+             === GcOps ===\n\n\
+             {ops:#?}\n\n\
+             === Wat ===\n\n\
+             {wat}"
+        );
+    }
+}
+
 #[test]
 fn mutate_gc_ops_with_default_mutator() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
-
-    let mut features = wasmparser::WasmFeatures::default();
-    features.insert(wasmparser::WasmFeatures::REFERENCE_TYPES);
-    features.insert(wasmparser::WasmFeatures::FUNCTION_REFERENCES);
-    features.insert(wasmparser::WasmFeatures::GC_TYPES);
-    features.insert(wasmparser::WasmFeatures::GC);
 
     let mut ops = test_ops(5, 5, 5);
 
     let mut session = mutatis::Session::new();
     for _ in 0..2048 {
         session.mutate(&mut ops)?;
-
-        let wasm = ops.to_wasm_binary();
-        crate::oracles::log_wasm(&wasm);
-
-        let mut validator = wasmparser::Validator::new_with_features(features);
-        if let Err(e) = validator.validate_all(&wasm) {
-            let mut config = wasmprinter::Config::new();
-            config.print_offsets(true);
-            config.print_operand_stack(true);
-            let mut wat = String::new();
-            let wat = match config.print(&wasm, &mut wasmprinter::PrintFmtWrite(&mut wat)) {
-                Ok(()) => wat,
-                Err(e) => format!("<failed to disassemble Wasm binary to WAT: {e}>"),
-            };
-            panic!(
-                "Emitted Wasm binary is not valid!\n\n\
-                 === Validation Error ===\n\n\
-                 {e}\n\n\
-                 === GcOps ===\n\n\
-                 {ops:#?}\n\n\
-                 === Wat ===\n\n\
-                 {wat}"
-            );
-        }
+        assert_valid_wasm(&mut ops);
     }
     Ok(())
 }
@@ -242,18 +236,9 @@ fn emits_rec_groups_and_validates() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 
     let mut ops = test_ops(5, 5, 5);
+    assert_valid_wasm(&mut ops);
 
     let wasm = ops.to_wasm_binary();
-
-    let feats = wasmparser::WasmFeatures::default();
-    feats.reference_types();
-    feats.gc();
-    let mut validator = wasmparser::Validator::new_with_features(feats);
-    assert!(
-        validator.validate_all(&wasm).is_ok(),
-        "GC validation failed"
-    );
-
     let wat = wasmprinter::print_bytes(&wasm).expect("to WAT");
     let recs = wat.matches("(rec").count();
     let structs = wat.matches("(struct)").count();
@@ -327,17 +312,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
     );
 
     // Verify that we generate a valid Wasm binary after calling `fixup`.
-    let wasm = ops.to_wasm_binary();
-    let wat = wasmprinter::print_bytes(&wasm).unwrap();
-    log::debug!("{wat}");
-    let feats = wasmparser::WasmFeatures::default();
-    feats.reference_types();
-    feats.gc();
-    let mut validator = wasmparser::Validator::new_with_features(feats);
-    assert!(
-        validator.validate_all(&wasm).is_ok(),
-        "GC validation should pass after fixup"
-    );
+    assert_valid_wasm(&mut ops);
 
     Ok(())
 }
@@ -781,4 +756,267 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
     // Not accepted. Fixup should synthesize the requested concrete type.
     assert_eq!(out, vec![GcOp::StructNew { type_index: 1 }]);
     assert_eq!(stack, vec![StackType::Struct(Some(0))]);
+}
+
+/// Helper: creates GcOps with a 3-type chain: TypeId(1) <- TypeId(2) <- TypeId(3).
+///
+/// Dense encoding indices:
+///   0 -> TypeId(1)  (root, no supertype)
+///   1 -> TypeId(2)  (supertype = TypeId(1))
+///   2 -> TypeId(3)  (supertype = TypeId(2))
+fn cast_test_ops(ops: Vec<GcOp>) -> GcOps {
+    let mut t = GcOps {
+        limits: GcOpsLimits {
+            num_params: 0,
+            num_globals: 0,
+            table_size: 0,
+            max_rec_groups: 5,
+            max_types: 10,
+        },
+        ops,
+        types: Types::new(),
+    };
+    let g = RecGroupId(0);
+    t.types.insert_rec_group(g);
+    t.types.insert_empty_struct(TypeId(1), g, false, None);
+    t.types
+        .insert_empty_struct(TypeId(2), g, false, Some(TypeId(1)));
+    t.types
+        .insert_empty_struct(TypeId(3), g, false, Some(TypeId(2)));
+    t
+}
+
+/// Helper: creates GcOps with two unrelated types (flat hierarchy, no supertypes).
+///
+/// Dense encoding indices:
+///   0 -> TypeId(1)  (no supertype)
+///   1 -> TypeId(2)  (no supertype)
+fn flat_cast_test_ops(ops: Vec<GcOp>) -> GcOps {
+    let mut t = GcOps {
+        limits: GcOpsLimits {
+            num_params: 0,
+            num_globals: 0,
+            table_size: 0,
+            max_rec_groups: 5,
+            max_types: 10,
+        },
+        ops,
+        types: Types::new(),
+    };
+    let g = RecGroupId(0);
+    t.types.insert_rec_group(g);
+    t.types.insert_empty_struct(TypeId(1), g, false, None);
+    t.types.insert_empty_struct(TypeId(2), g, false, None);
+    t
+}
+
+// ---- RefCastUpward tests ----
+
+/// Case 1: valid pair (sub <: super) — kept as-is.
+#[test]
+fn upcast_valid_pair() {
+    let _ = env_logger::try_init();
+    // index 2 (TypeId(3)) <: index 0 (TypeId(1)) via chain 3 <: 2 <: 1
+    let mut ops = cast_test_ops(vec![GcOp::RefCastUpward {
+        sub_type_index: 2,
+        super_type_index: 0,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastUpward {
+                sub_type_index: 2,
+                super_type_index: 0,
+            }
+        )),
+        "valid upcast pair should be preserved: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 2: wrong pair — repaired to sub's direct supertype.
+#[test]
+fn upcast_wrong_pair_repaired_via_supertype() {
+    let _ = env_logger::try_init();
+    // index 1 (TypeId(2)) is NOT a subtype of index 2 (TypeId(3)).
+    // TypeId(2)'s supertype is TypeId(1) at index 0.
+    // Should repair to { sub: 1, super: 0 }.
+    let mut ops = cast_test_ops(vec![GcOp::RefCastUpward {
+        sub_type_index: 1,
+        super_type_index: 2,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastUpward {
+                sub_type_index: 1,
+                super_type_index: 0,
+            }
+        )),
+        "upcast should be repaired to sub's direct supertype: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 3: sub has no supertype — falls back to self-cast.
+#[test]
+fn upcast_no_supertype_self_cast() {
+    let _ = env_logger::try_init();
+    // index 0 (TypeId(1)) has no supertype, so no valid super can be found.
+    // Falls back to self-cast { sub: 0, super: 0 }.
+    let mut ops = cast_test_ops(vec![GcOp::RefCastUpward {
+        sub_type_index: 0,
+        super_type_index: 2,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastUpward {
+                sub_type_index: 0,
+                super_type_index: 0,
+            }
+        )),
+        "upcast with no supertype should become self-cast: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 4: flat hierarchy (no supertypes at all) — self-cast.
+#[test]
+fn upcast_flat_hierarchy_self_cast() {
+    let _ = env_logger::try_init();
+    let mut ops = flat_cast_test_ops(vec![GcOp::RefCastUpward {
+        sub_type_index: 0,
+        super_type_index: 1,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastUpward {
+                sub_type_index,
+                super_type_index,
+            } if sub_type_index == super_type_index
+        )),
+        "upcast in flat hierarchy should become self-cast: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+// ---- RefCastDownward tests ----
+
+/// Case 1: valid pair — kept as-is.
+#[test]
+fn downcast_valid_pair() {
+    let _ = env_logger::try_init();
+    // index 2 (TypeId(3)) <: index 0 (TypeId(1)) — valid.
+    let mut ops = cast_test_ops(vec![GcOp::RefCastDownward {
+        sub_type_index: 2,
+        super_type_index: 0,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastDownward {
+                sub_type_index: 2,
+                super_type_index: 0,
+            }
+        )),
+        "valid downcast pair should be preserved: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 2: wrong pair — super (operand) is kept, sub (result) is
+/// repaired by finding a direct subtype of the super.
+#[test]
+fn downcast_wrong_pair_repaired_finds_subtype() {
+    let _ = env_logger::try_init();
+    // sub=0 (TypeId(1)) is NOT a subtype of super=1 (TypeId(2)).
+    // super stays at 1 (it's the stack operand).
+    // Scan finds TypeId(3) at index 2 as a direct subtype of TypeId(2).
+    // Repaired to { sub: 2, super: 1 }.
+    let mut ops = cast_test_ops(vec![GcOp::RefCastDownward {
+        sub_type_index: 0,
+        super_type_index: 1,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastDownward {
+                sub_type_index: 2,
+                super_type_index: 1,
+            }
+        )),
+        "downcast should keep super and find a valid sub: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 3: super has no subtypes — falls back to self-cast keeping
+/// the super (operand) fixed.
+#[test]
+fn downcast_no_subtype_self_cast() {
+    let _ = env_logger::try_init();
+    // super=2 (TypeId(3)) is the leaf — no type has it as a supertype.
+    // Self-cast: { sub: 2, super: 2 }.
+    let mut ops = cast_test_ops(vec![GcOp::RefCastDownward {
+        sub_type_index: 1,
+        super_type_index: 2,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastDownward {
+                sub_type_index: 2,
+                super_type_index: 2,
+            }
+        )),
+        "downcast with no subtypes should self-cast keeping super: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
+}
+
+/// Case 4: flat hierarchy — self-cast.
+#[test]
+fn downcast_flat_hierarchy_self_cast() {
+    let _ = env_logger::try_init();
+    let mut ops = flat_cast_test_ops(vec![GcOp::RefCastDownward {
+        sub_type_index: 0,
+        super_type_index: 1,
+    }]);
+    ops.fixup(&mut Vec::new());
+
+    assert!(
+        ops.ops.iter().any(|op| matches!(
+            op,
+            GcOp::RefCastDownward {
+                sub_type_index,
+                super_type_index,
+            } if sub_type_index == super_type_index
+        )),
+        "downcast in flat hierarchy should become self-cast: {:#?}",
+        ops.ops
+    );
+    assert_valid_wasm(&mut ops);
 }

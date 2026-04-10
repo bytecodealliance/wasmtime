@@ -368,6 +368,7 @@ impl GcOps {
             let Some(op) = op.fixup(&self.limits, num_types) else {
                 continue;
             };
+            let op = StackType::fixup_cast(op, &self.types, &encoding_order);
 
             debug_assert!(operand_types.is_empty());
             op.operand_types(&mut operand_types);
@@ -584,6 +585,22 @@ macro_rules! for_each_gc_op {
                 type_index = type_index.checked_rem(num_types)?;
             })]
             NullTypedStruct { type_index: u32 },
+
+            #[operands([Some(Struct(Some(sub_type_index)))])]
+            #[results([Struct(Some(super_type_index))])]
+            #[fixup(|_limits, num_types| {
+                sub_type_index = sub_type_index.checked_rem(num_types)?;
+                super_type_index = super_type_index.checked_rem(num_types)?;
+            })]
+            RefCastUpward { sub_type_index: u32, super_type_index: u32 },
+
+            #[operands([Some(Struct(Some(super_type_index)))])]
+            #[results([Struct(Some(sub_type_index))])]
+            #[fixup(|_limits, num_types| {
+                sub_type_index = sub_type_index.checked_rem(num_types)?;
+                super_type_index = super_type_index.checked_rem(num_types)?;
+            })]
+            RefCastDownward { sub_type_index: u32, super_type_index: u32 },
         }
     };
 }
@@ -889,6 +906,66 @@ impl GcOp {
                 func.instruction(&Instruction::TableSet(
                     encoding_bases.typed_table_base + type_index,
                 ));
+            }
+            Self::RefCastUpward {
+                sub_type_index: _,
+                super_type_index,
+            } => {
+                // The value on the stack is already the subtype, so this
+                // cast always succeeds.
+                let heap_type = wasm_encoder::HeapType::Concrete(
+                    encoding_bases.struct_type_base + super_type_index,
+                );
+                func.instruction(&Instruction::RefCastNullable(heap_type));
+            }
+            Self::RefCastDownward {
+                sub_type_index,
+                super_type_index,
+            } => {
+                // Fallible downcast that never traps:
+                //
+                //   local.tee $my_temp
+                //   ;; Test if the downcast will succeed.
+                //   ref.test ...
+                //   if (result (ref null $my_sub))
+                //     ;; The downcast will succeed, do a downcast-or-trap
+                //     ;; operation which we know will not trap.
+                //     local.get $my_temp
+                //     ref.cast ...
+                //   else
+                //     ;; The downcast would fail, so just create a null
+                //     ;; reference instead.
+                //     ref.null ...
+                //   end
+                let sub_wasm_type = encoding_bases.struct_type_base + sub_type_index;
+                let sub_heap_type = wasm_encoder::HeapType::Concrete(sub_wasm_type);
+                let temp_local = encoding_bases.typed_local_base + super_type_index;
+
+                // Tee the supertype value into a temp local (saves and
+                // leaves the value on the stack for ref.test).
+                func.instruction(&Instruction::LocalTee(temp_local));
+
+                // Test if the downcast will succeed.
+                func.instruction(&Instruction::RefTestNullable(sub_heap_type));
+
+                // if (result (ref null $sub_type))
+                func.instruction(&Instruction::If(wasm_encoder::BlockType::Result(
+                    ValType::Ref(RefType {
+                        nullable: true,
+                        heap_type: sub_heap_type,
+                    }),
+                )));
+
+                // The downcast will succeed; do the cast.
+                func.instruction(&Instruction::LocalGet(temp_local));
+                func.instruction(&Instruction::RefCastNullable(sub_heap_type));
+
+                func.instruction(&Instruction::Else);
+
+                // The downcast would fail; produce null instead.
+                func.instruction(&Instruction::RefNull(sub_heap_type));
+
+                func.instruction(&Instruction::End);
             }
         }
     }
