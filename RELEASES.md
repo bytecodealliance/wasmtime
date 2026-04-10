@@ -1,3 +1,14 @@
+## 44.0.1
+
+Released 2026-04-30.
+
+### Fixed
+
+* Panic when allocating a table exceeding the size of the host's address space.
+  [GHSA-p8xm-42r7-89xg](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-p8xm-42r7-89xg)
+
+--------------------------------------------------------------------------------
+
 ## 44.0.0
 
 Released 2026-04-20.
