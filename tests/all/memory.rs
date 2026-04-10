@@ -678,6 +678,66 @@ fn shared_memory_wait_notify() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn custom_1byte_page_cant_grow() -> Result<()> {
+    let mut config = Config::new();
+    config.shared_memory(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // unshared too big
+    Memory::new(
+        &mut store,
+        MemoryTypeBuilder::new()
+            .min(0xffff_ffff)
+            .max(Some(0xffff_ffff))
+            .page_size_log2(0)
+            .build()?,
+    )
+    .unwrap_err();
+
+    // shared too big
+    SharedMemory::new(
+        &engine,
+        MemoryTypeBuilder::new()
+            .min(0xffff_ffff)
+            .max(Some(0xffff_ffff))
+            .shared(true)
+            .page_size_log2(0)
+            .build()?,
+    )
+    .unwrap_err();
+
+    if cfg!(target_pointer_width = "64") {
+        // unshared growth too big
+        let memory = Memory::new(
+            &mut store,
+            MemoryTypeBuilder::new()
+                .min(0xffff_fffe)
+                .max(Some(0xffff_ffff))
+                .page_size_log2(0)
+                .build()?,
+        )?;
+        assert!(memory.grow(&mut store, 1).is_err());
+
+        // shared growth too big
+        let memory = SharedMemory::new(
+            &engine,
+            MemoryTypeBuilder::new()
+                .min(0xffff_fffe)
+                .max(Some(0xffff_ffff))
+                .shared(true)
+                .page_size_log2(0)
+                .build()?,
+        )?;
+        assert!(memory.grow(1).is_err());
+    }
+
+    Ok(())
+}
+
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
 #[cfg(target_pointer_width = "64")] // requires large VM reservation
