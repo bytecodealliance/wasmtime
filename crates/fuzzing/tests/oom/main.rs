@@ -6,6 +6,7 @@ mod boxed;
 mod btree_map;
 mod caller;
 mod component_func;
+mod component_instance;
 mod component_linker;
 mod component_resource;
 mod config;
