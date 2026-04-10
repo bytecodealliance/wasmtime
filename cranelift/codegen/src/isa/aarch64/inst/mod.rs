@@ -88,6 +88,8 @@ pub struct ReturnCallInfo<T> {
     pub new_stack_arg_size: u32,
     /// API key to use to restore the return address, if any.
     pub key: Option<APIKey>,
+    /// Whether pointer-auth return addresses are signed even without frame setup.
+    pub sign_return_address_all: bool,
 }
 
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {

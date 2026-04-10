@@ -1199,15 +1199,17 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // Compute clobber size.
         let clobber_size = compute_clobber_size(call_conv, &regs);
 
+        let needs_linkage_frame = flags.preserve_frame_pointers()
+                // The function arguments that are passed on the stack are addressed
+                // relative to the Frame Pointer.
+                || incoming_args_size > 0
+                || tail_args_size > incoming_args_size
+                || clobber_size > 0
+                || fixed_frame_storage_size > 0
+                || outgoing_args_size > 0;
+
         // Compute linkage frame size.
-        let setup_area_size = if flags.preserve_frame_pointers()
-            || function_calls != FunctionCalls::None
-            // The function arguments that are passed on the stack are addressed
-            // relative to the Frame Pointer.
-            || incoming_args_size > 0
-            || clobber_size > 0
-            || fixed_frame_storage_size > 0
-        {
+        let setup_area_size = if needs_linkage_frame || function_calls == FunctionCalls::Regular {
             16 // FP, LR
         } else {
             0
