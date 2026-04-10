@@ -364,7 +364,7 @@ fn emit_gc_raw_alloc(
         .ins()
         .iconst(ir::types::I32, i64::from(kind.as_u32()));
 
-    let ty = builder.ins().iconst(ir::types::I32, i64::from(ty.as_u32()));
+    let ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
 
     assert!(align.is_power_of_two());
     let align = builder.ins().iconst(ir::types::I32, i64::from(align));

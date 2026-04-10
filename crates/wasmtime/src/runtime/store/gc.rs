@@ -57,6 +57,7 @@ impl StoreOpaque {
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
     ) {
+        log::trace!("collect_and_maybe_grow_gc_heap(bytes_needed = {bytes_needed:#x?})");
         self.do_gc(asyncness).await;
         if let Some(n) = bytes_needed
             // The gc_zeal's allocation counter will pass `bytes_needed == 0` to

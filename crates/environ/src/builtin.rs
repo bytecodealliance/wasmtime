@@ -86,7 +86,7 @@ macro_rules! foreach_builtin_function {
             gc_alloc_raw(
                 vmctx: vmctx,
                 kind: u32,
-                module_interned_type_index: u32,
+                shared_type_index: u32,
                 size: u32,
                 align: u32
             ) -> u32;
