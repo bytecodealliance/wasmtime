@@ -1,4 +1,3 @@
-use crate::prelude::*;
 use alloc::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 use core::{alloc::Layout, num::NonZeroU32};
 
@@ -178,8 +177,8 @@ impl FreeList {
     /// Check the given layout for compatibility with this free list and return
     /// the actual block size we will use for this layout.
     #[cfg(test)]
-    fn check_layout(&self, layout: Layout) -> Result<u32> {
-        ensure!(
+    fn check_layout(&self, layout: Layout) -> crate::Result<u32> {
+        crate::ensure!(
             Self::can_align_to(layout.align()),
             "requested allocation's alignment of {} is greater than max supported \
              alignment of {ALIGN_USIZE}",
@@ -206,7 +205,7 @@ impl FreeList {
     }
 
     #[cfg(test)]
-    pub fn alloc(&mut self, layout: Layout) -> Result<Option<NonZeroU32>> {
+    pub fn alloc(&mut self, layout: Layout) -> crate::Result<Option<NonZeroU32>> {
         log::trace!("FreeList::alloc({layout:?})");
         let alloc_size = self.check_layout(layout)?;
         Ok(self.alloc_impl(alloc_size))
@@ -623,6 +622,7 @@ fn round_usize_down_to_pow2(value: usize, divisor: usize) -> usize {
 mod tests {
     use super::*;
     use crate::hash_map::HashMap;
+    use crate::prelude::*;
     use proptest::prelude::*;
     use std::num::NonZeroUsize;
 
