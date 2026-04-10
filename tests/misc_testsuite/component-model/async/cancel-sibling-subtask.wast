@@ -37,12 +37,15 @@
       (import "" "f" (func $f (result i32)))
       (import "" "cancel" (func $cancel (param i32) (result i32)))
       (import "" "drop" (func $drop (param i32)))
+      (import "" "future.new" (func $future.new (result i64)))
       (global $subtask (mut i32) (i32.const 0))
 
       ;; This export starts a call to `$f` in the above component but doesn't
       ;; await it or complete it. Instead this task exits.
       (func (export "a") (param $cancel i32)
         (local $ret i32)
+
+        (drop (call $future.new))
 
         ;; start the subtask
         (local.set $ret (call $f))
@@ -81,29 +84,67 @@
     (core func $f (canon lower (func $f) async))
     (core func $cancel (canon subtask.cancel))
     (core func $drop (canon subtask.drop))
+    (type $ft (future))
+    (core func $future.new (canon future.new $ft))
     (core instance $i (instantiate $m
       (with "" (instance
         (export "f" (func $f))
         (export "cancel" (func $cancel))
         (export "drop" (func $drop))
+        (export "future.new" (func $future.new))
       ))
     ))
     (func (export "a") async (param "cancel" bool) (canon lift (core func $i "a")))
     (func (export "b") async (param "cancel" bool) (canon lift (core func $i "b")))
   )
 
+  (component $c
+    (import "b" (instance $b
+      (export "a" (func async (param "cancel" bool)))
+      (export "b" (func async (param "cancel" bool)))
+    ))
+    (core module $m
+      (import "" "a" (func $a (param i32)))
+      (import "" "b" (func $b (param i32)))
+      (import "" "future.new" (func $future.new (result i64)))
+
+      (func (export "run") (param i32 i32)
+        (call $a (local.get 0))
+
+        ;; push things into the handle table to ensure that b's task is
+        ;; different from a's.
+        (drop (call $future.new))
+
+        (call $b (local.get 1))
+      )
+    )
+    (core func $a (canon lower (func $b "a")))
+    (core func $b (canon lower (func $b "b")))
+    (type $ft (future))
+    (core func $future.new (canon future.new $ft))
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "a" (func $a))
+        (export "b" (func $b))
+        (export "future.new" (func $future.new))
+      ))
+    ))
+
+    (func (export "run") async (param "a" bool) (param "b" bool)
+      (canon lift (core func $i "run"))
+    )
+  )
+
   (instance $a (instantiate $a))
   (instance $b (instantiate $b (with "f" (func $a "f"))))
-  (export "a" (func $b "a"))
-  (export "b" (func $b "b"))
+  (instance $c (instantiate $c (with "b" (instance $b))))
+  (export "run" (func $c "run"))
 )
 
 ;; start subtask in "a", cancel/drop it in "b"
 (component instance $A $A)
-(assert_return (invoke "a" (bool.const false)))
-(assert_return (invoke "b" (bool.const true)))
+(assert_return (invoke "run" (bool.const false) (bool.const true)))
 
 ;; start/cancel subtask in "a", drop it in "b"
 (component instance $A $A)
-(assert_return (invoke "a" (bool.const true)))
-(assert_return (invoke "b" (bool.const false)))
+(assert_return (invoke "run" (bool.const true) (bool.const false)))
