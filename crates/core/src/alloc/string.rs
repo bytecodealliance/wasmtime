@@ -60,10 +60,28 @@ impl Borrow<str> for TryString {
     }
 }
 
+impl TryFrom<&str> for TryString {
+    type Error = OutOfMemory;
+
+    #[inline]
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut s = TryString::new();
+        s.push_str(value)?;
+        Ok(s)
+    }
+}
+
 impl From<inner::String> for TryString {
     #[inline]
     fn from(inner: inner::String) -> Self {
         Self { inner }
+    }
+}
+
+impl From<TryString> for inner::String {
+    #[inline]
+    fn from(s: TryString) -> Self {
+        s.inner
     }
 }
 

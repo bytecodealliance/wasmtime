@@ -150,7 +150,7 @@ impl ComponentTypesBuilder {
         }
         for (name, ty) in component.exports.raw_iter() {
             component_ty.exports.insert(
-                name.clone(),
+                name.clone_panic_on_oom().into(),
                 self.export_type_def(&component.export_items, *ty),
             );
         }

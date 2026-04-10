@@ -1,5 +1,8 @@
+use crate::collections::TryCow;
 use crate::error::{Result, bail};
 use crate::prelude::*;
+use alloc::sync::Arc;
+use core::borrow::Borrow;
 use core::hash::Hash;
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
@@ -12,8 +15,11 @@ use serde_derive::{Deserialize, Serialize};
 /// which is currently considered a key feature of WASI's compatibility story.
 ///
 /// On the outside this looks like a map of `K` to `V`.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct NameMap<K: Clone + Hash + Eq + Ord, V> {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NameMap<K, V>
+where
+    K: TryClone + Hash + Eq + Ord,
+{
     /// A map of keys to the value that they define.
     ///
     /// Note that this map is "exact" where the name here is the exact name that
@@ -21,7 +27,7 @@ pub struct NameMap<K: Clone + Hash + Eq + Ord, V> {
     /// semver-mangling or anything like that.
     ///
     /// This map is always consulted first during lookups.
-    definitions: IndexMap<K, V>,
+    definitions: TryIndexMap<K, V>,
 
     /// An auxiliary map tracking semver-compatible names. This is a map from
     /// "semver compatible alternate name" to a name present in `definitions`
@@ -43,12 +49,81 @@ pub struct NameMap<K: Clone + Hash + Eq + Ord, V> {
     ///
     /// The `Version` here is tracked to ensure that when multiple versions on
     /// one track are defined that only the maximal version here is retained.
-    alternate_lookups: IndexMap<K, (K, Version)>,
+    alternate_lookups: TryIndexMap<K, (K, TryVersion)>,
+}
+
+/// A wrapper around `Version` that implements `TryClone`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct TryVersion(Arc<Version>);
+
+impl TryFrom<Version> for TryVersion {
+    type Error = OutOfMemory;
+
+    fn try_from(value: Version) -> Result<Self, Self::Error> {
+        Ok(Self(try_new::<Arc<_>>(value)?))
+    }
+}
+
+impl TryClone for TryVersion {
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self(self.0.clone()))
+    }
+}
+
+impl core::ops::Deref for TryVersion {
+    type Target = Version;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Borrow<Version> for TryVersion {
+    #[inline]
+    fn borrow(&self) -> &Version {
+        &self.0
+    }
+}
+
+impl serde::Serialize for TryVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TryVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let v = Version::deserialize(deserializer)?;
+        let v = try_new::<Arc<_>>(v).map_err(|oom| D::Error::custom(oom))?;
+        Ok(Self(v))
+    }
+}
+
+impl<K, V> TryClone for NameMap<K, V>
+where
+    K: TryClone + Hash + Eq + Ord,
+    V: TryClone,
+{
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            definitions: self.definitions.try_clone()?,
+            alternate_lookups: self.alternate_lookups.try_clone()?,
+        })
+    }
 }
 
 impl<K, V> NameMap<K, V>
 where
-    K: Clone + Hash + Eq + Ord,
+    K: TryClone + Hash + Eq + Ord,
 {
     /// Inserts the `name` specified into this map.
     ///
@@ -64,15 +139,14 @@ where
     pub fn insert<I>(&mut self, name: &str, cx: &mut I, allow_shadowing: bool, item: V) -> Result<K>
     where
         I: NameMapIntern<Key = K>,
+        I::BorrowedKey: Hash + Eq,
     {
         // Always insert `name` and `item` as an exact definition.
-        let key = cx.intern(name);
-        if let Some(prev) = self.definitions.insert(key.clone(), item) {
-            if !allow_shadowing {
-                self.definitions.insert(key, prev);
-                bail!("map entry `{name}` defined twice")
-            }
+        let key = cx.intern(name)?;
+        if !allow_shadowing && self.definitions.contains_key(&key) {
+            bail!("map entry `{name}` defined twice")
         }
+        self.definitions.insert(key.try_to_owned()?, item)?;
 
         // If `name` is a semver-looking thing, like `a:b/c@1.0.0`, then also
         // insert an entry in the semver-compatible map under a key such as
@@ -80,16 +154,17 @@ where
         //
         // This key is used during `get` later on.
         if let Some((alternate_key, version)) = alternate_lookup_key(name) {
-            let alternate_key = cx.intern(alternate_key);
-            if let Some((prev_key, prev_version)) = self
-                .alternate_lookups
-                .insert(alternate_key.clone(), (key.clone(), version.clone()))
-            {
+            let alternate_key = cx.intern(alternate_key)?;
+            let version = TryVersion::try_from(version)?;
+            if let Some((prev_key, prev_version)) = self.alternate_lookups.insert(
+                alternate_key.try_clone()?,
+                (key.try_clone()?, version.clone()),
+            )? {
                 // Prefer the latest version, so only do this if we're
                 // greater than the prior version.
                 if version < prev_version {
                     self.alternate_lookups
-                        .insert(alternate_key, (prev_key, prev_version));
+                        .insert(alternate_key, (prev_key, prev_version))?;
                 }
             }
         }
@@ -105,11 +180,13 @@ where
     pub fn get<I>(&self, name: &str, cx: &I) -> Option<&V>
     where
         I: NameMapIntern<Key = K>,
+        I::Key: Borrow<I::BorrowedKey>,
+        I::BorrowedKey: Hash + Eq,
     {
         // First look up an exact match and if that's found return that. This
         // enables defining multiple versions in the map and the requested
         // version is returned if it matches exactly.
-        let candidate = cx.lookup(name).and_then(|k| self.definitions.get(&k));
+        let candidate = cx.lookup(name).and_then(|k| self.definitions.get(&*k));
         if let Some(def) = candidate {
             return Some(def);
         }
@@ -122,7 +199,7 @@ where
         let (alternate_name, _version) = alternate_lookup_key(name)?;
         let alternate_key = cx.lookup(alternate_name)?;
         let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
-        self.definitions.get(exact_key)
+        self.definitions.get(exact_key.borrow())
     }
 
     /// Returns an iterator over inserted values in this map.
@@ -142,7 +219,7 @@ where
 
 impl<K, V> Default for NameMap<K, V>
 where
-    K: Clone + Hash + Eq + Ord,
+    K: TryClone + Hash + Eq + Ord,
 {
     fn default() -> NameMap<K, V> {
         NameMap {
@@ -156,14 +233,17 @@ where
 /// keys to non-strings.
 pub trait NameMapIntern {
     /// The key that this interning context generates.
-    type Key;
+    type Key: Borrow<Self::BorrowedKey>;
+
+    /// The borrowed version of the key type.
+    type BorrowedKey: ?Sized + TryToOwned<Owned = Self::Key>;
 
     /// Inserts `s` into `self` and returns the intern'd key `Self::Key`.
-    fn intern(&mut self, s: &str) -> Self::Key;
+    fn intern(&mut self, s: &str) -> Result<Self::Key, OutOfMemory>;
 
     /// Looks up `s` in `self` returning `Some` if it was found or `None` if
     /// it's not present.
-    fn lookup(&self, s: &str) -> Option<Self::Key>;
+    fn lookup<'a>(&'a self, s: &'a str) -> Option<TryCow<'a, Self::BorrowedKey>>;
 }
 
 /// For use with [`NameMap`] when no interning should happen and instead string
@@ -171,14 +251,15 @@ pub trait NameMapIntern {
 pub struct NameMapNoIntern;
 
 impl NameMapIntern for NameMapNoIntern {
-    type Key = String;
+    type Key = TryString;
+    type BorrowedKey = str;
 
-    fn intern(&mut self, s: &str) -> String {
-        s.to_string()
+    fn intern(&mut self, s: &str) -> Result<Self::Key, OutOfMemory> {
+        TryString::try_from(s)
     }
 
-    fn lookup(&self, s: &str) -> Option<String> {
-        Some(s.to_string())
+    fn lookup<'a>(&'a self, s: &'a str) -> Option<TryCow<'a, Self::BorrowedKey>> {
+        Some(TryCow::Borrowed(s))
     }
 }
 

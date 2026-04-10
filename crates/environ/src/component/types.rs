@@ -22,6 +22,12 @@ macro_rules! indices {
         #[repr(transparent)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
+        impl TryClone for $name {
+            #[inline]
+            fn try_clone(&self) -> Result<Self, OutOfMemory> {
+                Ok(*self)
+            }
+        }
     )*);
 }
 

@@ -15,6 +15,7 @@ use core::marker;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::collections::TryCow;
 use wasmtime_environ::component::{NameMap, NameMapIntern};
 
 /// A type used to instantiate [`Component`]s.
@@ -72,7 +73,7 @@ impl<T: 'static> Clone for Linker<T> {
         Linker {
             engine: self.engine.clone(),
             strings: self.strings.clone(),
-            map: self.map.clone(),
+            map: self.map.clone_panic_on_oom(),
             path: self.path.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
@@ -101,12 +102,23 @@ pub struct LinkerInstance<'a, T: 'static> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) enum Definition {
     Instance(NameMap<usize, Definition>),
     Func(Arc<HostFunc>),
     Module(Module),
     Resource(ResourceType, Arc<crate::func::HostFunc>),
+}
+
+impl TryClone for Definition {
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(match self {
+            Self::Instance(i) => Self::Instance(i.try_clone()?),
+            Self::Func(f) => Self::Func(f.try_clone()?),
+            Self::Module(m) => Self::Module(m.clone()),
+            Self::Resource(r, f) => Self::Resource(*r, f.try_clone()?),
+        })
+    }
 }
 
 impl<T: 'static> Linker<T> {
@@ -837,19 +849,20 @@ impl<T: 'static> LinkerInstance<'_, T> {
 
 impl NameMapIntern for Strings {
     type Key = usize;
+    type BorrowedKey = usize;
 
-    fn intern(&mut self, string: &str) -> usize {
+    fn intern(&mut self, string: &str) -> Result<usize, OutOfMemory> {
         if let Some(idx) = self.string2idx.get(string) {
-            return *idx;
+            return Ok(*idx);
         }
         let string: Arc<str> = string.into();
         let idx = self.strings.len();
         self.strings.push(string.clone());
         self.string2idx.insert(string, idx);
-        idx
+        Ok(idx)
     }
 
-    fn lookup(&self, string: &str) -> Option<usize> {
-        self.string2idx.get(string).cloned()
+    fn lookup(&self, string: &str) -> Option<TryCow<'_, usize>> {
+        self.string2idx.get(string).copied().map(TryCow::Owned)
     }
 }
