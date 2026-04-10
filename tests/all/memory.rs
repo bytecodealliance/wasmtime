@@ -1,5 +1,7 @@
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst};
+use std::thread;
 use std::time::Duration;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
@@ -774,6 +776,42 @@ fn configure_zero(config: &mut Config) -> Result<()> {
     let ty = MemoryType::new(0, None);
     let memory = Memory::new(&mut store, ty)?;
     assert_eq!(memory.data_size(&store), 0);
+
+    Ok(())
+}
+
+#[test]
+fn atomic_wait_massive_timeout() -> Result<()> {
+    let mut config = Config::new();
+    config.shared_memory(true);
+    let engine = Engine::new(&config)?;
+
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let result = memory.atomic_wait32(0, 1, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Mismatch));
+    let result = memory.atomic_wait64(0, 1, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Mismatch));
+
+    let done = Arc::new(AtomicBool::new(false));
+    let t = thread::spawn({
+        let memory = memory.clone();
+        let done = done.clone();
+        move || {
+            while !done.load(SeqCst) {
+                memory.atomic_notify(0, 1).unwrap();
+                memory.atomic_notify(8, 1).unwrap();
+            }
+        }
+    });
+
+    let result = memory.atomic_wait32(0, 0, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Ok));
+    let result = memory.atomic_wait64(8, 0, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Ok));
+
+    done.store(true, SeqCst);
+
+    t.join().unwrap();
 
     Ok(())
 }

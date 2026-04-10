@@ -138,7 +138,12 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { AtomicU32::from_ptr(addr.cast()) };
-        let deadline = timeout.map(|d| Instant::now() + d);
+
+        // Note that `checked_add` is used such that when `timeout` is too large
+        // it'll cause there to be no timeout at all if we can't represent the
+        // deadline. That effectively maps to the requested timeout since if we
+        // can't represent the deadline we'll be here awhile.
+        let deadline = timeout.and_then(|d| Instant::now().checked_add(d));
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
@@ -162,7 +167,9 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
         let atomic = unsafe { AtomicU64::from_ptr(addr.cast()) };
-        let deadline = timeout.map(|d| Instant::now() + d);
+
+        // See `atomic_wait32` for why this is using `checked_add`.
+        let deadline = timeout.and_then(|d| Instant::now().checked_add(d));
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
