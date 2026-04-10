@@ -31,9 +31,14 @@ const MAX_LIST_LENGTH: u32 = 10;
 const MAX_ITERS: usize = 1_000;
 
 /// Generate an arbitrary instance of the specified type.
-fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::Result<Val> {
+fn arbitrary_val(
+    ty: &component::Type,
+    fuel: &mut u32,
+    input: &mut Unstructured,
+) -> arbitrary::Result<Val> {
     use component::Type;
 
+    *fuel = fuel.saturating_sub(1);
     Ok(match ty {
         Type::Bool => Val::Bool(input.arbitrary()?),
         Type::S8 => Val::S8(input.arbitrary()?),
@@ -47,11 +52,22 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
         Type::Float32 => Val::Float32(input.arbitrary()?),
         Type::Float64 => Val::Float64(input.arbitrary()?),
         Type::Char => Val::Char(input.arbitrary()?),
-        Type::String => Val::String(input.arbitrary()?),
+        Type::String => {
+            let string = if *fuel == 0 {
+                String::new()
+            } else {
+                input.arbitrary()?
+            };
+            *fuel = fuel.saturating_sub(string.len() as u32);
+            Val::String(string)
+        }
         Type::List(list) => {
             let mut values = Vec::new();
             input.arbitrary_loop(Some(MIN_LIST_LENGTH), Some(MAX_LIST_LENGTH), |input| {
-                values.push(arbitrary_val(&list.ty(), input)?);
+                if *fuel == 0 {
+                    return Ok(ControlFlow::Break(()));
+                }
+                values.push(arbitrary_val(&list.ty(), fuel, input)?);
 
                 Ok(ControlFlow::Continue(()))
             })?;
@@ -61,20 +77,25 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
         Type::Record(record) => Val::Record(
             record
                 .fields()
-                .map(|field| Ok((field.name.to_string(), arbitrary_val(&field.ty, input)?)))
+                .map(|field| {
+                    Ok((
+                        field.name.to_string(),
+                        arbitrary_val(&field.ty, fuel, input)?,
+                    ))
+                })
                 .collect::<arbitrary::Result<_>>()?,
         ),
         Type::Tuple(tuple) => Val::Tuple(
             tuple
                 .types()
-                .map(|ty| arbitrary_val(&ty, input))
+                .map(|ty| arbitrary_val(&ty, fuel, input))
                 .collect::<arbitrary::Result<_>>()?,
         ),
         Type::Variant(variant) => {
             let cases = variant.cases().collect::<Vec<_>>();
             let case = input.choose(&cases)?;
             let payload = match &case.ty {
-                Some(ty) => Some(Box::new(arbitrary_val(ty, input)?)),
+                Some(ty) => Some(Box::new(arbitrary_val(ty, fuel, input)?)),
                 None => None,
             };
             Val::Variant(case.name.to_string(), payload)
@@ -88,7 +109,7 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
             let discriminant = input.int_in_range(0..=1)?;
             Val::Option(match discriminant {
                 0 => None,
-                1 => Some(Box::new(arbitrary_val(&option.ty(), input)?)),
+                1 => Some(Box::new(arbitrary_val(&option.ty(), fuel, input)?)),
                 _ => unreachable!(),
             })
         }
@@ -96,11 +117,11 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
             let discriminant = input.int_in_range(0..=1)?;
             Val::Result(match discriminant {
                 0 => Ok(match result.ok() {
-                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, fuel, input)?)),
                     None => None,
                 }),
                 1 => Err(match result.err() {
-                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, fuel, input)?)),
                     None => None,
                 }),
                 _ => unreachable!(),
@@ -121,8 +142,11 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
         Type::Map(map) => {
             let mut pairs = Vec::new();
             input.arbitrary_loop(Some(MIN_LIST_LENGTH), Some(MAX_LIST_LENGTH), |input| {
-                let key = arbitrary_val(&map.key(), input)?;
-                let value = arbitrary_val(&map.value(), input)?;
+                if *fuel == 0 {
+                    return Ok(ControlFlow::Break(()));
+                }
+                let key = arbitrary_val(&map.key(), fuel, input)?;
+                let value = arbitrary_val(&map.value(), fuel, input)?;
                 pairs.push((key, value));
                 Ok(ControlFlow::Continue(()))
             })?;
@@ -369,13 +393,14 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
         let mut iters = 0..MAX_ITERS;
         while iters.next().is_some() && input.arbitrary()? {
+            let mut fuel = 10_000;
             let params = ty
                 .params()
-                .map(|(_, ty)| arbitrary_val(&ty, input))
+                .map(|(_, ty)| arbitrary_val(&ty, &mut fuel, input))
                 .collect::<arbitrary::Result<Vec<_>>>()?;
             let results = ty
                 .results()
-                .map(|ty| arbitrary_val(&ty, input))
+                .map(|ty| arbitrary_val(&ty, &mut fuel, input))
                 .collect::<arbitrary::Result<Vec<_>>>()?;
 
             *store.data_mut() = (params.clone(), Some(results.clone()));
