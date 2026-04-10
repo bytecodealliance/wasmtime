@@ -415,38 +415,6 @@ impl Memory {
         delta_pages: u64,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
     ) -> Result<Option<usize>, Error> {
-        let new_size = delta_pages
-            .checked_mul(self.page_size())
-            .and_then(|new_bytes| {
-                let new_bytes = usize::try_from(new_bytes).ok()?;
-                self.byte_size().checked_add(new_bytes)
-            });
-        match new_size {
-            Some(new_size) => {
-                // Disallow growth to a value which this linear memory's type
-                // cannot represent. For example 1-byte-page memories cannot be
-                // 4GiB in size.
-                if !self.ty().allow_growth_to(new_size) {
-                    if let Some(limiter) = limiter {
-                        let err = crate::format_err!("memory growth exceeds memory type's limits");
-                        limiter.memory_grow_failed(err)?;
-                    }
-                    return Ok(None);
-                }
-            }
-
-            // If the new size in memory isn't representable in a `usize` then
-            // there's no need to actually try to grow it to that size. It's
-            // impossible to succeed so just fail it early.
-            None => {
-                if let Some(limiter) = limiter {
-                    let err = crate::format_err!("memory growth exceeds address space");
-                    limiter.memory_grow_failed(err)?;
-                }
-                return Ok(None);
-            }
-        }
-
         let result = match self {
             Memory::Local(mem) => mem.grow(delta_pages, limiter).await?,
             Memory::Shared(mem) => mem.grow(delta_pages)?,
@@ -664,6 +632,17 @@ impl LocalMemory {
             .maximum_byte_size()
             .ok()
             .and_then(|n| usize::try_from(n).ok());
+
+        // Disallow growth to a value which this linear memory's type
+        // cannot represent. For example 1-byte-page memories cannot be
+        // 4GiB in size.
+        if !self.ty().allow_growth_to(new_byte_size) {
+            if let Some(limiter) = limiter {
+                let err = crate::format_err!("memory growth exceeds memory type's limits");
+                limiter.memory_grow_failed(err)?;
+            }
+            return Ok(None);
+        }
 
         // Store limiter gets first chance to reject memory_growing.
         if let Some(limiter) = &mut limiter {
