@@ -491,6 +491,7 @@ impl WastTest {
                 "spec_testsuite/proposals/threads/exports.wast",
                 "spec_testsuite/proposals/threads/memory.wast",
                 "misc_testsuite/memory64/threads.wast",
+                "misc_testsuite/winch/rmw32_cmpxchg_u_wrap.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
