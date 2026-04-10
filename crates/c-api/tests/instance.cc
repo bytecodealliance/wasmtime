@@ -45,3 +45,26 @@ TEST(Instance, Smoke) {
   auto [name, func] = *i.get(store, 0);
   EXPECT_EQ(name, "f");
 }
+
+TEST(Instance, NewClearsTrapPointer) {
+  Engine engine;
+  Store store(engine);
+  auto context = store.context();
+
+  auto ok_module = Module::compile(engine, "(module)").unwrap();
+  wasmtime_instance_t instance;
+  wasm_trap_t *trap = reinterpret_cast<wasm_trap_t *>(1);
+  auto *error = wasmtime_instance_new(context.capi(), ok_module.capi(), nullptr,
+                                      0, &instance, &trap);
+  EXPECT_EQ(error, nullptr);
+  EXPECT_EQ(trap, nullptr);
+
+  auto import_module =
+      Module::compile(engine, "(module (import \"\" \"\" (func)))").unwrap();
+  trap = reinterpret_cast<wasm_trap_t *>(1);
+  error = wasmtime_instance_new(context.capi(), import_module.capi(), nullptr,
+                                0, &instance, &trap);
+  EXPECT_NE(error, nullptr);
+  EXPECT_EQ(trap, nullptr);
+  wasmtime_error_delete(error);
+}
