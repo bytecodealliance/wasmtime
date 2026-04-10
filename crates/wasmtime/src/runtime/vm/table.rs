@@ -309,7 +309,9 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<TryVec<Option<T>
 
     let size = mem::size_of::<Option<T>>();
     let size = size.next_multiple_of(align);
-    let size = size.checked_mul(len).unwrap();
+    let size = size
+        .checked_mul(len)
+        .ok_or_else(|| format_err!("overflow calculating table allocation size"))?;
 
     let layout = Layout::from_size_align(size, align)?;
 
