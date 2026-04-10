@@ -309,7 +309,9 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
 
     let size = mem::size_of::<Option<T>>();
     let size = size.next_multiple_of(align);
-    let size = size.checked_mul(len).unwrap();
+    let size = size
+        .checked_mul(len)
+        .ok_or_else(|| format_err!("overflow calculating table allocation size"))?;
 
     let layout = Layout::from_size_align(size, align)?;
 
@@ -728,12 +730,15 @@ impl Table {
             // that delta is non-zero and the new size doesn't exceed the
             // maximum mean we can't get here.
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
+                vec_reserve_resize(elements, new_size)?;
                 elements.resize(new_size, None);
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
+                vec_reserve_resize(elements, new_size)?;
                 elements.resize_with(new_size, || None);
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
+                vec_reserve_resize(elements, new_size)?;
                 elements.resize(new_size, None);
             }
         }
@@ -1139,4 +1144,11 @@ impl Default for Table {
             lazy_init: false,
         })
     }
+}
+
+fn vec_reserve_resize<T>(vec: &mut Vec<T>, new_size: usize) -> Result<()> {
+    if vec.len() < new_size {
+        vec.try_reserve(new_size - vec.len())?;
+    }
+    Ok(())
 }

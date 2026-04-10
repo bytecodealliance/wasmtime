@@ -502,6 +502,7 @@ impl WastTest {
                 "misc_testsuite/no-panic.wast",
                 "misc_testsuite/simple_ref_is_null.wast",
                 "misc_testsuite/table_grow_with_funcref.wast",
+                "misc_testsuite/memory64/table-too-big.wast",
                 "spec_testsuite/br_table.wast",
                 "spec_testsuite/global.wast",
                 "spec_testsuite/ref_func.wast",
