@@ -116,7 +116,7 @@ impl TryClone for Definition {
             Self::Instance(i) => Self::Instance(i.try_clone()?),
             Self::Func(f) => Self::Func(f.try_clone()?),
             Self::Module(m) => Self::Module(m.clone()),
-            Self::Resource(r, f) => Self::Resource(r.clone(), f.try_clone()?),
+            Self::Resource(r, f) => Self::Resource(*r, f.try_clone()?),
         })
     }
 }
