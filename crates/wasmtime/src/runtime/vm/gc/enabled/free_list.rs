@@ -177,6 +177,7 @@ impl FreeList {
 
     /// Check the given layout for compatibility with this free list and return
     /// the actual block size we will use for this layout.
+    #[cfg(test)]
     fn check_layout(&self, layout: Layout) -> Result<u32> {
         ensure!(
             Self::can_align_to(layout.align()),
@@ -298,8 +299,8 @@ impl FreeList {
     }
 
     /// Deallocate an object with the given layout.
+    #[cfg(test)]
     pub fn dealloc(&mut self, index: NonZeroU32, layout: Layout) {
-        log::trace!("FreeList::dealloc({index:#x}, {layout:?})");
         let alloc_size = self.check_layout(layout).unwrap();
         self.dealloc_impl(index.get(), alloc_size);
     }
@@ -314,6 +315,7 @@ impl FreeList {
 
     #[inline]
     fn dealloc_impl(&mut self, index: u32, alloc_size: u32) {
+        log::trace!("FreeList::dealloc({index:#x}, {alloc_size:?})");
         debug_assert_eq!(index % ALIGN_U32, 0);
         debug_assert_eq!(alloc_size % ALIGN_U32, 0);
 
