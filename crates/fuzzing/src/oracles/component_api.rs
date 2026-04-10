@@ -364,10 +364,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
             .instantiate_async(&mut store, &component)
             .await
             .unwrap();
-        let func = instance
-            .get_func(&mut store, EXPORT_FUNCTION)
-            .unwrap()
-            .unwrap();
+        let func = instance.get_func(&mut store, EXPORT_FUNCTION).unwrap();
         let ty = func.ty(&store);
 
         let mut iters = 0..MAX_ITERS;

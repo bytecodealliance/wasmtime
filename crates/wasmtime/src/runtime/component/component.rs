@@ -737,14 +737,12 @@ impl Component {
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Result<Option<ComponentExportIndex>> {
-        let Some(index) = self.lookup_export_index(instance, name)? else {
-            return Ok(None);
-        };
-        Ok(Some(ComponentExportIndex {
+    ) -> Option<ComponentExportIndex> {
+        let index = self.lookup_export_index(instance, name)?;
+        Some(ComponentExportIndex {
             id: self.inner.id,
             index,
-        }))
+        })
     }
 
     /// Looks up a specific export of this component by `name` optionally nested
@@ -821,11 +819,9 @@ impl Component {
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Result<Option<(types::ComponentItem, ComponentExportIndex)>> {
+    ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
-        let Some(index) = self.lookup_export_index(instance, name)? else {
-            return Ok(None);
-        };
+        let index = self.lookup_export_index(instance, name)?;
         let item = self.with_uninstantiated_instance_type(|instance| {
             types::ComponentItem::from_export(
                 &self.inner.engine,
@@ -833,34 +829,34 @@ impl Component {
                 instance,
             )
         });
-        Ok(Some((
+        Some((
             item,
             ComponentExportIndex {
                 id: self.inner.id,
                 index,
             },
-        )))
+        ))
     }
 
     pub(crate) fn lookup_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Result<Option<ExportIndex>, OutOfMemory> {
+    ) -> Option<ExportIndex> {
         let info = self.env_component();
         let exports = match instance {
             Some(idx) => {
                 if idx.id != self.inner.id {
-                    return Ok(None);
+                    return None;
                 }
                 match &info.export_items[idx.index] {
                     Export::Instance { exports, .. } => exports,
-                    _ => return Ok(None),
+                    _ => return None,
                 }
             }
             None => &info.exports,
         };
-        Ok(exports.get(name, &NameMapNoIntern)?.copied())
+        exports.get(name, &NameMapNoIntern).copied()
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -914,12 +910,12 @@ pub struct ComponentExportIndex {
 }
 
 impl InstanceExportLookup for ComponentExportIndex {
-    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>> {
-        Ok(if component.inner.id == self.id {
+    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+        if component.inner.id == self.id {
             Some(self.index)
         } else {
             None
-        })
+        }
     }
 }
 

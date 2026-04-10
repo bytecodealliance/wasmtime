@@ -187,7 +187,7 @@ impl WastContext {
             #[cfg(feature = "component-model")]
             InstanceKind::Component(store, i) => {
                 let export = i
-                    .get_func(&mut *store, name)?
+                    .get_func(&mut *store, name)
                     .ok_or_else(|| format_err!("no func named `{name}` found"))?;
                 Export::Component(store, export)
             }
@@ -358,11 +358,11 @@ impl WastContext {
                     for (name, item) in ty.exports(&engine) {
                         match item {
                             component::types::ComponentItem::Module(_) => {
-                                let module = instance.get_module(&mut store, name)?.unwrap();
+                                let module = instance.get_module(&mut store, name).unwrap();
                                 linker.module(name, &module)?;
                             }
                             component::types::ComponentItem::Resource(_) => {
-                                let resource = instance.get_resource(&mut store, name)?.unwrap();
+                                let resource = instance.get_resource(&mut store, name).unwrap();
                                 linker.resource(name, resource, |_, _| Ok(()))?;
                             }
                             // TODO: should ideally reflect more than just

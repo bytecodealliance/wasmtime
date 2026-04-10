@@ -77,7 +77,7 @@ async fn component_func_call_async() -> Result<()> {
         .test_async(|| async {
             let mut store = Store::try_new(&engine, ())?;
             let instance = instance_pre.instantiate_async(&mut store).await?;
-            let func = instance.get_func(&mut store, "id")?.unwrap();
+            let func = instance.get_func(&mut store, "id").unwrap();
             let mut results = [Val::S32(0)];
             func.call_async(&mut store, &[Val::S32(42)], &mut results)
                 .await?;

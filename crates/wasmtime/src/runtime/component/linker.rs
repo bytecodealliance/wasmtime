@@ -185,7 +185,7 @@ impl<T: 'static> Linker<T> {
         // perform a typecheck against the component's expected type.
         let env_component = component.env_component();
         for (_idx, (name, ty)) in env_component.import_types.iter() {
-            let import = self.map.get(name, &self.strings)?;
+            let import = self.map.get(name, &self.strings);
             cx.definition(ty, import)
                 .with_context(|| format!("component imports {desc} `{name}`, but a matching implementation was not found in the linker", desc = ty.desc()))?;
         }
@@ -243,10 +243,10 @@ impl<T: 'static> Linker<T> {
             // This is the flattening process where we go from a definition
             // optionally through a list of exported names to get to the final
             // item.
-            let mut cur = self.map.get(root, &self.strings)?.unwrap();
+            let mut cur = self.map.get(root, &self.strings).unwrap();
             for name in names {
                 cur = match cur {
-                    Definition::Instance(map) => map.get(&name, &self.strings)?.unwrap(),
+                    Definition::Instance(map) => map.get(&name, &self.strings).unwrap(),
                     _ => unreachable!(),
                 };
             }
@@ -334,8 +334,7 @@ impl<T: 'static> Linker<T> {
             types: &ComponentTypes,
         ) -> Result<()> {
             // Skip if the item isn't an instance and has already been defined in the linker.
-            if !matches!(item_def, TypeDef::ComponentInstance(_))
-                && linker.get(item_name)?.is_some()
+            if !matches!(item_def, TypeDef::ComponentInstance(_)) && linker.get(item_name).is_some()
             {
                 return Ok(());
             }
@@ -843,7 +842,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             .insert(name, self.strings, self.allow_shadowing, item)
     }
 
-    fn get(&self, name: &str) -> Result<Option<&Definition>, OutOfMemory> {
+    fn get(&self, name: &str) -> Option<&Definition> {
         self.map.get(name, self.strings)
     }
 }
@@ -863,7 +862,7 @@ impl NameMapIntern for Strings {
         Ok(idx)
     }
 
-    fn lookup(&self, string: &str) -> Result<Option<TryCow<'_, usize>>, OutOfMemory> {
-        Ok(self.string2idx.get(string).copied().map(TryCow::Owned))
+    fn lookup(&self, string: &str) -> Option<TryCow<'_, usize>> {
+        self.string2idx.get(string).copied().map(TryCow::Owned)
     }
 }

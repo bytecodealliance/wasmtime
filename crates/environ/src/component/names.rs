@@ -119,7 +119,7 @@ where
     /// This may return a definition even if `name` wasn't exactly defined in
     /// this map, such as looking up `a:b/c@0.2.0` when the map only has
     /// `a:b/c@0.2.1` defined.
-    pub fn get<I>(&self, name: &str, cx: &I) -> Result<Option<&V>, OutOfMemory>
+    pub fn get<I>(&self, name: &str, cx: &I) -> Option<&V>
     where
         I: NameMapIntern<Key = K>,
         I::Key: Borrow<I::BorrowedKey>,
@@ -128,9 +128,9 @@ where
         // First look up an exact match and if that's found return that. This
         // enables defining multiple versions in the map and the requested
         // version is returned if it matches exactly.
-        let candidate = cx.lookup(name)?.and_then(|k| self.definitions.get(&*k));
+        let candidate = cx.lookup(name).and_then(|k| self.definitions.get(&*k));
         if let Some(def) = candidate {
-            return Ok(Some(def));
+            return Some(def);
         }
 
         // Failing that, then try to look for a semver-compatible alternative.
@@ -138,16 +138,10 @@ where
         // if that was intern'd in `strings`. Given all that look to see if it
         // was defined in `alternate_lookups` and finally at the end that exact
         // key is then used to look up again in `self.definitions`.
-        let Some((alternate_name, _version)) = alternate_lookup_key(name) else {
-            return Ok(None);
-        };
-        let Some(alternate_key) = cx.lookup(alternate_name)? else {
-            return Ok(None);
-        };
-        let Some((exact_key, _version)) = self.alternate_lookups.get(&alternate_key) else {
-            return Ok(None);
-        };
-        Ok(self.definitions.get(exact_key.borrow()))
+        let (alternate_name, _version) = alternate_lookup_key(name)?;
+        let alternate_key = cx.lookup(alternate_name)?;
+        let (exact_key, _version) = self.alternate_lookups.get(&alternate_key)?;
+        self.definitions.get(exact_key.borrow())
     }
 
     /// Returns an iterator over inserted values in this map.
@@ -191,7 +185,7 @@ pub trait NameMapIntern {
 
     /// Looks up `s` in `self` returning `Some` if it was found or `None` if
     /// it's not present.
-    fn lookup(&self, s: &str) -> Result<Option<TryCow<'_, Self::BorrowedKey>>, OutOfMemory>;
+    fn lookup<'a>(&'a self, s: &'a str) -> Option<TryCow<'a, Self::BorrowedKey>>;
 }
 
 /// For use with [`NameMap`] when no interning should happen and instead string
@@ -206,9 +200,8 @@ impl NameMapIntern for NameMapNoIntern {
         TryString::try_from(s)
     }
 
-    fn lookup(&self, s: &str) -> Result<Option<TryCow<'_, Self::BorrowedKey>>, OutOfMemory> {
-        let s = TryString::try_from(s)?;
-        Ok(Some(TryCow::Owned(s)))
+    fn lookup<'a>(&'a self, s: &'a str) -> Option<TryCow<'a, Self::BorrowedKey>> {
+        Some(TryCow::Borrowed(s))
     }
 }
 
