@@ -124,7 +124,13 @@ enum Deadline {
 impl Pollable for Deadline {
     async fn ready(&mut self) {
         match self {
-            Deadline::Past => {}
+            Deadline::Past => {
+                // It is important we yield to Tokio here; otherwise we risk
+                // starving `mio` such that it is unable to signal readiness for
+                // other pollables (e.g. TCP sockets) when the guest is polling
+                // in a busy loop.
+                tokio::task::yield_now().await
+            }
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
         }

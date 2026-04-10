@@ -61,7 +61,8 @@ use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
-    AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
+    AsContext, AsContextMut, Config, FuncType, Result, StoreContext, StoreContextMut, ValRaw,
+    ValType, bail,
 };
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
@@ -1196,8 +1197,12 @@ impl<T> StoreContextMut<'_, T> {
 
             enum PollResult<R> {
                 Complete(R),
-                ProcessWork(Vec<WorkItem>),
+                ProcessWork {
+                    ready: Vec<WorkItem>,
+                    low_priority: bool,
+                },
             }
+
             let result = future::poll_fn(|cx| {
                 // First, poll the future we were passed as an argument and
                 // return immediately if it's ready.
@@ -1220,13 +1225,19 @@ impl<T> StoreContextMut<'_, T> {
                     Poll::Pending => Poll::Pending,
                 };
 
-                // Next, collect the next batch of work items to process, if any.
-                // This will be either all of the high-priority work items, or if
-                // there are none, a single low-priority work item.
+                // Next, collect the next batch of work items to process, if
+                // any.  This will be either all of the high-priority work
+                // items, or if there are none (and we haven't made progress
+                // with `ConcurrentState::futures` above), a single low-priority
+                // work item.
                 let state = reset.store.0.concurrent_state_mut();
-                let ready = state.collect_work_items_to_run();
+                let (ready, low_priority) =
+                    state.collect_work_items_to_run(!matches!(next, Poll::Ready(true)));
                 if !ready.is_empty() {
-                    return Poll::Ready(Ok(PollResult::ProcessWork(ready)));
+                    return Poll::Ready(Ok(PollResult::ProcessWork {
+                        ready,
+                        low_priority,
+                    }));
                 }
 
                 // Finally, if we have nothing else to do right now, determine what to do
@@ -1239,7 +1250,10 @@ impl<T> StoreContextMut<'_, T> {
                         // successfully, so we return now and continue
                         // the outer loop in case there is another one
                         // ready to complete.
-                        Poll::Ready(Ok(PollResult::ProcessWork(Vec::new())))
+                        Poll::Ready(Ok(PollResult::ProcessWork {
+                            ready: Vec::new(),
+                            low_priority: false,
+                        }))
                     }
                     Poll::Ready(false) => {
                         // Poll the future we were passed one last time
@@ -1287,7 +1301,10 @@ impl<T> StoreContextMut<'_, T> {
                 PollResult::Complete(value) => break Ok(value),
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
-                PollResult::ProcessWork(ready) => {
+                PollResult::ProcessWork {
+                    ready,
+                    low_priority,
+                } => {
                     struct Dispose<'a, T: 'static, I: Iterator<Item = WorkItem>> {
                         store: StoreContextMut<'a, T>,
                         ready: I,
@@ -1311,6 +1328,15 @@ impl<T> StoreContextMut<'_, T> {
                         store: self.as_context_mut(),
                         ready: ready.into_iter(),
                     };
+
+                    // If we're about to run a low-priority task, first yield to
+                    // the executor.  This ensures that it won't be starved of
+                    // the ability to e.g. update the readiness of sockets,
+                    // etc. which the guest may be using `thread.yield` along
+                    // with `waitable-set.poll` to monitor in a CPU-heavy loop.
+                    if low_priority {
+                        yield_to_executor(dispose.store.engine().config()).await
+                    }
 
                     while let Some(item) = dispose.ready.next() {
                         dispose
@@ -4974,15 +5000,16 @@ impl ConcurrentState {
 
     /// Collect the next set of work items to run. This will be either all
     /// high-priority items, or a single low-priority item if there are no
-    /// high-priority items.
-    fn collect_work_items_to_run(&mut self) -> Vec<WorkItem> {
+    /// high-priority items and `take_low_priority` is `true`.
+    fn collect_work_items_to_run(&mut self, take_low_priority: bool) -> (Vec<WorkItem>, bool) {
         let mut ready = mem::take(&mut self.high_priority);
-        if ready.is_empty() {
+        let low_priority = take_low_priority && ready.is_empty();
+        if low_priority {
             if let Some(item) = self.low_priority.pop_back() {
                 ready.push(item);
             }
         }
-        ready
+        (ready, low_priority)
     }
 
     fn push<V: Send + Sync + 'static>(
@@ -5475,4 +5502,23 @@ fn queue_call0<T: 'static>(
             post_return.map(SendSyncPtr::new),
         )
     }
+}
+
+async fn yield_to_executor(config: &Config) {
+    // TODO: Once `Config` has an optional `AsyncFn` field for yielding to the
+    // current async runtime (e.g. `tokio::task::yield_now`), use that if set;
+    // otherwise fall back to the runtime-agnostic code below.
+    _ = config;
+
+    let mut yielded = false;
+    future::poll_fn(move |cx| {
+        if yielded {
+            Poll::Ready(())
+        } else {
+            yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    })
+    .await;
 }
