@@ -54,9 +54,8 @@ TEST(Instance, NewClearsTrapPointer) {
   auto ok_module = Module::compile(engine, "(module)").unwrap();
   wasmtime_instance_t instance;
   wasm_trap_t *trap = reinterpret_cast<wasm_trap_t *>(1);
-  auto *error =
-      wasmtime_instance_new(context.capi(), ok_module.capi(), nullptr, 0,
-                            &instance, &trap);
+  auto *error = wasmtime_instance_new(context.capi(), ok_module.capi(), nullptr,
+                                      0, &instance, &trap);
   EXPECT_EQ(error, nullptr);
   EXPECT_EQ(trap, nullptr);
 
