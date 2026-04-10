@@ -148,20 +148,13 @@ impl FreeList {
             return;
         }
 
-        // If we can't represent this block in a `Layout`, then don't add it to
-        // our free list either.
-        let Ok(layout) = Layout::from_size_align(usize::try_from(size).unwrap(), ALIGN_USIZE)
-        else {
-            return;
-        };
-
         // Okay! Add a block to our free list for the new capacity, potentially
         // merging it with existing blocks at the end of the free list.
         log::trace!(
             "FreeList::add_capacity(..): adding block {index:#x}..{:#x}",
             index.get() + size
         );
-        self.dealloc(index, layout);
+        self.dealloc_impl(index.get(), size);
     }
 
     #[cfg(test)]
@@ -321,10 +314,6 @@ impl FreeList {
 
     #[inline]
     fn dealloc_impl(&mut self, index: u32, alloc_size: u32) {
-        debug_assert_eq!(
-            Self::layout(usize::try_from(alloc_size).unwrap()).size(),
-            usize::try_from(alloc_size).unwrap()
-        );
         debug_assert_eq!(index % ALIGN_U32, 0);
         debug_assert_eq!(alloc_size % ALIGN_U32, 0);
 
