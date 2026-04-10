@@ -248,7 +248,7 @@ impl DrcHeap {
             self.heap_slice_mut()[index..][..alloc_size].fill(POISON);
         }
 
-        self.allocated_bytes -= usize::try_from(size).unwrap();
+        self.allocated_bytes -= usize::try_from(alloc_size).unwrap();
         self.free_list
             .as_mut()
             .unwrap()
@@ -385,6 +385,7 @@ impl DrcHeap {
                 .as_mut()
                 .unwrap()
                 .dealloc_fast(index, alloc_size);
+            self.allocated_bytes -= usize::try_from(alloc_size).unwrap();
         }
 
         debug_assert!(stack.is_empty());
@@ -1034,7 +1035,7 @@ unsafe impl GcHeap for DrcHeap {
             next_over_approximated_stack_root: None,
             object_size,
         };
-        self.allocated_bytes += layout.size();
+        self.allocated_bytes += usize::try_from(alloc_size).unwrap();
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Ok(gc_ref))
     }
