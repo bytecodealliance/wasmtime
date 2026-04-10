@@ -17,8 +17,8 @@ pub use primary_map::TryPrimaryMap;
 pub use secondary_map::TrySecondaryMap;
 pub use wasmtime_core::{
     alloc::{
-        TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
-        TryVec, try_new,
+        AssertTryClone, TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew,
+        TryString, TryToOwned, TryVec, try_new,
     },
     try_vec,
 };

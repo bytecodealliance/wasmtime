@@ -107,7 +107,7 @@ pub struct Component {
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
     /// This component's own root exports from the component itself.
-    pub exports: NameMap<String, ExportIndex>,
+    pub exports: NameMap<TryString, ExportIndex>,
 
     /// All exports of this component and exported instances of this component.
     ///
@@ -459,7 +459,7 @@ pub enum ExportItem<T> {
 }
 
 /// Possible exports from a component.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Export {
     /// A lifted function being exported which is an adaptation of a core wasm
     /// function.
@@ -491,7 +491,7 @@ pub enum Export {
         /// Instance type index, if such is assigned
         ty: TypeComponentInstanceIndex,
         /// Instance export map
-        exports: NameMap<String, ExportIndex>,
+        exports: NameMap<TryString, ExportIndex>,
     },
     /// An exported type from a component or instance, currently only
     /// informational.

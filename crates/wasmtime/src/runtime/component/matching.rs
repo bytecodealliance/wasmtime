@@ -159,7 +159,10 @@ impl TypeChecker<'_> {
             if let TypeDef::Interface(_) = expected {
                 continue;
             }
-            let actual = actual.and_then(|map| map.get(name, self.strings));
+            let actual = match actual {
+                Some(actual) => actual.get(name, self.strings)?,
+                None => None,
+            };
             self.definition(expected, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }

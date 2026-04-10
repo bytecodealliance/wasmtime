@@ -17,8 +17,8 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::component::{
     CompiledComponentInfo, ComponentArtifacts, ComponentTypes, CoreDef, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, OptionsIndex, StaticModuleIndex, TrampolineIndex,
-    TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
+    GlobalInitializer, InstantiateModule, NameMapNoIntern, OptionsIndex, StaticModuleIndex,
+    TrampolineIndex, TypeComponentIndex, TypeFuncIndex, UnsafeIntrinsic, VMComponentOffsets,
 };
 use wasmtime_environ::{Abi, CompiledFunctionsTable, FuncKey, TypeTrace, WasmChecksum};
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -737,12 +737,14 @@ impl Component {
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
-        let index = self.lookup_export_index(instance, name)?;
-        Some(ComponentExportIndex {
+    ) -> Result<Option<ComponentExportIndex>> {
+        let Some(index) = self.lookup_export_index(instance, name)? else {
+            return Ok(None);
+        };
+        Ok(Some(ComponentExportIndex {
             id: self.inner.id,
             index,
-        })
+        }))
     }
 
     /// Looks up a specific export of this component by `name` optionally nested
@@ -819,9 +821,11 @@ impl Component {
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
+    ) -> Result<Option<(types::ComponentItem, ComponentExportIndex)>> {
         let info = self.env_component();
-        let index = self.lookup_export_index(instance, name)?;
+        let Some(index) = self.lookup_export_index(instance, name)? else {
+            return Ok(None);
+        };
         let item = self.with_uninstantiated_instance_type(|instance| {
             types::ComponentItem::from_export(
                 &self.inner.engine,
@@ -829,34 +833,34 @@ impl Component {
                 instance,
             )
         });
-        Some((
+        Ok(Some((
             item,
             ComponentExportIndex {
                 id: self.inner.id,
                 index,
             },
-        ))
+        )))
     }
 
     pub(crate) fn lookup_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ExportIndex> {
+    ) -> Result<Option<ExportIndex>, OutOfMemory> {
         let info = self.env_component();
         let exports = match instance {
             Some(idx) => {
                 if idx.id != self.inner.id {
-                    return None;
+                    return Ok(None);
                 }
                 match &info.export_items[idx.index] {
                     Export::Instance { exports, .. } => exports,
-                    _ => return None,
+                    _ => return Ok(None),
                 }
             }
             None => &info.exports,
         };
-        exports.get_by_str(name).copied()
+        Ok(exports.get(name, &NameMapNoIntern)?.copied())
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -910,12 +914,12 @@ pub struct ComponentExportIndex {
 }
 
 impl InstanceExportLookup for ComponentExportIndex {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        if component.inner.id == self.id {
+    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>> {
+        Ok(if component.inner.id == self.id {
             Some(self.index)
         } else {
             None
-        }
+        })
     }
 }
 

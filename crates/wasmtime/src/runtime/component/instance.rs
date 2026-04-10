@@ -156,22 +156,24 @@ impl Instance {
         &self,
         mut store: impl AsContextMut,
         name: impl InstanceExportLookup,
-    ) -> Option<Func> {
+    ) -> Result<Option<Func>> {
         let store = store.as_context_mut().0;
         let instance = self.id.get(store);
         let component = instance.component();
 
         // Validate that `name` exists within `self.`
-        let index = name.lookup(component)?;
+        let Some(index) = name.lookup(component)? else {
+            return Ok(None);
+        };
 
         // Validate that `index` is indeed a lifted function.
         match &component.env_component().export_items[index] {
             Export::LiftedFunction { .. } => {}
-            _ => return None,
+            _ => return Ok(None),
         }
 
         // And package up the indices!
-        Some(Func::from_lifted_func(*self, index))
+        Ok(Some(Func::from_lifted_func(*self, index)))
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -195,7 +197,7 @@ impl Instance {
         Results: ComponentNamedList + Lift,
     {
         let f = self
-            .get_func(store.as_context_mut(), name)
+            .get_func(store.as_context_mut(), name)?
             .ok_or_else(|| format_err!("failed to find function export"))?;
         Ok(f.typed::<Params, Results>(store)
             .with_context(|| format!("failed to convert function to given type"))?)
@@ -221,10 +223,12 @@ impl Instance {
         &self,
         mut store: impl AsContextMut,
         name: impl InstanceExportLookup,
-    ) -> Option<Module> {
+    ) -> Result<Option<Module>> {
         let store = store.as_context_mut().0;
-        let (instance, export) = self.lookup_export(store, name)?;
-        match export {
+        let Some((instance, export)) = self.lookup_export(store, name)? else {
+            return Ok(None);
+        };
+        Ok(match export {
             Export::ModuleStatic { index, .. } => {
                 Some(instance.component().static_module(*index).clone())
             }
@@ -233,7 +237,7 @@ impl Instance {
                 _ => unreachable!(),
             },
             _ => None,
-        }
+        })
     }
 
     /// Looks up an exported resource type by name within this [`Instance`].
@@ -256,10 +260,12 @@ impl Instance {
         &self,
         mut store: impl AsContextMut,
         name: impl InstanceExportLookup,
-    ) -> Option<ResourceType> {
+    ) -> Result<Option<ResourceType>> {
         let store = store.as_context_mut().0;
-        let (instance, export) = self.lookup_export(store, name)?;
-        match export {
+        let Some((instance, export)) = self.lookup_export(store, name)? else {
+            return Ok(None);
+        };
+        Ok(match export {
             Export::Type(TypeDef::Resource(id)) => {
                 Some(InstanceType::new(instance).resource_type(*id))
             }
@@ -268,7 +274,7 @@ impl Instance {
             | Export::ModuleStatic { .. }
             | Export::ModuleImport { .. }
             | Export::Instance { .. } => None,
-        }
+        })
     }
 
     /// A methods similar to [`Component::get_export`] except for this
@@ -291,7 +297,7 @@ impl Instance {
         mut store: impl AsContextMut,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<(ComponentItem, ComponentExportIndex)> {
+    ) -> Result<Option<(ComponentItem, ComponentExportIndex)>> {
         self._get_export(store.as_context_mut().0, instance, name)
     }
 
@@ -300,22 +306,24 @@ impl Instance {
         store: &StoreOpaque,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<(ComponentItem, ComponentExportIndex)> {
+    ) -> Result<Option<(ComponentItem, ComponentExportIndex)>> {
         let data = self.id().get(store);
         let component = data.component();
-        let index = component.lookup_export_index(instance, name)?;
+        let Some(index) = component.lookup_export_index(instance, name)? else {
+            return Ok(None);
+        };
         let item = ComponentItem::from_export(
             &store.engine(),
             &component.env_component().export_items[index],
             &InstanceType::new(data),
         );
-        Some((
+        Ok(Some((
             item,
             ComponentExportIndex {
                 id: data.component().id(),
                 index,
             },
-        ))
+        )))
     }
 
     /// A methods similar to [`Component::get_export_index`] except for this
@@ -336,23 +344,30 @@ impl Instance {
         mut store: impl AsContextMut,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
+    ) -> Result<Option<ComponentExportIndex>> {
         let data = self.id().get(store.as_context_mut().0);
-        let index = data.component().lookup_export_index(instance, name)?;
-        Some(ComponentExportIndex {
+        let Some(index) = data.component().lookup_export_index(instance, name)? else {
+            return Ok(None);
+        };
+        Ok(Some(ComponentExportIndex {
             id: data.component().id(),
             index,
-        })
+        }))
     }
 
     fn lookup_export<'a>(
         &self,
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
-    ) -> Option<(&'a ComponentInstance, &'a Export)> {
+    ) -> Result<Option<(&'a ComponentInstance, &'a Export)>> {
         let data = self.id().get(store);
-        let index = name.lookup(data.component())?;
-        Some((data, &data.component().env_component().export_items[index]))
+        let Some(index) = name.lookup(data.component())? else {
+            return Ok(None);
+        };
+        Ok(Some((
+            data,
+            &data.component().env_component().export_items[index],
+        )))
     }
 
     /// Returns the [`InstancePre`] that was used to create this instance.
@@ -656,26 +671,30 @@ where
 /// need to be implemented externally.
 pub trait InstanceExportLookup {
     #[doc(hidden)]
-    fn lookup(&self, component: &Component) -> Option<ExportIndex>;
+    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>>;
 }
 
 impl<T> InstanceExportLookup for &T
 where
     T: InstanceExportLookup + ?Sized,
 {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>> {
         T::lookup(self, component)
     }
 }
 
 impl InstanceExportLookup for str {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        component.env_component().exports.get_by_str(self).copied()
+    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>> {
+        Ok(component
+            .env_component()
+            .exports
+            .get(self, &NameMapNoIntern)?
+            .copied())
     }
 }
 
 impl InstanceExportLookup for String {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+    fn lookup(&self, component: &Component) -> Result<Option<ExportIndex>> {
         str::lookup(self, component)
     }
 }

@@ -15,7 +15,7 @@ pub use boxed::{
     new_boxed_slice_from_iter_with_len, new_uninit_boxed_slice,
 };
 pub use string::TryString;
-pub use try_clone::TryClone;
+pub use try_clone::{AssertTryClone, TryClone};
 pub use try_collect::{TryCollect, TryExtend, TryFromIterator};
 pub use try_cow::{TryCow, TryToOwned};
 pub use try_new::{TryNew, try_new};
