@@ -178,6 +178,7 @@ jobs:
       preview1-adapter: ${{ steps.calculate.outputs.preview1-adapter }}
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
+      test-gc-zeal: ${{ steps.calculate.outputs.test-gc-zeal }}
     steps:
     - uses: actions/checkout@v6
     - id: calculate
