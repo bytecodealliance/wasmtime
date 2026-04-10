@@ -93,6 +93,15 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, config: &FindConfig) -> Res
             continue;
         }
 
+        // These tests use `*.wast` directives not yet supported by Wasmtime, so
+        // wait for a `wasm-tools` update to ungate these.
+        if path.ends_with("spec_testsuite/custom/custom_annot.wast")
+            || path.ends_with("spec_testsuite/custom/branch_hint.wast")
+            || path.ends_with("spec_testsuite/custom/name_annot.wast")
+        {
+            continue;
+        }
+
         let contents =
             fs::read_to_string(&path).with_context(|| format!("failed to read test: {path:?}"))?;
         let config = match config {
@@ -125,6 +134,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.custom_page_sizes = Some(true);
             ret.multi_memory = Some(true);
             ret.memory64 = Some(true);
+            ret.reference_types = Some(true);
 
             // See commentary below in `wasm-3.0` case for why these "hog
             // memory"
