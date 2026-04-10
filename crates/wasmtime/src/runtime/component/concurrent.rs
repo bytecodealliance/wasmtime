@@ -3124,7 +3124,7 @@ impl Instance {
             .subtask_remove(task_id)?;
 
         let concurrent_state = store.concurrent_state_mut();
-        let (waitable, expected_caller, delete) = if is_host {
+        let (waitable, delete) = if is_host {
             let id = TableId::<HostTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             match &task.state {
@@ -3134,22 +3134,17 @@ impl Instance {
                     bail_bug!("invalid state for callee in `subtask.drop`")
                 }
             }
-            (Waitable::Host(id), task.caller, true)
+            (Waitable::Host(id), true)
         } else {
             let id = TableId::<GuestTask>::new(rep);
             let task = concurrent_state.get_mut(id)?;
             if task.lift_result.is_some() {
                 bail!(Trap::SubtaskDropNotResolved);
             }
-            if let Caller::Guest { thread } = task.caller {
-                (
-                    Waitable::Guest(id),
-                    thread,
-                    concurrent_state.get_mut(id)?.ready_to_delete(),
-                )
-            } else {
-                bail_bug!("expected guest caller for `subtask.drop`")
-            }
+            (
+                Waitable::Guest(id),
+                concurrent_state.get_mut(id)?.ready_to_delete(),
+            )
         };
 
         waitable.common(concurrent_state)?.handle = None;
@@ -3164,10 +3159,6 @@ impl Instance {
             waitable.delete_from(concurrent_state)?;
         }
 
-        // Since waitables can neither be passed between instances nor forged,
-        // this should never fail unless there's a bug in Wasmtime, but we check
-        // here to be sure:
-        debug_assert_eq!(expected_caller, concurrent_state.current_guest_thread()?);
         log::trace!("subtask_drop {waitable:?} (handle {task_id})");
         Ok(())
     }
@@ -3583,25 +3574,12 @@ impl Instance {
             })
             .handle_table()
             .subtask_rep(task_id)?;
-        let (waitable, expected_caller) = if is_host {
-            let id = TableId::<HostTask>::new(rep);
-            (
-                Waitable::Host(id),
-                store.concurrent_state_mut().get_mut(id)?.caller,
-            )
+        let waitable = if is_host {
+            Waitable::Host(TableId::<HostTask>::new(rep))
         } else {
-            let id = TableId::<GuestTask>::new(rep);
-            if let Caller::Guest { thread } = store.concurrent_state_mut().get_mut(id)?.caller {
-                (Waitable::Guest(id), thread)
-            } else {
-                bail_bug!("expected guest caller for `subtask.cancel`")
-            }
+            Waitable::Guest(TableId::<GuestTask>::new(rep))
         };
-        // Since waitables can neither be passed between instances nor forged,
-        // this should never fail unless there's a bug in Wasmtime, but we check
-        // here to be sure:
         let concurrent_state = store.concurrent_state_mut();
-        debug_assert_eq!(expected_caller, concurrent_state.current_guest_thread()?);
 
         log::trace!("subtask_cancel {waitable:?} (handle {task_id})");
 
