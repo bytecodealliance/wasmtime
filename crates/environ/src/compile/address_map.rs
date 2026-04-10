@@ -9,7 +9,7 @@ use std::ops::Range;
 
 /// Builder for the address map section of a wasmtime compilation image.
 ///
-/// This builder is used to conveniently built the `ELF_WASMTIME_ADDRMAP`
+/// This builder is used to conveniently build the `ELF_WASMTIME_ADDRMAP`
 /// section by compilers, and provides utilities to directly insert the results
 /// into an `Object`.
 #[derive(Default)]

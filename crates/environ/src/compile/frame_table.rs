@@ -325,7 +325,7 @@ impl FrameTableBuilder {
             .push(U32Bytes::new(LittleEndian, end));
     }
 
-    /// Serialize the framd-table data section, taking a closure to
+    /// Serialize the frame-table data section, taking a closure to
     /// consume slices.
     pub fn serialize<F: FnMut(&[u8])>(&mut self, mut f: F) {
         // Pad `frame_descriptor_data` to a multiple of 4 bytes so

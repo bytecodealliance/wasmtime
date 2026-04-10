@@ -332,7 +332,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
     }
 }
 
-/// Updates the siginfo context stored in `cx` to resume to `handler` up on
+/// Updates the siginfo context stored in `cx` to resume to `handler` upon
 /// resumption while returning from the signal handler.
 unsafe fn store_handler_in_ucontext(cx: *mut libc::c_void, handler: &Handler) {
     cfg_if::cfg_if! {
