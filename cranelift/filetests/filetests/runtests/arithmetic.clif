@@ -881,33 +881,6 @@ block0(v0: i32, v1: i32):
 ; run: %test_ineg_imul_ineg_rhs(0, 0) == 0
 ; run: %test_ineg_imul_ineg_rhs(1, 2) == 2
 
-function %test_ireduce_iadd_extends(i8, i8) -> i8 fast {
-block0(v0: i8, v1: i8):
-    v2 = sextend.i16 v0
-    v3 = uextend.i16 v1
-    v4 = iadd v2, v3
-    v5 = ireduce.i8 v4
-    return v5
-}
-
-; run: %test_ireduce_iadd_extends(0, 0) == 0
-; run: %test_ireduce_iadd_extends(1, 2) == 3
-
-function %test_ireduce_isub_extends(i8, i8) -> i8 fast {
-block0(v0: i8, v1: i8):
-    v2 = sextend.i16 v0
-    v3 = uextend.i16 v1
-    v4 = isub v2, v3
-    v5 = ireduce.i8 v4
-    return v5
-}
-
-; run: %test_ireduce_isub_extends(0, 0) == 0
-; run: %test_ireduce_isub_extends(5, 2) == 3
-; run: %test_ireduce_isub_extends(0, 1) == -1
-; run: %test_ireduce_isub_extends(-1, 1) == -2
-; run: %test_ireduce_isub_extends(-128, 1) == 127
-
 function %test_sge_smax_x(i32, i32) -> i8 fast {
 block0(v0: i32, v1: i32):
     v2 = smax v0, v1

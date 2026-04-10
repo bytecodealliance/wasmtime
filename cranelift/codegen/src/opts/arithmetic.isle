@@ -406,18 +406,6 @@
 (rule (simplify (ineg ty (imul ty (ineg ty y) x))) (imul ty x y))
 (rule (simplify (ineg ty (imul ty x (ineg ty y)))) (imul ty x y))
 
-;; ireduce(xext(a) + xext(b)) --> a + b
-(rule (simplify (ireduce ty (iadd cty (sextend cty x) (sextend cty y)))) (iadd ty x y))
-(rule (simplify (ireduce ty (iadd cty (sextend cty x) (uextend cty y)))) (iadd ty x y))
-(rule (simplify (ireduce ty (iadd cty (uextend cty x) (sextend cty y)))) (iadd ty x y))
-(rule (simplify (ireduce ty (iadd cty (uextend cty x) (uextend cty y)))) (iadd ty x y))
-
-;; ireduce(xext(a) - xext(b)) --> a - b
-(rule (simplify (ireduce ty (isub cty (sextend cty x) (sextend cty y)))) (isub ty x y))
-(rule (simplify (ireduce ty (isub cty (sextend cty x) (uextend cty y)))) (isub ty x y))
-(rule (simplify (ireduce ty (isub cty (uextend cty x) (sextend cty y)))) (isub ty x y))
-(rule (simplify (ireduce ty (isub cty (uextend cty x) (uextend cty y)))) (isub ty x y))
-
 ;; max(x, y) >= x
 (rule (simplify (sge ty (smax ty x y) x)) (iconst_u ty 1))
 (rule (simplify (sge ty (smax ty y x) x)) (iconst_u ty 1))
