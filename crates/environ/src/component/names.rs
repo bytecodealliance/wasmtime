@@ -1,6 +1,7 @@
-use crate::collections::{AssertTryClone, TryCow};
+use crate::collections::TryCow;
 use crate::error::{Result, bail};
 use crate::prelude::*;
+use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::hash::Hash;
 use semver::Version;
@@ -48,7 +49,63 @@ where
     ///
     /// The `Version` here is tracked to ensure that when multiple versions on
     /// one track are defined that only the maximal version here is retained.
-    alternate_lookups: TryIndexMap<K, (K, AssertTryClone<Version>)>,
+    alternate_lookups: TryIndexMap<K, (K, TryVersion)>,
+}
+
+/// A wrapper around `Version` that implements `TryClone`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct TryVersion(Arc<Version>);
+
+impl TryFrom<Version> for TryVersion {
+    type Error = OutOfMemory;
+
+    fn try_from(value: Version) -> Result<Self, Self::Error> {
+        Ok(Self(try_new::<Arc<_>>(value)?))
+    }
+}
+
+impl TryClone for TryVersion {
+    #[inline]
+    fn try_clone(&self) -> Result<Self, OutOfMemory> {
+        Ok(Self(self.0.clone()))
+    }
+}
+
+impl core::ops::Deref for TryVersion {
+    type Target = Version;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Borrow<Version> for TryVersion {
+    #[inline]
+    fn borrow(&self) -> &Version {
+        &self.0
+    }
+}
+
+impl serde::Serialize for TryVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TryVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let v = Version::deserialize(deserializer)?;
+        let v = try_new::<Arc<_>>(v).map_err(|oom| D::Error::custom(oom))?;
+        Ok(Self(v))
+    }
 }
 
 impl<K, V> TryClone for NameMap<K, V>
@@ -98,13 +155,14 @@ where
         // This key is used during `get` later on.
         if let Some((alternate_key, version)) = alternate_lookup_key(name) {
             let alternate_key = cx.intern(alternate_key)?;
+            let version = TryVersion::try_from(version)?;
             if let Some((prev_key, prev_version)) = self.alternate_lookups.insert(
                 alternate_key.try_clone()?,
-                (key.try_clone()?, version.clone().into()),
+                (key.try_clone()?, version.clone()),
             )? {
                 // Prefer the latest version, so only do this if we're
                 // greater than the prior version.
-                if version < prev_version.0 {
+                if version < prev_version {
                     self.alternate_lookups
                         .insert(alternate_key, (prev_key, prev_version))?;
                 }

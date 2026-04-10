@@ -1,5 +1,5 @@
 use crate::error::OutOfMemory;
-use core::{borrow::Borrow, mem};
+use core::mem;
 use std_alloc::sync::Arc;
 
 /// A trait for values that can be cloned, but contain owned, heap-allocated
@@ -13,90 +13,6 @@ pub trait TryClone: Sized {
     fn clone_panic_on_oom(&self) -> Self {
         use super::PanicOnOom as _;
         self.try_clone().panic_on_oom()
-    }
-}
-
-/// A wrapper around `T` that implements `TryClone` via `T: Clone`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AssertTryClone<T>(pub T);
-
-impl<T> From<T> for AssertTryClone<T> {
-    #[inline]
-    fn from(value: T) -> Self {
-        Self(value)
-    }
-}
-
-impl<T> TryClone for AssertTryClone<T>
-where
-    T: Clone,
-{
-    #[inline]
-    fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(AssertTryClone(self.0.clone()))
-    }
-}
-
-impl<T> core::ops::Deref for AssertTryClone<T> {
-    type Target = T;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> core::ops::DerefMut for AssertTryClone<T> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<T> AsRef<T> for AssertTryClone<T> {
-    #[inline]
-    fn as_ref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<T> AsMut<T> for AssertTryClone<T> {
-    #[inline]
-    fn as_mut(&mut self) -> &mut T {
-        &mut self.0
-    }
-}
-
-impl<T> Borrow<T> for AssertTryClone<T> {
-    #[inline]
-    fn borrow(&self) -> &T {
-        &self.0
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T> serde::Serialize for AssertTryClone<T>
-where
-    T: serde::Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, T> serde::Deserialize<'de> for AssertTryClone<T>
-where
-    T: serde::Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        T::deserialize(deserializer).map(Self)
     }
 }
 
