@@ -84,9 +84,6 @@
 (rule (simplify
        (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
       (select ty c x y))
-(rule (simplify
-       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
-      (select ty c x y))
 
 ;; Masking the result of a comparison with 1 always results in the comparison
 ;; itself. Note that comparisons in wasm may sometimes be hidden behind
