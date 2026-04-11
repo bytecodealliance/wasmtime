@@ -1978,7 +1978,11 @@ impl StoreOpaque {
                     .allocator()
                     .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index, mem)?;
 
-            Ok(GcStore::new(index, heap))
+            Ok(GcStore::new(
+                index,
+                heap,
+                engine.tunables().gc_zeal_alloc_counter,
+            ))
         }
 
         #[cfg(not(feature = "gc"))]

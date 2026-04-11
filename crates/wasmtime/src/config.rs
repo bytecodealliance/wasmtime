@@ -2,7 +2,7 @@ use crate::prelude::*;
 use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
-use core::num::NonZeroUsize;
+use core::num::{NonZeroU32, NonZeroUsize};
 use core::str::FromStr;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use std::path::Path;
@@ -726,6 +726,24 @@ impl Config {
     pub fn epoch_interruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.epoch_interruption = Some(enable);
         self
+    }
+
+    /// XXX: For internal fuzzing and debugging use only!
+    #[doc(hidden)]
+    pub fn gc_zeal_alloc_counter(&mut self, counter: Option<NonZeroU32>) -> Result<&mut Self> {
+        #[cfg(not(gc_zeal))]
+        {
+            let _ = counter;
+            bail!(
+                "cannot set `gc_zeal_alloc_counter` because Wasmtime was not built with `cfg(gc_zeal)`"
+            );
+        }
+
+        #[cfg(gc_zeal)]
+        {
+            self.tunables.gc_zeal_alloc_counter = Some(counter);
+            Ok(self)
+        }
     }
 
     /// Configures the maximum amount of stack space available for

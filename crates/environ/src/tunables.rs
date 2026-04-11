@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crate::{IndexType, Limits, Memory, TripleExt};
+use core::num::NonZeroU32;
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
@@ -152,6 +153,13 @@ define_tunables! {
         /// Whether recording in RR is enabled or not. This is used primarily
         /// to signal checksum computation for compiled artifacts.
         pub recording: bool,
+
+        /// An allocation counter that triggers GC when it reaches zero.
+        ///
+        /// Decremented on every allocation and when it hits zero, a GC is
+        /// forced and the counter is reset. Only effective when
+        /// `cfg(gc_zeal)` is enabled.
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
     }
 
     pub struct ConfigTunables {
@@ -230,6 +238,7 @@ impl Tunables {
             debug_guest: false,
             concurrency_support: true,
             recording: false,
+            gc_zeal_alloc_counter: None,
         }
     }
 
