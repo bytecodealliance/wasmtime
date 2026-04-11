@@ -578,6 +578,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
         let setup_frame = frame_layout.setup_area_size > 0;
+        let lr_only_setup = setup_frame
+            && AArch64MachineDeps::use_lr_only_linkage_frame(
+                call_conv,
+                flags,
+                isa_flags,
+                frame_layout,
+            );
         let mut insts = SmallVec::new();
 
         match Self::select_api_key(isa_flags, call_conv, setup_frame) {
@@ -610,36 +617,47 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
 
         if setup_frame {
-            // stp fp (x29), lr (x30), [sp, #-16]!
-            insts.push(Inst::StoreP64 {
-                rt: fp_reg(),
-                rt2: link_reg(),
-                mem: PairAMode::SPPreIndexed {
-                    simm7: SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
-                },
-                flags: MemFlags::trusted(),
-            });
+            if lr_only_setup {
+                // str lr (x30), [sp, #-16]!
+                insts.push(Inst::Store64 {
+                    rd: link_reg(),
+                    mem: AMode::SPPreIndexed {
+                        simm9: SImm9::maybe_from_i64(-16).unwrap(),
+                    },
+                    flags: MemFlags::trusted(),
+                });
+            } else {
+                // stp fp (x29), lr (x30), [sp, #-16]!
+                insts.push(Inst::StoreP64 {
+                    rt: fp_reg(),
+                    rt2: link_reg(),
+                    mem: PairAMode::SPPreIndexed {
+                        simm7: SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
+                    },
+                    flags: MemFlags::trusted(),
+                });
 
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::PushFrameRegs {
-                        offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                if flags.unwind_info() {
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::PushFrameRegs {
+                            offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                        },
+                    });
+                }
+
+                // mov fp (x29), sp. This uses the ADDI rd, rs, 0 form of `MOV` because
+                // the usual encoding (`ORR`) does not work with SP.
+                insts.push(Inst::AluRRImm12 {
+                    alu_op: ALUOp::Add,
+                    size: OperandSize::Size64,
+                    rd: writable_fp_reg(),
+                    rn: stack_reg(),
+                    imm12: Imm12 {
+                        bits: 0,
+                        shift12: false,
                     },
                 });
             }
-
-            // mov fp (x29), sp. This uses the ADDI rd, rs, 0 form of `MOV` because
-            // the usual encoding (`ORR`) does not work with SP.
-            insts.push(Inst::AluRRImm12 {
-                alu_op: ALUOp::Add,
-                size: OperandSize::Size64,
-                rd: writable_fp_reg(),
-                rn: stack_reg(),
-                imm12: Imm12 {
-                    bits: 0,
-                    shift12: false,
-                },
-            });
         }
 
         insts
@@ -647,11 +665,18 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_epilogue_frame_restore(
         call_conv: isa::CallConv,
-        _flags: &settings::Flags,
-        _isa_flags: &aarch64_settings::Flags,
+        flags: &settings::Flags,
+        isa_flags: &aarch64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Inst> {
         let setup_frame = frame_layout.setup_area_size > 0;
+        let lr_only_setup = setup_frame
+            && AArch64MachineDeps::use_lr_only_linkage_frame(
+                call_conv,
+                flags,
+                isa_flags,
+                frame_layout,
+            );
         let mut insts = SmallVec::new();
 
         if setup_frame {
@@ -659,15 +684,26 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // clobber-restore code (which also frees the fixed frame). Hence, there
             // is no need for the usual `mov sp, fp` here.
 
-            // `ldp fp, lr, [sp], #16`
-            insts.push(Inst::LoadP64 {
-                rt: writable_fp_reg(),
-                rt2: writable_link_reg(),
-                mem: PairAMode::SPPostIndexed {
-                    simm7: SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
-                },
-                flags: MemFlags::trusted(),
-            });
+            if lr_only_setup {
+                // `ldr lr, [sp], #16`
+                insts.push(Inst::ULoad64 {
+                    rd: writable_link_reg(),
+                    mem: AMode::SPPostIndexed {
+                        simm9: SImm9::maybe_from_i64(16).unwrap(),
+                    },
+                    flags: MemFlags::trusted(),
+                });
+            } else {
+                // `ldp fp, lr, [sp], #16`
+                insts.push(Inst::LoadP64 {
+                    rt: writable_fp_reg(),
+                    rt2: writable_link_reg(),
+                    mem: PairAMode::SPPostIndexed {
+                        simm7: SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
+                    },
+                    flags: MemFlags::trusted(),
+                });
+            }
         }
 
         if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
@@ -1248,6 +1284,25 @@ impl ABIMachineSpec for AArch64MachineDeps {
 }
 
 impl AArch64MachineDeps {
+    fn use_lr_only_linkage_frame(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        isa_flags: &aarch64_settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> bool {
+        call_conv != isa::CallConv::Tail
+            && frame_layout.function_calls == FunctionCalls::Regular
+            && frame_layout.setup_area_size == 16
+            && !flags.preserve_frame_pointers()
+            && !flags.unwind_info()
+            && !isa_flags.sign_return_address()
+            && frame_layout.incoming_args_size == 0
+            && frame_layout.tail_args_size == frame_layout.incoming_args_size
+            && frame_layout.clobber_size == 0
+            && frame_layout.fixed_frame_storage_size == 0
+            && frame_layout.outgoing_args_size == 0
+    }
+
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
         // When manually unrolling adjust the stack pointer and then write a zero
         // to the stack at that offset. This generates something like
