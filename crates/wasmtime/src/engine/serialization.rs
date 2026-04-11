@@ -327,6 +327,9 @@ impl Metadata<'_> {
 
             // Just a debugging aid, doesn't affect functionality at all.
             debug_adapter_modules: _,
+
+            // This is a runtime GC debugging setting, doesn't affect compilation.
+            gc_zeal_alloc_counter: _,
         } = self.tunables;
 
         Self::check_collector(collector, other.collector)?;

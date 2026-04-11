@@ -56,35 +56,27 @@ pub struct GcStore {
 
     /// An allocation counter that triggers GC when it reaches zero.
     ///
-    /// Initialized from the `WASMTIME_GC_ZEAL_ALLOC_COUNTER` environment
-    /// variable. Decremented on every allocation and when it hits zero, a GC is
+    /// Decremented on every allocation and when it hits zero, a GC is
     /// forced and the counter is reset.
-    #[cfg(all(gc_zeal, feature = "std"))]
+    #[cfg(gc_zeal)]
     gc_zeal_alloc_counter: Option<NonZeroU32>,
 
     /// The initial value to reset the counter to after it triggers.
-    #[cfg(all(gc_zeal, feature = "std"))]
+    #[cfg(gc_zeal)]
     gc_zeal_alloc_counter_init: Option<NonZeroU32>,
 }
 
 impl GcStore {
     /// Create a new `GcStore`.
-    pub fn new(allocation_index: GcHeapAllocationIndex, gc_heap: Box<dyn GcHeap>) -> Self {
+    pub fn new(
+        allocation_index: GcHeapAllocationIndex,
+        gc_heap: Box<dyn GcHeap>,
+        gc_zeal_alloc_counter: Option<NonZeroU32>,
+    ) -> Self {
         let host_data_table = ExternRefHostDataTable::default();
         let func_ref_table = FuncRefTable::default();
 
-        #[cfg(all(gc_zeal, feature = "std"))]
-        let gc_zeal_alloc_counter_init =
-            std::env::var("WASMTIME_GC_ZEAL_ALLOC_COUNTER")
-                .ok()
-                .map(|v| {
-                    v.parse::<NonZeroU32>().unwrap_or_else(|_| {
-                        panic!(
-                            "`WASMTIME_GC_ZEAL_ALLOC_COUNTER` must be a non-zero \
-                             `u32` value, got: {v}"
-                        )
-                    })
-                });
+        let _ = &gc_zeal_alloc_counter;
 
         Self {
             allocation_index,
@@ -92,10 +84,10 @@ impl GcStore {
             host_data_table,
             func_ref_table,
             last_post_gc_allocated_bytes: None,
-            #[cfg(all(gc_zeal, feature = "std"))]
-            gc_zeal_alloc_counter: gc_zeal_alloc_counter_init,
-            #[cfg(all(gc_zeal, feature = "std"))]
-            gc_zeal_alloc_counter_init,
+            #[cfg(gc_zeal)]
+            gc_zeal_alloc_counter,
+            #[cfg(gc_zeal)]
+            gc_zeal_alloc_counter_init: gc_zeal_alloc_counter,
         }
     }
 
@@ -279,7 +271,7 @@ impl GcStore {
     ) -> Result<Result<VMGcRef, u64>> {
         // When gc_zeal is enabled with an allocation counter, decrement it and
         // force a GC cycle when it reaches zero by returning a fake OOM.
-        #[cfg(all(gc_zeal, feature = "std"))]
+        #[cfg(gc_zeal)]
         if let Some(counter) = self.gc_zeal_alloc_counter.take() {
             match NonZeroU32::new(counter.get() - 1) {
                 Some(c) => self.gc_zeal_alloc_counter = Some(c),
