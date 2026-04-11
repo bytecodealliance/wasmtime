@@ -1,5 +1,6 @@
 ;;! component_model_async = true
 ;;! component_model_threading = true
+;;! reference_types = true
 
 ;; Regression test for a bug where the `ThreadNewIndirect` trampoline passed
 ;; `start_func_table_idx` and `start_func_ty_idx` in the wrong order to the
