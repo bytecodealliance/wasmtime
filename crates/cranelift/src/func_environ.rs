@@ -1566,6 +1566,9 @@ impl FuncEnvironment<'_> {
         self.heaps.push(HeapData {
             base,
             bound,
+            guard_size: self.tunables.memory_guard_size,
+            reservation: self.tunables.memory_reservation,
+            may_move: memory.memory_may_move(self.tunables),
             memory,
         })
     }

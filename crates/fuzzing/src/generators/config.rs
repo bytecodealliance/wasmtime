@@ -240,6 +240,11 @@ impl Config {
             pooling.total_stacks = pooling.total_stacks.max(limits::TOTAL_STACKS);
         }
 
+        // Re-enforce internal consistency after all the adjustments above
+        // (e.g. memory_reservation may have been bumped without a
+        // corresponding bump to gc_heap_reservation).
+        self.wasmtime.make_internally_consistent();
+
         // Return the test configuration that this fuzz configuration represents
         // which is used afterwards to test if the `test` here is expected to
         // fail or not.
@@ -419,6 +424,19 @@ impl Config {
             && cfg.opts.memory_init_cow == Some(false)
         {
             let growth = &mut cfg.opts.memory_reservation_for_growth;
+            let max = 1 << 20;
+            *growth = match *growth {
+                Some(n) => Some(n.min(max)),
+                None => Some(max),
+            };
+        }
+
+        // Same cap for GC heap reservation for growth.
+        if ((cfg.opts.signals_based_traps == Some(true) && cfg.opts.gc_heap_guard_size == Some(0))
+            || self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley)
+            && cfg.opts.gc_heap_reservation == Some(0)
+        {
+            let growth = &mut cfg.opts.gc_heap_reservation_for_growth;
             let max = 1 << 20;
             *growth = match *growth {
                 Some(n) => Some(n.min(max)),
@@ -796,7 +814,19 @@ impl WasmtimeConfig {
     /// be considered a "TODO" to go implement more stuff in Wasmtime to accept
     /// these sorts of configurations. For now though it's intended to reflect
     /// the current state of the engine's development.
-    fn make_internally_consistent(&mut self) {
+    pub(crate) fn make_internally_consistent(&mut self) {
+        // When using the pooling allocator, GC heap tunables must match memory
+        // tunables.
+        if let InstanceAllocationStrategy::Pooling(_) = &self.strategy {
+            self.memory_config.gc_heap_reservation = self.memory_config.memory_reservation;
+            self.memory_config.gc_heap_guard_size = self.memory_config.memory_guard_size;
+            self.memory_config.gc_heap_reservation_for_growth =
+                self.memory_config.memory_reservation_for_growth;
+            // memory_may_move is not in MemoryConfig, but gc_heap_may_move
+            // must not conflict. Set it to None so the default matches.
+            self.memory_config.gc_heap_may_move = None;
+        }
+
         if !self.signals_based_traps {
             let cfg = &mut self.memory_config;
             // Spectre-based heap mitigations require signal handlers so
@@ -816,6 +846,17 @@ impl WasmtimeConfig {
                     *val = (*val).min(min);
                 } else {
                     cfg.memory_reservation_for_growth = Some(min);
+                }
+            }
+
+            // Similarly cap gc_heap_reservation_for_growth when signals-based
+            // traps are disabled and the GC heap uses malloc-style allocation.
+            if cfg.gc_heap_guard_size == Some(0) && cfg.gc_heap_reservation == Some(0) {
+                let min = 10 << 20; // 10 MiB
+                if let Some(val) = &mut cfg.gc_heap_reservation_for_growth {
+                    *val = (*val).min(min);
+                } else {
+                    cfg.gc_heap_reservation_for_growth = Some(min);
                 }
             }
         }

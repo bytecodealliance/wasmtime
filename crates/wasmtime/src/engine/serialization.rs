@@ -330,6 +330,13 @@ impl Metadata<'_> {
 
             // This is a runtime GC debugging setting, doesn't affect compilation.
             gc_zeal_alloc_counter: _,
+
+            gc_heap_reservation,
+            gc_heap_guard_size,
+            gc_heap_may_move,
+
+            // This doesn't affect compilation, it's just a runtime setting.
+            gc_heap_reservation_for_growth: _,
         } = self.tunables;
 
         Self::check_collector(collector, other.collector)?;
@@ -406,6 +413,17 @@ impl Metadata<'_> {
         )?;
         Self::check_bool(recording, other.recording, "RR recording support")?;
         Self::check_intra_module_inlining(inlining_intra_module, other.inlining_intra_module)?;
+        Self::check_int(
+            gc_heap_reservation,
+            other.gc_heap_reservation,
+            "GC heap reservation",
+        )?;
+        Self::check_int(
+            gc_heap_guard_size,
+            other.gc_heap_guard_size,
+            "GC heap guard size",
+        )?;
+        Self::check_bool(gc_heap_may_move, other.gc_heap_may_move, "GC heap may move")?;
 
         Ok(())
     }

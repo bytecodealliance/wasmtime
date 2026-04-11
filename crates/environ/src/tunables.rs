@@ -160,6 +160,29 @@ define_tunables! {
         /// forced and the counter is reset. Only effective when
         /// `cfg(gc_zeal)` is enabled.
         pub gc_zeal_alloc_counter: Option<NonZeroU32>,
+
+        /// Initial size, in bytes, to be allocated for GC heaps.
+        ///
+        /// This is the same as `memory_reservation` but for GC heaps.
+        pub gc_heap_reservation: u64,
+
+        /// The size, in bytes, of the guard page region for GC heaps.
+        ///
+        /// This is the same as `memory_guard_size` but for GC heaps.
+        pub gc_heap_guard_size: u64,
+
+        /// The size, in bytes, to allocate at the end of a relocated GC heap
+        /// for growth.
+        ///
+        /// This is the same as `memory_reservation_for_growth` but for GC
+        /// heaps.
+        pub gc_heap_reservation_for_growth: u64,
+
+        /// Whether or not GC heaps are allowed to be reallocated after initial
+        /// allocation at runtime.
+        ///
+        /// This is the same as `memory_may_move` but for GC heaps.
+        pub gc_heap_may_move: bool,
     }
 
     pub struct ConfigTunables {
@@ -200,6 +223,7 @@ impl Tunables {
         if target.is_pulley() {
             ret.signals_based_traps = false;
             ret.memory_guard_size = 0;
+            ret.gc_heap_guard_size = 0;
         }
         Ok(ret)
     }
@@ -239,6 +263,10 @@ impl Tunables {
             concurrency_support: true,
             recording: false,
             gc_zeal_alloc_counter: None,
+            gc_heap_reservation: 0,
+            gc_heap_guard_size: 0,
+            gc_heap_reservation_for_growth: 0,
+            gc_heap_may_move: true,
         }
     }
 
@@ -252,6 +280,12 @@ impl Tunables {
             memory_guard_size: 0x1_0000,
             memory_reservation_for_growth: 1 << 20, // 1MB
             signals_based_traps: true,
+
+            // GC heaps on 32-bit: conservative defaults similar to linear
+            // memories.
+            gc_heap_reservation: 10 * (1 << 20),
+            gc_heap_guard_size: 0x1_0000,
+            gc_heap_reservation_for_growth: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
         }
@@ -278,6 +312,12 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            // GC heaps on 64-bit: use 4GiB reservation and 32MiB guard pages
+            // to enable bounds check elision, matching linear memory defaults.
+            gc_heap_reservation: 1 << 32,
+            gc_heap_guard_size: 32 << 20,
+            gc_heap_reservation_for_growth: 2 << 30, // 2GB
+
             signals_based_traps: true,
             ..Tunables::default_miri()
         }
@@ -295,6 +335,20 @@ impl Tunables {
             // use the default Wasm page size, for now.
             page_size_log2: 16,
         }
+    }
+
+    /// Whether the GC heap may actually move in practice, given the
+    /// configured GC heap tunables.
+    ///
+    /// This mirrors `Memory::memory_may_move` but uses the GC-specific
+    /// tunables rather than the linear-memory tunables.
+    pub fn gc_heap_memory_may_move(&self) -> bool {
+        if !self.gc_heap_may_move {
+            return false;
+        }
+        let memory = self.gc_heap_memory_type();
+        let max = memory.maximum_byte_size().unwrap_or(u64::MAX);
+        max > self.gc_heap_reservation
     }
 }
 

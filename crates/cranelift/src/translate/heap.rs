@@ -45,6 +45,15 @@ pub struct HeapData {
 
     /// The type of wasm memory that this heap is operating on.
     pub memory: Memory,
+
+    /// The size of the guard page region for this heap.
+    pub guard_size: u64,
+
+    /// The virtual memory reservation for this heap.
+    pub reservation: u64,
+
+    /// Whether this heap's base pointer may move at runtime.
+    pub may_move: bool,
 }
 
 impl HeapData {

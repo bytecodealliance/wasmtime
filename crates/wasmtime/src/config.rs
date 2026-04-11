@@ -1947,6 +1947,65 @@ impl Config {
         self
     }
 
+    /// Configures the initial size, in bytes, to be allocated for GC heaps.
+    ///
+    /// This is similar to [`Config::memory_reservation`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details
+    /// on what "reservation" means and the implications of this setting.
+    ///
+    /// ## Default
+    ///
+    /// The default value for this property depends on the host platform. For
+    /// 64-bit platforms this defaults to 4GiB. For 32-bit platforms this
+    /// defaults to 10MiB.
+    pub fn gc_heap_reservation(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_reservation = Some(bytes);
+        self
+    }
+
+    /// Configures the size, in bytes, of the guard page region for GC heaps.
+    ///
+    /// This is similar to [`Config::memory_guard_size`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details on
+    /// what guard pages are and the implications of this setting.
+    ///
+    /// ## Default
+    ///
+    /// The default value for this property is 32MiB on 64-bit platforms and
+    /// 64KiB on 32-bit platforms.
+    pub fn gc_heap_guard_size(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_guard_size = Some(bytes);
+        self
+    }
+
+    /// Configures the size, in bytes, of the extra virtual memory space
+    /// reserved after a GC heap is relocated.
+    ///
+    /// This is similar to [`Config::memory_reservation_for_growth`] but applies
+    /// to the GC heap rather than to linear memories. See that method for more
+    /// details.
+    ///
+    /// ## Default
+    ///
+    /// For 64-bit platforms this defaults to 2GiB, and for 32-bit platforms
+    /// this defaults to 1MiB.
+    pub fn gc_heap_reservation_for_growth(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_reservation_for_growth = Some(bytes);
+        self
+    }
+
+    /// Indicates whether GC heaps are allowed to be reallocated after initial
+    /// allocation at runtime.
+    ///
+    /// This is similar to [`Config::memory_may_move`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details.
+    ///
+    /// The default value for this option is `true`.
+    pub fn gc_heap_may_move(&mut self, enable: bool) -> &mut Self {
+        self.tunables.gc_heap_may_move = Some(enable);
+        self
+    }
+
     /// Indicates whether a guard region is present before allocations of
     /// linear memory.
     ///
@@ -2456,6 +2515,7 @@ impl Config {
             if !cfg!(has_native_signals) {
                 tunables.signals_based_traps = cfg!(has_native_signals);
                 tunables.memory_guard_size = 0;
+                tunables.gc_heap_guard_size = 0;
             }
 
             // When virtual memory is not available use slightly different
@@ -2465,6 +2525,8 @@ impl Config {
                 tunables.memory_reservation = 0;
                 tunables.memory_reservation_for_growth = 1 << 20; // 1MB
                 tunables.memory_init_cow = false;
+                tunables.gc_heap_reservation = 0;
+                tunables.gc_heap_reservation_for_growth = 1 << 20; // 1MB
             }
         }
 
@@ -2532,6 +2594,50 @@ impl Config {
                 "concurrency support must be enabled to use the component \
                  model async or threading features"
             )
+        }
+
+        // If the pooling allocator is used and GC is enabled, check that
+        // memories and the GC heap are configured identically, since the
+        // pooling allocator can't support differently-configured heaps.
+        #[cfg(feature = "pooling-allocator")]
+        if matches!(
+            &self.allocation_strategy,
+            InstanceAllocationStrategy::Pooling(_)
+        ) && tunables.collector.is_some()
+        {
+            if tunables.memory_reservation != tunables.gc_heap_reservation {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_reservation` ({}) \
+                     and `gc_heap_reservation` ({}) must be the same",
+                    tunables.memory_reservation,
+                    tunables.gc_heap_reservation,
+                );
+            }
+            if tunables.memory_guard_size != tunables.gc_heap_guard_size {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_guard_size` ({}) \
+                     and `gc_heap_guard_size` ({}) must be the same",
+                    tunables.memory_guard_size,
+                    tunables.gc_heap_guard_size,
+                );
+            }
+            if tunables.memory_reservation_for_growth != tunables.gc_heap_reservation_for_growth {
+                bail!(
+                    "when using the pooling allocator with GC, \
+                     `memory_reservation_for_growth` ({}) and \
+                     `gc_heap_reservation_for_growth` ({}) must be the same",
+                    tunables.memory_reservation_for_growth,
+                    tunables.gc_heap_reservation_for_growth,
+                );
+            }
+            if tunables.memory_may_move != tunables.gc_heap_may_move {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_may_move` ({}) \
+                     and `gc_heap_may_move` ({}) must be the same",
+                    tunables.memory_may_move,
+                    tunables.gc_heap_may_move,
+                );
+            }
         }
 
         Ok((tunables, features))

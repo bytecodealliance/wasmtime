@@ -1449,11 +1449,7 @@ impl FuncEnvironment<'_> {
         let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
 
         let mut flags = ir::MemFlags::trusted();
-        if !self
-            .tunables
-            .gc_heap_memory_type()
-            .memory_may_move(self.tunables)
-        {
+        if !self.tunables.gc_heap_memory_may_move() {
             flags.set_readonly();
             flags.set_can_move();
         }
@@ -1512,6 +1508,9 @@ impl FuncEnvironment<'_> {
             base,
             bound,
             memory,
+            guard_size: self.tunables.gc_heap_guard_size,
+            reservation: self.tunables.gc_heap_reservation,
+            may_move: self.tunables.gc_heap_memory_may_move(),
         });
         self.gc_heap = Some(heap);
         heap
