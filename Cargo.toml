@@ -214,6 +214,9 @@ check-cfg = [
   'cfg(pulley_disable_interp_simd)',
   'cfg(arc_try_new)',
 
+  # Activated by `cargo fuzz` when building for fuzzing.
+  'cfg(fuzzing)',
+
   # When enabled, `cfg(gc_zeal)` activates aggressive GC debugging assertions.
   'cfg(gc_zeal)',
 ]
