@@ -109,7 +109,19 @@ impl Drop for PtrLen {
     }
 }
 
-// TODO: add a `Drop` impl for `cfg(target_os = "windows")`
+#[cfg(target_os = "windows")]
+impl Drop for PtrLen {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            use windows_sys::Win32::System::Memory::{MEM_RELEASE, VirtualFree};
+
+            unsafe {
+                let ok = VirtualFree(self.ptr.cast(), 0, MEM_RELEASE);
+                debug_assert_ne!(ok, 0, "unable to free memory");
+            }
+        }
+    }
+}
 
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
@@ -214,7 +226,9 @@ impl Memory {
     /// Likely to invalidate existing function pointers, causing unsafety.
     pub(crate) unsafe fn free_memory(&mut self) {
         self.allocations.clear();
+        drop(mem::replace(&mut self.current, PtrLen::new()));
         self.already_protected = 0;
+        self.position = 0;
     }
 }
 
