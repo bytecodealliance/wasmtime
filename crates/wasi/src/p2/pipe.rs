@@ -164,17 +164,34 @@ impl AsyncReadStream {
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(crate::MAX_READ_SIZE_ALLOC);
-                let sent = match reader.read_buf(&mut buf).await {
-                    Ok(nbytes) if nbytes == 0 => sender.send(Err(StreamError::Closed)).await,
-                    Ok(_) => sender.send(Ok(buf.freeze())).await,
+                let eof = match reader.read_buf(&mut buf).await {
+                    Ok(nbytes) if nbytes == 0 => {
+                        if sender.send(Err(StreamError::Closed)).await.is_err() {
+                            // no more receiver - stop trying to read
+                            break;
+                        }
+                        true
+                    }
+                    Ok(_) => {
+                        if sender.send(Ok(buf.freeze())).await.is_err() {
+                            // no more receiver - stop trying to read
+                            break;
+                        }
+                        false
+                    }
                     Err(e) => {
-                        sender
+                        if sender
                             .send(Err(StreamError::LastOperationFailed(e.into())))
                             .await
+                            .is_err()
+                        {
+                            // no more receiver - stop trying to read
+                            break;
+                        }
+                        false
                     }
                 };
-                if sent.is_err() {
-                    // no more receiver - stop trying to read
+                if eof {
                     break;
                 }
             }
