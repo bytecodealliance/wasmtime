@@ -51,7 +51,7 @@ tracing-subscriber = { workspace = true }
 wasmtime = { workspace = true, features = ['default', 'anyhow'] }
 tokio = { workspace = true, features = ['fs', 'macros'] }
 futures = { workspace = true, default-features = false, features = ['alloc', 'async-await'] }
-sha2 = { workspace = true, features = ['std'] }
+sha2 = { workspace = true }
 base64 = { workspace = true }
 flate2 = { workspace = true }
 wasm-compose = { workspace = true }

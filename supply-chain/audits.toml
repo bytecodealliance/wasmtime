@@ -2737,6 +2737,12 @@ This is a minor update that looks to add some more detected CPU features and
 various other minor portability fixes such as MIRI support.
 """
 
+[[audits.cpufeatures]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.8 -> 0.2.14"
+notes = "Minor updates, nothing awry. Mostly portability updates."
+
 [[audits.criterion]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -3179,6 +3185,12 @@ version = "0.7.10"
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 version = "0.3.3"
+
+[[audits.getrandom]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.1 -> 0.4.2"
+notes = "Nothing awry in this update, standard updates for some platforms and other misc things."
 
 [[audits.gimli]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -4305,6 +4317,12 @@ looks to be receiving new assistance for maintainership as well.
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.23 -> 1.0.27"
+
+[[audits.rand]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.10.1"
+notes = "Minor logging-based updated fixing a recent advisory for the crate."
 
 [[audits.raw-cpuid]]
 who = "Alex Crichton <alex@alexcrichton.com>"

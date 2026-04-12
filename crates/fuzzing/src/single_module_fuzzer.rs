@@ -274,7 +274,7 @@ fn extract_fuzz_input(data: &[u8]) -> wasmtime::Result<FuzzInput<'_>> {
 mod tests {
     use super::*;
     use rand::rngs::SmallRng;
-    use rand::{RngCore, SeedableRng};
+    use rand::{Rng, SeedableRng};
 
     #[test]
     fn changing_configuration_does_not_change_module() {

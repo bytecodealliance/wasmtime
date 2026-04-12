@@ -9,7 +9,7 @@ mod component {
     use proc_macro2::TokenStream;
     use quote::quote;
     use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{RngExt, SeedableRng};
     use std::collections::HashMap;
     use std::env;
     use std::fmt::Write;
@@ -43,7 +43,7 @@ mod component {
             seed.parse::<u64>()
                 .with_context(|| format_err!("expected u64 in WASMTIME_FUZZ_SEED"))?
         } else {
-            StdRng::from_entropy().r#gen()
+            rand::random()
         };
 
         eprintln!(
@@ -184,8 +184,8 @@ mod component {
     ) -> Result<T> {
         let mut bytes = Vec::new();
         loop {
-            let count = rng.gen_range(1000..2000);
-            bytes.extend(iter::repeat_with(|| rng.r#gen::<u8>()).take(count));
+            let count = rng.random_range(1000..2000);
+            bytes.extend(iter::repeat_with(|| rng.random::<u8>()).take(count));
 
             match f(&mut Unstructured::new(&bytes)) {
                 Ok(ret) => break Ok(ret),

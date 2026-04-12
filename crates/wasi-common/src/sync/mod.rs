@@ -29,7 +29,7 @@ pub use sched::sched_ctx;
 
 use self::net::Socket;
 use crate::{Error, WasiCtx, WasiFile, file::FileAccessMode, table::Table};
-use cap_rand::{Rng, RngCore, SeedableRng};
+use rand::{Rng, SeedableRng};
 use std::mem;
 use std::path::Path;
 
@@ -129,9 +129,8 @@ impl WasiCtxBuilder {
     }
 }
 
-pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
-    Box::new(cap_rand::rngs::StdRng::from_seed(rng.r#gen()))
+pub fn random_ctx() -> Box<dyn Rng + Send + Sync> {
+    Box::new(rand::rngs::StdRng::from_seed(rand::random()))
 }
 
 #[cfg(feature = "wasmtime")]

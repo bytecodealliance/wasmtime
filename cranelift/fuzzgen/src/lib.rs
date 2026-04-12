@@ -13,7 +13,7 @@ use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 use target_isa_extras::TargetIsaExtras;
 use target_lexicon::Architecture;
 

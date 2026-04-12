@@ -225,13 +225,6 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<cap_rand::Error> for Error {
-    fn from(err: cap_rand::Error) -> Error {
-        // I picked Error::Io as a 'reasonable default', FIXME dan is this ok?
-        from_raw_os_error(err.raw_os_error()).unwrap_or_else(|| Error::from(Errno::Io))
-    }
-}
-
 impl From<wiggle::GuestError> for Error {
     fn from(err: wiggle::GuestError) -> Error {
         use wiggle::GuestError::*;

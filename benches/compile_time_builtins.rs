@@ -474,7 +474,7 @@ mod inc_list {
 
 mod inc_random {
     use super::*;
-    use rand::{Rng, SeedableRng as _};
+    use rand::{RngExt, SeedableRng as _};
 
     pub fn bench(c: &mut Criterion) {
         let mut g = c.benchmark_group("increment-random-byte-in-buf");
