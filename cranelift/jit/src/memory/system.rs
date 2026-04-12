@@ -234,10 +234,11 @@ impl Memory {
 
 impl Drop for Memory {
     fn drop(&mut self) {
-        // leak memory to guarantee validity of function pointers
+        // Leak all JIT memory to guarantee validity of published function pointers.
         mem::replace(&mut self.allocations, Vec::new())
             .into_iter()
             .for_each(mem::forget);
+        mem::forget(mem::replace(&mut self.current, PtrLen::new()));
     }
 }
 
