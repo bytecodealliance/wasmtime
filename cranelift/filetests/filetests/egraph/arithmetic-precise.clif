@@ -244,9 +244,11 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; function %simplify_vector_icmp_eq_iadd_commute(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0xffffffffffffffffffffffffffffffff
+;
 ; block0(v0: i32x4, v1: i32x4):
-;     v5 = icmp eq v0, v0
-;     return v5
+;     v9 = icmp eq v0, v0
+;     return v9
 ; }
 
 ;; (x - y) != x --> y != 0
