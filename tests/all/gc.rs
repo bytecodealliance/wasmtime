@@ -1687,7 +1687,7 @@ fn select_gc_ref_stack_map() -> Result<()> {
     )?;
 
     let mut store = Store::new(&engine, ());
-    let force_gc = Func::wrap(&mut store, |mut caller: Caller<'_>| {
+    let force_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
         caller.gc(None)?;
         Ok(())
     });
