@@ -4,6 +4,8 @@ use cranelift_codegen::ir::{self, GlobalValue, Type};
 use cranelift_entity::entity_impl;
 use wasmtime_environ::{IndexType, Memory};
 
+pub use wasmtime_environ::MemoryKind;
+
 /// An opaque reference to a [`HeapData`][crate::HeapData].
 ///
 /// While the order is stable, it is arbitrary.
@@ -46,14 +48,8 @@ pub struct HeapData {
     /// The type of wasm memory that this heap is operating on.
     pub memory: Memory,
 
-    /// The size of the guard page region for this heap.
-    pub guard_size: u64,
-
-    /// The virtual memory reservation for this heap.
-    pub reservation: u64,
-
-    /// Whether this heap's base pointer may move at runtime.
-    pub may_move: bool,
+    /// Whether this is a linear memory or a GC heap.
+    pub kind: MemoryKind,
 }
 
 impl HeapData {
@@ -62,5 +58,13 @@ impl HeapData {
             IndexType::I32 => ir::types::I32,
             IndexType::I64 => ir::types::I64,
         }
+    }
+
+    /// Get the [`MemoryTunables`] for this heap based on its [`MemoryKind`].
+    pub fn memory_tunables<'a>(
+        &self,
+        tunables: &'a wasmtime_environ::Tunables,
+    ) -> wasmtime_environ::MemoryTunables<'a> {
+        wasmtime_environ::MemoryTunables::new(tunables, self.kind)
     }
 }

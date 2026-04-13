@@ -33,13 +33,15 @@ impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(engine: &Engine, ty: &wasmtime_environ::Memory) -> Result<Self> {
         let tunables = engine.tunables();
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(tunables, wasmtime_environ::MemoryKind::LinearMemory);
         // Note that without a limiter being passed to `limit_new` this
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
-        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
+        let mmap_memory = MmapMemory::new(ty, &memory_tunables, minimum_bytes, maximum_bytes)?;
         let boxed: Box<dyn crate::runtime::vm::RuntimeLinearMemory> =
             try_new::<Box<_>>(mmap_memory)?;
-        Self::wrap(engine, ty, LocalMemory::new(ty, tunables, boxed, None)?)
+        Self::wrap(engine, ty, LocalMemory::new(ty, &memory_tunables, boxed, None)?)
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].

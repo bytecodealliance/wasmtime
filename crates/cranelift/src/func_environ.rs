@@ -4,8 +4,8 @@ pub(crate) mod stack_switching;
 use crate::BuiltinFunctionSignatures;
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
-    TargetEnvironment,
+    FuncTranslationStacks, GlobalVariable, Heap, HeapData, MemoryKind, StructFieldsVec, TableData,
+    TableSize, TargetEnvironment,
 };
 use crate::trap::TranslateTrap;
 use cranelift_codegen::cursor::FuncCursor;
@@ -28,10 +28,10 @@ use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
     EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
-    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TagIndex, Tunables,
-    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
+    TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
+    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1566,9 +1566,7 @@ impl FuncEnvironment<'_> {
         self.heaps.push(HeapData {
             base,
             bound,
-            guard_size: self.tunables.memory_guard_size,
-            reservation: self.tunables.memory_reservation,
-            may_move: memory.memory_may_move(self.tunables),
+            kind: MemoryKind::LinearMemory,
             memory,
         })
     }
@@ -1581,9 +1579,10 @@ impl FuncEnvironment<'_> {
         offset: i32,
     ) -> ir::GlobalValue {
         let pointer_type = self.pointer_type();
+        let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
 
         let mut flags = ir::MemFlags::trusted().with_can_move();
-        if !memory.memory_may_move(self.tunables) {
+        if !memory.memory_may_move(&memory_tunables) {
             flags.set_readonly();
         }
 

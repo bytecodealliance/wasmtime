@@ -1067,10 +1067,13 @@ mod tests {
         let store = store.as_context();
         let tunables = store.engine().tunables();
         assert_eq!(tunables.memory_guard_size, 0);
-        assert!(
-            !mem.wasmtime_ty(store.0)
-                .can_elide_bounds_check(tunables, 12)
-        );
+        assert!(!mem.wasmtime_ty(store.0).can_elide_bounds_check(
+            &wasmtime_environ::MemoryTunables::new(
+                tunables,
+                wasmtime_environ::MemoryKind::LinearMemory,
+            ),
+            12,
+        ));
     }
 
     #[test]

@@ -336,19 +336,72 @@ impl Tunables {
             page_size_log2: 16,
         }
     }
+}
 
-    /// Whether the GC heap may actually move in practice, given the
-    /// configured GC heap tunables.
-    ///
-    /// This mirrors `Memory::memory_may_move` but uses the GC-specific
-    /// tunables rather than the linear-memory tunables.
-    pub fn gc_heap_memory_may_move(&self) -> bool {
-        if !self.gc_heap_may_move {
-            return false;
+/// Whether a heap is backing a linear memory or a GC heap.
+///
+/// This is used by [`MemoryTunables`] to select between the memory tunables and
+/// the GC heap tunables.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MemoryKind {
+    /// A WebAssembly linear memory.
+    LinearMemory,
+    /// A GC heap for garbage-collected objects.
+    GcHeap,
+}
+
+/// A view into a [`Tunables`] that selects the appropriate linear-memory or
+/// GC-heap flavor of each tunable based on a [`MemoryKind`].
+pub struct MemoryTunables<'a> {
+    tunables: &'a Tunables,
+    kind: MemoryKind,
+}
+
+impl<'a> MemoryTunables<'a> {
+    /// Create a new `MemoryTunables` view.
+    pub fn new(tunables: &'a Tunables, kind: MemoryKind) -> Self {
+        Self { tunables, kind }
+    }
+
+    /// The virtual memory reservation for this kind of memory.
+    pub fn reservation(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation,
         }
-        let memory = self.gc_heap_memory_type();
-        let max = memory.maximum_byte_size().unwrap_or(u64::MAX);
-        max > self.gc_heap_reservation
+    }
+
+    /// The size of the guard page region for this kind of memory.
+    pub fn guard_size(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_guard_size,
+            MemoryKind::GcHeap => self.tunables.gc_heap_guard_size,
+        }
+    }
+
+    /// Extra virtual memory to reserve beyond the initially mapped pages for
+    /// this kind of memory.
+    pub fn reservation_for_growth(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation_for_growth,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation_for_growth,
+        }
+    }
+
+    /// Whether this kind of memory's base pointer may be relocated at runtime.
+    pub fn may_move(&self) -> bool {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_may_move,
+            MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
+        }
+    }
+
+    /// Get the underlying tunables.
+    ///
+    /// This is ONLY for accessing tunable fields that DO NOT come in a
+    /// linear-memory flavor and a GC-heap flavor.
+    pub fn tunables(&self) -> &'a Tunables {
+        self.tunables
     }
 }
 

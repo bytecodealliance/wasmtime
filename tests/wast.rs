@@ -197,12 +197,6 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
 
         let small_guard = 64 * 1024;
         cfg.memory_guard_size(small_guard);
-
-        // When using the pooling allocator, GC heap tunables must match
-        // memory tunables.
-        cfg.gc_heap_reservation(2 * u64::from(wasmtime_environ::Memory::DEFAULT_PAGE_SIZE));
-        cfg.gc_heap_reservation_for_growth(0);
-        cfg.gc_heap_guard_size(small_guard);
     }
 
     let _pooling_lock = if config.pooling {
@@ -228,9 +222,6 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
             cfg.memory_reservation(max_memory_size as u64);
             cfg.memory_reservation_for_growth(0);
             cfg.memory_guard_size(0);
-            cfg.gc_heap_reservation(max_memory_size as u64);
-            cfg.gc_heap_reservation_for_growth(0);
-            cfg.gc_heap_guard_size(0);
         }
 
         let mut pool = PoolingAllocationConfig::default();

@@ -412,36 +412,37 @@ impl Config {
             memory_config.configure(&mut cfg);
         };
 
-        // If malloc-based memory is going to be used, which requires these four
-        // options set to specific values (and Pulley auto-sets two of them)
-        // then be sure to cap `memory_reservation_for_growth` at a smaller
-        // value than the default. For malloc-based memory reservation beyond
-        // the end of memory isn't captured by `StoreLimiter` so we need to be
-        // sure it's small enough to not blow OOM limits while fuzzing.
-        if ((cfg.opts.signals_based_traps == Some(true) && cfg.opts.memory_guard_size == Some(0))
-            || self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley)
-            && cfg.opts.memory_reservation == Some(0)
-            && cfg.opts.memory_init_cow == Some(false)
-        {
-            let growth = &mut cfg.opts.memory_reservation_for_growth;
-            let max = 1 << 20;
-            *growth = match *growth {
-                Some(n) => Some(n.min(max)),
-                None => Some(max),
-            };
-        }
-
-        // Same cap for GC heap reservation for growth.
-        if ((cfg.opts.signals_based_traps == Some(true) && cfg.opts.gc_heap_guard_size == Some(0))
-            || self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley)
-            && cfg.opts.gc_heap_reservation == Some(0)
-        {
-            let growth = &mut cfg.opts.gc_heap_reservation_for_growth;
-            let max = 1 << 20;
-            *growth = match *growth {
-                Some(n) => Some(n.min(max)),
-                None => Some(max),
-            };
+        // If malloc-based memory is going to be used, which requires these
+        // options set to specific values (and Pulley auto-sets some of them)
+        // then be sure to cap `memory_reservation_for_growth` and
+        // `gc_heap_reservation_for_growth` at a smaller value than the
+        // default. For malloc-based memory/heaps, reservation beyond the end
+        // isn't captured by `StoreLimiter` so we need to be sure it's small
+        // enough to not blow OOM limits while fuzzing.
+        let is_pulley = self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley;
+        let signals_traps = cfg.opts.signals_based_traps == Some(true);
+        if signals_traps || is_pulley {
+            if ((signals_traps && cfg.opts.memory_guard_size == Some(0)) || is_pulley)
+                && cfg.opts.memory_reservation == Some(0)
+                && cfg.opts.memory_init_cow == Some(false)
+            {
+                let growth = &mut cfg.opts.memory_reservation_for_growth;
+                let max = 1 << 20;
+                *growth = match *growth {
+                    Some(n) => Some(n.min(max)),
+                    None => Some(max),
+                };
+            }
+            if ((signals_traps && cfg.opts.gc_heap_guard_size == Some(0)) || is_pulley)
+                && cfg.opts.gc_heap_reservation == Some(0)
+            {
+                let growth = &mut cfg.opts.gc_heap_reservation_for_growth;
+                let max = 1 << 20;
+                *growth = match *growth {
+                    Some(n) => Some(n.min(max)),
+                    None => Some(max),
+                };
+            }
         }
 
         log::debug!("creating wasmtime config with CLI options:\n{cfg}");
@@ -835,8 +836,8 @@ impl WasmtimeConfig {
             cfg.cranelift_enable_heap_access_spectre_mitigations = None;
 
             // With configuration settings that match the use of malloc for
-            // linear memories cap the `memory_reservation_for_growth` value
-            // to something reasonable to avoid OOM in fuzzing.
+            // linear memories and GC heaps, cap the reservation-for-growth
+            // values to something reasonable to avoid OOM in fuzzing.
             if !cfg.memory_init_cow
                 && cfg.memory_guard_size == Some(0)
                 && cfg.memory_reservation == Some(0)

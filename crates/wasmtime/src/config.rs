@@ -50,6 +50,12 @@ pub enum InstanceAllocationStrategy {
     /// A pool of resources is created in advance and module instantiation reuses resources
     /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
     /// is dropped.
+    ///
+    /// When GC is enabled, the pooling allocator requires that the GC heap
+    /// configuration matches the linear memory configuration (i.e.,
+    /// `gc_heap_reservation` must equal `memory_reservation`, etc.). By
+    /// default, if no `gc_heap_*` tunables are explicitly configured, they
+    /// automatically inherit the `memory_*` values.
     #[cfg(feature = "pooling-allocator")]
     Pooling(PoolingAllocationConfig),
 }
@@ -1955,8 +1961,10 @@ impl Config {
     ///
     /// ## Default
     ///
-    /// The default value for this property depends on the host platform. For
-    /// 64-bit platforms this defaults to 4GiB. For 32-bit platforms this
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this property depends on the host platform: for
+    /// 64-bit platforms this defaults to 4GiB, and for 32-bit platforms this
     /// defaults to 10MiB.
     pub fn gc_heap_reservation(&mut self, bytes: u64) -> &mut Self {
         self.tunables.gc_heap_reservation = Some(bytes);
@@ -1971,7 +1979,9 @@ impl Config {
     ///
     /// ## Default
     ///
-    /// The default value for this property is 32MiB on 64-bit platforms and
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this property is 32MiB on 64-bit platforms and
     /// 64KiB on 32-bit platforms.
     pub fn gc_heap_guard_size(&mut self, bytes: u64) -> &mut Self {
         self.tunables.gc_heap_guard_size = Some(bytes);
@@ -1987,7 +1997,9 @@ impl Config {
     ///
     /// ## Default
     ///
-    /// For 64-bit platforms this defaults to 2GiB, and for 32-bit platforms
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// for 64-bit platforms this defaults to 2GiB, and for 32-bit platforms
     /// this defaults to 1MiB.
     pub fn gc_heap_reservation_for_growth(&mut self, bytes: u64) -> &mut Self {
         self.tunables.gc_heap_reservation_for_growth = Some(bytes);
@@ -2000,7 +2012,11 @@ impl Config {
     /// This is similar to [`Config::memory_may_move`] but applies to the GC
     /// heap rather than to linear memories. See that method for more details.
     ///
-    /// The default value for this option is `true`.
+    /// ## Default
+    ///
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this option is `true`.
     pub fn gc_heap_may_move(&mut self, enable: bool) -> &mut Self {
         self.tunables.gc_heap_may_move = Some(enable);
         self
@@ -2442,6 +2458,15 @@ impl Config {
         target_lexicon::Triple::host()
     }
 
+    /// Returns `true` if any of the `gc_heap_*` tunables have been explicitly
+    /// configured.
+    fn any_gc_heap_tunables_configured(&self) -> bool {
+        self.tunables.gc_heap_reservation.is_some()
+            || self.tunables.gc_heap_guard_size.is_some()
+            || self.tunables.gc_heap_reservation_for_growth.is_some()
+            || self.tunables.gc_heap_may_move.is_some()
+    }
+
     pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
         let features = self.features();
 
@@ -2491,6 +2516,18 @@ impl Config {
             RRConfig::None => {}
         };
 
+        // If no GC heap tunables are explicitly configured, copy the memory
+        // tunables' configured values so that GC heaps default to the same
+        // configuration as linear memories.
+        let mut tunables_config = self.tunables.clone();
+        if !self.any_gc_heap_tunables_configured() {
+            tunables_config.gc_heap_reservation = tunables_config.memory_reservation;
+            tunables_config.gc_heap_guard_size = tunables_config.memory_guard_size;
+            tunables_config.gc_heap_reservation_for_growth =
+                tunables_config.memory_reservation_for_growth;
+            tunables_config.gc_heap_may_move = tunables_config.memory_may_move;
+        }
+
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
         // By default this is enabled with the Cargo feature, and if the feature
@@ -2539,7 +2576,7 @@ impl Config {
             tunables.signals_based_traps = false;
         }
 
-        self.tunables.configure(&mut tunables);
+        tunables_config.configure(&mut tunables);
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
