@@ -513,6 +513,7 @@ pub use wasmtime_environ::OperatorCost;
 pub use wasmtime_environ::ToWasmtimeResult;
 #[doc(inline)]
 pub use wasmtime_environ::error;
+pub use wasmtime_environ::{FuncIndex, StaticModuleIndex};
 
 // Only for use in `bindgen!`-generated code.
 #[doc(hidden)]

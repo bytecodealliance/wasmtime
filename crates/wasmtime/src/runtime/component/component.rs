@@ -558,6 +558,31 @@ impl Component {
         &self.inner.code
     }
 
+    /// Get this component's code object's `.text` section, containing its
+    /// compiled executable code.
+    pub fn text(&self) -> &[u8] {
+        self.engine_code().text()
+    }
+
+    /// Get information about functions in this component's `.text` section:
+    /// their module index, function index, name, and offset+length.
+    pub fn functions(&self) -> impl Iterator<Item = crate::ModuleFunction> + '_ {
+        self.inner
+            .static_modules
+            .values()
+            .flat_map(|m| m.functions())
+    }
+
+    /// Get the address map for this component's `.text` section.
+    ///
+    /// See [`Module::address_map`] for more details.
+    pub fn address_map(&self) -> Option<impl Iterator<Item = (usize, Option<u32>)> + '_> {
+        Some(
+            wasmtime_environ::iterate_address_map(self.engine_code().address_map_data())?
+                .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
+        )
+    }
+
     /// Same as [`Module::serialize`], except for a component.
     ///
     /// Note that the artifact produced here must be passed to

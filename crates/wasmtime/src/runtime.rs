@@ -99,7 +99,7 @@ pub use instantiate::CompiledModule;
 pub use limits::*;
 pub use linker::*;
 pub use memory::*;
-pub use module::{Module, ModuleExport};
+pub use module::{Module, ModuleExport, ModuleFunction};
 pub use resources::*;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
