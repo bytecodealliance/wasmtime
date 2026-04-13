@@ -1,7 +1,7 @@
 use crate::Module;
 use crate::component::ResourceType;
 use crate::component::func::HostFunc;
-use crate::component::linker::{Definition, Strings};
+use crate::component::linker::Definition;
 use crate::component::types::{FutureType, StreamType};
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
@@ -13,11 +13,12 @@ use wasmtime_environ::component::{
     TypeStreamTableIndex,
 };
 use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{Atom, StringPool};
 
 pub struct TypeChecker<'a> {
     pub engine: &'a Engine,
     pub types: &'a Arc<ComponentTypes>,
-    pub strings: &'a Strings,
+    pub strings: &'a StringPool,
     pub imported_resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
@@ -147,7 +148,7 @@ impl TypeChecker<'_> {
     fn instance(
         &mut self,
         expected: &TypeComponentInstance,
-        actual: Option<&NameMap<usize, Definition>>,
+        actual: Option<&NameMap<Atom, Definition>>,
     ) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
