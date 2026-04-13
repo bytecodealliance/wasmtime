@@ -3750,14 +3750,15 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         self.instruction(Block(BlockType::Empty));
         self.instruction(Block(BlockType::Empty));
+        let (memory, ty) = mem_opts.memory.unwrap();
 
         // Calculate the full byte size of memory with `memory.size`. Note that
         // arithmetic here is done always in 64-bits to accommodate 4G memories.
         // Additionally it's assumed that 64-bit memories never fill up
         // entirely.
-        self.instruction(MemorySize(mem_opts.memory.unwrap().0.as_u32()));
+        self.instruction(MemorySize(memory.as_u32()));
         extend_to_64(self);
-        self.instruction(I64Const(16));
+        self.instruction(I64Const(ty.page_size_log2.into()));
         self.instruction(I64Shl);
 
         // Calculate the end address of the string. This is done by adding the
