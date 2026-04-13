@@ -1131,6 +1131,31 @@ impl Table {
             }
         }
     }
+
+    /// Manually resets all table elements to a null bit pattern.
+    ///
+    /// Used in the pooling allocator when `madvise` fails to reset pages back
+    /// to their original contents. In such a situation the previous contents of
+    /// the table are unknown so this resets them all to defined values.
+    pub fn manually_memset_zeros(&mut self) {
+        match self.element_type() {
+            TableElementType::Func => {
+                let (funcrefs, _lazy_init) = self.funcrefs_mut();
+                funcrefs.fill(MaybeTaggedFuncRef(None));
+            }
+            TableElementType::GcRef => {
+                // Note that this explicitly contains no barriers as all table
+                // GC elements should already have been dropped before returning
+                // the table back to the pool.
+                for r in self.gc_refs_mut() {
+                    *r = None;
+                }
+            }
+            TableElementType::Cont => {
+                self.contrefs_mut().fill(None);
+            }
+        }
+    }
 }
 
 // The default table representation is an empty funcref table that cannot grow.
