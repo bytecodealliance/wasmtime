@@ -8,6 +8,8 @@ fn successful_instantiation() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(1 << 16);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
@@ -28,6 +30,8 @@ fn memory_limit() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(1 << 16);
     config.memory_reservation(3 << 16);
+    config.gc_heap_guard_size(1 << 16);
+    config.gc_heap_reservation(3 << 16);
     config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
@@ -206,6 +210,8 @@ fn memory_zeroed() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -243,6 +249,8 @@ fn table_limit() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -376,6 +384,8 @@ fn table_zeroed() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(1 << 16);
 
     let engine = Engine::new(&config)?;
 
@@ -411,6 +421,8 @@ fn total_core_instances_limit() -> Result<()> {
     config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.memory_reservation(1 << 16);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(1 << 16);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module)"#)?;
@@ -677,6 +689,8 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
             let mut config = Config::new();
             config.memory_reservation(max_size);
             config.memory_guard_size(guard_size);
+            config.gc_heap_reservation(max_size);
+            config.gc_heap_guard_size(guard_size);
             config.allocation_strategy(pool);
             config.signals_based_traps(signals_based_traps);
 
@@ -1418,6 +1432,8 @@ fn pooling_reuse_resets() -> Result<()> {
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
     config.memory_guard_size(0);
     config.memory_reservation(0x2000000);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(0x2000000);
     let engine = Engine::new(&config)?;
 
     let a = Module::new(&engine, r#"(module (memory (export "m") 10 100))"#)?;

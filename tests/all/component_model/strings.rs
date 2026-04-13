@@ -591,6 +591,8 @@ fn pass_string_on_component_boundary() -> Result<()> {
     let mut config = Config::new();
     config.memory_guard_size(0);
     config.memory_reservation(65536);
+    config.gc_heap_guard_size(0);
+    config.gc_heap_reservation(65536);
     config.allocation_strategy(pooling_config);
     let engine = Engine::new(&config)?;
 

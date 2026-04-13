@@ -202,6 +202,8 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
         .memory_protection_keys(Enabled::No);
     config.memory_reservation(1 << 20);
     config.memory_guard_size(GUARD_SIZE);
+    config.gc_heap_reservation(1 << 20);
+    config.gc_heap_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
