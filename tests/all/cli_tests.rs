@@ -3326,3 +3326,63 @@ fn wizer_components() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(not(target_os = "linux"), ignore)]
+fn hot_blocks_fib() -> Result<()> {
+    // This test requires `perf` to be available on the system.
+    // Skip if perf is not installed.
+    let perf_check = Command::new("perf").arg("--version").output();
+    if perf_check.is_err() || !perf_check.unwrap().status.success() {
+        eprintln!("skipping hot_blocks_fib: perf not available");
+        return Ok(());
+    }
+
+    let wasm = build_wasm("tests/all/cli_tests/fib.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "hot-blocks",
+            "-Ccache=n",
+            "--event",
+            "instructions",
+            "--percent",
+            "90",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+
+    // The command should succeed.
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // perf may fail due to permissions (perf_event_paranoid), which is OK
+        // in CI. Just skip in that case.
+        if stderr.contains("perf_event_open")
+            || stderr.contains("permission")
+            || stderr.contains("not permitted")
+        {
+            eprintln!("skipping hot_blocks_fib: perf permission denied");
+            return Ok(());
+        }
+        bail!(
+            "hot-blocks failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            stderr
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // The output should mention the function and basic block info.
+    // We don't assert exact percentages since they vary by run.
+    assert!(
+        stdout.contains("block") || stdout.contains("function"),
+        "expected hot-blocks output to contain block/function info, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("[Assembly]") || stdout.contains("total samples"),
+        "expected hot-blocks output to contain column headers or sample info, got:\n{stdout}"
+    );
+
+    Ok(())
+}
