@@ -420,7 +420,16 @@ impl ComponentTypes {
         (params_storage, results_storage)
     }
 
-    fn flat_interface_type<const N: usize>(
+    /// Computes the flat type representation of a component model interface
+    /// type according to the Canonical ABI.
+    ///
+    /// Returns `None` if the type cannot be represented within the given
+    /// `limit` of flat types. The returned `FlatTypesStorage` contains
+    /// separate representations for 32-bit and 64-bit memories.
+    ///
+    /// This is the single source of truth for flat type computation, used
+    /// both at compile time (via `TypeInformation`) and at runtime.
+    pub(super) fn flat_interface_type<const N: usize>(
         &self,
         ty: &InterfaceType,
         limit: usize,
@@ -435,6 +444,8 @@ impl ComponentTypes {
             push(storage, FlatType::I32, FlatType::I32)
         };
 
+        // Merges the flat types from a nested type into the current storage.
+        // Used for record fields, tuple elements, etc.
         let push_storage =
             |storage: &mut FlatTypesStorage<N>, other: Option<FlatTypesStorage<N>>| -> bool {
                 other
@@ -452,6 +463,8 @@ impl ComponentTypes {
                     .is_some()
             };
 
+        // Repeats a flat type representation `n` times into the storage.
+        // Used for fixed-length lists.
         let push_storage_n = |storage: &mut FlatTypesStorage<N>,
                               other: Option<FlatTypesStorage<N>>,
                               n: usize|
@@ -462,24 +475,28 @@ impl ComponentTypes {
                     let other_len = usize::from(other.len);
                     let other_total_len = other_len * n;
                     (len + other_total_len <= limit).then(|| {
+                        let mut rlen = storage.len as usize;
                         for _ in 0..n {
-                            storage
-                                .memory32
+                            storage.memory32[rlen..rlen + other_len]
                                 .copy_from_slice(&other.memory32[..other_len]);
-                            storage
-                                .memory64
+                            storage.memory64[rlen..rlen + other_len]
                                 .copy_from_slice(&other.memory64[..other_len]);
+                            rlen += other_len;
                         }
-                        storage.len += other_total_len as u8;
+                        storage.len = rlen as u8;
                     })
                 })
                 .is_some()
         };
 
+        // Builds up the flat types used to represent a variant case,
+        // "join"ing types together so each case is representable as a
+        // single flat list of types.
+        //
         // Case is broken down as:
-        // * None => No field
-        // * Some(None) => Invalid storage (overflow)
-        // * Some(storage) => Valid storage
+        // * None => No payload
+        // * Some(None) => Payload cannot be directly represented in flat storage
+        // * Some(Some(storage)) => Payload is directly representable in flat storage
         let push_storage_variant_case = |storage: &mut FlatTypesStorage<N>,
                                          case: Option<Option<FlatTypesStorage<N>>>|
          -> bool {
@@ -487,7 +504,9 @@ impl ComponentTypes {
                 None => true,
                 Some(case) => {
                     case.and_then(|case| {
-                        // Discriminant will make size[case] = limit overshoot
+                        // If the case used all of the flat types then the
+                        // additional discriminant will make the variant
+                        // unrepresentable
                         ((1 + case.len as usize) <= limit).then(|| {
                             // Skip 1 for discriminant
                             let dst = storage
@@ -521,7 +540,6 @@ impl ComponentTypes {
             }
         };
 
-        // Logic
         let mut storage_buf = FlatTypesStorage::new();
         let storage = &mut storage_buf;
 
@@ -1504,6 +1522,13 @@ impl<const N: usize> FlatTypesStorage<N> {
             memory64: [FlatType::I32; N],
             len: 0,
         }
+    }
+
+    /// Creates storage representing an unrepresentable type (overflow).
+    pub(super) fn overflow() -> FlatTypesStorage<N> {
+        let mut s = FlatTypesStorage::new();
+        s.len = (N + 1) as u8;
+        s
     }
 
     /// Returns a reference to flat type representation
