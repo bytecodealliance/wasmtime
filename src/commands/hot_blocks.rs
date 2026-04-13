@@ -1,7 +1,6 @@
 //! Implementation of the `wasmtime hot-blocks` subcommand.
 
 use crate::common::{RunCommon, RunTarget};
-use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
 use capstone::arch::BuildsCapstone;
 use clap::Parser;
 use std::borrow::Cow;
@@ -132,7 +131,7 @@ impl HotBlocksCommand {
         self.run_perf_record(&cwasm_path, &perf_data_path)?;
 
         // Run perf script and parse samples.
-        let samples = self.run_perf_script(&perf_data_path)?;
+        let (samples, total_samples) = self.run_perf_script(&perf_data_path)?;
 
         let target = match self.run.common.target.as_deref() {
             None => target_lexicon::Triple::host(),
@@ -180,6 +179,7 @@ impl HotBlocksCommand {
 
         self.format_hot_blocks(
             &samples,
+            total_samples,
             &functions,
             &text,
             &address_map,
@@ -249,21 +249,9 @@ impl HotBlocksCommand {
             .arg("--allow-precompiled")
             .arg("--profile=perfmap");
 
-        // Forward run flags to the nested `wasmtime run` subprocess.
-        for (host, guest) in &self.run.dirs {
-            perf_cmd.arg("--dir").arg(format!("{host}::{guest}"));
-        }
-        for (key, value) in &self.run.vars {
-            match value {
-                Some(val) => perf_cmd.arg("--env").arg(format!("{key}={val}")),
-                None => perf_cmd.arg("--env").arg(key),
-            };
-        }
-        if self.run.common.wasm.unknown_imports_trap == Some(true) {
-            perf_cmd.arg("-Wunknown-imports-trap");
-        }
-        if self.run.common.wasm.unknown_imports_default == Some(true) {
-            perf_cmd.arg("-Wunknown-imports-default");
+        // Forward all RunCommon flags to the nested `wasmtime run` subprocess.
+        for arg in self.run.to_string().split_whitespace() {
+            perf_cmd.arg(arg);
         }
 
         perf_cmd.arg(cwasm_path.as_os_str());
@@ -283,7 +271,7 @@ impl HotBlocksCommand {
     }
 
     /// Run `perf script` and parse the output into samples.
-    fn run_perf_script(&self, perf_data_path: &Path) -> Result<Vec<PerfSample>> {
+    fn run_perf_script(&self, perf_data_path: &Path) -> Result<(Vec<PerfSample>, usize)> {
         let perf_script_output = Command::new("perf")
             .arg("script")
             .arg("-i")
@@ -305,6 +293,7 @@ impl HotBlocksCommand {
     fn format_hot_blocks(
         &self,
         samples: &[PerfSample],
+        total_samples: usize,
         functions: &[ModuleFunction],
         text: &[u8],
         address_map: &[(usize, Option<u32>)],
@@ -313,8 +302,15 @@ impl HotBlocksCommand {
         target: &target_lexicon::Triple,
         output: &mut dyn Write,
     ) -> Result<()> {
-        let total_samples = samples.len();
-        if total_samples == 0 {
+        let wasm_samples = samples.len();
+        writeln!(
+            output,
+            "Collected {total_samples} total samples; {wasm_samples} ({:.2}%) Wasm samples.",
+            wasm_samples as f64 / total_samples as f64 * 100.0,
+        )?;
+        writeln!(output)?;
+
+        if wasm_samples == 0 {
             writeln!(output, "No samples collected within WebAssembly code.")?;
             return Ok(());
         }
@@ -429,8 +425,8 @@ impl HotBlocksCommand {
                 .max()
                 .unwrap_or(6);
 
-            let asm_width = max_asm_len.max(10);
-            let clif_width = max_clif_len.max(6);
+            let asm_width = max_asm_len.clamp(10, 60);
+            let clif_width = max_clif_len.clamp(6, 40);
 
             writeln!(
                 output,
@@ -458,6 +454,8 @@ impl HotBlocksCommand {
                     String::new()
                 };
 
+                let asm_str = &inst.assembly[..inst.assembly.len().min(asm_width)];
+
                 // Determine CLIF display, using ditto marks for repeated same-offset instructions.
                 let clif_display = if let Some(ref clif_text) = inst.clif {
                     let current = (clif_text.as_str(), inst.wasm_offset);
@@ -471,6 +469,7 @@ impl HotBlocksCommand {
                     prev_clif = None;
                     "-".to_string()
                 };
+                let clif_display = &clif_display[..clif_display.len().min(clif_width)];
 
                 // Determine Wasm display, using ditto marks for repeated same-offset instructions.
                 let wasm_display = if let Some(ref wasm_text) = inst.wasm {
@@ -485,11 +484,12 @@ impl HotBlocksCommand {
                     prev_wasm = None;
                     "-".to_string()
                 };
+                let wasm_display = &wasm_display[..wasm_display.len().min(40)];
 
                 writeln!(
                     output,
                     "{:>10}   {:<asm_width$}   {:<clif_width$}   {}",
-                    sample_str, inst.assembly, clif_display, wasm_display
+                    sample_str, asm_str, clif_display, wasm_display
                 )?;
             }
             writeln!(output)?;
@@ -512,18 +512,16 @@ struct PerfSample {
 
 /// Parse `perf script -F ip,sym,symoff,dso` output to extract samples that
 /// come from a perf map (i.e. compiled WebAssembly code and trampolines).
-fn parse_perf_script(output: &str) -> Vec<PerfSample> {
+fn parse_perf_script(output: &str) -> (Vec<PerfSample>, usize) {
     let mut samples = Vec::new();
+    let mut total_samples = 0;
     for line in output.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(sample) = parse_perf_script_line(line) {
+        total_samples += 1;
+        if let Some(sample) = parse_perf_script_line(line.trim()) {
             samples.push(sample);
         }
     }
-    samples
+    (samples, total_samples)
 }
 
 fn parse_perf_script_line(line: &str) -> Option<PerfSample> {
@@ -531,7 +529,6 @@ fn parse_perf_script_line(line: &str) -> Option<PerfSample> {
     //   7f1234567890 wasm[0]::function[3]+0x10 (/tmp/perf-1234.map)
     //   7f1234567890 wasm[0]::function[3]+0x10 (/path/to/module.cwasm)
     // Filter by whether the DSO is a perf map or a cwasm file.
-    let line = line.trim();
 
     // Check for a `.map)` or `.cwasm)` suffix.
     if !line.ends_with(".map)") && !line.ends_with(".cwasm)") {
@@ -624,10 +621,8 @@ fn build_basic_blocks(
     target: &target_lexicon::Triple,
 ) -> Result<Vec<BasicBlock>> {
     let cs = build_capstone(target)?;
-
-    let instructions = cs
-        .disasm_all(func_body, u64::try_from(func_offset).unwrap())
-        .map_err(|e| format_err!("{e}"))?;
+    let insts =
+        crate::disas::disas_with_capstone(&cs, func_body, u64::try_from(func_offset).unwrap())?;
 
     // Build a map from code offset -> wasm offset for instructions in this function.
     let mut offset_to_wasm: BTreeMap<usize, Option<u32>> = BTreeMap::new();
@@ -645,19 +640,13 @@ fn build_basic_blocks(
         }
     }
 
-    // Build annotated instructions and identify block boundaries.
-    let mut annotated = Vec::new();
-    let mut is_block_end = Vec::new();
+    // Build annotated instructions and split into basic blocks.
+    let mut blocks = Vec::new();
+    let mut current_block = Vec::new();
 
-    for inst in instructions.iter() {
-        let addr = usize::try_from(inst.address()).unwrap();
+    for inst in &insts {
+        let addr = usize::try_from(inst.address).unwrap();
         let offset_in_func = addr - func_offset;
-
-        let disassembly = match (inst.mnemonic(), inst.op_str()) {
-            (Some(m), Some(o)) if !o.is_empty() => format!("{m:7} {o}"),
-            (Some(m), _) => m.to_string(),
-            _ => "<unknown>".to_string(),
-        };
 
         // Find wasm offset for this instruction.
         let wasm_offset = find_wasm_offset_for_address(&offset_to_wasm, addr);
@@ -670,34 +659,15 @@ fn build_basic_blocks(
         // Find Wasm text for this wasm offset from the WAT map.
         let wasm = wasm_offset.and_then(|wo| wat_map.get(&wo).cloned());
 
-        annotated.push(BlockInstruction {
+        current_block.push(BlockInstruction {
             offset_in_func,
-            assembly: disassembly,
+            assembly: inst.disassembly.clone(),
             clif,
             wasm_offset,
             wasm,
         });
 
-        // Check if this instruction ends a basic block.
-        let detail = cs.insn_detail(&inst).ok();
-        let ends_block = detail
-            .as_ref()
-            .map(|d| {
-                d.groups()
-                    .iter()
-                    .any(|g| u32::from(g.0) == CS_GRP_JUMP || u32::from(g.0) == CS_GRP_RET)
-            })
-            .unwrap_or(false);
-        is_block_end.push(ends_block);
-    }
-
-    // Split into basic blocks.
-    let mut blocks = Vec::new();
-    let mut current_block = Vec::new();
-
-    for (i, inst) in annotated.into_iter().enumerate() {
-        current_block.push(inst);
-        if is_block_end[i] {
+        if inst.is_jump || inst.is_return {
             blocks.push(BasicBlock {
                 instructions: std::mem::take(&mut current_block),
             });
@@ -1023,9 +993,10 @@ mod test {
  7f0001002000 some_native_func+0x10 (/usr/bin/wasmtime)
  7f0001001010 wasm[0]::function[5]+0x10 (/tmp/perf-1234.map)
 ";
-        let samples = parse_perf_script(input);
+        let (samples, total) = parse_perf_script(input);
         // The native func line is filtered out (not a .map DSO).
         assert_eq!(samples.len(), 4);
+        assert_eq!(total, 5);
         assert_eq!(samples[0].symbol, "wasm[0]::function[3]");
         assert_eq!(samples[0].offset, 0);
         assert_eq!(samples[1].symbol, "wasm[0]::function[3]");
@@ -1151,6 +1122,8 @@ mod test {
                 profile: None,
                 dirs: Vec::new(),
                 vars: Vec::new(),
+                #[cfg(feature = "gdbstub")]
+                gdbstub: None,
             },
             percent: 100.0,
             event: Event::CpuCycles,
@@ -1163,6 +1136,7 @@ mod test {
         let mut output = Vec::new();
         cmd.format_hot_blocks(
             &samples,
+            samples.len(),
             &functions,
             func_body,
             &address_map,
