@@ -432,6 +432,10 @@ criteria = "safe-to-deploy"
 version = "2.0.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.r-efi]]
+version = "6.0.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
 criteria = "safe-to-deploy"

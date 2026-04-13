@@ -95,7 +95,7 @@ rustix = { workspace = true, optional = true, features = ["mm", "param"] }
 [dev-dependencies]
 env_logger = { workspace = true }
 proptest = { workspace = true }
-rand = { workspace = true }
+rand = { workspace = true, features = ['thread_rng'] }
 tempfile = { workspace = true }
 libtest-mimic = { workspace = true }
 cranelift-native = { workspace = true }

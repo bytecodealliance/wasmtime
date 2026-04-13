@@ -1,31 +1,30 @@
 use crate::p3::bindings::random::{insecure, insecure_seed, random};
 use crate::random::WasiRandomCtx;
-use cap_rand::Rng;
-use cap_rand::distributions::Standard;
+use rand::RngExt;
 
 impl random::Host for WasiRandomCtx {
     fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
         Ok((&mut self.random)
-            .sample_iter(Standard)
+            .random_iter()
             .take(len.min(self.max_size) as usize)
             .collect())
     }
 
     fn get_random_u64(&mut self) -> wasmtime::Result<u64> {
-        Ok(self.random.sample(Standard))
+        Ok(self.random.random())
     }
 }
 
 impl insecure::Host for WasiRandomCtx {
     fn get_insecure_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
         Ok((&mut self.insecure_random)
-            .sample_iter(Standard)
+            .random_iter()
             .take(len.min(self.max_size) as usize)
             .collect())
     }
 
     fn get_insecure_random_u64(&mut self) -> wasmtime::Result<u64> {
-        Ok(self.insecure_random.sample(Standard))
+        Ok(self.insecure_random.random())
     }
 }
 

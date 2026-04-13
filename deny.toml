@@ -18,7 +18,6 @@ allow = [
     "ISC",
     "MIT",
     "MPL-2.0",
-    "Unicode-DFS-2016",
     "Zlib",
     "Unicode-3.0",
 ]
@@ -36,7 +35,7 @@ multiple-versions = "deny"
 wildcards = "allow"
 deny = []
 skip = [
-    { name = "heck", reason = "wasm-compose uses an old version of `heck` and was updated in https://github.com/bytecodealliance/wasm-tools/pull/2359, but that hasn't released yet" },
+    { name = "cpufeatures", reason = "requires an update to `sha2` which pulls in a lot of other dependencies which doesn't seem worth it" }
 ]
 skip-tree = [
     # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so

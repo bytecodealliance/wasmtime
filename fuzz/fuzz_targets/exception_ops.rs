@@ -4,7 +4,7 @@ use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use mutatis::Session;
 use postcard::{from_bytes, to_slice};
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use wasmtime_fuzzing::generators::ExceptionOps;
 use wasmtime_fuzzing::oracles::exception_ops;
 
