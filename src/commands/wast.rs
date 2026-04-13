@@ -37,6 +37,11 @@ pub struct WastCommand {
     /// Wasmtime itself.
     #[arg(long = "async", require_equals = true, value_name = "true|false")]
     async_: Option<Option<bool>>,
+
+    /// Whether or not to enable wasmtime's builtin functions for the `*.wast`
+    /// to import.
+    #[arg(long = "wasmtime-builtins")]
+    wasmtime_builtins: bool,
 }
 
 impl WastCommand {
@@ -79,6 +84,10 @@ impl WastCommand {
         }
         if let Some(path) = &self.precompile_load {
             wast_context.precompile_load(path);
+        }
+
+        if self.wasmtime_builtins {
+            wast_context.register_wasmtime()?;
         }
 
         for script in self.scripts.iter() {
