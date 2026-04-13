@@ -765,8 +765,8 @@ impl<'a> TrampolineCompiler<'a> {
                     WasmArgs::InRegisters,
                     |me, params| {
                         params.push(me.index_value(*instance));
-                        params.push(me.index_value(*start_func_table_idx));
                         params.push(me.index_value(*start_func_ty_idx));
+                        params.push(me.index_value(*start_func_table_idx));
                     },
                 );
             }
