@@ -7,17 +7,14 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
-use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
-use core::mem::size_of;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-use wasmtime_environ::PrimaryMap;
-use wasmtime_environ::collections::TryCow;
-use wasmtime_environ::component::{NameMap, NameMapIntern};
+use wasmtime_environ::component::NameMap;
+use wasmtime_environ::{Atom, PrimaryMap, StringPool};
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -62,9 +59,9 @@ use wasmtime_environ::component::{NameMap, NameMapIntern};
 /// be instantiated.
 pub struct Linker<T: 'static> {
     engine: Engine,
-    strings: Strings,
-    map: NameMap<usize, Definition>,
-    path: Vec<usize>,
+    strings: StringPool,
+    map: NameMap<Atom, Definition>,
+    path: Vec<Atom>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -73,19 +70,13 @@ impl<T: 'static> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
-            strings: self.strings.clone(),
+            strings: self.strings.clone_panic_on_oom(),
             map: self.map.clone_panic_on_oom(),
             path: self.path.clone(),
             allow_shadowing: self.allow_shadowing,
             _marker: self._marker,
         }
     }
-}
-
-#[derive(Clone, Default)]
-pub struct Strings {
-    string2idx: HashMap<Box<str>, usize>,
-    strings: Vec<Box<str>>,
 }
 
 /// Structure representing an "instance" being defined within a linker.
@@ -95,17 +86,17 @@ pub struct Strings {
 /// internally.
 pub struct LinkerInstance<'a, T: 'static> {
     engine: &'a Engine,
-    path: &'a mut Vec<usize>,
+    path: &'a mut Vec<Atom>,
     path_len: usize,
-    strings: &'a mut Strings,
-    map: &'a mut NameMap<usize, Definition>,
+    strings: &'a mut StringPool,
+    map: &'a mut NameMap<Atom, Definition>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
 #[derive(Debug)]
 pub(crate) enum Definition {
-    Instance(NameMap<usize, Definition>),
+    Instance(NameMap<Atom, Definition>),
     Func(Arc<HostFunc>),
     Module(Module),
     Resource(ResourceType, Arc<crate::func::HostFunc>),
@@ -128,7 +119,7 @@ impl<T: 'static> Linker<T> {
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
-            strings: Strings::default(),
+            strings: StringPool::default(),
             map: NameMap::default(),
             allow_shadowing: false,
             path: Vec::new(),
@@ -853,43 +844,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
         Ok(self)
     }
 
-    fn insert(&mut self, name: &str, item: Definition) -> Result<usize> {
+    fn insert(&mut self, name: &str, item: Definition) -> Result<Atom> {
         self.map
             .insert(name, self.strings, self.allow_shadowing, item)
     }
 
     fn get(&self, name: &str) -> Option<&Definition> {
         self.map.get(name, self.strings)
-    }
-}
-
-impl NameMapIntern for Strings {
-    type Key = usize;
-    type BorrowedKey = usize;
-
-    fn intern(&mut self, string: &str) -> Result<usize, OutOfMemory> {
-        if let Some(idx) = self.string2idx.get(string) {
-            return Ok(*idx);
-        }
-        let mut ts = TryString::new();
-        ts.push_str(string)?;
-        let key = ts.into_boxed_str()?;
-        let mut ts2 = TryString::new();
-        ts2.push_str(string)?;
-        let key2 = ts2.into_boxed_str()?;
-        let idx = self.strings.len();
-        self.strings
-            .try_reserve(1)
-            .map_err(|_| OutOfMemory::new(size_of::<Box<str>>()))?;
-        self.strings.push(key);
-        self.string2idx
-            .try_reserve(1)
-            .map_err(|_| OutOfMemory::new(size_of::<(Box<str>, usize)>()))?;
-        self.string2idx.insert(key2, idx);
-        Ok(idx)
-    }
-
-    fn lookup(&self, string: &str) -> Option<TryCow<'_, usize>> {
-        self.string2idx.get(string).copied().map(TryCow::Owned)
     }
 }
