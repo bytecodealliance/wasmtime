@@ -135,7 +135,7 @@ impl VMGcObjectData {
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
         let bytes = self.data.get(offset..end).expect("out of bounds field");
-        T::read_le(bytes.try_into().unwrap())
+        T::read_le(bytes.as_array().unwrap())
     }
 
     /// Read a POD field out of this object.
@@ -159,7 +159,7 @@ impl VMGcObjectData {
                 self.data.as_mut().len(),
             ),
         };
-        val.write_le(into.try_into().unwrap());
+        val.write_le(into.as_mut_array().unwrap());
     }
 
     /// Get a slice of this object's data.

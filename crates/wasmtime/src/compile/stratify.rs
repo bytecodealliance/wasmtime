@@ -68,20 +68,17 @@ pub struct Strata<Node> {
 
 impl<Node: Debug> Debug for Strata<Node> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        struct Layers<'a, Node>(&'a Strata<Node>);
-
-        impl<'a, Node: Debug> Debug for Layers<'a, Node> {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                let mut f = f.debug_list();
-                for layer in self.0.layers() {
-                    f.entry(&layer);
-                }
-                f.finish()
-            }
-        }
-
         f.debug_struct("Strata")
-            .field("layers", &Layers(self))
+            .field(
+                "layers",
+                &core::fmt::from_fn(|f| {
+                    let mut f = f.debug_list();
+                    for layer in self.layers() {
+                        f.entry(&layer);
+                    }
+                    f.finish()
+                }),
+            )
             .finish()
     }
 }

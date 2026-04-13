@@ -17,7 +17,7 @@ pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
 
 #[unsafe(naked)]
 unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
-    naked_asm!(concat!(
+    naked_asm!(
         "
             .cfi_startproc
             // Save all callee-saved registers on the stack since we're
@@ -57,7 +57,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
             ret
             .cfi_endproc
         ",
-    ));
+    );
 }
 
 pub(crate) unsafe fn wasmtime_fiber_init(

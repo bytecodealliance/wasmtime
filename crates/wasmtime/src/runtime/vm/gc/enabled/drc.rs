@@ -324,7 +324,7 @@ impl DrcHeap {
                             debug_assert!(
                                 field_end <= object_start + usize::try_from(object_size).unwrap()
                             );
-                            let raw: [u8; 4] = heap[field_start..field_end].try_into().unwrap();
+                            let raw = *heap[field_start..field_end].as_array().unwrap();
                             let raw = u32::from_le_bytes(raw);
 
                             if let Some(child) = VMGcRef::from_raw_u32(raw)
