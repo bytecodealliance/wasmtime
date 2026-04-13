@@ -1055,8 +1055,9 @@ impl Table {
         match ty {
             TableElementType::Func => {
                 // `funcref` are `Copy`, so just do a mempcy
-                let (dst_funcrefs, _lazy_init) = dst_table.funcrefs_mut();
-                let (src_funcrefs, _lazy_init) = src_table.funcrefs();
+                let (dst_funcrefs, dst_lazy_init) = dst_table.funcrefs_mut();
+                let (src_funcrefs, src_lazy_init) = src_table.funcrefs();
+                debug_assert_eq!(dst_lazy_init, src_lazy_init);
                 dst_funcrefs[dst_range].copy_from_slice(&src_funcrefs[src_range]);
             }
             TableElementType::GcRef => {
