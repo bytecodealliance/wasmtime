@@ -47,7 +47,7 @@
       (subsume inner))
 
 ;; x-x == 0.
-(rule (simplify (isub (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (isub ty x x)) (subsume (iconst_u ty 0)))
 
 ;; x*1 == x.
 (rule (simplify (imul ty
@@ -318,12 +318,8 @@
 (rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
 
 ;; (~x) + x == -1
-;; Keep the generic fold for <=64-bit types, and handle i128 explicitly.
-(rule (simplify (iadd (fits_in_64 ty) (bnot ty x) x)) (iconst_s ty -1))
-(rule (simplify (iadd (fits_in_64 ty) x (bnot ty x))) (iconst_s ty -1))
-
-(rule (simplify (iadd $I128 (bnot $I128 x) x)) (sextend $I128 (iconst_s $I64 -1)))
-(rule (simplify (iadd $I128 x (bnot $I128 x))) (sextend $I128 (iconst_s $I64 -1)))
+(rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
+(rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
 
 ;; ((x + y) - (x + z)) --> (y - z)
 (rule (simplify (isub ty (iadd ty x y) (iadd ty x z))) (isub ty y z))
@@ -379,11 +375,18 @@
 (rule (simplify (iadd ty x (iadd ty (isub ty z x) y))) (iadd ty y z))
 (rule (simplify (iadd ty (iadd ty (isub ty z x) y) x)) (iadd ty y z))
 
+;; Helper to create a "true" value for a comparison. For scalar integers this is
+;; a value of 1 but for vectors this is -1 since each lane is filled with all
+;; 1s.
+(decl cmp_true (Type) Value)
+(rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
+(rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
+
 ;; (x + y) == (y + x) --> true
-(rule (simplify (eq (ty_int ty) (iadd cty x y) (iadd cty y x))) (iconst_u ty 1))
-(rule (simplify (eq (ty_int ty) (iadd cty y x) (iadd cty x y))) (iconst_u ty 1))
-(rule (simplify (eq (ty_int ty) (iadd cty x y) (iadd cty x y))) (iconst_u ty 1))
-(rule (simplify (eq (ty_int ty) (iadd cty y x) (iadd cty y x))) (iconst_u ty 1))
+(rule (simplify (eq ty (iadd cty x y) (iadd cty y x))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty x y) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (cmp_true ty))
 
 ;; (x - y) != x --> y != 0
 (rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))
@@ -407,24 +410,24 @@
 (rule (simplify (ineg ty (imul ty x (ineg ty y)))) (imul ty x y))
 
 ;; max(x, y) >= x
-(rule (simplify (sge ty (smax ty x y) x)) (iconst_u ty 1))
-(rule (simplify (sge ty (smax ty y x) x)) (iconst_u ty 1))
-(rule (simplify (sle ty x (smax ty x y))) (iconst_u ty 1))
-(rule (simplify (sle ty x (smax ty y x))) (iconst_u ty 1))
-(rule (simplify (uge ty (umax ty x y) x)) (iconst_u ty 1))
-(rule (simplify (uge ty (umax ty y x) x)) (iconst_u ty 1))
-(rule (simplify (ule ty x (umax ty x y))) (iconst_u ty 1))
-(rule (simplify (ule ty x (umax ty y x))) (iconst_u ty 1))
+(rule (simplify (sge ty (smax ty x y) x)) (cmp_true ty))
+(rule (simplify (sge ty (smax ty y x) x)) (cmp_true ty))
+(rule (simplify (sle ty x (smax ty x y))) (cmp_true ty))
+(rule (simplify (sle ty x (smax ty y x))) (cmp_true ty))
+(rule (simplify (uge ty (umax ty x y) x)) (cmp_true ty))
+(rule (simplify (uge ty (umax ty y x) x)) (cmp_true ty))
+(rule (simplify (ule ty x (umax ty x y))) (cmp_true ty))
+(rule (simplify (ule ty x (umax ty y x))) (cmp_true ty))
 
 ;; x >= min(x, y)
-(rule (simplify (sge ty x (smin ty x y))) (iconst_u ty 1))
-(rule (simplify (sge ty x (smin ty y x))) (iconst_u ty 1))
-(rule (simplify (sle ty (smin ty x y) x)) (iconst_u ty 1))
-(rule (simplify (sle ty (smin ty y x) x)) (iconst_u ty 1))
-(rule (simplify (uge ty x (umin ty x y))) (iconst_u ty 1))
-(rule (simplify (uge ty x (umin ty y x))) (iconst_u ty 1))
-(rule (simplify (ule ty (umin ty x y) x)) (iconst_u ty 1))
-(rule (simplify (ule ty (umin ty y x) x)) (iconst_u ty 1))
+(rule (simplify (sge ty x (smin ty x y))) (cmp_true ty))
+(rule (simplify (sge ty x (smin ty y x))) (cmp_true ty))
+(rule (simplify (sle ty (smin ty x y) x)) (cmp_true ty))
+(rule (simplify (sle ty (smin ty y x) x)) (cmp_true ty))
+(rule (simplify (uge ty x (umin ty x y))) (cmp_true ty))
+(rule (simplify (uge ty x (umin ty y x))) (cmp_true ty))
+(rule (simplify (ule ty (umin ty x y) x)) (cmp_true ty))
+(rule (simplify (ule ty (umin ty y x) x)) (cmp_true ty))
 
 ;; min/max(x,x) --> x
 (rule (simplify (umin ty x x)) x)
