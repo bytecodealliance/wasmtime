@@ -212,11 +212,12 @@
 ;; wasm[0]::function[9]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm0, %xmm0
-;;       pcmpeqd %xmm0, %xmm1
-;;       pcmpeqd %xmm2, %xmm2
-;;       movdqa  %xmm1, %xmm0
-;;       pxor    %xmm2, %xmm0
+;;       movdqa  %xmm0, %xmm2
+;;       psubd   %xmm1, %xmm0
+;;       movdqa  %xmm2, %xmm1
+;;       pcmpeqd %xmm1, %xmm0
+;;       pcmpeqd %xmm1, %xmm1
+;;       pxor    %xmm1, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -243,11 +244,12 @@
 ;; wasm[0]::function[12]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm0, %xmm0
-;;       pcmpeqw %xmm0, %xmm1
-;;       pcmpeqd %xmm2, %xmm2
-;;       movdqa  %xmm1, %xmm0
-;;       pxor    %xmm2, %xmm0
+;;       movdqa  %xmm0, %xmm2
+;;       psubw   %xmm1, %xmm0
+;;       movdqa  %xmm2, %xmm1
+;;       pcmpeqw %xmm1, %xmm0
+;;       pcmpeqd %xmm1, %xmm1
+;;       pxor    %xmm1, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
