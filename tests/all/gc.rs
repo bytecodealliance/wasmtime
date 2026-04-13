@@ -1656,18 +1656,7 @@ fn select_gc_ref_stack_map() -> Result<()> {
                 (type $pair (struct (field (mut i32))))
                 (type $arr (array (mut i8)))
 
-                ;; Allocate many objects to fill the GC heap and trigger
-                ;; collection. After GC frees everything, subsequent
-                ;; allocations reuse the freed memory.
-                (func $force_gc
-                    (local i32)
-                    (local.set 0 (i32.const 64))
-                    (loop $l
-                        (drop (array.new $arr (i32.const 0) (i32.const 1024)))
-                        (local.set 0 (i32.sub (local.get 0) (i32.const 1)))
-                        (br_if $l (local.get 0))
-                    )
-                )
+                (import "" "" (func $force_gc))
 
                 (func (export "test") (param $cond i32) (result i32)
                     ;; The select result stays on the Wasm operand stack (never
@@ -1687,6 +1676,8 @@ fn select_gc_ref_stack_map() -> Result<()> {
                     ;; overwrite the freed memory.
                     (call $force_gc)
 
+                    (drop (struct.new $pair (i32.const 222)))
+
                     ;; Use the select result. If it was incorrectly freed, then
                     ;; this will have the wrong value.
                     (struct.get $pair 0)
@@ -1696,15 +1687,15 @@ fn select_gc_ref_stack_map() -> Result<()> {
     )?;
 
     let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
+    let force_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
+        caller.gc(None)?;
+        Ok(())
+    });
+    let instance = Instance::new(&mut store, &module, &[force_gc.into()])?;
     let test = instance.get_typed_func::<(i32,), i32>(&mut store, "test")?;
 
-    // Run multiple times to increase chance of triggering GC at the right
-    // moment.
-    for _ in 0..30 {
-        let result = test.call(&mut store, (1,))?;
-        assert_eq!(result, 111);
-    }
+    let result = test.call(&mut store, (1,))?;
+    assert_eq!(result, 111);
 
     Ok(())
 }
