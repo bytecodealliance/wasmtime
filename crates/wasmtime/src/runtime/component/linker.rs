@@ -177,7 +177,7 @@ impl<T: 'static> Linker<T> {
             engine: &self.engine,
             types: component.types(),
             strings: &self.strings,
-            imported_resources: try_new::<Arc<_>>(Default::default())?,
+            imported_resources: try_new::<Arc<_>>(TryPrimaryMap::new())?,
         };
 
         // Walk over the component's list of import names and use that to lookup

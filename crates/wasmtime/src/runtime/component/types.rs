@@ -7,6 +7,7 @@ use crate::{Engine, ExternType, FuncType, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
+use wasmtime_environ::PanicOnOom as _;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
     TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex,
@@ -14,7 +15,6 @@ use wasmtime_environ::component::{
     TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex,
     TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
 };
-use wasmtime_environ::{PanicOnOom as _, PrimaryMap};
 
 pub use crate::component::resources::ResourceType;
 
@@ -40,7 +40,7 @@ pub use crate::component::resources::ResourceType;
 struct Handle<T> {
     index: T,
     types: Arc<ComponentTypes>,
-    resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 impl<T> Handle<T> {
@@ -94,9 +94,9 @@ impl<T: fmt::Debug> fmt::Debug for Handle<T> {
 /// Type checker between two `Handle`s
 struct TypeChecker<'a> {
     a_types: &'a ComponentTypes,
-    a_resource: &'a PrimaryMap<ResourceIndex, ResourceType>,
+    a_resource: &'a TryPrimaryMap<ResourceIndex, ResourceType>,
     b_types: &'a ComponentTypes,
-    b_resource: &'a PrimaryMap<ResourceIndex, ResourceType>,
+    b_resource: &'a TryPrimaryMap<ResourceIndex, ResourceType>,
 }
 
 impl TypeChecker<'_> {

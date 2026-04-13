@@ -138,7 +138,7 @@ pub struct ComponentInstance {
 
     /// Storage for the type information about resources within this component
     /// instance.
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 
     /// Arguments that this instance used to be instantiated.
     ///
@@ -319,7 +319,7 @@ impl ComponentInstance {
     pub(crate) fn new(
         id: ComponentInstanceId,
         component: &Component,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) -> Result<OwnedComponentInstance, OutOfMemory> {
@@ -826,14 +826,14 @@ impl ComponentInstance {
     }
 
     /// Returns a reference to the resource type information.
-    pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    pub fn resource_types(&self) -> &Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
     }
 
     /// Returns a mutable reference to the resource type information.
     pub fn resource_types_mut(
         self: Pin<&mut Self>,
-    ) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    ) -> &mut Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().resource_types }

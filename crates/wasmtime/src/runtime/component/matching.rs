@@ -7,25 +7,25 @@ use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::{Engine, prelude::*};
 use alloc::sync::Arc;
-use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
     TypeFutureTableIndex, TypeModule, TypeResourceTable, TypeResourceTableIndex,
     TypeStreamTableIndex,
 };
+use wasmtime_environ::prelude::TryPrimaryMap;
 
 pub struct TypeChecker<'a> {
     pub engine: &'a Engine,
     pub types: &'a Arc<ComponentTypes>,
     pub strings: &'a Strings,
-    pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    pub imported_resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 #[derive(Copy, Clone)]
 #[doc(hidden)]
 pub struct InstanceType<'a> {
     pub types: &'a Arc<ComponentTypes>,
-    pub resources: &'a Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    pub resources: &'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 impl TypeChecker<'_> {
@@ -89,7 +89,7 @@ impl TypeChecker<'_> {
                     // cloned.
                     None => {
                         let resources = Arc::get_mut(&mut self.imported_resources).unwrap();
-                        let id = resources.push(*actual);
+                        let id = resources.push(*actual)?;
                         assert_eq!(id, i);
                     }
 

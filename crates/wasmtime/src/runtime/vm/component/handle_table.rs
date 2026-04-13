@@ -1,6 +1,6 @@
 use super::{TypedResource, TypedResourceIndex};
+use crate::prelude::TryVec;
 use crate::{Result, bail};
-use alloc::vec::Vec;
 use core::mem;
 use wasmtime_environ::component::{TypeFutureTableIndex, TypeStreamTableIndex};
 
@@ -114,14 +114,14 @@ enum Slot {
 
 pub struct HandleTable {
     next: u32,
-    slots: Vec<Slot>,
+    slots: TryVec<Slot>,
 }
 
 impl Default for HandleTable {
     fn default() -> Self {
         Self {
             next: 0,
-            slots: Vec::new(),
+            slots: TryVec::new(),
         }
     }
 }
@@ -139,7 +139,7 @@ impl HandleTable {
         if next == self.slots.len() {
             self.slots.push(Slot::Free {
                 next: self.next.checked_add(1).unwrap(),
-            });
+            })?;
         }
         let ret = self.next;
         self.next = match mem::replace(&mut self.slots[next], slot) {

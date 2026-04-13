@@ -7,6 +7,7 @@ mod btree_map;
 mod caller;
 mod component_func;
 mod component_linker;
+mod component_resource;
 mod config;
 mod engine;
 mod entity_set;
