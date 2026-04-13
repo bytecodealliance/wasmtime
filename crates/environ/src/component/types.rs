@@ -1525,7 +1525,7 @@ impl<const N: usize> FlatTypesStorage<N> {
     }
 
     /// Creates storage representing an unrepresentable type (overflow).
-    pub(super) fn overflow() -> FlatTypesStorage<N> {
+    pub const fn overflow() -> FlatTypesStorage<N> {
         let mut s = FlatTypesStorage::new();
         s.len = (N + 1) as u8;
         s
