@@ -223,6 +223,9 @@ generate_trap_type! {
         /// A reference count (for e.g. an `error-context`) overflowed.
         ReferenceCountOverflow = "reference count overflow",
 
+        /// A read/write on a stream must be <2**28 items.
+        StreamOpTooBig = "stream read/write count too large",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }
