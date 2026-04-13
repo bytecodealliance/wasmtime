@@ -1,5 +1,6 @@
 //! Implementation of the `wasmtime hot-blocks` subcommand.
 
+use crate::common::{RunCommon, RunTarget};
 use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
 use capstone::arch::BuildsCapstone;
 use clap::Parser;
@@ -11,10 +12,9 @@ use std::process::Command;
 use std::str::FromStr;
 use tempfile::tempdir;
 use wasmtime::{
-    CodeBuilder, CodeHint, Engine, FuncIndex, Module, ModuleFunction, Result, StaticModuleIndex,
-    bail, error::Context as _, format_err,
+    CodeBuilder, CodeHint, Engine, FuncIndex, ModuleFunction, Result, StaticModuleIndex, bail,
+    error::Context as _, format_err,
 };
-use wasmtime_cli_flags::CommonOptions;
 
 /// Profile a WebAssembly module or component's execution and print the hottest
 /// basic blocks.
@@ -29,7 +29,7 @@ use wasmtime_cli_flags::CommonOptions;
 #[command(name = "hot-blocks")]
 pub struct HotBlocksCommand {
     #[command(flatten)]
-    common: CommonOptions,
+    run: RunCommon,
 
     /// Print the hottest basic blocks that cover at least this percent of
     /// total execution samples.
@@ -94,19 +94,19 @@ struct FunctionOffset(usize);
 impl HotBlocksCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging()?;
+        self.run.common.init_logging()?;
 
         if !(0.0..=100.0).contains(&self.percent) {
             bail!("--percent must be between 0 and 100 inclusive");
         }
 
         // Ensure address maps are enabled (error if explicitly disabled).
-        if self.common.debug.address_map == Some(false) {
+        if self.run.common.debug.address_map == Some(false) {
             bail!(
                 "address maps must be enabled for hot-blocks profiling; do not pass -Daddress-map=n"
             );
         }
-        self.common.debug.address_map = Some(true);
+        self.run.common.debug.address_map = Some(true);
 
         let tmp_dir = tempdir().context("failed to create temp directory")?;
 
@@ -125,8 +125,7 @@ impl HotBlocksCommand {
             e
         })?;
 
-        let (engine, serialized, is_component) =
-            self.compile_to_cwasm(&clif_dir, &cwasm_path, &wasm_bytes)?;
+        let engine = self.compile_to_cwasm(&clif_dir, &cwasm_path, &wasm_bytes)?;
 
         // Run perf record.
         let perf_data_path = tmp_dir.path().join("perf.data");
@@ -135,7 +134,7 @@ impl HotBlocksCommand {
         // Run perf script and parse samples.
         let samples = self.run_perf_script(&perf_data_path)?;
 
-        let target = match self.common.target.as_deref() {
+        let target = match self.run.common.target.as_deref() {
             None => target_lexicon::Triple::host(),
             Some(t) => target_lexicon::Triple::from_str(t)?,
         };
@@ -143,46 +142,32 @@ impl HotBlocksCommand {
         // Build the WAT offset map using wasmprinter.
         let wat_map = build_wat_offset_map(&wasm_bytes);
 
-        // Collect functions, text, and address map from either a module or component.
-        //
-        // Declare these outside the if/else so text can be borrowed rather than
-        // copied into a Vec.
-        let module;
-        #[cfg(feature = "component-model")]
-        let component;
-        let (functions, text, address_map);
-
-        if is_component {
+        // Deserialize the cwasm to extract functions, text, and address map.
+        self.run.allow_precompiled = true;
+        let run_target = self.run.load_module(&engine, &cwasm_path, None)?;
+        let (functions, text, address_map) = match &run_target {
+            RunTarget::Core(module) => (
+                module.functions().collect::<Vec<_>>(),
+                module.text(),
+                module
+                    .address_map()
+                    .ok_or_else(|| {
+                        format_err!("address maps are not available in the compiled module")
+                    })?
+                    .collect::<Vec<_>>(),
+            ),
             #[cfg(feature = "component-model")]
-            {
-                // SAFETY: We just compiled this code.
-                component =
-                    unsafe { wasmtime::component::Component::deserialize(&engine, &serialized)? };
-                functions = component.functions().collect::<Vec<_>>();
-                text = component.text();
-                address_map = component
+            RunTarget::Component(component) => (
+                component.functions().collect::<Vec<_>>(),
+                component.text(),
+                component
                     .address_map()
                     .ok_or_else(|| {
                         format_err!("address maps are not available in the compiled component")
                     })?
-                    .collect::<Vec<_>>();
-            }
-            #[cfg(not(feature = "component-model"))]
-            {
-                bail!("component model support was disabled at compile time");
-            }
-        } else {
-            // SAFETY: We just compiled this code.
-            module = unsafe { Module::deserialize(&engine, &serialized)? };
-            functions = module.functions().collect::<Vec<_>>();
-            text = module.text();
-            address_map = module
-                .address_map()
-                .ok_or_else(|| {
-                    format_err!("address maps are not available in the compiled module")
-                })?
-                .collect::<Vec<_>>();
-        }
+                    .collect::<Vec<_>>(),
+            ),
+        };
 
         let mut output: Box<dyn Write> = match &self.output {
             Some(path) => {
@@ -209,14 +194,14 @@ impl HotBlocksCommand {
 
     /// Compile the input Wasm bytes to a `.cwasm` file, emitting CLIF to `clif_dir`.
     ///
-    /// Returns the engine, the serialized bytes, and whether the input was a component.
+    /// Returns the engine used for compilation.
     fn compile_to_cwasm(
         &mut self,
         clif_dir: &Path,
         cwasm_path: &Path,
         wasm_bytes: &[u8],
-    ) -> Result<(Engine, Vec<u8>, bool)> {
-        let mut config = self.common.config(None)?;
+    ) -> Result<Engine> {
+        let mut config = self.run.common.config(None)?;
         config.emit_clif(clif_dir);
 
         let engine = Engine::new(&config)?;
@@ -224,19 +209,19 @@ impl HotBlocksCommand {
         let mut code = CodeBuilder::new(&engine);
         code.wasm_binary_or_text(wasm_bytes, Some(&self.module))?;
 
-        let (serialized, is_component) = match code.hint() {
+        let serialized = match code.hint() {
             #[cfg(feature = "component-model")]
-            Some(CodeHint::Component) => (code.compile_component_serialized()?, true),
+            Some(CodeHint::Component) => code.compile_component_serialized()?,
             #[cfg(not(feature = "component-model"))]
             Some(CodeHint::Component) => {
                 bail!("component model support was disabled at compile time")
             }
-            Some(CodeHint::Module) | None => (code.compile_module_serialized()?, false),
+            Some(CodeHint::Module) | None => code.compile_module_serialized()?,
         };
         std::fs::write(cwasm_path, &serialized)
             .with_context(|| format!("failed to write cwasm: {}", cwasm_path.display()))?;
 
-        Ok((engine, serialized, is_component))
+        Ok(engine)
     }
 
     /// Run `perf record` on the compiled `.cwasm` file.
@@ -262,8 +247,26 @@ impl HotBlocksCommand {
             .arg(&current_exe)
             .arg("run")
             .arg("--allow-precompiled")
-            .arg("--profile=perfmap")
-            .arg(cwasm_path.as_os_str());
+            .arg("--profile=perfmap");
+
+        // Forward run flags to the nested `wasmtime run` subprocess.
+        for (host, guest) in &self.run.dirs {
+            perf_cmd.arg("--dir").arg(format!("{host}::{guest}"));
+        }
+        for (key, value) in &self.run.vars {
+            match value {
+                Some(val) => perf_cmd.arg("--env").arg(format!("{key}={val}")),
+                None => perf_cmd.arg("--env").arg(key),
+            };
+        }
+        if self.run.common.wasm.unknown_imports_trap == Some(true) {
+            perf_cmd.arg("-Wunknown-imports-trap");
+        }
+        if self.run.common.wasm.unknown_imports_default == Some(true) {
+            perf_cmd.arg("-Wunknown-imports-default");
+        }
+
+        perf_cmd.arg(cwasm_path.as_os_str());
         for arg in &self.module_args {
             perf_cmd.arg(arg);
         }
@@ -1142,7 +1145,13 @@ mod test {
         }];
 
         let cmd = HotBlocksCommand {
-            common: CommonOptions::default(),
+            run: RunCommon {
+                common: wasmtime_cli_flags::CommonOptions::default(),
+                allow_precompiled: false,
+                profile: None,
+                dirs: Vec::new(),
+                vars: Vec::new(),
+            },
             percent: 100.0,
             event: Event::CpuCycles,
             frequency: None,
