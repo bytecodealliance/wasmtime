@@ -3330,9 +3330,9 @@ fn wizer_components() -> Result<()> {
 #[test]
 #[cfg_attr(not(target_os = "linux"), ignore)]
 fn hot_blocks_fib() -> Result<()> {
-    // This test requires `perf` to be available on the system.
-    // Skip if perf is not installed.
-    let perf_check = Command::new("perf").arg("--version").output();
+    // This test requires `perf` to be available and usable on the system. Skip
+    // if it is not installed or we do not have permissions to `perf record`.
+    let perf_check = Command::new("perf").args(&["record", "--", "ls"]).output();
     if perf_check.is_err() || !perf_check.unwrap().status.success() {
         eprintln!("skipping hot_blocks_fib: perf not available");
         return Ok(());
