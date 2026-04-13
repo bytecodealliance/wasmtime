@@ -661,7 +661,9 @@ jobs:
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
     - run: cargo install cargo-fuzz --vers "^0.11" --locked
-    - run: sudo apt-get update && sudo apt install -y ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
+    - uses: ./.github/actions/apt-get-install
+      with:
+        packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
     - run: cargo fetch
       working-directory: ./fuzz
     - run: cargo fuzz check --dev
