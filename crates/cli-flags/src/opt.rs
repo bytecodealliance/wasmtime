@@ -9,11 +9,12 @@ use crate::{KeyValuePair, WasiNnGraph};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fmt, marker};
-use wasmtime::{Result, bail};
+use wasmtime::{Result, bail, format_err};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
 const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
@@ -368,6 +369,19 @@ impl WasmtimeOptionValue for u32 {
             Some(hex) => Ok(u32::from_str_radix(hex, 16)?),
             None => Ok(val.parse()?),
         }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl WasmtimeOptionValue for NonZeroU32 {
+    const VAL_HELP: &'static str = "=N";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let n = <u32 as WasmtimeOptionValue>::parse(val)?;
+        NonZeroU32::new(n).ok_or_else(|| format_err!("value must be non-zero"))
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

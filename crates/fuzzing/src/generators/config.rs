@@ -3,6 +3,7 @@
 use super::{AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig};
 use crate::oracles::{StoreLimits, Timeout};
 use arbitrary::{Arbitrary, Unstructured};
+use std::num::NonZeroU32;
 use std::time::Duration;
 use wasmtime::Result;
 use wasmtime::{Enabled, Engine, Module, Store};
@@ -285,6 +286,10 @@ impl Config {
             16 << 20,
             self.wasmtime.memory_guaranteed_dense_image_size,
         ));
+        cfg.opts.gc_zeal_alloc_counter = self
+            .wasmtime
+            .gc_zeal_alloc_counter
+            .map(|c| c.clamp(NonZeroU32::new(1).unwrap(), NonZeroU32::new(1024).unwrap()));
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
         cfg.wasm.bulk_memory = Some(self.module_config.config.bulk_memory_enabled);
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
@@ -596,6 +601,7 @@ pub struct WasmtimeConfig {
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
     collector: Collector,
+    gc_zeal_alloc_counter: Option<NonZeroU32>,
     table_lazy_init: bool,
 
     /// Configuration for whether wasm is invoked in an async fashion and how

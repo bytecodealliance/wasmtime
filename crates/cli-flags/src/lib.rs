@@ -4,6 +4,7 @@ use clap::Parser;
 use serde::Deserialize;
 use std::{
     fmt, fs,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -198,6 +199,10 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub pooling_pagemap_scan: Option<wasmtime::Enabled>,
+
+        /// XXX: For internal fuzzing and debugging use only!
+        #[doc(hidden)]
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
     }
 
     enum Optimize {
@@ -893,6 +898,10 @@ impl CommonOptions {
         }
         if let Some(enable) = self.opts.table_lazy_init {
             config.table_lazy_init(enable);
+        }
+
+        if let Some(n) = self.opts.gc_zeal_alloc_counter {
+            config.gc_zeal_alloc_counter(Some(n))?;
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
