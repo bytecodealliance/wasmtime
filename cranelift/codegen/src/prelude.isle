@@ -79,6 +79,9 @@
 (decl pure partial imm64_srem (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_srem imm64_srem)
 
+(decl pure partial imm64_urem (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_urem imm64_urem)
+
 (decl pure imm64_add (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_add imm64_add)
 

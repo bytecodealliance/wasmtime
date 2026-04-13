@@ -101,6 +101,17 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn imm64_urem(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
+            let type_width = ty.bits();
+            assert!(type_width <= 64);
+            let mask = self.ty_mask(ty);
+            let x = (x.bits() as u64) & mask;
+            let y = (y.bits() as u64) & mask;
+            let result = x.checked_rem(y)?;
+            Some(Imm64::new(result as i64).mask_to_width(type_width))
+        }
+
+        #[inline]
         fn imm64_add(&mut self, ty: Type, x: Imm64, y: Imm64) -> Imm64 {
             let ty_mask = self.ty_mask(ty) as i64;
             Imm64::new(x.bits().wrapping_add(y.bits()) & ty_mask)

@@ -13,21 +13,21 @@
 
 (rule (simplify
        (iadd (fits_in_64 ty)
-             (iconst ty (u64_from_imm64 k1))
-             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_add k1 k2)))))
+             (iconst ty k1)
+             (iconst ty k2)))
+      (subsume (iconst ty (imm64_add ty k1 k2))))
 
 (rule (simplify
        (isub (fits_in_64 ty)
-             (iconst ty (u64_from_imm64 k1))
-             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_sub k1 k2)))))
+             (iconst ty k1)
+             (iconst ty k2)))
+      (subsume (iconst ty (imm64_sub ty k1 k2))))
 
 (rule (simplify
        (imul (fits_in_64 ty)
-             (iconst ty (u64_from_imm64 k1))
-             (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_wrapping_mul k1 k2)))))
+             (iconst ty k1)
+             (iconst ty k2)))
+      (subsume (iconst ty (imm64_mul ty k1 k2))))
 
 (rule (simplify_skeleton
        (sdiv (iconst ty k1)
@@ -42,39 +42,39 @@
       (iconst ty d))
 
 (rule (simplify_skeleton
-       (udiv (iconst_u ty k1)
-             (iconst_u ty k2)))
-      (if-let d (u64_checked_div k1 k2))
-      (iconst ty (imm64_masked ty d)))
+       (udiv (iconst ty k1)
+             (iconst ty k2)))
+      (if-let d (imm64_udiv ty k1 k2))
+      (iconst ty d))
 
 (rule (simplify_skeleton
-       (urem (iconst_u ty k1)
-             (iconst_u ty k2)))
-      (if-let d (u64_checked_rem k1 k2))
-      (iconst ty (imm64_masked ty d)))
+       (urem (iconst ty k1)
+             (iconst ty k2)))
+      (if-let d (imm64_urem ty k1 k2))
+      (iconst ty d))
 
 (rule (simplify
        (bor (fits_in_64 ty)
-            (iconst ty (u64_from_imm64 k1))
-            (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_or k1 k2)))))
+            (iconst ty k1)
+            (iconst ty k2)))
+      (subsume (iconst ty (imm64_or ty k1 k2))))
 
 (rule (simplify
        (band (fits_in_64 ty)
-            (iconst ty (u64_from_imm64 k1))
-            (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_and k1 k2)))))
+            (iconst ty k1)
+            (iconst ty k2)))
+      (subsume (iconst ty (imm64_and ty k1 k2))))
 
 (rule (simplify
        (bxor (fits_in_64 ty)
-            (iconst ty (u64_from_imm64 k1))
-            (iconst ty (u64_from_imm64 k2))))
-      (subsume (iconst ty (imm64_masked ty (u64_xor k1 k2)))))
+            (iconst ty k1)
+            (iconst ty k2)))
+      (subsume (iconst ty (imm64_xor ty k1 k2))))
 
 (rule (simplify
        (bnot (fits_in_64 ty)
-            (iconst ty (u64_from_imm64 k))))
-      (subsume (iconst ty (imm64_masked ty (u64_not k)))))
+            (iconst ty k)))
+      (subsume (iconst ty (imm64_not ty k))))
 
 (rule (simplify (ishl (fits_in_64 ty)
                       (iconst ty k1)
