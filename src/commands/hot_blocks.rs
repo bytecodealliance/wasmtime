@@ -488,8 +488,7 @@ impl HotBlocksCommand {
 
                 writeln!(
                     output,
-                    "{:>10}   {:<asm_width$}   {:<clif_width$}   {}",
-                    sample_str, asm_str, clif_display, wasm_display
+                    "{sample_str:>10}   {asm_str:<asm_width$}   {clif_display:<clif_width$}   {wasm_display}",
                 )?;
             }
             writeln!(output)?;
