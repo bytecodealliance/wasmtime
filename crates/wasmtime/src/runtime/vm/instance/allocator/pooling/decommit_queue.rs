@@ -177,16 +177,15 @@ impl DecommitQueue {
         // Second, restore the various entities to their associated pools' free
         // lists. This is safe, and they are ready for reuse, now that their
         // memory regions have been decommitted.
-        //
-        // Note that for memory images the images are all dropped here and
-        // ignored if any decommits failed. This signifies how the state of the
-        // slot is unknown and needs to be paved over in the future. Also note
-        // that `bytes_resident` is probably too low, but there's no other
-        // precise way to know, so it's left here as-is and it'll get reset when
-        // the slot is reused.
         let mut deallocated_any = false;
         for (allocation_index, image, bytes_resident) in self.memories {
             deallocated_any = true;
+            // Note that for memory images the images are all dropped here and
+            // ignored if any decommits failed. This signifies how the state of the
+            // slot is unknown and needs to be paved over in the future. Also note
+            // that `bytes_resident` is probably too low, but there's no other
+            // precise way to know, so it's left here as-is and it'll get reset when
+            // the slot is reused.
             let image = if decommit_succeeded {
                 Some(image)
             } else {
@@ -197,8 +196,16 @@ impl DecommitQueue {
                     .deallocate(allocation_index, image, bytes_resident);
             }
         }
-        for (allocation_index, table, bytes_resident) in self.tables {
+        for (allocation_index, mut table, bytes_resident) in self.tables {
             deallocated_any = true;
+            // Like with memories,  if any decommit failed then we need to
+            // ensure that tables are still in a defined state. Unlike memories
+            // which track this via images tables are always assumed to be
+            // all-null on returning to the allocator. If the OS couldn't do it
+            // then manually do it ourselves here.
+            if !decommit_succeeded {
+                table.manually_memset_zeros();
+            }
             unsafe {
                 pool.tables
                     .deallocate(allocation_index, table, bytes_resident);
