@@ -2516,18 +2516,6 @@ impl Config {
             RRConfig::None => {}
         };
 
-        // If no GC heap tunables are explicitly configured, copy the memory
-        // tunables' configured values so that GC heaps default to the same
-        // configuration as linear memories.
-        let mut tunables_config = self.tunables.clone();
-        if !self.any_gc_heap_tunables_configured() {
-            tunables_config.gc_heap_reservation = tunables_config.memory_reservation;
-            tunables_config.gc_heap_guard_size = tunables_config.memory_guard_size;
-            tunables_config.gc_heap_reservation_for_growth =
-                tunables_config.memory_reservation_for_growth;
-            tunables_config.gc_heap_may_move = tunables_config.memory_may_move;
-        }
-
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
         // By default this is enabled with the Cargo feature, and if the feature
@@ -2576,7 +2564,17 @@ impl Config {
             tunables.signals_based_traps = false;
         }
 
-        tunables_config.configure(&mut tunables);
+        self.tunables.configure(&mut tunables);
+
+        // If no GC heap tunables are explicitly configured, copy the memory
+        // tunables' configured values so that GC heaps default to the same
+        // configuration as linear memories.
+        if !self.any_gc_heap_tunables_configured() {
+            tunables.gc_heap_reservation = tunables.memory_reservation;
+            tunables.gc_heap_guard_size = tunables.memory_guard_size;
+            tunables.gc_heap_reservation_for_growth = tunables.memory_reservation_for_growth;
+            tunables.gc_heap_may_move = tunables.memory_may_move;
+        }
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
