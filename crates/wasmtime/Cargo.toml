@@ -289,7 +289,7 @@ runtime = [
 # load and run Wasm that uses those proposals.
 #
 # You can additionally configure which GC implementations are enabled via the
-# `gc-drc` and `gc-null` features.
+# `gc-drc`, `gc-null`, and `gc-copying` features.
 gc = [
   "wasmtime-environ/gc",
   "wasmtime-cranelift?/gc",
@@ -310,6 +310,14 @@ gc-null = [
   "wasmtime-environ/gc-null",
   "wasmtime-cranelift?/gc-null",
   "wasmtime-winch?/gc-null",
+]
+
+# Enable the copying garbage collector.
+gc-copying = [
+  "gc",
+  "wasmtime-environ/gc-copying",
+  "wasmtime-cranelift?/gc-copying",
+  "wasmtime-winch?/gc-copying",
 ]
 
 # Enable runtime support for the WebAssembly threads proposal.

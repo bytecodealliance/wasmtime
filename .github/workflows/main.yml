@@ -360,6 +360,9 @@ jobs:
               -p wasmtime --no-default-features --features gc-null
               -p wasmtime --no-default-features --features runtime,gc-null
               -p wasmtime --no-default-features --features cranelift,gc-null
+              -p wasmtime --no-default-features --features gc-copying
+              -p wasmtime --no-default-features --features runtime,gc-copying
+              -p wasmtime --no-default-features --features cranelift,gc-copying
               -p wasmtime --no-default-features --features runtime
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads

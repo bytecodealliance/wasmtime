@@ -534,12 +534,15 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
 }
 
 impl WasmtimeOptionValue for wasmtime::Collector {
-    const VAL_HELP: &'static str = "=drc|null";
+    const VAL_HELP: &'static str = "=drc|null|copying";
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "drc" => Ok(wasmtime::Collector::DeferredReferenceCounting),
             "null" => Ok(wasmtime::Collector::Null),
-            other => bail!("unknown collector `{other}` only `drc` and `null` accepted",),
+            "copying" => Ok(wasmtime::Collector::Copying),
+            other => {
+                bail!("unknown collector `{other}` only `drc`, `null`, and `copying` accepted",)
+            }
         }
     }
 
@@ -547,6 +550,7 @@ impl WasmtimeOptionValue for wasmtime::Collector {
         match *self {
             wasmtime::Collector::DeferredReferenceCounting => f.write_str("drc"),
             wasmtime::Collector::Null => f.write_str("null"),
+            wasmtime::Collector::Copying => f.write_str("copying"),
             _ => unreachable!(),
         }
     }

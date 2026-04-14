@@ -24,6 +24,9 @@ mod drc;
 #[cfg(feature = "gc-null")]
 mod null;
 
+#[cfg(feature = "gc-copying")]
+mod copying;
+
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
     // If this function requires a GC compiler, that is not too bad of an
@@ -47,11 +50,19 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
              was disabled at compile time",
         )),
 
-        #[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+        #[cfg(feature = "gc-copying")]
+        Some(Collector::Copying) => Ok(Box::new(copying::CopyingCompiler::default())),
+        #[cfg(not(feature = "gc-copying"))]
+        Some(Collector::Copying) => Err(wasm_unsupported!(
+            "the copying collector is unavailable because the `gc-copying` feature \
+             was disabled at compile time",
+        )),
+
+        #[cfg(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying"))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled at configuration time"
         )),
-        #[cfg(not(any(feature = "gc-drc", feature = "gc-null")))]
+        #[cfg(not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled because no collector implementation \
              was selected at compile time; enable one of the `gc-drc` or \
