@@ -307,6 +307,10 @@ async fn p2_tcp_listen() {
     run(P2_TCP_LISTEN_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_tcp_busy_poll() {
+    run(P2_TCP_BUSY_POLL_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p2_udp_sockopts() {
     run(P2_UDP_SOCKOPTS_COMPONENT, false).await.unwrap()
 }

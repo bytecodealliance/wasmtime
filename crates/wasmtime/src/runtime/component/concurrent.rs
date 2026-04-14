@@ -1196,8 +1196,12 @@ impl<T> StoreContextMut<'_, T> {
 
             enum PollResult<R> {
                 Complete(R),
-                ProcessWork(Vec<WorkItem>),
+                ProcessWork {
+                    ready: Vec<WorkItem>,
+                    low_priority: bool,
+                },
             }
+
             let result = future::poll_fn(|cx| {
                 // First, poll the future we were passed as an argument and
                 // return immediately if it's ready.
@@ -1220,13 +1224,23 @@ impl<T> StoreContextMut<'_, T> {
                     Poll::Pending => Poll::Pending,
                 };
 
-                // Next, collect the next batch of work items to process, if any.
-                // This will be either all of the high-priority work items, or if
-                // there are none, a single low-priority work item.
+                // Next, collect the next batch of work items to process, if
+                // any.  This will be either all of the high-priority work
+                // items, or if there are none, a single low-priority work item.
                 let state = reset.store.0.concurrent_state_mut();
-                let ready = state.collect_work_items_to_run();
+                let mut ready = mem::take(&mut state.high_priority);
+                let mut low_priority = false;
+                if ready.is_empty() {
+                    if let Some(item) = state.low_priority.pop_back() {
+                        ready.push(item);
+                        low_priority = true;
+                    }
+                }
                 if !ready.is_empty() {
-                    return Poll::Ready(Ok(PollResult::ProcessWork(ready)));
+                    return Poll::Ready(Ok(PollResult::ProcessWork {
+                        ready,
+                        low_priority,
+                    }));
                 }
 
                 // Finally, if we have nothing else to do right now, determine what to do
@@ -1239,7 +1253,10 @@ impl<T> StoreContextMut<'_, T> {
                         // successfully, so we return now and continue
                         // the outer loop in case there is another one
                         // ready to complete.
-                        Poll::Ready(Ok(PollResult::ProcessWork(Vec::new())))
+                        Poll::Ready(Ok(PollResult::ProcessWork {
+                            ready: Vec::new(),
+                            low_priority: false,
+                        }))
                     }
                     Poll::Ready(false) => {
                         // Poll the future we were passed one last time
@@ -1287,7 +1304,10 @@ impl<T> StoreContextMut<'_, T> {
                 PollResult::Complete(value) => break Ok(value),
                 // The future we were passed has not yet completed, so handle
                 // any work items and then loop again.
-                PollResult::ProcessWork(ready) => {
+                PollResult::ProcessWork {
+                    ready,
+                    low_priority,
+                } => {
                     struct Dispose<'a, T: 'static, I: Iterator<Item = WorkItem>> {
                         store: StoreContextMut<'a, T>,
                         ready: I,
@@ -1311,6 +1331,31 @@ impl<T> StoreContextMut<'_, T> {
                         store: self.as_context_mut(),
                         ready: ready.into_iter(),
                     };
+
+                    // If we're about to run a low-priority task, first yield to
+                    // the executor.  This ensures that it won't be starved of
+                    // the ability to e.g. update the readiness of sockets,
+                    // etc. which the guest may be using `thread.yield` along
+                    // with `waitable-set.poll` to monitor in a CPU-heavy loop.
+                    //
+                    // This works for e.g. `thread.yield` and callbacks which
+                    // return `CALLBACK_CODE_YIELD` because we queue a low
+                    // priority item to resume the task (i.e. resume the thread
+                    // or call the callback, respectively) just prior to
+                    // suspending it.  Indeed, as of this writing those are the
+                    // _only_ situations we queue low-priority tasks.
+                    // Therefore, we interpret the guest's request to yield as
+                    // meaning "yield to other guest tasks _and_/_or_ host
+                    // operations such as updating socket readiness", the latter
+                    // being the async runtime's responsibility.
+                    //
+                    // In the future, if this ends up causing measurable
+                    // performance issues, this could be optimized such that we
+                    // only yield periodically (e.g. for batches of low priority
+                    // items) and not for each and every idividual item.
+                    if low_priority {
+                        dispose.store.0.yield_now().await
+                    }
 
                     while let Some(item) = dispose.ready.next() {
                         dispose
@@ -4970,19 +5015,6 @@ impl ConcurrentState {
         if let Some(them) = self.futures.get_mut().take() {
             futures.push(them);
         }
-    }
-
-    /// Collect the next set of work items to run. This will be either all
-    /// high-priority items, or a single low-priority item if there are no
-    /// high-priority items.
-    fn collect_work_items_to_run(&mut self) -> Vec<WorkItem> {
-        let mut ready = mem::take(&mut self.high_priority);
-        if ready.is_empty() {
-            if let Some(item) = self.low_priority.pop_back() {
-                ready.push(item);
-            }
-        }
-        ready
     }
 
     fn push<V: Send + Sync + 'static>(

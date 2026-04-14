@@ -106,12 +106,16 @@ use crate::{ExnRef, Rooted};
 use crate::{Global, Instance, Table};
 use core::convert::Infallible;
 use core::fmt;
+#[cfg(any(feature = "async", feature = "gc"))]
+use core::future;
 use core::marker;
 use core::mem::{self, ManuallyDrop, MaybeUninit};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::pin::Pin;
 use core::ptr::NonNull;
+#[cfg(any(feature = "async", feature = "gc"))]
+use core::task::Poll;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
 
 mod context;
@@ -2116,7 +2120,15 @@ impl StoreOpaque {
 
         self.trace_roots(&mut roots, asyncness).await;
         self.unwrap_gc_store_mut()
-            .gc(asyncness, unsafe { roots.iter() })
+            .gc(
+                asyncness,
+                unsafe { roots.iter() },
+                // TODO: Once `Config` has an optional `AsyncFn` field for
+                // yielding to the current async runtime
+                // (e.g. `tokio::task::yield_now`), use that if set; otherwise
+                // fall back to the runtime-agnostic code.
+                yield_now,
+            )
             .await;
 
         // Restore the GC roots for the next GC.
@@ -2135,30 +2147,30 @@ impl StoreOpaque {
 
         self.trace_wasm_stack_roots(gc_roots_list);
         if asyncness != Asyncness::No {
-            vm::Yield::new().await;
+            self.yield_now().await;
         }
 
         #[cfg(feature = "stack-switching")]
         {
             self.trace_wasm_continuation_roots(gc_roots_list);
             if asyncness != Asyncness::No {
-                vm::Yield::new().await;
+                self.yield_now().await;
             }
         }
 
         self.trace_vmctx_roots(gc_roots_list);
         if asyncness != Asyncness::No {
-            vm::Yield::new().await;
+            self.yield_now().await;
         }
 
         self.trace_instance_roots(gc_roots_list);
         if asyncness != Asyncness::No {
-            vm::Yield::new().await;
+            self.yield_now().await;
         }
 
         self.trace_user_roots(gc_roots_list);
         if asyncness != Asyncness::No {
-            vm::Yield::new().await;
+            self.yield_now().await;
         }
 
         self.trace_pending_exception_roots(gc_roots_list);
@@ -2810,6 +2822,29 @@ at https://bytecodealliance.org/security.
             Asyncness::No => {}
         }
     }
+
+    #[cfg(any(feature = "async", feature = "gc"))]
+    pub(crate) async fn yield_now(&self) {
+        // TODO: Once `Config` has an optional `AsyncFn` field for yielding to the
+        // current async runtime (e.g. `tokio::task::yield_now`), use that if set;
+        // otherwise fall back to the runtime-agnostic code.
+        yield_now().await
+    }
+}
+
+#[cfg(any(feature = "async", feature = "gc"))]
+async fn yield_now() {
+    let mut yielded = false;
+    future::poll_fn(move |cx| {
+        if yielded {
+            Poll::Ready(())
+        } else {
+            yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    })
+    .await;
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
