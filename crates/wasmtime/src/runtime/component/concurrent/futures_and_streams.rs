@@ -2373,7 +2373,7 @@ impl StoreOpaque {
                 let WriteState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.write, WriteState::Open)
                 else {
-                    bail_bug!("expected WriteState::HostReady")
+                    bail_bug!("expected WriteState::GuestReady")
                 };
                 state.send_write_result(ty, id, handle, code)?;
                 Ok(())
@@ -2417,7 +2417,7 @@ impl StoreOpaque {
                 let ReadState::GuestReady { ty, handle, .. } =
                     mem::replace(&mut transmit.read, ReadState::Open)
                 else {
-                    bail_bug!("expected ReadState::HostReady")
+                    bail_bug!("expected ReadState::GuestReady")
                 };
                 state.send_read_result(ty, id, handle, code)?;
                 Ok(())
