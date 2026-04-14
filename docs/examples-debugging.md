@@ -3,6 +3,9 @@
 Wasmtime currently provides the following support for debugging misbehaving
 WebAssembly:
 
+* We can [live debug and step through the guest Wasm on its
+  own.](./examples-debugging-guest.md)
+
 * We can [live debug and step through the guest Wasm and the host at the same
   time with `gdb` or `lldb`.](./examples-debugging-native-debugger.md)
 
