@@ -1326,6 +1326,7 @@ async fn bytes_stream_producer() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn drop_deadlocked_typed_future() -> Result<()> {
     let mut config = Config::new();
     config.wasm_component_model_async(true);
