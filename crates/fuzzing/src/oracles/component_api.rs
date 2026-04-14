@@ -211,6 +211,11 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
         10 << 20,
     );
 
+    // Re-enforce internal consistency after the adjustments above (e.g.
+    // memory_reservation may have been bumped without a corresponding bump
+    // to gc_heap_reservation).
+    config.wasmtime.make_internally_consistent();
+
     let engine = Engine::new(
         config
             .to_wasmtime()

@@ -1,7 +1,7 @@
 use super::{ArrayInit, GcCompiler};
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
@@ -1449,10 +1449,12 @@ impl FuncEnvironment<'_> {
         let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
 
         let mut flags = ir::MemFlags::trusted();
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
         if !self
             .tunables
             .gc_heap_memory_type()
-            .memory_may_move(self.tunables)
+            .memory_may_move(&memory_tunables)
         {
             flags.set_readonly();
             flags.set_can_move();
@@ -1512,6 +1514,7 @@ impl FuncEnvironment<'_> {
             base,
             bound,
             memory,
+            kind: MemoryKind::GcHeap,
         });
         self.gc_heap = Some(heap);
         heap

@@ -184,16 +184,17 @@ fn bounds_check_field_access(
         env.heap_access_spectre_mitigation() && clif_memory_traps_enabled;
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
+    let memory_tunables = heap.memory_tunables(env.tunables());
     let can_use_virtual_memory = heap
         .memory
-        .can_use_virtual_memory(env.tunables(), host_page_size_log2)
+        .can_use_virtual_memory(memory_tunables.tunables(), host_page_size_log2)
         && clif_memory_traps_enabled;
     let can_elide_bounds_check = heap
         .memory
-        .can_elide_bounds_check(env.tunables(), host_page_size_log2)
+        .can_elide_bounds_check(&memory_tunables, host_page_size_log2)
         && clif_memory_traps_enabled;
-    let memory_guard_size = env.tunables().memory_guard_size;
-    let memory_reservation = env.tunables().memory_reservation;
+    let memory_guard_size = memory_tunables.guard_size();
+    let memory_reservation = memory_tunables.reservation();
 
     let offset_and_size = offset_plus_size(offset, access_size);
     let statically_in_bounds = statically_in_bounds(&builder.func, heap, index, offset_and_size);
@@ -348,7 +349,7 @@ fn bounds_check_field_access(
     // factor in the guard pages here.
     if can_use_virtual_memory
         && heap.memory.minimum_byte_size().unwrap_or(u64::MAX) <= memory_reservation
-        && !heap.memory.memory_may_move(env.tunables())
+        && !heap.memory.memory_may_move(&memory_tunables)
         && memory_reservation >= offset_and_size
     {
         let adjusted_bound = memory_reservation.checked_sub(offset_and_size).unwrap();

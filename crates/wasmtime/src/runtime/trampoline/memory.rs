@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::future::Future;
 use core::pin::Pin;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, StaticModuleIndex,
-    Tunables, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryTunables, Module,
+    StaticModuleIndex, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -105,18 +105,18 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let reserved_size_in_bytes = Some(tunables.memory_reservation.try_into().unwrap());
+        let reserved_size_in_bytes = Some(memory_tunables.reservation().try_into().unwrap());
         self.0
             .new_memory(
                 MemoryType::from_wasmtime_memory(ty),
                 minimum,
                 maximum,
                 reserved_size_in_bytes,
-                usize::try_from(tunables.memory_guard_size).unwrap(),
+                usize::try_from(memory_tunables.guard_size()).unwrap(),
             )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
             .map_err(|e| format_err!(e))
