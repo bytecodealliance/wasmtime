@@ -571,12 +571,7 @@ impl LocalMemory {
 
                     let mut slot =
                         MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
-                    slot.instantiate(
-                        alloc.byte_size(),
-                        Some(image),
-                        ty,
-                        memory_tunables,
-                    )?;
+                    slot.instantiate(alloc.byte_size(), Some(image), ty, memory_tunables)?;
                     Some(slot)
                 } else {
                     None

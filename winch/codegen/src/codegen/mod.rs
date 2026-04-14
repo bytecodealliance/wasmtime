@@ -24,7 +24,7 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    FUNCREF_MASK, GlobalIndex, MemoryKind, MemoryTunables, MemoryIndex, PtrSize, TableIndex,
+    FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind, MemoryTunables, PtrSize, TableIndex,
     Tunables, TypeIndex, WasmHeapType, WasmValType,
 };
 
@@ -691,10 +691,9 @@ where
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
         let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
-        let can_elide_bounds_check = heap.memory.can_elide_bounds_check(
-            &memory_tunables,
-            self.env.page_size_log2,
-        );
+        let can_elide_bounds_check = heap
+            .memory
+            .can_elide_bounds_check(&memory_tunables, self.env.page_size_log2);
 
         let addr = if offset_with_access_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX)
             || (!self.tunables.memory_may_move

@@ -1,6 +1,6 @@
 use crate::{
-    MemoryTunables, PanicOnOom as _, Tunables, WasmResult, collections::TryCow,
-    error::OutOfMemory, prelude::*, wasm_unsupported,
+    MemoryTunables, PanicOnOom as _, Tunables, WasmResult, collections::TryCow, error::OutOfMemory,
+    prelude::*, wasm_unsupported,
 };
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
