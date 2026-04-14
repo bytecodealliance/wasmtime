@@ -1780,6 +1780,12 @@ fn pooling_gc_different_configs_rejected() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn memory_guard_pages_but_no_gc_heap_guard_pages() -> Result<()> {
+    if std::mem::size_of::<usize>() < std::mem::size_of::<u64>()
+        || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
+    {
+        return Ok(());
+    }
+
     let _ = env_logger::try_init();
 
     let mut config = Config::new();
@@ -1829,6 +1835,12 @@ fn memory_guard_pages_but_no_gc_heap_guard_pages() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn gc_heap_guard_pages_but_no_memory_guard_pages() -> Result<()> {
+    if std::mem::size_of::<usize>() < std::mem::size_of::<u64>()
+        || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
+    {
+        return Ok(());
+    }
+
     let _ = env_logger::try_init();
 
     let mut config = Config::new();
