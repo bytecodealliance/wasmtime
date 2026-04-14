@@ -2592,6 +2592,7 @@ impl Config {
                 Some(match self.collector.try_not_auto()? {
                     Collector::DeferredReferenceCounting => EnvCollector::DeferredReferenceCounting,
                     Collector::Null => EnvCollector::Null,
+                    Collector::Copying => EnvCollector::Copying,
                     Collector::Auto => unreachable!(),
                 })
             }
@@ -2728,7 +2729,7 @@ impl Config {
 
         #[cfg(feature = "gc")]
         #[cfg_attr(
-            not(any(feature = "gc-null", feature = "gc-drc")),
+            not(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying")),
             expect(unreachable_code, reason = "definitions known to be dummy")
         )]
         {
@@ -2746,6 +2747,13 @@ impl Config {
                 }
                 #[cfg(not(feature = "gc-null"))]
                 Collector::Null => unreachable!(),
+
+                #[cfg(feature = "gc-copying")]
+                Collector::Copying => {
+                    try_new::<Arc<_>>(crate::runtime::vm::CopyingCollector::default())? as _
+                }
+                #[cfg(not(feature = "gc-copying"))]
+                Collector::Copying => unreachable!(),
 
                 Collector::Auto => unreachable!(),
             }))
@@ -3325,10 +3333,11 @@ impl Strategy {
 /// The properties of Wasmtime's available collectors are summarized in the
 /// following table:
 ///
-/// | Collector                   | Collects Garbage[^1] | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
-/// |-----------------------------|----------------------|-------------|----------------|----------------------|----------------------|
-/// | `DeferredReferenceCounting` | Yes, but not cycles  | 🙂         | 🙁             | 😐                   | 😐                  |
-/// | `Null`                      | No                   | 🙂         | 🙂             | 🙂                   | 🙂                  |
+/// | Collector                   | Collects Garbage[^1]  | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
+/// |-----------------------------|-----------------------|-------------|----------------|----------------------|----------------------|
+/// | `DeferredReferenceCounting` | Yes, but not cycles   | 🙂         | 🙁             | 😐                   | 😐                  |
+/// | `Null`                      | No                    | 🙂         | 🙂             | 🙂                   | 🙂                  |
+/// | `Copying`[^copying]         | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
 ///
 /// [^1]: Whether or not the collector is capable of collecting garbage and cyclic garbage.
 ///
@@ -3348,6 +3357,9 @@ impl Strategy {
 ///       require? Less space taken up by metadata means more space for
 ///       additional objects. Reference counts are larger than mark bits and
 ///       free lists are larger than bump pointers, for example.
+///
+/// [^copying]: The copying collector is still under construction and is not yet
+///             functional.
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Collector {
@@ -3393,6 +3405,20 @@ pub enum Collector {
     /// collectors, as this collector imposes as close to zero throughput and
     /// latency overhead as possible.
     Null,
+
+    /// The copying collector.
+    ///
+    /// A tracing collector that splits the GC heap in half, bump-allocates
+    /// objects in one half until it fills up, and then does a GC and copies
+    /// live objects into the other half, and repeats the process. It has fast
+    /// allocation, collects cyclic garbage, and good collection throughput,
+    /// however it suffers from poor latency due to its stop-the-world
+    /// collections and poor heap utilization due to only using half the GC
+    /// heap's full capacity at any given time.
+    ///
+    /// Note that this collector is still under construction and is not yet
+    /// functional.
+    Copying,
 }
 
 impl Default for Collector {
@@ -3437,12 +3463,20 @@ impl Collector {
                  the `gc-null` feature was not enabled at compile time",
             ),
 
+            #[cfg(feature = "gc-copying")]
+            Some(c @ Collector::Copying) => Ok(c),
+            #[cfg(not(feature = "gc-copying"))]
+            Some(Collector::Copying) => bail!(
+                "cannot create an engine using the copying collector because \
+                 the `gc-copying` feature was not enabled at compile time",
+            ),
+
             Some(Collector::Auto) => unreachable!(),
 
             None => bail!(
                 "cannot create an engine with GC support when none of the \
                  collectors are available; enable one of the following \
-                 features: `gc-drc`, `gc-null`",
+                 features: `gc-drc`, `gc-null`, `gc-copying`",
             ),
         }
     }

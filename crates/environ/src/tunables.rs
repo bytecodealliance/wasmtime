@@ -412,6 +412,8 @@ pub enum Collector {
     DeferredReferenceCounting,
     /// The null collector.
     Null,
+    /// The copying collector.
+    Copying,
 }
 
 impl fmt::Display for Collector {
@@ -419,6 +421,7 @@ impl fmt::Display for Collector {
         match self {
             Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
             Collector::Null => write!(f, "null"),
+            Collector::Copying => write!(f, "copying"),
         }
     }
 }

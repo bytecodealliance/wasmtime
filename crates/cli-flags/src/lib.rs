@@ -234,12 +234,14 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub compiler: Option<wasmtime::Strategy>,
-        /// Which garbage collector to use: `drc` or `null`.
+        /// Which garbage collector to use: `drc`, `null`, or `copying`.
         ///
         /// `drc` is the deferred reference-counting collector.
         ///
         /// `null` is the null garbage collector, which does not collect any
         /// garbage.
+        ///
+        /// `copying` is the copying garbage collector (not yet implemented).
         ///
         /// Note that not all builds of Wasmtime will have support for garbage
         /// collection included.
@@ -1325,6 +1327,7 @@ mod tests {
                 Some(wasmtime::Collector::DeferredReferenceCounting),
             ),
             ("\"null\"", Some(wasmtime::Collector::Null)),
+            ("\"copying\"", Some(wasmtime::Collector::Copying)),
             ("\"hello\"", None), // should fail
             ("5", None),         // should fail
             ("true", None),      // should fail

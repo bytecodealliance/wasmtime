@@ -19,6 +19,7 @@ pub fn apply_wast_config(config: &mut Config, wast_config: &wast::WastConfig) {
         Collector::Auto => wasmtime::Collector::Auto,
         Collector::Null => wasmtime::Collector::Null,
         Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
+        Collector::Copying => wasmtime::Collector::Copying,
     });
 }
 

@@ -74,6 +74,7 @@ demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']
 gc = []
 gc-drc = ["gc"]
 gc-null = ["gc"]
+gc-copying = ["gc"]
 compile = [
   'gimli/write',
   'object/write_core',

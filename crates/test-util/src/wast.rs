@@ -445,6 +445,7 @@ pub enum Collector {
     Auto,
     Null,
     DeferredReferenceCounting,
+    Copying,
 }
 
 impl WastTest {
