@@ -1,7 +1,7 @@
 use super::{ArrayInit, GcCompiler};
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
@@ -23,6 +23,9 @@ use wasmtime_environ::{
 mod drc;
 #[cfg(feature = "gc-null")]
 mod null;
+
+#[cfg(feature = "gc-copying")]
+mod copying;
 
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
@@ -47,11 +50,19 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
              was disabled at compile time",
         )),
 
-        #[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+        #[cfg(feature = "gc-copying")]
+        Some(Collector::Copying) => Ok(Box::new(copying::CopyingCompiler::default())),
+        #[cfg(not(feature = "gc-copying"))]
+        Some(Collector::Copying) => Err(wasm_unsupported!(
+            "the copying collector is unavailable because the `gc-copying` feature \
+             was disabled at compile time",
+        )),
+
+        #[cfg(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying"))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled at configuration time"
         )),
-        #[cfg(not(any(feature = "gc-drc", feature = "gc-null")))]
+        #[cfg(not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled because no collector implementation \
              was selected at compile time; enable one of the `gc-drc` or \
@@ -1449,10 +1460,12 @@ impl FuncEnvironment<'_> {
         let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
 
         let mut flags = ir::MemFlags::trusted();
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
         if !self
             .tunables
             .gc_heap_memory_type()
-            .memory_may_move(self.tunables)
+            .memory_may_move(&memory_tunables)
         {
             flags.set_readonly();
             flags.set_can_move();
@@ -1512,6 +1525,7 @@ impl FuncEnvironment<'_> {
             base,
             bound,
             memory,
+            kind: MemoryKind::GcHeap,
         });
         self.gc_heap = Some(heap);
         heap

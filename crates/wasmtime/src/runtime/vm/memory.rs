@@ -83,7 +83,7 @@ use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr};
 use alloc::sync::Arc;
 use core::{ops::Range, ptr::NonNull};
-use wasmtime_environ::Tunables;
+use wasmtime_environ::{MemoryKind, MemoryTunables};
 
 #[cfg(feature = "threads")]
 use wasmtime_environ::Trap;
@@ -117,7 +117,7 @@ pub trait RuntimeMemoryCreator: Send + Sync {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>>;
@@ -131,25 +131,25 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         #[cfg(has_virtual_memory)]
-        if tunables.signals_based_traps
-            || tunables.memory_guard_size > 0
-            || tunables.memory_reservation > 0
-            || tunables.memory_init_cow
+        if memory_tunables.tunables().signals_based_traps
+            || memory_tunables.guard_size() > 0
+            || memory_tunables.reservation() > 0
+            || memory_tunables.tunables().memory_init_cow
         {
             return Ok(
-                try_new::<Box<_>>(MmapMemory::new(ty, tunables, minimum, maximum)?)?
+                try_new::<Box<_>>(MmapMemory::new(ty, memory_tunables, minimum, maximum)?)?
                     as Box<dyn RuntimeLinearMemory>,
             );
         }
 
         let _ = maximum;
         Ok(
-            try_new::<Box<_>>(MallocMemory::new(ty, tunables, minimum)?)?
+            try_new::<Box<_>>(MallocMemory::new(ty, memory_tunables, minimum)?)?
                 as Box<dyn RuntimeLinearMemory>,
         )
     }
@@ -247,9 +247,10 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let tunables = engine.tunables();
-        let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
+        let memory_tunables = MemoryTunables::new(tunables, MemoryKind::LinearMemory);
+        let allocation = creator.new_memory(ty, &memory_tunables, minimum, maximum)?;
 
-        let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
+        let memory = LocalMemory::new(ty, &memory_tunables, allocation, memory_image)?;
         Ok(if ty.shared {
             Memory::Shared(SharedMemory::wrap(engine, ty, memory)?)
         } else {
@@ -261,7 +262,7 @@ impl Memory {
     #[cfg(feature = "pooling-allocator")]
     pub async fn new_static(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         base: MemoryBase,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
@@ -275,7 +276,7 @@ impl Memory {
         // `LocalMemory` structure created, notably we already have
         // `memory_image` and regardless of configuration settings this memory
         // can't move its base pointer since it's a fixed allocation.
-        let mut memory = LocalMemory::new(ty, tunables, allocation, None)?;
+        let mut memory = LocalMemory::new(ty, memory_tunables, allocation, None)?;
         assert!(memory.memory_image.is_none());
         memory.memory_image = Some(memory_image);
         memory.memory_may_move = false;
@@ -546,7 +547,7 @@ pub struct LocalMemory {
 impl LocalMemory {
     pub fn new(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         alloc: Box<dyn RuntimeLinearMemory>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<LocalMemory> {
@@ -570,7 +571,7 @@ impl LocalMemory {
 
                     let mut slot =
                         MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
-                    slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
+                    slot.instantiate(alloc.byte_size(), Some(image), ty, memory_tunables)?;
                     Some(slot)
                 } else {
                     None
@@ -583,10 +584,10 @@ impl LocalMemory {
         Ok(LocalMemory {
             ty: *ty,
             alloc,
-            memory_may_move: ty.memory_may_move(tunables),
+            memory_may_move: ty.memory_may_move(memory_tunables),
             memory_image,
-            memory_guard_size: tunables.memory_guard_size.try_into().unwrap(),
-            memory_reservation: tunables.memory_reservation.try_into().unwrap(),
+            memory_guard_size: memory_tunables.guard_size().try_into().unwrap(),
+            memory_reservation: memory_tunables.reservation().try_into().unwrap(),
         })
     }
 

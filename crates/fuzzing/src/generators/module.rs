@@ -26,6 +26,7 @@ pub struct ModuleConfig {
     pub component_model_fixed_length_lists: bool,
     pub legacy_exceptions: bool,
     pub shared_memory: bool,
+    pub stack_switching: bool,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
@@ -85,6 +86,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_fixed_length_lists: false,
             legacy_exceptions: false,
             shared_memory: false,
+            stack_switching: false,
             function_references_enabled: config.gc_enabled,
             config,
         })

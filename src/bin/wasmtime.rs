@@ -90,6 +90,10 @@ enum Subcommand {
     #[cfg(feature = "objdump")]
     Objdump(wasmtime_cli::commands::ObjdumpCommand),
 
+    /// Profile a Wasm module's execution and print the hottest basic blocks.
+    #[cfg(all(feature = "hot-blocks", target_os = "linux"))]
+    HotBlocks(wasmtime_cli::commands::HotBlocksCommand),
+
     #[cfg(feature = "wizer")]
     Wizer(wasmtime_cli::commands::WizerCommand),
 }
@@ -129,6 +133,9 @@ impl Wasmtime {
 
             #[cfg(feature = "objdump")]
             Subcommand::Objdump(c) => c.execute(),
+
+            #[cfg(all(feature = "hot-blocks", target_os = "linux"))]
+            Subcommand::HotBlocks(c) => c.execute(),
 
             #[cfg(feature = "wizer")]
             Subcommand::Wizer(c) => c.execute(),

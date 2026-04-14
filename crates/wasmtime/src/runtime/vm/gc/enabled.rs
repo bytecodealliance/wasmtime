@@ -24,6 +24,11 @@ mod null;
 #[cfg(feature = "gc-null")]
 pub use null::*;
 
+#[cfg(feature = "gc-copying")]
+mod copying;
+#[cfg(feature = "gc-copying")]
+pub use copying::*;
+
 // Explicit methods to clearly indicate that truncation is desired when used.
 #[expect(
     clippy::cast_possible_truncation,

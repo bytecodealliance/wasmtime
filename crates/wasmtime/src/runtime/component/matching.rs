@@ -1,7 +1,7 @@
 use crate::Module;
 use crate::component::ResourceType;
 use crate::component::func::HostFunc;
-use crate::component::linker::{Definition, Strings};
+use crate::component::linker::Definition;
 use crate::component::types::{FutureType, StreamType};
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
@@ -13,11 +13,12 @@ use wasmtime_environ::component::{
     TypeStreamTableIndex,
 };
 use wasmtime_environ::prelude::TryPrimaryMap;
+use wasmtime_environ::{Atom, StringPool};
 
 pub struct TypeChecker<'a> {
     pub engine: &'a Engine,
     pub types: &'a Arc<ComponentTypes>,
-    pub strings: &'a Strings,
+    pub strings: &'a StringPool,
     pub imported_resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
@@ -25,7 +26,13 @@ pub struct TypeChecker<'a> {
 #[doc(hidden)]
 pub struct InstanceType<'a> {
     pub types: &'a Arc<ComponentTypes>,
-    pub resources: &'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
+    /// Resource type substitutions for resources within `ComponentTypes`, if
+    /// any.
+    ///
+    /// If this isn't present then resource types are considered "abstract" and
+    /// un-intantiated. This doesn't refer to a concrete instantiated component,
+    /// but rather an abstract component type.
+    pub resources: Option<&'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>>,
 }
 
 impl TypeChecker<'_> {
@@ -147,7 +154,7 @@ impl TypeChecker<'_> {
     fn instance(
         &mut self,
         expected: &TypeComponentInstance,
-        actual: Option<&NameMap<usize, Definition>>,
+        actual: Option<&NameMap<Atom, Definition>>,
     ) -> Result<()> {
         // Like modules, every export in the expected type must be present in
         // the actual type. It's ok, though, to have extra exports in the actual
@@ -169,7 +176,7 @@ impl TypeChecker<'_> {
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         let instance_type = InstanceType {
             types: self.types,
-            resources: &self.imported_resources,
+            resources: Some(&self.imported_resources),
         };
         actual.typecheck(expected, &instance_type)
     }
@@ -190,7 +197,7 @@ impl<'a> InstanceType<'a> {
     pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
             types: instance.component().types(),
-            resources: instance.resource_types(),
+            resources: Some(instance.resource_types()),
         }
     }
 
@@ -198,8 +205,7 @@ impl<'a> InstanceType<'a> {
         match self.types[index] {
             TypeResourceTable::Concrete { ty, .. } => self
                 .resources
-                .get(ty)
-                .copied()
+                .map(|t| t[ty])
                 .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, ty)),
             TypeResourceTable::Abstract(ty) => ResourceType::abstract_(&self.types, ty),
         }

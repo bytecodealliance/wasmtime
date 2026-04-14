@@ -1,6 +1,6 @@
 use crate::collections::TryCow;
 use crate::error::{Result, bail};
-use crate::prelude::*;
+use crate::{Atom, StringPool, prelude::*};
 use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::hash::Hash;
@@ -260,6 +260,19 @@ impl NameMapIntern for NameMapNoIntern {
 
     fn lookup<'a>(&'a self, s: &'a str) -> Option<TryCow<'a, Self::BorrowedKey>> {
         Some(TryCow::Borrowed(s))
+    }
+}
+
+impl NameMapIntern for StringPool {
+    type Key = Atom;
+    type BorrowedKey = Atom;
+
+    fn intern(&mut self, string: &str) -> Result<Atom, OutOfMemory> {
+        self.insert(string)
+    }
+
+    fn lookup(&self, string: &str) -> Option<TryCow<'_, Atom>> {
+        self.get_atom(string).map(TryCow::Owned)
     }
 }
 

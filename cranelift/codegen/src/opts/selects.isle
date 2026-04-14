@@ -94,10 +94,10 @@
 
 ;; fold add-select to select-add
 (rule (simplify
-        (iadd ty (select ty c (iconst_u ty x) (iconst_u ty y)) (iconst_u ty z)))
+        (iadd ty (select ty c (iconst ty x) (iconst ty y)) (iconst ty z)))
         (select ty c
-            (iconst ty (imm64_masked ty (u64_wrapping_add x z)))
-            (iconst ty (imm64_masked ty (u64_wrapping_add y z)))))
+            (iconst ty (imm64_add ty x z))
+            (iconst ty (imm64_add ty y z))))
 
 (rule (simplify (select ty d a (select ty d _ y))) (select ty d a y))
 (rule (simplify (select ty d (select ty d x _) a)) (select ty d x a))

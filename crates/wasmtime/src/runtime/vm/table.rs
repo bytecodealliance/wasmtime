@@ -1055,8 +1055,9 @@ impl Table {
         match ty {
             TableElementType::Func => {
                 // `funcref` are `Copy`, so just do a mempcy
-                let (dst_funcrefs, _lazy_init) = dst_table.funcrefs_mut();
-                let (src_funcrefs, _lazy_init) = src_table.funcrefs();
+                let (dst_funcrefs, dst_lazy_init) = dst_table.funcrefs_mut();
+                let (src_funcrefs, src_lazy_init) = src_table.funcrefs();
+                debug_assert_eq!(dst_lazy_init, src_lazy_init);
                 dst_funcrefs[dst_range].copy_from_slice(&src_funcrefs[src_range]);
             }
             TableElementType::GcRef => {
@@ -1128,6 +1129,31 @@ impl Table {
             TableElementType::Cont => {
                 // `contref` are `Copy`, so just do a memmove
                 self.contrefs_mut().copy_within(src_range, dst_range.start);
+            }
+        }
+    }
+
+    /// Manually resets all table elements to a null bit pattern.
+    ///
+    /// Used in the pooling allocator when `madvise` fails to reset pages back
+    /// to their original contents. In such a situation the previous contents of
+    /// the table are unknown so this resets them all to defined values.
+    pub fn manually_memset_zeros(&mut self) {
+        match self.element_type() {
+            TableElementType::Func => {
+                let (funcrefs, _lazy_init) = self.funcrefs_mut();
+                funcrefs.fill(MaybeTaggedFuncRef(None));
+            }
+            TableElementType::GcRef => {
+                // Note that this explicitly contains no barriers as all table
+                // GC elements should already have been dropped before returning
+                // the table back to the pool.
+                for r in self.gc_refs_mut() {
+                    *r = None;
+                }
+            }
+            TableElementType::Cont => {
+                self.contrefs_mut().fill(None);
             }
         }
     }

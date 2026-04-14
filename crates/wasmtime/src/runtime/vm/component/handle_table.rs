@@ -135,27 +135,30 @@ impl HandleTable {
     }
 
     fn insert(&mut self, slot: Slot) -> Result<u32> {
-        let next = self.next as usize;
-        if next == self.slots.len() {
-            self.slots.push(Slot::Free {
-                next: self.next.checked_add(1).unwrap(),
-            })?;
-        }
-        let ret = self.next;
-        self.next = match mem::replace(&mut self.slots[next], slot) {
-            Slot::Free { next } => next,
-            _ => unreachable!(),
-        };
+        let next = self.next;
+
         // The component model reserves index 0 as never allocatable so add one
         // to the table index to start the numbering at 1 instead. Also note
         // that the component model places an upper-limit per-table on the
         // maximum allowed index.
-        let ret = ret + 1;
-        if ret >= MAX_HANDLE {
+        //
+        // First check to make sure the returned handle is in-bounds, then do
+        // the actual allocation below.
+        if next + 1 >= MAX_HANDLE {
             bail!("cannot allocate another handle: index overflow");
         }
 
-        Ok(ret)
+        if next as usize == self.slots.len() {
+            self.slots.push(Slot::Free {
+                next: next.checked_add(1).unwrap(),
+            })?;
+        }
+        self.next = match mem::replace(&mut self.slots[next as usize], slot) {
+            Slot::Free { next } => next,
+            _ => unreachable!(),
+        };
+
+        Ok(next + 1)
     }
 
     fn remove(&mut self, idx: u32) -> Result<()> {

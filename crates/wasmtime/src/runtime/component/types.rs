@@ -35,12 +35,13 @@ pub use crate::component::resources::ResourceType;
 ///   component with different resources produces different instance types but
 ///   the same underlying component type, so this field serves the purpose to
 ///   distinguish instance types from one another. This is runtime state created
-///   during instantiation and threaded through here.
+///   during instantiation and threaded through here. Note that if this field
+///   is `None` then this represents an abstract uninstantiated component type.
 #[derive(Clone)]
 struct Handle<T> {
     index: T,
     types: Arc<ComponentTypes>,
-    resources: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
+    resources: Option<Arc<TryPrimaryMap<ResourceIndex, ResourceType>>>,
 }
 
 impl<T> Handle<T> {
@@ -48,14 +49,14 @@ impl<T> Handle<T> {
         Handle {
             index,
             types: ty.types.clone(),
-            resources: ty.resources.clone(),
+            resources: ty.resources.cloned(),
         }
     }
 
     fn instance(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.types,
-            resources: &self.resources,
+            resources: self.resources.as_ref(),
         }
     }
 
@@ -69,13 +70,17 @@ impl<T> Handle<T> {
     {
         (self.index == other.index
             && Arc::ptr_eq(&self.types, &other.types)
-            && Arc::ptr_eq(&self.resources, &other.resources))
+            && match (&self.resources, &other.resources) {
+                (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+                (None, None) => true,
+                _ => false,
+            })
             || type_check(
                 &TypeChecker {
                     a_types: &self.types,
                     b_types: &other.types,
-                    a_resource: &self.resources,
-                    b_resource: &other.resources,
+                    a_resource: self.resources.as_deref(),
+                    b_resource: other.resources.as_deref(),
                 },
                 self.index,
                 other.index,
@@ -94,9 +99,9 @@ impl<T: fmt::Debug> fmt::Debug for Handle<T> {
 /// Type checker between two `Handle`s
 struct TypeChecker<'a> {
     a_types: &'a ComponentTypes,
-    a_resource: &'a TryPrimaryMap<ResourceIndex, ResourceType>,
+    a_resource: Option<&'a TryPrimaryMap<ResourceIndex, ResourceType>>,
     b_types: &'a ComponentTypes,
-    b_resource: &'a TryPrimaryMap<ResourceIndex, ResourceType>,
+    b_resource: Option<&'a TryPrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 impl TypeChecker<'_> {
@@ -184,7 +189,7 @@ impl TypeChecker<'_> {
             (
                 TypeResourceTable::Concrete { ty: a, .. },
                 TypeResourceTable::Concrete { ty: b, .. },
-            ) => self.a_resource[*a] == self.b_resource[*b],
+            ) => self.a_resource.unwrap()[*a] == self.b_resource.unwrap()[*b],
             (TypeResourceTable::Concrete { .. }, _) => false,
 
             // Abstract resource types are only the same if they have the same
@@ -615,9 +620,9 @@ impl FutureType {
         match (my_payload, payload) {
             (Some(a), Some(b)) => TypeChecker {
                 a_types: &self.0.types,
-                a_resource: &self.0.resources,
+                a_resource: self.0.resources.as_deref(),
                 b_types: ty.types,
-                b_resource: ty.resources,
+                b_resource: ty.resources.map(|p| &**p),
             }
             .interface_types_equal(*a, *b),
             (None, None) => true,
@@ -672,9 +677,9 @@ impl StreamType {
         match (my_payload, payload) {
             (Some(a), Some(b)) => TypeChecker {
                 a_types: &self.0.types,
-                a_resource: &self.0.resources,
+                a_resource: self.0.resources.as_deref(),
                 b_types: ty.types,
-                b_resource: ty.resources,
+                b_resource: ty.resources.map(|p| &**p),
             }
             .interface_types_equal(*a, *b),
             (None, None) => true,
@@ -1071,7 +1076,7 @@ impl Component {
     pub fn instance_type(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.0.types,
-            resources: &self.0.resources,
+            resources: self.0.resources.as_ref(),
         }
     }
 }
@@ -1152,7 +1157,7 @@ impl ComponentItem {
                 TypeResourceTable::Concrete {
                     ty: resource_index, ..
                 } => {
-                    let ty = match ty.resources.get(resource_index) {
+                    let ty = match ty.resources.and_then(|t| t.get(resource_index)) {
                         // This resource type was substituted by a linker for
                         // example so it's replaced here.
                         Some(ty) => *ty,

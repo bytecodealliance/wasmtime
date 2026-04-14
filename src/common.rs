@@ -130,6 +130,28 @@ fn parse_dirs(s: &str) -> Result<(String, String)> {
     Ok((host.into(), guest.into()))
 }
 
+impl std::fmt::Display for RunCommon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.common)?;
+        if self.allow_precompiled {
+            write!(f, "--allow-precompiled ")?;
+        }
+        if let Some(profile) = &self.profile {
+            write!(f, "--profile={profile} ")?;
+        }
+        for (host, guest) in &self.dirs {
+            write!(f, "--dir={host}::{guest} ")?;
+        }
+        for (key, value) in &self.vars {
+            match value {
+                Some(val) => write!(f, "--env={key}={val} ")?,
+                None => write!(f, "--env={key} ")?,
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RunCommon {
     pub fn store_limits(&self) -> StoreLimits {
         let mut limits = StoreLimitsBuilder::new();
@@ -459,6 +481,24 @@ impl RunCommon {
 pub enum Profile {
     Native(wasmtime::ProfilingStrategy),
     Guest { path: String, interval: Duration },
+}
+
+impl std::fmt::Display for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Profile::Native(strategy) => match strategy {
+                wasmtime::ProfilingStrategy::PerfMap => write!(f, "perfmap"),
+                wasmtime::ProfilingStrategy::JitDump => write!(f, "jitdump"),
+                wasmtime::ProfilingStrategy::VTune => write!(f, "vtune"),
+                wasmtime::ProfilingStrategy::Pulley => write!(f, "pulley"),
+                other => write!(f, "{other:?}"),
+            },
+            Profile::Guest { path, interval } => {
+                write!(f, "guest,{path},{}", interval.as_millis())?;
+                Ok(())
+            }
+        }
+    }
 }
 
 impl Profile {

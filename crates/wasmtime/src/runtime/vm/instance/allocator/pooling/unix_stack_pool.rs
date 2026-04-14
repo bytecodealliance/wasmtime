@@ -2,7 +2,6 @@
 
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use crate::prelude::*;
-use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
     HostAlignedByteCount, Mmap, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
 };
@@ -120,8 +119,6 @@ impl StackPool {
                 .as_ptr()
                 .add(self.stack_size.unchecked_mul(index).byte_count())
                 .cast_mut();
-
-            commit_pages(bottom_of_stack, size_without_guard.byte_count())?;
 
             let stack = wasmtime_fiber::FiberStack::from_raw_parts(
                 bottom_of_stack,

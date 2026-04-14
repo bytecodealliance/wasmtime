@@ -61,6 +61,6 @@ pub use async_trait::async_trait;
 #[doc(no_inline)]
 pub use cap_fs_ext::SystemTimeSpec;
 #[doc(no_inline)]
-pub use cap_rand::RngCore;
+pub use rand::Rng;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};

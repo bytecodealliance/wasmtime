@@ -160,6 +160,29 @@ define_tunables! {
         /// forced and the counter is reset. Only effective when
         /// `cfg(gc_zeal)` is enabled.
         pub gc_zeal_alloc_counter: Option<NonZeroU32>,
+
+        /// Initial size, in bytes, to be allocated for GC heaps.
+        ///
+        /// This is the same as `memory_reservation` but for GC heaps.
+        pub gc_heap_reservation: u64,
+
+        /// The size, in bytes, of the guard page region for GC heaps.
+        ///
+        /// This is the same as `memory_guard_size` but for GC heaps.
+        pub gc_heap_guard_size: u64,
+
+        /// The size, in bytes, to allocate at the end of a relocated GC heap
+        /// for growth.
+        ///
+        /// This is the same as `memory_reservation_for_growth` but for GC
+        /// heaps.
+        pub gc_heap_reservation_for_growth: u64,
+
+        /// Whether or not GC heaps are allowed to be reallocated after initial
+        /// allocation at runtime.
+        ///
+        /// This is the same as `memory_may_move` but for GC heaps.
+        pub gc_heap_may_move: bool,
     }
 
     pub struct ConfigTunables {
@@ -200,6 +223,7 @@ impl Tunables {
         if target.is_pulley() {
             ret.signals_based_traps = false;
             ret.memory_guard_size = 0;
+            ret.gc_heap_guard_size = 0;
         }
         Ok(ret)
     }
@@ -239,6 +263,10 @@ impl Tunables {
             concurrency_support: true,
             recording: false,
             gc_zeal_alloc_counter: None,
+            gc_heap_reservation: 0,
+            gc_heap_guard_size: 0,
+            gc_heap_reservation_for_growth: 0,
+            gc_heap_may_move: true,
         }
     }
 
@@ -252,6 +280,12 @@ impl Tunables {
             memory_guard_size: 0x1_0000,
             memory_reservation_for_growth: 1 << 20, // 1MB
             signals_based_traps: true,
+
+            // GC heaps on 32-bit: conservative defaults similar to linear
+            // memories.
+            gc_heap_reservation: 10 * (1 << 20),
+            gc_heap_guard_size: 0x1_0000,
+            gc_heap_reservation_for_growth: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
         }
@@ -278,6 +312,12 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            // GC heaps on 64-bit: use 4GiB reservation and 32MiB guard pages
+            // to enable bounds check elision, matching linear memory defaults.
+            gc_heap_reservation: 1 << 32,
+            gc_heap_guard_size: 32 << 20,
+            gc_heap_reservation_for_growth: 2 << 30, // 2GB
+
             signals_based_traps: true,
             ..Tunables::default_miri()
         }
@@ -298,6 +338,73 @@ impl Tunables {
     }
 }
 
+/// Whether a heap is backing a linear memory or a GC heap.
+///
+/// This is used by [`MemoryTunables`] to select between the memory tunables and
+/// the GC heap tunables.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MemoryKind {
+    /// A WebAssembly linear memory.
+    LinearMemory,
+    /// A GC heap for garbage-collected objects.
+    GcHeap,
+}
+
+/// A view into a [`Tunables`] that selects the appropriate linear-memory or
+/// GC-heap flavor of each tunable based on a [`MemoryKind`].
+pub struct MemoryTunables<'a> {
+    tunables: &'a Tunables,
+    kind: MemoryKind,
+}
+
+impl<'a> MemoryTunables<'a> {
+    /// Create a new `MemoryTunables` view.
+    pub fn new(tunables: &'a Tunables, kind: MemoryKind) -> Self {
+        Self { tunables, kind }
+    }
+
+    /// The virtual memory reservation for this kind of memory.
+    pub fn reservation(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation,
+        }
+    }
+
+    /// The size of the guard page region for this kind of memory.
+    pub fn guard_size(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_guard_size,
+            MemoryKind::GcHeap => self.tunables.gc_heap_guard_size,
+        }
+    }
+
+    /// Extra virtual memory to reserve beyond the initially mapped pages for
+    /// this kind of memory.
+    pub fn reservation_for_growth(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation_for_growth,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation_for_growth,
+        }
+    }
+
+    /// Whether this kind of memory's base pointer may be relocated at runtime.
+    pub fn may_move(&self) -> bool {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_may_move,
+            MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
+        }
+    }
+
+    /// Get the underlying tunables.
+    ///
+    /// This is ONLY for accessing tunable fields that DO NOT come in a
+    /// linear-memory flavor and a GC-heap flavor.
+    pub fn tunables(&self) -> &'a Tunables {
+        self.tunables
+    }
+}
+
 /// The garbage collector implementation to use.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Collector {
@@ -305,6 +412,8 @@ pub enum Collector {
     DeferredReferenceCounting,
     /// The null collector.
     Null,
+    /// The copying collector.
+    Copying,
 }
 
 impl fmt::Display for Collector {
@@ -312,6 +421,7 @@ impl fmt::Display for Collector {
         match self {
             Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
             Collector::Null => write!(f, "null"),
+            Collector::Copying => write!(f, "copying"),
         }
     }
 }

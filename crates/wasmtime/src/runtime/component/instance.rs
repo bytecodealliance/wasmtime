@@ -1149,7 +1149,7 @@ impl<T: 'static> InstancePre<T> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.component.types(),
-            resources: &self.resource_types,
+            resources: Some(&self.resource_types),
         }
     }
 
@@ -1187,23 +1187,46 @@ impl<T: 'static> InstancePre<T> {
         mut store: impl AsContextMut<Data = T>,
         asyncness: Asyncness,
     ) -> Result<Instance> {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         store.0.set_async_required(self.asyncness);
         store
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
-        instantiator.run(&mut store, asyncness).await.map_err(|e| {
-            store
-                .engine()
-                .allocator()
-                .decrement_component_instance_count();
-            e
-        })?;
 
-        let instance = Instance::from_wasmtime(store.0, instantiator.id);
-        store.0.push_component_instance(instance);
-        Ok(instance)
+        // Helper structure to pair the above increment with a decrement should
+        // anything fail below.
+        let mut decrement = DecrementComponentInstanceCountOnDrop {
+            store,
+            enabled: true,
+        };
+
+        let mut instantiator =
+            Instantiator::new(&self.component, decrement.store.0, &self.imports)?;
+        instantiator.run(&mut decrement.store, asyncness).await?;
+
+        let instance = Instance::from_wasmtime(decrement.store.0, instantiator.id);
+        decrement.store.0.push_component_instance(instance);
+
+        // Everything has passed, don't decrement the instance count and let the
+        // destructor for the `Store` handle that at this point.
+        decrement.enabled = false;
+        return Ok(instance);
+
+        struct DecrementComponentInstanceCountOnDrop<'a, T: 'static> {
+            store: StoreContextMut<'a, T>,
+            enabled: bool,
+        }
+
+        impl<T> Drop for DecrementComponentInstanceCountOnDrop<'_, T> {
+            fn drop(&mut self) {
+                if self.enabled {
+                    self.store
+                        .engine()
+                        .allocator()
+                        .decrement_component_instance_count();
+                }
+            }
+        }
     }
 }

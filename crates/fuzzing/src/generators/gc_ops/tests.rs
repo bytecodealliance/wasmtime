@@ -5,7 +5,7 @@ use crate::generators::gc_ops::{
 };
 use mutatis;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use wasmparser;
 use wasmprinter;
 
@@ -106,7 +106,7 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
     let mut rng = StdRng::seed_from_u64(0xC0FFEE);
     if t.limits.max_rec_groups > 0 {
         for i in 0..t.limits.max_types {
-            let gid = RecGroupId(rng.gen_range(0..t.limits.max_rec_groups));
+            let gid = RecGroupId(rng.random_range(0..t.limits.max_rec_groups));
             let is_final = false;
             let supertype = None;
             t.types

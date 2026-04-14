@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
 use crate::runtime::vm::{HostAlignedByteCount, Mmap, mmap::AlignedLength};
 use alloc::sync::Arc;
-use wasmtime_environ::Tunables;
+use wasmtime_environ::MemoryTunables;
 
 use super::MemoryBase;
 
@@ -50,7 +50,7 @@ impl MmapMemory {
     /// number of wasm pages.
     pub fn new(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Self> {
@@ -60,9 +60,9 @@ impl MmapMemory {
         //
         // Also be sure to round up to the host page size for this value.
         let offset_guard_bytes =
-            HostAlignedByteCount::new_rounded_up_u64(tunables.memory_guard_size)
+            HostAlignedByteCount::new_rounded_up_u64(memory_tunables.guard_size())
                 .context("tunable.memory_guard_size overflows")?;
-        let pre_guard_bytes = if tunables.guard_before_linear_memory {
+        let pre_guard_bytes = if memory_tunables.tunables().guard_before_linear_memory {
             offset_guard_bytes
         } else {
             HostAlignedByteCount::ZERO
@@ -78,8 +78,8 @@ impl MmapMemory {
         // to reserve any extra for growth.
         //
         // If the minimum size doesn't fit within this linear memory.
-        let mut alloc_bytes = tunables.memory_reservation;
-        let mut extra_to_reserve_on_growth = tunables.memory_reservation_for_growth;
+        let mut alloc_bytes = memory_tunables.reservation();
+        let mut extra_to_reserve_on_growth = memory_tunables.reservation_for_growth();
         let minimum_u64 = u64::try_from(minimum).unwrap();
         if minimum_u64 <= alloc_bytes {
             if let Ok(max) = ty.maximum_byte_size() {

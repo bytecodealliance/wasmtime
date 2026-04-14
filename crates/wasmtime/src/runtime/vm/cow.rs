@@ -12,7 +12,7 @@ use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Range;
 use wasmtime_environ::prelude::TryPrimaryMap;
-use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, Tunables};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, MemoryTunables, Module};
 
 /// Backing images for memories in a module.
 ///
@@ -416,7 +416,7 @@ impl MemoryImageSlot {
         initial_size_bytes: usize,
         maybe_image: Option<&Arc<MemoryImage>>,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
     ) -> Result<()> {
         assert!(!self.dirty);
         assert!(
@@ -460,8 +460,8 @@ impl MemoryImageSlot {
         // using dynamic memory without any guard pages.
         let host_page_size_log2 = u8::try_from(host_page_size().ilog2()).unwrap();
         if initial_size_bytes_page_aligned < self.accessible
-            && (tunables.memory_guard_size > 0
-                || ty.can_use_virtual_memory(tunables, host_page_size_log2))
+            && (memory_tunables.guard_size() > 0
+                || ty.can_use_virtual_memory(memory_tunables.tunables(), host_page_size_log2))
         {
             self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
             self.accessible = initial_size_bytes_page_aligned;
@@ -715,7 +715,7 @@ mod test {
     use crate::runtime::vm::sys::vm::decommit_pages;
     use crate::runtime::vm::{HostAlignedByteCount, MmapVec, host_page_size};
     use std::sync::Arc;
-    use wasmtime_environ::{IndexType, Limits, Memory};
+    use wasmtime_environ::{IndexType, Limits, Memory, MemoryKind, Tunables};
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // offset must be a multiple of the page size.
@@ -804,7 +804,14 @@ mod test {
             MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
-        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
+        memfd
+            .instantiate(
+                64 << 10,
+                None,
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
+            .unwrap();
         assert!(memfd.is_dirty());
 
         // We should be able to access this 64 KiB (try both ends) and
@@ -831,7 +838,14 @@ mod test {
             })
             .unwrap();
         assert!(!memfd.is_dirty());
-        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
+        memfd
+            .instantiate(
+                64 << 10,
+                None,
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
+            .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(0, slice[1024]);
     }
@@ -853,7 +867,12 @@ mod test {
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         // Instantiate with this image
         memfd
-            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .instantiate(
+                64 << 10,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         assert!(memfd.has_image());
 
@@ -871,7 +890,12 @@ mod test {
             })
             .unwrap();
         memfd
-            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .instantiate(
+                64 << 10,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -882,7 +906,14 @@ mod test {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
-        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
+        memfd
+            .instantiate(
+                64 << 10,
+                None,
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
+            .unwrap();
         assert!(!memfd.has_image());
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
@@ -894,7 +925,12 @@ mod test {
             })
             .unwrap();
         memfd
-            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .instantiate(
+                64 << 10,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -907,7 +943,12 @@ mod test {
             })
             .unwrap();
         memfd
-            .instantiate(128 << 10, Some(&image2), &ty, &tunables)
+            .instantiate(
+                128 << 10,
+                Some(&image2),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[10, 11, 12, 13], &slice[page_size..][..4]);
@@ -920,7 +961,12 @@ mod test {
             })
             .unwrap();
         memfd
-            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .instantiate(
+                64 << 10,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -945,7 +991,12 @@ mod test {
             for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
                 let amt_to_memset = HostAlignedByteCount::new(amt_to_memset).unwrap();
                 memfd
-                    .instantiate(64 << 10, Some(&image), &ty, &tunables)
+                    .instantiate(
+                        64 << 10,
+                        Some(&image),
+                        &ty,
+                        &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+                    )
                     .unwrap();
                 assert!(memfd.has_image());
 
@@ -972,7 +1023,14 @@ mod test {
         // Test without an image
         for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
             let amt_to_memset = HostAlignedByteCount::new(amt_to_memset).unwrap();
-            memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
+            memfd
+                .instantiate(
+                    64 << 10,
+                    None,
+                    &ty,
+                    &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+                )
+                .unwrap();
 
             unsafe {
                 with_slice_mut(&mmap, 0..64 << 10, |slice| {
@@ -1010,7 +1068,12 @@ mod test {
         // Instantiate the image and test that memory remains accessible after
         // it's cleared.
         memfd
-            .instantiate(initial, Some(&image), &ty, &tunables)
+            .instantiate(
+                initial,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         assert!(memfd.has_image());
 
@@ -1033,7 +1096,12 @@ mod test {
         // Re-instantiate make sure it preserves memory. Grow a bit and set data
         // beyond the initial size.
         memfd
-            .instantiate(initial, Some(&image), &ty, &tunables)
+            .instantiate(
+                initial,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
 
@@ -1059,7 +1127,12 @@ mod test {
         // Instantiate again, and again memory beyond the initial size should
         // still be accessible. Grow into it again and make sure it works.
         memfd
-            .instantiate(initial, Some(&image), &ty, &tunables)
+            .instantiate(
+                initial,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         memfd.set_heap_limit(initial * 2).unwrap();
@@ -1079,7 +1152,14 @@ mod test {
             .unwrap();
 
         // Reset the image to none and double-check everything is back to zero
-        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
+        memfd
+            .instantiate(
+                64 << 10,
+                None,
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
+            .unwrap();
         assert!(!memfd.has_image());
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
@@ -1109,7 +1189,12 @@ mod test {
         let image = Arc::new(create_memfd_with_data(3 * page_size, &data).unwrap());
 
         memfd
-            .instantiate(mmap_len, Some(&image), &ty, &tunables)
+            .instantiate(
+                mmap_len,
+                Some(&image),
+                &ty,
+                &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+            )
             .unwrap();
 
         let keep_resident = HostAlignedByteCount::new(mmap_len).unwrap();
@@ -1140,7 +1225,12 @@ mod test {
             // Re-instantiate, but then wipe the image entirely by keeping
             // nothing resident.
             memfd
-                .instantiate(mmap_len, Some(&image), &ty, &tunables)
+                .instantiate(
+                    mmap_len,
+                    Some(&image),
+                    &ty,
+                    &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+                )
                 .unwrap();
             memfd
                 .clear_and_remain_ready(pagemap, HostAlignedByteCount::ZERO, |ptr, len| {
@@ -1150,7 +1240,12 @@ mod test {
 
             // Next re-instantiate a final time to get used for the next test.
             memfd
-                .instantiate(mmap_len, Some(&image), &ty, &tunables)
+                .instantiate(
+                    mmap_len,
+                    Some(&image),
+                    &ty,
+                    &MemoryTunables::new(&tunables, MemoryKind::LinearMemory),
+                )
                 .unwrap();
         };
 

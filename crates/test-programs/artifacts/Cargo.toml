@@ -21,3 +21,4 @@ cargo_metadata = "0.19.2"
 wasmtime-test-util = { workspace = true, features = ['wast'] }
 serde_derive = { workspace = true }
 serde = { workspace = true }
+rayon = { workspace = true }

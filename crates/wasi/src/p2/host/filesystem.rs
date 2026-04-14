@@ -716,13 +716,6 @@ impl<'a> From<&'a std::io::Error> for ErrorCode {
     }
 }
 
-impl From<cap_rand::Error> for ErrorCode {
-    fn from(err: cap_rand::Error) -> ErrorCode {
-        // I picked Error::Io as a 'reasonable default', FIXME dan is this ok?
-        from_raw_os_error(err.raw_os_error()).unwrap_or(ErrorCode::Io)
-    }
-}
-
 impl From<std::num::TryFromIntError> for ErrorCode {
     fn from(_err: std::num::TryFromIntError) -> ErrorCode {
         ErrorCode::Overflow

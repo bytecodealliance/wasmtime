@@ -67,7 +67,7 @@ use crate::{
 use std::mem;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use wasmtime_environ::{DefinedMemoryIndex, Module, Tunables};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryKind, MemoryTunables, Module, Tunables};
 
 /// A set of allocator slots.
 ///
@@ -354,6 +354,7 @@ impl MemoryPool {
         memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         let tunables = request.store.engine().tunables();
+        let memory_tunables = MemoryTunables::new(tunables, MemoryKind::LinearMemory);
         let stripe_index = if let Some(pkey) = request.store.get_pkey() {
             pkey.as_stripe()
         } else {
@@ -391,7 +392,7 @@ impl MemoryPool {
         // should be returned as an error through `validate_memory_plans`
         // but double-check here to be sure.
         assert!(
-            tunables.memory_reservation + tunables.memory_guard_size
+            memory_tunables.reservation() + memory_tunables.guard_size()
                 <= u64::try_from(self.layout.bytes_to_next_stripe_slot().byte_count()).unwrap()
         );
 
@@ -421,11 +422,11 @@ impl MemoryPool {
         // mmap that would leave an open space for someone
         // else to come in and map something.
         let initial_size = usize::try_from(initial_size).unwrap();
-        slot.instantiate(initial_size, image, ty, tunables)?;
+        slot.instantiate(initial_size, image, ty, &memory_tunables)?;
 
         let memory = Memory::new_static(
             ty,
-            tunables,
+            &memory_tunables,
             MemoryBase::Mmap(base),
             base_capacity.byte_count(),
             slot,

@@ -77,6 +77,7 @@ tempfile = { workspace = true, optional = true }
 object = { workspace = true, optional = true }
 cranelift-codegen = { workspace = true, optional = true, features = ['disas'] }
 capstone = { workspace = true, optional = true }
+wasmprinter = { workspace = true, optional = true }
 termcolor = { workspace = true, optional = true }
 gimli = { workspace = true, optional = true }
 pulley-interpreter = { workspace = true, optional = true }
@@ -337,7 +338,6 @@ wasip1 = { version = "1.0.0", default-features = false }
 # cap-std family:
 target-lexicon = "0.13.0"
 cap-std = "3.4.5"
-cap-rand = { version = "3.4.5", features = ["small_rng"] }
 cap-fs-ext = "3.4.5"
 cap-net-ext = "3.4.5"
 cap-time-ext = "3.4.5"
@@ -348,8 +348,8 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.4"
 rustix = "1.0.8"
 # wit-bindgen:
-wit-bindgen = { version = "0.55.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.55.0", default-features = false }
+wit-bindgen = { version = "0.56.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.56.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.246.2", default-features = false, features = ['simd'] }
@@ -399,7 +399,7 @@ mach2 = "0.4.2"
 memfd = "0.6.5"
 psm = "0.1.11"
 proptest = "1.0.0"
-rand = { version = "0.9.2", features = ["small_rng"] }
+rand = { version = "0.10.1", default-features = false }
 # serde and serde_derive must have the same version
 serde = { version = "1.0.228", default-features = false, features = ['alloc'] }
 serde_derive = "1.0.228"
@@ -479,6 +479,7 @@ default = [
   "config",
   "completion",
   "objdump",
+  "hot-blocks",
   "wizer",
 
   # On-by-default WASI features
@@ -582,6 +583,7 @@ threads = ["wasmtime-cli-flags/threads"]
 gc = ["wasmtime-cli-flags/gc", "wasmtime/gc"]
 gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
+gc-copying = ["gc", "wasmtime/gc-copying", "wasmtime-cli-flags/gc-copying"]
 pulley = ["wasmtime-cli-flags/pulley"]
 stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
 debug = ["wasmtime-cli-flags/debug", "wasmtime/debug", "component-model"]
@@ -620,6 +622,11 @@ objdump = [
   'dep:termcolor',
   'dep:gimli',
   'pulley-interpreter/disas',
+]
+hot-blocks = [
+  'dep:capstone',
+  'dep:tempfile',
+  'dep:wasmprinter',
 ]
 wizer = [
   "wasmtime-wizer",

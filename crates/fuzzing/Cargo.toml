@@ -59,6 +59,7 @@ features = [
   'pulley',
   'threads',
   'parallel-compilation',
+  'stack-switching',
 ]
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
@@ -70,7 +71,7 @@ v8 = "139.0.0"
 
 [dev-dependencies]
 wat = { workspace = true }
-rand = { version = "0.8.0", features = ["small_rng"] }
+rand = { workspace = true }
 wasmtime-environ = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }

@@ -19,7 +19,7 @@ pub struct WastContext {
     /// recently defined.
     current: Option<InstanceKind>,
     core_linker: Linker<()>,
-    modules: HashMap<String, ModuleKind>,
+    modules: HashMap<Option<String>, ModuleKind>,
     #[cfg(feature = "component-model")]
     component_linker: component::Linker<()>,
 
@@ -645,18 +645,16 @@ impl WastContext {
                 line: _,
             } => {
                 let module = self.module_definition(&file)?;
-                if let Some(name) = name {
-                    self.modules.insert(name.to_string(), module);
-                }
+                self.modules.insert(name.map(|s| s.to_string()), module);
             }
             ModuleInstance {
                 instance,
                 module,
                 line: _,
             } => {
-                let module = module
-                    .as_deref()
-                    .and_then(|n| self.modules.get(n))
+                let module = self
+                    .modules
+                    .get(&module.as_ref().map(|s| s.to_string()))
                     .cloned()
                     .ok_or_else(|| format_err!("no module named {module:?}"))?;
                 self.module(instance.as_deref(), &module)?;

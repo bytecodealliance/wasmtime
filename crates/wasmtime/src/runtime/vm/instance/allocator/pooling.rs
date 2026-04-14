@@ -383,7 +383,7 @@ impl PoolingInstanceAllocator {
             tables: TablePool::new(config)?,
             live_tables: AtomicUsize::new(0),
             #[cfg(feature = "gc")]
-            gc_heaps: GcHeapPool::new(config)?,
+            gc_heaps: GcHeapPool::new(config, tunables)?,
             #[cfg(feature = "gc")]
             live_gc_heaps: AtomicUsize::new(0),
             #[cfg(feature = "async")]

@@ -9,11 +9,12 @@ use crate::{KeyValuePair, WasiNnGraph};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
+use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{fmt, marker};
-use wasmtime::{Result, bail};
+use wasmtime::{Result, bail, format_err};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
 const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
@@ -375,6 +376,19 @@ impl WasmtimeOptionValue for u32 {
     }
 }
 
+impl WasmtimeOptionValue for NonZeroU32 {
+    const VAL_HELP: &'static str = "=N";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let n = <u32 as WasmtimeOptionValue>::parse(val)?;
+        NonZeroU32::new(n).ok_or_else(|| format_err!("value must be non-zero"))
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
 impl WasmtimeOptionValue for u64 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
@@ -534,12 +548,15 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
 }
 
 impl WasmtimeOptionValue for wasmtime::Collector {
-    const VAL_HELP: &'static str = "=drc|null";
+    const VAL_HELP: &'static str = "=drc|null|copying";
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "drc" => Ok(wasmtime::Collector::DeferredReferenceCounting),
             "null" => Ok(wasmtime::Collector::Null),
-            other => bail!("unknown collector `{other}` only `drc` and `null` accepted",),
+            "copying" => Ok(wasmtime::Collector::Copying),
+            other => {
+                bail!("unknown collector `{other}` only `drc`, `null`, and `copying` accepted",)
+            }
         }
     }
 
@@ -547,6 +564,7 @@ impl WasmtimeOptionValue for wasmtime::Collector {
         match *self {
             wasmtime::Collector::DeferredReferenceCounting => f.write_str("drc"),
             wasmtime::Collector::Null => f.write_str("null"),
+            wasmtime::Collector::Copying => f.write_str("copying"),
             _ => unreachable!(),
         }
     }

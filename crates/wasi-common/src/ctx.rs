@@ -5,7 +5,7 @@ use crate::sched::WasiSched;
 use crate::string_array::StringArray;
 use crate::table::Table;
 use crate::{Error, StringArrayError};
-use cap_rand::RngCore;
+use rand::Rng;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -24,7 +24,7 @@ pub struct WasiCtxInner {
     // TODO: this mutex should not be necessary, it forces threads to serialize
     // their access to randomness unnecessarily
     // (https://github.com/bytecodealliance/wasmtime/issues/5660).
-    pub random: Mutex<Box<dyn RngCore + Send + Sync>>,
+    pub random: Mutex<Box<dyn Rng + Send + Sync>>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
     pub table: Table,
@@ -32,7 +32,7 @@ pub struct WasiCtxInner {
 
 impl WasiCtx {
     pub fn new(
-        random: Box<dyn RngCore + Send + Sync>,
+        random: Box<dyn Rng + Send + Sync>,
         clocks: WasiClocks,
         sched: Box<dyn WasiSched>,
         table: Table,

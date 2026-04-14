@@ -1,9 +1,11 @@
 use heck::*;
+use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 use wit_component::ComponentEncoder;
 
 fn main() {
@@ -62,6 +64,7 @@ impl Artifacts {
         let mut kinds = BTreeMap::new();
         let missing_sdk_path =
             PathBuf::from("Asset not compiled, WASI_SDK_PATH missing at compile time");
+        let mut components = Vec::new();
         for test in tests.iter() {
             let shouty_snake = test.name.to_shouty_snake_case();
             let snake = test.name.to_snake_case();
@@ -122,14 +125,20 @@ impl Artifacts {
             {
                 continue;
             }
-            let adapter = match test.name.as_str() {
+            let (adapter, mtime) = match test.name.as_str() {
                 "reactor" => &reactor_adapter,
                 s if s.starts_with("p3_") => &reactor_adapter,
                 s if s.starts_with("p2_api_proxy") => &proxy_adapter,
                 _ => &command_adapter,
             };
             let path = match &test.core_wasm {
-                Some(path) => self.compile_component(path, adapter),
+                Some(path) => {
+                    let out_dir = path.parent().unwrap();
+                    let stem = path.file_stem().unwrap().to_str().unwrap();
+                    let component_path = out_dir.join(format!("{stem}.component.wasm"));
+                    components.push((path, adapter, mtime.as_ref(), component_path.clone()));
+                    component_path
+                }
                 None => missing_sdk_path.clone(),
             };
             generated_code +=
@@ -140,6 +149,12 @@ impl Artifacts {
                 }}",
             );
         }
+
+        components
+            .par_iter()
+            .for_each(|(wasm, adapter, mtime, component_path)| {
+                self.compile_component(wasm, adapter, *mtime, component_path);
+            });
 
         for (kind, targets) in kinds {
             generated_code += &format!("#[macro_export]");
@@ -206,13 +221,15 @@ impl Artifacts {
         generated_code: &mut String,
         name: &str,
         features: &[&str],
-    ) -> Vec<u8> {
+    ) -> (Vec<u8>, Option<SystemTime>) {
         let mut cmd = cargo();
         cmd.arg("build")
             .arg("--release")
+            .arg("-vv")
             .arg("--package=wasi-preview1-component-adapter")
             .arg("--target=wasm32-unknown-unknown")
-            .env("CARGO_TARGET_DIR", &self.out_dir)
+            .env("CARGO_BUILD_BUILD_DIR", &self.out_dir)
+            .env("CARGO_TARGET_DIR", &self.out_dir.join(name))
             .env("RUSTFLAGS", rustflags())
             .env_remove("CARGO_ENCODED_RUSTFLAGS");
         for f in features {
@@ -224,24 +241,55 @@ impl Artifacts {
 
         let artifact = self
             .out_dir
+            .join(name)
             .join("wasm32-unknown-unknown")
             .join("release")
             .join("wasi_snapshot_preview1.wasm");
         let adapter = self
             .out_dir
             .join(format!("wasi_snapshot_preview1.{name}.wasm"));
-        std::fs::copy(&artifact, &adapter).unwrap();
+
+        if let Ok(prev) = std::fs::read(&adapter)
+            && let Ok(cur) = std::fs::read(&artifact)
+            && prev == cur
+        {
+            // nothing to do ...
+        } else {
+            if adapter.exists() {
+                fs::remove_file(&adapter).unwrap();
+            }
+            std::fs::hard_link(&artifact, &adapter)
+                .or_else(|_| std::fs::copy(&artifact, &adapter).map(|_| ()))
+                .unwrap();
+        }
         self.read_deps_of(&artifact);
         println!("wasi {name} adapter: {:?}", &adapter);
         generated_code.push_str(&format!(
             "pub const ADAPTER_{}: &'static str = {adapter:?};\n",
             name.to_shouty_snake_case(),
         ));
-        fs::read(&adapter).unwrap()
+        (fs::read(&adapter).unwrap(), mtime(&adapter))
     }
 
     // Compile a component, return the path of the binary:
-    fn compile_component(&self, wasm: &Path, adapter: &[u8]) -> PathBuf {
+    fn compile_component(
+        &self,
+        wasm: &Path,
+        adapter: &[u8],
+        adapter_mtime: Option<&SystemTime>,
+        component_path: &Path,
+    ) {
+        // If the component exists and was last updated after the inputs that
+        // make it up then there's no need to recreate it.
+        if let Some(wasm_mtime) = mtime(wasm)
+            && let Some(adapter_mtime) = adapter_mtime
+            && let Some(component_mtime) = mtime(&component_path)
+            && wasm_mtime < component_mtime
+            && *adapter_mtime < component_mtime
+        {
+            println!("reusing cached component for {wasm:?}");
+            return;
+        }
         println!("creating a component from {wasm:?}");
         let module = fs::read(wasm).expect("read wasm module");
         let component = ComponentEncoder::default()
@@ -252,51 +300,55 @@ impl Artifacts {
             .unwrap()
             .encode()
             .expect("module can be translated to a component");
-        let out_dir = wasm.parent().unwrap();
-        let stem = wasm.file_stem().unwrap().to_str().unwrap();
-        let component_path = out_dir.join(format!("{stem}.component.wasm"));
         fs::write(&component_path, component).expect("write component to disk");
-        component_path
     }
 
     fn build_non_rust_tests(&mut self, tests: &mut Vec<Test>) {
         const ASSETS_REL_SRC_DIR: &'static str = "../src/bin";
         println!("cargo:rerun-if-changed={ASSETS_REL_SRC_DIR}");
 
-        for entry in fs::read_dir(ASSETS_REL_SRC_DIR).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
-            match path.extension().and_then(|s| s.to_str()) {
-                // Compile C/C++ tests with clang
-                Some("c") | Some("cc") => self.build_c_or_cpp_test(path, name, tests),
+        let entries = fs::read_dir(ASSETS_REL_SRC_DIR)
+            .unwrap()
+            .map(|e| e.unwrap())
+            .collect::<Vec<_>>();
+        let mut c_tests = entries
+            .par_iter()
+            .flat_map(|entry| {
+                let path = entry.path();
+                let name = path.file_stem().unwrap().to_str().unwrap().to_owned();
+                match path.extension().and_then(|s| s.to_str()) {
+                    // Compile C/C++ tests with clang
+                    Some("c") | Some("cc") => self.build_c_or_cpp_test(path, name),
 
-                // just a header, part of another test.
-                Some("h") => {}
+                    // just a header, part of another test.
+                    Some("h") => None,
 
-                // Convert the text format to binary and use it as a test.
-                Some("wat") => {
-                    let wasm = wat::parse_file(&path).unwrap();
-                    let core_wasm = self.out_dir.join(&name).with_extension("wasm");
-                    fs::write(&core_wasm, &wasm).unwrap();
-                    tests.push(Test {
-                        name,
-                        core_wasm: Some(core_wasm),
-                    });
+                    // Convert the text format to binary and use it as a test.
+                    Some("wat") => {
+                        let wasm = wat::parse_file(&path).unwrap();
+                        let core_wasm = self.out_dir.join(&name).with_extension("wasm");
+                        fs::write(&core_wasm, &wasm).unwrap();
+                        Some(Test {
+                            name,
+                            core_wasm: Some(core_wasm),
+                        })
+                    }
+
+                    // these are built above in `build_rust_tests`
+                    Some("rs") => None,
+
+                    // Prevent stray files for now that we don't understand.
+                    Some(_) => panic!("unknown file extension on {path:?}"),
+
+                    None => unreachable!("no extension in path {path:?}"),
                 }
-
-                // these are built above in `build_rust_tests`
-                Some("rs") => {}
-
-                // Prevent stray files for now that we don't understand.
-                Some(_) => panic!("unknown file extension on {path:?}"),
-
-                None => unreachable!("no extension in path {path:?}"),
-            }
-        }
+            })
+            .collect::<Vec<_>>();
+        c_tests.sort_by_key(|t| t.name.clone());
+        tests.extend(c_tests);
     }
 
-    fn build_c_or_cpp_test(&mut self, path: PathBuf, name: String, tests: &mut Vec<Test>) {
+    fn build_c_or_cpp_test(&self, path: PathBuf, name: String) -> Option<Test> {
         println!("compiling {path:?}");
         println!("cargo:rerun-if-changed={}", path.display());
         let contents = std::fs::read_to_string(&path).unwrap();
@@ -304,7 +356,7 @@ impl Artifacts {
             wasmtime_test_util::wast::parse_test_config::<CTestConfig>(&contents, "//!").unwrap();
 
         if config.skip {
-            return;
+            return None;
         }
 
         // The debug tests relying on these assets are ignored by default,
@@ -317,11 +369,10 @@ impl Artifacts {
         let wasi_sdk_path = match env::var_os("WASI_SDK_PATH") {
             Some(path) => PathBuf::from(path),
             None => {
-                tests.push(Test {
+                return Some(Test {
                     name,
                     core_wasm: None,
                 });
-                return;
             }
         };
 
@@ -352,7 +403,7 @@ impl Artifacts {
             assert!(dwp.status().expect("failed to spawn llvm-dwp").success());
         }
 
-        tests.push(Test {
+        return Some(Test {
             name,
             core_wasm: Some(wasm_path),
         });
@@ -424,4 +475,8 @@ fn rustflags() -> &'static str {
         Some(s) if s.contains("-D warnings") => "-D warnings",
         _ => "",
     }
+}
+
+fn mtime(path: &Path) -> Option<SystemTime> {
+    path.metadata().ok()?.modified().ok()
 }

@@ -4,6 +4,7 @@ use clap::Parser;
 use serde::Deserialize;
 use std::{
     fmt, fs,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -66,6 +67,19 @@ wasmtime_option_group! {
 
         /// Size, in bytes, of guard pages for linear memories.
         pub memory_guard_size: Option<u64>,
+
+        /// Do not allow the GC heap to move in the host process's address
+        /// space.
+        pub gc_heap_may_move: Option<bool>,
+
+        /// Initial virtual memory allocation size for the GC heap.
+        pub gc_heap_reservation: Option<u64>,
+
+        /// Bytes to reserve at the end of the GC heap for growth into.
+        pub gc_heap_reservation_for_growth: Option<u64>,
+
+        /// Size, in bytes, of guard pages for the GC heap.
+        pub gc_heap_guard_size: Option<u64>,
 
         /// Indicates whether an unmapped region of memory is placed before all
         /// linear memories.
@@ -198,6 +212,10 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub pooling_pagemap_scan: Option<wasmtime::Enabled>,
+
+        /// XXX: For internal fuzzing and debugging use only!
+        #[doc(hidden)]
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
     }
 
     enum Optimize {
@@ -216,12 +234,14 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub compiler: Option<wasmtime::Strategy>,
-        /// Which garbage collector to use: `drc` or `null`.
+        /// Which garbage collector to use: `drc`, `null`, or `copying`.
         ///
         /// `drc` is the deferred reference-counting collector.
         ///
         /// `null` is the null garbage collector, which does not collect any
         /// garbage.
+        ///
+        /// `copying` is the copying garbage collector (not yet implemented).
         ///
         /// Note that not all builds of Wasmtime will have support for garbage
         /// collection included.
@@ -891,8 +911,27 @@ impl CommonOptions {
         if let Some(enable) = self.opts.guard_before_linear_memory {
             config.guard_before_linear_memory(enable);
         }
+
+        if let Some(size) = self.opts.gc_heap_reservation {
+            config.gc_heap_reservation(size);
+        }
+        if let Some(enable) = self.opts.gc_heap_may_move {
+            config.gc_heap_may_move(enable);
+        }
+        if let Some(size) = self.opts.gc_heap_guard_size {
+            config.gc_heap_guard_size(size);
+        }
+        if let Some(size) = self.opts.gc_heap_reservation_for_growth {
+            config.gc_heap_reservation_for_growth(size);
+        }
         if let Some(enable) = self.opts.table_lazy_init {
             config.table_lazy_init(enable);
+        }
+
+        if let Some(n) = self.opts.gc_zeal_alloc_counter
+            && (cfg!(gc_zeal) || cfg!(fuzzing))
+        {
+            config.gc_zeal_alloc_counter(Some(n))?;
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
@@ -1288,6 +1327,7 @@ mod tests {
                 Some(wasmtime::Collector::DeferredReferenceCounting),
             ),
             ("\"null\"", Some(wasmtime::Collector::Null)),
+            ("\"copying\"", Some(wasmtime::Collector::Copying)),
             ("\"hello\"", None), // should fail
             ("5", None),         // should fail
             ("true", None),      // should fail
