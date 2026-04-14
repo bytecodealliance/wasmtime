@@ -222,8 +222,8 @@
 (rule (simplify (bor ty (bnot ty x) (band ty x y))) (bor ty y (bnot ty x)))
 
 ; (z & x) ^ (z & y) => z & (x ^ y)
-(rule (simplify 
-  (bxor ty (band ty z x) (band ty z y))) 
+(rule (simplify
+  (bxor ty (band ty z x) (band ty z y)))
 	(band ty z (bxor ty x y)))
 
 ; (x & y) | ~(x ^ y) => ~(x ^ y)
@@ -669,13 +669,13 @@
 (rule (simplify (eq rty (bnot cty y) (band cty x (bnot cty y)))) (eq rty (bor cty y x) (iconst_s cty -1)))
 
 ;; x >=_u (x & y), and (x & y) <=_u x, are always true.
-(rule (simplify (uge ty x (band ty x y))) (iconst_u ty 1))
-(rule (simplify (uge ty x (band ty y x))) (iconst_u ty 1))
-(rule (simplify (ule ty (band ty x y) x)) (iconst_u ty 1))
-(rule (simplify (ule ty (band ty y x) x)) (iconst_u ty 1))
+(rule (simplify (uge ty x (band ty x y))) (cmp_true ty))
+(rule (simplify (uge ty x (band ty y x))) (cmp_true ty))
+(rule (simplify (ule ty (band ty x y) x)) (cmp_true ty))
+(rule (simplify (ule ty (band ty y x) x)) (cmp_true ty))
 
 ;; (x | y) >=_u x, and x <=_u (x | y), are always true.
-(rule (simplify (uge ty (bor ty x y) x)) (iconst_u ty 1))
-(rule (simplify (uge ty (bor ty y x) x)) (iconst_u ty 1))
-(rule (simplify (ule ty x (bor ty x y))) (iconst_u ty 1))
-(rule (simplify (ule ty x (bor ty y x))) (iconst_u ty 1))
+(rule (simplify (uge ty (bor ty x y) x)) (cmp_true ty))
+(rule (simplify (uge ty (bor ty y x) x)) (cmp_true ty))
+(rule (simplify (ule ty x (bor ty x y))) (cmp_true ty))
+(rule (simplify (ule ty x (bor ty y x))) (cmp_true ty))
