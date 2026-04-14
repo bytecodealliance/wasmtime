@@ -3,7 +3,7 @@
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, StructType, TypeId, Types},
+    types::{CompositeType, RecGroupId, TypeId, Types},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -21,6 +21,7 @@ struct WasmEncodingBases {
     typed_first_func_index: u32,
     struct_local_idx: u32,
     typed_local_base: u32,
+    struct_externref_scratch_base: u32,
     struct_global_idx: u32,
     typed_global_base: u32,
     struct_table_idx: u32,
@@ -122,18 +123,30 @@ impl GcOps {
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
-                CompositeType::Struct(StructType {}) => wasm_encoder::SubType {
-                    is_final: def.is_final,
-                    supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
-                    composite_type: wasm_encoder::CompositeType {
-                        inner: wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType {
-                            fields: Box::new([]),
-                        }),
-                        shared: false,
-                        describes: None,
-                        descriptor: None,
-                    },
-                },
+                CompositeType::Struct(st) => {
+                    let fields: Vec<wasm_encoder::FieldType> = st
+                        .fields
+                        .iter()
+                        .map(|f| wasm_encoder::FieldType {
+                            element_type: f.field_type.to_storage_type(),
+                            mutable: f.mutable,
+                        })
+                        .collect();
+                    wasm_encoder::SubType {
+                        is_final: def.is_final,
+                        supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
+                        composite_type: wasm_encoder::CompositeType {
+                            inner: wasm_encoder::CompositeInnerType::Struct(
+                                wasm_encoder::StructType {
+                                    fields: fields.into_boxed_slice(),
+                                },
+                            ),
+                            shared: false,
+                            describes: None,
+                            descriptor: None,
+                        },
+                    }
+                }
             }
         };
 
@@ -305,21 +318,52 @@ impl GcOps {
             ));
         }
 
+        // Scratch locals for saving externref values consumed from the stack
+        // during StructNew encoding.
+        let struct_externref_scratch_base: u32 = typed_local_base + struct_count;
+        let max_ref_fields: u32 = self
+            .types
+            .type_defs
+            .values()
+            .map(|def| {
+                let CompositeType::Struct(ref st) = def.composite_type;
+                u32::try_from(st.fields.iter().filter(|f| f.field_type.is_ref()).count())
+                    .expect("field count should fit in u32")
+            })
+            .max()
+            .unwrap_or(0);
+        for _ in 0..max_ref_fields {
+            local_decls.push((1, ValType::EXTERNREF));
+        }
+
         let storage_bases = WasmEncodingBases {
             struct_type_base,
             typed_first_func_index,
             struct_local_idx,
             typed_local_base,
+            struct_externref_scratch_base,
             struct_global_idx,
             typed_global_base,
             struct_table_idx,
             typed_table_base,
         };
 
+        // Build a flat encoding order for field lookups during encoding.
+        let encoding_order: Vec<TypeId> = encoding_order_grouped
+            .iter()
+            .flat_map(|(_, members)| members.iter().copied())
+            .collect();
+
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.encode(&mut func, scratch_local, storage_bases);
+            op.encode(
+                &mut func,
+                scratch_local,
+                storage_bases,
+                &self.types,
+                &encoding_order,
+            );
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -382,6 +426,42 @@ impl GcOps {
                     &encoding_order,
                 );
             }
+
+            // For StructNew: try to consume ExternRef values from the abstract
+            // stack for reference-typed fields instead of synthesizing defaults.
+            // For StructSet: try to consume one ExternRef for the target field value.
+            let op = if let GcOp::StructNew { type_index, .. } = op {
+                let consumed = StackType::consume_refs_for_struct(
+                    type_index,
+                    &mut stack,
+                    &self.types,
+                    &encoding_order,
+                );
+                GcOp::StructNew {
+                    type_index,
+                    externref_from_stack: consumed,
+                }
+            } else if let GcOp::StructSet {
+                type_index,
+                field_index,
+                ..
+            } = op
+            {
+                let consumed = StackType::consume_ref_for_struct_set(
+                    type_index,
+                    field_index,
+                    &mut stack,
+                    &self.types,
+                    &encoding_order,
+                );
+                GcOp::StructSet {
+                    type_index,
+                    field_index,
+                    externref_from_stack: consumed,
+                }
+            } else {
+                op
+            };
 
             // Finally, emit the op itself (updates stack abstractly)
             let mut result_types = Vec::new();
@@ -471,8 +551,10 @@ macro_rules! for_each_gc_op {
             #[results([Struct(Some(type_index))])]
             #[fixup(|_limits, num_types| {
                 type_index = type_index.checked_rem(num_types)?;
+                // Reset; the actual value is computed during GcOps::fixup().
+                externref_from_stack = 0;
             })]
-            StructNew { type_index: u32 },
+            StructNew { type_index: u32, externref_from_stack: u32 },
 
             #[operands([Some(Struct(None))])]
             #[results([])]
@@ -601,6 +683,22 @@ macro_rules! for_each_gc_op {
                 super_type_index = super_type_index.checked_rem(num_types)?;
             })]
             RefCastDownward { sub_type_index: u32, super_type_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            StructGet { type_index: u32, field_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+                // Reset; the actual value is computed during GcOps::fixup().
+                externref_from_stack = 0;
+            })]
+            StructSet { type_index: u32, field_index: u32, externref_from_stack: u32 },
         }
     };
 }
@@ -733,7 +831,7 @@ impl GcOp {
                         Self::$op $( { $($field),* } )? => {
                             $(
                                 $(
-                                    #[allow(unused_mut, reason = "macro code")]
+                                    #[allow(unused_mut, unused_assignments, reason = "macro code")]
                                     let mut $field = *$field;
                                 )*
                                 let $limits = limits;
@@ -779,7 +877,14 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_generate)
     }
 
-    fn encode(&self, func: &mut Function, scratch_local: u32, encoding_bases: WasmEncodingBases) {
+    fn encode(
+        &self,
+        func: &mut Function,
+        scratch_local: u32,
+        encoding_bases: WasmEncodingBases,
+        types: &Types,
+        encoding_order: &[TypeId],
+    ) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -834,7 +939,44 @@ impl GcOp {
                     encoding_bases.struct_type_base + type_index,
                 )));
             }
-            Self::StructNew { type_index: x } => {
+            Self::StructNew {
+                type_index: x,
+                externref_from_stack,
+            } => {
+                if let Some(tid) =
+                    encoding_order.get(usize::try_from(x).expect("type_index should fit in usize"))
+                {
+                    if let Some(def) = types.type_defs.get(tid) {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        let num_from_stack = usize::try_from(externref_from_stack)
+                            .expect("externref_from_stack should fit in usize");
+
+                        // Save consumed externrefs from the Wasm stack into
+                        // scratch locals. The most-recently-consumed value is
+                        // on top, so save in reverse index order.
+                        for i in (0..num_from_stack).rev() {
+                            func.instruction(&Instruction::LocalSet(
+                                encoding_bases.struct_externref_scratch_base
+                                    + u32::try_from(i).expect("i should fit in u32"),
+                            ));
+                        }
+
+                        // Push field values in declaration order.
+                        let mut ref_idx = 0usize;
+                        for field in &st.fields {
+                            if field.field_type.is_ref() && ref_idx < num_from_stack {
+                                func.instruction(&Instruction::LocalGet(
+                                    encoding_bases.struct_externref_scratch_base
+                                        + u32::try_from(ref_idx)
+                                            .expect("ref_idx should fit in u32"),
+                                ));
+                                ref_idx += 1;
+                            } else {
+                                field.field_type.emit_default_const(func);
+                            }
+                        }
+                    }
+                }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
             Self::TakeStructCall => {
@@ -966,6 +1108,142 @@ impl GcOp {
                 func.instruction(&Instruction::RefNull(sub_heap_type));
 
                 func.instruction(&Instruction::End);
+            }
+            Self::StructGet {
+                type_index,
+                field_index,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let fields = encoding_order
+                    .get(usize::try_from(type_index).expect("Too large encoding"))
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .map(|def| {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        &st.fields[..]
+                    });
+
+                match fields {
+                    Some(fields) if !fields.is_empty() => {
+                        let typed_local = encoding_bases.typed_local_base + type_index;
+                        // Guard against null: save ref, check, skip if null.
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        let idx = field_index % u32::try_from(fields.len()).unwrap();
+                        if fields[usize::try_from(idx).expect("Too large encoding")]
+                            .field_type
+                            .is_packed()
+                        {
+                            func.instruction(&Instruction::StructGetS {
+                                struct_type_index: wasm_type,
+                                field_index: idx,
+                            });
+                        } else {
+                            func.instruction(&Instruction::StructGet {
+                                struct_type_index: wasm_type,
+                                field_index: idx,
+                            });
+                        }
+                        // Drop the result — field values are not tracked
+                        // on the abstract stack.
+                        func.instruction(&Instruction::Drop);
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::StructSet {
+                type_index,
+                field_index,
+                externref_from_stack,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let fields = encoding_order
+                    .get(usize::try_from(type_index).expect("Too large encoding"))
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .map(|def| {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        &st.fields[..]
+                    });
+
+                let use_stack_ref = externref_from_stack > 0;
+
+                match fields {
+                    Some(fields) if !fields.is_empty() => {
+                        let len = fields.len();
+                        let start =
+                            (usize::try_from(field_index).expect("Too large encoding")) % len;
+                        let mutable_field = (0..len)
+                            .map(|offset| (start + offset) % len)
+                            .find(|&i| fields[i].mutable);
+
+                        match mutable_field {
+                            Some(idx) => {
+                                let typed_local = encoding_bases.typed_local_base + type_index;
+
+                                if use_stack_ref {
+                                    // Wasm stack: [externref, struct_ref]
+                                    // Save struct ref, then save externref to scratch.
+                                    func.instruction(&Instruction::LocalSet(typed_local));
+                                    func.instruction(&Instruction::LocalSet(
+                                        encoding_bases.struct_externref_scratch_base,
+                                    ));
+                                    // Null check on the struct ref.
+                                    func.instruction(&Instruction::LocalGet(typed_local));
+                                    func.instruction(&Instruction::LocalTee(typed_local));
+                                    func.instruction(&Instruction::RefIsNull);
+                                    func.instruction(&Instruction::If(
+                                        wasm_encoder::BlockType::Empty,
+                                    ));
+                                    func.instruction(&Instruction::Else);
+                                    func.instruction(&Instruction::LocalGet(typed_local));
+                                    func.instruction(&Instruction::LocalGet(
+                                        encoding_bases.struct_externref_scratch_base,
+                                    ));
+                                    let idx = u32::try_from(idx).expect("Too large encoding");
+                                    func.instruction(&Instruction::StructSet {
+                                        struct_type_index: wasm_type,
+                                        field_index: idx,
+                                    });
+                                    func.instruction(&Instruction::End);
+                                } else {
+                                    // Wasm stack: [struct_ref]
+                                    func.instruction(&Instruction::LocalTee(typed_local));
+                                    func.instruction(&Instruction::RefIsNull);
+                                    func.instruction(&Instruction::If(
+                                        wasm_encoder::BlockType::Empty,
+                                    ));
+                                    func.instruction(&Instruction::Else);
+                                    func.instruction(&Instruction::LocalGet(typed_local));
+                                    fields[idx].field_type.emit_default_const(func);
+                                    let idx = u32::try_from(idx).expect("Too large encoding");
+                                    func.instruction(&Instruction::StructSet {
+                                        struct_type_index: wasm_type,
+                                        field_index: idx,
+                                    });
+                                    func.instruction(&Instruction::End);
+                                }
+                            }
+                            None => {
+                                if use_stack_ref {
+                                    // Drop both the externref and struct ref.
+                                    func.instruction(&Instruction::Drop);
+                                }
+                                func.instruction(&Instruction::Drop);
+                            }
+                        }
+                    }
+                    _ => {
+                        if use_stack_ref {
+                            func.instruction(&Instruction::Drop);
+                        }
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
             }
         }
     }
