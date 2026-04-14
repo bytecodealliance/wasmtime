@@ -900,7 +900,9 @@ impl CommonOptions {
             config.table_lazy_init(enable);
         }
 
-        if let Some(n) = self.opts.gc_zeal_alloc_counter {
+        if let Some(n) = self.opts.gc_zeal_alloc_counter
+            && (cfg!(gc_zeal) || cfg!(fuzzing))
+        {
             config.gc_zeal_alloc_counter(Some(n))?;
         }
 
