@@ -1149,7 +1149,7 @@ impl<T: 'static> InstancePre<T> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.component.types(),
-            resources: &self.resource_types,
+            resources: Some(&self.resource_types),
         }
     }
 
