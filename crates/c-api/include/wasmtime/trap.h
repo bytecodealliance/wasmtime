@@ -136,6 +136,8 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_CONCURRENT_FUTURE_STREAM_OP = 45,
   /// A reference count (for e.g. an `error-context`) overflowed.
   WASMTIME_TRAP_CODE_REFERENCE_COUNT_OVERFLOW = 46,
+  /// A read/write on a stream must be <2**28 items.
+  WASMTIME_TRAP_CODE_STREAM_OP_TOO_BIG = 47,
 };
 
 /**
