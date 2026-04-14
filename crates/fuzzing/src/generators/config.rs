@@ -317,6 +317,7 @@ impl Config {
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
+        cfg.wasm.stack_switching = Some(self.module_config.stack_switching);
         cfg.wasm.shared_memory = Some(self.module_config.shared_memory);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
@@ -665,6 +666,7 @@ impl WasmtimeConfig {
                 config.config.reference_types_enabled = false;
                 config.config.exceptions_enabled = false;
                 config.function_references_enabled = false;
+                config.stack_switching = false;
 
                 // Winch's SIMD implementations require AVX and AVX2.
                 if self
