@@ -77,6 +77,7 @@ tempfile = { workspace = true, optional = true }
 object = { workspace = true, optional = true }
 cranelift-codegen = { workspace = true, optional = true, features = ['disas'] }
 capstone = { workspace = true, optional = true }
+wasmprinter = { workspace = true, optional = true }
 termcolor = { workspace = true, optional = true }
 gimli = { workspace = true, optional = true }
 pulley-interpreter = { workspace = true, optional = true }
@@ -478,6 +479,7 @@ default = [
   "config",
   "completion",
   "objdump",
+  "hot-blocks",
   "wizer",
 
   # On-by-default WASI features
@@ -619,6 +621,11 @@ objdump = [
   'dep:termcolor',
   'dep:gimli',
   'pulley-interpreter/disas',
+]
+hot-blocks = [
+  'dep:capstone',
+  'dep:tempfile',
+  'dep:wasmprinter',
 ]
 wizer = [
   "wasmtime-wizer",

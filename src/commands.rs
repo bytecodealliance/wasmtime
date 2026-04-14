@@ -40,6 +40,11 @@ mod objdump;
 #[cfg(feature = "objdump")]
 pub use self::objdump::*;
 
+#[cfg(all(feature = "hot-blocks", target_os = "linux"))]
+mod hot_blocks;
+#[cfg(all(feature = "hot-blocks", target_os = "linux"))]
+pub use self::hot_blocks::*;
+
 #[cfg(feature = "wizer")]
 mod wizer;
 #[cfg(feature = "wizer")]

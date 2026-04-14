@@ -1,13 +1,9 @@
 //! Implementation of the `wasmtime objdump` CLI command.
 
-use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
+use crate::disas::{self, Inst};
 use clap::Parser;
-use cranelift_codegen::isa::lookup_by_name;
-use cranelift_codegen::settings::Flags;
 use object::read::elf::ElfFile64;
-use object::{Architecture, Endianness, FileFlags, Object, ObjectSection, ObjectSymbol};
-use pulley_interpreter::decode::{Decoder, DecodingError, OpVisitor};
-use pulley_interpreter::disas::Disassembler;
+use object::{Endianness, Object, ObjectSection, ObjectSymbol};
 use smallvec::SmallVec;
 use std::io::{IsTerminal, Read, Write};
 use std::iter::{self, Peekable};
@@ -257,7 +253,7 @@ impl ObjdumpCommand {
             let mut prev_jump = false;
             let mut write_offsets = false;
 
-            for inst in self.disas(&elf, bytes, sym.address())? {
+            for inst in disas::disas(&elf, bytes, sym.address())? {
                 let Inst {
                     address,
                     is_jump,
@@ -403,127 +399,6 @@ impl ObjdumpCommand {
         Ok(())
     }
 
-    /// Disassembles `func` contained within `elf` returning a list of
-    /// instructions that represent the function.
-    fn disas(&self, elf: &ElfFile64<'_, Endianness>, func: &[u8], addr: u64) -> Result<Vec<Inst>> {
-        let cranelift_target = match elf.architecture() {
-            Architecture::X86_64 => "x86_64",
-            Architecture::Aarch64 => "aarch64",
-            Architecture::S390x => "s390x",
-            Architecture::Riscv64 => {
-                let e_flags = match elf.flags() {
-                    FileFlags::Elf { e_flags, .. } => e_flags,
-                    _ => bail!("not an ELF file"),
-                };
-                if e_flags & (obj::EF_WASMTIME_PULLEY32 | obj::EF_WASMTIME_PULLEY64) != 0 {
-                    return self.disas_pulley(func, addr);
-                } else {
-                    "riscv64"
-                }
-            }
-            other => bail!("unknown architecture {other:?}"),
-        };
-        let builder =
-            lookup_by_name(cranelift_target).context("failed to load cranelift ISA builder")?;
-        let flags = cranelift_codegen::settings::builder();
-        let isa = builder.finish(Flags::new(flags))?;
-        let isa = &*isa;
-        let capstone = isa
-            .to_capstone()
-            .context("failed to create a capstone disassembler")?;
-
-        let insts = capstone
-            .disasm_all(func, addr)?
-            .into_iter()
-            .map(|inst| {
-                let detail = capstone.insn_detail(&inst).ok();
-                let detail = detail.as_ref();
-                let is_jump = detail
-                    .map(|d| {
-                        d.groups()
-                            .iter()
-                            .find(|g| g.0 as u32 == CS_GRP_JUMP)
-                            .is_some()
-                    })
-                    .unwrap_or(false);
-
-                let is_return = detail
-                    .map(|d| {
-                        d.groups()
-                            .iter()
-                            .find(|g| g.0 as u32 == CS_GRP_RET)
-                            .is_some()
-                    })
-                    .unwrap_or(false);
-
-                let disassembly = match (inst.mnemonic(), inst.op_str()) {
-                    (Some(i), Some(o)) => {
-                        if o.is_empty() {
-                            format!("{i}")
-                        } else {
-                            format!("{i:7} {o}")
-                        }
-                    }
-                    (Some(i), None) => format!("{i}"),
-                    _ => unreachable!(),
-                };
-
-                let address = inst.address();
-                Inst {
-                    address,
-                    is_jump,
-                    is_return,
-                    bytes: inst.bytes().to_vec(),
-                    disassembly,
-                }
-            })
-            .collect::<Vec<_>>();
-        Ok(insts)
-    }
-
-    /// Same as `dias` above, but just for Pulley.
-    fn disas_pulley(&self, func: &[u8], addr: u64) -> Result<Vec<Inst>> {
-        let mut result = vec![];
-
-        let mut disas = Disassembler::new(func);
-        disas.offsets(false);
-        disas.hexdump(false);
-        disas.start_offset(usize::try_from(addr).unwrap());
-        let mut decoder = Decoder::new();
-        let mut last_disas_pos = 0;
-        loop {
-            let start_addr = disas.bytecode().position();
-
-            match decoder.decode_one(&mut disas) {
-                // If we got EOF at the initial position, then we're done disassembling.
-                Err(DecodingError::UnexpectedEof { position }) if position == start_addr => break,
-
-                // Otherwise, propagate the error.
-                Err(e) => {
-                    return Err(e).context("failed to disassembly pulley bytecode");
-                }
-
-                Ok(()) => {
-                    let bytes_range = start_addr..disas.bytecode().position();
-                    let disassembly = disas.disas()[last_disas_pos..].trim();
-                    last_disas_pos = disas.disas().len();
-                    let address = u64::try_from(start_addr).unwrap() + addr;
-                    let is_jump = disassembly.contains("jump") || disassembly.contains("br_");
-                    let is_return = disassembly == "ret";
-                    result.push(Inst {
-                        bytes: func[bytes_range].to_vec(),
-                        address,
-                        is_jump,
-                        is_return,
-                        disassembly: disassembly.to_string(),
-                    });
-                }
-            }
-        }
-
-        Ok(result)
-    }
-
     /// Helper to read the input bytes of the `*.cwasm` handling stdin
     /// automatically.
     fn read_cwasm(&self) -> Result<Vec<u8>> {
@@ -539,15 +414,6 @@ impl ObjdumpCommand {
             .context("failed to read stdin")?;
         Ok(stdin)
     }
-}
-
-/// Helper structure to package up metadata about an instruction.
-struct Inst {
-    address: u64,
-    is_jump: bool,
-    is_return: bool,
-    disassembly: String,
-    bytes: Vec<u8>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]

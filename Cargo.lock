@@ -4814,6 +4814,7 @@ dependencies = [
  "wasi-common",
  "wasm-encoder 0.246.2",
  "wasmparser 0.246.2",
+ "wasmprinter",
  "wasmtime",
  "wasmtime-cli-flags",
  "wasmtime-environ",
