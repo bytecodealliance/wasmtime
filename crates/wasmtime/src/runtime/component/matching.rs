@@ -26,7 +26,13 @@ pub struct TypeChecker<'a> {
 #[doc(hidden)]
 pub struct InstanceType<'a> {
     pub types: &'a Arc<ComponentTypes>,
-    pub resources: &'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
+    /// Resource type substitutions for resources within `ComponentTypes`, if
+    /// any.
+    ///
+    /// If this isn't present then resource types are considered "abstract" and
+    /// un-intantiated. This doesn't refer to a concrete instantiated component,
+    /// but rather an abstract component type.
+    pub resources: Option<&'a Arc<TryPrimaryMap<ResourceIndex, ResourceType>>>,
 }
 
 impl TypeChecker<'_> {
@@ -170,7 +176,7 @@ impl TypeChecker<'_> {
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         let instance_type = InstanceType {
             types: self.types,
-            resources: &self.imported_resources,
+            resources: Some(&self.imported_resources),
         };
         actual.typecheck(expected, &instance_type)
     }
@@ -191,7 +197,7 @@ impl<'a> InstanceType<'a> {
     pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
             types: instance.component().types(),
-            resources: instance.resource_types(),
+            resources: Some(instance.resource_types()),
         }
     }
 
@@ -199,8 +205,7 @@ impl<'a> InstanceType<'a> {
         match self.types[index] {
             TypeResourceTable::Concrete { ty, .. } => self
                 .resources
-                .get(ty)
-                .copied()
+                .map(|t| t[ty])
                 .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, ty)),
             TypeResourceTable::Abstract(ty) => ResourceType::abstract_(&self.types, ty),
         }

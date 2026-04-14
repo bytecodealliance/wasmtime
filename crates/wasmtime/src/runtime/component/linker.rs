@@ -192,7 +192,7 @@ impl<T: 'static> Linker<T> {
             component.ty(),
             &InstanceType {
                 types: cx.types,
-                resources: &cx.imported_resources,
+                resources: Some(&cx.imported_resources),
             },
         ))
     }
