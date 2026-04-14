@@ -151,11 +151,6 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(any(feature = "async", feature = "gc"))]
-mod async_yield;
-#[cfg(any(feature = "async", feature = "gc"))]
-pub use crate::runtime::vm::async_yield::*;
-
 #[cfg(feature = "gc-null")]
 mod send_sync_unsafe_cell;
 #[cfg(feature = "gc-null")]

@@ -129,6 +129,19 @@ impl Pollable for Deadline {
                 // starving `mio` such that it is unable to signal readiness for
                 // other pollables (e.g. TCP sockets) when the guest is polling
                 // in a busy loop.
+                //
+                // This is somewhat of a hack to ensure that
+                // `wasmtime-wasi-io`'s implementation of `wasi:io/poll` does
+                // not starve `mio` when the guest calls `wasi:io/poll#poll` in
+                // a busy loop with a zero timeout.  It relies on the guest
+                // using the most natural approach to making a non-blocking call
+                // to `wasi:io/poll#poll`, which is to include a zero-duration
+                // `monotonic_clock::subscribe_{instant,duration}` in the list
+                // of pollables.  That's what `wasi-libc`'s `poll(2)`
+                // implementation does as of this writing, for example.  There
+                // are hypothetically other ways to generate a pollable that's
+                // always immediately ready, which this hack doesn't cover, but
+                // we consider this sufficient for now.
                 tokio::task::yield_now().await
             }
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,

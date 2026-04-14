@@ -1243,7 +1243,7 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
         }
         #[cfg(feature = "async")]
         if store.fuel_yield_interval.is_some() {
-            crate::runtime::vm::Yield::new().await;
+            store.yield_now().await;
         }
         Ok(())
     })?
@@ -1279,7 +1279,7 @@ fn new_epoch(store: &mut dyn VMStore, _instance: InstanceId) -> Result<NextEpoch
                          an async wasm entrypoint",
                     );
                 }
-                crate::runtime::vm::Yield::new().await;
+                store.yield_now().await;
                 delta
             }
             #[cfg(feature = "async")]

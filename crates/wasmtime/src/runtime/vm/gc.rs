@@ -102,9 +102,14 @@ impl GcStore {
     }
 
     /// Asynchronously perform garbage collection within this heap.
-    pub async fn gc(&mut self, asyncness: Asyncness, roots: GcRootsIter<'_>) {
+    pub async fn gc(
+        &mut self,
+        asyncness: Asyncness,
+        roots: GcRootsIter<'_>,
+        yield_fn: impl AsyncFn(),
+    ) {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
-        collect_async(collection, asyncness).await;
+        collect_async(collection, asyncness, yield_fn).await;
         self.last_post_gc_allocated_bytes = Some({
             let size = self.gc_heap.allocated_bytes();
             log::trace!("After collection, GC heap size = {size} bytes");

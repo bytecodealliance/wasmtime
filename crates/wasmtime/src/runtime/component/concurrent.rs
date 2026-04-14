@@ -61,8 +61,7 @@ use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
 use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
-    AsContext, AsContextMut, Config, FuncType, Result, StoreContext, StoreContextMut, ValRaw,
-    ValType, bail,
+    AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
 use error_contexts::GlobalErrorContextRefCount;
 use futures::channel::oneshot;
@@ -1227,12 +1226,16 @@ impl<T> StoreContextMut<'_, T> {
 
                 // Next, collect the next batch of work items to process, if
                 // any.  This will be either all of the high-priority work
-                // items, or if there are none (and we haven't made progress
-                // with `ConcurrentState::futures` above), a single low-priority
-                // work item.
+                // items, or if there are none, a single low-priority work item.
                 let state = reset.store.0.concurrent_state_mut();
-                let (ready, low_priority) =
-                    state.collect_work_items_to_run(!matches!(next, Poll::Ready(true)));
+                let mut ready = mem::take(&mut state.high_priority);
+                let mut low_priority = false;
+                if ready.is_empty() {
+                    if let Some(item) = state.low_priority.pop_back() {
+                        ready.push(item);
+                        low_priority = true;
+                    }
+                }
                 if !ready.is_empty() {
                     return Poll::Ready(Ok(PollResult::ProcessWork {
                         ready,
@@ -1334,8 +1337,24 @@ impl<T> StoreContextMut<'_, T> {
                     // the ability to e.g. update the readiness of sockets,
                     // etc. which the guest may be using `thread.yield` along
                     // with `waitable-set.poll` to monitor in a CPU-heavy loop.
+                    //
+                    // This works for e.g. `thread.yield` and callbacks which
+                    // return `CALLBACK_CODE_YIELD` because we queue a low
+                    // priority item to resume the task (i.e. resume the thread
+                    // or call the callback, respectively) just prior to
+                    // suspending it.  Indeed, as of this writing those are the
+                    // _only_ situations we queue low-priority tasks.
+                    // Therefore, we interpret the guest's request to yield as
+                    // meaning "yield to other guest tasks _and_/_or_ host
+                    // operations such as updating socket readiness", the latter
+                    // being the async runtime's responsibility.
+                    //
+                    // In the future, if this ends up causing measurable
+                    // performance issues, this could be optimized such that we
+                    // only yield periodically (e.g. for batches of low priority
+                    // items) and not for each and every idividual item.
                     if low_priority {
-                        yield_to_executor(dispose.store.engine().config()).await
+                        dispose.store.0.yield_now().await
                     }
 
                     while let Some(item) = dispose.ready.next() {
@@ -4998,20 +5017,6 @@ impl ConcurrentState {
         }
     }
 
-    /// Collect the next set of work items to run. This will be either all
-    /// high-priority items, or a single low-priority item if there are no
-    /// high-priority items and `take_low_priority` is `true`.
-    fn collect_work_items_to_run(&mut self, take_low_priority: bool) -> (Vec<WorkItem>, bool) {
-        let mut ready = mem::take(&mut self.high_priority);
-        let low_priority = take_low_priority && ready.is_empty();
-        if low_priority {
-            if let Some(item) = self.low_priority.pop_back() {
-                ready.push(item);
-            }
-        }
-        (ready, low_priority)
-    }
-
     fn push<V: Send + Sync + 'static>(
         &mut self,
         value: V,
@@ -5502,23 +5507,4 @@ fn queue_call0<T: 'static>(
             post_return.map(SendSyncPtr::new),
         )
     }
-}
-
-async fn yield_to_executor(config: &Config) {
-    // TODO: Once `Config` has an optional `AsyncFn` field for yielding to the
-    // current async runtime (e.g. `tokio::task::yield_now`), use that if set;
-    // otherwise fall back to the runtime-agnostic code below.
-    _ = config;
-
-    let mut yielded = false;
-    future::poll_fn(move |cx| {
-        if yielded {
-            Poll::Ready(())
-        } else {
-            yielded = true;
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    })
-    .await;
 }
