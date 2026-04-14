@@ -152,7 +152,7 @@ impl Config {
             hogs_memory: _,
             nan_canonicalization: _,
             gc_types: _,
-            stack_switching: _,
+            stack_switching,
             spec_test: _,
         } = test.config;
 
@@ -172,6 +172,7 @@ impl Config {
         self.module_config.component_model_map = component_model_map.unwrap_or(false);
         self.module_config.component_model_fixed_length_lists =
             component_model_fixed_length_lists.unwrap_or(false);
+        self.module_config.stack_switching = stack_switching.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.

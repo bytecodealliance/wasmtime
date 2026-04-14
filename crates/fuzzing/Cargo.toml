@@ -59,6 +59,7 @@ features = [
   'pulley',
   'threads',
   'parallel-compilation',
+  'stack-switching',
 ]
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
