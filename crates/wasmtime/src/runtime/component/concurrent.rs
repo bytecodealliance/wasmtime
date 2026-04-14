@@ -2121,11 +2121,17 @@ impl Instance {
     ) -> Result<()> {
         let state = store.concurrent_state_mut();
         let thread_data = state.get_mut(guest_thread.thread)?;
-        let guest_id = match thread_data.instance_rep {
-            Some(id) => id,
-            None => bail_bug!("thread must have instance_rep set by now"),
-        };
         let sync_call_set = thread_data.sync_call_set;
+        if let Some(guest_id) = thread_data.instance_rep {
+            store
+                .instance_state(RuntimeInstance {
+                    instance: self.id().instance(),
+                    index: runtime_instance,
+                })
+                .thread_handle_table()
+                .guest_thread_remove(guest_id)?;
+        }
+        let state = store.concurrent_state_mut();
 
         // Clean up any pending subtasks in the sync_call_set
         for waitable in mem::take(&mut state.get_mut(sync_call_set)?.ready) {
@@ -2136,14 +2142,6 @@ impl Instance {
                 waitable.delete_from(state)?;
             }
         }
-
-        store
-            .instance_state(RuntimeInstance {
-                instance: self.id().instance(),
-                index: runtime_instance,
-            })
-            .thread_handle_table()
-            .guest_thread_remove(guest_id)?;
 
         store.concurrent_state_mut().delete(guest_thread.thread)?;
         store.concurrent_state_mut().delete(sync_call_set)?;
@@ -3672,14 +3670,20 @@ impl Instance {
                 task.lower_params = None;
                 task.lift_result = None;
                 task.exited = true;
-
                 let instance = task.instance;
 
+                // Clean up the thread within this task as it's now never going
+                // to run.
                 assert_eq!(1, task.threads.len());
-                let thread = mem::take(&mut task.threads).into_iter().next().unwrap();
-                let concurrent_state = store.concurrent_state_mut();
-                concurrent_state.delete(thread)?;
-                assert!(concurrent_state.get_mut(guest_task)?.ready_to_delete());
+                let thread = *task.threads.iter().next().unwrap();
+                self.cleanup_thread(
+                    store,
+                    QualifiedThreadId {
+                        task: guest_task,
+                        thread,
+                    },
+                    caller_instance,
+                )?;
 
                 // Not yet started; cancel and remove from pending
                 let pending = &mut store.instance_state(instance).concurrent_state().pending;

@@ -244,6 +244,21 @@ impl WastContext {
                 caller.gc(None)?;
                 Ok(())
             })?;
+        #[cfg(feature = "component-model")]
+        {
+            let mut i = self.component_linker.instance("wasmtime")?;
+            i.func_wrap(
+                "set-max-table-capacity",
+                |mut store, (capacity,): (u32,)| {
+                    store
+                        .as_context_mut()
+                        .concurrent_resource_table()
+                        .expect("table must be present")
+                        .set_max_capacity(capacity.try_into().unwrap());
+                    Ok(())
+                },
+            )?;
+        }
         Ok(())
     }
 
