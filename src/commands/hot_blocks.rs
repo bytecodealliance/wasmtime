@@ -831,7 +831,12 @@ fn find_block_for_offset(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    // These tests don't exercise any unsafe code and so they are
+    // generally uninteresting to run under MIRI.
+    not(miri)
+))]
 mod test {
     use super::*;
 
