@@ -17,7 +17,7 @@ single instruction stepping at the Wasm bytecode level.
    feature enabled, which is off by default:
    
    - Published CLI binary releases already have this feature.
-   - If building from source, use(`cargo build --features gdbstub`.
+   - If building from source, use `cargo build --features gdbstub`.
 
 3. Run Wasmtime, enabling the gdbstub server:
 
