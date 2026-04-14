@@ -1533,7 +1533,7 @@ impl StoreOpaque {
         let state = self.concurrent_state_mut();
         let task = state.get_mut(thread.task)?;
         if task.ready_to_delete() {
-            state.delete(thread.task)?.dispose(state)?;
+            state.delete(thread.task)?;
         }
 
         Ok(())
@@ -4567,12 +4567,6 @@ impl GuestTask {
             async_function,
         })
     }
-
-    /// Dispose of this guest task.
-    fn dispose(self, _state: &mut ConcurrentState) -> Result<()> {
-        assert!(self.threads.is_empty());
-        Ok(())
-    }
 }
 
 impl TableDebug for GuestTask {
@@ -4733,7 +4727,7 @@ impl Waitable {
             }
             Self::Guest(task) => {
                 log::trace!("delete guest task {task:?}");
-                state.delete(*task)?.dispose(state)?;
+                state.delete(*task)?;
             }
             Self::Transmit(task) => {
                 state.delete(*task)?;
@@ -5303,13 +5297,14 @@ impl TaskId {
     /// and delete the task when all threads are done.
     pub(crate) fn host_future_dropped<T>(&self, store: StoreContextMut<T>) -> Result<()> {
         let task = store.0.concurrent_state_mut().get_mut(self.task)?;
-        if !task.already_lowered_parameters() {
-            Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
+        let delete = if !task.already_lowered_parameters() {
+            true
         } else {
             task.host_future_state = HostFutureState::Dropped;
-            if task.ready_to_delete() {
-                Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
-            }
+            task.ready_to_delete()
+        };
+        if delete {
+            Waitable::Guest(self.task).delete_from(store.0.concurrent_state_mut())?
         }
         Ok(())
     }
