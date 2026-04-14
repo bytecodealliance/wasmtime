@@ -593,10 +593,10 @@ impl Component {
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let image = self.engine_code().image();
-        let mut v = Vec::new();
-        v.try_reserve(image.len())?;
-        v.extend_from_slice(image);
-        Ok(v)
+        let mut v = TryVec::new();
+        v.reserve(image.len())?;
+        v.try_extend(image.iter().copied())?;
+        Ok(v.into())
     }
 
     /// Creates a new `VMFuncRef` with all fields filled out for the destructor
