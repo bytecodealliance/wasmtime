@@ -226,10 +226,10 @@
 ;; or(x, C) + (-C)  -->  and(x, ~C)
 (rule
   (simplify (iadd ty
-              (bor ty x (iconst_s ty n))
-              (iconst_s ty m)))
-  (if-let m (i64_checked_neg n))
-  (band ty x (iconst ty (imm64_masked ty (i64_cast_unsigned (i64_not n))))))
+              (bor ty x (iconst ty n))
+              (iconst ty m)))
+  (if-let m (imm64_neg ty n))
+  (band ty x (iconst ty (imm64_not ty n))))
 
 ;; (x + y) - (x | y) --> x & y
 (rule (simplify (isub ty (iadd ty x y) (bor ty x y))) (band ty x y))
@@ -500,3 +500,6 @@
 (rule (simplify (ugt ty x (umax ty y x))) (iconst_u ty 0))
 (rule (simplify (ult ty (umax ty x y) x)) (iconst_u ty 0))
 (rule (simplify (ult ty (umax ty y x) x)) (iconst_u ty 0))
+
+;; (-X) * C = X * (-C)
+(rule (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))

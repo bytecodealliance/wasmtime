@@ -73,8 +73,56 @@
 (decl pure partial imm64_sdiv (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_sdiv imm64_sdiv)
 
+(decl pure partial imm64_udiv (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_udiv imm64_udiv)
+
 (decl pure partial imm64_srem (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_srem imm64_srem)
+
+(decl pure partial imm64_urem (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_urem imm64_urem)
+
+(decl pure imm64_add (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_add imm64_add)
+
+(decl pure imm64_sub (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_sub imm64_sub)
+
+(decl pure imm64_mul (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_mul imm64_mul)
+
+(decl pure imm64_and (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_and imm64_and)
+
+(decl pure imm64_or (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_or imm64_or)
+
+(decl pure imm64_xor (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_xor imm64_xor)
+
+(decl pure imm64_not (Type Imm64) Imm64)
+(extern constructor imm64_not imm64_not)
+
+(decl pure imm64_neg (Type Imm64) Imm64)
+(extern constructor imm64_neg imm64_neg)
+
+(decl pure partial imm64_abs (Type Imm64) Imm64)
+(extern constructor imm64_abs imm64_abs)
+
+(decl pure partial imm64_ilog2 (Type Imm64) Imm64)
+(extern constructor imm64_ilog2 imm64_ilog2)
+
+(decl pure imm64_umin (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_umin imm64_umin)
+
+(decl pure imm64_umax (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_umax imm64_umax)
+
+(decl pure imm64_smin (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_smin imm64_smin)
+
+(decl pure imm64_smax (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_smax imm64_smax)
 
 (decl pure imm64_shl (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_shl imm64_shl)
