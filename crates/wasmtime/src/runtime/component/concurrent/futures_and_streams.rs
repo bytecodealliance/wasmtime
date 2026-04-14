@@ -3641,7 +3641,13 @@ impl Instance {
                     concurrent_state.send_read_result(read_ty, transmit_id, read_handle, code)?;
                 }
 
-                if read_buffer_remaining {
+                // If the reader still has buffer remaining, or if this was a
+                // zero-length rendezvous, then restore the state of the reader
+                // back to what it was when we found it. Note that for the
+                // zero-length rendezvous case this specifically won't execute
+                // the `read_complete` logic above, which is intentional, as the
+                // reader remains blocked.
+                if read_buffer_remaining || (count == 0 && read_count == 0) {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.read = ReadState::GuestReady {
                         ty: read_ty,
