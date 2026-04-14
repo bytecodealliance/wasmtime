@@ -223,6 +223,7 @@ pub struct SliceBuffer {
 
 impl SliceBuffer {
     pub fn new(buffer: Vec<u8>, offset: usize, limit: usize) -> Self {
+        assert!(offset <= limit);
         assert!(limit <= buffer.len());
         Self {
             buffer,
