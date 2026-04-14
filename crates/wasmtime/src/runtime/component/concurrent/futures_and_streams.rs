@@ -3657,7 +3657,7 @@ impl Instance {
                 }
 
                 if write_complete {
-                    ReturnCode::completed(ty.kind(), count.try_into()?)
+                    ReturnCode::completed(ty.kind(), count)
                 } else {
                     set_guest_ready(concurrent_state)?;
                     ReturnCode::Blocked
@@ -3895,7 +3895,7 @@ impl Instance {
                 }
 
                 if read_complete {
-                    ReturnCode::completed(ty.kind(), count.try_into()?)
+                    ReturnCode::completed(ty.kind(), count)
                 } else {
                     set_guest_ready(concurrent_state)?;
                     ReturnCode::Blocked
