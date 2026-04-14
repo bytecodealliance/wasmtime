@@ -5,6 +5,7 @@ mod bit_set;
 mod boxed;
 mod btree_map;
 mod caller;
+mod component_component;
 mod component_func;
 mod component_instance;
 mod component_linker;
