@@ -26,6 +26,55 @@
   </h3>
 </div>
 
+## How to build and use
+You'll need rust and cargo to build most of the crates, and you'll need cmake and c++ compiler, to build c-api.
+Official building documentation is [here|https://docs.wasmtime.dev/contributing-building.html]
+
+### Rust part
+First, update git submodules
+```console
+git submodule update --init
+```
+
+Build everything, except c-api:
+```console
+cargo build --release
+```
+
+The built executable will be located at `target/release/wasmtime.`
+
+### C-API
+Make sure that you have c++ compiler and cmake in your system.
+On Windows I used MSYS2 with clang64 toolchain.
+On Linux and macOS either gcc or clang should be sufficient.
+
+From the root of the Wasmtime repository, run the following commands:
+
+```shell-session
+$ cmake -S crates/c-api -B target/c-api --install-prefix "$(pwd)/artifacts"
+$ cmake --build target/c-api
+$ cmake --install target/c-api
+```
+
+These commands will produce the following files:
+
+* `artifacts/lib/libwasmtime.{a,lib}`: Static Wasmtime library. Exact extension
+  depends on your operating system.
+
+* `artifacts/lib/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime library. Exact
+  extension depends on your operating system.
+
+* `artifacts/include/**.{h,hh}`: Header files for working with Wasmtime.
+
+On Windows MSYS2+CLANG64 will produce `wasmtime.dll`, `wasmtime.lib` and `wasmtime.dll.lib`.
+If you then will use clang toolchain to link with these libraries, it may not work, because
+clang linker follows linux naming convention when searching for libraries. In my case, following actions helped
+
+```bash
+cp artifacts/lib/wasmtime.dll.lib artifacts/lib/libwasmtime.dll.a
+PATH="$(pwd)/artifacts/lib:$PATH"
+```
+
 ## Installation
 
 The Wasmtime CLI can be installed on Linux and macOS (locally) with a small install

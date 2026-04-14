@@ -51,6 +51,22 @@ WASI_DECLARE_OWN(config)
 WASI_API_EXTERN own wasi_config_t *wasi_config_new();
 
 /**
+ * \brief Allow all network addresses accessible to the host.
+ *
+ * This method will inherit all network addresses meaning that any address
+ * can be bound by the guest or connected to by the guest using any
+ * protocol.
+ */
+WASI_API_EXTERN void wasi_config_inherit_network(wasi_config_t *config);
+
+/**
+ * \brief Allow usage of `wasi:sockets/ip-name-lookup`
+ *
+ * By default this is disabled.
+ */
+WASI_API_EXTERN void wasi_config_allow_ip_name_lookup(wasi_config_t *config, bool enable);
+
+/**
  * \brief Sets the argv list for this configuration object.
  *
  * By default WASI programs have an empty argv list, but this can be used to
