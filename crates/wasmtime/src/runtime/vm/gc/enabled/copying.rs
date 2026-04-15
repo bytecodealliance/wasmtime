@@ -18,7 +18,6 @@ use crate::runtime::vm::{
 };
 use crate::vm::VMMemoryDefinition;
 use crate::{Engine, prelude::*};
-use core::mem::MaybeUninit;
 use core::sync::atomic::AtomicUsize;
 use core::{alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull};
 use wasmtime_environ::copying::{
@@ -154,11 +153,9 @@ unsafe impl GcHeapObject for VMCopyingArrayHeader {
 /// The representation of an `externref` in the copying collector.
 #[repr(C)]
 struct VMCopyingExternRef {
-    header: VMCopyingHeader,
-
-    /// Padding so that our other fields aren't overwritten by the forwarding
-    /// location.
-    _forwarding_ref_padding: MaybeUninit<Option<VMGcRef>>,
+    /// NB: Explicitly leave room for the forwarding ref so that our other
+    /// fields aren't overwritten after copying to the new semi-space.
+    header: VMCopyingHeaderAndForwardingRef,
 
     /// The ID of this ref's data in the `ExternRefHostDataTable`.
     host_data: ExternRefHostDataId,
@@ -268,14 +265,49 @@ impl CopyingHeap {
         })
     }
 
-    /// Initialize the semi-spaces for a heap of the given capacity.
-    fn initialize_semi_spaces(&mut self, capacity: u32) {
-        // Round capacity down to an even number, so our semi-spaces are
+    fn capacity(&self) -> u32 {
+        let len = self.vmmemory.as_ref().unwrap().current_length();
+        let len = u32::try_from(len).unwrap_or(u32::MAX);
+        // Round down to a multiple of `ALIGN` so our semi-spaces are
         // equal-sized.
-        let capacity = capacity & !1;
+        let len = len & !(ALIGN - 1);
+        len
+    }
 
+    /// Initialize the semi-spaces for a heap of the given capacity.
+    fn initialize_semi_spaces(&mut self) {
+        debug_assert_eq!(self.active_space_start, 0);
+        debug_assert_eq!(self.active_space_end, 0);
+        debug_assert_eq!(self.idle_space_start, 0);
+        debug_assert_eq!(self.idle_space_end, 0);
+        debug_assert_eq!(self.bump_ptr, 0);
+
+        self.resize_semi_spaces();
+        self.reset_bump_ptr();
+    }
+
+    fn resize_semi_spaces(&mut self) {
+        debug_assert_eq!(
+            self.active_space_end - self.active_space_start,
+            self.idle_space_end - self.idle_space_start,
+            "the active and idle spaces should be the same size"
+        );
+
+        // We only adjust the semi-space regions for new memory capacity if the
+        // active semi-space is the first half of the GC heap. Else, when the
+        // the second half of the GC heap is the active semi-space, wait until
+        // the next collection to automatically update the regions.
+        if self.idle_space_start < self.active_space_start {
+            return;
+        }
+
+        let capacity = self.capacity();
         let halfway = capacity / 2;
-        self.active_space_start = 0;
+
+        debug_assert!(self.bump_ptr <= halfway);
+        debug_assert!(self.idle_space_start <= halfway);
+        debug_assert!(self.active_space_end <= halfway);
+
         self.active_space_end = halfway;
         self.idle_space_start = halfway;
         self.idle_space_end = capacity;
@@ -285,11 +317,23 @@ impl CopyingHeap {
             self.idle_space_end - self.idle_space_start,
             "the active and idle spaces should be the same size"
         );
+    }
 
-        // VMGcRef uses NonZeroU32, so index 0 is reserved. Start the bump
-        // pointer at `ALIGN` to skip past zero while keeping it aligned.
-        debug_assert!(capacity == 0 || capacity > 2 * ALIGN);
-        self.bump_ptr = if capacity > 0 { ALIGN } else { 0 };
+    fn reset_bump_ptr(&mut self) {
+        // We always need to keep `bump_ptr` aligned to `ALIGN`.
+        //
+        // When the active space is the first half of the GC heap, we need to
+        // skip past index 0, since `VMGcRef` is a `NonZeroU32`.
+        //
+        // When the active space is the second half of the GC heap, we *also*
+        // skip the first `ALIGN` bytes. This ensures that the active and idle
+        // spaces are always equally sized, which is required to guarantee that
+        // evacuating objects from one to the other will succeed.
+        self.bump_ptr = self.active_space_start;
+        if self.active_space_end - self.active_space_start >= ALIGN {
+            self.bump_ptr += ALIGN;
+        }
+        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
     }
 
     /// Ensure that we have tracing information for the given type.
@@ -301,6 +345,8 @@ impl CopyingHeap {
     ///
     /// Returns `None` if there isn't enough room.
     fn allocate(&mut self, size: u32) -> Option<u32> {
+        debug_assert!(size.is_multiple_of(ALIGN));
+        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
         debug_assert!(self.bump_ptr >= self.active_space_start);
         debug_assert!(self.bump_ptr <= self.active_space_end);
 
@@ -309,10 +355,12 @@ impl CopyingHeap {
         if new_bump_ptr > self.active_space_end {
             return None;
         }
-        self.bump_ptr = new_bump_ptr;
 
+        self.bump_ptr = new_bump_ptr;
+        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
         debug_assert!(self.bump_ptr >= self.active_space_start);
         debug_assert!(self.bump_ptr <= self.active_space_end);
+
         Some(result)
     }
 
@@ -336,25 +384,11 @@ impl CopyingHeap {
 
         mem::swap(&mut self.active_space_start, &mut self.idle_space_start);
         mem::swap(&mut self.active_space_end, &mut self.idle_space_end);
+        self.reset_bump_ptr();
 
-        // VMGcRef uses NonZeroU32, so index 0 is reserved. Skip past it with
-        // proper alignment so allocations never return index 0. Also skip past
-        // the first ALIGN bytes in the second half of the GC heap so that the
-        // usable size of both semi-spaces is the same (which we require when
-        // copying live objects across semi-spaces during collection).
-        self.bump_ptr = self.active_space_start;
-        if self.active_space_end - self.active_space_start >= ALIGN {
-            self.bump_ptr += ALIGN;
-        }
-
-        // Swap the externref linked lists along with the semi-spaces.
-        mem::swap(
-            &mut self.active_extern_ref_set_head,
-            &mut self.idle_extern_ref_set_head,
-        );
-
-        // Clear the active list since we're starting fresh in the new space.
-        self.active_extern_ref_set_head = None;
+        // The active idle list becomes the old active list; the active list is
+        // cleared because we are starting fresh in the new space.
+        self.idle_extern_ref_set_head = self.active_extern_ref_set_head.take();
     }
 
     /// Initialize the worklist at the start of a collection.
@@ -444,14 +478,8 @@ impl CopyingHeap {
         let from_start = usize::try_from(from_index).unwrap();
         let to_start = usize::try_from(to_index).unwrap();
         let size_usize = usize::try_from(size).unwrap();
-        let [from, to] = self
-            .heap_slice_mut()
-            .get_disjoint_mut([
-                from_start..from_start + size_usize,
-                to_start..to_start + size_usize,
-            ])
-            .expect("semi-spaces do not overlap");
-        to.copy_from_slice(from);
+        self.heap_slice_mut()
+            .copy_within(from_start..from_start + size_usize, to_start);
 
         // Set the forwarding ref in the old (idle-space) object.
         self.index_mut(header_and_forwarding_ref(from_ref))
@@ -490,68 +518,48 @@ impl CopyingHeap {
             return;
         };
 
+        let object_start = usize::try_from(index).unwrap();
         match trace_infos.trace_info(&ty) {
             TraceInfo::Struct { gc_ref_offsets } => {
-                let object_start = usize::try_from(index).unwrap();
-
                 for &offset in gc_ref_offsets {
-                    let offset_usize = usize::try_from(offset).unwrap();
-                    let field_start = object_start + offset_usize;
-                    let field_end = field_start + mem::size_of::<u32>();
-
-                    let raw: [u8; 4] = self.heap_slice()[field_start..field_end]
-                        .try_into()
-                        .unwrap();
-                    let raw = u32::from_le_bytes(raw);
-
-                    if let Some(child) = VMGcRef::from_raw_u32(raw)
-                        && !child.is_i31()
-                    {
-                        debug_assert!(self.is_in_idle_space(child.as_heap_index().unwrap().get()));
-                        let new_ref = self.forward(&child);
-                        debug_assert!(
-                            self.is_in_active_space(new_ref.as_heap_index().unwrap().get())
-                        );
-                        // Write the new reference back.
-                        let new_raw = new_ref.as_raw_u32().to_le_bytes();
-                        self.heap_slice_mut()[field_start..field_end].copy_from_slice(&new_raw);
-                    }
+                    self.scan_field(object_start, offset);
                 }
             }
             TraceInfo::Array { gc_ref_elems } => {
                 if *gc_ref_elems {
                     let array_ref = gc_ref.as_arrayref_unchecked();
                     let len = self.array_len(array_ref);
-                    let object_start = usize::try_from(index).unwrap();
 
                     for i in 0..len {
                         let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
                             + i * u32::try_from(mem::size_of::<u32>()).unwrap();
-                        let offset_usize = usize::try_from(elem_offset).unwrap();
-                        let field_start = object_start + offset_usize;
-                        let field_end = field_start + mem::size_of::<u32>();
-
-                        let raw: [u8; 4] = self.heap_slice()[field_start..field_end]
-                            .try_into()
-                            .unwrap();
-                        let raw = u32::from_le_bytes(raw);
-
-                        if let Some(child) = VMGcRef::from_raw_u32(raw)
-                            && !child.is_i31()
-                        {
-                            debug_assert!(
-                                self.is_in_idle_space(child.as_heap_index().unwrap().get())
-                            );
-                            let new_ref = self.forward(&child);
-                            debug_assert!(
-                                self.is_in_active_space(new_ref.as_heap_index().unwrap().get())
-                            );
-                            let new_raw = new_ref.as_raw_u32().to_le_bytes();
-                            self.heap_slice_mut()[field_start..field_end].copy_from_slice(&new_raw);
-                        }
+                        self.scan_field(object_start, elem_offset);
                     }
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn scan_field(&mut self, object_start: usize, offset: u32) {
+        let offset = usize::try_from(offset).unwrap();
+        let field_start = object_start + offset;
+        let field_end = field_start + mem::size_of::<u32>();
+
+        let raw: [u8; 4] = self.heap_slice()[field_start..field_end]
+            .try_into()
+            .unwrap();
+        let raw = u32::from_le_bytes(raw);
+
+        if let Some(child) = VMGcRef::from_raw_u32(raw)
+            && !child.is_i31()
+        {
+            debug_assert!(self.is_in_idle_space(child.as_heap_index().unwrap().get()));
+            let new_ref = self.forward(&child);
+            debug_assert!(self.is_in_active_space(new_ref.as_heap_index().unwrap().get()));
+            // Write the new reference back.
+            let new_raw = new_ref.as_raw_u32().to_le_bytes();
+            self.heap_slice_mut()[field_start..field_end].copy_from_slice(&new_raw);
         }
     }
 }
@@ -565,11 +573,9 @@ unsafe impl GcHeap for CopyingHeap {
     fn attach(&mut self, memory: crate::vm::Memory) {
         assert!(!self.is_attached());
         assert!(!memory.is_shared_memory());
-        let len = memory.vmmemory().current_length();
-        let capacity = u32::try_from(len).unwrap();
-        self.initialize_semi_spaces(capacity);
         self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
+        self.initialize_semi_spaces();
 
         if cfg!(gc_zeal) {
             self.heap_slice_mut().fill(POISON);
@@ -848,7 +854,7 @@ unsafe impl GcHeap for CopyingHeap {
         // We need a GC before growth when the active space is the second half
         // of the GC heap, because we cannot safely extend the active space in
         // that configuration without making it larger than the idle space.
-        self.active_space_start >= self.idle_space_start && self.active_space_end > 0
+        self.idle_space_start < self.active_space_start
     }
 
     unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, _delta_bytes_grown: u64) {
@@ -857,30 +863,14 @@ unsafe impl GcHeap for CopyingHeap {
         self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
 
-        let new_len = u32::try_from(self.vmmemory.as_ref().unwrap().current_length()).unwrap();
-
-        // If the heap was previously empty (all zeroes), reinitialize the
-        // semi-spaces from scratch.
+        // If the heap was previously empty, reinitialize the semi-spaces from
+        // scratch.
         if self.active_space_end == 0 && self.idle_space_end == 0 {
-            self.initialize_semi_spaces(new_len);
+            self.initialize_semi_spaces();
         } else {
-            // Otherwise the memory was grown.
-            //
-            // We only adjust the semi-space regions for new memory capacity if
-            // the active semi-space is the first half of the GC heap. Else,
-            // when the the second half of the GC heap is the active semi-space,
-            // wait until the next collection to automatically update the
-            // regions.
-            if self.active_space_start < self.idle_space_start {
-                let halfway = new_len / 2;
-                debug_assert!(self.bump_ptr <= halfway);
-                debug_assert!(self.idle_space_start <= halfway);
-                debug_assert!(self.active_space_end <= halfway);
-
-                self.active_space_end = halfway;
-                self.idle_space_start = halfway;
-                self.idle_space_end = new_len;
-            }
+            // Otherwise the memory was grown: try to resize the semi-spaces
+            // accordingly.
+            self.resize_semi_spaces();
         }
 
         // Poison the newly-grown region.
@@ -1011,33 +1001,7 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
                 );
 
                 self.sweep_extern_refs();
-
-                // Adjust semi-space regions for any new capacity if the active
-                // space is the first half.
-                if self.heap.active_space_start < self.heap.idle_space_start {
-                    let mem_len =
-                        u32::try_from(self.heap.vmmemory.as_ref().unwrap().current_length())
-                            .unwrap();
-                    // Round `mem_len` down to an even number, so our
-                    // semi-spaces are equal-sized.
-                    let mem_len = mem_len & !1;
-                    assert!(self.heap.idle_space_end <= mem_len);
-                    self.heap.idle_space_end = mem_len;
-
-                    let halfway = mem_len / 2;
-                    assert!(self.heap.bump_ptr <= halfway);
-
-                    assert!(self.heap.idle_space_start <= halfway);
-                    self.heap.idle_space_start = halfway;
-
-                    assert!(self.heap.active_space_end <= halfway);
-                    self.heap.active_space_end = halfway;
-                } else {
-                    // NB: Cannot adjust semi-space regions when the active
-                    // space is the second half of the GC heap because resizing
-                    // them would require moving objects which, in turn, would
-                    // require updating GC edges.
-                }
+                self.heap.resize_semi_spaces();
 
                 debug_assert_eq!(
                     self.heap.active_space_end - self.heap.active_space_start,

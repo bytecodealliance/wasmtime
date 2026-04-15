@@ -118,7 +118,6 @@ fn main() {
                 },
             );
 
-            #[cfg(feature = "gc-copying")]
             add_trial(
                 &test,
                 WastConfig {
