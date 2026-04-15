@@ -58,8 +58,8 @@ impl FreeList {
     /// Compute the aligned allocation size for a given byte size. Returns the
     /// size rounded up to this free list's alignment, as a u32.
     #[inline]
-    pub fn aligned_size(size: u32) -> u32 {
-        (size + ALIGN_U32 - 1) & !(ALIGN_U32 - 1)
+    pub fn aligned_size(size: u32) -> Option<u32> {
+        Some((size.checked_add(ALIGN_U32)? - 1) & !(ALIGN_U32 - 1))
     }
 
     /// Get the current total capacity this free list manages.
