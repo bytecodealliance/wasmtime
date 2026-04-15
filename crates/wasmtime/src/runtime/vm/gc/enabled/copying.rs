@@ -863,21 +863,24 @@ unsafe impl GcHeap for CopyingHeap {
         // semi-spaces from scratch.
         if self.active_space_end == 0 && self.idle_space_end == 0 {
             self.initialize_semi_spaces(new_len);
-            return;
-        }
+        } else {
+            // Otherwise the memory was grown.
+            //
+            // We only adjust the semi-space regions for new memory capacity if
+            // the active semi-space is the first half of the GC heap. Else,
+            // when the the second half of the GC heap is the active semi-space,
+            // wait until the next collection to automatically update the
+            // regions.
+            if self.active_space_start < self.idle_space_start {
+                let halfway = new_len / 2;
+                debug_assert!(self.bump_ptr <= halfway);
+                debug_assert!(self.idle_space_start <= halfway);
+                debug_assert!(self.active_space_end <= halfway);
 
-        // Only adjust the semi-space regions for new capacity if the active
-        // semi-space is the first half of the GC heap. Otherwise, wait until
-        // the next collection to update the regions.
-        if self.active_space_start < self.idle_space_start {
-            let halfway = new_len / 2;
-            debug_assert!(self.bump_ptr <= halfway);
-            debug_assert!(self.idle_space_start <= halfway);
-            debug_assert!(self.active_space_end <= halfway);
-
-            self.active_space_end = halfway;
-            self.idle_space_start = halfway;
-            self.idle_space_end = new_len;
+                self.active_space_end = halfway;
+                self.idle_space_start = halfway;
+                self.idle_space_end = new_len;
+            }
         }
 
         // Poison the newly-grown region.
