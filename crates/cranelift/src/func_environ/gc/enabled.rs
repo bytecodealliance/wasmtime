@@ -72,7 +72,7 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
 }
 
 #[cfg_attr(
-    not(feature = "gc-drc"),
+    not(any(feature = "gc-drc", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn unbarriered_load_gc_ref(
@@ -90,7 +90,7 @@ fn unbarriered_load_gc_ref(
 }
 
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn unbarriered_store_gc_ref(
@@ -103,6 +103,37 @@ fn unbarriered_store_gc_ref(
     debug_assert!(ty.is_vmgcref_type());
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
+}
+
+/// Emit CLIF to call the `gc_raw_alloc` libcall.
+#[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+fn emit_gc_raw_alloc(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    kind: VMGcKind,
+    ty: ModuleInternedTypeIndex,
+    size: ir::Value,
+    align: u32,
+) -> ir::Value {
+    let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+
+    let kind = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(kind.as_u32()));
+
+    let ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
+
+    assert!(align.is_power_of_two());
+    let align = builder.ins().iconst(ir::types::I32, i64::from(align));
+
+    let call_inst = builder
+        .ins()
+        .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
+
+    let gc_ref = builder.func.dfg.first_result(call_inst);
+    builder.declare_value_needs_stack_map(gc_ref);
+    gc_ref
 }
 
 /// Emit inline CLIF code that asserts an object's `VMGcKind` matches the
@@ -645,7 +676,7 @@ pub fn translate_array_new_fixed(
 impl ArrayInit<'_> {
     /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
     #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null")),
+        not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
         expect(dead_code, reason = "easier to define")
     )]
     fn len(self, pos: &mut FuncCursor) -> ir::Value {
@@ -660,7 +691,7 @@ impl ArrayInit<'_> {
 
     /// Initialize a newly-allocated array's elements.
     #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null")),
+        not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
         expect(dead_code, reason = "easier to define")
     )]
     fn initialize(
@@ -1333,7 +1364,7 @@ fn uextend_i32_to_pointer_type(
 ///
 /// Traps if the size overflows.
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn emit_array_size(
@@ -1381,7 +1412,7 @@ fn emit_array_size(
 /// Common helper for struct-field initialization that can be reused across
 /// collectors.
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn initialize_struct_fields(
@@ -1483,7 +1514,7 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's base.
-    #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
+    #[cfg(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying"))]
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_gc_heap_base_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)

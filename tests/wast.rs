@@ -117,6 +117,15 @@ fn main() {
                     collector: Collector::Null,
                 },
             );
+
+            add_trial(
+                &test,
+                WastConfig {
+                    compiler,
+                    pooling: false,
+                    collector: Collector::Copying,
+                },
+            );
         }
     }
 
