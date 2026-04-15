@@ -270,11 +270,21 @@ impl CopyingHeap {
 
     /// Initialize the semi-spaces for a heap of the given capacity.
     fn initialize_semi_spaces(&mut self, capacity: u32) {
+        // Round capacity down to an even number, so our semi-spaces are
+        // equal-sized.
+        let capacity = capacity & !1;
+
         let halfway = capacity / 2;
         self.active_space_start = 0;
         self.active_space_end = halfway;
         self.idle_space_start = halfway;
         self.idle_space_end = capacity;
+
+        debug_assert_eq!(
+            self.active_space_end - self.active_space_start,
+            self.idle_space_end - self.idle_space_start,
+            "the active and idle spaces should be the same size"
+        );
 
         // VMGcRef uses NonZeroU32, so index 0 is reserved. Start the bump
         // pointer at `ALIGN` to skip past zero while keeping it aligned.
@@ -318,19 +328,28 @@ impl CopyingHeap {
 
     /// Swap the active and idle semi-spaces.
     fn flip(&mut self) {
+        debug_assert_eq!(
+            self.active_space_end - self.active_space_start,
+            self.idle_space_end - self.idle_space_start,
+            "the active and idle spaces should be the same size"
+        );
+
         mem::swap(&mut self.active_space_start, &mut self.idle_space_start);
         mem::swap(&mut self.active_space_end, &mut self.idle_space_end);
-        self.bump_ptr = self.active_space_start;
+
         // VMGcRef uses NonZeroU32, so index 0 is reserved. Skip past it
         // with proper alignment so allocations never return index 0.
+        self.bump_ptr = self.active_space_start;
         if self.bump_ptr == 0 && self.active_space_end > ALIGN {
             self.bump_ptr = ALIGN;
         }
+
         // Swap the externref linked lists along with the semi-spaces.
         mem::swap(
             &mut self.active_extern_ref_set_head,
             &mut self.idle_extern_ref_set_head,
         );
+
         // Clear the active list since we're starting fresh in the new space.
         self.active_extern_ref_set_head = None;
     }
@@ -898,52 +917,61 @@ enum CopyingCollectionPhase {
 impl CopyingCollection<'_> {
     /// Forward all GC roots from the idle space to the active space.
     fn process_roots(&mut self) {
-        let heap = &mut *self.heap;
-        let mut roots = self.roots.take().unwrap();
-        for mut root in &mut roots {
+        log::trace!("Begin processing GC roots");
+        let roots = self.roots.take().unwrap();
+        for mut root in roots {
             let gc_ref = root.get();
             if gc_ref.is_i31() {
                 continue;
             }
             let old_index = gc_ref.as_heap_index().unwrap().get();
-            debug_assert!(heap.is_in_idle_space(old_index));
-            let new_ref = heap.forward(&gc_ref);
+            debug_assert!(self.heap.is_in_idle_space(old_index));
+            let new_ref = self.heap.forward(&gc_ref);
             root.set(new_ref);
         }
-        drop(roots);
+        log::trace!("End processing GC roots");
     }
 
     /// Scan all grey objects until the worklist is empty.
     fn process_worklist(&mut self) {
-        let heap = &mut *self.heap;
-        let trace_infos = mem::take(&mut heap.trace_infos);
-        while let Some(gc_ref) = heap.worklist_pop() {
-            debug_assert!(heap.is_in_active_space(gc_ref.as_heap_index().unwrap().get()));
-            heap.scan(&gc_ref, &trace_infos);
+        log::trace!("Begin processing worklist");
+        let trace_infos = mem::take(&mut self.heap.trace_infos);
+        while let Some(gc_ref) = self.heap.worklist_pop() {
+            debug_assert!(
+                self.heap
+                    .is_in_active_space(gc_ref.as_heap_index().unwrap().get())
+            );
+            self.heap.scan(&gc_ref, &trace_infos);
         }
-        heap.trace_infos = trace_infos;
+        self.heap.trace_infos = trace_infos;
+        log::trace!("End processing worklist");
     }
 
     /// Clean up dead externrefs by iterating the idle semi-space's externref
     /// linked list and deallocating host data for any that were not forwarded.
     fn sweep_extern_refs(&mut self) {
-        let heap = &mut *self.heap;
-        let mut link = heap.idle_extern_ref_set_head.take();
+        log::trace!("Begin sweeping `externref`s");
+        let mut link = self.heap.idle_extern_ref_set_head.take();
         while let Some(externref) = link {
             let gc_ref = externref.as_gc_ref();
-            debug_assert!(heap.is_in_idle_space(gc_ref.as_heap_index().unwrap().get()));
-            let header = heap.index(copying_ref(gc_ref));
+            debug_assert!(
+                self.heap
+                    .is_in_idle_space(gc_ref.as_heap_index().unwrap().get())
+            );
+            let header = self.heap.index(copying_ref(gc_ref));
             if !header.copied() {
                 let typed: &TypedGcRef<VMCopyingExternRef> = gc_ref.as_typed_unchecked();
-                let host_data_id = heap.index(typed).host_data;
+                let host_data_id = self.heap.index(typed).host_data;
                 self.host_data_table.dealloc(host_data_id);
             }
-            link = heap
+            link = self
+                .heap
                 .index::<VMCopyingExternRef>(gc_ref.as_typed_unchecked())
                 .next_extern_ref
                 .as_ref()
                 .map(|e| e.unchecked_copy());
         }
+        log::trace!("End sweeping `externref`s");
     }
 }
 
@@ -953,58 +981,69 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
             CopyingCollectionPhase::Collect => {
                 log::trace!("Begin copying collection");
 
-                let heap = &mut *self.heap;
-
-                assert!(heap.active_space_start <= heap.bump_ptr);
-                assert!(heap.bump_ptr <= heap.active_space_end);
-                assert!(heap.idle_space_start <= heap.idle_space_end);
+                assert!(self.heap.active_space_start <= self.heap.bump_ptr);
+                assert!(self.heap.bump_ptr <= self.heap.active_space_end);
+                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
                 assert!(
-                    heap.active_space_end <= heap.idle_space_start
-                        || heap.idle_space_end <= heap.active_space_start
+                    self.heap.active_space_end <= self.heap.idle_space_start
+                        || self.heap.idle_space_end <= self.heap.active_space_start
                 );
 
                 // Flip the semi-spaces.
-                heap.flip();
-                heap.initialize_worklist();
+                self.heap.flip();
+                self.heap.initialize_worklist();
 
                 self.process_roots();
                 self.process_worklist();
 
-                let heap = &mut *self.heap;
-                assert!(heap.active_space_start <= heap.bump_ptr);
-                assert!(heap.bump_ptr <= heap.active_space_end);
-                assert!(heap.idle_space_start <= heap.idle_space_end);
+                assert!(self.heap.active_space_start <= self.heap.bump_ptr);
+                assert!(self.heap.bump_ptr <= self.heap.active_space_end);
+                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
                 assert!(
-                    heap.active_space_end <= heap.idle_space_start
-                        || heap.idle_space_end <= heap.active_space_start
+                    self.heap.active_space_end <= self.heap.idle_space_start
+                        || self.heap.idle_space_end <= self.heap.active_space_start
                 );
 
                 self.sweep_extern_refs();
 
                 // Adjust semi-space regions for any new capacity if the active
                 // space is the first half.
-                let heap = &mut *self.heap;
-                if heap.active_space_start < heap.idle_space_start {
+                if self.heap.active_space_start < self.heap.idle_space_start {
                     let mem_len =
-                        u32::try_from(heap.vmmemory.as_ref().unwrap().current_length()).unwrap();
-                    assert!(heap.idle_space_end <= mem_len);
-                    heap.idle_space_end = mem_len;
+                        u32::try_from(self.heap.vmmemory.as_ref().unwrap().current_length())
+                            .unwrap();
+                    // Round `mem_len` down to an even number, so our
+                    // semi-spaces are equal-sized.
+                    let mem_len = mem_len & !1;
+                    assert!(self.heap.idle_space_end <= mem_len);
+                    self.heap.idle_space_end = mem_len;
 
                     let halfway = mem_len / 2;
-                    assert!(heap.bump_ptr <= halfway);
+                    assert!(self.heap.bump_ptr <= halfway);
 
-                    assert!(heap.idle_space_start <= halfway);
-                    heap.idle_space_start = halfway;
+                    assert!(self.heap.idle_space_start <= halfway);
+                    self.heap.idle_space_start = halfway;
 
-                    assert!(heap.active_space_end <= halfway);
-                    heap.active_space_end = halfway;
+                    assert!(self.heap.active_space_end <= halfway);
+                    self.heap.active_space_end = halfway;
+                } else {
+                    // NB: Cannot adjust semi-space regions when the active
+                    // space is the second half of the GC heap because resizing
+                    // them would require moving objects which, in turn, would
+                    // require updating GC edges.
                 }
+
+                debug_assert_eq!(
+                    self.heap.active_space_end - self.heap.active_space_start,
+                    self.heap.idle_space_end - self.heap.idle_space_start,
+                    "the active and idle spaces should be the same size"
+                );
 
                 // Poison the idle space so stale accesses are detectable.
                 if cfg!(gc_zeal) {
-                    let idle_start = usize::try_from(heap.idle_space_start).unwrap();
-                    let idle_end = usize::try_from(heap.idle_space_end).unwrap();
-                    heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
+                    let idle_start = usize::try_from(self.heap.idle_space_start).unwrap();
+                    let idle_end = usize::try_from(self.heap.idle_space_end).unwrap();
+                    self.heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
                 }
 
                 log::trace!("End copying collection");
