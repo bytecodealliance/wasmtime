@@ -890,7 +890,7 @@ fn issue_13034_array_layout_overflow() -> Result<()> {
     ] {
         log::trace!("Testing [{storage}; {len}]");
         let mut store = gc_store()?;
-        let array_ty = ArrayType::new(store.engine(), FieldType::new(Mutability::Const, storage.clone()));
+        let array_ty = ArrayType::new(store.engine(), FieldType::new(Mutability::Const, storage));
         let pre = ArrayRefPre::new(&mut store, array_ty);
         let err = ArrayRef::new(&mut store, &pre, &val, len).unwrap_err();
         err.assert_contains("allocation size too large");
