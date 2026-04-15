@@ -50,7 +50,6 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
-wasi-common = { workspace = true, default-features = true, features = ["exit", "tokio"], optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-config = { workspace = true, optional = true }
@@ -65,7 +64,6 @@ gdbstub-component-artifact = { workspace = true, optional = true }
 clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
-listenfd = { version = "1.0.0", optional = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
@@ -295,7 +293,6 @@ wasmtime-wizer = { path = "crates/wizer", version = "45.0.0" }
 wiggle = { path = "crates/wiggle", version = "=45.0.0", default-features = false }
 wiggle-macro = { path = "crates/wiggle/macro", version = "=45.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=45.0.0" }
-wasi-common = { path = "crates/wasi-common", version = "=45.0.0", default-features = false }
 pulley-interpreter = { path = 'pulley', version = "=45.0.0" }
 pulley-macros = { path = 'pulley/macros', version = "=45.0.0" }
 
@@ -607,8 +604,6 @@ run = [
   "dep:wasmtime-wasi",
   "wasmtime/runtime",
   "wasmtime/wave",
-  "dep:listenfd",
-  "dep:wasi-common",
   "dep:tokio",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
@@ -631,7 +626,6 @@ hot-blocks = [
 wizer = [
   "wasmtime-wizer",
   "dep:wasmtime-wasi",
-  "dep:wasi-common",
   "dep:tokio",
   "wasmtime/wave",
 ]
@@ -650,7 +644,6 @@ harness = false
 
 [[example]]
 name = "tokio"
-required-features = ["wasi-common/tokio"]
 
 [[bench]]
 name = "compile"

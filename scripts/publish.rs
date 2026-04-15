@@ -63,9 +63,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "winch-codegen",
     "wasmtime-internal-winch",
     "wasmtime",
-    // wasi-common/wiggle
+    // wiggle
     "wiggle",
-    "wasi-common",
     // other misc wasmtime crates
     "wasmtime-wasi-io",
     "wasmtime-wasi",

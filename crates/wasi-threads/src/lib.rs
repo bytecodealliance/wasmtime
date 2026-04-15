@@ -104,7 +104,6 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
                     Ok(_) => log::trace!("exiting thread id = {wasi_thread_id} normally"),
                     Err(e) => {
                         log::trace!("exiting thread id = {wasi_thread_id} due to error");
-                        let e = wasi_common::maybe_exit_on_error(e);
                         eprintln!("Error: {e:?}");
                         std::process::exit(1);
                     }

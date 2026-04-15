@@ -2319,17 +2319,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
-name = "listenfd"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14e4fcc00ff6731d94b70e16e71f43bda62883461f31230742e3bc6dddf12988"
-dependencies = [
- "libc",
- "uuid",
- "winapi",
-]
-
-[[package]]
 name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4334,37 +4323,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasi-common"
-version = "45.0.0"
-dependencies = [
- "async-trait",
- "bitflags 2.9.4",
- "cap-fs-ext",
- "cap-std",
- "cap-time-ext",
- "fs-set-times",
- "io-extras",
- "io-lifetimes",
- "libc",
- "log",
- "rand 0.10.1",
- "rustix 1.0.8",
- "system-interface",
- "tempfile",
- "test-log",
- "test-programs-artifacts",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "wasi-common",
- "wasmtime",
- "wasmtime-environ",
- "wiggle",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "wasi-nn"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4789,7 +4747,6 @@ dependencies = [
  "hyper",
  "libc",
  "libtest-mimic",
- "listenfd",
  "log",
  "memchr",
  "num_cpus",
@@ -4811,7 +4768,6 @@ dependencies = [
  "toml",
  "tracing",
  "walkdir",
- "wasi-common",
  "wasm-encoder 0.246.2",
  "wasmparser 0.246.2",
  "wasmprinter",
@@ -5352,7 +5308,6 @@ version = "45.0.0"
 dependencies = [
  "log",
  "rand 0.10.1",
- "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
 ]

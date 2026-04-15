@@ -18,6 +18,5 @@ workspace = true
 [dependencies]
 log = { workspace = true }
 rand = { workspace = true }
-wasi-common = { workspace = true, features = ["exit"]}
 wasmtime = { workspace = true, features = ['threads'] }
 wasmtime-wasi = { workspace = true }

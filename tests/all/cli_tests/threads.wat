@@ -2,10 +2,6 @@
   ;; As we have discussed, it makes sense to make the shared memory an import
   ;; so that all
   (import "" "memory" (memory $shmem 1 1 shared))
-  (import "wasi_snapshot_preview1" "fd_write"
-    (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))
-  (import "wasi_snapshot_preview1" "proc_exit"
-    (func $__wasi_proc_exit (param i32)))
   (import "wasi" "thread-spawn"
     (func $__wasi_thread_spawn (param i32) (result i32)))
 
@@ -49,11 +45,15 @@
   (func $print (param $ptr i32) (param $len i32)
     (i32.store (i32.const 8) (local.get $len))
     (i32.store (i32.const 4) (local.get $ptr))
+        ;; Wasmtime doesn't currently have an implementation of WASIp1 that's
+        ;; compatible with wasi-threads, so this can't actually be emitted yet.
+        (;
         (drop (call $__wasi_fd_write
           (i32.const 1)
           (i32.const 4)
           (i32.const 1)
           (i32.const 0)))
+        ;)
   )
 
   ;; We still need to export the shared memory for Wiggle's sake.

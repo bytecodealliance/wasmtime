@@ -172,14 +172,8 @@ fn assert_trap_code(status: &ExitStatus) {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let stdout = run_wasmtime(&[
-            "-Ccache=n",
-            preview2,
-            "tests/all/cli_tests/hello_wasi_snapshot0.wat",
-        ])?;
-        assert_eq!(stdout, "Hello, world!\n");
-    }
+    let stdout = run_wasmtime(&["-Ccache=n", "tests/all/cli_tests/hello_wasi_snapshot0.wat"])?;
+    assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
 
@@ -240,13 +234,8 @@ fn timeout_in_invoke() -> Result<()> {
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
 
-    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let output = run_wasmtime_for_output(
-            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
-            None,
-        )?;
-        assert_eq!(output.status.code().unwrap(), 2);
-    }
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
 
@@ -263,14 +252,9 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let output = run_wasmtime_for_output(
-            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
-            None,
-        )?;
-        dbg!(&output);
-        assert_eq!(output.status.code().unwrap(), 125);
-    }
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    dbg!(&output);
+    assert_eq!(output.status.code().unwrap(), 125);
     Ok(())
 }
 
@@ -288,15 +272,10 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
 
-    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let output = run_wasmtime_for_output(
-            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
-            None,
-        )?;
-        assert_eq!(output.status.code().unwrap(), 1);
-        assert!(output.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
-    }
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    assert_eq!(output.status.code().unwrap(), 1);
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
     Ok(())
 }
 
@@ -438,22 +417,20 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     // Run a simple WASI hello world, snapshot0 edition.
     // The module is piped from standard input.
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
-        let stdout = {
-            let path = wasm.path();
-            let args: &[&str] = &["-Ccache=n", preview2, "-"];
-            let output = run_wasmtime_for_output(args, Some(path))?;
-            if !output.status.success() {
-                bail!(
-                    "Failed to execute wasmtime with: {:?}\n{}",
-                    args,
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
-            Ok::<_, wasmtime::Error>(String::from_utf8(output.stdout).unwrap())
-        }?;
-        assert_eq!(stdout, "Hello, world!\n");
-    }
+    let stdout = {
+        let path = wasm.path();
+        let args: &[&str] = &["-Ccache=n", "-"];
+        let output = run_wasmtime_for_output(args, Some(path))?;
+        if !output.status.success() {
+            bail!(
+                "Failed to execute wasmtime with: {:?}\n{}",
+                args,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        Ok::<_, wasmtime::Error>(String::from_utf8(output.stdout).unwrap())
+    }?;
+    assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
 
@@ -566,19 +543,12 @@ fn run_threads() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
         "-Wthreads,shared-memory",
-        "-Sthreads",
+        "-Sthreads,cli=n",
         "-Ccache=n",
         wasm.path().to_str().unwrap(),
     ])?;
 
-    assert!(
-        stdout
-            == "Called _start\n\
-    Running wasi_thread_start\n\
-    Running wasi_thread_start\n\
-    Running wasi_thread_start\n\
-    Done\n"
-    );
+    assert_eq!(stdout, "");
     Ok(())
 }
 
@@ -596,7 +566,7 @@ fn run_simple_with_wasi_threads() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
         "-Wthreads",
-        "-Sthreads",
+        "-Sthreads,cli=n",
         "-Ccache=n",
         "--invoke",
         "simple",
@@ -1420,8 +1390,7 @@ mod test_programs {
             Ok(())
         }
 
-        run(&["run", "-Spreview2=n", P2_CLI_STDIO_WRITE_FLUSHES])?;
-        run(&["run", "-Spreview2=y", P2_CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", P2_CLI_STDIO_WRITE_FLUSHES])?;
         run(&[
             "run",
             "-Wcomponent-model",

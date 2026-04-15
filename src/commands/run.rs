@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{
     Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
     error::Context as _, format_err,
@@ -488,9 +487,7 @@ impl RunCommand {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
                 // code.
-                if store.data().legacy_p1_ctx.is_some() {
-                    return Err(wasi_common::maybe_exit_on_error(e));
-                } else if store.data().wasip1_ctx.is_some() {
+                if store.data().wasip1_ctx.is_some() {
                     if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
                         std::process::exit(exit.0);
                     }
@@ -1120,11 +1117,11 @@ impl RunCommand {
                         // If preview2 is explicitly disabled, or if threads
                         // are enabled, then use the historical preview1
                         // implementation.
-                        (Some(false), _) | (None, Some(true)) => {
-                            wasi_common::tokio::add_to_linker(linker, |host| {
-                                host.legacy_p1_ctx.as_mut().unwrap()
-                            })?;
-                            self.set_legacy_p1_ctx(store)?;
+                        (Some(false), _) => {
+                            bail!("wasmtime no longer supports disabling p2")
+                        }
+                        (None, Some(true)) => {
+                            bail!("enabling wasi-threads requires disabling wasi-cli")
                         }
                         // If preview2 was explicitly requested, always use it.
                         // Otherwise use it so long as threads are disabled.
@@ -1342,63 +1339,6 @@ impl RunCommand {
         Ok(())
     }
 
-    fn set_legacy_p1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = WasiCtxBuilder::new();
-        builder.args(&self.compute_argv()?)?;
-
-        if self.run.common.wasi.inherit_stdin.unwrap_or(true) {
-            builder.inherit_stdin();
-        }
-        if self.run.common.wasi.inherit_stdout.unwrap_or(true) {
-            builder.inherit_stdout();
-        }
-        if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
-            builder.inherit_stderr();
-        }
-
-        if self.run.common.wasi.inherit_env == Some(true) {
-            for (k, v) in std::env::vars() {
-                builder.env(&k, &v)?;
-            }
-        }
-        for (key, value) in self.run.vars.iter() {
-            let value = match value {
-                Some(value) => value.clone(),
-                None => match std::env::var_os(key) {
-                    Some(val) => val
-                        .into_string()
-                        .map_err(|_| format_err!("environment variable `{key}` not valid utf-8"))?,
-                    None => {
-                        // leave the env var un-set in the guest
-                        continue;
-                    }
-                },
-            };
-            builder.env(key, &value)?;
-        }
-
-        let mut num_fd: usize = 3;
-
-        if self.run.common.wasi.listenfd == Some(true) {
-            num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
-        }
-
-        for listener in self.run.compute_preopen_sockets()? {
-            let listener = TcpListener::from_std(listener);
-            builder.preopened_socket(num_fd as _, listener)?;
-            num_fd += 1;
-        }
-
-        for (host, guest) in self.run.dirs.iter() {
-            let dir = Dir::open_ambient_dir(host, ambient_authority())
-                .with_context(|| format!("failed to open directory '{host}'"))?;
-            builder.preopened_dir(dir, guest)?;
-        }
-
-        store.data_mut().legacy_p1_ctx = Some(builder.build());
-        Ok(())
-    }
-
     /// Note the naming here is subtle, but this is effectively setting up a
     /// `wasmtime_wasi::WasiCtx` structure.
     ///
@@ -1470,10 +1410,6 @@ pub struct Host {
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
-
-    // Legacy wasip1 context using `wasi_common`, not set unless opted-in-to
-    // with the CLI.
-    legacy_p1_ctx: Option<wasi_common::WasiCtx>,
 
     // Context for both WASIp1 and WASIp2 (and beyond) for the `wasmtime_wasi`
     // crate. This has both `wasmtime_wasi::WasiCtx` as well as a
@@ -1558,35 +1494,6 @@ impl wasmtime_wasi_tls::WasiTlsView for Host {
             ctx: Arc::get_mut(self.wasi_tls.as_mut().unwrap()).unwrap(),
         }
     }
-}
-
-fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
-    let _ = &mut num_fd;
-    let _ = &mut *builder;
-
-    #[cfg(all(unix, feature = "run"))]
-    {
-        use listenfd::ListenFd;
-
-        for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
-            if let Ok(val) = std::env::var(env) {
-                builder.env(env, &val)?;
-            }
-        }
-
-        let mut listenfd = ListenFd::from_env();
-
-        for i in 0..listenfd.len() {
-            if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
-                let _ = stdlistener.set_nonblocking(true)?;
-                let listener = TcpListener::from_std(stdlistener);
-                builder.preopened_socket((3 + i) as _, listener)?;
-                num_fd = 3 + i;
-            }
-        }
-    }
-
-    Ok(num_fd)
 }
 
 #[cfg(feature = "coredump")]
