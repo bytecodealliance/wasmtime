@@ -348,6 +348,17 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// This is distinct from the heap capacity.
     fn allocated_bytes(&self) -> usize;
 
+    /// Whether a GC should be performed before the next heap growth.
+    ///
+    /// Some collectors (e.g. the copying collector) need to perform a GC before
+    /// growing the heap in certain states, to ensure that the semi-spaces remain
+    /// properly balanced.
+    ///
+    /// Defaults to `false`.
+    fn needs_gc_before_next_growth(&self) -> bool {
+        false
+    }
+
     /// Start a new garbage collection process.
     ///
     /// The given `roots` are GC roots and should not be collected (nor anything

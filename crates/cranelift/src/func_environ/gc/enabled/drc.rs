@@ -11,8 +11,8 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::drc::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
-    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
+    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType,
+    WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
 };
 
 #[derive(Default)]
@@ -346,36 +346,6 @@ impl DrcCompiler {
 
         Ok(())
     }
-}
-
-/// Emit CLIF to call the `gc_raw_alloc` libcall.
-fn emit_gc_raw_alloc(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    kind: VMGcKind,
-    ty: ModuleInternedTypeIndex,
-    size: ir::Value,
-    align: u32,
-) -> ir::Value {
-    let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
-    let vmctx = func_env.vmctx_val(&mut builder.cursor());
-
-    let kind = builder
-        .ins()
-        .iconst(ir::types::I32, i64::from(kind.as_u32()));
-
-    let ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
-
-    assert!(align.is_power_of_two());
-    let align = builder.ins().iconst(ir::types::I32, i64::from(align));
-
-    let call_inst = builder
-        .ins()
-        .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
-
-    let gc_ref = builder.func.dfg.first_result(call_inst);
-    builder.declare_value_needs_stack_map(gc_ref);
-    gc_ref
 }
 
 impl GcCompiler for DrcCompiler {

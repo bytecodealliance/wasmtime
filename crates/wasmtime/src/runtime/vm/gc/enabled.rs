@@ -7,6 +7,8 @@ mod externref;
 #[cfg(feature = "gc-drc")]
 mod free_list;
 mod structref;
+#[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+mod trace_info;
 
 pub use arrayref::*;
 pub use data::*;

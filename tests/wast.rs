@@ -117,6 +117,16 @@ fn main() {
                     collector: Collector::Null,
                 },
             );
+
+            #[cfg(feature = "gc-copying")]
+            add_trial(
+                &test,
+                WastConfig {
+                    compiler,
+                    pooling: false,
+                    collector: Collector::Copying,
+                },
+            );
         }
     }
 

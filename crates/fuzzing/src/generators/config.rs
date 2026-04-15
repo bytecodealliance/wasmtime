@@ -261,6 +261,7 @@ impl Config {
                 Collector::DeferredReferenceCounting => {
                     wasmtime_test_util::wast::Collector::DeferredReferenceCounting
                 }
+                Collector::Copying => wasmtime_test_util::wast::Collector::Copying,
             },
             pooling: matches!(
                 self.wasmtime.strategy,
@@ -953,6 +954,7 @@ impl Arbitrary<'_> for CompilerStrategy {
 pub enum Collector {
     DeferredReferenceCounting,
     Null,
+    Copying,
 }
 
 impl Collector {
@@ -960,6 +962,7 @@ impl Collector {
         match self {
             Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
             Collector::Null => wasmtime::Collector::Null,
+            Collector::Copying => wasmtime::Collector::Copying,
         }
     }
 }

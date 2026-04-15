@@ -1007,7 +1007,7 @@ impl Engine {
 }
 
 /// A weak reference to an [`Engine`].
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct EngineWeak {
     inner: alloc::sync::Weak<EngineInner>,
 }
