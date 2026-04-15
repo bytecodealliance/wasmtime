@@ -288,7 +288,7 @@ impl CopyingHeap {
 
         // VMGcRef uses NonZeroU32, so index 0 is reserved. Start the bump
         // pointer at `ALIGN` to skip past zero while keeping it aligned.
-        debug_assert!(capacity == 0 || capacity > ALIGN);
+        debug_assert!(capacity == 0 || capacity > 2 * ALIGN);
         self.bump_ptr = if capacity > 0 { ALIGN } else { 0 };
     }
 
@@ -337,11 +337,14 @@ impl CopyingHeap {
         mem::swap(&mut self.active_space_start, &mut self.idle_space_start);
         mem::swap(&mut self.active_space_end, &mut self.idle_space_end);
 
-        // VMGcRef uses NonZeroU32, so index 0 is reserved. Skip past it
-        // with proper alignment so allocations never return index 0.
+        // VMGcRef uses NonZeroU32, so index 0 is reserved. Skip past it with
+        // proper alignment so allocations never return index 0. Also skip past
+        // the first ALIGN bytes in the second half of the GC heap so that the
+        // usable size of both semi-spaces is the same (which we require when
+        // copying live objects across semi-spaces during collection).
         self.bump_ptr = self.active_space_start;
-        if self.bump_ptr == 0 && self.active_space_end > ALIGN {
-            self.bump_ptr = ALIGN;
+        if self.active_space_end - self.active_space_start >= ALIGN {
+            self.bump_ptr += ALIGN;
         }
 
         // Swap the externref linked lists along with the semi-spaces.
