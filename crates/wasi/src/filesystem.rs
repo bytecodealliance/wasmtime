@@ -8,6 +8,15 @@ use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
 use wasmtime::error::Context as _;
 
+#[cfg(unix)]
+pub(crate) mod unix;
+#[cfg(unix)]
+pub(crate) use unix as sys;
+#[cfg(windows)]
+pub(crate) mod windows;
+#[cfg(windows)]
+pub(crate) use windows as sys;
+
 /// A helper struct which implements [`HasData`] for the `wasi:filesystem` APIs.
 ///
 /// This can be useful when directly calling `add_to_linker` functions directly,
@@ -350,6 +359,16 @@ impl From<&cap_std::fs::Metadata> for MetadataHashValue {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Advice {
+    Normal,
+    Sequential,
+    Random,
+    WillNeed,
+    DontNeed,
+    NoReuse,
+}
+
 #[cfg(unix)]
 fn from_raw_os_error(err: Option<i32>) -> Option<ErrorCode> {
     use rustix::io::Errno as RustixErrno;
@@ -509,25 +528,9 @@ impl Descriptor {
     }
 
     pub(crate) async fn get_flags(&self) -> Result<DescriptorFlags, ErrorCode> {
-        use system_interface::fs::{FdFlags, GetSetFdFlags};
-
-        fn get_from_fdflags(flags: FdFlags) -> DescriptorFlags {
-            let mut out = DescriptorFlags::empty();
-            if flags.contains(FdFlags::DSYNC) {
-                out |= DescriptorFlags::REQUESTED_WRITE_SYNC;
-            }
-            if flags.contains(FdFlags::RSYNC) {
-                out |= DescriptorFlags::DATA_INTEGRITY_SYNC;
-            }
-            if flags.contains(FdFlags::SYNC) {
-                out |= DescriptorFlags::FILE_INTEGRITY_SYNC;
-            }
-            out
-        }
         match self {
             Self::File(f) => {
-                let flags = f.run_blocking(|f| f.get_fd_flags()).await?;
-                let mut flags = get_from_fdflags(flags);
+                let mut flags = f.run_blocking(|f| sys::get_flags(f)).await?;
                 if f.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
@@ -537,8 +540,7 @@ impl Descriptor {
                 Ok(flags)
             }
             Self::Dir(d) => {
-                let flags = d.run_blocking(|d| d.get_fd_flags()).await?;
-                let mut flags = get_from_fdflags(flags);
+                let mut flags = d.run_blocking(|d| sys::get_flags(d)).await?;
                 if d.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
                 }
@@ -747,10 +749,9 @@ impl File {
         &self,
         offset: u64,
         len: u64,
-        advice: system_interface::fs::Advice,
+        advice: Advice,
     ) -> Result<(), ErrorCode> {
-        use system_interface::fs::FileIoExt as _;
-        self.run_blocking(move |f| f.advise(offset, len, advice))
+        self.run_blocking(move |f| sys::advise(f, offset, len, advice))
             .await?;
         Ok(())
     }
@@ -930,7 +931,6 @@ impl Dir {
         allow_blocking_current_thread: bool,
     ) -> Result<Descriptor, ErrorCode> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
-        use system_interface::fs::{FdFlags, GetSetFdFlags};
 
         if !self.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted);
@@ -1023,7 +1023,7 @@ impl Dir {
 
         let opened = self
             .run_blocking::<_, std::io::Result<OpenResult>>(move |d| {
-                let mut opened = d.open_with(&path, &opts)?;
+                let opened = d.open_with(&path, &opts)?;
                 if opened.metadata()?.is_dir() {
                     Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
                         opened.into_std(),
@@ -1031,10 +1031,6 @@ impl Dir {
                 } else if oflags.contains(OpenFlags::DIRECTORY) {
                     Ok(OpenResult::NotDir)
                 } else {
-                    // FIXME cap-std needs a nonblocking open option so that files reads and writes
-                    // are nonblocking. Instead we set it after opening here:
-                    let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
-                    opened.set_fd_flags(set_fd_flags)?;
                     Ok(OpenResult::File(opened))
                 }
             })

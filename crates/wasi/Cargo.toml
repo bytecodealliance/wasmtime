@@ -34,7 +34,6 @@ io-lifetimes = { workspace = true }
 fs-set-times = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
-system-interface = { workspace = true}
 futures = { workspace = true }
 url = { workspace = true }
 rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
@@ -54,8 +53,16 @@ rustix = { workspace = true, features = ["event", "fs", "net"] }
 
 [target.'cfg(windows)'.dependencies]
 io-extras = { workspace = true }
-windows-sys = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+workspace = true
+features = [
+  "Wdk_Storage_FileSystem",
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+]
 
 [features]
 default = ["p1", "p2"]

@@ -1,5 +1,6 @@
 use crate::TrappableError;
 use crate::filesystem::File;
+use crate::filesystem::sys;
 use crate::p2::bindings::filesystem::types;
 use crate::p2::{InputStream, OutputStream, Pollable, StreamError, StreamResult};
 use crate::runtime::AbortOnDropJoinHandle;
@@ -84,11 +85,9 @@ impl FileInputStream {
     }
 
     fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
-        use system_interface::fs::FileIoExt;
-
         let mut buf = BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
         loop {
-            match file.read_at(&mut buf, offset) {
+            match sys::read_at_cursor_unspecified(file, &mut buf, offset) {
                 Ok(0) => return ReadState::Closed,
                 Ok(n) => {
                     buf.truncate(n);
@@ -243,13 +242,11 @@ impl FileOutputStream {
         mut buf: Bytes,
         mode: FileOutputMode,
     ) -> io::Result<usize> {
-        use system_interface::fs::FileIoExt;
-
         match mode {
             FileOutputMode::Position(mut p) => {
                 let mut total = 0;
                 loop {
-                    let nwritten = file.write_at(buf.as_ref(), p)?;
+                    let nwritten = sys::write_at_cursor_unspecified(file, buf.as_ref(), p)?;
                     // afterwards buf contains [nwritten, len):
                     let _ = buf.split_to(nwritten);
                     p += nwritten as u64;
@@ -263,7 +260,7 @@ impl FileOutputStream {
             FileOutputMode::Append => {
                 let mut total = 0;
                 loop {
-                    let nwritten = file.append(buf.as_ref())?;
+                    let nwritten = sys::append_cursor_unspecified(file, buf.as_ref())?;
                     let _ = buf.split_to(nwritten);
                     total += nwritten;
                     if buf.is_empty() {

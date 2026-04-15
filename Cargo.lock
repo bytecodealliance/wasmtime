@@ -5275,7 +5275,6 @@ dependencies = [
  "io-lifetimes",
  "rand 0.10.1",
  "rustix 1.1.4",
- "system-interface",
  "tempfile",
  "test-log",
  "test-programs-artifacts",

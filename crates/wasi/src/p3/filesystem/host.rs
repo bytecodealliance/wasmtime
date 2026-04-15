@@ -1,3 +1,4 @@
+use crate::filesystem::sys;
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
 use crate::p3::bindings::clocks::system_clock;
 use crate::p3::bindings::filesystem::types::{
@@ -13,7 +14,6 @@ use core::task::{Context, Poll, ready};
 use core::{iter, mem};
 use std::io::{self, Cursor};
 use std::sync::Arc;
-use system_interface::fs::FileIoExt as _;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
@@ -179,7 +179,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             if buf.is_empty() {
                 return Poll::Ready(Ok(StreamResult::Completed));
             }
-            return match file.read_at(buf, self.offset) {
+            return match sys::read_at_cursor_unspecified(file, buf, self.offset) {
                 Ok(0) => {
                     self.close(Ok(()));
                     Poll::Ready(Ok(StreamResult::Dropped))
@@ -203,7 +203,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             let file = Arc::clone(me.file.as_file());
             let offset = me.offset;
             spawn_blocking(move || {
-                file.read_at(&mut buf, offset).map(|n| {
+                sys::read_at_cursor_unspecified(file, &mut buf, offset).map(|n| {
                     buf.truncate(n);
                     buf
                 })
@@ -420,8 +420,8 @@ impl WriteStreamConsumer {
 impl WriteLocation {
     fn write(&self, file: &cap_std::fs::File, bytes: &[u8]) -> io::Result<usize> {
         match *self {
-            WriteLocation::End => file.append(bytes),
-            WriteLocation::Offset(at) => file.write_at(bytes, at),
+            WriteLocation::End => sys::append_cursor_unspecified(file, bytes),
+            WriteLocation::Offset(at) => sys::write_at_cursor_unspecified(file, bytes, at),
         }
     }
 }
