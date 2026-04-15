@@ -39,7 +39,7 @@ pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> 
                 Advice::DontNeed |
                 Advice::NoReuse => {}
             }
-        } else if #[cfg(target_os = "linux")] {
+        } else if #[cfg(any(target_os = "linux", target_os = "android"))] {
             use std::num::NonZeroU64;
             let advice = match advice {
                 Advice::Normal => rustix::fs::Advice::Normal,
@@ -52,6 +52,7 @@ pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> 
             rustix::fs::fadvise(file, offset, NonZeroU64::new(len), advice)?;
         } else {
             // noop on other platforms
+            let _ = (file, offset, len, advice);
         }
     }
     Ok(())
