@@ -1294,10 +1294,18 @@ pub unsafe extern "C" fn fd_read(
                         .set(file.position.get() + data.len() as filesystem::Filesize);
                 }
 
-                let len = data.len();
-                *nread = len;
+                let count = data.len();
+                *nread = count;
                 forget(data);
-                Ok(())
+
+                if let BlockingMode::NonBlocking = blocking_mode
+                    && count == 0
+                    && len > 0
+                {
+                    Err(ERRNO_AGAIN)
+                } else {
+                    Ok(())
+                }
             }
             Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
         }
@@ -2599,6 +2607,7 @@ impl BlockingMode {
 
             BlockingMode::NonBlocking => {
                 let permit = match output_stream.check_write() {
+                    Ok(0) if bytes.len() > 0 => return Err(ERRNO_AGAIN),
                     Ok(n) => n,
                     Err(streams::StreamError::Closed) => 0,
                     Err(streams::StreamError::LastOperationFailed(e)) => {
