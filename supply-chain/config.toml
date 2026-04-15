@@ -100,9 +100,6 @@ audit-as-crates-io = true
 [policy.uap-bench]
 criteria = []
 
-[policy.wasi-common]
-audit-as-crates-io = true
-
 [policy.wasmtime]
 audit-as-crates-io = true
 
