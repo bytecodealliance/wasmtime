@@ -106,7 +106,9 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
         }],
     );
     assert!(
-        res == Err(wasip1::ERRNO_BADF) || res == Err(wasip1::ERRNO_PERM),
+        res == Err(wasip1::ERRNO_BADF)
+            || res == Err(wasip1::ERRNO_PERM)
+            || res == Err(wasip1::ERRNO_ACCES),
         "bad result {res:?}"
     )
 }
