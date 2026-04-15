@@ -38,11 +38,6 @@ pub const FORWARDING_REF_OFFSET: u32 = HEADER_SIZE;
 /// forwarding reference that the copying collector writes during collection.
 pub const MIN_OBJECT_SIZE: u32 = FORWARDING_REF_OFFSET + mem::size_of::<u32>() as u32;
 
-/// Round `size` up to a multiple of `ALIGN`.
-fn align_up(size: u32) -> u32 {
-    (size + ALIGN - 1) & !(ALIGN - 1)
-}
-
 /// The layout of Wasm GC objects in the copying collector.
 #[derive(Default)]
 pub struct CopyingTypeLayouts;
@@ -75,7 +70,7 @@ impl GcTypeLayouts for CopyingTypeLayouts {
         if layout.size < MIN_OBJECT_SIZE {
             layout.size = MIN_OBJECT_SIZE;
         }
-        layout.size = align_up(layout.size);
+        layout.size = layout.size.next_multiple_of(ALIGN);
         debug_assert!(layout.align <= ALIGN);
         layout.align = ALIGN;
         debug_assert!(layout.size >= MIN_OBJECT_SIZE);
@@ -84,7 +79,7 @@ impl GcTypeLayouts for CopyingTypeLayouts {
 
     fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout {
         let mut layout = common_exn_layout(ty, HEADER_SIZE, ALIGN);
-        layout.size = align_up(layout.size);
+        layout.size = layout.size.next_multiple_of(ALIGN);
         debug_assert!(layout.align <= ALIGN);
         layout.align = ALIGN;
         debug_assert!(layout.size >= MIN_OBJECT_SIZE);
