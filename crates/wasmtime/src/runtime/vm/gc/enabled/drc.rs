@@ -46,15 +46,14 @@
 
 use super::VMArrayRef;
 use super::free_list::FreeList;
-use crate::hash_map::HashMap;
+use super::trace_info::{TraceInfo, TraceInfos};
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
     GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
 use crate::vm::VMMemoryDefinition;
-use crate::{Engine, EngineWeak, prelude::*};
-use core::hash::BuildHasher;
+use crate::{Engine, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
@@ -65,8 +64,7 @@ use core::{
 };
 use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, POISON, VMGcKind, VMSharedTypeIndex,
-    gc_assert,
+    GcArrayLayout, GcStructLayout, GcTypeLayouts, POISON, VMGcKind, VMSharedTypeIndex, gc_assert,
 };
 
 #[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
@@ -95,83 +93,10 @@ unsafe impl GcRuntime for DrcCollector {
     }
 }
 
-/// How to trace a GC object.
-enum TraceInfo {
-    /// How to trace an array.
-    Array {
-        /// Whether this array type's elements are GC references, and need
-        /// tracing.
-        gc_ref_elems: bool,
-    },
-
-    /// How to trace a struct.
-    Struct {
-        /// The offsets of each GC reference field that needs tracing in
-        /// instances of this struct type.
-        gc_ref_offsets: Box<[u32]>,
-    },
-}
-
-/// A hasher that doesn't hash, for use in the trace-info hash map, where we are
-/// just using scalar keys and aren't overly concerned with collision-based DoS.
-#[derive(Default)]
-struct NopHasher(u64);
-
-impl BuildHasher for NopHasher {
-    type Hasher = Self;
-
-    #[inline]
-    fn build_hasher(&self) -> Self::Hasher {
-        NopHasher::default()
-    }
-}
-
-impl core::hash::Hasher for NopHasher {
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        let mut hash = self.0.to_ne_bytes();
-        let n = hash.len().min(bytes.len());
-        hash[..n].copy_from_slice(bytes);
-        self.0 = u64::from_ne_bytes(hash);
-    }
-
-    #[inline]
-    fn write_u8(&mut self, i: u8) {
-        self.write_u64(i.into());
-    }
-
-    #[inline]
-    fn write_u16(&mut self, i: u16) {
-        self.write_u64(i.into())
-    }
-
-    #[inline]
-    fn write_u32(&mut self, i: u32) {
-        self.write_u64(i.into())
-    }
-
-    #[inline]
-    fn write_u64(&mut self, i: u64) {
-        self.0 = i;
-    }
-
-    #[inline]
-    fn write_usize(&mut self, i: usize) {
-        self.write_u64(i.try_into().unwrap());
-    }
-}
-
 /// A deferred reference-counting (DRC) heap.
 struct DrcHeap {
-    engine: EngineWeak,
-
     /// For every type that we have allocated in this heap, how do we trace it?
-    trace_infos: HashMap<VMSharedTypeIndex, TraceInfo, NopHasher>,
+    trace_infos: TraceInfos,
 
     /// Count of how many no-gc scopes we are currently within.
     no_gc_count: u64,
@@ -216,11 +141,8 @@ impl DrcHeap {
     /// Construct a new, default DRC heap.
     fn new(engine: &Engine) -> Result<Self> {
         log::trace!("allocating new DRC heap");
-        let mut trace_infos = HashMap::default();
-        trace_infos.reserve(1);
         Ok(Self {
-            engine: engine.weak(),
-            trace_infos,
+            trace_infos: TraceInfos::new(engine, GC_REF_ARRAY_ELEMS_OFFSET),
             no_gc_count: 0,
             over_approximated_stack_roots: Box::new(None),
             memory: None,
@@ -229,10 +151,6 @@ impl DrcHeap {
             dec_ref_stack: Some(Vec::with_capacity(1)),
             allocated_bytes: 0,
         })
-    }
-
-    fn engine(&self) -> Engine {
-        self.engine.upgrade().unwrap()
     }
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
@@ -306,7 +224,7 @@ impl DrcHeap {
 
             // Trace: enqueue child GC refs for dec-ref'ing.
             if let Some(ty) = ty {
-                match &self.trace_infos[&ty] {
+                match self.trace_infos.trace_info(&ty) {
                     TraceInfo::Struct { gc_ref_offsets } => {
                         stack.reserve(gc_ref_offsets.len());
 
@@ -395,42 +313,7 @@ impl DrcHeap {
 
     /// Ensure that we have tracing information for the given type.
     fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        if self.trace_infos.contains_key(&ty) {
-            return;
-        }
-
-        self.insert_new_trace_info(ty);
-    }
-
-    fn insert_new_trace_info(&mut self, ty: VMSharedTypeIndex) {
-        debug_assert!(!self.trace_infos.contains_key(&ty));
-
-        let engine = self.engine();
-        let gc_layout = engine
-            .signatures()
-            .layout(ty)
-            .unwrap_or_else(|| panic!("should have a GC layout for {ty:?}"));
-
-        let info = match gc_layout {
-            GcLayout::Array(l) => {
-                if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET,);
-                }
-                TraceInfo::Array {
-                    gc_ref_elems: l.elems_are_gc_refs,
-                }
-            }
-            GcLayout::Struct(l) => TraceInfo::Struct {
-                gc_ref_offsets: l
-                    .fields
-                    .iter()
-                    .filter_map(|f| if f.is_gc_ref { Some(f.offset) } else { None })
-                    .collect(),
-            },
-        };
-
-        let old_entry = self.trace_infos.insert(ty, info);
-        debug_assert!(old_entry.is_none());
+        self.trace_infos.ensure(ty);
     }
 
     /// Iterate over the over-approximated-stack-roots list.
@@ -858,7 +741,6 @@ unsafe impl GcHeap for DrcHeap {
         assert!(self.is_attached());
 
         let DrcHeap {
-            engine: _,
             no_gc_count,
             over_approximated_stack_roots,
             free_list,

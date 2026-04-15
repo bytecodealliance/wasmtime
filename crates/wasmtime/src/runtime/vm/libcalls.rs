@@ -642,10 +642,12 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
     .unwrap();
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store, _asyncness| {
+    block_on!(store, async |store, asyncness| {
         // We error below if there's still not enough space; swallow
         // any growth failures here.
-        let _ = store.grow_gc_heap(limiter.as_mut(), bytes_needed).await;
+        let _ = store
+            .grow_gc_heap(limiter.as_mut(), bytes_needed, asyncness)
+            .await;
     })?;
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
@@ -671,7 +673,7 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
 /// Allocate a raw, unininitialized GC object for Wasm code.
 ///
 /// The Wasm code is responsible for initializing the object.
-#[cfg(feature = "gc-drc")]
+#[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
 fn gc_alloc_raw(
     store: &mut dyn VMStore,
     _instance: InstanceId,
