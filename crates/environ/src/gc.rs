@@ -349,23 +349,24 @@ pub struct GcArrayLayout {
 impl GcArrayLayout {
     /// Get the total size of this array for a given length of elements.
     #[inline]
-    pub fn size_for_len(&self, len: u32) -> u32 {
+    pub fn size_for_len(&self, len: u32) -> Option<u32> {
         self.elem_offset(len)
     }
 
     /// Get the offset of the `i`th element in an array with this layout.
     #[inline]
-    pub fn elem_offset(&self, i: u32) -> u32 {
-        self.base_size + i * self.elem_size
+    pub fn elem_offset(&self, i: u32) -> Option<u32> {
+        let elem_offset = i.checked_mul(self.elem_size)?;
+        self.base_size.checked_add(elem_offset)
     }
 
     /// Get a `core::alloc::Layout` for an array of this type with the given
     /// length.
-    pub fn layout(&self, len: u32) -> Layout {
-        let size = self.size_for_len(len);
+    pub fn layout(&self, len: u32) -> Option<Layout> {
+        let size = self.size_for_len(len)?;
         let size = usize::try_from(size).unwrap();
         let align = usize::try_from(self.align).unwrap();
-        Layout::from_size_align(size, align).unwrap()
+        Layout::from_size_align(size, align).ok()
     }
 }
 
