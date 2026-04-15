@@ -1064,7 +1064,6 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::HostPtr;
 
     #[test]
     fn vm_copying_header_size_align() {
