@@ -2221,6 +2221,12 @@ criteria = "safe-to-deploy"
 delta = "2.7.0 -> 2.9.4"
 notes = "Tweaks to the macro, nothing out of order."
 
+[[audits.bitflags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.10.0 -> 2.11.1"
+notes = "Minor updates, nothing awry here."
+
 [[audits.bitmaps]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -7066,6 +7072,12 @@ user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-07-07"
 end = "2026-10-10"
 
+[[trusted.mio]]
+criteria = "safe-to-deploy"
+user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
+start = "2019-12-17"
+end = "2027-04-15"
+
 [[trusted.num_cpus]]
 criteria = "safe-to-deploy"
 user-id = 359 # Sean McArthur (seanmonstar)
@@ -7234,6 +7246,12 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-05-06"
 end = "2025-12-05"
 
+[[trusted.socket2]]
+criteria = "safe-to-deploy"
+user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
+start = "2020-09-09"
+end = "2027-04-15"
+
 [[trusted.syn]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -7287,6 +7305,12 @@ criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-12-25"
 end = "2026-10-10"
+
+[[trusted.tokio-macros]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2020-10-26"
+end = "2027-04-15"
 
 [[trusted.tokio-util]]
 criteria = "safe-to-deploy"

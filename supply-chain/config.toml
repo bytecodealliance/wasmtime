@@ -368,10 +368,6 @@ criteria = "safe-to-deploy"
 version = "0.2.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.mio]]
-version = "1.0.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.ndarray]]
 version = "0.15.6"
 criteria = "safe-to-deploy"
@@ -488,10 +484,6 @@ criteria = "safe-to-deploy"
 version = "1.1.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.socket2]]
-version = "0.4.9"
-criteria = "safe-to-deploy"
-
 [[exemptions.souper-ir]]
 version = "2.1.0"
 criteria = "safe-to-deploy"
@@ -506,10 +498,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.time]]
 version = "0.3.36"
-criteria = "safe-to-deploy"
-
-[[exemptions.tokio-macros]]
-version = "2.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-rustls]]
