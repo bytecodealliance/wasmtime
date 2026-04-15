@@ -238,7 +238,7 @@ impl DrcHeap {
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size;
-        let alloc_size = FreeList::aligned_size(size);
+        let alloc_size = FreeList::aligned_size(size).unwrap();
         let index = gc_ref.as_heap_index().unwrap();
 
         // Poison the freed memory so that any stale access is detectable.
@@ -373,7 +373,7 @@ impl DrcHeap {
             }
 
             // Deallocate using the object_size we already read.
-            let alloc_size = FreeList::aligned_size(object_size);
+            let alloc_size = FreeList::aligned_size(object_size).unwrap();
             let index = gc_ref.as_heap_index().unwrap();
 
             if cfg!(gc_zeal) {
@@ -1007,7 +1007,8 @@ unsafe impl GcHeap for DrcHeap {
         }
 
         let object_size = u32::try_from(layout.size()).unwrap();
-        let alloc_size = FreeList::aligned_size(object_size);
+        let alloc_size = FreeList::aligned_size(object_size)
+            .ok_or_else(|| format_err!("allocation size too large"))?;
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
