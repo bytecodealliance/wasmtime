@@ -263,10 +263,6 @@ criteria = "safe-to-deploy"
 version = "0.3.5"
 criteria = "safe-to-run"
 
-[[exemptions.criterion-plot]]
-version = "0.4.4"
-criteria = "safe-to-run"
-
 [[exemptions.crossbeam-deque]]
 version = "0.8.1"
 criteria = "safe-to-deploy"
@@ -413,15 +409,11 @@ version = "0.2.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.proptest]]
-version = "1.0.0"
+version = "1.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.quick-error]]
 version = "1.2.3"
-criteria = "safe-to-deploy"
-
-[[exemptions.quick-error]]
-version = "2.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
