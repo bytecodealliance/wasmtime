@@ -4,7 +4,6 @@ use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::write;
 use std::fs::File;
 use std::io;
-use std::num::NonZeroU64;
 use std::os::fd::AsFd;
 use std::os::unix::fs::FileExt;
 
@@ -19,6 +18,7 @@ pub(crate) fn get_flags(file: impl AsFd) -> io::Result<DescriptorFlags> {
         DescriptorFlags::FILE_INTEGRITY_SYNC,
         flags.contains(OFlags::SYNC),
     );
+    #[cfg(not(any(target_vendor = "apple", target_os = "freebsd")))]
     ret.set(
         DescriptorFlags::DATA_INTEGRITY_SYNC,
         flags.contains(OFlags::RSYNC),
@@ -27,15 +27,33 @@ pub(crate) fn get_flags(file: impl AsFd) -> io::Result<DescriptorFlags> {
 }
 
 pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-    let advice = match advice {
-        Advice::Normal => rustix::fs::Advice::Normal,
-        Advice::Sequential => rustix::fs::Advice::Sequential,
-        Advice::Random => rustix::fs::Advice::Random,
-        Advice::WillNeed => rustix::fs::Advice::WillNeed,
-        Advice::DontNeed => rustix::fs::Advice::DontNeed,
-        Advice::NoReuse => rustix::fs::Advice::NoReuse,
-    };
-    rustix::fs::fadvise(file, offset, NonZeroU64::new(len), advice)?;
+    cfg_if::cfg_if! {
+        if #[cfg(target_vendor = "apple")] {
+            match advice {
+                Advice::WillNeed => {
+                    rustix::fs::fcntl_rdadvise(file, offset, len)?;
+                }
+                Advice::Normal |
+                Advice::Sequential |
+                Advice::Random |
+                Advice::DontNeed |
+                Advice::NoReuse => {}
+            }
+        } else if #[cfg(target_os = "linux")] {
+            use std::num::NonZeroU64;
+            let advice = match advice {
+                Advice::Normal => rustix::fs::Advice::Normal,
+                Advice::Sequential => rustix::fs::Advice::Sequential,
+                Advice::Random => rustix::fs::Advice::Random,
+                Advice::WillNeed => rustix::fs::Advice::WillNeed,
+                Advice::DontNeed => rustix::fs::Advice::DontNeed,
+                Advice::NoReuse => rustix::fs::Advice::NoReuse,
+            };
+            rustix::fs::fadvise(file, offset, NonZeroU64::new(len), advice)?;
+        } else {
+            // noop on other platforms
+        }
+    }
     Ok(())
 }
 
