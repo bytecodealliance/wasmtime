@@ -857,7 +857,7 @@ unsafe impl GcHeap for CopyingHeap {
         self.idle_space_start < self.active_space_start
     }
 
-    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, _delta_bytes_grown: u64) {
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
         debug_assert!(self.memory.is_none());
         debug_assert!(!memory.is_shared_memory());
         self.vmmemory = Some(memory.vmmemory());
@@ -874,15 +874,11 @@ unsafe impl GcHeap for CopyingHeap {
         }
 
         // Poison the newly-grown region.
-        if cfg!(gc_zeal) {
-            // The idle space has grown, poison any new bytes.
-            let idle_end = usize::try_from(self.idle_space_end).unwrap();
+        if cfg!(gc_zeal) && delta_bytes_grown > 0 {
             let slice = self.heap_slice_mut();
-            if idle_end <= slice.len() {
-                // Poison from the old idle_space_end to the new length.
-                // But we need to know the old idle_space_end. For simplicity
-                // just let collection handle reclamation.
-            }
+            let len = slice.len();
+            let delta_bytes_grown = usize::try_from(delta_bytes_grown).unwrap();
+            slice[len - delta_bytes_grown..].fill(POISON);
         }
     }
 
