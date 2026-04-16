@@ -11,8 +11,8 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         let preopens = wasi::filesystem::preopens::get_directories();
         let (dir, _) = &preopens[0];
 
+        let filename = "test.txt";
         {
-            let filename = "test.txt";
             let file = dir
                 .open_at(
                     PathFlags::empty(),
