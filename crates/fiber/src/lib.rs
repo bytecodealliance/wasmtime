@@ -438,4 +438,18 @@ mod tests {
         assert!(FiberStack::new(usize::MAX, true).is_err());
         assert!(FiberStack::new(usize::MAX, false).is_err());
     }
+
+    #[test]
+    fn cross_thread_fiber() {
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, s| {
+            s.suspend(());
+        })
+        .unwrap();
+        assert!(fiber.resume(()).is_err());
+        std::thread::spawn(move || {
+            assert!(fiber.resume(()).is_ok());
+        })
+        .join()
+        .unwrap();
+    }
 }

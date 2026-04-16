@@ -7,30 +7,8 @@
 //
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
-//
-// Finally, control flow integrity hardening has been applied to the code using
-// the Pointer Authentication (PAuth) and Branch Target Identification (BTI)
-// technologies from the Arm instruction set architecture:
-// * All callable functions start with either the `BTI c` or `PACIASP`/`PACIBSP`
-//   instructions
-// * Return addresses are signed and authenticated using the stack pointer
-//   value as a modifier (similarly to the salt in a HMAC operation); the
-//   `DW_CFA_AARCH64_negate_ra_state` DWARF operation (aliased with the
-//   `.cfi_window_save` assembler directive) informs an unwinder about this
 
 use core::arch::naked_asm;
-
-cfg_if::cfg_if! {
-    if #[cfg(target_vendor = "apple")] {
-        macro_rules! paci1716 { () => ("pacib1716\n"); }
-        macro_rules! pacisp { () => ("pacibsp\n"); }
-        macro_rules! autisp { () => ("autibsp\n"); }
-    } else {
-        macro_rules! paci1716 { () => ("pacia1716\n"); }
-        macro_rules! pacisp { () => ("paciasp\n"); }
-        macro_rules! autisp { () => ("autiasp\n"); }
-    }
-}
 
 #[inline(never)] // FIXME(rust-lang/rust#148307)
 pub(crate) unsafe extern "C" fn wasmtime_fiber_switch(top_of_stack: *mut u8) {
@@ -42,10 +20,6 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
     naked_asm!(concat!(
         "
             .cfi_startproc
-        ",
-        pacisp!(),
-        "
-            .cfi_window_save
             // Save all callee-saved registers on the stack since we're
             // assuming they're clobbered as a result of the stack switch.
             stp x29, x30, [sp, -16]!
@@ -80,10 +54,6 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8 /* x0 */) {
             ldp x25, x26, [sp], 16
             ldp x27, x28, [sp], 16
             ldp x29, x30, [sp], 16
-        ",
-        autisp!(),
-        "
-            .cfi_window_save
             ret
             .cfi_endproc
         ",
@@ -133,42 +103,11 @@ pub(crate) unsafe fn wasmtime_fiber_init(
             x20: entry_point as *mut u8,
             x21: entry_arg0,
             x22: wasmtime_fiber_switch_ as *mut u8,
-
-            // We set up the newly initialized fiber, so that it resumes
-            // execution from wasmtime_fiber_start(). As a result, we need a
-            // signed address of this function because `wasmtime_fiber_switch`
-            // ends with a `auti{a,b}sp` instruction. There are 2 requirements:
-            // * We would like to use an instruction that is executed as a no-op
-            //   by processors that do not support PAuth, so that the code is
-            //   backward-compatible and there is no duplication; `PACIA1716` is
-            //   a suitable one.
-            // * The fiber stack pointer value that is used by the signing
-            //   operation must match the value when the pointer is
-            //   authenticated inside wasmtime_fiber_switch(), which is 16 bytes
-            //   below the `top_of_stack` which will be `sp` at the time of the
-            //   `auti{a,b}sp`.
-            //
-            // TODO: Use the PACGA instruction to authenticate the saved register
-            // state, which avoids creating signed pointers to
-            // wasmtime_fiber_start(), and provides wider coverage.
-            lr: paci1716(wasmtime_fiber_start as *mut u8, top_of_stack.sub(16)),
+            lr: wasmtime_fiber_start as *mut u8,
 
             last_sp: initial_stack.cast(),
             ..InitialStack::default()
         });
-    }
-}
-
-/// Signs `r17` with the value in `r16` using either `paci{a,b}1716` depending
-/// on the platform.
-fn paci1716(mut r17: *mut u8, r16: *mut u8) -> *mut u8 {
-    unsafe {
-        core::arch::asm!(
-            paci1716!(),
-            inout("x17") r17,
-            in("x16") r16,
-        );
-        r17
     }
 }
 
@@ -188,7 +127,6 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
             0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
         .cfi_rel_offset x30, -0x08
         .cfi_rel_offset x29, -0x10
-        .cfi_window_save
         .cfi_rel_offset x28, -0x18
         .cfi_rel_offset x27, -0x20
         .cfi_rel_offset x26, -0x28
