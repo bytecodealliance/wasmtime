@@ -52,7 +52,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         }
     };
     if ready > 0 {
-        for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds.into_iter()) {
+        for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds) {
             let revents = pollfd.revents();
             let (nbytes, rwsub) = match rwsub {
                 Subscription::Read(sub) => {
