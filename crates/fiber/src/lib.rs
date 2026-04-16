@@ -438,4 +438,25 @@ mod tests {
         assert!(FiberStack::new(usize::MAX, true).is_err());
         assert!(FiberStack::new(usize::MAX, false).is_err());
     }
+
+    #[test]
+    fn cross_thread_fiber() {
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, s| {
+            s.suspend(());
+        })
+        .unwrap();
+        assert!(fiber.resume(()).is_err());
+        let fiber = UnsafeSendSync(fiber);
+        std::thread::spawn(move || {
+            let fiber = fiber;
+            assert!(fiber.0.resume(()).is_ok());
+        })
+        .join()
+        .unwrap();
+
+        struct UnsafeSendSync<T>(T);
+
+        unsafe impl<T> Send for UnsafeSendSync<T> {}
+        unsafe impl<T> Sync for UnsafeSendSync<T> {}
+    }
 }
