@@ -446,10 +446,16 @@ mod tests {
         })
         .unwrap();
         assert!(fiber.resume(()).is_err());
+        let fiber = UnsafeSendSync(fiber);
         std::thread::spawn(move || {
-            assert!(fiber.resume(()).is_ok());
+            assert!(fiber.0.resume(()).is_ok());
         })
         .join()
         .unwrap();
+
+        struct UnsafeSendSync<T>(T);
+
+        unsafe impl<T> Send for UnsafeSendSync<T> {}
+        unsafe impl<T> Sync for UnsafeSendSync<T> {}
     }
 }
