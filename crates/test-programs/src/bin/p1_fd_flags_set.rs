@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::open_scratch_directory;
+use test_programs::preview1::{BlockingMode, open_scratch_directory};
 
-unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
+unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     const FILE_NAME: &str = "file";
     let data = &[0u8; 100];
 
@@ -14,20 +14,21 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
-        wasip1::FDFLAGS_APPEND,
+        blocking_mode.fd_flags() | wasip1::FDFLAGS_APPEND,
     )
     .expect("opening a file");
 
     // Write some data and then verify the written data
     assert_eq!(
-        wasip1::fd_write(
-            file_fd,
-            &[wasip1::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
-        .expect("writing to a file"),
+        blocking_mode
+            .write(
+                file_fd,
+                &[wasip1::Ciovec {
+                    buf: data.as_ptr(),
+                    buf_len: data.len(),
+                }],
+            )
+            .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
         data.len(),
@@ -38,14 +39,15 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
     let buffer = &mut [0u8; 100];
 
     assert_eq!(
-        wasip1::fd_read(
-            file_fd,
-            &[wasip1::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
-        .expect("reading file"),
+        blocking_mode
+            .read(
+                file_fd,
+                &[wasip1::Iovec {
+                    buf: buffer.as_mut_ptr(),
+                    buf_len: buffer.len(),
+                }]
+            )
+            .expect("reading file"),
         buffer.len(),
         "should read {} bytes",
         buffer.len()
@@ -59,14 +61,15 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasip1::fd_write(
-            file_fd,
-            &[wasip1::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
-        .expect("writing to a file"),
+        blocking_mode
+            .write(
+                file_fd,
+                &[wasip1::Ciovec {
+                    buf: data.as_ptr(),
+                    buf_len: data.len(),
+                }],
+            )
+            .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
         data.len(),
@@ -75,14 +78,15 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
     wasip1::fd_seek(file_fd, 100, wasip1::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasip1::fd_read(
-            file_fd,
-            &[wasip1::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
-        .expect("reading file"),
+        blocking_mode
+            .read(
+                file_fd,
+                &[wasip1::Iovec {
+                    buf: buffer.as_mut_ptr(),
+                    buf_len: buffer.len(),
+                }]
+            )
+            .expect("reading file"),
         buffer.len(),
         "should read {} bytes",
         buffer.len()
@@ -98,14 +102,15 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
     let data = &[2u8; 100];
 
     assert_eq!(
-        wasip1::fd_write(
-            file_fd,
-            &[wasip1::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
-        .expect("writing to a file"),
+        blocking_mode
+            .write(
+                file_fd,
+                &[wasip1::Ciovec {
+                    buf: data.as_ptr(),
+                    buf_len: data.len(),
+                }],
+            )
+            .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
         data.len(),
@@ -114,14 +119,15 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd) {
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasip1::fd_read(
-            file_fd,
-            &[wasip1::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
-        .expect("reading file"),
+        blocking_mode
+            .read(
+                file_fd,
+                &[wasip1::Iovec {
+                    buf: buffer.as_mut_ptr(),
+                    buf_len: buffer.len(),
+                }]
+            )
+            .expect("reading file"),
         buffer.len(),
         "should read {} bytes",
         buffer.len()
@@ -157,6 +163,7 @@ fn main() {
     };
 
     unsafe {
-        test_fd_fdstat_set_flags(dir_fd);
+        test_fd_fdstat_set_flags(dir_fd, BlockingMode::Blocking);
+        test_fd_fdstat_set_flags(dir_fd, BlockingMode::NonBlocking);
     }
 }

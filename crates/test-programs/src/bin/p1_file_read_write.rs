@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::open_scratch_directory;
+use test_programs::preview1::{BlockingMode, open_scratch_directory};
 
-unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
+unsafe fn test_file_read_write(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     // Create a file in the scratch directory.
     let file_fd = wasip1::path_open(
         dir_fd,
@@ -12,7 +12,7 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("opening a file");
     assert!(
@@ -25,7 +25,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    let mut nwritten = wasip1::fd_write(file_fd, &[ciovec]).expect("writing bytes at offset 0");
+    let mut nwritten = blocking_mode
+        .write(file_fd, &[ciovec])
+        .expect("writing bytes at offset 0");
     assert_eq!(nwritten, 4, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -34,7 +36,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         buf_len: contents.len(),
     };
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).expect("seeking to offset 0");
-    let mut nread = wasip1::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 0");
+    let mut nread = blocking_mode
+        .read(file_fd, &[iovec])
+        .expect("reading bytes at offset 0");
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 2, 3], "written bytes equal read bytes");
 
@@ -61,8 +65,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
             buf_len: remaining,
         });
 
-        nwritten =
-            wasip1::fd_write(file_fd, ciovecs.as_slice()).expect("writing bytes at offset 0");
+        nwritten = blocking_mode
+            .write(file_fd, ciovecs.as_slice())
+            .expect("writing bytes at offset 0");
 
         offset += nwritten;
         if offset == contents.len() {
@@ -91,7 +96,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
                 buf_len: 2,
             },
         ];
-        nread = wasip1::fd_read(file_fd, iovecs).expect("reading bytes at offset 0");
+        nread = blocking_mode
+            .read(file_fd, iovecs)
+            .expect("reading bytes at offset 0");
         if nread == 0 {
             break;
         }
@@ -107,7 +114,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         buf_len: contents.len(),
     };
     wasip1::fd_seek(file_fd, 2, wasip1::WHENCE_SET).expect("seeking to offset 2");
-    nread = wasip1::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 2");
+    nread = blocking_mode
+        .read(file_fd, &[iovec])
+        .expect("reading bytes at offset 2");
     assert_eq!(nread, 2, "nread bytes check");
     assert_eq!(contents, &[2u8, 3, 0, 0], "file cursor was overwritten");
 
@@ -117,7 +126,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         buf_len: contents.len(),
     };
     wasip1::fd_seek(file_fd, 2, wasip1::WHENCE_SET).expect("seeking to offset 2");
-    nwritten = wasip1::fd_write(file_fd, &[ciovec]).expect("writing bytes at offset 2");
+    nwritten = blocking_mode
+        .write(file_fd, &[ciovec])
+        .expect("writing bytes at offset 2");
     assert_eq!(nwritten, 2, "nwritten bytes check");
 
     let contents = &mut [0u8; 4];
@@ -126,7 +137,9 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
         buf_len: contents.len(),
     };
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).expect("seeking to offset 0");
-    nread = wasip1::fd_read(file_fd, &[iovec]).expect("reading bytes at offset 0");
+    nread = blocking_mode
+        .read(file_fd, &[iovec])
+        .expect("reading bytes at offset 0");
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 1, 0], "file cursor was overwritten");
 
@@ -134,7 +147,7 @@ unsafe fn test_file_read_write(dir_fd: wasip1::Fd) {
     wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
-unsafe fn test_file_write_and_file_pos(dir_fd: wasip1::Fd) {
+unsafe fn test_file_write_and_file_pos(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     let path = "file2";
     let file_fd = wasip1::path_open(
         dir_fd,
@@ -160,7 +173,9 @@ unsafe fn test_file_write_and_file_pos(dir_fd: wasip1::Fd) {
         buf_len: 0,
     };
     wasip1::fd_seek(file_fd, 2, wasip1::WHENCE_SET).expect("seeking to offset 2");
-    let n = wasip1::fd_write(file_fd, &[ciovec]).expect("writing bytes at offset 2");
+    let n = blocking_mode
+        .write(file_fd, &[ciovec])
+        .expect("writing bytes at offset 2");
     assert_eq!(n, 0);
 
     assert_eq!(wasip1::fd_tell(file_fd).unwrap(), 2);
@@ -174,7 +189,9 @@ unsafe fn test_file_write_and_file_pos(dir_fd: wasip1::Fd) {
         buf_len: buf.len(),
     };
     wasip1::fd_seek(file_fd, 50, wasip1::WHENCE_SET).expect("seeking to offset 50");
-    let n = wasip1::fd_write(file_fd, &[ciovec]).expect("writing bytes at offset 50");
+    let n = blocking_mode
+        .write(file_fd, &[ciovec])
+        .expect("writing bytes at offset 50");
     assert_eq!(n, 1);
 
     assert_eq!(wasip1::fd_tell(file_fd).unwrap(), 51);
@@ -206,7 +223,9 @@ fn main() {
 
     // Run the tests.
     unsafe {
-        test_file_read_write(dir_fd);
-        test_file_write_and_file_pos(dir_fd);
+        test_file_read_write(dir_fd, BlockingMode::Blocking);
+        test_file_read_write(dir_fd, BlockingMode::NonBlocking);
+        test_file_write_and_file_pos(dir_fd, BlockingMode::Blocking);
+        test_file_write_and_file_pos(dir_fd, BlockingMode::NonBlocking);
     }
 }

@@ -1,13 +1,21 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
+use test_programs::preview1::{BlockingMode, assert_errno, create_file, open_scratch_directory};
 
-unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
+unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     create_file(dir_fd, "file");
 
-    let f_readonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
-        .expect("open file readonly");
+    let f_readonly = wasip1::path_open(
+        dir_fd,
+        0,
+        "file",
+        0,
+        wasip1::RIGHTS_FD_READ,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("open file readonly");
 
     let stat = wasip1::fd_fdstat_get(f_readonly).expect("get fdstat readonly");
     assert!(
@@ -24,7 +32,9 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
         buf: buffer.as_mut_ptr(),
         buf_len: buffer.len(),
     };
-    let nread = wasip1::fd_read(f_readonly, &[iovec]).expect("reading readonly file");
+    let nread = blocking_mode
+        .read(f_readonly, &[iovec])
+        .expect("reading readonly file");
     assert_eq!(nread, 0, "readonly file is empty");
 
     let write_buffer = &[1u8; 50];
@@ -36,7 +46,8 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
     // fails on windows with BADF, so we can't use the `windows =>` syntax
     // because that doesn't support alternatives like the agnostic syntax does.
     assert_errno!(
-        wasip1::fd_write(f_readonly, &[ciovec])
+        blocking_mode
+            .write(f_readonly, &[ciovec])
             .err()
             .expect("read of writeonly fails"),
         wasip1::ERRNO_PERM,
@@ -46,8 +57,16 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
     wasip1::fd_close(f_readonly).expect("close readonly");
 
     // =============== WRITE ONLY ==================
-    let f_writeonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_WRITE, 0, 0)
-        .expect("open file writeonly");
+    let f_writeonly = wasip1::path_open(
+        dir_fd,
+        0,
+        "file",
+        0,
+        wasip1::RIGHTS_FD_WRITE,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("open file writeonly");
 
     let stat = wasip1::fd_fdstat_get(f_writeonly).expect("get fdstat writeonly");
     assert!(
@@ -65,13 +84,16 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
 
     // See above for description of PERM
     assert_errno!(
-        wasip1::fd_read(f_writeonly, &[iovec])
+        blocking_mode
+            .read(f_writeonly, &[iovec])
             .err()
             .expect("read of writeonly fails"),
         wasip1::ERRNO_PERM,
         wasip1::ERRNO_BADF
     );
-    let bytes_written = wasip1::fd_write(f_writeonly, &[ciovec]).expect("write to writeonly");
+    let bytes_written = blocking_mode
+        .write(f_writeonly, &[ciovec])
+        .expect("write to writeonly");
     assert_eq!(bytes_written, write_buffer.len());
 
     wasip1::fd_close(f_writeonly).expect("close writeonly");
@@ -85,7 +107,7 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
         0,
         wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("open file readwrite");
     let stat = wasip1::fd_fdstat_get(f_readwrite).expect("get fdstat readwrite");
@@ -98,7 +120,9 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
         "readwrite has write right"
     );
 
-    let nread = wasip1::fd_read(f_readwrite, &[iovec]).expect("reading readwrite file");
+    let nread = blocking_mode
+        .read(f_readwrite, &[iovec])
+        .expect("reading readwrite file");
     assert_eq!(
         nread,
         write_buffer.len(),
@@ -110,7 +134,9 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd) {
         buf: write_buffer_2.as_ptr(),
         buf_len: write_buffer_2.len(),
     };
-    let bytes_written = wasip1::fd_write(f_readwrite, &[ciovec]).expect("write to readwrite");
+    let bytes_written = blocking_mode
+        .write(f_readwrite, &[ciovec])
+        .expect("write to readwrite");
     assert_eq!(bytes_written, write_buffer_2.len());
 
     let filestat = wasip1::fd_filestat_get(f_readwrite).expect("get filestat readwrite");
@@ -145,5 +171,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_path_open_read_write(dir_fd) }
+    unsafe {
+        test_path_open_read_write(dir_fd, BlockingMode::Blocking);
+        test_path_open_read_write(dir_fd, BlockingMode::NonBlocking);
+    }
 }

@@ -1,4 +1,4 @@
-use std::{sync::OnceLock, time::Duration};
+use std::{mem::MaybeUninit, sync::OnceLock, time::Duration};
 
 pub fn config() -> &'static TestConfig {
     static TESTCONFIG: OnceLock<TestConfig> = OnceLock::new();
@@ -195,5 +195,87 @@ impl TestConfig {
     }
     pub fn support_rename_dir_onto_file(&self) -> bool {
         self.rename_dir_onto_file
+    }
+}
+
+pub enum BlockingMode {
+    Blocking,
+    NonBlocking,
+}
+
+impl BlockingMode {
+    pub fn fd_flags(&self) -> u16 {
+        match self {
+            BlockingMode::Blocking => 0,
+            BlockingMode::NonBlocking => wasip1::FDFLAGS_NONBLOCK,
+        }
+    }
+
+    pub unsafe fn read(
+        &self,
+        fd: wasip1::Fd,
+        iovs: wasip1::IovecArray<'_>,
+    ) -> Result<wasip1::Size, wasip1::Errno> {
+        loop {
+            match (self, unsafe { wasip1::fd_read(fd, iovs) }) {
+                (BlockingMode::NonBlocking, Err(wasip1::ERRNO_AGAIN)) => {
+                    assert!(
+                        unsafe {
+                            wasip1::poll_oneoff(
+                                [wasip1::Subscription {
+                                    userdata: 0,
+                                    u: wasip1::SubscriptionU {
+                                        tag: wasip1::EVENTTYPE_FD_READ.raw(),
+                                        u: wasip1::SubscriptionUU {
+                                            fd_read: wasip1::SubscriptionFdReadwrite {
+                                                file_descriptor: fd,
+                                            },
+                                        },
+                                    },
+                                }]
+                                .as_ptr(),
+                                MaybeUninit::<wasip1::Event>::uninit().as_mut_ptr(),
+                                1,
+                            )
+                        }? == 1
+                    );
+                }
+                (_, result) => break result,
+            }
+        }
+    }
+
+    pub unsafe fn write(
+        &self,
+        fd: wasip1::Fd,
+        iovs: wasip1::CiovecArray<'_>,
+    ) -> Result<wasip1::Size, wasip1::Errno> {
+        loop {
+            match (self, unsafe { wasip1::fd_write(fd, iovs) }) {
+                (BlockingMode::NonBlocking, Err(wasip1::ERRNO_AGAIN)) => {
+                    assert!(
+                        unsafe {
+                            wasip1::poll_oneoff(
+                                [wasip1::Subscription {
+                                    userdata: 0,
+                                    u: wasip1::SubscriptionU {
+                                        tag: wasip1::EVENTTYPE_FD_WRITE.raw(),
+                                        u: wasip1::SubscriptionUU {
+                                            fd_read: wasip1::SubscriptionFdReadwrite {
+                                                file_descriptor: fd,
+                                            },
+                                        },
+                                    },
+                                }]
+                                .as_ptr(),
+                                MaybeUninit::<wasip1::Event>::uninit().as_mut_ptr(),
+                                1,
+                            )
+                        }? == 1
+                    );
+                }
+                (_, result) => break result,
+            }
+        }
     }
 }

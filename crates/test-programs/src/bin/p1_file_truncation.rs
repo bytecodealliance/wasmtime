@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::open_scratch_directory;
+use test_programs::preview1::{BlockingMode, open_scratch_directory};
 
-unsafe fn test_file_truncation(dir_fd: wasip1::Fd) {
+unsafe fn test_file_truncation(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     const FILENAME: &str = "test.txt";
 
     // Open a file for writing
@@ -14,20 +14,21 @@ unsafe fn test_file_truncation(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("creating a file for writing");
 
     // Write to the file
     let content = b"this content will be truncated!";
-    let nwritten = wasip1::fd_write(
-        file_fd,
-        &[wasip1::Ciovec {
-            buf: content.as_ptr() as *const _,
-            buf_len: content.len(),
-        }],
-    )
-    .expect("writing file content");
+    let nwritten = blocking_mode
+        .write(
+            file_fd,
+            &[wasip1::Ciovec {
+                buf: content.as_ptr() as *const _,
+                buf_len: content.len(),
+            }],
+        )
+        .expect("writing file content");
     assert_eq!(nwritten, content.len(), "nwritten bytes check");
 
     wasip1::fd_close(file_fd).expect("closing the file");
@@ -40,20 +41,21 @@ unsafe fn test_file_truncation(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT | wasip1::OFLAGS_TRUNC,
         wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_READ,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("creating a truncated file for reading");
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasip1::fd_read(
-        file_fd,
-        &[wasip1::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
-    .expect("reading file content");
+    let nread = blocking_mode
+        .read(
+            file_fd,
+            &[wasip1::Iovec {
+                buf: buffer.as_mut_ptr(),
+                buf_len: buffer.len(),
+            }],
+        )
+        .expect("reading file content");
 
     // The file should be empty due to truncation
     assert_eq!(nread, 0, "expected an empty file after truncation");
@@ -81,5 +83,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_file_truncation(dir_fd) }
+    unsafe {
+        test_file_truncation(dir_fd, BlockingMode::Blocking);
+        test_file_truncation(dir_fd, BlockingMode::NonBlocking);
+    }
 }
