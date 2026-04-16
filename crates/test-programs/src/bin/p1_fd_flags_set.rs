@@ -94,7 +94,7 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasip1::Fd, blocking_mode: BlockingMo
 
     assert_eq!(&data[..], &buffer[..]);
 
-    wasip1::fd_fdstat_set_flags(file_fd, 0).expect("disabling flags");
+    wasip1::fd_fdstat_set_flags(file_fd, blocking_mode.fd_flags()).expect("disabling flags");
 
     // Overwrite some existing data to ensure the append mode is now off
     wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_SET).expect("seeking file");

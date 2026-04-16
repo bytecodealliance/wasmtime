@@ -211,6 +211,31 @@ impl BlockingMode {
         }
     }
 
+    fn poll(fd: wasip1::Fd, event: wasip1::Eventtype) -> Result<(), wasip1::Errno> {
+        assert!(
+            unsafe {
+                wasip1::poll_oneoff(
+                    [wasip1::Subscription {
+                        userdata: 0,
+                        u: wasip1::SubscriptionU {
+                            tag: event.raw(),
+                            u: wasip1::SubscriptionUU {
+                                fd_read: wasip1::SubscriptionFdReadwrite {
+                                    file_descriptor: fd,
+                                },
+                            },
+                        },
+                    }]
+                    .as_ptr(),
+                    MaybeUninit::<wasip1::Event>::uninit().as_mut_ptr(),
+                    1,
+                )
+            }? == 1
+        );
+
+        Ok(())
+    }
+
     pub unsafe fn read(
         &self,
         fd: wasip1::Fd,
@@ -219,26 +244,7 @@ impl BlockingMode {
         loop {
             match (self, unsafe { wasip1::fd_read(fd, iovs) }) {
                 (BlockingMode::NonBlocking, Err(wasip1::ERRNO_AGAIN)) => {
-                    assert!(
-                        unsafe {
-                            wasip1::poll_oneoff(
-                                [wasip1::Subscription {
-                                    userdata: 0,
-                                    u: wasip1::SubscriptionU {
-                                        tag: wasip1::EVENTTYPE_FD_READ.raw(),
-                                        u: wasip1::SubscriptionUU {
-                                            fd_read: wasip1::SubscriptionFdReadwrite {
-                                                file_descriptor: fd,
-                                            },
-                                        },
-                                    },
-                                }]
-                                .as_ptr(),
-                                MaybeUninit::<wasip1::Event>::uninit().as_mut_ptr(),
-                                1,
-                            )
-                        }? == 1
-                    );
+                    Self::poll(fd, wasip1::EVENTTYPE_FD_READ)?;
                 }
                 (_, result) => break result,
             }
@@ -253,26 +259,7 @@ impl BlockingMode {
         loop {
             match (self, unsafe { wasip1::fd_write(fd, iovs) }) {
                 (BlockingMode::NonBlocking, Err(wasip1::ERRNO_AGAIN)) => {
-                    assert!(
-                        unsafe {
-                            wasip1::poll_oneoff(
-                                [wasip1::Subscription {
-                                    userdata: 0,
-                                    u: wasip1::SubscriptionU {
-                                        tag: wasip1::EVENTTYPE_FD_WRITE.raw(),
-                                        u: wasip1::SubscriptionUU {
-                                            fd_read: wasip1::SubscriptionFdReadwrite {
-                                                file_descriptor: fd,
-                                            },
-                                        },
-                                    },
-                                }]
-                                .as_ptr(),
-                                MaybeUninit::<wasip1::Event>::uninit().as_mut_ptr(),
-                                1,
-                            )
-                        }? == 1
-                    );
+                    Self::poll(fd, wasip1::EVENTTYPE_FD_WRITE)?;
                 }
                 (_, result) => break result,
             }
