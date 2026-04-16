@@ -95,7 +95,13 @@ impl Dir {
         } else {
             // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
             if fdflags.contains(crate::file::FdFlags::NONBLOCK) {
-                let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
+                let set_fd_flags = f.new_set_fd_flags(
+                    if fdflags.contains(crate::file::FdFlags::APPEND) {
+                        system_interface::fs::FdFlags::APPEND
+                    } else {
+                        system_interface::fs::FdFlags::empty()
+                    } | system_interface::fs::FdFlags::NONBLOCK,
+                )?;
                 f.set_fd_flags(set_fd_flags)?;
             }
             Ok(OpenResult::File(File::from_cap_std(f)))

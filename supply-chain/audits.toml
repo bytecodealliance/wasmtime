@@ -45,7 +45,7 @@ who = "Saúl Cabrera <saulecabrera@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-02-20"
-end = "2026-02-20"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate"
 
 [[wildcard-audits.cranelift-assembler-x64-meta]]
@@ -61,7 +61,7 @@ who = "Saúl Cabrera <saulecabrera@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-02-20"
-end = "2026-02-20"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-bforest]]
@@ -85,7 +85,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-04-21"
-end = "2026-04-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-bitset]]
@@ -325,7 +325,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-04-21"
-end = "2026-04-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.cranelift-srcgen]]
@@ -811,7 +811,7 @@ who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2024-02-20"
-end = "2026-01-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-c-api-macros]]
@@ -819,7 +819,7 @@ who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2024-02-20"
-end = "2026-01-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-cache]]
@@ -1291,7 +1291,7 @@ who = "Saúl Cabrera <saulecabrera@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-01-20"
-end = "2026-01-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-runtime]]
@@ -1391,7 +1391,7 @@ who = "Saúl Cabrera <saulecabrera@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-02-20"
-end = "2026-02-20"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wasi-keyvalue]]
@@ -1455,7 +1455,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2025-04-21"
-end = "2026-04-21"
+end = "2027-04-14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wasi-tls]]
@@ -2220,6 +2220,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "2.7.0 -> 2.9.4"
 notes = "Tweaks to the macro, nothing out of order."
+
+[[audits.bitflags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.10.0 -> 2.11.1"
+notes = "Minor updates, nothing awry here."
 
 [[audits.bitmaps]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -4324,6 +4330,12 @@ criteria = "safe-to-deploy"
 delta = "0.10.0 -> 0.10.1"
 notes = "Minor logging-based updated fixing a recent advisory for the crate."
 
+[[audits.rand_xorshift]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.4.0"
+notes = "Minor updates for a new `rand` crate version, nothing awry."
+
 [[audits.raw-cpuid]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4972,6 +4984,15 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.4"
 notes = "Implements a concurrency primitive with atomics, and is not obviously incorrect"
+
+[[audits.unarray]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.4"
+notes = """
+Crate is sound, albeit leaky, and not actively malicious. Probably not the best
+crate to use in practice but it's suitable for testing dependencies.
+"""
 
 [[audits.unicase]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -6962,7 +6983,7 @@ end = "2027-02-11"
 criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
 start = "2020-01-15"
-end = "2026-01-08"
+end = "2027-04-14"
 
 [[trusted.io-extras]]
 criteria = "safe-to-deploy"
@@ -7065,6 +7086,12 @@ criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-07-07"
 end = "2026-10-10"
+
+[[trusted.mio]]
+criteria = "safe-to-deploy"
+user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
+start = "2019-12-17"
+end = "2027-04-15"
 
 [[trusted.num_cpus]]
 criteria = "safe-to-deploy"
@@ -7234,6 +7261,12 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-05-06"
 end = "2025-12-05"
 
+[[trusted.socket2]]
+criteria = "safe-to-deploy"
+user-id = 6025 # Thomas de Zeeuw (Thomasdezeeuw)
+start = "2020-09-09"
+end = "2027-04-15"
+
 [[trusted.syn]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -7287,6 +7320,12 @@ criteria = "safe-to-deploy"
 user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2020-12-25"
 end = "2026-10-10"
+
+[[trusted.tokio-macros]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2020-10-26"
+end = "2027-04-15"
 
 [[trusted.tokio-util]]
 criteria = "safe-to-deploy"

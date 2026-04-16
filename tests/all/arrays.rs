@@ -1,3 +1,5 @@
+use crate::ErrorExt;
+
 use super::gc_store;
 use wasmtime::*;
 
@@ -874,5 +876,24 @@ fn instantiate_with_array_global() -> Result<()> {
     assert_eq!(a1.get(&mut store, 0)?.unwrap_i32(), 42);
     assert!(Rooted::ref_eq(&store, &a0, &a1)?);
 
+    Ok(())
+}
+
+#[test]
+fn issue_13034_array_layout_overflow() -> Result<()> {
+    for (storage, len, val) in [
+        (StorageType::I8, u32::MAX, Val::I32(0)),
+        (StorageType::I8, u32::MAX - 1, Val::I32(0)),
+        (StorageType::I16, u32::MAX / 2, Val::I32(0)),
+        (ValType::I32.into(), u32::MAX / 4, Val::I32(0)),
+        (ValType::I64.into(), u32::MAX / 8, Val::I32(0)),
+    ] {
+        log::trace!("Testing [{storage}; {len}]");
+        let mut store = gc_store()?;
+        let array_ty = ArrayType::new(store.engine(), FieldType::new(Mutability::Const, storage));
+        let pre = ArrayRefPre::new(&mut store, array_ty);
+        let err = ArrayRef::new(&mut store, &pre, &val, len).unwrap_err();
+        err.assert_contains("allocation size too large");
+    }
     Ok(())
 }

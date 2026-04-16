@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::open_scratch_directory;
+use test_programs::preview1::{BlockingMode, open_scratch_directory};
 
-unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
+unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str, blocking_mode: BlockingMode) {
     // Open a file for writing
     let file_fd = wasip1::path_open(
         dir_fd,
@@ -12,7 +12,7 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("creating a file for writing");
 
@@ -25,14 +25,15 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
     }
 
     // Write to the file
-    let nwritten = wasip1::fd_write(
-        file_fd,
-        &[wasip1::Ciovec {
-            buf: content.as_slice().as_ptr() as *const _,
-            buf_len: content.len(),
-        }],
-    )
-    .expect("writing file content");
+    let nwritten = blocking_mode
+        .write(
+            file_fd,
+            &[wasip1::Ciovec {
+                buf: content.as_slice().as_ptr() as *const _,
+                buf_len: content.len(),
+            }],
+        )
+        .expect("writing file content");
     assert_eq!(nwritten, content.len(), "nwritten bytes check");
 
     let stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
@@ -44,19 +45,28 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
 
     wasip1::fd_close(file_fd).expect("closing the file");
     // Open the file for reading
-    let file_fd = wasip1::path_open(dir_fd, 0, filename, 0, wasip1::RIGHTS_FD_READ, 0, 0)
-        .expect("open the file for reading");
+    let file_fd = wasip1::path_open(
+        dir_fd,
+        0,
+        filename,
+        0,
+        wasip1::RIGHTS_FD_READ,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("open the file for reading");
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasip1::fd_read(
-        file_fd,
-        &[wasip1::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
-    .expect("reading first chunk file content");
+    let nread = blocking_mode
+        .read(
+            file_fd,
+            &[wasip1::Iovec {
+                buf: buffer.as_mut_ptr(),
+                buf_len: buffer.len(),
+            }],
+        )
+        .expect("reading first chunk file content");
 
     assert_eq!(nread, buffer.len(), "read first chunk");
     assert_eq!(
@@ -69,14 +79,15 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
     wasip1::fd_seek(file_fd, end_cursor as i64, wasip1::WHENCE_SET)
         .expect("seeking to end of file minus buffer size");
 
-    let nread = wasip1::fd_read(
-        file_fd,
-        &[wasip1::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
-    .expect("reading end chunk of file content");
+    let nread = blocking_mode
+        .read(
+            file_fd,
+            &[wasip1::Iovec {
+                buf: buffer.as_mut_ptr(),
+                buf_len: buffer.len(),
+            }],
+        )
+        .expect("reading end chunk of file content");
 
     assert_eq!(nread, buffer.len(), "read end chunk len");
     assert_eq!(buffer, &content[end_cursor..], "contents of end read chunk");
@@ -92,13 +103,21 @@ unsafe fn test_file_long_write(dir_fd: wasip1::Fd, filename: &str) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("creating a file for writing");
     wasip1::fd_close(file_fd).expect("closing the file");
-    let file_fd = wasip1::path_open(dir_fd, 0, filename, 0, wasip1::RIGHTS_FD_READ, 0, 0)
-        .expect("opening a file for writing");
-    let res = wasip1::fd_write(
+    let file_fd = wasip1::path_open(
+        dir_fd,
+        0,
+        filename,
+        0,
+        wasip1::RIGHTS_FD_READ,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("opening a file for writing");
+    let res = blocking_mode.write(
         file_fd,
         &[wasip1::Ciovec {
             buf: 3 as *const u8,
@@ -131,5 +150,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_file_long_write(dir_fd, "long_write.txt") }
+    unsafe {
+        test_file_long_write(dir_fd, "long_write.txt", BlockingMode::Blocking);
+        test_file_long_write(dir_fd, "long_write.txt", BlockingMode::NonBlocking);
+    }
 }

@@ -1567,7 +1567,7 @@ impl From<TagType> for ExternType {
 ///
 /// This is either a packed 8- or -16 bit integer, or else it is some unpacked
 /// Wasm value type.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum StorageType {
     /// `i8`, an 8-bit integer.
     I8,

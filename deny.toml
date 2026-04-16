@@ -35,29 +35,15 @@ multiple-versions = "deny"
 wildcards = "allow"
 deny = []
 skip = [
-    { name = "cpufeatures", reason = "requires an update to `sha2` which pulls in a lot of other dependencies which doesn't seem worth it" }
+    { name = "cpufeatures", reason = "requires an update to `sha2` which pulls in a lot of other dependencies which doesn't seem worth it" },
+    { name = "hashbrown", reason = "waiting on lots of crates to update" },
+    { name = "gimli", reason = "waiting on a few crates to update" },
+    { name = "linux-raw-sys", reason = "waiting on `system-interface` to update" },
+    { name = "rustix", reason = "waiting on `system-interface` to update" },
 ]
 skip-tree = [
-    # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
-    # ignore its dependency tree until it updates.
-    { name = "proptest", depth = 20 },
-
-    # This is maintained externally and we allow it to have duplicate
-    # dependencies relative to Wasmtime's main dependency tree.
-    { name = "witx", depth = 20 },
-
-    # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
-    # it is duplicated for us.
-    { name = "indexmap", depth = 2 },
-
-    # criterion is on old version, will update on next release.
-    { name = "itertools" },
-
-    # backtrace currently using an older version of gimli/addr2line
-    { name = "backtrace" },
-
-    # right now terminal_size pulls in an older version of io-lifetimes
-    { name = "io-lifetimes" },
-
-    { name = "file-per-thread-logger", reason = "this uses an old version of env-logger; may be unmaintained?" }
+    { name = "rand", reason = "waiting on `proptest` to update" },
+    { name = "witx", depth = 20, reason = "dep will never update again" },
+    { name = "file-per-thread-logger", reason = "unmaintained dep not updating" },
+    { name = "region", reason = "unmaintained dep not updating" },
 ]

@@ -238,7 +238,7 @@ impl DrcHeap {
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
         let size = self.index(drc_ref).object_size;
-        let alloc_size = FreeList::aligned_size(size);
+        let alloc_size = FreeList::aligned_size(size).unwrap();
         let index = gc_ref.as_heap_index().unwrap();
 
         // Poison the freed memory so that any stale access is detectable.
@@ -373,7 +373,7 @@ impl DrcHeap {
             }
 
             // Deallocate using the object_size we already read.
-            let alloc_size = FreeList::aligned_size(object_size);
+            let alloc_size = FreeList::aligned_size(object_size).unwrap();
             let index = gc_ref.as_heap_index().unwrap();
 
             if cfg!(gc_zeal) {
@@ -414,7 +414,7 @@ impl DrcHeap {
         let info = match gc_layout {
             GcLayout::Array(l) => {
                 if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET,);
+                    debug_assert_eq!(l.elem_offset(0), Some(GC_REF_ARRAY_ELEMS_OFFSET));
                 }
                 TraceInfo::Array {
                     gc_ref_elems: l.elems_are_gc_refs,
@@ -1007,7 +1007,8 @@ unsafe impl GcHeap for DrcHeap {
         }
 
         let object_size = u32::try_from(layout.size()).unwrap();
-        let alloc_size = FreeList::aligned_size(object_size);
+        let alloc_size = FreeList::aligned_size(object_size)
+            .ok_or_else(|| format_err!("allocation size too large"))?;
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
@@ -1069,9 +1070,12 @@ unsafe impl GcHeap for DrcHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
+        let layout = layout
+            .layout(length)
+            .ok_or_else(|| format_err!("allocation size too large"))?;
         let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout.layout(length),
+            layout,
         )? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,

@@ -1,9 +1,11 @@
 use std::ptr;
+use test_programs::preview1::BlockingMode;
 
 fn main() {
     big_poll();
     big_string();
-    big_iovecs();
+    big_iovecs(BlockingMode::Blocking);
+    big_iovecs(BlockingMode::NonBlocking);
 }
 
 fn big_string() {
@@ -18,7 +20,7 @@ fn big_string() {
     );
 }
 
-fn big_iovecs() {
+fn big_iovecs(blocking_mode: BlockingMode) {
     let mut iovs = Vec::new();
     let mut ciovs = Vec::new();
     for _ in 0..10_000 {
@@ -40,14 +42,14 @@ fn big_iovecs() {
             wasip1::OFLAGS_CREAT,
             wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_READ,
             0,
-            0,
+            blocking_mode.fd_flags(),
         )
         .unwrap()
     };
 
     unsafe {
-        assert_eq!(wasip1::fd_write(fd, &ciovs), Err(wasip1::ERRNO_NOMEM));
-        assert_eq!(wasip1::fd_read(fd, &iovs), Err(wasip1::ERRNO_NOMEM));
+        assert_eq!(blocking_mode.write(fd, &ciovs), Err(wasip1::ERRNO_NOMEM));
+        assert_eq!(blocking_mode.read(fd, &iovs), Err(wasip1::ERRNO_NOMEM));
         assert_eq!(wasip1::fd_pwrite(fd, &ciovs, 0), Err(wasip1::ERRNO_NOMEM));
         assert_eq!(wasip1::fd_pread(fd, &iovs, 0), Err(wasip1::ERRNO_NOMEM));
     }
@@ -63,8 +65,8 @@ fn big_iovecs() {
         buf_len: 10_000,
     });
     unsafe {
-        assert_eq!(wasip1::fd_write(fd, &ciovs), Err(wasip1::ERRNO_NOMEM));
-        assert_eq!(wasip1::fd_read(fd, &iovs), Err(wasip1::ERRNO_NOMEM));
+        assert_eq!(blocking_mode.write(fd, &ciovs), Err(wasip1::ERRNO_NOMEM));
+        assert_eq!(blocking_mode.read(fd, &iovs), Err(wasip1::ERRNO_NOMEM));
         assert_eq!(wasip1::fd_pwrite(fd, &ciovs, 0), Err(wasip1::ERRNO_NOMEM));
         assert_eq!(wasip1::fd_pread(fd, &iovs, 0), Err(wasip1::ERRNO_NOMEM));
     }

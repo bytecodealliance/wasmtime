@@ -1,4 +1,4 @@
-# Debugging with `gdb` and `lldb`
+# Native (Wasm + runtime) Debugging with `gdb` and `lldb`
 
 The following steps describe how to use `gdb` or `lldb` to debug both the Wasm
 guest and the host (i.e. the Wasmtime CLI or your Wasmtime-embedding program) at
