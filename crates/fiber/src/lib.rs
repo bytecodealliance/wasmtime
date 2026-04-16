@@ -448,6 +448,7 @@ mod tests {
         assert!(fiber.resume(()).is_err());
         let fiber = UnsafeSendSync(fiber);
         std::thread::spawn(move || {
+            let fiber = fiber;
             assert!(fiber.0.resume(()).is_ok());
         })
         .join()
