@@ -64,6 +64,7 @@
 use crate::cli::WasiCliView as _;
 use crate::clocks::WasiClocksView as _;
 use crate::filesystem::WasiFilesystemView as _;
+use crate::filesystem::sys;
 use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
@@ -79,7 +80,6 @@ use std::mem::{self, size_of, size_of_val};
 use std::slice;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
 use wasmtime::{bail, error::Context as _};
 use wasmtime_wasi_io::{
@@ -657,9 +657,9 @@ impl WasiP1Ctx {
                     // Note that this is implementing Linux semantics of
                     // `pwrite` where the offset is ignored if the file was
                     // opened in append mode.
-                    (true, _) => f.append(&buf),
-                    (false, FdWrite::At(pos)) => f.write_at(&buf, pos),
-                    (false, FdWrite::AtCur) => f.write_at(&buf, pos),
+                    (true, _) => sys::append_cursor_unspecified(f, &buf),
+                    (false, FdWrite::At(pos)) => sys::write_at_cursor_unspecified(f, &buf, pos),
+                    (false, FdWrite::AtCur) => sys::write_at_cursor_unspecified(f, &buf, pos),
                 };
 
                 let nwritten = match f.as_blocking_file() {
@@ -1690,9 +1690,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                     // Try to read directly into wasm memory where possible
                     // when the current thread can block and additionally wasm
                     // memory isn't shared.
-                    (Some(file), Some(mut buf)) => file
-                        .read_at(&mut buf, pos)
-                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?,
+                    (Some(file), Some(mut buf)) => {
+                        sys::read_at_cursor_unspecified(file, &mut buf, pos)
+                            .map_err(|e| StreamError::LastOperationFailed(e.into()))?
+                    }
                     // ... otherwise fall back to performing the read on a
                     // blocking thread and which copies the data back into wasm
                     // memory.
@@ -1701,9 +1702,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                         let mut buf = vec![0; iov.len() as usize];
                         let buf = file
                             .run_blocking(move |file| -> Result<_, types::Error> {
-                                let bytes_read = file
-                                    .read_at(&mut buf, pos)
-                                    .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
+                                let bytes_read =
+                                    sys::read_at_cursor_unspecified(file, &mut buf, pos)
+                                        .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
                                 buf.truncate(bytes_read);
                                 Ok(buf)
                             })
