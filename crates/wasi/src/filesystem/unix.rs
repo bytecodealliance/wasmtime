@@ -60,7 +60,7 @@ pub(crate) fn advise(file: impl AsFd, offset: u64, len: u64, advice: Advice) -> 
 
 pub(crate) fn append_cursor_unspecified(file: impl AsFd, data: &[u8]) -> io::Result<usize> {
     // On Linux, use `pwritev2`.
-    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[cfg(target_os = "linux")]
     {
         use rustix::io::{Errno, ReadWriteFlags, pwritev2};
         use std::io::IoSlice;
