@@ -2,6 +2,7 @@
 
 use crate::V128;
 use core::mem;
+use wasmtime_environ::endian::Le;
 
 /// A plain-old-data type that can be stored in a `ValType` or a `StorageType`.
 pub trait PodValType<const SIZE: usize>: Copy {
@@ -15,9 +16,9 @@ pub trait PodValType<const SIZE: usize>: Copy {
 macro_rules! impl_pod_val_type {
     ( $( $t:ty , )* ) => {
         $(
-            impl PodValType<{mem::size_of::<$t>()}> for $t {
+            impl PodValType<{mem::size_of::<$t>()}> for Le<$t> {
                 fn read_le(le_bytes: &[u8; mem::size_of::<$t>()]) -> Self {
-                    <$t>::from_le_bytes(*le_bytes)
+                    <Le<$t>>::from_le_bytes(*le_bytes)
                 }
                 fn write_le(&self, into: &mut [u8; mem::size_of::<$t>()]) {
                     *into = self.to_le_bytes();
@@ -28,14 +29,30 @@ macro_rules! impl_pod_val_type {
 }
 
 impl_pod_val_type! {
-    u8,
     u16,
     u32,
     u64,
-    i8,
     i16,
     i32,
     i64,
+}
+
+impl PodValType<{ mem::size_of::<u8>() }> for u8 {
+    fn read_le(le_bytes: &[u8; mem::size_of::<u8>()]) -> Self {
+        u8::from_le_bytes(*le_bytes)
+    }
+    fn write_le(&self, into: &mut [u8; mem::size_of::<u8>()]) {
+        *into = self.to_ne_bytes();
+    }
+}
+
+impl PodValType<{ mem::size_of::<i8>() }> for i8 {
+    fn read_le(le_bytes: &[u8; mem::size_of::<i8>()]) -> Self {
+        i8::from_le_bytes(*le_bytes)
+    }
+    fn write_le(&self, into: &mut [u8; mem::size_of::<i8>()]) {
+        *into = self.to_ne_bytes();
+    }
 }
 
 impl PodValType<{ mem::size_of::<V128>() }> for V128 {
@@ -206,13 +223,13 @@ impl VMGcObjectData {
 
     impl_pod_methods! {
         u8, read_u8, write_u8;
-        u16, read_u16, write_u16;
-        u32, read_u32, write_u32;
-        u64, read_u64, write_u64;
+        Le<u16>, read_u16, write_u16;
+        Le<u32>, read_u32, write_u32;
+        Le<u64>, read_u64, write_u64;
         i8, read_i8, write_i8;
-        i16, read_i16, write_i16;
-        i32, read_i32, write_i32;
-        i64, read_i64, write_i64;
+        Le<i16>, read_i16, write_i16;
+        Le<i32>, read_i32, write_i32;
+        Le<i64>, read_i64, write_i64;
         V128, read_v128, write_v128;
     }
 }

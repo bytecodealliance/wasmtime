@@ -116,7 +116,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
+use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt, endian::Le};
 
 mod context;
 pub use self::context::*;
@@ -2199,12 +2199,13 @@ impl StoreOpaque {
             .expect("should have module info for Wasm frame");
 
         if let Some(stack_map) = module_with_code.lookup_stack_map(pc) {
+            let sp = unsafe { stack_map.sp(fp) };
             log::trace!(
-                "We have a stack map that maps {} bytes in this Wasm frame",
-                stack_map.frame_size()
+                "We have a stack map covering {size} ({size:#x}) bytes in this Wasm frame: \
+                 {sp:#p}..{fp:#p}",
+                size = stack_map.frame_size(),
             );
 
-            let sp = unsafe { stack_map.sp(fp) };
             for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
@@ -2227,18 +2228,26 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
-        use crate::runtime::vm::SendSyncPtr;
         use core::ptr::NonNull;
 
+        // GC refs are always little-endian in stack maps.
         let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+        let raw = Le::from_le(raw);
+        log::trace!("Stack slot @ {stack_slot:#p} = {raw:#010x}");
 
-        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
-        if gc_ref.is_some() {
-            unsafe {
-                gc_roots_list
-                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
-            }
+        let Some(gc_ref) = vm::VMGcRef::from_raw_u32(raw) else {
+            log::trace!("    stack slot contains null GC ref: ignoring");
+            return;
+        };
+
+        if gc_ref.is_i31() {
+            log::trace!("    stack slot contains i31ref: ignoring");
+            return;
+        }
+
+        let stack_slot = NonNull::new(stack_slot).unwrap();
+        unsafe {
+            gc_roots_list.add_wasm_stack_root(stack_slot.into());
         }
     }
 
@@ -2773,7 +2782,7 @@ at https://bytecodealliance.org/security.
     #[cfg(feature = "gc")]
     fn throw_impl(&mut self, exception: Rooted<ExnRef>) {
         let mut nogc = AutoAssertNoGc::new(self);
-        let exnref = exception._to_raw(&mut nogc).unwrap();
+        let exnref = exception.to_raw_le(&mut nogc).unwrap();
         let exnref = VMGcRef::from_raw_u32(exnref)
             .expect("exception cannot be null")
             .into_exnref_unchecked();

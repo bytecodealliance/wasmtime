@@ -491,11 +491,11 @@ unsafe impl WasmTy for Rooted<EqRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), EqRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), EqRef::from_cloned_gc_ref)
     }
 }
 
@@ -535,11 +535,11 @@ unsafe impl WasmTy for Option<Rooted<EqRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <Rooted<EqRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <Rooted<EqRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <Rooted<EqRef>>::wasm_ty_option_load(store, ptr.get_anyref(), EqRef::from_cloned_gc_ref)
+        <Rooted<EqRef>>::wasm_ty_option_load(store, ptr.get_anyref_le(), EqRef::from_cloned_gc_ref)
     }
 }
 
@@ -565,11 +565,11 @@ unsafe impl WasmTy for OwnedRooted<EqRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), EqRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), EqRef::from_cloned_gc_ref)
     }
 }
 
@@ -610,13 +610,13 @@ unsafe impl WasmTy for Option<OwnedRooted<EqRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <OwnedRooted<EqRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<EqRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <OwnedRooted<EqRef>>::wasm_ty_option_load(
             store,
-            ptr.get_anyref(),
+            ptr.get_anyref_le(),
             EqRef::from_cloned_gc_ref,
         )
     }

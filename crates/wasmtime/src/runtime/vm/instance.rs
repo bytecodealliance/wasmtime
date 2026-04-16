@@ -1954,10 +1954,10 @@ impl PassiveElementSegment {
 
     fn clone_gc_ref(&mut self, store: &mut StoreOpaque, val: ValRaw) -> ValRaw {
         if let NeedsGcRooting::Yes = self.needs_gc_rooting {
-            let gc_ref = val.get_anyref();
+            let gc_ref = val.get_anyref_le();
             if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
                 if let Some(gc_store) = store.optional_gc_store_mut() {
-                    return ValRaw::anyref(gc_store.clone_gc_ref(&gc_ref).as_raw_u32());
+                    return ValRaw::anyref_le(gc_store.clone_gc_ref(&gc_ref).as_raw_u32());
                 }
             }
         }
@@ -1973,7 +1973,7 @@ impl PassiveElementSegment {
 
     fn drop_gc_ref(&mut self, gc_store: &mut Option<&mut GcStore>, val: ValRaw) {
         if let NeedsGcRooting::Yes = self.needs_gc_rooting {
-            let gc_ref = val.get_anyref();
+            let gc_ref = val.get_anyref_le();
             if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
                 if let Some(gc_store) = gc_store.as_deref_mut() {
                     let _ = gc_store.drop_gc_ref(gc_ref);

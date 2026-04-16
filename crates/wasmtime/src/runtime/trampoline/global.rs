@@ -52,7 +52,7 @@ pub fn generate_global_export(
                     Some(x) => Some(x.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
-                global.write_gc_ref(&mut store, new);
+                global.init_gc_ref(&mut store, new);
             }
             Val::AnyRef(a) => {
                 let new = match a {
@@ -60,7 +60,7 @@ pub fn generate_global_export(
                     Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
-                global.write_gc_ref(&mut store, new);
+                global.init_gc_ref(&mut store, new);
             }
             Val::ExnRef(e) => {
                 let new = match e {
@@ -68,11 +68,11 @@ pub fn generate_global_export(
                     Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                 };
                 let new = new.as_ref();
-                global.write_gc_ref(&mut store, new);
+                global.init_gc_ref(&mut store, new);
             }
             Val::ContRef(None) => {
                 // Allow null continuation references for trampoline globals - these are just placeholders
-                global.write_gc_ref(&mut store, None);
+                global.init_gc_ref(&mut store, None);
             }
             Val::ContRef(Some(_)) => {
                 // TODO(#10248): Implement non-null trampoline continuation reference handling

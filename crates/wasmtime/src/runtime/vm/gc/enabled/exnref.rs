@@ -6,7 +6,7 @@ use crate::{
     store::{AutoAssertNoGc, InstanceId},
 };
 use core::fmt;
-use wasmtime_environ::{DefinedTagIndex, GcStructLayout, VMGcKind};
+use wasmtime_environ::{DefinedTagIndex, GcStructLayout, VMGcKind, endian::Le};
 
 /// A `VMGcRef` that we know points to an `exn`.
 ///
@@ -194,10 +194,10 @@ impl VMExnRef {
         let store = store.require_gc_store_mut()?;
         store
             .gc_object_data(&self.0)
-            .write_u32(instance_offset, instance.as_u32());
+            .write_u32(instance_offset, Le::from_ne(instance.as_u32()));
         store
             .gc_object_data(&self.0)
-            .write_u32(tag_offset, tag.as_u32());
+            .write_u32(tag_offset, Le::from_ne(tag.as_u32()));
         Ok(())
     }
 
@@ -210,10 +210,10 @@ impl VMExnRef {
             .require_gc_store_mut()?
             .gc_object_data(&self.0)
             .read_u32(instance_offset);
-        let instance = InstanceId::from_u32(instance);
+        let instance = InstanceId::from_u32(instance.get_ne());
         let store = store.require_gc_store_mut()?;
         let tag = store.gc_object_data(&self.0).read_u32(tag_offset);
-        let tag = DefinedTagIndex::from_u32(tag);
+        let tag = DefinedTagIndex::from_u32(tag.get_ne());
         Ok((instance, tag))
     }
 }

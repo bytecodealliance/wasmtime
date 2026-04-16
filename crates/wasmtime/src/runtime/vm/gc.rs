@@ -26,7 +26,7 @@ use crate::store::Asyncness;
 use core::any::Any;
 use core::mem::MaybeUninit;
 use core::{alloc::Layout, num::NonZeroU32};
-use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex, endian::Le};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
 ///
@@ -214,7 +214,7 @@ impl GcStore {
     /// Returns the raw representation of this GC ref, ready to be passed to
     /// Wasm.
     #[must_use]
-    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> NonZeroU32 {
+    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> Le<NonZeroU32> {
         let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
@@ -274,6 +274,8 @@ impl GcStore {
         header: VMGcHeader,
         layout: Layout,
     ) -> Result<Result<VMGcRef, u64>> {
+        log::trace!("GcStore::alloc_raw(header = {header:?}, layout = {layout:?})");
+
         // When gc_zeal is enabled with an allocation counter, decrement it and
         // force a GC cycle when it reaches zero by returning a fake OOM.
         #[cfg(gc_zeal)]

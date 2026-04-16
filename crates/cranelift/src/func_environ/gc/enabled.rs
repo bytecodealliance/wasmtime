@@ -82,6 +82,10 @@ fn unbarriered_load_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<ir::Value> {
     debug_assert!(ty.is_vmgcref_type());
+
+    // GC refs are always stored little-endian.
+    let flags = flags.with_endianness(ir::Endianness::Little);
+
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
     if ty != WasmHeapType::I31 {
         builder.declare_value_needs_stack_map(gc_ref);
@@ -101,6 +105,10 @@ fn unbarriered_store_gc_ref(
     flags: ir::MemFlags,
 ) -> WasmResult<()> {
     debug_assert!(ty.is_vmgcref_type());
+
+    // GC refs are always stored little-endian.
+    let flags = flags.with_endianness(ir::Endianness::Little);
+
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }

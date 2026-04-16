@@ -25,7 +25,7 @@ pub use wasmtime_environ::ModulePC;
 use wasmtime_environ::{
     DefinedFuncIndex, EntityIndex, FrameInstPos, FrameStackShape, FrameStateSlot,
     FrameStateSlotOffset, FrameTableBreakpointData, FrameTableDescriptorIndex, FrameValType,
-    FuncIndex, FuncKey, GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap,
+    FuncIndex, FuncKey, GlobalIndex, MemoryIndex, TableIndex, TagIndex, Trap, endian::Le,
 };
 use wasmtime_unwinder::{Frame, FrameCursor};
 
@@ -800,19 +800,22 @@ unsafe fn read_value(
         FrameValType::AnyRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
-            let value = AnyRef::_from_raw(&mut nogc, value);
+            let value = Le::from_ne(value);
+            let value = AnyRef::from_raw_le(&mut nogc, value);
             Val::AnyRef(value)
         }
         FrameValType::ExnRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
-            let value = ExnRef::_from_raw(&mut nogc, value);
+            let value = Le::from_ne(value);
+            let value = ExnRef::from_raw_le(&mut nogc, value);
             Val::ExnRef(value)
         }
         FrameValType::ExternRef => {
             let mut nogc = AutoAssertNoGc::new(store);
             let value = unsafe { *(address as *const u32) };
-            let value = ExternRef::_from_raw(&mut nogc, value);
+            let value = Le::from_ne(value);
+            let value = ExternRef::from_raw_le(&mut nogc, value);
             Val::ExternRef(value)
         }
         FrameValType::FuncRef => {

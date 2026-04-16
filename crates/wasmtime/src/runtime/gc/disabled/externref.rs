@@ -3,6 +3,7 @@ use crate::{
     AsContextMut, GcRefImpl, Result, Rooted, StoreContext, StoreContextMut, store::AutoAssertNoGc,
 };
 use core::any::Any;
+use wasmtime_environ::endian::Le;
 
 /// Support for `externref` disabled at compile time because the `gc` cargo
 /// feature was not enabled.
@@ -48,11 +49,20 @@ impl ExternRef {
         None
     }
 
+    pub(crate) fn from_raw_le(_store: &mut AutoAssertNoGc<'_>, raw: Le<u32>) -> Option<Rooted<Self>> {
+        assert_eq!(raw.get_ne(), 0);
+        None
+    }
+
     pub fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
         match *self {}
     }
 
     pub(crate) fn _to_raw(&self, _store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+        match *self {}
+    }
+
+    pub(crate) fn to_raw_le(&self, _store: &mut AutoAssertNoGc) -> Result<Le<u32>> {
         match *self {}
     }
 }

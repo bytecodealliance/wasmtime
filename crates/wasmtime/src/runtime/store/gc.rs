@@ -69,7 +69,7 @@ impl StoreOpaque {
                     u64::try_from(gc.last_post_gc_allocated_bytes.unwrap_or(0)).unwrap()
                 }))
         {
-            let _ = self.grow_gc_heap(limiter, n).await;
+            let _ = self.grow_gc_heap(limiter, n, asyncness).await;
         }
     }
 
@@ -80,10 +80,28 @@ impl StoreOpaque {
         &mut self,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: u64,
+        asyncness: Asyncness,
     ) -> Result<()> {
-        log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
+        log::trace!("Attempting to grow the GC heap by {bytes_needed:#010x} bytes");
         if bytes_needed == 0 {
             return Ok(());
+        }
+
+        // If the GC heap needs a collection before growth (e.g. the copying
+        // collector's active space is the second half), do a GC first.
+        if self
+            .gc_store
+            .as_ref()
+            .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth())
+        {
+            self.do_gc(asyncness).await;
+            debug_assert!(
+                !self
+                    .gc_store
+                    .as_ref()
+                    .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth()),
+                "needs_gc_before_next_growth should return false after a GC"
+            );
         }
 
         let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
@@ -230,7 +248,8 @@ impl StoreOpaque {
                                     // from `alloc_func` below if
                                     // growth failed and failure to
                                     // grow was fatal.
-                                    let _ = self.grow_gc_heap(limiter, bytes_needed).await;
+                                    let _ =
+                                        self.grow_gc_heap(limiter, bytes_needed, asyncness).await;
                                     alloc_func(self, value)
                                 }
                                 Err(e) => Err(e),
@@ -242,7 +261,7 @@ impl StoreOpaque {
                         // Ignore error; we'll get one from
                         // `alloc_func` below if growth failed and
                         // failure to grow was fatal.
-                        let _ = self.grow_gc_heap(limiter, bytes_needed).await;
+                        let _ = self.grow_gc_heap(limiter, bytes_needed, asyncness).await;
                         alloc_func(self, value)
                     }
                 }

@@ -14,6 +14,7 @@ use crate::{
 use core::any::Any;
 use core::mem;
 use core::mem::MaybeUninit;
+use wasmtime_environ::endian::Le;
 
 /// An opaque, GC-managed reference to some host data that can be passed to
 /// WebAssembly.
@@ -563,12 +564,16 @@ impl ExternRef {
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
     pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<ExternRef>> {
+        let raw = Le::from_le(raw);
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        Self::_from_raw(&mut store, raw)
+        Self::from_raw_le(&mut store, raw)
     }
 
     // (Not actually memory unsafe since we have indexed GC heaps.)
-    pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<ExternRef>> {
+    pub(crate) fn from_raw_le(
+        store: &mut AutoAssertNoGc,
+        raw: Le<u32>,
+    ) -> Option<Rooted<ExternRef>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
@@ -588,13 +593,15 @@ impl ExternRef {
     /// [`ValRaw`]: crate::ValRaw
     pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._to_raw(&mut store)
+        Ok(self.to_raw_le(&mut store)?.get_le())
     }
 
-    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc) -> Result<u32> {
+    pub(crate) fn to_raw_le(&self, store: &mut AutoAssertNoGc) -> Result<Le<u32>> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw.get())
+        Ok(store
+            .unwrap_gc_store_mut()
+            .expose_gc_ref_to_wasm(gc_ref)
+            .into())
     }
 }
 
@@ -615,11 +622,11 @@ unsafe impl WasmTy for Rooted<ExternRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::externref)
+        self.wasm_ty_store(store, ptr, ValRaw::externref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_externref(), ExternRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_externref_le(), ExternRef::from_cloned_gc_ref)
     }
 }
 
@@ -645,13 +652,13 @@ unsafe impl WasmTy for Option<Rooted<ExternRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <Rooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
+        <Rooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <Rooted<ExternRef>>::wasm_ty_option_load(
             store,
-            ptr.get_externref(),
+            ptr.get_externref_le(),
             ExternRef::from_cloned_gc_ref,
         )
     }
@@ -679,11 +686,11 @@ unsafe impl WasmTy for OwnedRooted<ExternRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::externref)
+        self.wasm_ty_store(store, ptr, ValRaw::externref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_externref(), ExternRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_externref_le(), ExternRef::from_cloned_gc_ref)
     }
 }
 
@@ -710,13 +717,13 @@ unsafe impl WasmTy for Option<OwnedRooted<ExternRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <OwnedRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref)
+        <OwnedRooted<ExternRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::externref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <OwnedRooted<ExternRef>>::wasm_ty_option_load(
             store,
-            ptr.get_externref(),
+            ptr.get_externref_le(),
             ExternRef::from_cloned_gc_ref,
         )
     }

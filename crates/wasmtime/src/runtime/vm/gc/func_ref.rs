@@ -17,7 +17,7 @@ use wasmtime_core::{
     alloc::PanicOnOom,
     slab::{Id, Slab},
 };
-use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::{VMSharedTypeIndex, endian::Le};
 
 /// An identifier into the `FuncRefTable`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -26,13 +26,13 @@ pub struct FuncRefTableId(Id);
 
 impl FuncRefTableId {
     /// Convert this `FuncRefTableId` into its raw `u32` ID.
-    pub fn into_raw(self) -> u32 {
-        self.0.into_raw()
+    pub fn into_raw(self) -> Le<u32> {
+        Le::from_ne(self.0.into_raw())
     }
 
     /// Create a `FuncRefTableId` from a raw `u32` ID.
-    pub fn from_raw(raw: u32) -> Self {
-        Self(Id::from_raw(raw))
+    pub fn from_raw(raw: Le<u32>) -> Self {
+        Self(Id::from_raw(raw.get_ne()))
     }
 }
 

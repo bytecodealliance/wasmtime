@@ -72,7 +72,7 @@ use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
     DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
-    TableIndex, Trap,
+    TableIndex, Trap, endian::Le,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -344,6 +344,7 @@ fn table_grow_gc_ref(
     init_value: u32,
 ) -> Result<Option<AllocationSize>> {
     let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
+    let init_value = Le::from_ne(init_value);
     let element = VMGcRef::from_raw_u32(init_value);
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
@@ -431,6 +432,7 @@ fn table_fill_gc_ref(
     val: u32,
     len: u64,
 ) -> Result<()> {
+    let val = Le::from_ne(val);
     let (gc_store, instance) = store.optional_gc_store_and_instance_mut(instance);
     let table_index = DefinedTableIndex::from_u32(table_index);
     let table = instance.get_defined_table(table_index);
@@ -623,6 +625,7 @@ fn table_get_lazy_init_func_ref(
 #[cfg(feature = "gc-drc")]
 fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
+    let gc_ref = Le::from_ne(gc_ref);
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
     store
         .store_opaque_mut()
@@ -643,10 +646,12 @@ fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u6
     .unwrap();
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store, _asyncness| {
+    block_on!(store, async |store, asyncness| {
         // We error below if there's still not enough space; swallow
         // any growth failures here.
-        let _ = store.grow_gc_heap(limiter.as_mut(), bytes_needed).await;
+        let _ = store
+            .grow_gc_heap(limiter.as_mut(), bytes_needed, asyncness)
+            .await;
     })?;
 
     // JIT code relies on the memory having grown by `bytes_needed` bytes if
@@ -706,7 +711,7 @@ fn gc_alloc_raw(
     if let Some(gc_store) = opaque.try_gc_store_mut() {
         if let Ok(gc_ref) = gc_store.alloc_raw(header, layout)? {
             let raw = gc_store.expose_gc_ref_to_wasm(gc_ref);
-            return Ok(raw);
+            return Ok(raw.get_ne());
         }
     }
 
@@ -722,7 +727,7 @@ fn gc_alloc_raw(
             .await?;
 
         let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
+        Ok(raw.get_ne())
     })?
 }
 
@@ -749,7 +754,7 @@ unsafe fn intern_func_ref_for_gc_heap(
             .func_ref_table
             .intern(func_ref)
     };
-    Ok(func_ref_id.into_raw())
+    Ok(func_ref_id.into_raw().get_ne())
 }
 
 // Get the raw `VMFuncRef` pointer associated with a `FuncRefTableId` from an
@@ -769,6 +774,7 @@ fn get_interned_func_ref(
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
+    let func_ref_id = Le::from_ne(func_ref_id);
     let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
     let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
 
@@ -803,6 +809,10 @@ fn array_new_data(
 ) -> Result<core::num::NonZeroU32> {
     use crate::ArrayType;
     use wasmtime_environ::ModuleInternedTypeIndex;
+
+    log::trace!(
+        "array_new_data(array_type_index = {array_type_index}, data_index = {data_index}, src = {src}, len = {len})"
+    );
 
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     block_on!(store, async |store, asyncness| {
@@ -859,7 +869,7 @@ fn array_new_data(
 
         // Return the array to Wasm!
         let raw = gc_store.expose_gc_ref_to_wasm(array_ref.into());
-        Ok(raw)
+        Ok(raw.get_ne())
     })?
 }
 
@@ -887,6 +897,7 @@ fn array_init_data(
     );
 
     // Null check the array.
+    let array = Le::from_ne(array);
     let gc_ref = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
     let array = gc_ref
         .into_arrayref(&*store.unwrap_gc_store().gc_heap)
@@ -1013,7 +1024,7 @@ fn array_new_elem(
         let mut store = AutoAssertNoGc::new(&mut store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
         let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
+        Ok(raw.get_ne())
     })?
 }
 
@@ -1042,6 +1053,7 @@ fn array_init_elem(
     );
 
     // Convert the raw GC ref into a `Rooted<ArrayRef>`.
+    let array = Le::from_ne(array);
     let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
     let array = store.unwrap_gc_store_mut().clone_gc_ref(&array);
     let array = {
@@ -1125,9 +1137,11 @@ fn array_copy(
     let mut store = AutoAssertNoGc::new(&mut store);
 
     // Convert the raw GC refs into `Rooted<ArrayRef>`s.
+    let dst_array = Le::from_ne(dst_array);
     let dst_array = VMGcRef::from_raw_u32(dst_array).ok_or_else(|| Trap::NullReference)?;
     let dst_array = store.unwrap_gc_store_mut().clone_gc_ref(&dst_array);
     let dst_array = ArrayRef::from_cloned_gc_ref(&mut store, dst_array);
+    let src_array = Le::from_ne(src_array);
     let src_array = VMGcRef::from_raw_u32(src_array).ok_or_else(|| Trap::NullReference)?;
     let src_array = store.unwrap_gc_store_mut().clone_gc_ref(&src_array);
     let src_array = ArrayRef::from_cloned_gc_ref(&mut store, src_array);
@@ -1701,6 +1715,7 @@ fn throw_ref(
     _instance: InstanceId,
     exnref: u32,
 ) -> Result<(), TrapReason> {
+    let exnref = Le::from_ne(exnref);
     let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
     let exnref = store.unwrap_gc_store_mut().clone_gc_ref(&exnref);
     let exnref = exnref

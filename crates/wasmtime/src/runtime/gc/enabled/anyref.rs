@@ -10,7 +10,7 @@ use crate::{
 };
 use core::mem;
 use core::mem::MaybeUninit;
-use wasmtime_environ::VMGcKind;
+use wasmtime_environ::{VMGcKind, endian::Le};
 
 /// An `anyref` GC reference.
 ///
@@ -273,12 +273,13 @@ impl AnyRef {
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
     pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
+        let raw = Le::from_le(raw);
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        Self::_from_raw(&mut store, raw)
+        Self::from_raw_le(&mut store, raw)
     }
 
     // (Not actually memory unsafe since we have indexed GC heaps.)
-    pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
+    pub(crate) fn from_raw_le(store: &mut AutoAssertNoGc, raw: Le<u32>) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
@@ -328,17 +329,17 @@ impl AnyRef {
     /// [`ValRaw`]: crate::ValRaw
     pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._to_raw(&mut store)
+        Ok(self.to_raw_le(&mut store)?.get_le())
     }
 
-    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+    pub(crate) fn to_raw_le(&self, store: &mut AutoAssertNoGc<'_>) -> Result<Le<u32>> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = if gc_ref.is_i31() {
             gc_ref.as_raw_non_zero_u32()
         } else {
             store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
         };
-        Ok(raw.get())
+        Ok(raw.into())
     }
 
     /// Get the type of this reference.
@@ -705,11 +706,11 @@ unsafe impl WasmTy for Rooted<AnyRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), AnyRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), AnyRef::from_cloned_gc_ref)
     }
 }
 
@@ -749,11 +750,15 @@ unsafe impl WasmTy for Option<Rooted<AnyRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <Rooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <Rooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <Rooted<AnyRef>>::wasm_ty_option_load(store, ptr.get_anyref(), AnyRef::from_cloned_gc_ref)
+        <Rooted<AnyRef>>::wasm_ty_option_load(
+            store,
+            ptr.get_anyref_le(),
+            AnyRef::from_cloned_gc_ref,
+        )
     }
 }
 
@@ -779,11 +784,11 @@ unsafe impl WasmTy for OwnedRooted<AnyRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), AnyRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), AnyRef::from_cloned_gc_ref)
     }
 }
 
@@ -824,13 +829,13 @@ unsafe impl WasmTy for Option<OwnedRooted<AnyRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <OwnedRooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<AnyRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <OwnedRooted<AnyRef>>::wasm_ty_option_load(
             store,
-            ptr.get_anyref(),
+            ptr.get_anyref_le(),
             AnyRef::from_cloned_gc_ref,
         )
     }

@@ -232,7 +232,7 @@ impl Global {
             .context("type mismatch: attempt to set global to value of wrong type")?;
 
         // SAFETY: mutability and a type-check above makes this safe to perform.
-        unsafe { self.set_unchecked(store, &val) }
+        unsafe { self.set_unchecked(store, true, &val) }
     }
 
     /// Sets this global to `val`.
@@ -242,7 +242,12 @@ impl Global {
     /// This function requires that `val` is of the correct type for this
     /// global. Furthermore this requires that the global is mutable or this is
     /// the first time the global is initialized.
-    pub(crate) unsafe fn set_unchecked(&self, store: &mut StoreOpaque, val: &Val) -> Result<()> {
+    pub(crate) unsafe fn set_unchecked(
+        &self,
+        store: &mut StoreOpaque,
+        initialized: bool,
+        val: &Val,
+    ) -> Result<()> {
         let mut store = AutoAssertNoGc::new(store);
         unsafe {
             let definition = self.definition(&store).as_mut();
@@ -262,7 +267,11 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    if initialized {
+                        definition.write_gc_ref(&mut store, new);
+                    } else {
+                        definition.init_gc_ref(&mut store, new);
+                    }
                 }
                 Val::AnyRef(a) => {
                     let new = match a {
@@ -270,7 +279,11 @@ impl Global {
                         Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    if initialized {
+                        definition.write_gc_ref(&mut store, new);
+                    } else {
+                        definition.init_gc_ref(&mut store, new);
+                    }
                 }
                 Val::ExnRef(e) => {
                     let new = match e {
@@ -278,7 +291,11 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    if initialized {
+                        definition.write_gc_ref(&mut store, new);
+                    } else {
+                        definition.init_gc_ref(&mut store, new);
+                    }
                 }
                 Val::ContRef(None) => {
                     // Allow null continuation references for globals - these are just placeholders

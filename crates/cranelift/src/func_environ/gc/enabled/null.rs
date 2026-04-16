@@ -379,7 +379,10 @@ impl GcCompiler for NullCompiler {
         flags: ir::MemFlags,
     ) -> WasmResult<ir::Value> {
         // NB: Don't use `unbarriered_load_gc_ref` here because we don't need to
-        // mark the value as requiring inclusion in stack maps.
+        // mark the value as requiring inclusion in stack maps. That does,
+        // however, mean we need to ensure that the little-endian flag is set
+        // ourselves, since GC refs area always stored little-endian.
+        let flags = flags.with_endianness(ir::Endianness::Little);
         Ok(builder.ins().load(ir::types::I32, flags, src, 0))
     }
 

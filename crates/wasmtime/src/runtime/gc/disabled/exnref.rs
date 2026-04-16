@@ -5,6 +5,7 @@ use crate::{
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     vm::VMGcRef,
 };
+use wasmtime_environ::endian::Le;
 
 /// Support for `ExnRefPre` disabled at compile time because the `gc`
 /// cargo feature was not enabled.
@@ -32,12 +33,20 @@ impl ExnRef {
         None
     }
 
+    pub(crate) fn from_raw_le(_store: &mut AutoAssertNoGc, _raw: Le<u32>) -> Option<Rooted<Self>> {
+        None
+    }
+
     pub fn to_raw(&self, _store: impl AsContextMut) -> Result<u32> {
         Ok(0)
     }
 
     pub(crate) fn _to_raw(&self, _store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         Ok(0)
+    }
+
+    pub(crate) fn to_raw_le(&self, _store: &mut AutoAssertNoGc<'_>) -> Result<Le<u32>> {
+        Ok(Le::from_le(0))
     }
 
     pub fn ty(&self, _store: impl AsContext) -> Result<ExnType> {

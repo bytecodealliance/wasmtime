@@ -25,6 +25,26 @@ impl<T: ?Sized> SendSyncPtr<T> {
     }
 
     /// Unsafely assert that this is a pointer to valid contents and it's also
+    /// valid to read it at this time.
+    #[inline]
+    pub unsafe fn read(&self) -> T
+    where
+        T: Sized,
+    {
+        unsafe { self.0.read() }
+    }
+
+    /// Unsafely assert that this is a pointer to valid contents and it's also
+    /// valid to write to it at this time.
+    #[inline]
+    pub unsafe fn write(&mut self, val: T)
+    where
+        T: Sized,
+    {
+        unsafe { self.0.write(val) }
+    }
+
+    /// Unsafely assert that this is a pointer to valid contents and it's also
     /// valid to get a shared reference to it at this time.
     #[inline]
     pub unsafe fn as_ref<'a>(&self) -> &'a T {

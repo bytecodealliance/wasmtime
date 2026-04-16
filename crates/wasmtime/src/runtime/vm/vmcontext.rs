@@ -18,7 +18,7 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType, endian::Le,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -618,17 +618,17 @@ impl VMGlobalDefinition {
                 WasmValType::V128 => global.set_u128(raw.get_v128()),
                 WasmValType::Ref(r) => match r.heap_type.top() {
                     WasmHeapTopType::Extern => {
-                        let r = VMGcRef::from_raw_u32(raw.get_externref());
+                        let r = VMGcRef::from_raw_u32(raw.get_externref_le());
                         global.init_gc_ref(store, r.as_ref())
                     }
                     WasmHeapTopType::Any => {
-                        let r = VMGcRef::from_raw_u32(raw.get_anyref());
+                        let r = VMGcRef::from_raw_u32(raw.get_anyref_le());
                         global.init_gc_ref(store, r.as_ref())
                     }
                     WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                     WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
                     WasmHeapTopType::Exn => {
-                        let r = VMGcRef::from_raw_u32(raw.get_exnref());
+                        let r = VMGcRef::from_raw_u32(raw.get_exnref_le());
                         global.init_gc_ref(store, r.as_ref())
                     }
                 },
@@ -655,20 +655,20 @@ impl VMGlobalDefinition {
                 WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
                 WasmValType::V128 => ValRaw::v128(self.get_u128()),
                 WasmValType::Ref(r) => match r.heap_type.top() {
-                    WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
+                    WasmHeapTopType::Extern => ValRaw::externref_le(match self.as_gc_ref() {
                         Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                        None => 0,
+                        None => Le::from_le(0),
                     }),
-                    WasmHeapTopType::Any => ValRaw::anyref({
+                    WasmHeapTopType::Any => ValRaw::anyref_le({
                         match self.as_gc_ref() {
                             Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
+                            None => Le::from_le(0),
                         }
                     }),
-                    WasmHeapTopType::Exn => ValRaw::exnref({
+                    WasmHeapTopType::Exn => ValRaw::exnref_le({
                         match self.as_gc_ref() {
                             Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
+                            None => Le::from_le(0),
                         }
                     }),
                     WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
@@ -788,28 +788,39 @@ impl VMGlobalDefinition {
 
     /// Return a reference to the global value as a borrowed GC reference.
     pub unsafe fn as_gc_ref(&self) -> Option<&VMGcRef> {
-        let raw_ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
-        let ret = unsafe { (*raw_ptr).as_ref() };
-        assert!(cfg!(feature = "gc") || ret.is_none());
-        ret
+        let ptr = self.storage.as_ref().as_ptr().cast::<Option<VMGcRef>>();
+        let gc_ref = unsafe { ptr.as_ref().unwrap().as_ref() };
+        log::trace!(
+            "Reading global at {ptr:#p} -> GC ref {:#010x}",
+            gc_ref.map_or(Le::from_le(0), |r| r.as_raw_u32())
+        );
+        assert!(cfg!(feature = "gc") || gc_ref.is_none());
+        gc_ref
     }
 
     /// Initialize a global to the given GC reference.
     pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
-        let dest = unsafe {
-            &mut *(self
-                .storage
-                .as_mut()
-                .as_mut_ptr()
-                .cast::<MaybeUninit<Option<VMGcRef>>>())
-        };
-
+        let ptr = self
+            .storage
+            .as_mut()
+            .as_mut_ptr()
+            .cast::<MaybeUninit<Option<VMGcRef>>>();
+        log::trace!(
+            "Initializing global at {ptr:#p} to GC ref {:#010x}",
+            gc_ref.map_or(Le::from_le(0), |r| r.as_raw_u32())
+        );
+        let dest = unsafe { ptr.as_mut().unwrap() };
         store.init_gc_ref(dest, gc_ref)
     }
 
     /// Write a GC reference into this global value.
     pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
-        let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
+        let ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
+        log::trace!(
+            "Writing to global at {ptr:#p} <- GC ref {:#010x}",
+            gc_ref.map_or(Le::from_le(0), |r| r.as_raw_u32())
+        );
+        let dest = unsafe { ptr.as_mut().unwrap() };
         store.write_gc_ref(dest, gc_ref)
     }
 
@@ -1705,24 +1716,45 @@ impl ValRaw {
     /// Creates a WebAssembly `externref` value
     #[inline]
     pub fn externref(e: u32) -> ValRaw {
-        assert!(cfg!(feature = "gc") || e == 0);
+        let e = Le::from_le(e);
+        Self::externref_le(e)
+    }
+
+    /// Creates a WebAssembly `externref` value
+    #[inline]
+    pub(crate) fn externref_le(e: Le<u32>) -> ValRaw {
+        assert!(cfg!(feature = "gc") || e.get_le() == 0);
         ValRaw {
-            externref: e.to_le(),
+            externref: e.get_le(),
         }
     }
 
     /// Creates a WebAssembly `anyref` value
     #[inline]
     pub fn anyref(r: u32) -> ValRaw {
-        assert!(cfg!(feature = "gc") || r == 0);
-        ValRaw { anyref: r.to_le() }
+        let r = Le::from_le(r);
+        Self::anyref_le(r)
+    }
+
+    /// Creates a WebAssembly `anyref` value
+    #[inline]
+    pub(crate) fn anyref_le(r: Le<u32>) -> ValRaw {
+        assert!(cfg!(feature = "gc") || r.get_le() == 0);
+        ValRaw { anyref: r.get_le() }
     }
 
     /// Creates a WebAssembly `exnref` value
     #[inline]
     pub fn exnref(r: u32) -> ValRaw {
-        assert!(cfg!(feature = "gc") || r == 0);
-        ValRaw { exnref: r.to_le() }
+        let r = Le::from_le(r);
+        Self::exnref_le(r)
+    }
+
+    /// Creates a WebAssembly `exnref` value
+    #[inline]
+    pub(crate) fn exnref_le(r: Le<u32>) -> ValRaw {
+        assert!(cfg!(feature = "gc") || r.get_le() == 0);
+        ValRaw { exnref: r.get_le() }
     }
 
     /// Gets the WebAssembly `i32` value
@@ -1782,6 +1814,12 @@ impl ValRaw {
         externref
     }
 
+    /// Gets the WebAssembly `externref` value
+    #[inline]
+    pub(crate) fn get_externref_le(&self) -> Le<u32> {
+        Le::from_le(self.get_externref())
+    }
+
     /// Gets the WebAssembly `anyref` value
     #[inline]
     pub fn get_anyref(&self) -> u32 {
@@ -1790,12 +1828,24 @@ impl ValRaw {
         anyref
     }
 
+    /// Gets the WebAssembly `anyref` value
+    #[inline]
+    pub(crate) fn get_anyref_le(&self) -> Le<u32> {
+        Le::from_le(self.get_anyref())
+    }
+
     /// Gets the WebAssembly `exnref` value
     #[inline]
     pub fn get_exnref(&self) -> u32 {
         let exnref = u32::from_le(unsafe { self.exnref });
         assert!(cfg!(feature = "gc") || exnref == 0);
         exnref
+    }
+
+    /// Gets the WebAssembly `exnref` value
+    #[inline]
+    pub(crate) fn get_exnref_le(&self) -> Le<u32> {
+        Le::from_le(self.get_exnref())
     }
 
     /// Convert this `&ValRaw` into a pointer to its inner `VMGcRef`.

@@ -242,12 +242,12 @@ unsafe impl WasmTy for I31 {
 
     fn store(self, _store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
         let gc_ref = VMGcRef::from_i31(self.into()).as_raw_u32();
-        ptr.write(ValRaw::anyref(gc_ref));
+        ptr.write(ValRaw::anyref_le(gc_ref));
         Ok(())
     }
 
     unsafe fn load(_store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        let raw = ptr.get_anyref();
+        let raw = ptr.get_anyref_le();
         let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
         gc_ref.unwrap_i31().into()
     }
@@ -284,7 +284,7 @@ unsafe impl WasmTy for Option<I31> {
     }
 
     unsafe fn load(_store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        let raw = ptr.get_anyref();
+        let raw = ptr.get_anyref_le();
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
         Some(I31(gc_ref.unwrap_i31()))
     }

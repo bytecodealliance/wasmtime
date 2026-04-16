@@ -836,7 +836,7 @@ async fn initialize_globals(
         // for this global, and it's safe to write to a global for the first
         // time as-is happening here.
         unsafe {
-            global.set_unchecked(&mut store, &val)?;
+            global.set_unchecked(&mut store, false, &val)?;
         }
     }
     Ok(())

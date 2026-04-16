@@ -16,6 +16,7 @@ use crate::{
 };
 use core::ptr::NonNull;
 use core::{alloc::Layout, any::Any, num::NonZeroU32};
+use wasmtime_core::endian::Le;
 use wasmtime_environ::{
     GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
     null::NullTypeLayouts,
@@ -124,6 +125,8 @@ impl NullHeap {
     /// allocatable, and `Err(_)` when we don't have enough space and growing
     /// the GC heap won't help.
     fn alloc(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
+        log::trace!("alloc({header:?}, {layout:?})");
+
         debug_assert!(layout.size() >= core::mem::size_of::<VMGcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMGcHeader>());
 
@@ -166,12 +169,14 @@ impl NullHeap {
         *self.next.get_mut() = NonZeroU32::new(end_of_object).unwrap();
 
         let aligned = NonZeroU32::new(aligned).unwrap();
+        let aligned = Le::from_ne(aligned);
         let gc_ref = VMGcRef::from_heap_index(aligned).unwrap();
 
         debug_assert_eq!(header.reserved_u26(), 0);
         header.set_reserved_u26(size);
         *self.header_mut(&gc_ref) = header;
 
+        log::trace!("  -> {gc_ref:#p}");
         Ok(Ok(gc_ref))
     }
 }

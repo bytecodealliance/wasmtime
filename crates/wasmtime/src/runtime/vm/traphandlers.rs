@@ -930,7 +930,8 @@ impl CallThreadState {
                         .take_pending_exception()
                         .unwrap()
                         .as_gc_ref()
-                        .as_raw_u32(),
+                        .as_raw_u32()
+                        .get_ne(),
                 )
                 .expect("GC ref does not fit in usize");
                 // We only use one of the payload words.

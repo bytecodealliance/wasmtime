@@ -19,6 +19,7 @@ extern crate alloc as std_alloc;
 extern crate std;
 
 pub mod alloc;
+pub mod endian;
 pub mod error;
 pub mod math;
 pub mod non_max;

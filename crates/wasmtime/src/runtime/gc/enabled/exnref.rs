@@ -14,7 +14,7 @@ use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude
 use alloc::sync::Arc;
 use core::mem;
 use core::mem::MaybeUninit;
-use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
+use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex, endian::Le};
 
 /// An allocator for a particular Wasm GC exception type.
 ///
@@ -162,12 +162,13 @@ impl ExnRef {
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
     pub fn from_raw(mut store: impl AsContextMut, raw: u32) -> Option<Rooted<Self>> {
+        let raw = Le::from_le(raw);
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        Self::_from_raw(&mut store, raw)
+        Self::from_raw_le(&mut store, raw)
     }
 
     // (Not actually memory unsafe since we have indexed GC heaps.)
-    pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
+    pub(crate) fn from_raw_le(store: &mut AutoAssertNoGc, raw: Le<u32>) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(Self::from_cloned_gc_ref(store, gc_ref))
@@ -413,17 +414,15 @@ impl ExnRef {
     /// [`ValRaw`]: crate::ValRaw
     pub fn to_raw(&self, mut store: impl AsContextMut) -> Result<u32> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
-        self._to_raw(&mut store)
+        Ok(self.to_raw_le(&mut store)?.get_le())
     }
 
-    pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+    pub(crate) fn to_raw_le(&self, store: &mut AutoAssertNoGc<'_>) -> Result<Le<u32>> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = if gc_ref.is_i31() {
-            gc_ref.as_raw_non_zero_u32()
-        } else {
-            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
-        };
-        Ok(raw.get())
+        Ok(store
+            .require_gc_store_mut()?
+            .expose_gc_ref_to_wasm(gc_ref)
+            .into())
     }
 
     /// Get the type of this reference.
@@ -654,11 +653,11 @@ unsafe impl WasmTy for Rooted<ExnRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), ExnRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), ExnRef::from_cloned_gc_ref)
     }
 }
 
@@ -698,11 +697,15 @@ unsafe impl WasmTy for Option<Rooted<ExnRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <Rooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <Rooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        <Rooted<ExnRef>>::wasm_ty_option_load(store, ptr.get_anyref(), ExnRef::from_cloned_gc_ref)
+        <Rooted<ExnRef>>::wasm_ty_option_load(
+            store,
+            ptr.get_anyref_le(),
+            ExnRef::from_cloned_gc_ref,
+        )
     }
 }
 
@@ -728,11 +731,11 @@ unsafe impl WasmTy for OwnedRooted<ExnRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), ExnRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), ExnRef::from_cloned_gc_ref)
     }
 }
 
@@ -773,13 +776,13 @@ unsafe impl WasmTy for Option<OwnedRooted<ExnRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <OwnedRooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<ExnRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <OwnedRooted<ExnRef>>::wasm_ty_option_load(
             store,
-            ptr.get_anyref(),
+            ptr.get_anyref_le(),
             ExnRef::from_cloned_gc_ref,
         )
     }

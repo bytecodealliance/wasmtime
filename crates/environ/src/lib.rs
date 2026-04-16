@@ -89,7 +89,7 @@ pub use self::error::ToWasmtimeResult;
 #[doc(inline)]
 pub use wasmtime_core::error;
 
-pub use wasmtime_core::{alloc::PanicOnOom, non_max, undo::Undo};
+pub use wasmtime_core::{alloc::PanicOnOom, endian, non_max, undo::Undo};
 
 // Only for use with `bindgen!`-generated code.
 #[doc(hidden)]

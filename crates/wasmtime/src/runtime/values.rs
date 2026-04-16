@@ -4,7 +4,7 @@ use crate::{
     StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
-use wasmtime_environ::WasmHeapTopType;
+use wasmtime_environ::{WasmHeapTopType, endian::Le};
 
 pub use crate::runtime::vm::ValRaw;
 
@@ -277,17 +277,17 @@ impl Val {
             Val::F32(u) => Ok(ValRaw::f32(*u)),
             Val::F64(u) => Ok(ValRaw::f64(*u)),
             Val::V128(b) => Ok(ValRaw::v128(b.as_u128())),
-            Val::ExternRef(e) => Ok(ValRaw::externref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
+            Val::ExternRef(e) => Ok(ValRaw::externref_le(match e {
+                None => Le::from_le(0),
+                Some(e) => e.to_raw_le(store)?,
             })),
-            Val::AnyRef(e) => Ok(ValRaw::anyref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
+            Val::AnyRef(e) => Ok(ValRaw::anyref_le(match e {
+                None => Le::from_le(0),
+                Some(e) => e.to_raw_le(store)?,
             })),
-            Val::ExnRef(e) => Ok(ValRaw::exnref(match e {
-                None => 0,
-                Some(e) => e._to_raw(store)?,
+            Val::ExnRef(e) => Ok(ValRaw::exnref_le(match e {
+                None => Le::from_le(0),
+                Some(e) => e.to_raw_le(store)?,
             })),
             Val::FuncRef(f) => Ok(ValRaw::funcref(match f {
                 Some(f) => f.to_raw_(store),
@@ -342,7 +342,10 @@ impl Val {
                         unimplemented!()
                     }
 
-                    HeapType::Extern => ExternRef::_from_raw(store, raw.get_externref()).into(),
+                    HeapType::Extern => {
+                        let raw_le = raw.get_externref_le();
+                        ExternRef::from_raw_le(store, raw_le).into()
+                    }
 
                     HeapType::NoExtern => Ref::Extern(None),
 
@@ -353,11 +356,13 @@ impl Val {
                     | HeapType::ConcreteArray(_)
                     | HeapType::Struct
                     | HeapType::ConcreteStruct(_) => {
-                        AnyRef::_from_raw(store, raw.get_anyref()).into()
+                        let raw = raw.get_anyref_le();
+                        AnyRef::from_raw_le(store, raw).into()
                     }
 
                     HeapType::Exn | HeapType::ConcreteExn(_) => {
-                        ExnRef::_from_raw(store, raw.get_exnref()).into()
+                        let raw_le = raw.get_exnref_le();
+                        ExnRef::from_raw_le(store, raw_le).into()
                     }
                     HeapType::NoExn => Ref::Exn(None),
 

@@ -681,11 +681,11 @@ unsafe impl WasmTy for Rooted<StructRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), StructRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), StructRef::from_cloned_gc_ref)
     }
 }
 
@@ -725,13 +725,13 @@ unsafe impl WasmTy for Option<Rooted<StructRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <Rooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <Rooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <Rooted<StructRef>>::wasm_ty_option_load(
             store,
-            ptr.get_anyref(),
+            ptr.get_anyref_le(),
             StructRef::from_cloned_gc_ref,
         )
     }
@@ -781,11 +781,11 @@ unsafe impl WasmTy for OwnedRooted<StructRef> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        self.wasm_ty_store(store, ptr, ValRaw::anyref)
+        self.wasm_ty_store(store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
-        Self::wasm_ty_load(store, ptr.get_anyref(), StructRef::from_cloned_gc_ref)
+        Self::wasm_ty_load(store, ptr.get_anyref_le(), StructRef::from_cloned_gc_ref)
     }
 }
 
@@ -828,13 +828,13 @@ unsafe impl WasmTy for Option<OwnedRooted<StructRef>> {
     }
 
     fn store(self, store: &mut AutoAssertNoGc<'_>, ptr: &mut MaybeUninit<ValRaw>) -> Result<()> {
-        <OwnedRooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref)
+        <OwnedRooted<StructRef>>::wasm_ty_option_store(self, store, ptr, ValRaw::anyref_le)
     }
 
     unsafe fn load(store: &mut AutoAssertNoGc<'_>, ptr: &ValRaw) -> Self {
         <OwnedRooted<StructRef>>::wasm_ty_option_load(
             store,
-            ptr.get_anyref(),
+            ptr.get_anyref_le(),
             StructRef::from_cloned_gc_ref,
         )
     }
