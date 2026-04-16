@@ -197,6 +197,8 @@ impl StoreOpaque {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
+                    log::trace!("Got GC heap OOM: {oom}");
+
                     let (value, oom) = oom.take_inner();
                     let bytes_needed = oom.bytes_needed();
 

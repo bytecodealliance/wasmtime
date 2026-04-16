@@ -145,7 +145,7 @@ impl VMArrayRef {
         ty: &StorageType,
         index: u32,
     ) -> Val {
-        let offset = layout.elem_offset(index);
+        let offset = layout.elem_offset(index).unwrap();
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset).into()),
@@ -205,7 +205,7 @@ impl VMArrayRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.elem_offset(index);
+        let offset = layout.elem_offset(index).unwrap();
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
@@ -319,7 +319,7 @@ impl VMArrayRef {
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.elem_offset(index);
+        let offset = layout.elem_offset(index).unwrap();
         let gcstore = store.require_gc_store_mut()?;
         match val {
             Val::I32(i) if ty.is_i8() => gcstore

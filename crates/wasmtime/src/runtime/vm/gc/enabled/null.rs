@@ -307,9 +307,12 @@ unsafe impl GcHeap for NullHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
+        let layout = layout
+            .layout(length)
+            .ok_or_else(|| format_err!("allocation size too large"))?;
         self.alloc(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout.layout(length),
+            layout,
         )
         .map(|r| {
             r.map(|r| {

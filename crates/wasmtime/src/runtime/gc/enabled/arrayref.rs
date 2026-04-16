@@ -393,21 +393,20 @@ impl ArrayRef {
             "attempted to use a `ArrayRefPre` with the wrong store"
         );
 
-        // Type check the elements against the element type.
-        for elem in elems.clone() {
-            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-                .context("element type mismatch")?;
-        }
-
         let len = u32::try_from(elems.len()).unwrap();
 
-        // Allocate the array and write each field value into the appropriate
-        // offset.
+        // Allocate the array.
         let arrayref = store
             .require_gc_store_mut()?
             .alloc_uninit_array(allocator.type_index(), len, allocator.layout())
             .context("unrecoverable error when allocating new `arrayref`")?
             .map_err(|n| GcHeapOutOfMemory::new((), n))?;
+
+        // Type check the elements against the element type.
+        for elem in elems.clone() {
+            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
+                .context("element type mismatch")?;
+        }
 
         // From this point on, if we get any errors, then the array is not
         // fully initialized, so we need to eagerly deallocate it before the
