@@ -1271,20 +1271,11 @@ pub unsafe extern "C" fn fd_read(
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
-                let data = match state
-                    .with_one_import_alloc(ptr, len, || blocking_mode.read(wasi_stream, read_len))
-                {
-                    Ok(data) => data,
-                    Err(streams::StreamError::Closed) => {
-                        *nread = 0;
-                        return Ok(());
-                    }
-                    Err(streams::StreamError::LastOperationFailed(e)) => {
-                        Err(stream_error_to_errno(e))?
-                    }
-                };
+                let data = state.with_one_import_alloc(ptr, len, || {
+                    blocking_mode.read(wasi_stream, read_len)
+                })?;
 
-                assert_eq!(data.as_ptr(), ptr);
+                assert!(data.is_empty() || data.as_ptr() == ptr);
                 assert!(data.len() <= len);
 
                 // If this is a file, keep the current-position pointer up to date.
@@ -1294,18 +1285,9 @@ pub unsafe extern "C" fn fd_read(
                         .set(file.position.get() + data.len() as filesystem::Filesize);
                 }
 
-                let count = data.len();
-                *nread = count;
+                *nread = data.len();
                 forget(data);
-
-                if let BlockingMode::NonBlocking = blocking_mode
-                    && count == 0
-                    && len > 0
-                {
-                    Err(ERRNO_AGAIN)
-                } else {
-                    Ok(())
-                }
+                Ok(())
             }
             Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
         }
@@ -2571,14 +2553,22 @@ impl BlockingMode {
     // note: these methods must take self, not &self, to avoid rustc creating a constant
     // out of a BlockingMode literal that it places in .romem, creating a data section and
     // breaking our fragile linking scheme
-    fn read(
-        self,
-        input_stream: &streams::InputStream,
-        read_len: u64,
-    ) -> Result<Vec<u8>, streams::StreamError> {
+    fn read(self, input_stream: &streams::InputStream, read_len: u64) -> Result<Vec<u8>, Errno> {
         match self {
-            BlockingMode::NonBlocking => input_stream.read(read_len),
-            BlockingMode::Blocking => input_stream.blocking_read(read_len),
+            BlockingMode::Blocking => match input_stream.blocking_read(read_len) {
+                Ok(data) => Ok(data),
+                Err(streams::StreamError::Closed) => Ok(Vec::new()),
+                Err(streams::StreamError::LastOperationFailed(e)) => Err(stream_error_to_errno(e)),
+            },
+            BlockingMode::NonBlocking => match input_stream.read(read_len) {
+                Ok(data) if data.is_empty() && read_len > 0 => {
+                    forget(data);
+                    Err(ERRNO_AGAIN)
+                }
+                Ok(data) => Ok(data),
+                Err(streams::StreamError::Closed) => Ok(Vec::new()),
+                Err(streams::StreamError::LastOperationFailed(e)) => Err(stream_error_to_errno(e)),
+            },
         }
     }
     fn write(
