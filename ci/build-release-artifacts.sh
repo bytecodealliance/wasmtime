@@ -20,7 +20,7 @@ wrapper=""
 # have precise glibc requirements for Linux platforms for example.
 if [ "$DOCKER_IMAGE" != "" ]; then
   if [ -f "$DOCKER_IMAGE" ]; then
-    docker build --tag build-image --file $DOCKER_IMAGE ci/docker
+    docker buildx build -o type=docker --tag build-image --file $DOCKER_IMAGE ci/docker
     DOCKER_IMAGE=build-image
   fi
 
