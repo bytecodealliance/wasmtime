@@ -32,7 +32,7 @@ runs:
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
           echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
-          echo "version=nightly-2026-04-10" >> "$GITHUB_OUTPUT"
+          echo "version=nightly-2026-04-16" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-oss-fuzz-pin" ]; then
           # Do not change this number unless OSS-Fuzz has updated. If you update
           # this version and do not update OSS-Fuzz then you will break our
