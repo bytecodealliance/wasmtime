@@ -816,6 +816,17 @@ impl WastContext {
             AssertSuspension { .. } => {
                 bail!("unimplemented wast directive");
             }
+
+            AssertMalformedCustom {
+                file: _,
+                text: _,
+                line: _,
+            }
+            | AssertInvalidCustom {
+                file: _,
+                text: _,
+                line: _,
+            } => bail!("unimplemented wast directives"),
         }
 
         Ok(())
