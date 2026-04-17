@@ -10,7 +10,7 @@ use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
     ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
-use log::info;
+use log::{info, warn};
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
@@ -21,7 +21,7 @@ use object::{
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::mem;
-use target_lexicon::PointerWidth;
+use target_lexicon::{PointerWidth, Triple};
 
 /// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
@@ -137,6 +137,68 @@ impl ObjectBuilder {
     }
 }
 
+/// See the following for details:
+/// <https://github.com/rust-lang/rust/blob/1.95.0/compiler/rustc_codegen_ssa/src/back/metadata.rs#L408-L425>
+fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersion> {
+    use target_lexicon::{DeploymentTarget, OperatingSystem::*};
+
+    fn pack_version(v: DeploymentTarget) -> u32 {
+        let (major, minor, patch) = (v.major as u32, v.minor as u32, v.patch as u32);
+        (major << 16) | (minor << 8) | patch
+    }
+
+    match triple.operating_system {
+        Darwin(v) | MacOSX(v) | IOS(v) | TvOS(v) | VisionOS(v) | WatchOS(v) | XROS(v) => {
+            use object::macho::*;
+            use target_lexicon::Environment::*;
+            // Same as https://github.com/rust-lang/rust/blob/1.95.0/compiler/rustc_codegen_ssa/src/back/apple.rs#L36-L50.
+            //
+            // TODO(madsmtm): Properly support simulator after
+            // https://github.com/bytecodealliance/target-lexicon/pull/130
+            let platform = match (triple.operating_system, triple.environment) {
+                (Darwin(_), _) => 0, // PLATFORM_UNKNOWN
+                (MacOSX(_), _) => PLATFORM_MACOS,
+                (_, Macabi) => PLATFORM_MACCATALYST,
+                (IOS(_), Sim) => PLATFORM_IOSSIMULATOR,
+                (IOS(_), _) => PLATFORM_IOS,
+                (TvOS(_), Sim) => PLATFORM_TVOSSIMULATOR,
+                (TvOS(_), _) => PLATFORM_TVOS,
+                (VisionOS(_) | XROS(_), Sim) => PLATFORM_XROSSIMULATOR,
+                (VisionOS(_) | XROS(_), _) => PLATFORM_XROS,
+                (WatchOS(_), Sim) => PLATFORM_WATCHOSSIMULATOR,
+                (WatchOS(_), _) => PLATFORM_WATCHOS,
+                _ => {
+                    warn!("unsupported OS/environment: {triple}");
+                    0
+                }
+            };
+
+            let mut build_version = object::write::MachOBuildVersion::default();
+            build_version.platform = platform;
+
+            build_version.minos = if let Some(v) = v {
+                pack_version(v)
+            } else {
+                // The `minos` in object files is useful for diagnostics, as
+                // it tells the linker whether the file supports a given OS -
+                // if the `minos` is higher than what you're linking against,
+                // that's a signal that something has gone wrong.
+                //
+                // Using `0.0.0` here should be fine if we don't have the data
+                // available.
+                0
+            };
+
+            // Setting a 0 SDK version is fine, it's only relevant for the
+            // final linked binary.
+            build_version.sdk = 0;
+
+            Some(build_version)
+        }
+        _ => None,
+    }
+}
+
 /// An `ObjectModule` implements `Module` and emits ".o" files using the `object` library.
 ///
 /// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
@@ -162,6 +224,13 @@ impl ObjectModule {
         object.flags = builder.flags;
         object.set_subsections_via_symbols();
         object.add_file_symbol(builder.name);
+        if let Some(info) = macho_build_version(builder.isa.triple()) {
+            // Set LC_BUILD_VERSION.
+            //
+            // Required when linking Apple targets to avoid warning, see:
+            // https://github.com/bytecodealliance/wasmtime/issues/8730
+            object.set_macho_build_version(info);
+        }
         Self {
             isa: builder.isa,
             object,
