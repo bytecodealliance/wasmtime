@@ -51,7 +51,8 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd, blocking_mode: BlockingM
             .err()
             .expect("read of writeonly fails"),
         wasip1::ERRNO_PERM,
-        wasip1::ERRNO_BADF
+        wasip1::ERRNO_BADF,
+        wasip1::ERRNO_ACCES
     );
 
     wasip1::fd_close(f_readonly).expect("close readonly");
@@ -89,7 +90,8 @@ unsafe fn test_path_open_read_write(dir_fd: wasip1::Fd, blocking_mode: BlockingM
             .err()
             .expect("read of writeonly fails"),
         wasip1::ERRNO_PERM,
-        wasip1::ERRNO_BADF
+        wasip1::ERRNO_BADF,
+        wasip1::ERRNO_ACCES
     );
     let bytes_written = blocking_mode
         .write(f_writeonly, &[ciovec])

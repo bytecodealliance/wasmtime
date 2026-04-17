@@ -851,7 +851,7 @@ where
             assign(vectorizelanes(
                 &(arg0
                     .into_iter()
-                    .zip(arg1.into_iter())
+                    .zip(arg1)
                     .map(|(x, y)| {
                         DataValue::bool(
                             fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
@@ -876,8 +876,8 @@ where
             assign(vectorizelanes(
                 &(arg0
                     .into_iter()
-                    .zip(arg1.into_iter())
-                    .zip(arg2.into_iter())
+                    .zip(arg1)
+                    .zip(arg2)
                     .map(|((x, y), z)| DataValueExt::fma(x, y, z))
                     .collect::<ValueResult<SimdVec<DataValue>>>()?),
                 ctrl_ty,
@@ -904,7 +904,7 @@ where
                 assign(vectorizelanes(
                     &(arg0
                         .into_iter()
-                        .zip(arg1.into_iter())
+                        .zip(arg1)
                         .map(|(a, b)| scalar_min(a, b))
                         .collect::<ValueResult<SimdVec<DataValue>>>()?),
                     ctrl_ty,
@@ -931,7 +931,7 @@ where
                 assign(vectorizelanes(
                     &(arg0
                         .into_iter()
-                        .zip(arg1.into_iter())
+                        .zip(arg1)
                         .map(|(a, b)| scalar_max(a, b))
                         .collect::<ValueResult<SimdVec<DataValue>>>()?),
                     ctrl_ty,
@@ -1323,7 +1323,7 @@ where
             let max: DataValue = DataValueExt::int(max as i128, double_width)?;
             let new_vec = arg0
                 .into_iter()
-                .zip(arg1.into_iter())
+                .zip(arg1)
                 .map(|(x, y)| {
                     let x = x.into_int_signed()?;
                     let y = y.into_int_signed()?;
@@ -1462,7 +1462,7 @@ fn icmp(
 
     let res = left
         .into_iter()
-        .zip(right.into_iter())
+        .zip(right)
         .map(|(l, r)| cmp(dst_ty.lane_type(), code, &l, &r))
         .collect::<ValueResult<SimdVec<DataValue>>>()?;
 

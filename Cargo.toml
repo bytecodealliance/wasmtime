@@ -195,7 +195,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2024"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.92.0"
+rust-version = "1.93.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -348,22 +348,22 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.4"
 rustix = "1.1.4"
 # wit-bindgen:
-wit-bindgen = { version = "0.56.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.56.0", default-features = false }
+wit-bindgen = { version = "0.57.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.57.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.246.2", default-features = false, features = ['simd'] }
-wat = "1.246.2"
-wast = "246.0.2"
-wasmprinter = "0.246.2"
-wasm-encoder = "0.246.2"
-wasm-smith = "0.246.2"
-wasm-mutate = "0.246.2"
-wit-parser = "0.246.2"
-wit-component = "0.246.2"
-wasm-wave = "0.246.2"
-wasm-compose = { version = "0.246.2", default-features = false }
-json-from-wast = "0.246.2"
+wasmparser = { version = "0.247.0", default-features = false, features = ['simd'] }
+wat = "1.247.0"
+wast = "247.0.0"
+wasmprinter = "0.247.0"
+wasm-encoder = "0.247.0"
+wasm-smith = "0.247.0"
+wasm-mutate = "0.247.0"
+wit-parser = "0.247.0"
+wit-component = "0.247.0"
+wasm-wave = "0.247.0"
+wasm-compose = { version = "0.247.0", default-features = false }
+json-from-wast = "0.247.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
