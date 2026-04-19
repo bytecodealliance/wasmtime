@@ -64,8 +64,6 @@ impl outgoing_handler::Host for WasiHttpCtxView<'_> {
 
         let authority = req.authority.unwrap_or_else(String::new);
 
-        builder = builder.header(hyper::header::HOST, &authority);
-
         let mut uri = http::Uri::builder()
             .scheme(scheme)
             .authority(authority.clone());
