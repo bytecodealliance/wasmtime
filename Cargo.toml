@@ -336,7 +336,7 @@ regalloc2 = "0.15.1"
 wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
-target-lexicon = "0.13.0"
+target-lexicon = "0.13.3"
 cap-std = "3.4.5"
 cap-fs-ext = "3.4.5"
 cap-net-ext = "3.4.5"

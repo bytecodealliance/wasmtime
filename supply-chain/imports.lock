@@ -1037,8 +1037,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.target-lexicon]]
-version = "0.13.0"
-when = "2024-12-05"
+version = "0.13.3"
+when = "2025-09-09"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
