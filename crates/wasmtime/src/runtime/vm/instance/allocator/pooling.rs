@@ -319,7 +319,7 @@ pub struct PoolingInstanceAllocator {
     live_tables: AtomicUsize,
 
     #[cfg(feature = "gc")]
-    gc_heaps: GcHeapPool,
+    gc_heaps: Option<GcHeapPool>,
     #[cfg(feature = "gc")]
     live_gc_heaps: AtomicUsize,
 
@@ -356,8 +356,8 @@ impl Drop for PoolingInstanceAllocator {
         debug_assert!(self.tables.is_empty());
 
         #[cfg(feature = "gc")]
-        {
-            debug_assert!(self.gc_heaps.is_empty());
+        if let Some(gc_heaps) = &self.gc_heaps {
+            debug_assert!(gc_heaps.is_empty());
             debug_assert_eq!(self.live_gc_heaps.load(Ordering::Acquire), 0);
         }
 
@@ -383,7 +383,11 @@ impl PoolingInstanceAllocator {
             tables: TablePool::new(config)?,
             live_tables: AtomicUsize::new(0),
             #[cfg(feature = "gc")]
-            gc_heaps: GcHeapPool::new(config, tunables)?,
+            gc_heaps: if tunables.collector.is_some() {
+                Some(GcHeapPool::new(config, tunables)?)
+            } else {
+                None
+            },
             #[cfg(feature = "gc")]
             live_gc_heaps: AtomicUsize::new(0),
             #[cfg(feature = "async")]
@@ -882,9 +886,12 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         memory_alloc_index: MemoryAllocationIndex,
         memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        let ret = self
-            .gc_heaps
-            .allocate(engine, gc_runtime, memory_alloc_index, memory)?;
+        let ret = self.gc_heaps.as_ref().unwrap().allocate(
+            engine,
+            gc_runtime,
+            memory_alloc_index,
+            memory,
+        )?;
         self.live_gc_heaps.fetch_add(1, Ordering::Relaxed);
         Ok(ret)
     }
@@ -895,8 +902,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
     ) -> (MemoryAllocationIndex, Memory) {
+        let gc_heaps = self.gc_heaps.as_ref().unwrap();
         self.live_gc_heaps.fetch_sub(1, Ordering::Relaxed);
-        self.gc_heaps.deallocate(allocation_index, gc_heap)
+        gc_heaps.deallocate(allocation_index, gc_heap)
     }
 
     fn as_pooling(&self) -> Option<&PoolingInstanceAllocator> {
