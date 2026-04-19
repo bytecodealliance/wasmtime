@@ -434,8 +434,8 @@ impl Module for ObjectModule {
                     "Custom section not supported for TLS"
                 )));
             }
-            let (seg, sec) = &custom_segment_section.as_ref().unwrap();
-            self.object.add_section(
+            let (seg, sec, macho_flags) = &custom_segment_section.as_ref().unwrap();
+            let section = self.object.add_section(
                 seg.clone().into_bytes(),
                 sec.clone().into_bytes(),
                 if decl.writable {
@@ -445,7 +445,22 @@ impl Module for ObjectModule {
                 } else {
                     SectionKind::ReadOnlyDataWithRel
                 },
-            )
+            );
+
+            match self.object.section_flags_mut(section) {
+                SectionFlags::MachO { flags } => {
+                    *flags = *macho_flags;
+                }
+                _ => {
+                    if *macho_flags != 0 {
+                        return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
+                            "unsupported Mach-O flags for this platform: {macho_flags:?}"
+                        )));
+                    }
+                }
+            }
+
+            section
         };
 
         if used {
