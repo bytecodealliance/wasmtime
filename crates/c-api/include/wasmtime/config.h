@@ -94,6 +94,39 @@ enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   WASMTIME_PROFILING_STRATEGY_PERFMAP,
 };
 
+/**
+ * \brief Different ways Cranelift can allocate registers
+ *
+ * See #wasmtime_regalloc_algorithm_enum for possible values.
+ */
+typedef uint8_t wasmtime_regalloc_algorithm_t;
+
+/**
+ * \brief Different ways to allocate registers.
+ *
+ * The default is #WASMTIME_REGALLOC_BACKTRACKING.
+ */
+enum wasmtime_regalloc_algorithm_enum { // RegallocAlgorithm
+  /// Generates the fastest possible code, but may take longer.
+  ///
+  /// This algorithm performs “backtracking”, which means that it may undo
+  /// its earlier work and retry as it discovers conflicts. This results
+  /// in better register utilization,  producing fewer spills and moves,
+  /// but can cause super-linear compile runtime.
+  WASMTIME_REGALLOC_BACKTRACKING,
+  /// Generates acceptable code very quickly.
+  ///
+  /// This algorithm performs a single pass through the code, guaranteed to work
+  /// in linear time.
+  /// (Note that the rest of Cranelift is not necessarily guaranteed to run in
+  /// linear time, however.)
+  /// It cannot undo earlier decisions, however, and it cannot foresee
+  /// constraints or issues that may
+  /// occur further ahead in the code, so the code may have more spills and
+  /// moves as a result.
+  WASMTIME_REGALLOC_SINGLE_PASS,
+};
+
 #define WASMTIME_CONFIG_PROP(ret, name, ty)                                    \
   WASM_API_EXTERN ret wasmtime_config_##name##_set(wasm_config_t *, ty);
 
@@ -348,6 +381,15 @@ WASMTIME_CONFIG_PROP(void, cranelift_nan_canonicalization, bool)
  * This setting in #WASMTIME_OPT_LEVEL_SPEED by default.
  */
 WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
+
+/**
+ * \brief Configures the regalloc algorithm used by the Cranelift code
+ * generator.
+ *
+ * This setting in #WASMTIME_REGALLOC_BACKTRACKING by default.
+ */
+WASMTIME_CONFIG_PROP(void, cranelift_regalloc_algorithm,
+                     wasmtime_regalloc_algorithm_t)
 
 #endif // WASMTIME_FEATURE_COMPILER
 
