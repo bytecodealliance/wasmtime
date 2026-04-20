@@ -71,14 +71,12 @@ impl GcOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(
-            usize::try_from(self.limits.num_params).expect("num_params is too large"),
-        );
+        let mut params: Vec<ValType> =
+            Vec::with_capacity(usize::try_from(self.limits.num_params).unwrap());
         for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
-        let params_len =
-            u32::try_from(params.len()).expect("params len should be within u32 range");
+        let params_len = u32::try_from(params.len()).unwrap();
         let results = vec![];
         types.ty().function(params, results);
 
@@ -124,7 +122,7 @@ impl GcOps {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
                 CompositeType::Struct(st) => {
-                    let fields: Vec<wasm_encoder::FieldType> = st
+                    let fields: Box<[wasm_encoder::FieldType]> = st
                         .fields
                         .iter()
                         .map(|f| wasm_encoder::FieldType {
@@ -137,9 +135,7 @@ impl GcOps {
                         supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
                         composite_type: wasm_encoder::CompositeType {
                             inner: wasm_encoder::CompositeInnerType::Struct(
-                                wasm_encoder::StructType {
-                                    fields: fields.into_boxed_slice(),
-                                },
+                                wasm_encoder::StructType { fields },
                             ),
                             shared: false,
                             describes: None,
@@ -943,13 +939,10 @@ impl GcOp {
                 type_index: x,
                 externref_from_stack,
             } => {
-                if let Some(tid) =
-                    encoding_order.get(usize::try_from(x).expect("type_index should fit in usize"))
-                {
+                if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
                     if let Some(def) = types.type_defs.get(tid) {
                         let CompositeType::Struct(ref st) = def.composite_type;
-                        let num_from_stack = usize::try_from(externref_from_stack)
-                            .expect("externref_from_stack should fit in usize");
+                        let num_from_stack = usize::try_from(externref_from_stack).unwrap();
 
                         // Save consumed externrefs from the Wasm stack into
                         // scratch locals. The most-recently-consumed value is
@@ -957,7 +950,7 @@ impl GcOp {
                         for i in (0..num_from_stack).rev() {
                             func.instruction(&Instruction::LocalSet(
                                 encoding_bases.struct_externref_scratch_base
-                                    + u32::try_from(i).expect("i should fit in u32"),
+                                    + u32::try_from(i).unwrap(),
                             ));
                         }
 
@@ -967,8 +960,7 @@ impl GcOp {
                             if field.field_type.is_ref() && ref_idx < num_from_stack {
                                 func.instruction(&Instruction::LocalGet(
                                     encoding_bases.struct_externref_scratch_base
-                                        + u32::try_from(ref_idx)
-                                            .expect("ref_idx should fit in u32"),
+                                        + u32::try_from(ref_idx).unwrap(),
                                 ));
                                 ref_idx += 1;
                             } else {
@@ -1115,7 +1107,7 @@ impl GcOp {
             } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let fields = encoding_order
-                    .get(usize::try_from(type_index).expect("Too large encoding"))
+                    .get(usize::try_from(type_index).unwrap())
                     .and_then(|tid| types.type_defs.get(tid))
                     .map(|def| {
                         let CompositeType::Struct(ref st) = def.composite_type;
@@ -1132,10 +1124,7 @@ impl GcOp {
                         func.instruction(&Instruction::Else);
                         func.instruction(&Instruction::LocalGet(typed_local));
                         let idx = field_index % u32::try_from(fields.len()).unwrap();
-                        if fields[usize::try_from(idx).expect("Too large encoding")]
-                            .field_type
-                            .is_packed()
-                        {
+                        if fields[usize::try_from(idx).unwrap()].field_type.is_packed() {
                             func.instruction(&Instruction::StructGetS {
                                 struct_type_index: wasm_type,
                                 field_index: idx,
@@ -1163,7 +1152,7 @@ impl GcOp {
             } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let fields = encoding_order
-                    .get(usize::try_from(type_index).expect("Too large encoding"))
+                    .get(usize::try_from(type_index).unwrap())
                     .and_then(|tid| types.type_defs.get(tid))
                     .map(|def| {
                         let CompositeType::Struct(ref st) = def.composite_type;
@@ -1175,8 +1164,7 @@ impl GcOp {
                 match fields {
                     Some(fields) if !fields.is_empty() => {
                         let len = fields.len();
-                        let start =
-                            (usize::try_from(field_index).expect("Too large encoding")) % len;
+                        let start = (usize::try_from(field_index).unwrap()) % len;
                         let mutable_field = (0..len)
                             .map(|offset| (start + offset) % len)
                             .find(|&i| fields[i].mutable);
@@ -1204,7 +1192,7 @@ impl GcOp {
                                     func.instruction(&Instruction::LocalGet(
                                         encoding_bases.struct_externref_scratch_base,
                                     ));
-                                    let idx = u32::try_from(idx).expect("Too large encoding");
+                                    let idx = u32::try_from(idx).unwrap();
                                     func.instruction(&Instruction::StructSet {
                                         struct_type_index: wasm_type,
                                         field_index: idx,
@@ -1220,7 +1208,7 @@ impl GcOp {
                                     func.instruction(&Instruction::Else);
                                     func.instruction(&Instruction::LocalGet(typed_local));
                                     fields[idx].field_type.emit_default_const(func);
-                                    let idx = u32::try_from(idx).expect("Too large encoding");
+                                    let idx = u32::try_from(idx).unwrap();
                                     func.instruction(&Instruction::StructSet {
                                         struct_type_index: wasm_type,
                                         field_index: idx,

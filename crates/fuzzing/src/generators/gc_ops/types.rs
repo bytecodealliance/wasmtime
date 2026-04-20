@@ -70,6 +70,12 @@ macro_rules! define_field_type_enum {
             /// All possible field type variants, for random selection.
             pub const ALL: &[FieldType] = &[ $( FieldType::$variant, )* ];
 
+            /// Pick a random field type.
+            pub fn random(rng: &mut mutatis::Rng) -> FieldType {
+                let idx = rng.gen_index(FieldType::ALL.len()).unwrap();
+                FieldType::ALL[idx]
+            }
+
             /// Convert to a `wasm_encoder::StorageType`.
             pub fn to_storage_type(self) -> wasm_encoder::StorageType {
                 match self {
@@ -504,9 +510,8 @@ impl Types {
         limits: &GcOpsLimits,
         encoding_order_grouped: &mut Vec<(RecGroupId, Vec<TypeId>)>,
     ) {
-        let max_rec_groups =
-            usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
-        let max_types = usize::try_from(limits.max_types).expect("max_types is too large");
+        let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
+        let max_types = usize::try_from(limits.max_types).unwrap();
 
         // 1. Trim excess types.
         while self.type_defs.len() > max_types {
@@ -576,7 +581,7 @@ impl Types {
         }
 
         // 8. Trim fields to max_fields limit.
-        let max_fields = usize::try_from(limits.max_fields).expect("max_fields is too large");
+        let max_fields = usize::try_from(limits.max_fields).unwrap();
         for def in self.type_defs.values_mut() {
             let CompositeType::Struct(ref mut st) = def.composite_type;
             st.fields.truncate(max_fields);
@@ -630,14 +635,11 @@ impl Types {
     /// every type belongs to exactly one rec group,
     /// and every rec group member must exist in type_defs.
     fn is_well_formed(&self, limits: &GcOpsLimits) -> bool {
-        if self.rec_groups.len()
-            > usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
-        {
+        if self.rec_groups.len() > usize::try_from(limits.max_rec_groups).unwrap() {
             log::debug!("[-] Failed: rec_groups.len() > max_rec_groups");
             return false;
         }
-        if self.type_defs.len() > usize::try_from(limits.max_types).expect("max_types is too large")
-        {
+        if self.type_defs.len() > usize::try_from(limits.max_types).unwrap() {
             log::debug!("[-] Failed: type_defs.len() > max_types");
             return false;
         }
@@ -659,7 +661,7 @@ impl Types {
             return false;
         }
         // Every supertype must exist and must not be final.
-        let max_fields = usize::try_from(limits.max_fields).expect("max_fields is too large");
+        let max_fields = usize::try_from(limits.max_fields).unwrap();
         for (&tid, def) in &self.type_defs {
             // Check field count limit.
             let CompositeType::Struct(ref st) = def.composite_type;
@@ -761,10 +763,10 @@ impl StackType {
                 let ok = match (wanted, stack.last()) {
                     (Some(wanted), Some(Self::Struct(Some(actual)))) => {
                         let sub = encoding_order
-                            .get(usize::try_from(*actual).expect("invalid type index"))
+                            .get(usize::try_from(*actual).unwrap())
                             .copied();
                         let sup = encoding_order
-                            .get(usize::try_from(wanted).expect("invalid type index"))
+                            .get(usize::try_from(wanted).unwrap())
                             .copied();
                         let st = match (sub, sup) {
                             (Some(sub), Some(sup)) => types.is_subtype(sub, sup),
@@ -931,10 +933,8 @@ impl StackType {
         encoding_order: &[TypeId],
     ) -> u32 {
         if let (Some(&sub_tid), Some(&super_tid)) = (
-            encoding_order
-                .get(usize::try_from(sub_type_index).expect("sub_type_index is out of bounds")),
-            encoding_order
-                .get(usize::try_from(super_type_index).expect("super_type_index is out of bounds")),
+            encoding_order.get(usize::try_from(sub_type_index).unwrap()),
+            encoding_order.get(usize::try_from(super_type_index).unwrap()),
         ) {
             // Already valid.
             if types.is_subtype(sub_tid, super_tid) {
@@ -943,7 +943,7 @@ impl StackType {
             // Try sub's direct supertype.
             if let Some(actual_super) = types.type_defs.get(&sub_tid).and_then(|d| d.supertype) {
                 if let Some(idx) = encoding_order.iter().position(|&t| t == actual_super) {
-                    return u32::try_from(idx).expect("too many types for index");
+                    return u32::try_from(idx).unwrap();
                 }
             }
         }
@@ -960,10 +960,8 @@ impl StackType {
         encoding_order: &[TypeId],
     ) -> u32 {
         if let (Some(&sub_tid), Some(&super_tid)) = (
-            encoding_order
-                .get(usize::try_from(sub_type_index).expect("sub_type_index is out of bounds")),
-            encoding_order
-                .get(usize::try_from(super_type_index).expect("super_type_index is out of bounds")),
+            encoding_order.get(usize::try_from(sub_type_index).unwrap()),
+            encoding_order.get(usize::try_from(super_type_index).unwrap()),
         ) {
             // Already valid.
             if types.is_subtype(sub_tid, super_tid) {
@@ -973,7 +971,7 @@ impl StackType {
             for (idx, tid) in encoding_order.iter().enumerate() {
                 if let Some(def) = types.type_defs.get(tid) {
                     if def.supertype == Some(super_tid) {
-                        return u32::try_from(idx).expect("too many types for index");
+                        return u32::try_from(idx).unwrap();
                     }
                 }
             }
@@ -1000,7 +998,7 @@ impl StackType {
     ) -> u32 {
         // Look up the struct type and count its ref fields.
         let ref_field_count = encoding_order
-            .get(usize::try_from(type_index).expect("type_index is out of bounds"))
+            .get(usize::try_from(type_index).unwrap())
             .and_then(|tid| types.type_defs.get(tid))
             .map(|def| {
                 let CompositeType::Struct(ref st) = def.composite_type;

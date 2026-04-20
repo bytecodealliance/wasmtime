@@ -35,14 +35,14 @@ fn is_subtype_index(
     }
 
     let sub = match encoding_order
-        .get(usize::try_from(sub_index).expect("sub_index is out of bounds"))
+        .get(usize::try_from(sub_index).unwrap())
         .copied()
     {
         Some(t) => t,
         None => return false,
     };
     let sup = match encoding_order
-        .get(usize::try_from(sup_index).expect("sup_index is out of bounds"))
+        .get(usize::try_from(sup_index).unwrap())
         .copied()
     {
         Some(t) => t,

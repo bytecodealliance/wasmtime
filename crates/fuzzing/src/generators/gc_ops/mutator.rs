@@ -22,15 +22,11 @@ impl TypesMutator {
         types: &mut Types,
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
-        if c.shrink()
-            || types.type_defs.len()
-                >= usize::try_from(limits.max_types).expect("max_types is too large")
-        {
+        if c.shrink() || types.type_defs.len() >= usize::try_from(limits.max_types).unwrap() {
             return Ok(());
         }
 
-        let max_rec_groups =
-            usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
+        let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
         if types.rec_groups.is_empty() && max_rec_groups == 0 {
             return Ok(());
         }
@@ -201,10 +197,8 @@ impl TypesMutator {
     ) -> mutatis::Result<()> {
         if c.shrink()
             || types.rec_groups.is_empty()
-            || types.rec_groups.len()
-                >= usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
-            || types.type_defs.len()
-                >= usize::try_from(limits.max_types).expect("max_types is too large")
+            || types.rec_groups.len() >= usize::try_from(limits.max_rec_groups).unwrap()
+            || types.type_defs.len() >= usize::try_from(limits.max_types).unwrap()
         {
             return Ok(());
         }
@@ -334,8 +328,7 @@ impl TypesMutator {
         if c.shrink()
             || types.rec_groups.is_empty()
             || types.type_defs.len() < 2
-            || types.rec_groups.len()
-                >= usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
+            || types.rec_groups.len() >= usize::try_from(limits.max_rec_groups).unwrap()
         {
             return Ok(());
         }
@@ -435,10 +428,7 @@ impl Mutate<StructField> for StructFieldMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, field: &mut StructField) -> MutResult<()> {
         c.mutation(|ctx| {
             let old = format!("{field:?}");
-            let idx = usize::try_from(ctx.rng().gen_u32())
-                .expect("failed to convert rng output to usize")
-                % FieldType::ALL.len();
-            field.field_type = FieldType::ALL[idx];
+            field.field_type = FieldType::random(ctx.rng());
             field.mutable = (ctx.rng().gen_u32() % 2) == 0;
             log::debug!("Mutated field {old} -> {field:?}");
             Ok(())
@@ -449,11 +439,8 @@ impl Mutate<StructField> for StructFieldMutator {
 
 impl Generate<StructField> for StructFieldMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<StructField> {
-        let idx = usize::try_from(ctx.rng().gen_u32())
-            .expect("failed to convert rng output to usize")
-            % FieldType::ALL.len();
         let field = StructField {
-            field_type: FieldType::ALL[idx],
+            field_type: FieldType::random(ctx.rng()),
             mutable: (ctx.rng().gen_u32() % 2) == 0,
         };
         log::debug!("Generated field {field:?}");
