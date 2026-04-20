@@ -187,6 +187,7 @@
 #include <wasmtime/conf.h>
 // clang-format off
 // IWYU pragma: begin_exports
+#include <wasmtime/anyref.h>
 #include <wasmtime/arrayref.h>
 #include <wasmtime/async.h>
 #include <wasmtime/component.h>
