@@ -707,7 +707,7 @@ opt-level = 's'
 # then this can be removed. Otherwise this is causing spurious failures on CI at
 # this time.
 [profile.dev.package.tokio]
-debug-assertions = false
+overflow-checks = false
 
 [profile.profiling]
 inherits = "bench"
