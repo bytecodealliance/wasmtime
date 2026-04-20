@@ -20,8 +20,6 @@ pub use wasmtime;
 mod config;
 mod engine;
 mod error;
-#[cfg(feature = "gc")]
-mod exn;
 mod r#extern;
 mod func;
 mod global;
@@ -31,8 +29,6 @@ mod memory;
 mod module;
 #[cfg(feature = "profiling")]
 mod profiling;
-#[cfg(feature = "gc")]
-mod r#ref;
 mod sharedmemory;
 mod store;
 mod table;
@@ -45,8 +41,6 @@ mod vec;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::error::*;
-#[cfg(feature = "gc")]
-pub use crate::exn::*;
 pub use crate::r#extern::*;
 pub use crate::func::*;
 pub use crate::global::*;
@@ -54,8 +48,6 @@ pub use crate::instance::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::*;
-#[cfg(feature = "gc")]
-pub use crate::r#ref::*;
 pub use crate::store::*;
 pub use crate::table::*;
 pub use crate::tag::*;
@@ -63,6 +55,36 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::val::*;
 pub use crate::vec::*;
+
+#[cfg(feature = "gc")]
+mod anyref;
+#[cfg(feature = "gc")]
+mod arrayref;
+#[cfg(feature = "gc")]
+mod eqref;
+#[cfg(feature = "gc")]
+mod exnref;
+#[cfg(feature = "gc")]
+mod externref;
+#[cfg(feature = "gc")]
+mod r#ref;
+#[cfg(feature = "gc")]
+mod structref;
+
+#[cfg(feature = "gc")]
+pub use crate::anyref::*;
+#[cfg(feature = "gc")]
+pub use crate::arrayref::*;
+#[cfg(feature = "gc")]
+pub use crate::eqref::*;
+#[cfg(feature = "gc")]
+pub use crate::exnref::*;
+#[cfg(feature = "gc")]
+pub use crate::externref::*;
+#[cfg(feature = "gc")]
+pub use crate::r#ref::*;
+#[cfg(feature = "gc")]
+pub use crate::structref::*;
 
 #[cfg(feature = "async")]
 mod r#async;

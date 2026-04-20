@@ -35,19 +35,23 @@
 #ifndef WASMTIME_HH
 #define WASMTIME_HH
 
+#include <wasmtime/anyref.hh>
+#include <wasmtime/arrayref.hh>
 #include <wasmtime/config.hh>
 #include <wasmtime/engine.hh>
+#include <wasmtime/eqref.hh>
 #include <wasmtime/error.hh>
-#include <wasmtime/exn.hh>
+#include <wasmtime/exnref.hh>
 #include <wasmtime/extern.hh>
+#include <wasmtime/externref.hh>
 #include <wasmtime/func.hh>
-#include <wasmtime/gc.hh>
 #include <wasmtime/global.hh>
 #include <wasmtime/instance.hh>
 #include <wasmtime/linker.hh>
 #include <wasmtime/memory.hh>
 #include <wasmtime/module.hh>
 #include <wasmtime/store.hh>
+#include <wasmtime/structref.hh>
 #include <wasmtime/table.hh>
 #include <wasmtime/tag.hh>
 #include <wasmtime/trap.hh>

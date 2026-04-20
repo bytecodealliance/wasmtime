@@ -5,8 +5,8 @@
 #ifndef WASMTIME_TAG_HH
 #define WASMTIME_TAG_HH
 
+#include <wasmtime/_store_class.hh>
 #include <wasmtime/error.hh>
-#include <wasmtime/store.hh>
 #include <wasmtime/tag.h>
 #include <wasmtime/types/tag.hh>
 

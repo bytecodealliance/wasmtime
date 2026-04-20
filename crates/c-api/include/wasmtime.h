@@ -187,11 +187,16 @@
 #include <wasmtime/conf.h>
 // clang-format off
 // IWYU pragma: begin_exports
+#include <wasmtime/arrayref.h>
+#include <wasmtime/async.h>
+#include <wasmtime/component.h>
 #include <wasmtime/config.h>
 #include <wasmtime/engine.h>
+#include <wasmtime/eqref.h>
 #include <wasmtime/error.h>
-#include <wasmtime/exn.h>
+#include <wasmtime/exnref.h>
 #include <wasmtime/extern.h>
+#include <wasmtime/externref.h>
 #include <wasmtime/func.h>
 #include <wasmtime/global.h>
 #include <wasmtime/instance.h>
@@ -201,13 +206,13 @@
 #include <wasmtime/profiling.h>
 #include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
+#include <wasmtime/structref.h>
 #include <wasmtime/table.h>
 #include <wasmtime/tag.h>
 #include <wasmtime/trap.h>
+#include <wasmtime/types/arrayref.h>
+#include <wasmtime/types/structref.h>
 #include <wasmtime/val.h>
-#include <wasmtime/gc.h>
-#include <wasmtime/async.h>
-#include <wasmtime/component.h>
 #include <wasmtime/wat.h>
 // IWYU pragma: end_exports
 // clang-format on

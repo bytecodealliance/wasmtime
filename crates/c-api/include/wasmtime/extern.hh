@@ -5,9 +5,9 @@
 #ifndef WASMTIME_EXTERN_HH
 #define WASMTIME_EXTERN_HH
 
+#include <wasmtime/_func_class.hh>
 #include <wasmtime/extern.h>
 #include <wasmtime/extern_declare.hh>
-#include <wasmtime/func.hh>
 #include <wasmtime/global.hh>
 #include <wasmtime/memory.hh>
 #include <wasmtime/table.hh>

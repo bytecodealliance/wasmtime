@@ -5,8 +5,8 @@
 #ifndef WASMTIME_INSTANCE_HH
 #define WASMTIME_INSTANCE_HH
 
+#include <wasmtime/_func_class.hh>
 #include <wasmtime/extern.hh>
-#include <wasmtime/func.hh>
 #include <wasmtime/global.hh>
 #include <wasmtime/instance.h>
 #include <wasmtime/memory.hh>

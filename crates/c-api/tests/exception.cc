@@ -23,7 +23,7 @@ TEST(Exception, ConstructAndExamine) {
 
   // Create an exception with payload (42, 100).
   std::vector<Val> fields = {Val(int32_t(42)), Val(int64_t(100))};
-  auto exn = Exn::create(cx, tag, fields).unwrap();
+  auto exn = ExnRef::create(cx, tag, fields).unwrap();
 
   // Read back the tag and verify identity.
   auto exn_tag = exn.tag(cx).unwrap();
@@ -97,7 +97,7 @@ TEST(Exception, HostThrowWasmCatch) {
                   auto cx2 = caller.context();
 
                   std::vector<Val> fields = {Val(int32_t(99))};
-                  auto exn = Exn::create(cx2, tag, fields).unwrap();
+                  auto exn = ExnRef::create(cx2, tag, fields).unwrap();
                   return cx2.throw_exception(std::move(exn));
                 });
 
