@@ -12,7 +12,7 @@
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (iconst _ (u64_from_imm64 n))))
+(rule (lower (iconst ty (u64_from_imm64 n)))
       (imm ty n))
 
 
@@ -42,7 +42,7 @@
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (vconst _ (u128_from_constant x))))
+(rule (lower (vconst ty (u128_from_constant x)))
       (vec_imm ty (be_vec_const ty x)))
 
 
@@ -54,7 +54,7 @@
 
 ;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (vr128_ty ty) (iconcat _ x y)))
+(rule (lower (iconcat (vr128_ty ty) x y))
       (mov_to_vec128 ty y x))
 
 
@@ -70,71 +70,75 @@
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (iadd _ x y)))
+(rule 0 (lower (iadd (fits_in_64 ty) x y))
       (add_reg ty x y))
 
 ;; Add a register and a sign-extended register.
-(rule 8 (lower (has_type (fits_in_64 ty) (iadd _ x (sext32_value y))))
+(rule 8 (lower (iadd (fits_in_64 ty) x (sext32_value y)))
       (add_reg_sext32 ty x y))
-(rule 15 (lower (has_type (fits_in_64 ty) (iadd _ (sext32_value x) y)))
+(rule 15 (lower (iadd (fits_in_64 ty) (sext32_value x) y))
       (add_reg_sext32 ty y x))
 
 ;; Add a register and an immediate.
-(rule 7 (lower (has_type (fits_in_64 ty) (iadd _ x (i16_from_value y))))
+(rule 7 (lower (iadd (fits_in_64 ty) x (i16_from_value y)))
       (add_simm16 ty x y))
-(rule 14 (lower (has_type (fits_in_64 ty) (iadd _ (i16_from_value x) y)))
+(rule 14 (lower (iadd (fits_in_64 ty) (i16_from_value x) y))
       (add_simm16 ty y x))
-(rule 6 (lower (has_type (fits_in_64 ty) (iadd _ x (i32_from_value y))))
+(rule 6 (lower (iadd (fits_in_64 ty) x (i32_from_value y)))
       (add_simm32 ty x y))
-(rule 13 (lower (has_type (fits_in_64 ty) (iadd _ (i32_from_value x) y)))
+(rule 13 (lower (iadd (fits_in_64 ty) (i32_from_value x) y))
       (add_simm32 ty y x))
 
 ;; Add a register and memory (32/64-bit types).
-(rule 5 (lower (has_type (fits_in_64 ty) (iadd _ x (sinkable_load_32_64 y))))
+(rule 5 (lower (iadd (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (add_mem ty x (sink_load y)))
-(rule 12 (lower (has_type (fits_in_64 ty) (iadd _ (sinkable_load_32_64 x) y)))
+(rule 12 (lower (iadd (fits_in_64 ty) (sinkable_load_32_64 x) y))
       (add_mem ty y (sink_load x)))
 
 ;; Add a register and memory (16-bit types).
-(rule 4 (lower (has_type (fits_in_64 ty) (iadd _ x (sinkable_load_16 y))))
+(rule 4 (lower (iadd (fits_in_64 ty) x (sinkable_load_16 y)))
       (add_mem_sext16 ty x (sink_load y)))
-(rule 11 (lower (has_type (fits_in_64 ty) (iadd _ (sinkable_load_16 x) y)))
+(rule 11 (lower (iadd (fits_in_64 ty) (sinkable_load_16 x) y))
       (add_mem_sext16 ty y (sink_load x)))
 
 ;; Add a register and sign-extended memory.
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd _ x (sinkable_sload16 y))))
+(rule 3 (lower (iadd (fits_in_64 ty) x (sinkable_sload16 y)))
       (add_mem_sext16 ty x (sink_sload16 y)))
-(rule 10 (lower (has_type (fits_in_64 ty) (iadd _ (sinkable_sload16 x) y)))
+(rule 10 (lower (iadd (fits_in_64 ty) (sinkable_sload16 x) y))
       (add_mem_sext16 ty y (sink_sload16 x)))
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd _ x (sinkable_sload32 y))))
+(rule 2 (lower (iadd (fits_in_64 ty) x (sinkable_sload32 y)))
       (add_mem_sext32 ty x (sink_sload32 y)))
-(rule 9 (lower (has_type (fits_in_64 ty) (iadd _ (sinkable_sload32 x) y)))
+(rule 9 (lower (iadd (fits_in_64 ty) (sinkable_sload32 x) y))
       (add_mem_sext32 ty y (sink_sload32 x)))
 
 ;; Add two vector registers.
-(rule 1 (lower (has_type (vr128_ty ty) (iadd _ x y)))
+(rule 1 (lower (iadd (vr128_ty ty) x y))
       (vec_add ty x y))
 
-(rule 16 (lower (has_type (mie4_enabled)
-          (iadd $I64 (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)) y)))
+(rule 16 (lower (iadd (and (mie4_enabled) $I64)
+           (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))
+           y))
       (load_logical_indexed_addr x y z shift))
 
-(rule 17 (lower (has_type (mie4_enabled)
-          (iadd $I64 y (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)))))
+(rule 17 (lower (iadd (and (mie4_enabled) $I64)
+           y
+           (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))))
       (load_logical_indexed_addr y x z shift))
 
-(rule 18 (lower (has_type (and (ty_addr64 _) (mie4_enabled))
-          (iadd $I64 (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)) y)))
+(rule 18 (lower (iadd (and (mie4_enabled) $I64)
+           (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))
+           y))
       (load_indexed_addr x y z shift))
 
-(rule 19 (lower (has_type (and (ty_addr64 _) (mie4_enabled))
-          (iadd $I64 y (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift)))))
+(rule 19 (lower (iadd (and (mie4_enabled) $I64)
+           y
+          (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))))
       (load_indexed_addr y x z shift))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add (saturate unsigned) two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (uadd_sat _ x y)))
+(rule (lower (uadd_sat (ty_vec128 ty) x y))
       (let ((sum Reg (vec_add ty x y)))
         (vec_or ty sum (vec_cmphl ty x sum))))
 
@@ -142,7 +146,7 @@
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add (saturate signed) two vector registers.  $I64X2 not supported.
-(rule (lower (has_type (ty_vec128 ty) (sadd_sat _ x y)))
+(rule (lower (sadd_sat (ty_vec128 ty) x y))
       (vec_pack_ssat (vec_widen_type ty)
                      (vec_add (vec_widen_type ty) (vec_unpacks_high ty x)
                                                   (vec_unpacks_high ty y))
@@ -153,7 +157,7 @@
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Lane-wise integer pairwise addition for 8-/16/32-bit vector registers.
-(rule (lower (has_type ty @ (multi_lane bits _) (iadd_pairwise _ x y)))
+(rule (lower (iadd_pairwise ty @ (multi_lane bits _) x y))
       (let ((size Reg (vec_imm_splat $I8X16 bits)))
         (vec_pack_lane_order (vec_widen_type ty)
                              (vec_add ty x (vec_lshr_by_byte x size))
@@ -161,9 +165,9 @@
 
 ;; special case for the `i32x4.dot_i16x8_s` wasm instruction
 (rule 1 (lower
-        (has_type dst_ty (iadd_pairwise _
-                           (imul _ (swiden_low _ x @ (value_type src_ty)) (swiden_low _ y))
-                           (imul _ (swiden_high _ x) (swiden_high _ y)))))
+          (iadd_pairwise dst_ty 
+            (imul _ (swiden_low _ x @ (value_type src_ty)) (swiden_low _ y))
+            (imul _ (swiden_high _ x) (swiden_high _ y))))
       (vec_add dst_ty (vec_smul_even src_ty x y)
                       (vec_smul_odd src_ty x y)))
 
@@ -171,49 +175,49 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Sub two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (isub _ x y)))
+(rule 0 (lower (isub (fits_in_64 ty) x y))
       (sub_reg ty x y))
 
 ;; Sub a register and a sign-extended register.
-(rule 8 (lower (has_type (fits_in_64 ty) (isub _ x (sext32_value y))))
+(rule 8 (lower (isub (fits_in_64 ty) x (sext32_value y)))
       (sub_reg_sext32 ty x y))
 
 ;; Sub a register and an immediate (using add of the negated value).
-(rule 7 (lower (has_type (fits_in_64 ty) (isub _ x (i16_from_negated_value y))))
+(rule 7 (lower (isub (fits_in_64 ty) x (i16_from_negated_value y)))
       (add_simm16 ty x y))
-(rule 6 (lower (has_type (fits_in_64 ty) (isub _ x (i32_from_negated_value y))))
+(rule 6 (lower (isub (fits_in_64 ty) x (i32_from_negated_value y)))
       (add_simm32 ty x y))
 
 ;; Sub a register and memory (32/64-bit types).
-(rule 5 (lower (has_type (fits_in_64 ty) (isub _ x (sinkable_load_32_64 y))))
+(rule 5 (lower (isub (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (sub_mem ty x (sink_load y)))
 
 ;; Sub a register and memory (16-bit types).
-(rule 4 (lower (has_type (fits_in_64 ty) (isub _ x (sinkable_load_16 y))))
+(rule 4 (lower (isub (fits_in_64 ty) x (sinkable_load_16 y)))
       (sub_mem_sext16 ty x (sink_load y)))
 
 ;; Sub a register and sign-extended memory.
-(rule 3 (lower (has_type (fits_in_64 ty) (isub _ x (sinkable_sload16 y))))
+(rule 3 (lower (isub (fits_in_64 ty) x (sinkable_sload16 y)))
       (sub_mem_sext16 ty x (sink_sload16 y)))
-(rule 2 (lower (has_type (fits_in_64 ty) (isub _ x (sinkable_sload32 y))))
+(rule 2 (lower (isub (fits_in_64 ty) x (sinkable_sload32 y)))
       (sub_mem_sext32 ty x (sink_sload32 y)))
 
 ;; Sub two vector registers.
-(rule 1 (lower (has_type (vr128_ty ty) (isub _ x y)))
+(rule 1 (lower (isub (vr128_ty ty) x y))
       (vec_sub ty x y))
 
 
 ;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add (saturate unsigned) two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (usub_sat _ x y)))
+(rule (lower (usub_sat (ty_vec128 ty) x y))
       (vec_and ty (vec_sub ty x y) (vec_cmphl ty x y)))
 
 
 ;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add (saturate signed) two vector registers.  $I64X2 not supported.
-(rule (lower (has_type (ty_vec128 ty) (ssub_sat _ x y)))
+(rule (lower (ssub_sat (ty_vec128 ty) x y))
       (vec_pack_ssat (vec_widen_type ty)
                      (vec_sub (vec_widen_type ty) (vec_unpacks_high ty x)
                                                   (vec_unpacks_high ty y))
@@ -225,23 +229,23 @@
 
 ;; Absolute value of a register.
 ;; For types smaller than 32-bit, the input value must be sign-extended.
-(rule 2 (lower (has_type (fits_in_64 ty) (iabs _ x)))
+(rule 2 (lower (iabs (fits_in_64 ty) x))
       (abs_reg (ty_ext32 ty) (put_in_reg_sext32 x)))
 
 ;; Absolute value of a sign-extended register.
-(rule 3 (lower (has_type (fits_in_64 ty) (iabs _ (sext32_value x))))
+(rule 3 (lower (iabs (fits_in_64 ty) (sext32_value x)))
       (abs_reg_sext32 ty x))
 
 ;; Absolute value of a vector register.
-(rule 1 (lower (has_type (ty_vec128 ty) (iabs _ x)))
+(rule 1 (lower (iabs (ty_vec128 ty) x))
       (vec_abs ty x))
 
 ;; Absolute value of a 128-bit integer on z17.
-(rule 4 (lower (has_type (and (vxrs_ext3_enabled) $I128) (iabs _ x)))
+(rule 4 (lower (iabs (and (vxrs_ext3_enabled) $I128) x))
       (vec_abs $I128 x))
 
 ;; Absolute value of a 128-bit integer pre-z17.
-(rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (iabs _ x)))
+(rule 0 (lower (iabs (and (vxrs_ext3_disabled) $I128) x))
       (let ((zero Reg (vec_imm $I128 0))
             (pos Reg x)
             (neg Reg (vec_sub $I128 zero pos))
@@ -253,30 +257,30 @@
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Negate a register.
-(rule 2 (lower (has_type (fits_in_64 ty) (ineg _ x)))
+(rule 2 (lower (ineg (fits_in_64 ty) x))
       (neg_reg ty x))
 
 ;; Negate a sign-extended register.
-(rule 3 (lower (has_type (fits_in_64 ty) (ineg _ (sext32_value x))))
+(rule 3 (lower (ineg (fits_in_64 ty) (sext32_value x)))
       (neg_reg_sext32 ty x))
 
 ;; Negate a vector register.
-(rule 1 (lower (has_type (ty_vec128 ty) (ineg _ x)))
+(rule 1 (lower (ineg (ty_vec128 ty) x))
       (vec_neg ty x))
 
 ;; Negate a 128-bit integer on z17.
-(rule 4 (lower (has_type (and (vxrs_ext3_enabled) $I128) (ineg _ x)))
+(rule 4 (lower (ineg (and (vxrs_ext3_enabled) $I128) x))
       (vec_neg $I128 x))
 
 ;; Negate a 128-bit integer pre-z17.
-(rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (ineg _ x)))
+(rule 0 (lower (ineg (and (vxrs_ext3_disabled) $I128) x))
       (vec_sub $I128 (vec_imm $I128 0) x))
 
 
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned maximum of two scalar integers - expand to icmp + select.
-(rule 2 (lower (has_type (fits_in_64 ty) (umax _ x y)))
+(rule 2 (lower (umax (fits_in_64 ty) x y))
       (let ((x_ext Reg (put_in_reg_zext32 x))
             (y_ext Reg (put_in_reg_zext32 y))
             (cond ProducesBool (bool (icmpu_reg (ty_ext32 ty) x_ext y_ext)
@@ -284,25 +288,25 @@
         (select_bool_reg ty cond y_ext x_ext)))
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
-(rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (umax _ x y)))
+(rule 1 (lower (umax (and (vxrs_ext3_disabled) $I128) x y))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi y_reg x_reg)))
         (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Unsigned maximum of two 128-bit integers on z17.
-(rule 3 (lower (has_type (and (vxrs_ext3_enabled) $I128) (umax _ x y)))
+(rule 3 (lower (umax (and (vxrs_ext3_enabled) $I128) x y))
       (vec_umax $I128 x y))
 
 ;; Unsigned maximum of two vector registers.
-(rule 0 (lower (has_type (ty_vec128 ty) (umax _ x y)))
+(rule 0 (lower (umax (ty_vec128 ty) x y))
       (vec_umax ty x y))
 
 
 ;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned minimum of two scalar integers - expand to icmp + select.
-(rule 2 (lower (has_type (fits_in_64 ty) (umin _ x y)))
+(rule 2 (lower (umin (fits_in_64 ty) x y))
       (let ((x_ext Reg (put_in_reg_zext32 x))
             (y_ext Reg (put_in_reg_zext32 y))
             (cond ProducesBool (bool (icmpu_reg (ty_ext32 ty) x_ext y_ext)
@@ -310,25 +314,25 @@
         (select_bool_reg ty cond y_ext x_ext)))
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
-(rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (umin _ x y)))
+(rule 1 (lower (umin (and (vxrs_ext3_disabled) $I128) x y))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi x_reg y_reg)))
         (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Unsigned minimum of two 128-bit integers on z17.
-(rule 3 (lower (has_type (and (vxrs_ext3_enabled) $I128) (umin _ x y)))
+(rule 3 (lower (umin (and (vxrs_ext3_enabled) $I128) x y))
       (vec_umin $I128 x y))
 
 ;; Unsigned minimum of two vector registers.
-(rule 0 (lower (has_type (ty_vec128 ty) (umin _ x y)))
+(rule 0 (lower (umin (ty_vec128 ty) x y))
       (vec_umin ty x y))
 
 
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed maximum of two scalar integers - expand to icmp + select.
-(rule 2 (lower (has_type (fits_in_64 ty) (smax _ x y)))
+(rule 2 (lower (smax (fits_in_64 ty) x y))
       (let ((x_ext Reg (put_in_reg_sext32 x))
             (y_ext Reg (put_in_reg_sext32 y))
             (cond ProducesBool (bool (icmps_reg (ty_ext32 ty) x_ext y_ext)
@@ -336,25 +340,25 @@
         (select_bool_reg ty cond y_ext x_ext)))
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
-(rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (smax _ x y)))
+(rule 1 (lower (smax (and (vxrs_ext3_disabled) $I128) x y))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi y_reg x_reg)))
         (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Signed maximum of two 128-bit integers on z17.
-(rule 3 (lower (has_type (and (vxrs_ext3_enabled) $I128) (smax _ x y)))
+(rule 3 (lower (smax (and (vxrs_ext3_enabled) $I128) x y))
       (vec_smax $I128 x y))
 
 ;; Signed maximum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (smax _ x y)))
+(rule (lower (smax (ty_vec128 ty) x y))
       (vec_smax ty x y))
 
 
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Signed minimum of two scalar integers - expand to icmp + select.
-(rule 2 (lower (has_type (fits_in_64 ty) (smin _ x y)))
+(rule 2 (lower (smin (fits_in_64 ty) x y))
       (let ((x_ext Reg (put_in_reg_sext32 x))
             (y_ext Reg (put_in_reg_sext32 y))
             (cond ProducesBool (bool (icmps_reg (ty_ext32 ty) x_ext y_ext)
@@ -362,75 +366,75 @@
         (select_bool_reg ty cond y_ext x_ext)))
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
-(rule 1 (lower (has_type (and (vxrs_ext3_disabled) $I128) (smin _ x y)))
+(rule 1 (lower (smin (and (vxrs_ext3_disabled) $I128) x y))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi x_reg y_reg)))
         (select_bool_reg $I128 cond y_reg x_reg)))
 
 ;; Signed minimum of two 128-bit integers on z17.
-(rule 3 (lower (has_type (and (vxrs_ext3_enabled) $I128) (smin _ x y)))
+(rule 3 (lower (smin (and (vxrs_ext3_enabled) $I128) x y))
       (vec_smin $I128 x y))
 
 ;; Signed minimum of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (smin _ x y)))
+(rule (lower (smin (ty_vec128 ty) x y))
       (vec_smin ty x y))
 
 
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned average of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (avg_round _ x y)))
+(rule (lower (avg_round (ty_vec128 ty) x y))
       (vec_uavg ty x y))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Multiply two registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (imul _ x y)))
+(rule 0 (lower (imul (fits_in_64 ty) x y))
       (mul_reg ty x y))
 
 ;; Multiply a register and a sign-extended register.
-(rule 8 (lower (has_type (fits_in_64 ty) (imul _ x (sext32_value y))))
+(rule 8 (lower (imul (fits_in_64 ty) x (sext32_value y)))
       (mul_reg_sext32 ty x y))
-(rule 15 (lower (has_type (fits_in_64 ty) (imul _ (sext32_value x) y)))
+(rule 15 (lower (imul (fits_in_64 ty) (sext32_value x) y))
       (mul_reg_sext32 ty y x))
 
 ;; Multiply a register and an immediate.
-(rule 7 (lower (has_type (fits_in_64 ty) (imul _ x (i16_from_value y))))
+(rule 7 (lower (imul (fits_in_64 ty) x (i16_from_value y)))
       (mul_simm16 ty x y))
-(rule 14 (lower (has_type (fits_in_64 ty) (imul _ (i16_from_value x) y)))
+(rule 14 (lower (imul (fits_in_64 ty) (i16_from_value x) y))
       (mul_simm16 ty y x))
-(rule 6 (lower (has_type (fits_in_64 ty) (imul _ x (i32_from_value y))))
+(rule 6 (lower (imul (fits_in_64 ty) x (i32_from_value y)))
       (mul_simm32 ty x y))
-(rule 13 (lower (has_type (fits_in_64 ty) (imul _ (i32_from_value x) y)))
+(rule 13 (lower (imul (fits_in_64 ty) (i32_from_value x) y))
       (mul_simm32 ty y x))
 
 ;; Multiply a register and memory (32/64-bit types).
-(rule 5 (lower (has_type (fits_in_64 ty) (imul _ x (sinkable_load_32_64 y))))
+(rule 5 (lower (imul (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (mul_mem ty x (sink_load y)))
-(rule 12 (lower (has_type (fits_in_64 ty) (imul _ (sinkable_load_32_64 x) y)))
+(rule 12 (lower (imul (fits_in_64 ty) (sinkable_load_32_64 x) y))
       (mul_mem ty y (sink_load x)))
 
 ;; Multiply a register and memory (16-bit types).
-(rule 4 (lower (has_type (fits_in_64 ty) (imul _ x (sinkable_load_16 y))))
+(rule 4 (lower (imul (fits_in_64 ty) x (sinkable_load_16 y)))
       (mul_mem_sext16 ty x (sink_load y)))
-(rule 11 (lower (has_type (fits_in_64 ty) (imul _ (sinkable_load_16 x) y)))
+(rule 11 (lower (imul (fits_in_64 ty) (sinkable_load_16 x) y))
       (mul_mem_sext16 ty y (sink_load x)))
 
 ;; Multiply a register and sign-extended memory.
-(rule 3 (lower (has_type (fits_in_64 ty) (imul _ x (sinkable_sload16 y))))
+(rule 3 (lower (imul (fits_in_64 ty) x (sinkable_sload16 y)))
       (mul_mem_sext16 ty x (sink_sload16 y)))
-(rule 10 (lower (has_type (fits_in_64 ty) (imul _ (sinkable_sload16 x) y)))
+(rule 10 (lower (imul (fits_in_64 ty) (sinkable_sload16 x) y))
       (mul_mem_sext16 ty y (sink_sload16 x)))
-(rule 2 (lower (has_type (fits_in_64 ty) (imul _ x (sinkable_sload32 y))))
+(rule 2 (lower (imul (fits_in_64 ty) x (sinkable_sload32 y)))
       (mul_mem_sext32 ty x (sink_sload32 y)))
-(rule 9 (lower (has_type (fits_in_64 ty) (imul _ (sinkable_sload32 x) y)))
+(rule 9 (lower (imul (fits_in_64 ty) (sinkable_sload32 x) y))
       (mul_mem_sext32 ty y (sink_sload32 x)))
 
 ;; Multiply two vector registers, using a helper.
 (decl vec_mul_impl (Type Reg Reg) Reg)
-(rule 1 (lower (has_type (vr128_ty ty) (imul _ x y)))
+(rule 1 (lower (imul (vr128_ty ty) x y))
       (vec_mul_impl ty x y))
 
 ;; Multiply two vector registers - byte, halfword, and word.
@@ -468,46 +472,46 @@
 
 ;; Special-case the lowering of a 128-bit multiply where the operands are sign
 ;; or zero extended. This maps directly to `umul_wide` and `smul_wide`.
-(rule 16 (lower (has_type $I128 (imul _ (uextend _ x) (uextend _ y))))
+(rule 16 (lower (imul $I128 (uextend _ x) (uextend _ y)))
   (let ((pair RegPair (umul_wide (put_in_reg_zext64 x) (put_in_reg_zext64 y))))
     (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
 
-(rule 16 (lower (has_type $I128 (imul _ (sextend _ x) (sextend _ y))))
+(rule 16 (lower (imul $I128 (sextend _ x) (sextend _ y)))
   (let ((pair RegPair (smul_wide (put_in_reg_sext64 x) (put_in_reg_sext64 y))))
     (mov_to_vec128 $I64X2 (regpair_hi pair) (regpair_lo pair))))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Multiply high part unsigned, 8-bit or 16-bit types.  (Uses 32-bit multiply.)
-(rule -1 (lower (has_type (ty_8_or_16 ty) (umulhi _ x y)))
+(rule -1 (lower (umulhi (ty_8_or_16 ty) x y))
       (let ((ext_reg_x Reg (put_in_reg_zext32 x))
             (ext_reg_y Reg (put_in_reg_zext32 y))
             (ext_mul Reg (mul_reg $I32 ext_reg_x ext_reg_y)))
         (lshr_imm $I32 ext_mul (ty_bits ty))))
 
 ;; Multiply high part unsigned, 32-bit types.  (Uses 64-bit multiply.)
-(rule (lower (has_type $I32 (umulhi _ x y)))
+(rule (lower (umulhi $I32 x y))
       (let ((ext_reg_x Reg (put_in_reg_zext64 x))
             (ext_reg_y Reg (put_in_reg_zext64 y))
             (ext_mul Reg (mul_reg $I64 ext_reg_x ext_reg_y)))
         (lshr_imm $I64 ext_mul 32)))
 
 ;; Multiply high part unsigned, 64-bit types.  (Uses umul_wide.)
-(rule (lower (has_type $I64 (umulhi _ x y)))
+(rule (lower (umulhi $I64 x y))
       (let ((pair RegPair (umul_wide x y)))
         (regpair_hi pair)))
 
 ;; Multiply high part unsigned, vector types with 8-, 16-, or 32-bit elements.
-(rule (lower (has_type $I8X16 (umulhi _ x y))) (vec_umulhi $I8X16 x y))
-(rule (lower (has_type $I16X8 (umulhi _ x y))) (vec_umulhi $I16X8 x y))
-(rule (lower (has_type $I32X4 (umulhi _ x y))) (vec_umulhi $I32X4 x y))
+(rule (lower (umulhi $I8X16 x y)) (vec_umulhi $I8X16 x y))
+(rule (lower (umulhi $I16X8 x y)) (vec_umulhi $I16X8 x y))
+(rule (lower (umulhi $I32X4 x y)) (vec_umulhi $I32X4 x y))
 
 ;; Multiply high part unsigned, vector types with 64-bit elements on z17.
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I64X2) (umulhi _ x y))) (vec_umulhi $I64X2 x y))
+(rule 1 (lower (umulhi (and (vxrs_ext3_enabled) $I64X2) x y)) (vec_umulhi $I64X2 x y))
 
 ;; Multiply high part unsigned, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
-(rule (lower (has_type (and (vxrs_ext3_disabled) $I64X2) (umulhi _ x y)))
+(rule (lower (umulhi (and (vxrs_ext3_disabled) $I64X2) x y))
       (let ((pair_0 RegPair (umul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (regpair_hi pair_0))
@@ -520,35 +524,35 @@
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Multiply high part signed, 8-bit or 16-bit types.  (Uses 32-bit multiply.)
-(rule -1 (lower (has_type (ty_8_or_16 ty) (smulhi _ x y)))
+(rule -1 (lower (smulhi (ty_8_or_16 ty) x y))
       (let ((ext_reg_x Reg (put_in_reg_sext32 x))
             (ext_reg_y Reg (put_in_reg_sext32 y))
             (ext_mul Reg (mul_reg $I32 ext_reg_x ext_reg_y)))
         (ashr_imm $I32 ext_mul (ty_bits ty))))
 
 ;; Multiply high part signed, 32-bit types.  (Uses 64-bit multiply.)
-(rule (lower (has_type $I32 (smulhi _ x y)))
+(rule (lower (smulhi $I32 x y))
       (let ((ext_reg_x Reg (put_in_reg_sext64 x))
             (ext_reg_y Reg (put_in_reg_sext64 y))
             (ext_mul Reg (mul_reg $I64 ext_reg_x ext_reg_y)))
         (ashr_imm $I64 ext_mul 32)))
 
 ;; Multiply high part signed, 64-bit types.  (Uses smul_wide.)
-(rule (lower (has_type $I64 (smulhi _ x y)))
+(rule (lower (smulhi $I64 x y))
       (let ((pair RegPair (smul_wide x y)))
         (regpair_hi pair)))
 
 ;; Multiply high part signed, vector types with 8-, 16-, or 32-bit elements.
-(rule (lower (has_type $I8X16 (smulhi _ x y))) (vec_smulhi $I8X16 x y))
-(rule (lower (has_type $I16X8 (smulhi _ x y))) (vec_smulhi $I16X8 x y))
-(rule (lower (has_type $I32X4 (smulhi _ x y))) (vec_smulhi $I32X4 x y))
+(rule (lower (smulhi $I8X16 x y)) (vec_smulhi $I8X16 x y))
+(rule (lower (smulhi $I16X8 x y)) (vec_smulhi $I16X8 x y))
+(rule (lower (smulhi $I32X4 x y)) (vec_smulhi $I32X4 x y))
 
 ;; Multiply high part signed, vector types with 64-bit elements on z17.
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I64X2) (smulhi _ x y))) (vec_smulhi $I64X2 x y))
+(rule 1 (lower (smulhi (and (vxrs_ext3_enabled) $I64X2) x y)) (vec_smulhi $I64X2 x y))
 
 ;; Multiply high part signed, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
-(rule (lower (has_type (and (vxrs_ext3_disabled) $I64X2) (smulhi _ x y)))
+(rule (lower (smulhi (and (vxrs_ext3_disabled) $I64X2) x y))
       (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
@@ -561,7 +565,7 @@
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Fixed-point multiplication of two vector registers.
-(rule (lower (has_type (ty_vec128 ty) (sqmul_round_sat _ x y)))
+(rule (lower (sqmul_round_sat (ty_vec128 ty) x y))
       (vec_pack_ssat (vec_widen_type ty)
                      (sqmul_impl (vec_widen_type ty)
                                  (vec_unpacks_high ty x)
@@ -599,7 +603,7 @@
 ;; and the second variant for 64-bit input types.
 
 ;; Implement `udiv`.
-(rule (lower (has_type (fits_in_64 ty) (udiv _ x y)))
+(rule (lower (udiv (fits_in_64 ty) x y))
       (let (
             ;; Look at the divisor to determine whether we need to generate
             ;; an explicit division-by zero check.
@@ -618,7 +622,7 @@
 
 ;; Implement `urem`.  Same as `udiv`, but finds the remainder in
 ;; the high half of the result register pair instead.
-(rule (lower (has_type (fits_in_64 ty) (urem _ x y)))
+(rule (lower (urem (fits_in_64 ty) x y))
       (let ((ext_x RegPair (regpair (imm (ty_ext32 ty) 0)
                                     (put_in_reg_zext32 x)))
             (ext_y Reg (put_in_reg_zext32 y))
@@ -627,11 +631,11 @@
         (regpair_hi pair)))
 
 ;; Implement `udiv` for 128-bit integers on z17 (only).
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I128) (udiv _ x y)))
+(rule 1 (lower (udiv (and (vxrs_ext3_enabled) $I128) x y))
         (vec_udiv $I128 x y))
 
 ;; Implement `urem` for 128-bit integers on z17 (only).
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I128) (urem _ x y)))
+(rule 1 (lower (urem (and (vxrs_ext3_enabled) $I128) x y))
         (vec_urem $I128 x y))
 
 
@@ -652,7 +656,7 @@
 ;; and the second variant for 64-bit input types.
 
 ;; Implement `sdiv`.
-(rule (lower (has_type (fits_in_64 ty) (sdiv _ x y)))
+(rule (lower (sdiv (fits_in_64 ty) x y))
       (let (
             ;; Look at the divisor to determine whether we need to generate
             ;; explicit division-by-zero and/or integer-overflow checks.
@@ -672,7 +676,7 @@
 ;; Implement `srem`.  Same as `sdiv`, but finds the remainder in
 ;; the high half of the result register pair instead.  Also, handle
 ;; the integer overflow case differently, see below.
-(rule (lower (has_type (fits_in_64 ty) (srem _ x y)))
+(rule (lower (srem (fits_in_64 ty) x y))
       (let ((OFcheck bool (div_overflow_check_needed y))
             (ext_x Reg (put_in_reg_sext64 x))
             (ext_y Reg (put_in_reg_sext32 y))
@@ -771,13 +775,13 @@
 
 
 ;; Implement `sdiv` for 128-bit integers on z17 (only).
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I128) (sdiv _ x y)))
+(rule 1 (lower (sdiv (and (vxrs_ext3_enabled) $I128) x y))
         (let ((OFcheck bool (div_overflow_check_needed y))
               (_ Reg (maybe_trap_if_sdiv_overflow OFcheck $I128 $I128 x y)))
         (vec_sdiv $I128 x y)))
 
 ;; Implement `srem` for 128-bit integers on z17 (only).
-(rule 1 (lower (has_type (and (vxrs_ext3_enabled) $I128) (srem _ x y)))
+(rule 1 (lower (srem (and (vxrs_ext3_enabled) $I128) x y))
         (let ((OFcheck bool (div_overflow_check_needed y))
               (top Reg (maybe_avoid_srem_overflow OFcheck $I128 x y)))
         (vec_srem $I128 top y)))
@@ -786,26 +790,26 @@
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift left, shift amount in register.
-(rule 0 (lower (has_type (fits_in_64 ty) (ishl _ x y)))
+(rule 0 (lower (ishl (fits_in_64 ty) x y))
       (let ((masked_amt Reg (mask_amt_reg ty (amt_reg y))))
         (lshl_reg ty x masked_amt)))
 
 ;; Shift left, immediate shift amount.
-(rule 1 (lower (has_type (fits_in_64 ty) (ishl _ x (i64_from_value y))))
+(rule 1 (lower (ishl (fits_in_64 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (lshl_imm ty x masked_amt)))
 
 ;; Vector shift left, shift amount in register.
-(rule 2 (lower (has_type (ty_vec128 ty) (ishl _ x y)))
+(rule 2 (lower (ishl (ty_vec128 ty) x y))
       (vec_lshl_reg ty x (amt_reg y)))
 
 ;; Vector shift left, immediate shift amount.
-(rule 3 (lower (has_type (ty_vec128 ty) (ishl _ x (i64_from_value y))))
+(rule 3 (lower (ishl (ty_vec128 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (vec_lshl_imm ty x masked_amt)))
 
 ;; 128-bit vector shift left.
-(rule 4 (lower (has_type $I128 (ishl _ x y)))
+(rule 4 (lower (ishl $I128 x y))
       (let ((amt Reg (amt_vr y)))
         (vec_lshl_by_bit (vec_lshl_by_byte x amt) amt)))
 
@@ -814,29 +818,29 @@
 
 ;; Shift right logical, shift amount in register.
 ;; For types smaller than 32-bit, the input value must be zero-extended.
-(rule 0 (lower (has_type (fits_in_64 ty) (ushr _ x y)))
+(rule 0 (lower (ushr (fits_in_64 ty) x y))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (masked_amt Reg (mask_amt_reg ty (amt_reg y))))
         (lshr_reg (ty_ext32 ty) ext_reg masked_amt)))
 
 ;; Shift right logical, immediate shift amount.
 ;; For types smaller than 32-bit, the input value must be zero-extended.
-(rule 1 (lower (has_type (fits_in_64 ty) (ushr _ x (i64_from_value y))))
+(rule 1 (lower (ushr (fits_in_64 ty) x (i64_from_value y)))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (masked_amt u8 (mask_amt_imm ty y)))
         (lshr_imm (ty_ext32 ty) ext_reg masked_amt)))
 
 ;; Vector shift right logical, shift amount in register.
-(rule 2 (lower (has_type (ty_vec128 ty) (ushr _ x y)))
+(rule 2 (lower (ushr (ty_vec128 ty) x y))
       (vec_lshr_reg ty x (amt_reg y)))
 
 ;; Vector shift right logical, immediate shift amount.
-(rule 3 (lower (has_type (ty_vec128 ty) (ushr _ x (i64_from_value y))))
+(rule 3 (lower (ushr (ty_vec128 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (vec_lshr_imm ty x masked_amt)))
 
 ;; 128-bit vector shift right logical.
-(rule 4 (lower (has_type $I128 (ushr _ x y)))
+(rule 4 (lower (ushr $I128 x y))
       (let ((amt Reg (amt_vr y)))
         (vec_lshr_by_bit (vec_lshr_by_byte x amt) amt)))
 
@@ -845,29 +849,29 @@
 
 ;; Shift right arithmetic, shift amount in register.
 ;; For types smaller than 32-bit, the input value must be sign-extended.
-(rule 0 (lower (has_type (fits_in_64 ty) (sshr _ x y)))
+(rule 0 (lower (sshr (fits_in_64 ty) x y))
       (let ((ext_reg Reg (put_in_reg_sext32 x))
             (masked_amt Reg (mask_amt_reg ty (amt_reg y))))
         (ashr_reg (ty_ext32 ty) ext_reg masked_amt)))
 
 ;; Shift right arithmetic, immediate shift amount.
 ;; For types smaller than 32-bit, the input value must be sign-extended.
-(rule 1 (lower (has_type (fits_in_64 ty) (sshr _ x (i64_from_value y))))
+(rule 1 (lower (sshr (fits_in_64 ty) x (i64_from_value y)))
       (let ((ext_reg Reg (put_in_reg_sext32 x))
             (masked_amt u8 (mask_amt_imm ty y)))
         (ashr_imm (ty_ext32 ty) ext_reg masked_amt)))
 
 ;; Vector shift right arithmetic, shift amount in register.
-(rule 2 (lower (has_type (ty_vec128 ty) (sshr _ x y)))
+(rule 2 (lower (sshr (ty_vec128 ty) x y))
       (vec_ashr_reg ty x (amt_reg y)))
 
 ;; Vector shift right arithmetic, immediate shift amount.
-(rule 3 (lower (has_type (ty_vec128 ty) (sshr _ x (i64_from_value y))))
+(rule 3 (lower (sshr (ty_vec128 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (vec_ashr_imm ty x masked_amt)))
 
 ;; 128-bit vector shift right arithmetic.
-(rule 4 (lower (has_type $I128 (sshr _ x y)))
+(rule 4 (lower (sshr $I128 x y))
       (let ((amt Reg (amt_vr y)))
         (vec_ashr_by_bit (vec_ashr_by_byte x amt) amt)))
 
@@ -875,17 +879,17 @@
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Rotate left, shift amount in register.  32-bit or 64-bit types.
-(rule 0 (lower (has_type (ty_32_or_64 ty) (rotl _ x y)))
+(rule 0 (lower (rotl (ty_32_or_64 ty) x y))
       (rot_reg ty x (amt_reg y)))
 
 ;; Rotate left arithmetic, immediate shift amount.  32-bit or 64-bit types.
-(rule 1 (lower (has_type (ty_32_or_64 ty) (rotl _ x (i64_from_value y))))
+(rule 1 (lower (rotl (ty_32_or_64 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (rot_imm ty x masked_amt)))
 
 ;; Rotate left, shift amount in register.  8-bit or 16-bit types.
 ;; Implemented via a pair of 32-bit shifts on the zero-extended input.
-(rule 2 (lower (has_type (ty_8_or_16 ty) (rotl _ x y)))
+(rule 2 (lower (rotl (ty_8_or_16 ty) x y))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (ext_ty Type (ty_ext32 ty))
             (pos_amt Reg (amt_reg y))
@@ -897,8 +901,8 @@
 
 ;; Rotate left, immediate shift amount.  8-bit or 16-bit types.
 ;; Implemented via a pair of 32-bit shifts on the zero-extended input.
-(rule 3 (lower (has_type (ty_8_or_16 ty) (rotl _ x (and (i64_from_value pos_amt)
-                                                    (i64_from_negated_value neg_amt)))))
+(rule 3 (lower (rotl (ty_8_or_16 ty) x (and (i64_from_value pos_amt)
+                                            (i64_from_negated_value neg_amt))))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (ext_ty Type (ty_ext32 ty))
             (masked_pos_amt u8 (mask_amt_imm ty pos_amt))
@@ -907,17 +911,17 @@
                 (lshr_imm ext_ty ext_reg masked_neg_amt))))
 
 ;; Vector rotate left, shift amount in register.
-(rule 4 (lower (has_type (ty_vec128 ty) (rotl _ x y)))
+(rule 4 (lower (rotl (ty_vec128 ty) x y))
       (vec_rot_reg ty x (amt_reg y)))
 
 ;; Vector rotate left, immediate shift amount.
-(rule 5 (lower (has_type (ty_vec128 ty) (rotl _ x (i64_from_value y))))
+(rule 5 (lower (rotl (ty_vec128 ty) x (i64_from_value y)))
       (let ((masked_amt u8 (mask_amt_imm ty y)))
         (vec_rot_imm ty x masked_amt)))
 
 ;; 128-bit full vector rotate left.
 ;; Implemented via a pair of 128-bit full vector shifts.
-(rule 6 (lower (has_type $I128 (rotl _ x y)))
+(rule 6 (lower (rotl $I128 x y))
       (let ((x_reg Reg x)
             (pos_amt Reg (amt_vr y))
             (neg_amt Reg (vec_neg $I8X16 pos_amt)))
@@ -930,19 +934,19 @@
 
 ;; Rotate right, shift amount in register.  32-bit or 64-bit types.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 0 (lower (has_type (ty_32_or_64 ty) (rotr _ x y)))
+(rule 0 (lower (rotr (ty_32_or_64 ty) x y))
       (let ((negated_amt Reg (neg_reg $I32 (amt_reg y))))
         (rot_reg ty x negated_amt)))
 
 ;; Rotate right arithmetic, immediate shift amount.  32-bit or 64-bit types.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 1 (lower (has_type (ty_32_or_64 ty) (rotr _ x (i64_from_negated_value y))))
+(rule 1 (lower (rotr (ty_32_or_64 ty) x (i64_from_negated_value y)))
       (let ((negated_amt u8 (mask_amt_imm ty y)))
         (rot_imm ty x negated_amt)))
 
 ;; Rotate right, shift amount in register.  8-bit or 16-bit types.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 2 (lower (has_type (ty_8_or_16 ty) (rotr _ x y)))
+(rule 2 (lower (rotr (ty_8_or_16 ty) x y))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (ext_ty Type (ty_ext32 ty))
             (pos_amt Reg (amt_reg y))
@@ -954,8 +958,8 @@
 
 ;; Rotate right, immediate shift amount.  8-bit or 16-bit types.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 3 (lower (has_type (ty_8_or_16 ty) (rotr _ x (and (i64_from_value pos_amt)
-                                                    (i64_from_negated_value neg_amt)))))
+(rule 3 (lower (rotr (ty_8_or_16 ty) x (and (i64_from_value pos_amt)
+                                            (i64_from_negated_value neg_amt))))
       (let ((ext_reg Reg (put_in_reg_zext32 x))
             (ext_ty Type (ty_ext32 ty))
             (masked_pos_amt u8 (mask_amt_imm ty pos_amt))
@@ -965,19 +969,19 @@
 
 ;; Vector rotate right, shift amount in register.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 4 (lower (has_type (ty_vec128 ty) (rotr _ x y)))
+(rule 4 (lower (rotr (ty_vec128 ty) x y))
       (let ((negated_amt Reg (neg_reg $I32 (amt_reg y))))
         (vec_rot_reg ty x negated_amt)))
 
 ;; Vector rotate right, immediate shift amount.
 ;; Implemented as rotate left with negated rotate amount.
-(rule 5 (lower (has_type (ty_vec128 ty) (rotr _ x (i64_from_negated_value y))))
+(rule 5 (lower (rotr (ty_vec128 ty) x (i64_from_negated_value y)))
       (let ((negated_amt u8 (mask_amt_imm ty y)))
         (vec_rot_imm ty x negated_amt)))
 
 ;; 128-bit full vector rotate right.
 ;; Implemented via a pair of 128-bit full vector shifts.
-(rule 6 (lower (has_type $I128 (rotr _ x y)))
+(rule 6 (lower (rotr $I128 x y))
       (let ((x_reg Reg x)
             (pos_amt Reg (amt_vr y))
             (neg_amt Reg (vec_neg $I8X16 pos_amt)))
@@ -1000,36 +1004,36 @@
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule 1 (lower (has_type (gpr32_ty _ty) (uextend _ x)))
+(rule 1 (lower (uextend (gpr32_ty _) x))
       (put_in_reg_zext32 x))
 
 ;; 64-bit target types.
-(rule 2 (lower (has_type (gpr64_ty _ty) (uextend _ x)))
+(rule 2 (lower (uextend (gpr64_ty _) x))
       (put_in_reg_zext64 x))
 
 ;; 128-bit target types.
-(rule (lower (has_type $I128 (uextend _ x @ (value_type $I8))))
+(rule (lower (uextend $I128 x @ (value_type $I8)))
       (vec_insert_lane $I8X16 (vec_imm $I128 0) x 15 (zero_reg)))
-(rule (lower (has_type $I128 (uextend _ x @ (value_type $I16))))
+(rule (lower (uextend $I128 x @ (value_type $I16)))
       (vec_insert_lane $I16X8 (vec_imm $I128 0) x 7 (zero_reg)))
-(rule (lower (has_type $I128 (uextend _ x @ (value_type $I32))))
+(rule (lower (uextend $I128 x @ (value_type $I32)))
       (vec_insert_lane $I32X4 (vec_imm $I128 0) x 3 (zero_reg)))
-(rule (lower (has_type $I128 (uextend _ x @ (value_type $I64))))
+(rule (lower (uextend $I128 x @ (value_type $I64)))
       (vec_insert_lane $I64X2 (vec_imm $I128 0) x 1 (zero_reg)))
 
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule 1 (lower (has_type (gpr32_ty _ty) (sextend _ x)))
+(rule 1 (lower (sextend (gpr32_ty _ty) x))
       (put_in_reg_sext32 x))
 
 ;; 64-bit target types.
-(rule 2 (lower (has_type (gpr64_ty _ty) (sextend _ x)))
+(rule 2 (lower (sextend (gpr64_ty _ty) x))
       (put_in_reg_sext64 x))
 
 ;; 128-bit target types.
-(rule (lower (has_type $I128 (sextend _ x)))
+(rule (lower (sextend $I128 x))
       (let ((x_ext Reg (put_in_reg_sext64 x)))
         (mov_to_vec128 $I128 (ashr_imm $I64 x_ext 63) x_ext)))
 
@@ -1080,65 +1084,65 @@
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a single instruction (NOR).
-(rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot _ x)))
+(rule 2 (lower (bnot (and (mie3_enabled) (fits_in_64 ty)) x))
       (let ((rx Reg x))
         (not_or_reg ty rx rx)))
 
 ;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bnot _ x)))
+(rule 1 (lower (bnot (and (mie3_disabled) (fits_in_64 ty)) x))
       (not_reg ty x))
 
 ;; Vector version using vector NOR.
-(rule (lower (has_type (vr128_ty ty) (bnot _ x)))
+(rule (lower (bnot (vr128_ty ty) x))
       (vec_not ty x))
 
 ;; Float version using vector NOR.
-(rule 5 (lower (has_type (ty_scalar_float _) (bnot _ x)))
+(rule 5 (lower (bnot (ty_scalar_float _) x))
       (vec_not $F64X2 x))
 
 ;; With z15 (bnot (bxor ...)) can be a single instruction, similar to the
 ;; (bxor _ (bnot _)) lowering.
-(rule 3 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bnot _ (bxor _ x y))))
+(rule 3 (lower (bnot (and (mie3_enabled) (fits_in_64 ty)) (bxor _ x y)))
       (not_xor_reg ty x y))
 
 ;; Combine a not/xor operation of vector types into one.
-(rule 4 (lower (has_type (vr128_ty ty) (bnot _ (bxor _ x y))))
+(rule 4 (lower (bnot (vr128_ty ty) (bxor _ x y)))
       (vec_not_xor ty x y))
 
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; And two registers.
-(rule -1 (lower (has_type (fits_in_64 ty) (band _ x y)))
+(rule -1 (lower (band (fits_in_64 ty) x y))
       (and_reg ty x y))
 
 ;; And a register and an immediate.
-(rule 5 (lower (has_type (fits_in_64 ty) (band _ x (uimm16shifted_from_inverted_value y))))
+(rule 5 (lower (band (fits_in_64 ty) x (uimm16shifted_from_inverted_value y)))
       (and_uimm16shifted ty x y))
-(rule 6 (lower (has_type (fits_in_64 ty) (band _ (uimm16shifted_from_inverted_value x) y)))
+(rule 6 (lower (band (fits_in_64 ty) (uimm16shifted_from_inverted_value x) y))
       (and_uimm16shifted ty y x))
-(rule 3 (lower (has_type (fits_in_64 ty) (band _ x (uimm32shifted_from_inverted_value y))))
+(rule 3 (lower (band (fits_in_64 ty) x (uimm32shifted_from_inverted_value y)))
       (and_uimm32shifted ty x y))
-(rule 4 (lower (has_type (fits_in_64 ty) (band _ (uimm32shifted_from_inverted_value x) y)))
+(rule 4 (lower (band (fits_in_64 ty) (uimm32shifted_from_inverted_value x) y))
       (and_uimm32shifted ty y x))
 
 ;; And a register and memory (32/64-bit types).
-(rule 1 (lower (has_type (fits_in_64 ty) (band _ x (sinkable_load_32_64 y))))
+(rule 1 (lower (band (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (and_mem ty x (sink_load y)))
-(rule 2 (lower (has_type (fits_in_64 ty) (band _ (sinkable_load_32_64 x) y)))
+(rule 2 (lower (band (fits_in_64 ty) (sinkable_load_32_64 x) y))
       (and_mem ty y (sink_load x)))
 
 ;; And two vector registers.
-(rule 0 (lower (has_type (vr128_ty ty) (band _ x y)))
+(rule 0 (lower (band (vr128_ty ty) x y))
       (vec_and ty x y))
 
 ;; And two float registers, using vector overlay.
-(rule 11 (lower (has_type (ty_scalar_float _) (band _ x y)))
+(rule 11 (lower (band (ty_scalar_float _) x y))
       (vec_and $F64X2 x y))
 
-(rule 12 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x y) z)))
+(rule 12 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x y) z))
       (vec_eval ty 0b00000001 x y z))
-(rule 13 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ y z))))
+(rule 13 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (band _ y z)))
       (vec_eval ty 0b00000001 x y z))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
@@ -1146,101 +1150,101 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band _ x (bnot _ y))))
+(rule 7 (lower (band (and (mie3_enabled) (fits_in_64 ty)) x (bnot _ y)))
       (and_not_reg ty x y))
-(rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (band _ (bnot _ y) x)))
+(rule 8 (lower (band (and (mie3_enabled) (fits_in_64 ty)) (bnot _ y) x))
       (and_not_reg ty x y))
 
 ;; And-not two vector registers.
-(rule 9 (lower (has_type (vr128_ty ty) (band _ x (bnot _ y))))
+(rule 9 (lower (band (vr128_ty ty) x (bnot _ y)))
       (vec_and_not ty x y))
-(rule 10 (lower (has_type (vr128_ty ty) (band _ (bnot _ y) x)))
+(rule 10 (lower (band (vr128_ty ty) (bnot _ y) x))
       (vec_and_not ty x y))
 
 ;; And-not three vector registers.
-(rule 14 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ (bnot _ x) y) z)))
+(rule 14 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bnot _ x) y) z))
       (vec_eval ty 0b00010000 x y z))
-(rule 15 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bnot _ x) (band _ y z))))
+(rule 15 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ x) (band _ y z)))
       (vec_eval ty 0b00010000 x y z))
-(rule 16 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x y) (bnot _ z))))
+(rule 16 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x y) (bnot _ z)))
       (vec_eval ty 0b00000010 x y z))
-(rule 17 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ y (bnot _ z)))))
+(rule 17 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (band _ y (bnot _ z))))
       (vec_eval ty 0b00000010 x y z))
-(rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x (bnot _ y)) z)))
+(rule 18 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bnot _ y)) z))
       (vec_eval ty 0b00000100 x y z))
-(rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ (bnot _ y) z))))
+(rule 19 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (band _ (bnot _ y) z)))
       (vec_eval ty 0b00000100 x y z))
 
 ;; Not-and three vector registers
-(rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ (band _ x y) z))))
+(rule 20 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x y) z)))
       (vec_eval ty 0b11111110 x y z))
-(rule 21 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ x (band _ y z)))))
+(rule 21 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ y z))))
       (vec_eval ty 0b11111110 x y z))
 
 ;; And-Nand three vector registers
-(rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bnot _ (band _ x y)) z)))
+(rule 20 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ x y)) z))
       (vec_eval ty 0b01010100 x y z))
-(rule 21 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bnot _ (band _ y z)))))
+(rule 21 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (band _ y z))))
       (vec_eval ty 0b00001110 x y z))
 
 ;; And-Or 3 vector registers
-(rule 22 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bor _ y z))))
+(rule 22 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bor _ y z)))
       (vec_eval ty 0b00000111 x y z))
-(rule 23 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bor _ x y) z)))
+(rule 23 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x y) z))
       (vec_eval ty 0b00010101 x y z))
 
 ;; And-Nor 3 vector registers
-(rule 24 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bnot _ (bor _ y z)))))
+(rule 24 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bor _ y z))))
       (vec_eval ty 0b00001000 x y z))
-(rule 25 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bnot _ (bor _ x y)) z)))
+(rule 25 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x y)) z))
       (vec_eval ty 0b01000000 x y z))
 
 ;; And-Xor 3 vector registers
-(rule 26 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bxor _ y z))))
+(rule 26 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bxor _ y z)))
       (vec_eval ty 0b00000110 x y z))
-(rule 27 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bxor _ x y) z)))
+(rule 27 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x y) z))
       (vec_eval ty 0b00010100 x y z))
 
 ;; And-Nxor 3 vector registers
-(rule 28 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (bnot _ (bxor _ y z)))))
+(rule 28 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bxor _ y z))))
       (vec_eval ty 0b00001001 x y z))
-(rule 29 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (bnot _ (bxor _ x y)) z)))
+(rule 29 (lower (band (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x y)) z))
       (vec_eval ty 0b01000001 x y z))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Or two registers.
-(rule -1 (lower (has_type (fits_in_64 ty) (bor _ x y)))
+(rule -1 (lower (bor (fits_in_64 ty) x y))
       (or_reg ty x y))
 
 ;; Or a register and an immediate.
-(rule 5 (lower (has_type (fits_in_64 ty) (bor _ x (uimm16shifted_from_value y))))
+(rule 5 (lower (bor (fits_in_64 ty) x (uimm16shifted_from_value y)))
       (or_uimm16shifted ty x y))
-(rule 6 (lower (has_type (fits_in_64 ty) (bor _ (uimm16shifted_from_value x) y)))
+(rule 6 (lower (bor (fits_in_64 ty) (uimm16shifted_from_value x) y))
       (or_uimm16shifted ty y x))
-(rule 3 (lower (has_type (fits_in_64 ty) (bor _ x (uimm32shifted_from_value y))))
+(rule 3 (lower (bor (fits_in_64 ty) x (uimm32shifted_from_value y)))
       (or_uimm32shifted ty x y))
-(rule 4 (lower (has_type (fits_in_64 ty) (bor _ (uimm32shifted_from_value x) y)))
+(rule 4 (lower (bor (fits_in_64 ty) (uimm32shifted_from_value x) y))
       (or_uimm32shifted ty y x))
 
 ;; Or a register and memory (32/64-bit types).
-(rule 1 (lower (has_type (fits_in_64 ty) (bor _ x (sinkable_load_32_64 y))))
+(rule 1 (lower (bor (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (or_mem ty x (sink_load y)))
-(rule 2 (lower (has_type (fits_in_64 ty) (bor _ (sinkable_load_32_64 x) y)))
+(rule 2 (lower (bor (fits_in_64 ty) (sinkable_load_32_64 x) y))
       (or_mem ty y (sink_load x)))
 
 ;; Or two vector registers.
-(rule 0 (lower (has_type (vr128_ty ty) (bor _ x y)))
+(rule 0 (lower (bor (vr128_ty ty) x y))
       (vec_or ty x y))
 
 ;; Or two floating registers, using vector overlay
-(rule 11 (lower (has_type (ty_scalar_float _) (bor _ x y)))
+(rule 11 (lower (bor (ty_scalar_float _) x y))
       (vec_or $F64X2 x y))
 
 ;; Or three vector registers.
-(rule 12 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bor _ x y) z)))
+(rule 12 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x y) z))
       (vec_eval ty 0b01111111 x y z))
-(rule 13 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bor _ y z))))
+(rule 13 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bor _ y z)))
       (vec_eval ty 0b01111111 x y z))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
@@ -1248,115 +1252,115 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 7 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor _ x (bnot _ y))))
+(rule 7 (lower (bor (and (mie3_enabled) (fits_in_64 ty)) x (bnot _ y)))
       (or_not_reg ty x y))
-(rule 8 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bor _ (bnot _ y) x)))
+(rule 8 (lower (bor (and (mie3_enabled) (fits_in_64 ty)) (bnot _ y) x))
       (or_not_reg ty x y))
 
 ;; Or-not two vector registers.
-(rule 9 (lower (has_type (vr128_ty ty) (bor _ x (bnot _ y))))
+(rule 9 (lower (bor (vr128_ty ty) x (bnot _ y)))
       (vec_or_not ty x y))
-(rule 10 (lower (has_type (vr128_ty ty) (bor _ (bnot _ y) x)))
+(rule 10 (lower (bor (vr128_ty ty) (bnot _ y) x))
       (vec_or_not ty x y))
 
 ;; 3-input bor with a single not
-(rule 14 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bor _ (bnot _ x) y) z)))
+(rule 14 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ x) y) z))
       (vec_eval ty 0b11110111 x y z))
-(rule 15 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ x) (bor _ y z))))
+(rule 15 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ x) (bor _ y z)))
       (vec_eval ty 0b11110111 x y z))
-(rule 16 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bor _ x (bnot _ y)) z)))
+(rule 16 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ y)) z))
       (vec_eval ty 0b11011111 x y z))
-(rule 17 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bor _ (bnot _ y) z))))
+(rule 17 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bor _ (bnot _ y) z)))
       (vec_eval ty 0b11011111 x y z))
-(rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bor _ x y) (bnot _ z))))
+(rule 18 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x y) (bnot _ z)))
       (vec_eval ty 0b10111111 x y z))
-(rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bor _ y (bnot _ z)))))
+(rule 19 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bor _ y (bnot _ z))))
       (vec_eval ty 0b10111111 x y z))
 
 ;; 3-input bnor
-(rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ (bor _ x y) z))))
+(rule 20 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bor _ x y) z)))
       (vec_eval ty 0b10000000 x y z))
-(rule 21 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x (bor _ y z)))))
+(rule 21 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bor _ y z))))
       (vec_eval ty 0b10000000 x y z))
 
 ;; Or-Nor
-(rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ (bor _ x y)) z)))
+(rule 20 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x y)) z))
       (vec_eval ty 0b11010101 x y z))
-(rule 21 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ (bor _ y z)))))
+(rule 21 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bor _ y z))))
       (vec_eval ty 0b10001111 x y z))
 
 ;; Or-And
-(rule 22 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (band _ x y) z)))
+(rule 22 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x y) z))
       (vec_eval ty 0b01010111 x y z))
-(rule 23 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (band _ y z))))
+(rule 23 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (band _ y z)))
       (vec_eval ty 0b00011111 x y z))
 
 ;; Or-Nand
-(rule 24 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ (band _ x y)) z)))
+(rule 24 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ x y)) z))
       (vec_eval ty 0b11111101 x y z))
-(rule 25 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ (band _ y z)))))
+(rule 25 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (band _ y z))))
       (vec_eval ty 0b11101111 x y z))
 
 ;; Or-Xor
-(rule 26 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bxor _ x y) z)))
+(rule 26 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x y) z))
       (vec_eval ty 0b01111101 x y z))
-(rule 27 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bxor _ y z))))
+(rule 27 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bxor _ y z)))
       (vec_eval ty 0b01101111 x y z))
 
 ;; Or-Nxor
-(rule 28 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ (bxor _ x y)) z)))
+(rule 28 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x y)) z))
       (vec_eval ty 0b11010111 x y z))
-(rule 29 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ (bxor _ y z)))))
+(rule 29 (lower (bor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bxor _ y z))))
       (vec_eval ty 0b10011111 x y z))
 
 ;; Nor-And
-(rule 30 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ (band _ x y) z))))
+(rule 30 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (band _ x y) z)))
       (vec_eval ty 0b10101000 x y z))
-(rule 31 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x (band _ y z)))))
+(rule 31 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (band _ y z))))
       (vec_eval ty 0b11100000 x y z))
 
 ;; Nor-Nand
-(rule 32 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ (bnot _ (band _ x y)) z))))
+(rule 32 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ (band _ x y)) z)))
       (vec_eval ty 0b00000010 x y z))
-(rule 33 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x (bnot _ (band _ y z))))))
+(rule 33 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ (band _ y z)))))
       (vec_eval ty 0b00010000 x y z))
 
 ;; Nor-Xor
-(rule 34 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ (bxor _ x y) z))))
+(rule 34 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bxor _ x y) z)))
       (vec_eval ty 0b10000010 x y z))
-(rule 35 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x (bxor _ y z)))))
+(rule 35 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bxor _ y z))))
       (vec_eval ty 0b10010000 x y z))
 
 ;; Nor-Nxor
-(rule 36 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ (bnot _ (bxor _ x y)) z))))
+(rule 36 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ (bnot _ (bxor _ x y)) z)))
       (vec_eval ty 0b00101000 x y z))
-(rule 37 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x (bnot _ (bxor _ y z))))))
+(rule 37 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x (bnot _ (bxor _ y z)))))
       (vec_eval ty 0b01100000 x y z))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Xor two registers.
-(rule -1 (lower (has_type (fits_in_64 ty) (bxor _ x y)))
+(rule -1 (lower (bxor (fits_in_64 ty) x y))
       (xor_reg ty x y))
 
 ;; Xor a register and an immediate.
-(rule 3 (lower (has_type (fits_in_64 ty) (bxor _ x (uimm32shifted_from_value y))))
+(rule 3 (lower (bxor (fits_in_64 ty) x (uimm32shifted_from_value y)))
       (xor_uimm32shifted ty x y))
-(rule 4 (lower (has_type (fits_in_64 ty) (bxor _ (uimm32shifted_from_value x) y)))
+(rule 4 (lower (bxor (fits_in_64 ty) (uimm32shifted_from_value x) y))
       (xor_uimm32shifted ty y x))
 
 ;; Xor a register and memory (32/64-bit types).
-(rule 1 (lower (has_type (fits_in_64 ty) (bxor _ x (sinkable_load_32_64 y))))
+(rule 1 (lower (bxor (fits_in_64 ty) x (sinkable_load_32_64 y)))
       (xor_mem ty x (sink_load y)))
-(rule 2 (lower (has_type (fits_in_64 ty) (bxor _ (sinkable_load_32_64 x) y)))
+(rule 2 (lower (bxor (fits_in_64 ty) (sinkable_load_32_64 x) y))
       (xor_mem ty y (sink_load x)))
 
 ;; Xor two vector registers.
-(rule 0 (lower (has_type (vr128_ty ty) (bxor _ x y)))
+(rule 0 (lower (bxor (vr128_ty ty) x y))
       (vec_xor ty x y))
 
 ;; Xor two floating registers, using vector overlay
-(rule 9 (lower (has_type (ty_scalar_float _) (bxor _ x y)))
+(rule 9 (lower (bxor (ty_scalar_float _) x y))
       (vec_xor $F64X2 x y))
 
 ;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
@@ -1364,134 +1368,134 @@
 ;; forms early on.
 
 ;; z15 version using a single instruction.
-(rule 5 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor _ x (bnot _ y))))
+(rule 5 (lower (bxor (and (mie3_enabled) (fits_in_64 ty)) x (bnot _ y)))
       (not_xor_reg ty x y))
-(rule 6 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bxor _ (bnot _ y) x)))
+(rule 6 (lower (bxor (and (mie3_enabled) (fits_in_64 ty)) (bnot _ y) x))
       (not_xor_reg ty x y))
 
 ;; Xor-not two vector registers.
-(rule 7 (lower (has_type (vr128_ty ty) (bxor _ x (bnot _ y))))
+(rule 7 (lower (bxor (vr128_ty ty) x (bnot _ y)))
       (vec_not_xor ty x y))
-(rule 8 (lower (has_type (vr128_ty ty) (bxor _ (bnot _ y) x)))
+(rule 8 (lower (bxor (vr128_ty ty) (bnot _ y) x))
       (vec_not_xor ty x y))
 
 ;; 3-input Xor
-(rule 10 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bxor _ x y) z)))
+(rule 10 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x y) z))
       (vec_eval ty 0b01101001 x y z))
-(rule 11 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bxor _ y z))))
+(rule 11 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bxor _ y z)))
       (vec_eval ty 0b01101001 x y z))
 
 ;; Xor-And
-(rule 12 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (band _ x y) z)))
+(rule 12 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x y) z))
       (vec_eval ty 0b01010110 x y z))
-(rule 13 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (band _ y z))))
+(rule 13 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (band _ y z)))
       (vec_eval ty 0b00011110 x y z))
 
 ;; Xor-Nand
-(rule 14 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (band _ x y)) z)))
+(rule 14 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ x y)) z))
       (vec_eval ty 0b10101001 x y z))
-(rule 15 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (band _ y z)))))
+(rule 15 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (band _ y z))))
       (vec_eval ty 0b11100001 x y z))
 
 ;; Xor-Or
-(rule 16 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bor _ x y) z)))
+(rule 16 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bor _ x y) z))
       (vec_eval ty 0b01101010 x y z))
-(rule 17 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bor _ y z))))
+(rule 17 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bor _ y z)))
       (vec_eval ty 0b01111000 x y z))
 
 ;; Xor-Nor
-(rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (bor _ x y)) z)))
+(rule 18 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bor _ x y)) z))
       (vec_eval ty 0b10010101 x y z))
-(rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (bor _ y z)))))
+(rule 19 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bor _ y z))))
       (vec_eval ty 0b10000111 x y z))
 
 ;; Xor-Nxor
-(rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (bxor _ x y)) z)))
+(rule 18 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x y)) z))
       (vec_eval ty 0b10010110 x y z))
-(rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (bxor _ y z)))))
+(rule 19 (lower (bxor (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ (bxor _ y z))))
       (vec_eval ty 0b10010110 x y z))
 
 ;; 3-input Nxor
-(rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (bxor _ x y) z))))
+(rule 20 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bxor _ x y) z)))
       (vec_eval ty 0b10010110 x y z))
-(rule 21 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (bxor _ y z)))))
+(rule 21 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bxor _ y z))))
       (vec_eval ty 0b10010110 x y z))
 
 ;; Nxor-And
-(rule 22 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (band _ x y) z))))
+(rule 22 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (band _ x y) z)))
       (vec_eval ty 0b10101001 x y z))
-(rule 23 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (band _ y z)))))
+(rule 23 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (band _ y z))))
       (vec_eval ty 0b11100001 x y z))
 
 ;; Nxor-Nand
-(rule 24 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (bnot _ (band _ x y)) z))))
+(rule 24 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (band _ x y)) z)))
       (vec_eval ty 0b01010110 x y z))
-(rule 25 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (bnot _ (band _ y z))))))
+(rule 25 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (band _ y z)))))
       (vec_eval ty 0b00011110 x y z))
 
 ;; Nxor-Or
-(rule 26 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (bor _ x y) z))))
+(rule 26 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bor _ x y) z)))
       (vec_eval ty 0b10010101 x y z))
-(rule 27 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (bor _ y z)))))
+(rule 27 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bor _ y z))))
       (vec_eval ty 0b10000111 x y z))
 
 ;; Nxor-Nor
-(rule 28 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (bnot _ (bor _ x y)) z))))
+(rule 28 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (bor _ x y)) z)))
       (vec_eval ty 0b01101010 x y z))
-(rule 29 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (bnot _ (bor _ y z))))))
+(rule 29 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (bor _ y z)))))
       (vec_eval ty 0b01111000 x y z))
 
 ;; Xor-Nxor
-(rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ (bnot _ (bxor _ x y)) z))))
+(rule 18 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ (bnot _ (bxor _ x y)) z)))
       (vec_eval ty 0b01101001 x y z))
-(rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (bxor _ x (bnot _ (bxor _ y z))))))
+(rule 19 (lower (bnot (and (vxrs_ext3_enabled) (vr128_ty ty)) (bxor _ x (bnot _ (bxor _ y z)))))
       (vec_eval ty 0b01101001 x y z))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; z15 version using a NAND instruction.
-(rule 2 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (bitselect _ x y z)))
+(rule 2 (lower (bitselect (and (mie3_enabled) (fits_in_64 ty)) x y z))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_not_reg ty z rx)))
         (or_reg ty if_false if_true)))
 
 ;; z14 version using XOR with -1.
-(rule 1 (lower (has_type (and (mie3_disabled) (fits_in_64 ty)) (bitselect _ x y z)))
+(rule 1 (lower (bitselect (and (mie3_disabled) (fits_in_64 ty)) x y z))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_reg ty z (not_reg ty rx))))
         (or_reg ty if_false if_true)))
 
 ;; Bitselect vector registers.
-(rule (lower (has_type (vr128_ty ty) (bitselect _ x y z)))
+(rule (lower (bitselect (vr128_ty ty) x y z))
       (vec_select ty y z x))
 
 ;; Bitselect-not vector registers.
-(rule 5 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bitselect _ x (bnot _ y) z)))
+(rule 5 (lower (bitselect (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ y) z))
       (vec_eval ty 0b01011100 x y z))
-(rule 6 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bitselect _ x y (bnot _ z))))
+(rule 6 (lower (bitselect (and (vxrs_ext3_enabled) (vr128_ty ty)) x y (bnot _ z)))
       (vec_eval ty 0b10100011 x y z))
-(rule 7 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bitselect _ x (bnot _ y) (bnot _ z))))
+(rule 7 (lower (bitselect (and (vxrs_ext3_enabled) (vr128_ty ty)) x (bnot _ y) (bnot _ z)))
       (vec_eval ty 0b10101100 x y z))
 
 ;; Special-case some float-selection instructions for min/max
-(rule 3 (lower (has_type (ty_vec128 ty) (bitselect _ (bitcast _ _ (fcmp _ (FloatCC.LessThan) x y)) x y)))
+(rule 3 (lower (bitselect (ty_vec128 ty) (bitcast _ _ (fcmp _ (FloatCC.LessThan) x y)) x y))
         (fmin_pseudo_reg ty y x))
-(rule 4 (lower (has_type (ty_vec128 ty) (bitselect _ (bitcast _ _ (fcmp _ (FloatCC.LessThan) y x)) x y)))
+(rule 4 (lower (bitselect (ty_vec128 ty) (bitcast _ _ (fcmp _ (FloatCC.LessThan) y x)) x y))
         (fmax_pseudo_reg ty y x))
 
 
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (bmask _ x)))
+(rule (lower (bmask ty x))
       (lower_bool_to_mask ty (value_nonzero x)))
 
 
 ;;;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (bitrev _ x)))
+(rule (lower (bitrev ty x))
       (bitrev_bytes ty
         (bitrev_bits 4 0xf0f0_f0f0_f0f0_f0f0 ty
           (bitrev_bits 2 0xcccc_cccc_cccc_cccc ty
@@ -1526,7 +1530,7 @@
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (bswap _ x)))
+(rule (lower (bswap ty x))
       (bitrev_bytes ty x))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1542,7 +1546,7 @@
 
 ;; Count leading zeros pre-z17, via FLOGR on an input zero-extended to 64 bits,
 ;; with the result compensated for the extra bits.
-(rule 1 (lower (has_type (and (mie4_disabled) (fits_in_64 ty)) (clz _ x)))
+(rule 1 (lower (clz (and (mie4_disabled) (fits_in_64 ty)) x))
       (let ((ext_reg Reg (put_in_reg_zext64 x))
             ;; Ask for a value of 64 in the all-zero 64-bit input case.
             ;; After compensation this will match the expected semantics.
@@ -1550,7 +1554,7 @@
         (clz_offset ty clz)))
 
 ;; Count leading zeros, 128-bit full vector pre-z17.
-(rule (lower (has_type (and (vxrs_ext3_disabled) $I128) (clz _ x)))
+(rule (lower (clz (and (vxrs_ext3_disabled) $I128) x))
       (let ((clz_vec Reg (vec_clz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (clz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 clz_vec 0))
@@ -1561,13 +1565,13 @@
 
 ;; Count leading zeros on z17, via CLZG on an input zero-extended to 64 bits,
 ;; with the result compensated for the extra bits.
-(rule 3 (lower (has_type (and (mie4_enabled) (fits_in_64 ty)) (clz _ x)))
+(rule 3 (lower (clz (and (mie4_enabled) (fits_in_64 ty)) x))
       (let ((ext_reg Reg (put_in_reg_zext64 x))
             (clz Reg (clz_reg ext_reg)))
         (clz_offset ty clz)))
 
 ;; Count leading zeros, 128-bit full vector on z17.
-(rule 2 (lower (has_type (and (vxrs_ext3_enabled) $I128) (clz _ x)))
+(rule 2 (lower (clz (and (vxrs_ext3_enabled) $I128) x))
         (vec_clz $I128 x))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1586,7 +1590,7 @@
 ;; i.e. computing
 ;;        cls(x) == clz(x ^ (x >> 63)) - 1
 ;; where x is the sign-extended input.
-(rule 1 (lower (has_type (and (mie4_disabled) (fits_in_64 ty)) (cls _ x)))
+(rule 1 (lower (cls (and (mie4_disabled) (fits_in_64 ty)) x))
       (let ((ext_reg Reg (put_in_reg_sext64 x))
             (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
             (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
@@ -1594,7 +1598,7 @@
         (cls_offset ty clz)))
 
 ;; Count leading sign-bit copies, 128-bit full vector pre-z17.
-(rule (lower (has_type (and (vxrs_ext3_disabled) $I128) (cls _ x)))
+(rule (lower (cls (and (vxrs_ext3_disabled) $I128) x))
       (let ((x_reg Reg x)
             (ones Reg (vec_imm_splat $I8X16 255))
             (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1608,7 +1612,7 @@
         (vec_add $I128 (vec_select $I128 clz_sum clz_hi mask) ones)))
 
 ;; Count leading sign-bit copies on z17, similar to above.
-(rule 3 (lower (has_type (and (mie4_enabled) (fits_in_64 ty)) (cls _ x)))
+(rule 3 (lower (cls (and (mie4_enabled) (fits_in_64 ty)) x))
         (let ((ext_reg Reg (put_in_reg_sext64 x))
               (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
               (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
@@ -1616,7 +1620,7 @@
           (cls_offset ty clz)))
 
 ;; Count leading sign-bit copies, 128-bit full vector on z17.
-(rule 2 (lower (has_type (and (vxrs_ext3_enabled) $I128) (cls _ x)))
+(rule 2 (lower (cls (and (vxrs_ext3_enabled) $I128) x))
         (let ((x_reg Reg x)
               (ones Reg (vec_imm_splat $I8X16 255))
               (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1639,7 +1643,7 @@
 ;; never zero by setting a "guard bit" in the position corresponding to
 ;; the input type size.  This way the 64-bit algorithm above will handle
 ;; that case correctly automatically.
-(rule 2 (lower (has_type (and (mie4_disabled) (gpr32_ty ty)) (ctz _ x)))
+(rule 2 (lower (ctz (and (mie4_disabled) (gpr32_ty ty)) x))
       (let ((rx Reg (or_uimm16shifted $I64 x (ctz_guardbit ty)))
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg 64 lastbit)))
@@ -1654,14 +1658,14 @@
 ;; via its condition code.  We check for that and replace the instruction
 ;; result with the value -1 via a conditional move, which will then lead to
 ;; the correct result after the final subtraction from 63.
-(rule 1 (lower (has_type (and (mie4_disabled) (gpr64_ty _ty)) (ctz _ x)))
+(rule 1 (lower (ctz (and (mie4_disabled) (gpr64_ty _ty)) x))
       (let ((rx Reg x)
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg -1 lastbit)))
         (sub_reg $I64 (imm $I64 63) clz)))
 
 ;; Count trailing zeros, 128-bit full vector pre-z17.
-(rule 0 (lower (has_type (and (vxrs_ext3_disabled) $I128) (ctz _ x)))
+(rule 0 (lower (ctz (and (vxrs_ext3_disabled) $I128) x))
       (let ((ctz_vec Reg (vec_ctz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (ctz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 ctz_vec 0))
@@ -1672,27 +1676,27 @@
 
 ;; Count leading zeros on z17, via CTZG on types smaller than 64-bit,
 ;; using the same guard bit mechanism as above.
-(rule 5 (lower (has_type (and (mie4_enabled) (gpr32_ty ty)) (ctz _ x)))
+(rule 5 (lower (ctz (and (mie4_enabled) (gpr32_ty ty)) x))
         (ctz_reg (or_uimm16shifted $I64 x (ctz_guardbit ty))))
 
 ;; Count leading zeros on z17, via CTZG directly on 64-bit types.
-(rule 4 (lower (has_type (and (mie4_enabled) (gpr64_ty _ty)) (ctz _ x)))
+(rule 4 (lower (ctz (and (mie4_enabled) (gpr64_ty _)) x))
         (ctz_reg x))
 
 ;; Count trailing zeros, 128-bit full vector on z17.
-(rule 3 (lower (has_type (and (vxrs_ext3_enabled) $I128) (ctz _ x)))
+(rule 3 (lower (ctz (and (vxrs_ext3_enabled) $I128) x))
         (vec_ctz $I128 x))
 
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Population count for 8-bit types is supported by the POPCNT instruction.
-(rule (lower (has_type $I8 (popcnt _ x)))
+(rule (lower (popcnt $I8 x))
       (popcnt_byte x))
 
 ;; On z15, the POPCNT instruction has a variant to compute a full 64-bit
 ;; population count, which we also use for 16- and 32-bit types.
-(rule -1 (lower (has_type (and (mie3_enabled) (fits_in_64 ty)) (popcnt _ x)))
+(rule -1 (lower (popcnt (and (mie3_enabled) (fits_in_64 ty)) x))
       (popcnt_reg (put_in_reg_zext64 x)))
 
 ;; On z14, we use the regular POPCNT, which computes the population count
@@ -1703,18 +1707,18 @@
 ;; $I16, where we instead accumulate in the low byte and clear high bits
 ;; via an explicit and operation.)
 
-(rule (lower (has_type (and (mie3_disabled) $I16) (popcnt _ x)))
+(rule (lower (popcnt (and (mie3_disabled) $I16) x))
       (let ((cnt2 Reg (popcnt_byte x))
             (cnt1 Reg (add_reg $I32 cnt2 (lshr_imm $I32 cnt2 8))))
         (and_uimm16shifted $I32 cnt1 (uimm16shifted 255 0))))
 
-(rule (lower (has_type (and (mie3_disabled) $I32) (popcnt _ x)))
+(rule (lower (popcnt (and (mie3_disabled) $I32) x))
       (let ((cnt4 Reg (popcnt_byte x))
             (cnt2 Reg (add_reg $I32 cnt4 (lshl_imm $I32 cnt4 16)))
             (cnt1 Reg (add_reg $I32 cnt2 (lshl_imm $I32 cnt2 8))))
         (lshr_imm $I32 cnt1 24)))
 
-(rule (lower (has_type (and (mie3_disabled) $I64) (popcnt _ x)))
+(rule (lower (popcnt (and (mie3_disabled) $I64) x))
       (let ((cnt8 Reg (popcnt_byte x))
             (cnt4 Reg (add_reg $I64 cnt8 (lshl_imm $I64 cnt8 32)))
             (cnt2 Reg (add_reg $I64 cnt4 (lshl_imm $I64 cnt4 16)))
@@ -1722,11 +1726,11 @@
         (lshr_imm $I64 cnt1 56)))
 
 ;; Population count for vector types.
-(rule 1 (lower (has_type (ty_vec128 ty) (popcnt _ x)))
+(rule 1 (lower (popcnt (ty_vec128 ty) x))
       (vec_popcnt ty x))
 
 ;; Population count, 128-bit full vector.
-(rule (lower (has_type $I128 (popcnt _ x)))
+(rule (lower (popcnt $I128 x))
       (let ((popcnt_vec Reg (vec_popcnt $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (popcnt_hi Reg (vec_permute_dw_imm $I64X2 zero 0 popcnt_vec 0))
@@ -1737,141 +1741,141 @@
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Add two registers.
-(rule (lower (has_type ty (fadd _ x y)))
+(rule (lower (fadd ty x y))
       (fadd_reg ty x y))
 
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Subtract two registers.
-(rule (lower (has_type ty (fsub _ x y)))
+(rule (lower (fsub ty x y))
       (fsub_reg ty x y))
 
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Multiply two registers.
-(rule (lower (has_type ty (fmul _ x y)))
+(rule (lower (fmul ty x y))
       (fmul_reg ty x y))
 
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Divide two registers.
-(rule (lower (has_type ty (fdiv _ x y)))
+(rule (lower (fdiv ty x y))
       (fdiv_reg ty x y))
 
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Minimum of two registers.
-(rule (lower (has_type ty (fmin _ x y)))
+(rule (lower (fmin ty x y))
       (fmin_reg ty x y))
 
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Maximum of two registers.
-(rule (lower (has_type ty (fmax _ x y)))
+(rule (lower (fmax ty x y))
       (fmax_reg ty x y))
 
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Copysign of two registers.
-(rule (lower (has_type $F32 (fcopysign _ x y)))
+(rule (lower (fcopysign $F32 x y))
       (vec_select $F32 x y (imm $F32 2147483647)))
-(rule (lower (has_type $F64 (fcopysign _ x y)))
+(rule (lower (fcopysign $F64 x y))
       (vec_select $F64 x y (imm $F64 9223372036854775807)))
-(rule (lower (has_type $F128 (fcopysign _ x y)))
+(rule (lower (fcopysign $F128 x y))
       (vec_select $F128 x y (vec_imm $F128 (imm8x16 127 255 255 255 255 255 255 255
                                                     255 255 255 255 255 255 255 255))))
-(rule (lower (has_type $F32X4 (fcopysign _ x y)))
+(rule (lower (fcopysign $F32X4 x y))
       (vec_select $F32X4 x y (vec_imm_bit_mask $F32X4 1 31)))
-(rule (lower (has_type $F64X2 (fcopysign _ x y)))
+(rule (lower (fcopysign $F64X2 x y))
       (vec_select $F64X2 x y (vec_imm_bit_mask $F64X2 1 63)))
 
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Multiply-and-add of three registers.
-(rule (lower (has_type ty (fma _ x y z)))
+(rule (lower (fma ty x y z))
       (fma_reg ty x y z))
 
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Square root of a register.
-(rule (lower (has_type ty (sqrt _ x)))
+(rule (lower (sqrt ty x))
       (sqrt_reg ty x))
 
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Negated value of a register.
-(rule (lower (has_type ty (fneg _ x)))
+(rule (lower (fneg ty x))
       (fneg_reg ty x))
 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Absolute value of a register.
-(rule (lower (has_type ty (fabs _ x)))
+(rule (lower (fabs ty x))
       (fabs_reg ty x))
 
 
 ;;;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Round value in a register towards positive infinity.
-(rule (lower (has_type ty (ceil _ x)))
+(rule (lower (ceil ty x))
       (ceil_reg ty x))
 
 
 ;;;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Round value in a register towards negative infinity.
-(rule (lower (has_type ty (floor _ x)))
+(rule (lower (floor ty x))
       (floor_reg ty x))
 
 
 ;;;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Round value in a register towards zero.
-(rule (lower (has_type ty (trunc _ x)))
+(rule (lower (trunc ty x))
       (trunc_reg ty x))
 
 
 ;;;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Round value in a register towards nearest.
-(rule (lower (has_type ty (nearest _ x)))
+(rule (lower (nearest ty x))
       (nearest_reg ty x))
 
 
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Promote a register.
-(rule (lower (has_type dst_ty (fpromote _ x @ (value_type src_ty))))
+(rule (lower (fpromote dst_ty x @ (value_type src_ty)))
       (fpromote_reg dst_ty src_ty x))
 
-(rule 1 (lower (has_type $F128 (fpromote _ x @ (value_type $F32))))
+(rule 1 (lower (fpromote $F128 x @ (value_type $F32)))
       (fpromote_reg $F128 $F64 (fpromote_reg $F64 $F32 x)))
 
 
 ;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Promote a register.
-(rule (lower (has_type $F64X2 (fvpromote_low _ x @ (value_type $F32X4))))
+(rule (lower (fvpromote_low $F64X2 x @ (value_type $F32X4)))
       (fpromote_reg $F64X2 $F32X4 (vec_merge_low_lane_order $I32X4 x x)))
 
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Demote a register.
-(rule (lower (has_type dst_ty (fdemote _ x @ (value_type src_ty))))
+(rule (lower (fdemote dst_ty x @ (value_type src_ty)))
       (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
 
-(rule 1 (lower (has_type $F32 (fdemote _ x @ (value_type $F128))))
+(rule 1 (lower (fdemote $F32 x @ (value_type $F128)))
       (fdemote_reg $F32 $F64 (FpuRoundMode.Current)
                    (fdemote_reg $F64 $F128 (FpuRoundMode.ShorterPrecision) x)))
 
@@ -1879,7 +1883,7 @@
 ;;;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Demote a register.
-(rule (lower (has_type $F32X4 (fvdemote _ x @ (value_type $F64X2))))
+(rule (lower (fvdemote $F32X4 x @ (value_type $F64X2)))
       (let ((dst Reg (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.Current) x)))
         (vec_pack_lane_order $I64X2 (vec_lshr_imm $I64X2 dst 32)
                                     (vec_imm $I64X2 0))))
@@ -1888,40 +1892,38 @@
 ;;;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a 32-bit or smaller unsigned integer to $F32 (z15 instruction).
-(rule 1 (lower (has_type $F32
-        (fcvt_from_uint _ x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+(rule 1 (lower
+        (fcvt_from_uint $F32 x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty)))))
       (fcvt_from_uint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext32 x)))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F32, via an intermediate $F64.
-(rule (lower (has_type $F32 (fcvt_from_uint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_uint $F32 x @ (value_type (fits_in_64 ty))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
                    (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_zext64 x))))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F64.
-(rule (lower (has_type $F64 (fcvt_from_uint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_uint $F64 x @ (value_type (fits_in_64 ty))))
       (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext64 x)))
 
 ;; Convert a 32-bit or smaller unsigned integer to $F128.
-(rule 1 (lower (has_type $F128 (fcvt_from_uint _ x @ (value_type (fits_in_32 ty)))))
+(rule 1 (lower (fcvt_from_uint $F128  x @ (value_type (fits_in_32 ty))))
       (fcvt_from_uint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext32 x)))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F128.
-(rule (lower (has_type $F128 (fcvt_from_uint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_uint $F128 x @ (value_type (fits_in_64 ty))))
       (fcvt_from_uint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
-(rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
-                       (fcvt_from_uint _ x @ (value_type $I32X4))))
+(rule 1 (lower (fcvt_from_uint (and (vxrs_ext2_enabled) $F32X4) x @ (value_type $I32X4)))
       (fcvt_from_uint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
-(rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
-                       (fcvt_from_uint _ x @ (value_type $I32X4))))
+(rule (lower (fcvt_from_uint (and (vxrs_ext2_disabled) $F32X4) x @ (value_type $I32X4)))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
           (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
@@ -1932,47 +1934,45 @@
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
-(rule (lower (has_type $F64X2 (fcvt_from_uint _ x @ (value_type $I64X2))))
+(rule (lower (fcvt_from_uint $F64X2 x @ (value_type $I64X2)))
       (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
 ;;;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a 32-bit or smaller signed integer to $F32 (z15 instruction).
-(rule 1 (lower (has_type $F32
-        (fcvt_from_sint _ x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
+(rule 1 (lower
+        (fcvt_from_sint $F32 x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty)))))
       (fcvt_from_sint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext32 x)))
 
 ;; Convert a 64-bit or smaller signed integer to $F32, via an intermediate $F64.
-(rule (lower (has_type $F32 (fcvt_from_sint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_sint $F32 x @ (value_type (fits_in_64 ty))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
                    (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_sext64 x))))
 
 ;; Convert a 64-bit or smaller signed integer to $F64.
-(rule (lower (has_type $F64 (fcvt_from_sint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_sint $F64 x @ (value_type (fits_in_64 ty))))
       (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext64 x)))
 
 ;; Convert a 32-bit or smaller signed integer to $F128.
-(rule 1 (lower (has_type $F128 (fcvt_from_sint _ x @ (value_type (fits_in_32 ty)))))
+(rule 1 (lower (fcvt_from_sint $F128 x @ (value_type (fits_in_32 ty))))
       (fcvt_from_sint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext32 x)))
 
 ;; Convert a 64-bit or smaller signed integer to $F128.
-(rule (lower (has_type $F128 (fcvt_from_sint _ x @ (value_type (fits_in_64 ty)))))
+(rule (lower (fcvt_from_sint $F128 x @ (value_type (fits_in_64 ty))))
       (fcvt_from_sint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
-(rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
-                       (fcvt_from_sint _ x @ (value_type $I32X4))))
+(rule 1 (lower (fcvt_from_sint (and (vxrs_ext2_enabled) $F32X4) x @ (value_type $I32X4)))
       (fcvt_from_sint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
-(rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
-                       (fcvt_from_sint _ x @ (value_type $I32X4))))
+(rule (lower (fcvt_from_sint (and (vxrs_ext2_disabled) $F32X4) x @ (value_type $I32X4)))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
           (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
@@ -1983,7 +1983,7 @@
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
-(rule (lower (has_type $F64X2 (fcvt_from_sint _ x @ (value_type $I64X2))))
+(rule (lower (fcvt_from_sint $F64X2 x @ (value_type $I64X2)))
       (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
@@ -1991,8 +1991,7 @@
 
 ;; Convert a scalar floating-point value in a register to an unsigned integer.
 ;; Traps if the input cannot be represented in the output type.
-(rule (lower (has_type (fits_in_64 dst_ty)
-                       (fcvt_to_uint _ x @ (value_type src_ty))))
+(rule (lower (fcvt_to_uint (fits_in_64 dst_ty) x @ (value_type src_ty)))
       (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
             (_ Reg (trap_if (fcmp_reg src_ty src src)
@@ -2016,8 +2015,7 @@
 
 ;; Convert a scalar floating-point value in a register to a signed integer.
 ;; Traps if the input cannot be represented in the output type.
-(rule (lower (has_type (fits_in_64 dst_ty)
-                       (fcvt_to_sint _ x @ (value_type src_ty))))
+(rule (lower (fcvt_to_sint (fits_in_64 dst_ty) x @ (value_type src_ty)))
       (let ((src Reg (put_in_reg x))
             ;; First, check whether the input is a NaN, and trap if so.
             (_ Reg (trap_if (fcmp_reg src_ty src src)
@@ -2041,8 +2039,7 @@
 ;;;; Rules for `fcvt_to_uint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a scalar floating-point value in a register to an unsigned integer.
-(rule -1 (lower (has_type (fits_in_64 dst_ty)
-                       (fcvt_to_uint_sat _ x @ (value_type src_ty))))
+(rule -1 (lower (fcvt_to_uint_sat (fits_in_64 dst_ty) x @ (value_type src_ty)))
       (let ((src Reg (put_in_reg x))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
@@ -2053,13 +2050,11 @@
         (uint_sat_reg dst_ty int_ty dst)))
 
 ;; Convert $F32X4 to $I32X4 (z15 instruction).
-(rule 1 (lower (has_type (and (vxrs_ext2_enabled) $I32X4)
-                       (fcvt_to_uint_sat _ x @ (value_type $F32X4))))
+(rule 1 (lower (fcvt_to_uint_sat (and (vxrs_ext2_enabled) $I32X4) x @ (value_type $F32X4)))
       (fcvt_to_uint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) x))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
-(rule (lower (has_type (and (vxrs_ext2_disabled) $I32X4)
-                       (fcvt_to_uint_sat _ x @ (value_type $F32X4))))
+(rule (lower (fcvt_to_uint_sat (and (vxrs_ext2_disabled) $I32X4) x @ (value_type $F32X4)))
       (vec_pack_usat $I64X2
         (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 x x)))
@@ -2067,15 +2062,14 @@
           (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 x x)))))
 
 ;; Convert $F64X2 to $I64X2.
-(rule (lower (has_type $I64X2 (fcvt_to_uint_sat _ x @ (value_type $F64X2))))
+(rule (lower (fcvt_to_uint_sat $I64X2 x @ (value_type $F64X2)))
       (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) x))
 
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a scalar floating-point value in a register to a signed integer.
-(rule -1 (lower (has_type (fits_in_64 dst_ty)
-                       (fcvt_to_sint_sat _ x @ (value_type src_ty))))
+(rule -1 (lower (fcvt_to_sint_sat (fits_in_64 dst_ty) x @ (value_type src_ty)))
       (let ((src Reg (put_in_reg x))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
@@ -2093,16 +2087,14 @@
         (sint_sat_reg dst_ty int_ty sat)))
 
 ;; Convert $F32X4 to $I32X4 (z15 instruction).
-(rule 1 (lower (has_type (and (vxrs_ext2_enabled) $I32X4)
-                       (fcvt_to_sint_sat _ src @ (value_type $F32X4))))
+(rule 1 (lower (fcvt_to_sint_sat (and (vxrs_ext2_enabled) $I32X4) src @ (value_type $F32X4)))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
         (fcvt_to_sint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) src)
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
-(rule (lower (has_type (and (vxrs_ext2_disabled) $I32X4)
-                       (fcvt_to_sint_sat _ src @ (value_type $F32X4))))
+(rule (lower (fcvt_to_sint_sat (and (vxrs_ext2_disabled) $I32X4) src @ (value_type $F32X4)))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
         (vec_pack_ssat $I64X2
@@ -2113,7 +2105,7 @@
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
 ;; Convert $F64X2 to $I64X2.
-(rule (lower (has_type $I64X2 (fcvt_to_sint_sat _ src @ (value_type $F64X2))))
+(rule (lower (fcvt_to_sint_sat $I64X2 src @ (value_type $F64X2)))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I64X2
         (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) src)
@@ -2123,45 +2115,41 @@
 ;;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Reinterpret a 64-bit integer value as floating-point.
-(rule (lower (has_type $F64 (bitcast _ _ x @ (value_type $I64))))
+(rule (lower (bitcast $F64 _ x @ (value_type $I64)))
       (vec_insert_lane_undef $F64X2 x 0 (zero_reg)))
 
 ;; Reinterpret a 64-bit floating-point value as integer.
-(rule (lower (has_type $I64 (bitcast _ _ x @ (value_type $F64))))
+(rule (lower (bitcast $I64 _ x @ (value_type $F64)))
       (vec_extract_lane $F64X2 x 0 (zero_reg)))
 
 ;; Reinterpret a 32-bit integer value as floating-point.
-(rule (lower (has_type $F32 (bitcast _ _ x @ (value_type $I32))))
+(rule (lower (bitcast $F32 _ x @ (value_type $I32)))
       (vec_insert_lane_undef $F32X4 x 0 (zero_reg)))
 
 ;; Reinterpret a 32-bit floating-point value as integer.
-(rule (lower (has_type $I32 (bitcast _ _ x @ (value_type $F32))))
+(rule (lower (bitcast $I32 _ x @ (value_type $F32)))
       (vec_extract_lane $F32X4 x 0 (zero_reg)))
 
 ;; Reinterpret a 16-bit integer value as floating-point.
-(rule (lower (has_type $F16 (bitcast _ _ x @ (value_type $I16))))
+(rule (lower (bitcast $F16 _ x @ (value_type $I16)))
       (vec_insert_lane_undef $F16X8 x 0 (zero_reg)))
 
 ;; Reinterpret a 16-bit floating-point value as integer.
-(rule (lower (has_type $I16 (bitcast _ _ x @ (value_type $F16))))
+(rule (lower (bitcast $I16 _ x @ (value_type $F16)))
       (vec_extract_lane $F16X8 x 0 (zero_reg)))
 
 ;; Bitcast between types residing in GPRs is a no-op.
-(rule 1 (lower (has_type (gpr32_ty _)
-                         (bitcast _ _ x @ (value_type (gpr32_ty _)))))
+(rule 1 (lower (bitcast (gpr32_ty _) _ x @ (value_type (gpr32_ty _))))
       x)
-(rule 2 (lower (has_type (gpr64_ty _)
-                         (bitcast _ _ x @ (value_type (gpr64_ty _)))))
+(rule 2 (lower (bitcast (gpr64_ty _) _ x @ (value_type (gpr64_ty _))))
       x)
 
 ;; Bitcast between types residing in FPRs is a no-op.
-(rule 3 (lower (has_type (ty_scalar_float _)
-                         (bitcast _ _ x @ (value_type (ty_scalar_float _)))))
+(rule 3 (lower (bitcast (ty_scalar_float _) _ x @ (value_type (ty_scalar_float _))))
       x)
 
 ;; Bitcast between types residing in VRs is a no-op if lane count is unchanged.
-(rule 5 (lower (has_type (multi_lane bits count)
-                         (bitcast _ _ x @ (value_type (multi_lane bits count)))))
+(rule 5 (lower (bitcast (multi_lane bits count) _ x @ (value_type (multi_lane bits count))))
       x)
 
 ;; Bitcast between types residing in VRs with different lane counts is a
@@ -2171,8 +2159,7 @@
 ;; be optimized further, but we don't bother at the moment since due to our
 ;; choice of lane order depending on the current function ABI, this case will
 ;; currently never arise in practice.
-(rule 4 (lower (has_type (vr128_ty out_ty)
-                         (bitcast _ flags x @ (value_type (vr128_ty in_ty)))))
+(rule 4 (lower (bitcast (vr128_ty out_ty) flags x @ (value_type (vr128_ty in_ty))))
       (abi_vec_elt_rev (lane_order_from_memflags flags) out_ty
         (abi_vec_elt_rev (lane_order_from_memflags flags) in_ty x)))
 
@@ -2303,14 +2290,12 @@
 ;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Extract vector lane to general-purpose register.
-(rule 1 (lower (has_type out_ty
-                       (extractlane _ x @ (value_type ty) (u8_from_uimm8 idx))))
+(rule 1 (lower (extractlane out_ty x @ (value_type ty) (u8_from_uimm8 idx)))
       (if (ty_int_ref_scalar_64 out_ty))
       (vec_extract_lane ty x (be_lane_idx ty idx) (zero_reg)))
 
 ;; Extract vector lane to floating-point register.
-(rule 0 (lower (has_type (ty_scalar_float _)
-                       (extractlane _ x @ (value_type ty) (u8_from_uimm8 idx))))
+(rule 0 (lower (extractlane (ty_scalar_float _) x @ (value_type ty) (u8_from_uimm8 idx)))
       (vec_replicate_lane ty x (be_lane_idx ty idx)))
 
 ;; Extract vector lane and store to big-endian memory.
@@ -2361,29 +2346,28 @@
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load replicated value from general-purpose register.
-(rule 1 (lower (has_type ty (splat _ x @ (value_type in_ty))))
+(rule 1 (lower (splat ty x @ (value_type in_ty)))
       (if (ty_int_ref_scalar_64 in_ty))
       (vec_replicate_lane ty (vec_insert_lane_undef ty x 0 (zero_reg)) 0))
 
 ;; Load replicated value from floating-point register.
-(rule 0 (lower (has_type ty (splat _
-                             x @ (value_type (ty_scalar_float _)))))
+(rule 0 (lower (splat ty x @ (value_type (ty_scalar_float _))))
       (vec_replicate_lane ty x 0))
 
 ;; Load replicated value from vector lane.
-(rule 2 (lower (has_type ty (splat _ (extractlane _ x (u8_from_uimm8 idx)))))
+(rule 2 (lower (splat ty (extractlane _ x (u8_from_uimm8 idx))))
       (vec_replicate_lane ty x (be_lane_idx ty idx)))
 
 ;; Load replicated 16-bit immediate value.
-(rule 3 (lower (has_type ty (splat _ (i16_from_value x))))
+(rule 3 (lower (splat ty (i16_from_value x)))
       (vec_imm_replicate ty x))
 
 ;; Load replicated value from big-endian memory.
-(rule 4 (lower (has_type ty (splat _ (sinkable_load x))))
+(rule 4 (lower (splat ty (sinkable_load x)))
       (vec_load_replicate ty (sink_load x)))
 
 ;; Load replicated value from little-endian memory.
-(rule 5 (lower (has_type ty (splat _ (sinkable_load_little x))))
+(rule 5 (lower (splat ty (sinkable_load_little x)))
       (vec_load_replicate_little ty (sink_load x)))
 
 
@@ -2420,31 +2404,28 @@
 ;;;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load scalar value from general-purpose register.
-(rule 1 (lower (has_type ty (scalar_to_vector _
-                             x @ (value_type in_ty))))
+(rule 1 (lower (scalar_to_vector ty x @ (value_type in_ty)))
       (if (ty_int_ref_scalar_64 in_ty))
       (vec_insert_lane ty (vec_imm ty 0) x (be_lane_idx ty 0) (zero_reg)))
 
 ;; Load scalar value from floating-point register.
-(rule 0 (lower (has_type ty (scalar_to_vector _
-                             x @ (value_type (ty_scalar_float _)))))
+(rule 0 (lower (scalar_to_vector ty x @ (value_type (ty_scalar_float _))))
       (vec_move_lane_and_zero ty (be_lane_idx ty 0) x 0))
 
 ;; Load scalar value from vector lane.
-(rule 2 (lower (has_type ty (scalar_to_vector _
-                            (extractlane _ x (u8_from_uimm8 idx)))))
+(rule 2 (lower (scalar_to_vector ty (extractlane _ x (u8_from_uimm8 idx))))
       (vec_move_lane_and_zero ty (be_lane_idx ty 0) x (be_lane_idx ty idx)))
 
 ;; Load scalar 16-bit immediate value.
-(rule 3 (lower (has_type ty (scalar_to_vector _ (i16_from_value x))))
+(rule 3 (lower (scalar_to_vector ty (i16_from_value x)))
       (vec_insert_lane_imm ty (vec_imm ty 0) x (be_lane_idx ty 0)))
 
 ;; Load scalar value from big-endian memory.
-(rule 4 (lower (has_type ty (scalar_to_vector _ (sinkable_load x))))
+(rule 4 (lower (scalar_to_vector ty (sinkable_load x)))
       (vec_load_lane ty (vec_imm ty 0) (sink_load x) (be_lane_idx ty 0)))
 
 ;; Load scalar value lane from little-endian memory.
-(rule 5 (lower (has_type ty (scalar_to_vector _ (sinkable_load_little x))))
+(rule 5 (lower (scalar_to_vector ty (sinkable_load_little x)))
       (vec_load_lane_little ty (vec_imm ty 0) (sink_load x) (be_lane_idx ty 0)))
 
 
@@ -2621,7 +2602,7 @@
 
 ;;;; Rules for `blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type (and (ty_vec128 ty) (vxrs_ext3_enabled)) (blendv _ p x y)))
+(rule 1 (lower (blendv (and (ty_vec128 ty) (vxrs_ext3_enabled)) p x y))
   (vec_blend ty p x y))
 
 
@@ -2634,7 +2615,7 @@
 ;;     permute-lane-element := umin (16, swizzle-lane-element)
 ;; and pass a zero vector as second operand to the permute instruction.
 
-(rule 1 (lower (has_type (ty_vec128 ty) (swizzle _ x y)))
+(rule 1 (lower (swizzle (ty_vec128 ty) x y))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_permute ty x (vec_imm ty 0)
          (vec_umin $I8X16 (vec_imm_splat $I8X16 16) y)))
@@ -2653,7 +2634,7 @@
 ;;     the input vector as second operand (covering lanes 16 .. 31)
 ;; to implement the required swizzle semantics.
 
-(rule (lower (has_type (ty_vec128 ty) (swizzle _ x y)))
+(rule (lower (swizzle (ty_vec128 ty) x y))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_permute ty (vec_imm ty 0) x
          (vec_umax $I8X16 (vec_imm_splat $I8X16 239)
@@ -2663,7 +2644,7 @@
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load the address of a stack slot.
-(rule (lower (has_type ty (stack_addr _ stack_slot offset)))
+(rule (lower (stack_addr ty stack_slot offset))
       (stack_addr_impl ty stack_slot offset))
 
 
@@ -2722,74 +2703,74 @@
 ;;;; Rules for `load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load 8-bit integers.
-(rule (lower (has_type $I8 (load _ flags addr offset)))
+(rule (lower (load $I8 flags addr offset))
       (zext32_mem $I8 (lower_address flags addr offset)))
 
 ;; Load 16-bit big-endian integers.
-(rule (lower (has_type $I16 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $I16 flags @ (bigendian) addr offset))
       (zext32_mem $I16 (lower_address flags addr offset)))
 
 ;; Load 16-bit little-endian integers.
-(rule -1 (lower (has_type $I16 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $I16 flags @ (littleendian) addr offset))
       (loadrev16 (lower_address flags addr offset)))
 
 ;; Load 32-bit big-endian integers.
-(rule (lower (has_type $I32 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $I32 flags @ (bigendian) addr offset))
       (load32 (lower_address flags addr offset)))
 
 ;; Load 32-bit little-endian integers.
-(rule -1 (lower (has_type $I32 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $I32 flags @ (littleendian) addr offset))
       (loadrev32 (lower_address flags addr offset)))
 
 ;; Load 64-bit big-endian integers.
-(rule (lower (has_type $I64 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $I64 flags @ (bigendian) addr offset))
       (load64 (lower_address flags addr offset)))
 
 ;; Load 64-bit little-endian integers.
-(rule -1 (lower (has_type $I64 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $I64 flags @ (littleendian) addr offset))
       (loadrev64 (lower_address flags addr offset)))
 
 ;; Load 16-bit big-endian floating-point values (as vector lane).
-(rule (lower (has_type $F16 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $F16 flags @ (bigendian) addr offset))
       (vec_load_lane_undef $F16X8 (lower_address flags addr offset) 0))
 
 ;; Load 16-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (has_type $F16 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $F16 flags @ (littleendian) addr offset))
       (vec_load_lane_little_undef $F16X8 (lower_address flags addr offset) 0))
 
 ;; Load 32-bit big-endian floating-point values (as vector lane).
-(rule (lower (has_type $F32 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $F32 flags @ (bigendian) addr offset))
       (vec_load_lane_undef $F32X4 (lower_address flags addr offset) 0))
 
 ;; Load 32-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (has_type $F32 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $F32 flags @ (littleendian) addr offset))
       (vec_load_lane_little_undef $F32X4 (lower_address flags addr offset) 0))
 
 ;; Load 64-bit big-endian floating-point values (as vector lane).
-(rule (lower (has_type $F64 (load _ flags @ (bigendian) addr offset)))
+(rule (lower (load $F64 flags @ (bigendian) addr offset))
       (vec_load_lane_undef $F64X2 (lower_address flags addr offset) 0))
 
 ;; Load 64-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (has_type $F64 (load _ flags @ (littleendian) addr offset)))
+(rule -1 (lower (load $F64 flags @ (littleendian) addr offset))
       (vec_load_lane_little_undef $F64X2 (lower_address flags addr offset) 0))
 
 ;; Load 128-bit big-endian vector values, BE lane order - direct load.
-(rule 4 (lower (has_type (vr128_ty ty) (load _ flags @ (bigendian) addr offset)))
+(rule 4 (lower (load (vr128_ty ty) flags @ (bigendian) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_load ty (lower_address flags addr offset)))
 
 ;; Load 128-bit little-endian vector values, BE lane order - byte-reversed load.
-(rule 3 (lower (has_type (vr128_ty ty) (load _ flags @ (littleendian) addr offset)))
+(rule 3 (lower (load (vr128_ty ty) flags @ (littleendian) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_load_byte_rev ty flags addr offset))
 
 ;; Load 128-bit big-endian vector values, LE lane order - element-reversed load.
-(rule 2 (lower (has_type (vr128_ty ty) (load _ flags @ (bigendian) addr offset)))
+(rule 2 (lower (load (vr128_ty ty) flags @ (bigendian) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_load_elt_rev ty flags addr offset))
 
 ;; Load 128-bit little-endian vector values, LE lane order - fully-reversed load.
-(rule 1 (lower (has_type (vr128_ty ty) (load _ flags @ (littleendian) addr offset)))
+(rule 1 (lower (load (vr128_ty ty) flags @ (littleendian) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_load_full_rev ty flags addr offset))
 
@@ -2890,46 +2871,42 @@
 ;;;; Rules for `uload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule (lower (has_type (gpr32_ty _ty) (uload8 _ flags addr offset)))
+(rule (lower (uload8 (gpr32_ty _ty) flags addr offset))
       (zext32_mem $I8 (lower_address flags addr offset)))
 
 ;; 64-bit target types.
-(rule 1 (lower (has_type (gpr64_ty _ty) (uload8 _ flags addr offset)))
+(rule 1 (lower (uload8 (gpr64_ty _ty) flags addr offset))
       (zext64_mem $I8 (lower_address flags addr offset)))
 
 
 ;;;; Rules for `sload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule (lower (has_type (gpr32_ty _ty) (sload8 _ flags addr offset)))
+(rule (lower (sload8 (gpr32_ty _ty) flags addr offset))
       (sext32_mem $I8 (lower_address flags addr offset)))
 
 ;; 64-bit target types.
-(rule 1 (lower (has_type (gpr64_ty _ty) (sload8 _ flags addr offset)))
+(rule 1 (lower (sload8 (gpr64_ty _ty) flags addr offset))
       (sext64_mem $I8 (lower_address flags addr offset)))
 
 
 ;;;; Rules for `uload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32-bit target type, big-endian source value.
-(rule 3 (lower (has_type (gpr32_ty _ty)
-                       (uload16 _ flags @ (bigendian) addr offset)))
+(rule 3 (lower (uload16 (gpr32_ty _ty) flags @ (bigendian) addr offset))
       (zext32_mem $I16 (lower_address flags addr offset)))
 
 ;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (has_type (gpr32_ty _ty)
-                       (uload16 _ flags @ (littleendian) addr offset)))
+(rule 1 (lower (uload16 (gpr32_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (zext32_reg $I16 reg16)))
 
 ;; 64-bit target type, big-endian source value.
-(rule 4 (lower (has_type (gpr64_ty _ty)
-                       (uload16 _ flags @ (bigendian) addr offset)))
+(rule 4 (lower (uload16 (gpr64_ty _ty) flags @ (bigendian) addr offset))
       (zext64_mem $I16 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 2 (lower (has_type (gpr64_ty _ty)
-                       (uload16 _ flags @ (littleendian) addr offset)))
+(rule 2 (lower (uload16 (gpr64_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (zext64_reg $I16 reg16)))
 
@@ -2937,24 +2914,20 @@
 ;;;; Rules for `sload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32-bit target type, big-endian source value.
-(rule 2 (lower (has_type (gpr32_ty _ty)
-                       (sload16 _ flags @ (bigendian) addr offset)))
+(rule 2 (lower (sload16 (gpr32_ty _ty) flags @ (bigendian) addr offset))
       (sext32_mem $I16 (lower_address flags addr offset)))
 
 ;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 0 (lower (has_type (gpr32_ty _ty)
-                       (sload16 _ flags @ (littleendian) addr offset)))
+(rule 0 (lower (sload16 (gpr32_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (sext32_reg $I16 reg16)))
 
 ;; 64-bit target type, big-endian source value.
-(rule 3 (lower (has_type (gpr64_ty _ty)
-                       (sload16 _ flags @ (bigendian) addr offset)))
+(rule 3 (lower (sload16 (gpr64_ty _ty) flags @ (bigendian) addr offset))
       (sext64_mem $I16 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (has_type (gpr64_ty _ty)
-                       (sload16 _ flags @ (littleendian) addr offset)))
+(rule 1 (lower (sload16 (gpr64_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (sext64_reg $I16 reg16)))
 
@@ -2962,13 +2935,11 @@
 ;;;; Rules for `uload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 64-bit target type, big-endian source value.
-(rule 1 (lower (has_type (gpr64_ty _ty)
-                       (uload32 _ flags @ (bigendian) addr offset)))
+(rule 1 (lower (uload32 (gpr64_ty _ty) flags @ (bigendian) addr offset))
       (zext64_mem $I32 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (has_type (gpr64_ty _ty)
-                       (uload32 _ flags @ (littleendian) addr offset)))
+(rule (lower (uload32 (gpr64_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
         (zext64_reg $I32 reg32)))
 
@@ -2976,13 +2947,11 @@
 ;;;; Rules for `sload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 64-bit target type, big-endian source value.
-(rule 1 (lower (has_type (gpr64_ty _ty)
-                       (sload32 _ flags @ (bigendian) addr offset)))
+(rule 1 (lower (sload32 (gpr64_ty _ty) flags @ (bigendian) addr offset))
       (sext64_mem $I32 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (has_type (gpr64_ty _ty)
-                       (sload32 _ flags @ (littleendian) addr offset)))
+(rule (lower (sload32 (gpr64_ty _ty) flags @ (littleendian) addr offset))
       (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
         (sext64_reg $I32 reg32)))
 
@@ -2990,27 +2959,27 @@
 ;;;; Rules for `uloadNxM` and `sloadNxM` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned 8->16 bit extension.
-(rule (lower (has_type $I16X8 (uload8x8 _ flags addr offset)))
+(rule (lower (uload8x8 $I16X8 flags addr offset))
       (vec_unpacku_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
 ;; Signed 8->16 bit extension.
-(rule (lower (has_type $I16X8 (sload8x8 _ flags addr offset)))
+(rule (lower (sload8x8 $I16X8 flags addr offset))
       (vec_unpacks_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
 ;; Unsigned 16->32 bit extension.
-(rule (lower (has_type $I32X4 (uload16x4 _ flags addr offset)))
+(rule (lower (uload16x4 $I32X4 flags addr offset))
       (vec_unpacku_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
 ;; Signed 16->32 bit extension.
-(rule (lower (has_type $I32X4 (sload16x4 _ flags addr offset)))
+(rule (lower (sload16x4 $I32X4 flags addr offset))
       (vec_unpacks_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
 ;; Unsigned 32->64 bit extension.
-(rule (lower (has_type $I64X2 (uload32x2 _ flags addr offset)))
+(rule (lower (uload32x2 $I64X2 flags addr offset))
       (vec_unpacku_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
 ;; Signed 32->64 bit extension.
-(rule (lower (has_type $I64X2 (sload32x2 _ flags addr offset)))
+(rule (lower (sload32x2 $I64X2 flags addr offset))
       (vec_unpacks_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
 
@@ -3326,50 +3295,42 @@
 ;; Atomic operations that do not require a compare-and-swap loop.
 
 ;; Atomic AND for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (has_type (ty_32_or_64 ty)
-                (atomic_rmw _ flags @ (bigendian) (AtomicRmwOp.And) addr src)))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.And) addr src))
       (atomic_rmw_and ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic AND for 32/64-bit big-endian types, using byte-swapped input/output.
-(rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (littleendian) (AtomicRmwOp.And) addr src)))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.And) addr src))
       (bswap_reg ty (atomic_rmw_and ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic OR for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (bigendian) (AtomicRmwOp.Or) addr src)))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Or) addr src))
       (atomic_rmw_or ty (put_in_reg src)
                      (lower_address flags addr (zero_offset))))
 
 ;; Atomic OR for 32/64-bit little-endian types, using byte-swapped input/output.
-(rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (littleendian) (AtomicRmwOp.Or) addr src)))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.Or) addr src))
       (bswap_reg ty (atomic_rmw_or ty (bswap_reg ty (put_in_reg src))
                                    (lower_address flags addr (zero_offset)))))
 
 ;; Atomic XOR for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (bigendian) (AtomicRmwOp.Xor) addr src)))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Xor) addr src))
       (atomic_rmw_xor ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic XOR for 32/64-bit little-endian types, using byte-swapped input/output.
-(rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (littleendian) (AtomicRmwOp.Xor) addr src)))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.Xor) addr src))
       (bswap_reg ty (atomic_rmw_xor ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic ADD for 32/64-bit big-endian types, using a single instruction.
-(rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (bigendian) (AtomicRmwOp.Add) addr src)))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Add) addr src))
       (atomic_rmw_add ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic SUB for 32/64-bit big-endian types, using atomic ADD with negated input.
-(rule (lower (has_type (ty_32_or_64 ty)
-               (atomic_rmw _ flags @ (bigendian) (AtomicRmwOp.Sub) addr src)))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Sub) addr src))
       (atomic_rmw_add ty (neg_reg ty (put_in_reg src))
                       (lower_address flags addr (zero_offset))))
 
@@ -3377,7 +3338,7 @@
 ;; Atomic operations that require a compare-and-swap loop.
 
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (has_type (ty_32_or_64 ty) (atomic_rmw _ flags op addr src)))
+(rule -1 (lower (atomic_rmw (ty_32_or_64 ty) flags op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3389,7 +3350,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (has_type (ty_8_or_16 ty) (atomic_rmw _ flags op addr src)))
+(rule -2 (lower (atomic_rmw (ty_8_or_16 ty) flags op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.
@@ -3582,21 +3543,19 @@
 ;;;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32/64-bit big-endian atomic compare-and-swap instruction.
-(rule 2 (lower (has_type (ty_32_or_64 ty)
-               (atomic_cas _ flags @ (bigendian) addr src1 src2)))
+(rule 2 (lower (atomic_cas (ty_32_or_64 ty) flags @ (bigendian) addr src1 src2))
       (atomic_cas_impl ty (put_in_reg src1) (put_in_reg src2)
                        (lower_address flags addr (zero_offset))))
 
 ;; 32/64-bit little-endian atomic compare-and-swap instruction.
 ;; Implemented by byte-swapping old/new inputs and the output.
-(rule 1 (lower (has_type (ty_32_or_64 ty)
-               (atomic_cas _ flags @ (littleendian) addr src1 src2)))
+(rule 1 (lower (atomic_cas (ty_32_or_64 ty) flags @ (littleendian) addr src1 src2))
       (bswap_reg ty (atomic_cas_impl ty (bswap_reg ty (put_in_reg src1))
                                      (bswap_reg ty (put_in_reg src2))
                                      (lower_address flags addr (zero_offset)))))
 
 ;; 8/16-bit atomic compare-and-swap implemented via loop.
-(rule (lower (has_type (ty_8_or_16 ty) (atomic_cas _ flags addr src1 src2)))
+(rule (lower (atomic_cas (ty_8_or_16 ty) flags addr src1 src2))
       (let ((src1_reg Reg (put_in_reg src1))
             (src2_reg Reg (put_in_reg src2))
             (addr_reg Reg (put_in_reg addr))
@@ -3653,31 +3612,31 @@
 ;; Atomic loads can be implemented via regular loads on this platform.
 
 ;; 8-bit atomic load.
-(rule (lower (has_type $I8 (atomic_load _ flags addr)))
+(rule (lower (atomic_load $I8 flags addr))
       (zext32_mem $I8 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit big-endian atomic load.
-(rule 1 (lower (has_type $I16 (atomic_load _ flags @ (bigendian) addr)))
+(rule 1 (lower (atomic_load $I16 flags @ (bigendian) addr))
       (zext32_mem $I16 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit little-endian atomic load.
-(rule (lower (has_type $I16 (atomic_load _ flags @ (littleendian) addr)))
+(rule (lower (atomic_load $I16 flags @ (littleendian) addr))
       (loadrev16 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit big-endian atomic load.
-(rule 1 (lower (has_type $I32 (atomic_load _ flags @ (bigendian) addr)))
+(rule 1 (lower (atomic_load $I32 flags @ (bigendian) addr))
       (load32 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit little-endian atomic load.
-(rule (lower (has_type $I32 (atomic_load _ flags @ (littleendian) addr)))
+(rule (lower (atomic_load $I32 flags @ (littleendian) addr))
       (loadrev32 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit big-endian atomic load.
-(rule 1 (lower (has_type $I64 (atomic_load _ flags @ (bigendian) addr)))
+(rule 1 (lower (atomic_load $I64 flags @ (bigendian) addr))
       (load64 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit little-endian atomic load.
-(rule (lower (has_type $I64 (atomic_load _ flags @ (littleendian) addr)))
+(rule (lower (atomic_load $I64 flags @ (littleendian) addr))
       (loadrev64 (lower_address flags addr (zero_offset))))
 
 
@@ -3742,7 +3701,7 @@
 ;; Main `icmp` entry point.  Generate a `ProducesBool` capturing the
 ;; integer comparison and immediately lower it to a 0/1 integer result.
 ;; In this case, it is safe to sink memory loads.
-(rule -1 (lower (has_type (fits_in_64 ty) (icmp _ int_cc x y)))
+(rule -1 (lower (icmp (fits_in_64 ty) int_cc x y))
       (lower_bool ty (icmp_val true int_cc x y)))
 
 
@@ -3872,25 +3831,25 @@
 ;; Vector `icmp` produces a boolean vector.
 ;; We need to handle the various IntCC flags separately here.
 
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.Equal) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.Equal) x y))
       (vec_cmpeq ty x y))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.NotEqual) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.NotEqual) x y))
       (vec_not ty (vec_cmpeq ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.SignedGreaterThan) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.SignedGreaterThan) x y))
       (vec_cmph ty x y))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.SignedLessThanOrEqual) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.SignedLessThanOrEqual) x y))
       (vec_not ty (vec_cmph ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.SignedLessThan) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.SignedLessThan) x y))
       (vec_cmph ty y x))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.SignedGreaterThanOrEqual) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.SignedGreaterThanOrEqual) x y))
       (vec_not ty (vec_cmph ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.UnsignedGreaterThan) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.UnsignedGreaterThan) x y))
       (vec_cmphl ty x y))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.UnsignedLessThanOrEqual) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.UnsignedLessThanOrEqual) x y))
       (vec_not ty (vec_cmphl ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.UnsignedLessThan) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.UnsignedLessThan) x y))
       (vec_cmphl ty y x))
-(rule (lower (has_type (ty_vec128 ty) (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y)))
+(rule (lower (icmp (ty_vec128 ty) (IntCC.UnsignedGreaterThanOrEqual) x y))
       (vec_not ty (vec_cmphl ty y x)))
 
 
@@ -3898,7 +3857,7 @@
 
 ;; Main `fcmp` entry point.  Generate a `ProducesBool` capturing the
 ;; integer comparison and immediately lower it to a 0/1 integer result.
-(rule -1 (lower (has_type (fits_in_64 ty) (fcmp _ float_cc x y)))
+(rule -1 (lower (fcmp (fits_in_64 ty) float_cc x y))
       (lower_bool ty (fcmp_val float_cc x y)))
 
 ;; Return a `ProducesBool` to implement any floating-point comparison.
@@ -3910,33 +3869,33 @@
 ;; Vector `fcmp` produces a boolean vector.
 ;; We need to handle the various FloatCC flags separately here.
 
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.Equal) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.Equal) x y))
       (vec_fcmpeq ty x y))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.NotEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.NotEqual) x y))
       (vec_not ty (vec_fcmpeq ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.GreaterThan) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.GreaterThan) x y))
       (vec_fcmph ty x y))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.UnorderedOrLessThanOrEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.UnorderedOrLessThanOrEqual) x y))
       (vec_not ty (vec_fcmph ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.GreaterThanOrEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.GreaterThanOrEqual) x y))
       (vec_fcmphe ty x y))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.UnorderedOrLessThan) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.UnorderedOrLessThan) x y))
       (vec_not ty (vec_fcmphe ty x y)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.LessThan) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.LessThan) x y))
       (vec_fcmph ty y x))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.UnorderedOrGreaterThanOrEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.UnorderedOrGreaterThanOrEqual) x y))
       (vec_not ty (vec_fcmph ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.LessThanOrEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.LessThanOrEqual) x y))
       (vec_fcmphe ty y x))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.UnorderedOrGreaterThan) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.UnorderedOrGreaterThan) x y))
       (vec_not ty (vec_fcmphe ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.Ordered) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.Ordered) x y))
       (vec_or ty (vec_fcmphe ty x y) (vec_fcmphe ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.Unordered) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.Unordered) x y))
       (vec_not_or ty (vec_fcmphe ty x y) (vec_fcmphe ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.OrderedNotEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.OrderedNotEqual) x y))
       (vec_or ty (vec_fcmph ty x y) (vec_fcmph ty y x)))
-(rule (lower (has_type (ty_vec128 ty) (fcmp _ (FloatCC.UnorderedOrEqual) x y)))
+(rule (lower (fcmp (ty_vec128 ty) (FloatCC.UnorderedOrEqual) x y))
       (vec_not_or ty (vec_fcmph ty x y) (vec_fcmph ty y x)))
 
 
@@ -3944,7 +3903,7 @@
 
 ;; Main `vall_true` entry point.  Generate a `ProducesBool` capturing the
 ;; comparison and immediately lower it to a 0/1 integer result.
-(rule (lower (has_type (fits_in_64 ty) (vall_true _ x)))
+(rule (lower (vall_true (fits_in_64 ty) x))
       (lower_bool ty (vall_true_val x)))
 
 ;; Return a `ProducesBool` to implement `vall_true`.
@@ -3954,66 +3913,66 @@
             (floatcc_as_cond (FloatCC.Unordered))))
 
 ;; Short-circuit `vall_true` on the result of a `icmp`.
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.Equal) x y)))
+(rule (vall_true_val (icmp ty (IntCC.Equal) x y))
       (bool (vec_cmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.NotEqual) x y)))
+(rule (vall_true_val (icmp ty (IntCC.NotEqual) x y))
       (bool (vec_cmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.SignedGreaterThan) x y)))
+(rule (vall_true_val (icmp ty (IntCC.SignedGreaterThan) x y))
       (bool (vec_cmphs ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.SignedLessThanOrEqual) x y)))
+(rule (vall_true_val (icmp ty (IntCC.SignedLessThanOrEqual) x y))
       (bool (vec_cmphs ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.SignedLessThan) x y)))
+(rule (vall_true_val (icmp ty (IntCC.SignedLessThan) x y))
       (bool (vec_cmphs ty y x)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y)))
+(rule (vall_true_val (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
       (bool (vec_cmphs ty y x)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.UnsignedGreaterThan) x y)))
+(rule (vall_true_val (icmp ty (IntCC.UnsignedGreaterThan) x y))
       (bool (vec_cmphls ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y)))
+(rule (vall_true_val (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
       (bool (vec_cmphls ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.UnsignedLessThan) x y)))
+(rule (vall_true_val (icmp ty (IntCC.UnsignedLessThan) x y))
       (bool (vec_cmphls ty y x)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y)))
+(rule (vall_true_val (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
       (bool (vec_cmphls ty y x)
             (floatcc_as_cond (FloatCC.Unordered))))
 
 ;; Short-circuit `vall_true` on the result of a `fcmp` where possible.
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.Equal) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.Equal) x y))
       (bool (vec_fcmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.NotEqual) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.NotEqual) x y))
       (bool (vec_fcmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.GreaterThan) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.GreaterThan) x y))
       (bool (vec_fcmphs ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrLessThanOrEqual) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.UnorderedOrLessThanOrEqual) x y))
       (bool (vec_fcmphs ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.GreaterThanOrEqual) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.GreaterThanOrEqual) x y))
       (bool (vec_fcmphes ty x y)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrLessThan) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.UnorderedOrLessThan) x y))
       (bool (vec_fcmphes ty x y)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.LessThan) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.LessThan) x y))
       (bool (vec_fcmphs ty y x)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrGreaterThanOrEqual) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.UnorderedOrGreaterThanOrEqual) x y))
       (bool (vec_fcmphs ty y x)
             (floatcc_as_cond (FloatCC.Unordered))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.LessThanOrEqual) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.LessThanOrEqual) x y))
       (bool (vec_fcmphes ty y x)
             (floatcc_as_cond (FloatCC.Equal))))
-(rule (vall_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrGreaterThan) x y)))
+(rule (vall_true_val (fcmp ty (FloatCC.UnorderedOrGreaterThan) x y))
       (bool (vec_fcmphes ty y x)
             (floatcc_as_cond (FloatCC.Unordered))))
 
@@ -4022,7 +3981,7 @@
 
 ;; Main `vany_true` entry point.  Generate a `ProducesBool` capturing the
 ;; comparison and immediately lower it to a 0/1 integer result.
-(rule (lower (has_type (fits_in_64 ty) (vany_true _ x)))
+(rule (lower (vany_true (fits_in_64 ty) x))
       (lower_bool ty (vany_true_val x)))
 
 ;; Return a `ProducesBool` to implement `vany_true`.
@@ -4032,66 +3991,66 @@
             (floatcc_as_cond (FloatCC.NotEqual))))
 
 ;; Short-circuit `vany_true` on the result of a `icmp`.
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.Equal) x y)))
+(rule (vany_true_val (icmp ty (IntCC.Equal) x y))
       (bool (vec_cmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.NotEqual) x y)))
+(rule (vany_true_val (icmp ty (IntCC.NotEqual) x y))
       (bool (vec_cmpeqs ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.SignedGreaterThan) x y)))
+(rule (vany_true_val (icmp ty (IntCC.SignedGreaterThan) x y))
       (bool (vec_cmphs ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.SignedLessThanOrEqual) x y)))
+(rule (vany_true_val (icmp ty (IntCC.SignedLessThanOrEqual) x y))
       (bool (vec_cmphs ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.SignedLessThan) x y)))
+(rule (vany_true_val (icmp ty (IntCC.SignedLessThan) x y))
       (bool (vec_cmphs ty y x)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y)))
+(rule (vany_true_val (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
       (bool (vec_cmphs ty y x)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.UnsignedGreaterThan) x y)))
+(rule (vany_true_val (icmp ty (IntCC.UnsignedGreaterThan) x y))
       (bool (vec_cmphls ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y)))
+(rule (vany_true_val (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
       (bool (vec_cmphls ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.UnsignedLessThan) x y)))
+(rule (vany_true_val (icmp ty (IntCC.UnsignedLessThan) x y))
       (bool (vec_cmphls ty y x)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y)))
+(rule (vany_true_val (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
       (bool (vec_cmphls ty y x)
             (floatcc_as_cond (FloatCC.NotEqual))))
 
 ;; Short-circuit `vany_true` on the result of a `fcmp` where possible.
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.Equal) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.Equal) x y))
       (bool (vec_fcmpeqs ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.NotEqual) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.NotEqual) x y))
       (bool (vec_fcmpeqs ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.GreaterThan) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.GreaterThan) x y))
       (bool (vec_fcmphs ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrLessThanOrEqual) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.UnorderedOrLessThanOrEqual) x y))
       (bool (vec_fcmphs ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.GreaterThanOrEqual) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.GreaterThanOrEqual) x y))
       (bool (vec_fcmphes ty x y)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrLessThan) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.UnorderedOrLessThan) x y))
       (bool (vec_fcmphes ty x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.LessThan) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.LessThan) x y))
       (bool (vec_fcmphs ty y x)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrGreaterThanOrEqual) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.UnorderedOrGreaterThanOrEqual) x y))
       (bool (vec_fcmphs ty y x)
             (floatcc_as_cond (FloatCC.NotEqual))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.LessThanOrEqual) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.LessThanOrEqual) x y))
       (bool (vec_fcmphes ty y x)
             (floatcc_as_cond (FloatCC.Ordered))))
-(rule (vany_true_val (has_type ty (fcmp _ (FloatCC.UnorderedOrGreaterThan) x y)))
+(rule (vany_true_val (fcmp ty (FloatCC.UnorderedOrGreaterThan) x y))
       (bool (vec_fcmphes ty y x)
             (floatcc_as_cond (FloatCC.NotEqual))))
 
@@ -4163,14 +4122,14 @@
             (floatcc_as_cond (FloatCC.NotEqual))))
 
 ;; Main `select` entry point.  Lower the `value_nonzero` result.
-(rule (lower (has_type ty (select _ val_cond val_true val_false)))
+(rule (lower (select ty val_cond val_true val_false))
       (select_bool_reg ty (value_nonzero val_cond)
                        (put_in_reg val_true) (put_in_reg val_false)))
 
 ;; Special-case some float-selection instructions for min/max
-(rule 1 (lower (has_type (ty_scalar_float ty) (select _ (maybe_uextend (fcmp _ (FloatCC.LessThan) x y)) x y)))
+(rule 1 (lower (select (ty_scalar_float ty) (maybe_uextend (fcmp _ (FloatCC.LessThan) x y)) x y))
         (fmin_pseudo_reg ty y x))
-(rule 2 (lower (has_type (ty_scalar_float ty) (select _ (maybe_uextend (fcmp _ (FloatCC.LessThan) y x)) x y)))
+(rule 2 (lower (select (ty_scalar_float ty) (maybe_uextend (fcmp _ (FloatCC.LessThan) y x)) x y))
         (fmax_pseudo_reg ty y x))
 
 
@@ -4179,8 +4138,7 @@
 ;; We need to guarantee a conditional move instruction.  But on this platform
 ;; this is already the best way to implement select in general, so the
 ;; implementation of `select_spectre_guard` is identical to `select`.
-(rule (lower (has_type ty (select_spectre_guard _
-                             val_cond val_true val_false)))
+(rule (lower (select_spectre_guard ty val_cond val_true val_false))
       (select_bool_reg ty (value_nonzero val_cond)
                        (put_in_reg val_true) (put_in_reg val_false)))
 
@@ -4271,55 +4229,47 @@
 ;; remap the IntCC::UnsignedGreaterThan value that we have here as result
 ;; of the unsigned_add_overflow_condition call to the correct mask.
 
-(rule 0 (lower (has_type (fits_in_64 ty) (uadd_overflow_trap _ x y tc)))
+(rule 0 (lower (uadd_overflow_trap (fits_in_64 ty) x y tc))
       (with_flags
         (add_logical_reg_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register an a zero-extended register.
-(rule 4 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ x (zext32_value y) tc)))
+(rule 4 (lower (uadd_overflow_trap (fits_in_64 ty) x (zext32_value y) tc))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 8 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ (zext32_value x) y tc)))
+(rule 8 (lower (uadd_overflow_trap (fits_in_64 ty) (zext32_value x) y tc))
       (with_flags
         (add_logical_reg_zext32_with_flags_paired ty y x)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and an immediate
-(rule 3 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ x (u32_from_value y) tc)))
+(rule 3 (lower (uadd_overflow_trap (fits_in_64 ty) x (u32_from_value y) tc))
       (with_flags
         (add_logical_zimm32_with_flags_paired ty x y)
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 7 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ (u32_from_value x) y tc)))
+(rule 7 (lower (uadd_overflow_trap (fits_in_64 ty) (u32_from_value x) y tc))
       (with_flags
         (add_logical_zimm32_with_flags_paired ty y x)
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and memory (32/64-bit types).
-(rule 2 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ x (sinkable_load_32_64 y) tc)))
+(rule 2 (lower (uadd_overflow_trap (fits_in_64 ty) x (sinkable_load_32_64 y) tc))
       (with_flags
         (add_logical_mem_with_flags_paired ty x (sink_load y))
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 6 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ (sinkable_load_32_64 x) y tc)))
+(rule 6 (lower (uadd_overflow_trap (fits_in_64 ty) (sinkable_load_32_64 x) y tc))
       (with_flags
         (add_logical_mem_with_flags_paired ty y (sink_load x))
         (trap_if_impl (mask_as_cond 3) tc)))
 
 ;; Add a register and zero-extended memory.
-(rule 1 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ x (sinkable_uload32 y) tc)))
+(rule 1 (lower (uadd_overflow_trap (fits_in_64 ty) x (sinkable_uload32 y) tc))
       (with_flags
         (add_logical_mem_zext32_with_flags_paired ty x (sink_uload32 y))
         (trap_if_impl (mask_as_cond 3) tc)))
-(rule 5 (lower (has_type (fits_in_64 ty)
-                         (uadd_overflow_trap _ (sinkable_uload32 x) y tc)))
+(rule 5 (lower (uadd_overflow_trap (fits_in_64 ty) (sinkable_uload32 x) y tc))
       (with_flags
         (add_logical_mem_zext32_with_flags_paired ty y (sink_uload32 x))
         (trap_if_impl (mask_as_cond 3) tc)))
