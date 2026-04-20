@@ -437,6 +437,10 @@ audited_as = "41.0.3"
 version = "44.0.0"
 audited_as = "42.0.1"
 
+[[unpublished.wasmtime-internal-gdbstub-component-artifact]]
+version = "45.0.0"
+audited_as = "44.0.0"
+
 [[unpublished.wasmtime-internal-jit-debug]]
 version = "42.0.0"
 audited_as = "40.0.1"
@@ -1838,6 +1842,11 @@ trusted-publisher = "github:bytecodealliance/wasmtime"
 [[publisher.wasmtime-internal-fiber]]
 version = "42.0.1"
 when = "2026-02-25"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
+[[publisher.wasmtime-internal-gdbstub-component-artifact]]
+version = "44.0.0"
+when = "2026-04-20"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-debug]]
