@@ -1,4 +1,3 @@
-use std::process::Command;
 use wasm_encoder::ConstExpr;
 use wasmtime::{
     Config, Engine, Instance, Linker, Module, Result, Store, ToWasmtimeResult as _,
@@ -469,19 +468,10 @@ async fn reject_data_drop() -> Result<()> {
 
 #[tokio::test]
 async fn rust_regex() -> Result<()> {
-    let status = Command::new("cargo")
-        .args(&["build", "--target=wasm32-wasip1", "-q"])
-        .current_dir("./tests/regex-test")
-        .env_remove("CARGO_ENCODED_RUSTFLAGS")
-        .env_remove("RUSTFLAGS")
-        .status()
-        .expect("failed to build regex test case");
-    assert!(status.success());
     wizen_and_run_wasm(
         &[wasmtime::Val::I32(13)],
         42,
-        &std::fs::read("../../target/wasm32-wasip1/debug/regex_test.wasm")
-            .expect("failed to read regex test case"),
+        test_programs_artifacts::wizer_regex_bytes!(),
         get_wizer(),
     )
     .await

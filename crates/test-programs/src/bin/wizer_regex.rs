@@ -14,3 +14,8 @@ pub fn run(n: i32) -> i32 {
     let s = format!("{n}");
     if REGEX.is_match(&s) { 42 } else { 0 }
 }
+
+pub fn main() {
+    eprintln!("dont use as a command");
+    std::process::exit(-1)
+}

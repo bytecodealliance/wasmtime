@@ -648,3 +648,17 @@ async fn leave_wasip1_initialize() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn rust_regex() -> Result<()> {
+    let status = std::process::Command::new("cargo")
+        .args(&["build", "--target=wasm32-wasip2", "-q"])
+        .current_dir("./tests/regex-test")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTFLAGS")
+        .status()
+        .expect("failed to build regex test case");
+    assert!(status.success());
+
+    Ok(())
+}
