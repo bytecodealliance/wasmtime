@@ -87,13 +87,13 @@ TEST(TypedFunc, Call) {
     FuncType ty({ValKind::ExternRef, ValKind::ExternRef},
                 {ValKind::ExternRef, ValKind::ExternRef});
     Func f(store, ty, [](auto caller, auto params, auto results) {
-      caller.context().gc();
+      caller.context().gc().unwrap();
       EXPECT_TRUE(params[0].externref());
       EXPECT_EQ(std::any_cast<int>(params[0].externref()->data(caller)), 100);
       EXPECT_FALSE(params[1].externref());
       results[0] = ExternRef(caller, int(3));
       results[1] = std::optional<ExternRef>(std::nullopt);
-      caller.context().gc();
+      caller.context().gc().unwrap();
       return std::monostate();
     });
 
@@ -102,7 +102,7 @@ TEST(TypedFunc, Call) {
     auto func = f.typed<ExternRefPair, ExternRefPair>(store).unwrap();
     auto result =
         func.call(store, {ExternRef(store, int(100)), std::nullopt}).unwrap();
-    store.context().gc();
+    store.context().gc().unwrap();
     EXPECT_EQ(std::any_cast<int>(std::get<0>(result)->data(store)), 3);
     EXPECT_EQ(std::get<1>(result), std::nullopt);
   }

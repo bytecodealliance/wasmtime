@@ -110,11 +110,11 @@ TEST(Val, DropsExternRef) {
     flag = guard.flag();
     ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
     EXPECT_FALSE(flag->load());
-    store.gc();
+    store.gc().unwrap();
     EXPECT_FALSE(flag->load());
   }
   EXPECT_FALSE(flag->load());
-  store.gc();
+  store.gc().unwrap();
   EXPECT_TRUE(flag->load());
 
   // Test that if a `Val(ExternRef)` is created and dropped it doesn't leak.
@@ -124,11 +124,11 @@ TEST(Val, DropsExternRef) {
     ExternRef r(store, std::make_shared<SetOnDrop>(std::move(guard)));
     Val v(r);
     EXPECT_FALSE(flag->load());
-    store.gc();
+    store.gc().unwrap();
     EXPECT_FALSE(flag->load());
   }
   EXPECT_FALSE(flag->load());
-  store.gc();
+  store.gc().unwrap();
   EXPECT_TRUE(flag->load());
 
   // Similar to above testing a variety of APIs.
@@ -147,10 +147,10 @@ TEST(Val, DropsExternRef) {
     v3 = v2;
     v = std::move(v2);
 
-    store.gc();
+    store.gc().unwrap();
     EXPECT_FALSE(flag->load());
   }
   EXPECT_FALSE(flag->load());
-  store.gc();
+  store.gc().unwrap();
   EXPECT_TRUE(flag->load());
 }
