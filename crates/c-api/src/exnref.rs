@@ -83,7 +83,7 @@ pub unsafe extern "C" fn wasmtime_exnref_field(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_context_set_exception(
     mut store: WasmtimeStoreContextMut<'_>,
-    exn: &mut wasmtime_exnref_t,
+    exn: &wasmtime_exnref_t,
 ) -> Option<Box<wasm_trap_t>> {
     let mut scope = RootScope::new(&mut store);
     let rooted = exn.as_wasmtime()?.to_rooted(&mut scope);

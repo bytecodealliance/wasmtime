@@ -98,7 +98,7 @@ TEST(Exception, HostThrowWasmCatch) {
 
                   std::vector<Val> fields = {Val(int32_t(99))};
                   auto exn = ExnRef::create(cx2, tag, fields).unwrap();
-                  return cx2.throw_exception(std::move(exn));
+                  return cx2.throw_exception(exn);
                 });
 
   std::vector<Extern> imports = {throw_fn, tag};

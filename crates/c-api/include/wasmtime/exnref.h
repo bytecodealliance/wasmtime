@@ -128,20 +128,17 @@ wasmtime_exnref_field(wasmtime_context_t *store, const wasmtime_exnref_t *exn,
 /**
  * \brief Sets the pending exception on the store and returns a trap.
  *
- * This transfers ownership of `exn` to the store. After this call,
- * the caller must not use or free `exn`.
- *
  * Returns a `wasm_trap_t` that the host callback MUST return to signal
  * to the Wasm runtime that an exception was thrown. The caller owns
  * the returned trap.
  *
  * \param store the store context
- * \param exn the exception to throw (ownership transferred)
+ * \param exn the exception to throw
  * \return a trap to return from the host callback (caller-owned)
  */
 WASM_API_EXTERN wasm_trap_t *
 wasmtime_context_set_exception(wasmtime_context_t *store,
-                               wasmtime_exnref_t *exn);
+                               const wasmtime_exnref_t *exn);
 
 /**
  * \brief Takes the pending exception from the store, if any.

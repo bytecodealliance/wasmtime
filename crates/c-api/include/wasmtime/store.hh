@@ -44,9 +44,7 @@ inline Store::Context::Context(Caller *caller) : Context(*caller) {}
 
 #ifdef WASMTIME_FEATURE_GC
 inline Trap Store::Context::throw_exception(ExnRef exn) {
-  auto *ret = wasmtime_context_set_exception(capi(), exn.capi());
-  wasmtime_exnref_set_null(exn.capi());
-  return Trap(ret);
+  return Trap(wasmtime_context_set_exception(capi(), exn.capi()));
 }
 
 inline std::optional<ExnRef> Store::Context::take_exception() {
