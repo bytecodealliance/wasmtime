@@ -722,7 +722,7 @@ pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
 ) {
     c.config
         .allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(
-            pc.config.clone().into(),
+            pc.config.clone(),
         ));
 }
 
