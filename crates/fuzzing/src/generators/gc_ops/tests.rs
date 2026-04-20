@@ -1,7 +1,7 @@
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
     ops::{GcOp, GcOps, OP_NAMES},
-    types::{FieldType, RecGroupId, StackType, StructField, TypeId, Types},
+    types::{RecGroupId, StackType, TypeId, Types},
 };
 use mutatis;
 use rand::rngs::StdRng;
@@ -91,10 +91,7 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
             GcOp::LocalGet { local_index: 0 },
             GcOp::GlobalSet { global_index: 0 },
             GcOp::GlobalGet { global_index: 0 },
-            GcOp::StructNew {
-                type_index: 0,
-                externref_from_stack: 0,
-            },
+            GcOp::StructNew { type_index: 0 },
         ],
         types: Types::new(),
     };
@@ -161,10 +158,7 @@ fn struct_new_removed_when_no_types() -> mutatis::Result<()> {
 
     let mut ops = test_ops(0, 0, 0);
     ops.limits.max_types = 0;
-    ops.ops = vec![GcOp::StructNew {
-        type_index: 42,
-        externref_from_stack: 0,
-    }];
+    ops.ops = vec![GcOp::StructNew { type_index: 42 }];
 
     ops.fixup(&mut Vec::new());
     assert!(
@@ -285,7 +279,6 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
         },
         GcOp::StructNew {
             type_index: ops.limits.max_types + 9,
-            externref_from_stack: 0,
         },
         GcOp::LocalSet {
             local_index: ops.limits.num_params * 5,
@@ -302,10 +295,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
         ops.ops,
         [
             // Inserted by `fixup` to satisfy `TakeTypedStructCall`'s operands.
-            GcOp::StructNew {
-                type_index: 7,
-                externref_from_stack: 0
-            },
+            GcOp::StructNew { type_index: 7 },
             // The `type_index` is now valid.
             GcOp::TakeTypedStructCall { type_index: 7 },
             // Inserted by `fixup` to satisfy `GlobalSet`'s operands.
@@ -313,10 +303,7 @@ fn fixup_check_types_and_indexes() -> mutatis::Result<()> {
             // The `global_index` is now valid.
             GcOp::GlobalSet { global_index: 0 },
             // The `type_index` is now valid.
-            GcOp::StructNew {
-                type_index: 9,
-                externref_from_stack: 0
-            },
+            GcOp::StructNew { type_index: 9 },
             // Inserted by `fixup` to satisfy `LocalSet`'s operands.
             GcOp::NullExtern,
             // The `local_index` is now valid.
@@ -772,13 +759,7 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
         &order,
     );
     // Not accepted. Fixup should synthesize the requested concrete type.
-    assert_eq!(
-        out,
-        vec![GcOp::StructNew {
-            type_index: 1,
-            externref_from_stack: 0
-        }]
-    );
+    assert_eq!(out, vec![GcOp::StructNew { type_index: 1 }]);
     assert_eq!(stack, vec![StackType::Struct(Some(0))]);
 }
 
@@ -1042,161 +1023,6 @@ fn downcast_flat_hierarchy_self_cast() {
             } if sub_type_index == super_type_index
         )),
         "downcast in flat hierarchy should become self-cast: {:#?}",
-        ops.ops
-    );
-    assert_valid_wasm(&mut ops);
-}
-
-// ---- StructNew externref consumption tests ----
-
-/// Helper: creates GcOps with a single struct type that has the given fields.
-///
-/// Dense encoding index: 0 -> TypeId(1)
-fn struct_fields_test_ops(ops: Vec<GcOp>, fields: Vec<StructField>) -> GcOps {
-    let mut t = GcOps {
-        limits: GcOpsLimits {
-            num_params: 5,
-            num_globals: 5,
-            table_size: 5,
-            max_rec_groups: 5,
-            max_types: 5,
-            max_fields: 10,
-        },
-        ops,
-        types: Types::new(),
-    };
-    let g = RecGroupId(0);
-    t.types.insert_rec_group(g);
-    t.types.insert_struct(TypeId(1), g, false, None, fields);
-    t
-}
-
-/// A user-specified StructNew with ExternRef on the stack should consume it
-/// when the struct has an ExternRef field.
-#[test]
-fn struct_new_consumes_externref_from_stack() {
-    let _ = env_logger::try_init();
-
-    let fields = vec![
-        StructField {
-            field_type: FieldType::I32,
-            mutable: true,
-        },
-        StructField {
-            field_type: FieldType::ExternRef,
-            mutable: true,
-        },
-    ];
-    // NullExtern pushes ExternRef onto the stack, then StructNew should consume it.
-    let mut ops = struct_fields_test_ops(
-        vec![
-            GcOp::NullExtern,
-            GcOp::StructNew {
-                type_index: 0,
-                externref_from_stack: 0,
-            },
-        ],
-        fields,
-    );
-    ops.fixup(&mut Vec::new());
-
-    // The StructNew should have consumed the ExternRef from the stack.
-    let struct_new = ops
-        .ops
-        .iter()
-        .find(|op| matches!(op, GcOp::StructNew { .. }));
-    assert_eq!(
-        struct_new,
-        Some(&GcOp::StructNew {
-            type_index: 0,
-            externref_from_stack: 1
-        }),
-        "StructNew should consume 1 ExternRef from the stack: {:#?}",
-        ops.ops
-    );
-    assert_valid_wasm(&mut ops);
-}
-
-/// When the top of stack is not ExternRef (e.g. a Struct), StructNew should
-/// not consume anything even if the struct has ExternRef fields.
-#[test]
-fn struct_new_no_consume_when_top_is_not_externref() {
-    let _ = env_logger::try_init();
-
-    let fields = vec![StructField {
-        field_type: FieldType::ExternRef,
-        mutable: true,
-    }];
-    // NullStruct pushes Struct(None) onto the stack — not ExternRef.
-    let mut ops = struct_fields_test_ops(
-        vec![
-            GcOp::NullStruct,
-            GcOp::StructNew {
-                type_index: 0,
-                externref_from_stack: 0,
-            },
-        ],
-        fields,
-    );
-    ops.fixup(&mut Vec::new());
-
-    // The StructNew should NOT have consumed from the stack (top was Struct, not ExternRef).
-    let struct_new = ops
-        .ops
-        .iter()
-        .find(|op| matches!(op, GcOp::StructNew { .. }));
-    assert_eq!(
-        struct_new,
-        Some(&GcOp::StructNew {
-            type_index: 0,
-            externref_from_stack: 0
-        }),
-        "StructNew should not consume when top of stack is not ExternRef: {:#?}",
-        ops.ops
-    );
-    assert_valid_wasm(&mut ops);
-}
-
-/// When fixup synthesizes a StructNew to satisfy another op's operand,
-/// it should also consume ExternRef values from the stack for ref fields.
-#[test]
-fn synthesized_struct_new_consumes_externref() {
-    let _ = env_logger::try_init();
-
-    let fields = vec![
-        StructField {
-            field_type: FieldType::I64,
-            mutable: true,
-        },
-        StructField {
-            field_type: FieldType::ExternRef,
-            mutable: true,
-        },
-    ];
-    // NullExtern pushes ExternRef, then TakeTypedStructCall needs a Struct(Some(0)).
-    // Fixup will synthesize a StructNew to satisfy the operand and should
-    // consume the ExternRef for the struct's ExternRef field.
-    let mut ops = struct_fields_test_ops(
-        vec![
-            GcOp::NullExtern,
-            GcOp::TakeTypedStructCall { type_index: 0 },
-        ],
-        fields,
-    );
-    ops.fixup(&mut Vec::new());
-
-    // The synthesized StructNew should have consumed the ExternRef.
-    let struct_new = ops
-        .ops
-        .iter()
-        .find(|op| matches!(op, GcOp::StructNew { .. }));
-    assert_eq!(
-        struct_new,
-        Some(&GcOp::StructNew {
-            type_index: 0,
-            externref_from_stack: 1
-        }),
-        "Synthesized StructNew should consume ExternRef from stack: {:#?}",
         ops.ops
     );
     assert_valid_wasm(&mut ops);

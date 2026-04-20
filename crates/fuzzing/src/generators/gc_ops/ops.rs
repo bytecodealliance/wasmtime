@@ -21,7 +21,6 @@ struct WasmEncodingBases {
     typed_first_func_index: u32,
     struct_local_idx: u32,
     typed_local_base: u32,
-    struct_externref_scratch_base: u32,
     struct_global_idx: u32,
     typed_global_base: u32,
     struct_table_idx: u32,
@@ -314,30 +313,11 @@ impl GcOps {
             ));
         }
 
-        // Scratch locals for saving externref values consumed from the stack
-        // during StructNew encoding.
-        let struct_externref_scratch_base: u32 = typed_local_base + struct_count;
-        let max_ref_fields: u32 = self
-            .types
-            .type_defs
-            .values()
-            .map(|def| {
-                let CompositeType::Struct(ref st) = def.composite_type;
-                u32::try_from(st.fields.iter().filter(|f| f.field_type.is_ref()).count())
-                    .expect("field count should fit in u32")
-            })
-            .max()
-            .unwrap_or(0);
-        for _ in 0..max_ref_fields {
-            local_decls.push((1, ValType::EXTERNREF));
-        }
-
         let storage_bases = WasmEncodingBases {
             struct_type_base,
             typed_first_func_index,
             struct_local_idx,
             typed_local_base,
-            struct_externref_scratch_base,
             struct_global_idx,
             typed_global_base,
             struct_table_idx,
@@ -422,42 +402,6 @@ impl GcOps {
                     &encoding_order,
                 );
             }
-
-            // For StructNew: try to consume ExternRef values from the abstract
-            // stack for reference-typed fields instead of synthesizing defaults.
-            // For StructSet: try to consume one ExternRef for the target field value.
-            let op = if let GcOp::StructNew { type_index, .. } = op {
-                let consumed = StackType::consume_refs_for_struct(
-                    type_index,
-                    &mut stack,
-                    &self.types,
-                    &encoding_order,
-                );
-                GcOp::StructNew {
-                    type_index,
-                    externref_from_stack: consumed,
-                }
-            } else if let GcOp::StructSet {
-                type_index,
-                field_index,
-                ..
-            } = op
-            {
-                let consumed = StackType::consume_ref_for_struct_set(
-                    type_index,
-                    field_index,
-                    &mut stack,
-                    &self.types,
-                    &encoding_order,
-                );
-                GcOp::StructSet {
-                    type_index,
-                    field_index,
-                    externref_from_stack: consumed,
-                }
-            } else {
-                op
-            };
 
             // Finally, emit the op itself (updates stack abstractly)
             let mut result_types = Vec::new();
@@ -547,10 +491,8 @@ macro_rules! for_each_gc_op {
             #[results([Struct(Some(type_index))])]
             #[fixup(|_limits, num_types| {
                 type_index = type_index.checked_rem(num_types)?;
-                // Reset; the actual value is computed during GcOps::fixup().
-                externref_from_stack = 0;
             })]
-            StructNew { type_index: u32, externref_from_stack: u32 },
+            StructNew { type_index: u32 },
 
             #[operands([Some(Struct(None))])]
             #[results([])]
@@ -691,10 +633,8 @@ macro_rules! for_each_gc_op {
             #[results([])]
             #[fixup(|_limits, num_types| {
                 type_index = type_index.checked_rem(num_types)?;
-                // Reset; the actual value is computed during GcOps::fixup().
-                externref_from_stack = 0;
             })]
-            StructSet { type_index: u32, field_index: u32, externref_from_stack: u32 },
+            StructSet { type_index: u32, field_index: u32 },
         }
     };
 }
@@ -935,37 +875,12 @@ impl GcOp {
                     encoding_bases.struct_type_base + type_index,
                 )));
             }
-            Self::StructNew {
-                type_index: x,
-                externref_from_stack,
-            } => {
+            Self::StructNew { type_index: x } => {
                 if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
                     if let Some(def) = types.type_defs.get(tid) {
                         let CompositeType::Struct(ref st) = def.composite_type;
-                        let num_from_stack = usize::try_from(externref_from_stack).unwrap();
-
-                        // Save consumed externrefs from the Wasm stack into
-                        // scratch locals. The most-recently-consumed value is
-                        // on top, so save in reverse index order.
-                        for i in (0..num_from_stack).rev() {
-                            func.instruction(&Instruction::LocalSet(
-                                encoding_bases.struct_externref_scratch_base
-                                    + u32::try_from(i).unwrap(),
-                            ));
-                        }
-
-                        // Push field values in declaration order.
-                        let mut ref_idx = 0usize;
                         for field in &st.fields {
-                            if field.field_type.is_ref() && ref_idx < num_from_stack {
-                                func.instruction(&Instruction::LocalGet(
-                                    encoding_bases.struct_externref_scratch_base
-                                        + u32::try_from(ref_idx).unwrap(),
-                                ));
-                                ref_idx += 1;
-                            } else {
-                                field.field_type.emit_default_const(func);
-                            }
+                            field.field_type.emit_default_const(func);
                         }
                     }
                 }
@@ -1148,7 +1063,6 @@ impl GcOp {
             Self::StructSet {
                 type_index,
                 field_index,
-                externref_from_stack,
             } => {
                 let wasm_type = encoding_bases.struct_type_base + type_index;
                 let fields = encoding_order
@@ -1158,8 +1072,6 @@ impl GcOp {
                         let CompositeType::Struct(ref st) = def.composite_type;
                         &st.fields[..]
                     });
-
-                let use_stack_ref = externref_from_stack > 0;
 
                 match fields {
                     Some(fields) if !fields.is_empty() => {
@@ -1173,62 +1085,26 @@ impl GcOp {
                             Some(idx) => {
                                 let typed_local = encoding_bases.typed_local_base + type_index;
 
-                                if use_stack_ref {
-                                    // Wasm stack: [externref, struct_ref]
-                                    // Save struct ref, then save externref to scratch.
-                                    func.instruction(&Instruction::LocalSet(typed_local));
-                                    func.instruction(&Instruction::LocalSet(
-                                        encoding_bases.struct_externref_scratch_base,
-                                    ));
-                                    // Null check on the struct ref.
-                                    func.instruction(&Instruction::LocalGet(typed_local));
-                                    func.instruction(&Instruction::LocalTee(typed_local));
-                                    func.instruction(&Instruction::RefIsNull);
-                                    func.instruction(&Instruction::If(
-                                        wasm_encoder::BlockType::Empty,
-                                    ));
-                                    func.instruction(&Instruction::Else);
-                                    func.instruction(&Instruction::LocalGet(typed_local));
-                                    func.instruction(&Instruction::LocalGet(
-                                        encoding_bases.struct_externref_scratch_base,
-                                    ));
-                                    let idx = u32::try_from(idx).unwrap();
-                                    func.instruction(&Instruction::StructSet {
-                                        struct_type_index: wasm_type,
-                                        field_index: idx,
-                                    });
-                                    func.instruction(&Instruction::End);
-                                } else {
-                                    // Wasm stack: [struct_ref]
-                                    func.instruction(&Instruction::LocalTee(typed_local));
-                                    func.instruction(&Instruction::RefIsNull);
-                                    func.instruction(&Instruction::If(
-                                        wasm_encoder::BlockType::Empty,
-                                    ));
-                                    func.instruction(&Instruction::Else);
-                                    func.instruction(&Instruction::LocalGet(typed_local));
-                                    fields[idx].field_type.emit_default_const(func);
-                                    let idx = u32::try_from(idx).unwrap();
-                                    func.instruction(&Instruction::StructSet {
-                                        struct_type_index: wasm_type,
-                                        field_index: idx,
-                                    });
-                                    func.instruction(&Instruction::End);
-                                }
+                                // Wasm stack: [struct_ref]
+                                func.instruction(&Instruction::LocalTee(typed_local));
+                                func.instruction(&Instruction::RefIsNull);
+                                func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                                func.instruction(&Instruction::Else);
+                                func.instruction(&Instruction::LocalGet(typed_local));
+                                fields[idx].field_type.emit_default_const(func);
+                                let idx = u32::try_from(idx).unwrap();
+                                func.instruction(&Instruction::StructSet {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                                func.instruction(&Instruction::End);
                             }
                             None => {
-                                if use_stack_ref {
-                                    // Drop both the externref and struct ref.
-                                    func.instruction(&Instruction::Drop);
-                                }
                                 func.instruction(&Instruction::Drop);
                             }
                         }
                     }
                     _ => {
-                        if use_stack_ref {
-                            func.instruction(&Instruction::Drop);
-                        }
                         func.instruction(&Instruction::Drop);
                     }
                 }

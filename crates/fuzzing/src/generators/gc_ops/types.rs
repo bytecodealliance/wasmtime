@@ -89,13 +89,6 @@ macro_rules! define_field_type_enum {
                 matches!(self, FieldType::I8 | FieldType::I16)
             }
 
-            /// Returns `true` for reference types (externref and, in the future,
-            /// concrete struct refs) that can be consumed from the operand stack
-            /// rather than synthesized as defaults.
-            pub fn is_ref(self) -> bool {
-                matches!(self, FieldType::ExternRef)
-            }
-
             /// Emit an iconic default constant for this field type onto the Wasm stack.
             pub fn emit_default_const(self, func: &mut wasm_encoder::Function) {
                 match self {
@@ -820,20 +813,11 @@ impl StackType {
                             );
                             let t = Self::clamp(t, num_types);
 
-                            // Try to consume ExternRef values from the abstract
-                            // stack for ExternRef fields instead of synthesizing
-                            // null defaults.
-                            let consumed =
-                                Self::consume_refs_for_struct(t, stack, types, encoding_order);
-
                             log::trace!(
-                                "[StackType::fixup] Struct synthesize StructNew type_index={t} externref_from_stack={consumed} stack_before={stack:?}"
+                                "[StackType::fixup] Struct synthesize StructNew type_index={t} stack_before={stack:?}"
                             );
                             Self::emit(
-                                GcOp::StructNew {
-                                    type_index: t,
-                                    externref_from_stack: consumed,
-                                },
+                                GcOp::StructNew { type_index: t },
                                 stack,
                                 out,
                                 num_types,
@@ -978,91 +962,6 @@ impl StackType {
         }
         // Self-cast.
         super_type_index
-    }
-
-    /// Try to consume ExternRef values from the abstract stack for
-    /// reference-typed fields of the given struct type. Returns the
-    /// number of values consumed.
-    ///
-    /// Used by `StructNew`: for each ref field in the struct, pops one
-    /// `ExternRef` from the top of the abstract stack (if available).
-    /// Stops at the first non-ExternRef or empty stack. The consumed
-    /// count is stored in `GcOp::StructNew::externref_from_stack` and
-    /// used during encoding to emit `local.get` (reuse) instead of
-    /// `ref.null extern` (default) for the first N ref fields.
-    pub(crate) fn consume_refs_for_struct(
-        type_index: u32,
-        stack: &mut Vec<StackType>,
-        types: &Types,
-        encoding_order: &[TypeId],
-    ) -> u32 {
-        // Look up the struct type and count its ref fields.
-        let ref_field_count = encoding_order
-            .get(usize::try_from(type_index).unwrap())
-            .and_then(|tid| types.type_defs.get(tid))
-            .map(|def| {
-                let CompositeType::Struct(ref st) = def.composite_type;
-                st.fields.iter().filter(|f| f.field_type.is_ref()).count()
-            })
-            .unwrap_or(0);
-        // Greedily pop ExternRef values from the top of the abstract stack,
-        // up to the number of ref fields.
-        let mut consumed = 0u32;
-        for _ in 0..ref_field_count {
-            if matches!(stack.last(), Some(StackType::ExternRef)) {
-                stack.pop();
-                consumed += 1;
-            } else {
-                break;
-            }
-        }
-        consumed
-    }
-
-    /// Try to consume one ExternRef from the abstract stack for a
-    /// `StructSet` target field. Returns 1 if consumed, 0 otherwise.
-    ///
-    /// Used by `StructSet`: determines which mutable field will be set
-    /// (scanning from `field_index`, wrapping around), then checks if
-    /// that field is a ref type. If so and the top of the abstract
-    /// stack is `ExternRef`, pops it. The consumed count is stored in
-    /// `GcOp::StructSet::externref_from_stack` and used during encoding
-    /// to use the live value instead of synthesizing `ref.null extern`.
-    pub(crate) fn consume_ref_for_struct_set(
-        type_index: u32,
-        field_index: u32,
-        stack: &mut Vec<StackType>,
-        types: &Types,
-        encoding_order: &[TypeId],
-    ) -> u32 {
-        // Look up the struct type and find the mutable field that
-        // StructSet will target (same scan logic as encoding).
-        let target_is_ref = encoding_order
-            .get(type_index as usize)
-            .and_then(|tid| types.type_defs.get(tid))
-            .map(|def| {
-                let CompositeType::Struct(ref st) = def.composite_type;
-                let fields = &st.fields;
-                if fields.is_empty() {
-                    return false;
-                }
-                let len = fields.len();
-                let start = (field_index as usize) % len;
-                // Scan forward (wrapping) for the first mutable field.
-                (0..len)
-                    .map(|offset| (start + offset) % len)
-                    .find(|&i| fields[i].mutable)
-                    .map(|i| fields[i].field_type.is_ref())
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false);
-        // Only consume if the target field is a ref type and the stack has an ExternRef.
-        if target_is_ref && matches!(stack.last(), Some(StackType::ExternRef)) {
-            stack.pop();
-            1
-        } else {
-            0
-        }
     }
 
     /// Clamp a type index to the number of types.
