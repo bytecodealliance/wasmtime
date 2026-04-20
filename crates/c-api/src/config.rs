@@ -27,6 +27,7 @@ wasmtime_c_api_macros::declare_own!(wasm_config_t);
 pub enum wasmtime_strategy_t {
     WASMTIME_STRATEGY_AUTO,
     WASMTIME_STRATEGY_CRANELIFT,
+    WASMTIME_STRATEGY_WINCH,
 }
 
 #[repr(u8)]
@@ -168,6 +169,7 @@ pub extern "C" fn wasmtime_config_strategy_set(
     c.config.strategy(match strategy {
         WASMTIME_STRATEGY_AUTO => Strategy::Auto,
         WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
+        WASMTIME_STRATEGY_WINCH => Strategy::Winch,
     });
 }
 

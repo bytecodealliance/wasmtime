@@ -34,6 +34,13 @@ enum wasmtime_strategy_enum { // Strategy
   /// Indicates that Wasmtime will unconditionally use Cranelift to compile
   /// WebAssembly code.
   WASMTIME_STRATEGY_CRANELIFT,
+
+  /// Indicates that Wasmtime will unconditionally use Winch to compile
+  /// WebAssembly code.
+  //
+  /// For more details regarding ISA support and Wasm proposals support
+  /// see <https://docs.wasmtime.dev/stability-tiers.html#current-tier-status>
+  WASMTIME_STRATEGY_WINCH,
 };
 
 /**

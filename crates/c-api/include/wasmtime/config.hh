@@ -19,6 +19,8 @@ enum class Strategy {
   Auto = WASMTIME_STRATEGY_AUTO,
   /// Requires Cranelift to be used for compilation
   Cranelift = WASMTIME_STRATEGY_CRANELIFT,
+  /// Use winch for compilation
+  Winch = WASMTIME_STRATEGY_WINCH,
 };
 
 /// \brief Values passed to `Config::cranelift_opt_level`
