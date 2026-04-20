@@ -4517,6 +4517,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.100.1 -> 0.101.4"
 
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.10 -> 0.103.12"
+notes = "Minor updates to address recent vulnerabilities, nothing awry."
+
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
