@@ -218,6 +218,7 @@ public:
   /// value.
   std::optional<Func> funcref() const;
 
+  /// Raw C-API representation.
   using Raw = wasmtime_val_t;
 
   /**

@@ -64,7 +64,7 @@ typedef uint8_t wasmtime_v128[16];
  * referencing the internal data requires using a `wasmtime_context_t`.
  *
  * Anyref values are required to be explicitly unrooted via
- * #wasmtime_anyref_unroot to enable them to be garbage-collected.
+ * `wasmtime_anyref_unroot` to enable them to be garbage-collected.
  *
  * If you do not unroot the value, *even if you free the corresponding
  * Store*, there will be some memory leaked, because GC roots use a
