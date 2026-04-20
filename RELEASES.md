@@ -1,6 +1,6 @@
 ## 44.0.0
 
-Unreleased.
+Released 2026-04-20.
 
 ### Added
 
