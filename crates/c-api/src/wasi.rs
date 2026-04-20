@@ -51,6 +51,19 @@ pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasi_config_inherit_network(config: &mut wasi_config_t) {
+    config.builder.inherit_network();
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasi_config_allow_ip_name_lookup(
+    config: &mut wasi_config_t,
+    enable: bool,
+) {
+    config.builder.allow_ip_name_lookup(enable);
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_argv(
     config: &mut wasi_config_t,
     argc: usize,

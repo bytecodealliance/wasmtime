@@ -154,6 +154,9 @@ audit-as-crates-io = true
 [policy.wasmtime-internal-fiber]
 audit-as-crates-io = true
 
+[policy.wasmtime-internal-gdbstub-component-artifact]
+audit-as-crates-io = true
+
 [policy.wasmtime-internal-jit-debug]
 audit-as-crates-io = true
 

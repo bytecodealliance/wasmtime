@@ -1297,7 +1297,44 @@ jobs:
       with:
         submodules: true
 
+    # Attempt to speed up building of docker images for Linux-based binaries by
+    # using docker's recommended way of building/caching with github actions.
+    # Notably this caches layers to github actions which enables subsequent
+    # reuse in future runs. The goal here is to make this step faster while
+    # additionally reducing network flakiness since the github actions cache
+    # generally works better than upstream package servers, or at least in
+    # theory.
+    #
+    # The way that this is designed is to build the image with docker-related
+    # github actions here primarily. This populates the github actions cache
+    # but also the local docker daemon cache too. Subsequently when the actual
+    # build script runs it'll attempt to rebuild the image and it should get a
+    # bunch of cache hits from here. This way we can configure the caching here
+    # within github actions without impacting the functionality of the script
+    # itself and continue enabling it to run locally.
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+      if: ${{ matrix.env.DOCKER_IMAGE }}
+    - name: Disable some docker things that are on-by-default
+      run: |
+        echo DOCKER_BUILD_CHECKS_ANNOTATIONS=false >> $GITHUB_ENV
+        echo DOCKER_BUILD_SUMMARY=false >> $GITHUB_ENV
+        echo DOCKER_BUILD_RECORD_UPLOAD=false >> $GITHUB_ENV
+      if: ${{ matrix.env.DOCKER_IMAGE }}
+    - name: Build docker image
+      if: ${{ matrix.env.DOCKER_IMAGE }}
+      uses: docker/build-push-action@v7
+      with:
+        context: ci/docker
+        file: ${{ matrix.env.DOCKER_IMAGE }}
+        tags: build-image
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        outputs: type=docker
+
     - uses: ./.github/actions/install-ninja
+      if: '${{ !matrix.env.DOCKER_IMAGE }}'
+
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}

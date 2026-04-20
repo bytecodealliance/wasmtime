@@ -1110,6 +1110,14 @@ start = "2026-01-07"
 end = "2027-01-08"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[wildcard-audits.wasmtime-internal-gdbstub-component-artifact]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+start = "2026-04-20"
+end = "2027-04-20"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[wildcard-audits.wasmtime-internal-jit-debug]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4508,6 +4516,12 @@ version = "0.100.1"
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.100.1 -> 0.101.4"
+
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.10 -> 0.103.12"
+notes = "Minor updates to address recent vulnerabilities, nothing awry."
 
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"

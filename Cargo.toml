@@ -336,7 +336,7 @@ regalloc2 = "0.15.1"
 wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
-target-lexicon = "0.13.0"
+target-lexicon = "0.13.3"
 cap-std = "3.4.5"
 cap-fs-ext = "3.4.5"
 cap-net-ext = "3.4.5"
@@ -702,6 +702,12 @@ incremental = false
 debug-assertions = false
 overflow-checks = false
 opt-level = 's'
+
+# FIXME(tokio-rs/tokio#8062): once that gets merged, published, and updated here
+# then this can be removed. Otherwise this is causing spurious failures on CI at
+# this time.
+[profile.dev.package.tokio]
+overflow-checks = false
 
 [profile.profiling]
 inherits = "bench"

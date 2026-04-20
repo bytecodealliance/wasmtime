@@ -145,6 +145,10 @@ audited_as = "43.0.1"
 version = "45.0.0"
 audited_as = "43.0.1"
 
+[[unpublished.wasmtime-internal-gdbstub-component-artifact]]
+version = "45.0.0"
+audited_as = "44.0.0"
+
 [[unpublished.wasmtime-internal-jit-debug]]
 version = "45.0.0"
 audited_as = "43.0.1"
@@ -1037,8 +1041,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.target-lexicon]]
-version = "0.13.0"
-when = "2024-12-05"
+version = "0.13.3"
+when = "2025-09-09"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1360,6 +1364,11 @@ trusted-publisher = "github:bytecodealliance/wasmtime"
 [[publisher.wasmtime-internal-fiber]]
 version = "43.0.1"
 when = "2026-04-09"
+trusted-publisher = "github:bytecodealliance/wasmtime"
+
+[[publisher.wasmtime-internal-gdbstub-component-artifact]]
+version = "44.0.0"
+when = "2026-04-20"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-internal-jit-debug]]

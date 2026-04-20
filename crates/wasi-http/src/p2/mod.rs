@@ -582,6 +582,14 @@ pub async fn default_send_request_handler(
     use tokio::net::TcpStream;
     use tokio::time::timeout;
 
+    if !request.headers().contains_key(hyper::header::HOST) {
+        if let Some(authority) = request.uri().authority() {
+            if let Ok(value) = hyper::header::HeaderValue::from_str(authority.as_str()) {
+                request.headers_mut().insert(hyper::header::HOST, value);
+            }
+        }
+    }
+
     let authority = if let Some(authority) = request.uri().authority() {
         if authority.port().is_some() {
             authority.to_string()
