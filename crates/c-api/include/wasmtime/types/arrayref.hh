@@ -1,5 +1,5 @@
 /**
- * \file wasmtime/typse/arrayref.hh
+ * \file wasmtime/types/arrayref.hh
  */
 
 #ifndef WASMTIME_TYPES_ARRAYREF_HH

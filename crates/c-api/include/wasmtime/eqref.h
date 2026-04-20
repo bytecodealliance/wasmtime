@@ -1,5 +1,5 @@
 /**
- * \file wasmtime/gc.h
+ * \file wasmtime/eqref.h
  *
  * APIs for interacting with WebAssembly `eqref` type in Wasmtime.
  */

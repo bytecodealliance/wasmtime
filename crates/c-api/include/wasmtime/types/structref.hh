@@ -1,5 +1,5 @@
 /**
- * \file wasmtime/typse/structref.hh
+ * \file wasmtime/types/structref.hh
  */
 
 #ifndef WASMTIME_TYPES_STRUCTREF_HH

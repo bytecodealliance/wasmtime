@@ -1,5 +1,5 @@
 /**
- * \file wasmtime/gc.h
+ * \file wasmtime/types/arrayref.h
  *
  * APIs for interacting with WebAssembly GC `structref` type in Wasmtime.
  */
