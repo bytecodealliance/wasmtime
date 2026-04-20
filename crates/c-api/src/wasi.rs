@@ -56,7 +56,10 @@ pub unsafe extern "C" fn wasi_config_inherit_network(config: &mut wasi_config_t)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasi_config_allow_ip_name_lookup(config: &mut wasi_config_t, enable: bool) {
+pub unsafe extern "C" fn wasi_config_allow_ip_name_lookup(
+    config: &mut wasi_config_t,
+    enable: bool,
+) {
     config.builder.allow_ip_name_lookup(enable);
 }
 

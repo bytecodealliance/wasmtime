@@ -64,7 +64,8 @@ WASI_API_EXTERN void wasi_config_inherit_network(wasi_config_t *config);
  *
  * By default this is disabled.
  */
-WASI_API_EXTERN void wasi_config_allow_ip_name_lookup(wasi_config_t *config, bool enable);
+WASI_API_EXTERN void wasi_config_allow_ip_name_lookup(wasi_config_t *config,
+                                                      bool enable);
 
 /**
  * \brief Sets the argv list for this configuration object.
