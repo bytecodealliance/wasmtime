@@ -56,6 +56,7 @@ TEST(Config, Smoke) {
   config.strategy(Strategy::Auto);
   config.cranelift_debug_verifier(false);
   config.cranelift_opt_level(OptLevel::Speed);
+  config.cranelift_regalloc_algorithm(RegallocAlgorithm::Backtracking);
   config.cranelift_nan_canonicalization(false);
   config.profiler(ProfilingStrategy::None);
   config.memory_reservation(0);

@@ -19,6 +19,8 @@ enum class Strategy {
   Auto = WASMTIME_STRATEGY_AUTO,
   /// Requires Cranelift to be used for compilation
   Cranelift = WASMTIME_STRATEGY_CRANELIFT,
+  /// Use winch for compilation
+  Winch = WASMTIME_STRATEGY_WINCH,
 };
 
 /// \brief Values passed to `Config::cranelift_opt_level`
@@ -41,6 +43,30 @@ enum class ProfilingStrategy {
   Vtune = WASMTIME_PROFILING_STRATEGY_VTUNE,
   /// Profiling hooks via perfmap
   Perfmap = WASMTIME_PROFILING_STRATEGY_PERFMAP,
+};
+
+/// \brief Values passed to `Config::cranelift_regalloc_algorithm`
+enum RegallocAlgorithm {
+  /// Generates the fastest possible code, but may take longer.
+  ///
+  /// This algorithm performs “backtracking”, which means that it may undo its
+  /// earlier work
+  /// and retry as it discovers conflicts. This results in better register
+  /// utilization,
+  /// producing fewer spills and moves, but can cause super-linear compile
+  /// runtime.
+  Backtracking = WASMTIME_REGALLOC_BACKTRACKING,
+  /// Generates acceptable code very quickly.
+  ///
+  /// This algorithm performs a single pass through the code, guaranteed to work
+  /// in linear time.
+  /// (Note that the rest of Cranelift is not necessarily guaranteed to run in
+  /// linear time, however.)
+  /// It cannot undo earlier decisions, however, and it cannot foresee
+  /// constraints or issues that may
+  /// occur further ahead in the code, so the code may have more spills and
+  /// moves as a result.
+  SinglePass = WASMTIME_REGALLOC_SINGLE_PASS,
 };
 
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
@@ -476,6 +502,14 @@ class Config {
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.cranelift_flag_set
   void cranelift_flag_set(const std::string &flag, const std::string &value) {
     wasmtime_config_cranelift_flag_set(ptr.get(), flag.c_str(), value.c_str());
+  }
+
+  /// \brief Configures cranelift's register allocation mode
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.cranelift_regalloc_algorithm
+  void cranelift_regalloc_algorithm(RegallocAlgorithm algo) {
+    wasmtime_config_cranelift_regalloc_algorithm_set(
+        ptr.get(), static_cast<wasmtime_regalloc_algorithm_t>(algo));
   }
 #endif // WASMTIME_FEATURE_COMPILER
 
