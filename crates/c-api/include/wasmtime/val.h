@@ -16,7 +16,6 @@ extern "C" {
 #endif
 
 #ifdef WASMTIME_FEATURE_GC
-struct wasmtime_eqref;
 /// Convenience alias for #wasmtime_eqref
 typedef struct wasmtime_eqref wasmtime_eqref_t;
 
@@ -81,19 +80,6 @@ static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
  */
 WASM_API_EXTERN void wasmtime_anyref_clone(const wasmtime_anyref_t *anyref,
                                            wasmtime_anyref_t *out);
-
-/**
- * \brief Downcast an `anyref` to an `eqyref`.
- *
- * Returns `true` if the downcast succeeded, and `out` is initialized. Returns
- * `false` if the downcast failed, and `out` is left uninitialized.
- *
- * The original `anyref` is not consumed; `out` receives a new cloned root
- * pointing to the same GC object as `anyref`.
- */
-WASM_API_EXTERN bool wasmtime_anyref_to_eqref(wasmtime_context_t *context,
-                                              const wasmtime_anyref_t *anyref,
-                                              wasmtime_eqref_t *out);
 
 /**
  * \brief Unroots the `ref` provided within the `context`.
