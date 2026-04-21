@@ -1,6 +1,0 @@
-package local:local;
-world wizer-test {
-    export wizer-initialize: func();
-    export run: func(arg: s32) -> s32;
-}
-

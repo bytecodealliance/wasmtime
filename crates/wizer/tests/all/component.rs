@@ -688,7 +688,7 @@ async fn rust_regex() -> Result<()> {
 
     // FIXME(#13186) Rather than using the `wizen` helper function, we use
     // Wizer directly here because, currently, this test is broken if
-    // `keep_init_func(true)` is not set. 
+    // `keep_init_func(true)` is not set.
     let mut store = store()?;
     let wizened_component = Wizer::new()
         .keep_init_func(true)

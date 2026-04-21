@@ -24,7 +24,13 @@ pub fn main() {
 }
 
 wit_bindgen::generate!({
-    path: "../wizer/tests/all",
+    inline: "
+package local:local;
+world wizer-test {
+    export wizer-initialize: func();
+    export run: func(arg: s32) -> s32;
+}
+    ",
     world: "wizer-test",
 });
 
