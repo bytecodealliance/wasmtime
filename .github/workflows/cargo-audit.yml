@@ -5,19 +5,14 @@ on:
 jobs:
   security_audit:
     runs-on: ubuntu-latest
-    env:
-      CARGO_AUDIT_VERSION: 0.22.1
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
-      - uses: actions/cache@v5
+      - uses: ./.github/actions/cargo-install
         with:
-          path: ${{ runner.tool_cache }}/cargo-audit
-          key: cargo-audit-${{ env.CARGO_AUDIT_VERSION }}
-      - run: |
-          echo "${{ runner.tool_cache }}/cargo-audit/bin" >> $GITHUB_PATH
-          cargo install --root ${{ runner.tool_cache }}/cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} cargo-audit --locked
+          crate: cargo-audit
+          version: 0.22.1
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

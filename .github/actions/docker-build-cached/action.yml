@@ -35,7 +35,8 @@ runs:
     # limit, so this is the next-best attempt to do something a bit more
     # targeted.
     - name: Setup Github Actions cache
-      uses: actions/cache@v5
+      uses: actions/cache/restore@v5
+      id: cache-restore
       with:
         path: ${{ runner.tool_cache }}/docker-buildx-cache
         key: ${{ inputs.cache_key_prefix }}-${{ hashFiles(inputs.file) }}
@@ -49,3 +50,16 @@ runs:
         cache-from: type=local,src=${{ runner.tool_cache }}/docker-buildx-cache
         cache-to: type=local,dest=${{ runner.tool_cache }}/docker-buildx-cache
         outputs: type=docker
+
+    # Only save caches on the `main` branch since these docker images are
+    # relatively large. This means that caches aren't filled through the merge
+    # queue nor through PRs, but instead only through the `main` branch. PRs and
+    # the merge queue will pull from the `main` branch cache, but only after a
+    # ~1 day delay after merging a change because the `main` branch CI runs only
+    # nightly to prime the caches.
+    - name: Save Github Actions cache
+      uses: actions/cache/save@v5
+      if: github.ref == 'refs/heads/main'
+      with:
+        path: ${{ runner.tool_cache }}/docker-buildx-cache
+        key: ${{ steps.cache-restore.outputs.cache-primary-key }}

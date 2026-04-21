@@ -9,9 +9,11 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
     - name: Install wit-bindgen (Linux)
-      run: cargo install wit-bindgen-cli@0.46.0
       if: runner.os == 'Linux'
-      shell: bash
+      uses: ./.github/actions/cargo-install
+      with:
+        crate: wit-bindgen-cli
+        version: 0.46.0
     - name: Install jco (Linux)
       run: npm install --global @bytecodealliance/jco@1.15.0 && npm install --global @bytecodealliance/componentize-js@0.19.1
       if: runner.os == 'Linux'
