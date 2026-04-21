@@ -1,0 +1,51 @@
+name: 'Build docker image'
+description: 'Build docker image'
+
+inputs:
+  context:
+    description: 'Context argument'
+    required: true
+  file:
+    description: 'Docker file'
+    required: true
+  cache_key_prefix:
+    description: 'Cache key prefix'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Docker-recommended setup.
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    # Disable things that docker has on-by-default from the above which we're
+    # not interested in.
+    - name: Disable some docker things that are on-by-default
+      shell: bash
+      run: |
+        echo DOCKER_BUILD_CHECKS_ANNOTATIONS=false >> $GITHUB_ENV
+        echo DOCKER_BUILD_SUMMARY=false >> $GITHUB_ENV
+        echo DOCKER_BUILD_RECORD_UPLOAD=false >> $GITHUB_ENV
+
+    # We'll be using this cache key and the "local" caching mode of docker. This
+    # allows pretty fine-grained views into what's being cache. Experimentation
+    # found that the default `gha` caching mode sprays quite a lot into the
+    # cache such that everything keeps getting evicted for being over the size
+    # limit, so this is the next-best attempt to do something a bit more
+    # targeted.
+    - name: Setup Github Actions cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.tool_cache }}/docker-buildx-cache
+        key: ${{ inputs.cache_key_prefix }}-${{ hashFiles(inputs.file) }}
+
+    - name: Build docker image
+      uses: docker/build-push-action@v7
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.file }}
+        tags: build-image
+        cache-from: type=local,src=${{ runner.tool_cache }}/docker-buildx-cache
+        cache-to: type=local,dest=${{ runner.tool_cache }}/docker-buildx-cache
+        outputs: type=docker
