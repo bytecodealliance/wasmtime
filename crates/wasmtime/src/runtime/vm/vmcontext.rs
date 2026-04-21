@@ -116,7 +116,7 @@ impl VMFunctionImport {
 
 #[cfg(test)]
 mod test_vmfunction_import {
-    use super::VMFunctionImport;
+    use super::{VMFuncRef, VMFunctionImport};
     use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
