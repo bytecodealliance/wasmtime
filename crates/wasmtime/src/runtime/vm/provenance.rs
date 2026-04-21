@@ -138,6 +138,13 @@ impl<T> fmt::Debug for VmPtr<T> {
     }
 }
 
+// Constructor from `&T`.
+impl<T> From<&T> for VmPtr<T> {
+    fn from(p: &T) -> Self {
+        NonNull::from(p).into()
+    }
+}
+
 // Constructor from `NonNull<T>`
 impl<T> From<NonNull<T>> for VmPtr<T> {
     fn from(ptr: NonNull<T>) -> VmPtr<T> {

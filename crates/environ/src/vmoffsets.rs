@@ -716,28 +716,34 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
 }
 
 impl<P: PtrSize> VMOffsets<P> {
-    /// The offset of the `wasm_call` field.
+    /// The offset of the `VMFunctionImport::array_call` field.
     #[inline]
-    pub fn vmfunction_import_wasm_call(&self) -> u8 {
+    pub fn vmfunction_import_array_call(&self) -> u8 {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `array_call` field.
+    /// The offset of the `VMFunctionImport::wasm_call` field.
     #[inline]
-    pub fn vmfunction_import_array_call(&self) -> u8 {
+    pub fn vmfunction_import_wasm_call(&self) -> u8 {
         1 * self.pointer_size()
     }
 
-    /// The offset of the `vmctx` field.
+    /// The offset of the `VMFunctionImport::type_index` field.
+    #[inline]
+    pub fn vmfunction_import_type_index(&self) -> u8 {
+        2 * self.pointer_size()
+    }
+
+    /// The offset of the `VMFunctionImport::vmctx` field.
     #[inline]
     pub fn vmfunction_import_vmctx(&self) -> u8 {
-        2 * self.pointer_size()
+        3 * self.pointer_size()
     }
 
     /// Return the size of `VMFunctionImport`.
     #[inline]
     pub fn size_of_vmfunction_import(&self) -> u8 {
-        3 * self.pointer_size()
+        4 * self.pointer_size()
     }
 }
 

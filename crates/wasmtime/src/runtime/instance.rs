@@ -734,14 +734,7 @@ impl OwnedImports {
     ) -> Result<(), OutOfMemory> {
         match item {
             crate::runtime::vm::Export::Function(f) => {
-                // SAFETY: the funcref associated with a `Func` is valid to use
-                // under the `store` that owns the function.
-                let f = unsafe { f.vm_func_ref(store).as_ref() };
-                self.functions.push(VMFunctionImport {
-                    wasm_call: f.wasm_call.unwrap(),
-                    array_call: f.array_call,
-                    vmctx: f.vmctx,
-                })?;
+                self.functions.push(f.vmimport(store))?;
             }
             crate::runtime::vm::Export::Global(g) => {
                 self.globals.push(g.vmimport(store))?;

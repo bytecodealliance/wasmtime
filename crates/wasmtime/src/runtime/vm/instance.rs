@@ -808,73 +808,6 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_type_ids_array()) }
     }
 
-    /// Construct a new VMFuncRef for the given function
-    /// (imported or defined in this module) and store into the given
-    /// location. Used during lazy initialization.
-    ///
-    /// Note that our current lazy-init scheme actually calls this every
-    /// time the funcref pointer is fetched; this turns out to be better
-    /// than tracking state related to whether it's been initialized
-    /// before, because resetting that state on (re)instantiation is
-    /// very expensive if there are many funcrefs.
-    ///
-    /// # Safety
-    ///
-    /// This functions requires that `into` is a valid pointer.
-    unsafe fn construct_func_ref(
-        self: Pin<&mut Self>,
-        registry: &ModuleRegistry,
-        index: FuncIndex,
-        type_index: VMSharedTypeIndex,
-        into: *mut VMFuncRef,
-    ) {
-        let module_with_code = ModuleWithCode::in_store(
-            registry,
-            self.runtime_module()
-                .expect("funcref impossible in fake module"),
-        )
-        .expect("module not in store");
-
-        let func_ref = if let Some(def_index) = self.env_module().defined_func_index(index) {
-            VMFuncRef {
-                array_call: NonNull::from(
-                    module_with_code
-                        .array_to_wasm_trampoline(def_index)
-                        .expect("should have array-to-Wasm trampoline for escaping function"),
-                )
-                .cast()
-                .into(),
-                wasm_call: Some(
-                    NonNull::new(
-                        module_with_code
-                            .finished_function(def_index)
-                            .as_ptr()
-                            .cast::<VMWasmCallFunction>()
-                            .cast_mut(),
-                    )
-                    .unwrap()
-                    .into(),
-                ),
-                vmctx: VMOpaqueContext::from_vmcontext(self.vmctx()).into(),
-                type_index,
-            }
-        } else {
-            let import = self.imported_function(index);
-            VMFuncRef {
-                array_call: import.array_call,
-                wasm_call: Some(import.wasm_call),
-                vmctx: import.vmctx,
-                type_index,
-            }
-        };
-
-        // SAFETY: the unsafe contract here is forwarded to callers of this
-        // function.
-        unsafe {
-            ptr::write(into, func_ref);
-        }
-    }
-
     /// Get a `&VMFuncRef` for the given `FuncIndex`.
     ///
     /// Returns `None` if the index is the reserved index value.
@@ -890,46 +823,82 @@ impl Instance {
             return None;
         }
 
-        // For now, we eagerly initialize an funcref struct in-place
-        // whenever asked for a reference to it. This is mostly
-        // fine, because in practice each funcref is unlikely to be
-        // requested more than a few times: once-ish for funcref
-        // tables used for call_indirect (the usual compilation
-        // strategy places each function in the table at most once),
-        // and once or a few times when fetching exports via API.
-        // Note that for any case driven by table accesses, the lazy
-        // table init behaves like a higher-level cache layer that
-        // protects this initialization from happening multiple
-        // times, via that particular table at least.
+        let Some(def_index) = self.env_module().defined_func_index(index) else {
+            debug_assert!(self.env_module().is_imported_function(index));
+            return Some(self.imported_function(index).as_func_ref().into());
+        };
+
+        // For now, we eagerly initialize an funcref struct in-place whenever
+        // asked for a reference to it. This is mostly fine, because in practice
+        // each funcref is unlikely to be requested more than a few times:
+        // once-ish for funcref tables used for call_indirect (the usual
+        // compilation strategy places each function in the table at most once),
+        // and once or a few times when fetching exports via API.  Note that for
+        // any case driven by table accesses, the lazy table init behaves like a
+        // higher-level cache layer that protects this initialization from
+        // happening multiple times, via that particular table at least.
         //
-        // When `ref.func` becomes more commonly used or if we
-        // otherwise see a use-case where this becomes a hotpath,
-        // we can reconsider by using some state to track
-        // "uninitialized" explicitly, for example by zeroing the
-        // funcrefs (perhaps together with other
-        // zeroed-at-instantiate-time state) or using a separate
-        // is-initialized bitmap.
+        // When `ref.func` becomes more commonly used or if we otherwise see a
+        // use-case where this becomes a hotpath, we can reconsider by using
+        // some state to track "uninitialized" explicitly, for example by
+        // zeroing the funcrefs (perhaps together with other
+        // zeroed-at-instantiate-time state) or using a separate is-initialized
+        // bitmap.
         //
-        // We arrived at this design because zeroing memory is
-        // expensive, so it's better for instantiation performance
-        // if we don't have to track "is-initialized" state at
-        // all!
+        // We arrived at this design because zeroing memory is expensive, so
+        // it's better for instantiation performance if we don't have to track
+        // "is-initialized" state at all!
+
         let func = &self.env_module().functions[index];
-        let sig = func.signature.unwrap_engine_type_index();
+        let type_index = func.signature.unwrap_engine_type_index();
+
+        let module_with_code = ModuleWithCode::in_store(
+            registry,
+            self.runtime_module()
+                .expect("funcref impossible in fake module"),
+        )
+        .expect("module not in store");
+
+        let array_call = VmPtr::from(
+            NonNull::from(
+                module_with_code
+                    .array_to_wasm_trampoline(def_index)
+                    .expect("should have array-to-Wasm trampoline for escaping function"),
+            )
+            .cast(),
+        );
+
+        let wasm_call = Some(VmPtr::from(
+            NonNull::new(
+                module_with_code
+                    .finished_function(def_index)
+                    .as_ptr()
+                    .cast::<VMWasmCallFunction>()
+                    .cast_mut(),
+            )
+            .unwrap(),
+        ));
+
+        let vmctx = VMOpaqueContext::from_vmcontext(self.vmctx()).into();
 
         // SAFETY: the offset calculated here should be correct with
         // `self.offsets`
-        let func_ref = unsafe {
+        let func_ref_ptr = unsafe {
             self.vmctx_plus_offset_raw::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref))
         };
 
-        // SAFETY: the `func_ref` ptr should be valid as it's within our
+        // SAFETY: the `func_ref_ptr` should be valid as it's within our
         // `VMContext` area.
         unsafe {
-            self.construct_func_ref(registry, index, sig, func_ref.as_ptr());
+            func_ref_ptr.write(VMFuncRef {
+                array_call,
+                wasm_call,
+                vmctx,
+                type_index,
+            });
         }
 
-        Some(func_ref)
+        Some(func_ref_ptr)
     }
 
     /// Get the passive elements segment at the given index.
