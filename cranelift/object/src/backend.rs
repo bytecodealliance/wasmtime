@@ -518,6 +518,13 @@ impl Module for ObjectModule {
 
             match self.object.section_flags_mut(section) {
                 SectionFlags::MachO { flags } => {
+                    // There are no default flags for the `SectionKind`s that
+                    // we've specified above, so it's fine to override.
+                    //
+                    // (If we don't want to override, we'll have to be careful
+                    // with how we set these, to ensure we set the section
+                    // type properly).
+                    assert_eq!(*flags, 0);
                     *flags = *macho_flags;
                 }
                 _ => {
