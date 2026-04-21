@@ -930,12 +930,21 @@ unsafe impl GcHeap for DrcHeap {
         let next = (*self.over_approximated_stack_roots)
             .as_ref()
             .map(|r| r.unchecked_copy());
+
         let header = self.index_mut(drc_ref(&gc_ref));
         if header.is_in_over_approximated_stack_roots() {
-            // Already in the over-approximated-stack-roots list, nothing more
-            // to do here.
+            // Already in the over-approximated-stack-roots list. Decrement the
+            // object's ref count because the OASR list can't hold multiple
+            // copies of the same GC reference.
+            let ref_count_is_zero = header.dec_ref();
+            debug_assert!(
+                !ref_count_is_zero,
+                "should not have reached refcount == 0 because the OASR list \
+                 is holding a reference"
+            );
             return;
         }
+
         // Push this object onto the head of the over-approximated-stack-roots
         // list using a single index_mut call.
         header.set_in_over_approximated_stack_roots_bit(true);
