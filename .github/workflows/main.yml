@@ -264,8 +264,6 @@ jobs:
     name: Doc build
     runs-on: ubuntu-latest
     env:
-      MDBOOK_VERSION: 0.4.37
-      MDBOOK_LANGTABS_VERSION: 0.1.1
       RUSTDOCFLAGS: -Dwarnings --cfg docsrs
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -286,14 +284,14 @@ jobs:
     - run: cmake --build target/c-api --target doc
 
     # install mdbook, build the docs, and test the docs
-    - uses: actions/cache@v5
+    - uses: ./.github/actions/cargo-install
       with:
-        path: ${{ runner.tool_cache }}/mdbook
-        key: cargo-mdbook-${{ env.MDBOOK_VERSION }}-langtabs-${{ env.MDBOOK_LANGTABS_VERSION }}
-    - run: |
-        echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_VERSION }} mdbook --locked
-        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.MDBOOK_LANGTABS_VERSION }} mdbook-langtabs --locked
+        crate: mdbook
+        version: 0.4.37
+    - uses: ./.github/actions/cargo-install
+      with:
+        crate: mdbook-langtabs
+        version: 0.1.1
     - run: (cd docs && mdbook build)
 
     # Build Rust API documentation.
@@ -663,7 +661,10 @@ jobs:
     #
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
-    - run: cargo install cargo-fuzz --vers "^0.11" --locked
+    - uses: ./.github/actions/cargo-install
+      with:
+        crate: cargo-fuzz
+        version: 0.13.1
     - uses: ./.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
@@ -1152,7 +1153,10 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen@0.29.0 --locked
+    - uses: ./.github/actions/cargo-install
+      with:
+        crate: cbindgen
+        version: 0.29.0
     - run: rustup target add x86_64-unknown-none
     - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none
@@ -1256,7 +1260,6 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.88
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
     - uses: actions/checkout@v6
@@ -1266,12 +1269,10 @@ jobs:
       with:
         toolchain: wasmtime-ci-pinned-nightly
     - run: rustup component add rust-src miri
-    - uses: actions/cache@v5
+    - uses: ./.github/actions/cargo-install
       with:
-        path: ${{ runner.tool_cache }}/cargo-nextest
-        key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-nextest/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
+        crate: cargo-nextest
+        version: 0.9.133
     - run: |
         cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
       if: ${{ matrix.crate }}
