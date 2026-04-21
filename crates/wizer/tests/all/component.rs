@@ -691,7 +691,7 @@ async fn rust_regex() -> Result<()> {
     // `keep_init_func(true)` is not set.
     let mut store = store()?;
     let wizened_component = Wizer::new()
-        .keep_init_func(true)
+        .keep_init_func(false)
         .run_component(&mut store, component, instantiate)
         .await
         .context("Wizer::run_component")?;
