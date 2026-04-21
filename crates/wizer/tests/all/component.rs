@@ -686,6 +686,9 @@ async fn rust_regex() -> Result<()> {
     let _ = env_logger::try_init();
     let component = test_programs_artifacts::wizer_regex_component_bytes!();
 
+    // FIXME(#13186) Rather than using the `wizen` helper function, we use
+    // Wizer directly here because, currently, this test is broken if
+    // `keep_init_func(true)` is not set. 
     let mut store = store()?;
     let wizened_component = Wizer::new()
         .keep_init_func(true)
