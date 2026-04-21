@@ -1779,6 +1779,38 @@ fn pooling_gc_different_configs_rejected() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn issue_13141_gc_heap_may_not_move() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.gc_heap_may_move(false);
+    config.gc_heap_reservation(0);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $a (array (mut i8)))
+
+                (global $g (mut (ref $a)) (array.new_default $a (i32.const 12)))
+
+                (func (export "array_get_nth") (param $p i32) (result i32)
+                    (array.get_u $a (global.get $g) (local.get $p))
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let array_get_nth = instance.get_typed_func::<i32, i32>(&mut store, "array_get_nth")?;
+    let result = array_get_nth.call(&mut store, 0)?;
+    assert_eq!(result, 0);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn memory_guard_pages_but_no_gc_heap_guard_pages() -> Result<()> {
     if std::mem::size_of::<usize>() < std::mem::size_of::<u64>()
         || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()

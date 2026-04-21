@@ -1,5 +1,4 @@
 ;;! gc = true
-;;! flags = "-Ogc-heap-may-move=n -Ogc-heap-reservation=0"
 
 (module
   (type $a (array (mut i8)))

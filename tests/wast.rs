@@ -1,8 +1,8 @@
-use clap::Parser;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
-    Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, bail, error::Context as _,
+    Config, Enabled, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, bail,
+    error::Context as _,
 };
 use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
@@ -153,22 +153,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
         _ => false,
     };
 
-    let mut flags = test_config.flags.as_ref().map_or(vec![], |f| f.to_vec());
-    flags.insert(0, "wasmtime");
-    if config.pooling && !flags.is_empty() {
-        return Ok(());
-    }
-
-    let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(flags)
-        .with_context(|| format!("failed to parse `flags` in `{}`", test.path.display()))?;
-
-    let mut cfg = opts.config(None).with_context(|| {
-        format!(
-            "failed to create `Config` from `flags` in `{}`",
-            test.path.display(),
-        )
-    })?;
-
+    let mut cfg = Config::new();
     cfg.shared_memory(true);
     wasmtime_test_util::wasmtime_wast::apply_test_config(&mut cfg, &test_config);
     wasmtime_test_util::wasmtime_wast::apply_wast_config(&mut cfg, &config);
