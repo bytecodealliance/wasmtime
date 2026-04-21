@@ -7,8 +7,8 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
-    Config, InstanceAllocationStrategy, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy,
-    RegallocAlgorithm, Result, Strategy,
+    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, RegallocAlgorithm, Result,
+    Strategy,
 };
 
 #[cfg(feature = "pooling-allocator")]
