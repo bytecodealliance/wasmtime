@@ -93,13 +93,10 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: |
-        set -e
-        curl --retry 5 --retry-all-errors -L -o cargo-deny.tar.gz https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz
-        tar xzf cargo-deny.tar.gz
-        rm cargo-deny.tar.gz
-        mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
-        echo `pwd` >> $GITHUB_PATH
+    - uses: ./.github/actions/cargo-install
+      with:
+        crate: cargo-deny
+        version: 0.18.2
     - run: cargo deny check bans licenses
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
