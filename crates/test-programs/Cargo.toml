@@ -26,4 +26,5 @@ flate2 = "1.0.28"
 log = { workspace = true }
 env_logger = { workspace = true }
 pin-project-lite = { workspace = true }
+regex = { workspace = true }
 

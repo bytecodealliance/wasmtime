@@ -105,6 +105,7 @@ impl Artifacts {
                 s if s.starts_with("keyvalue_") => "keyvalue",
                 s if s.starts_with("async_") => "async",
                 s if s.starts_with("fuzz_") => "fuzz",
+                s if s.starts_with("wizer_") => "wizer",
                 // If you're reading this because you hit this panic, either add
                 // it to a test suite above or add a new "suite". The purpose of
                 // the categorization above is to have a static assertion that

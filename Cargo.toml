@@ -171,7 +171,6 @@ members = [
   "crates/gdbstub-component",
   "crates/gdbstub-component/artifact",
   "crates/wizer/fuzz",
-  "crates/wizer/tests/regex-test",
   "crates/wizer/benches/regex-bench",
   "crates/wizer/benches/uap-bench",
   "examples/fib-debug/wasm",

@@ -1,5 +1,6 @@
-use wasmtime::component::{Component, Instance, Linker, Val};
+use wasmtime::component::{Component, Instance, Linker, ResourceTable, Val};
 use wasmtime::{Engine, Result, Store, ToWasmtimeResult as _, bail, error::Context as _};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView, p2};
 use wasmtime_wizer::Wizer;
 
 fn fail_wizening(msg: &str, wasm: &[u8]) -> Result<()> {
@@ -119,20 +120,41 @@ fn unsupported_constructs() -> Result<()> {
     Ok(())
 }
 
-fn store() -> Result<Store<()>> {
-    let engine = Engine::default();
-    Ok(Store::new(&engine, ()))
+struct Ctx {
+    wasi: WasiCtx,
+    table: ResourceTable,
+}
+impl WasiView for Ctx {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
+    }
 }
 
-async fn instantiate(store: &mut Store<()>, component: &Component) -> Result<Instance> {
+fn store() -> Result<Store<Ctx>> {
+    let engine = Engine::default();
+    Ok(Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().build(),
+            table: ResourceTable::new(),
+        },
+    ))
+}
+
+async fn instantiate(store: &mut Store<Ctx>, component: &Component) -> Result<Instance> {
     let mut linker = Linker::new(store.engine());
-    linker.define_unknown_imports_as_traps(component)?;
+    p2::add_to_linker_async(&mut linker)?;
+    linker.root().func_new("x", |_, _, _, _| -> Result<()> {
+        wasmtime::bail!("trapped in wizer import of `x`")
+    })?;
     linker.instantiate_async(store, component).await
 }
 
-async fn wizen(wat: &str) -> Result<Vec<u8>> {
+async fn wizen(wasm: &[u8]) -> Result<Vec<u8>> {
     let _ = env_logger::try_init();
-    let wasm = wat::parse_str(wat)?;
 
     log::debug!(
         "=== PreWizened Wasm ==========================================================\n\
@@ -157,14 +179,21 @@ async fn wizen(wat: &str) -> Result<Vec<u8>> {
     Ok(wasm)
 }
 
-async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
-    let wasm = wizen(wat).await?;
-
+async fn wizen_and_run_wat(expected: i32, wat: &str) -> Result<()> {
+    let wasm = wat::parse_str(wat)?;
+    let wasm = wizen(&wasm).await?;
+    run_wasm(0, expected, &wasm).await
+}
+async fn run_wasm(input: i32, expected: i32, wasm: &[u8]) -> Result<()> {
     let mut store = store()?;
     let module =
         Component::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
-    let linker = Linker::new(store.engine());
+    let mut linker = Linker::new(store.engine());
+    p2::add_to_linker_async(&mut linker)?;
+    linker.root().func_new("x", |_, _, _, _| -> Result<()> {
+        wasmtime::bail!("trapped in runtime import of `x`")
+    })?;
     let instance = linker.instantiate_async(&mut store, &module).await?;
 
     let run = instance.get_func(&mut store, "run").ok_or_else(|| {
@@ -172,10 +201,11 @@ async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
     })?;
 
     let mut actual = [Val::U8(0)];
-    run.call_async(&mut store, &[], &mut actual).await?;
+    run.call_async(&mut store, &[Val::S32(input)], &mut actual)
+        .await?;
     let actual = match actual[0] {
-        Val::U32(x) => x,
-        _ => wasmtime::bail!("expected an u32 result"),
+        Val::S32(x) => x,
+        _ => wasmtime::bail!("expected an s32 result"),
     };
     wasmtime::ensure!(
         expected == actual,
@@ -187,18 +217,18 @@ async fn wizen_and_run_wasm(expected: u32, wat: &str) -> Result<()> {
 
 #[tokio::test]
 async fn simple() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         42,
         r#"(component
             (core module $m
                 (func (export "init"))
 
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 42
                 )
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -209,16 +239,16 @@ async fn simple() -> Result<()> {
 
 #[tokio::test]
 async fn snapshot_global_i32() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         1,
         r#"(component
             (core module $m
                 (global $g (mut i32) i32.const 0)
                 (func (export "init") (global.set $g (i32.const 1)))
-                (func (export "run") (result i32) global.get $g)
+                (func (export "run") (param i32) (result i32) global.get $g)
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -229,19 +259,19 @@ async fn snapshot_global_i32() -> Result<()> {
 
 #[tokio::test]
 async fn snapshot_global_i64() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         1,
         r#"(component
             (core module $m
                 (global $g (mut i64) i64.const 0)
                 (func (export "init") (global.set $g (i64.const 1)))
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     global.get $g
                     i32.wrap_i64
                 )
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -252,18 +282,18 @@ async fn snapshot_global_i64() -> Result<()> {
 
 #[tokio::test]
 async fn snapshot_global_f32() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         1,
         r#"(component
             (core module $m
                 (global $g (mut f32) f32.const 0)
                 (func (export "init") (global.set $g (f32.const 1)))
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     global.get $g
                     i32.trunc_f32_s)
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -274,18 +304,18 @@ async fn snapshot_global_f32() -> Result<()> {
 
 #[tokio::test]
 async fn snapshot_global_f64() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         1,
         r#"(component
             (core module $m
                 (global $g (mut f64) f64.const 0)
                 (func (export "init") (global.set $g (f64.const 1)))
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     global.get $g
                     i32.trunc_f64_s)
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -309,7 +339,7 @@ fn v128_globals() -> Result<()> {
 
 #[tokio::test]
 async fn snapshot_memory() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         201,
         r#"(component
             (core module $m
@@ -322,7 +352,7 @@ async fn snapshot_memory() -> Result<()> {
                     i32.const 101
                     i32.store
                 )
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 200
                     i32.load
                     i32.const 300
@@ -331,7 +361,7 @@ async fn snapshot_memory() -> Result<()> {
                 )
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -342,7 +372,7 @@ async fn snapshot_memory() -> Result<()> {
 
 #[tokio::test]
 async fn nested_components() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         42,
         r#"(component
             (component $a)
@@ -366,10 +396,10 @@ async fn nested_components() -> Result<()> {
 
             (core module $m
                 (func (export "init"))
-                (func (export "run") (result i32) i32.const 42)
+                (func (export "run") (param i32) (result i32) i32.const 42)
             )
             (core instance $i (instantiate $m))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
@@ -380,7 +410,7 @@ async fn nested_components() -> Result<()> {
 
 #[tokio::test]
 async fn multiple_modules() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         100 + 101 + 200 + 201 + 7 + 112,
         r#"(component
             (core module $a
@@ -396,7 +426,7 @@ async fn multiple_modules() -> Result<()> {
                     i32.store
                 )
 
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 200
                     i32.load
                     i32.const 300
@@ -411,7 +441,7 @@ async fn multiple_modules() -> Result<()> {
             (core module $b
                 (import "a" "g" (global $g (mut i32)))
                 (import "a" "init" (func $init))
-                (import "a" "run" (func $run (result i32)))
+                (import "a" "run" (func $run (param i32) (result i32)))
                 (memory (export "mem") 1)
                 (func (export "init")
                     call $init
@@ -425,12 +455,13 @@ async fn multiple_modules() -> Result<()> {
                     i32.const 111
                     global.set $g
                 )
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 400
                     i32.load
                     i32.const 500
                     i32.load
                     i32.add
+                    i32.const 0
                     call $run
                     i32.add
                 )
@@ -440,7 +471,7 @@ async fn multiple_modules() -> Result<()> {
             (core module $c
                 (import "a" "g" (global $g (mut i32)))
                 (import "b" "init" (func $init))
-                (import "b" "run" (func $run (result i32)))
+                (import "b" "run" (func $run (param i32) (result i32)))
                 (import "b" "mem" (memory 1))
 
                 (func (export "init")
@@ -461,9 +492,10 @@ async fn multiple_modules() -> Result<()> {
                     i32.const 112
                     global.set $g
                 )
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 65536
                     i32.load
+                    i32.const 0
                     call $run
                     i32.add
                 )
@@ -473,7 +505,7 @@ async fn multiple_modules() -> Result<()> {
                 (with "b" (instance $b))
             ))
 
-            (func (export "run") (result u32) (canon lift (core func $c "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $c "run")))
             (func (export "wizer-initialize") (canon lift (core func $c "init")))
         )"#,
     )
@@ -484,7 +516,7 @@ async fn multiple_modules() -> Result<()> {
 
 #[tokio::test]
 async fn export_is_removed() -> Result<()> {
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -493,13 +525,13 @@ async fn export_is_removed() -> Result<()> {
             (func $a (canon lift (core func $a "init")))
             (export "wizer-initialize" (func $a))
         )"#,
-    )
+    )?)
     .await?;
 
     let names = exports(&wasm);
     assert!(names.is_empty());
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -509,12 +541,12 @@ async fn export_is_removed() -> Result<()> {
             (export "other" (func $a))
             (export "wizer-initialize" (func $a))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other"]);
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -525,12 +557,12 @@ async fn export_is_removed() -> Result<()> {
             (export "wizer-initialize" (func $a))
             (export "other2" (func $a))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other1", "other2"]);
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -541,12 +573,12 @@ async fn export_is_removed() -> Result<()> {
             (export "other2" (func $a))
             (export "wizer-initialize" (func $a))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other1", "other2"]);
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -557,12 +589,12 @@ async fn export_is_removed() -> Result<()> {
             (export "other1" (func $a))
             (export "other2" (func $a))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other1", "other2"]);
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (core module $a
                 (func (export "init"))
@@ -573,12 +605,12 @@ async fn export_is_removed() -> Result<()> {
             (export "wizer-initialize" (func $a))
             (export "other2" (func $x))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other1", "other2"]);
 
-    let wasm = wizen(
+    let wasm = wizen(&wat::parse_str(
         r#"(component
             (import "x" (func))
             (core module $a
@@ -590,7 +622,7 @@ async fn export_is_removed() -> Result<()> {
             (export "wizer-initialize" (func $a))
             (export "other2" (func $x))
         )"#,
-    )
+    )?)
     .await?;
     let names = exports(&wasm);
     assert_eq!(names, ["other1", "other2"]);
@@ -619,13 +651,13 @@ async fn export_is_removed() -> Result<()> {
 // redundancy.
 #[tokio::test]
 async fn leave_wasip1_initialize() -> Result<()> {
-    wizen_and_run_wasm(
+    wizen_and_run_wat(
         42,
         r#"(component
             (core module $m
                 (func (export "init"))
 
-                (func (export "run") (result i32)
+                (func (export "run") (param i32) (result i32)
                     i32.const 42
                 )
 
@@ -640,11 +672,33 @@ async fn leave_wasip1_initialize() -> Result<()> {
             (core instance $shim (instantiate $shim (with "" (instance
                 (export "_initialize" (func $initialize))
             ))))
-            (func (export "run") (result u32) (canon lift (core func $i "run")))
+            (func (export "run") (param "arg" s32) (result s32) (canon lift (core func $i "run")))
             (func (export "wizer-initialize") (canon lift (core func $i "init")))
         )"#,
     )
     .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_regex() -> Result<()> {
+    let _ = env_logger::try_init();
+    let component = test_programs_artifacts::wizer_regex_component_bytes!();
+
+    // FIXME(#13186) Rather than using the `wizen` helper function, we use
+    // Wizer directly here because, currently, this test is broken if
+    // `keep_init_func(true)` is not set.
+    let mut store = store()?;
+    let wizened_component = Wizer::new()
+        .keep_init_func(true)
+        .run_component(&mut store, component, instantiate)
+        .await
+        .context("Wizer::run_component")?;
+
+    run_wasm(1, 42, &wizened_component)
+        .await
+        .context("run_wasm")?;
 
     Ok(())
 }
