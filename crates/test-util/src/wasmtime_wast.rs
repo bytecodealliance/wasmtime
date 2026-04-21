@@ -54,6 +54,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         stack_switching,
         custom_descriptors,
 
+        flags: _,
         hogs_memory: _,
         gc_types: _,
         spec_test: _,

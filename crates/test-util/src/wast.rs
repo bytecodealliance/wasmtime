@@ -300,6 +300,7 @@ macro_rules! define_test_config {
         #[derive(Debug, PartialEq, Default, Deserialize, Clone)]
         #[serde(deny_unknown_fields)]
         pub struct TestConfig {
+            pub flags: Option<TestConfigFlags>,
             $(pub $option: Option<bool>,)*
         }
 
@@ -326,6 +327,28 @@ impl TestConfig {
             }
         }
         foreach_config_option!(mk)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum TestConfigFlags {
+    SpaceSeparated(String),
+    List(Vec<String>),
+}
+
+impl Default for TestConfigFlags {
+    fn default() -> Self {
+        Self::List(vec![])
+    }
+}
+
+impl TestConfigFlags {
+    pub fn to_vec(&self) -> Vec<&str> {
+        match self {
+            TestConfigFlags::SpaceSeparated(s) => s.split_whitespace().collect(),
+            TestConfigFlags::List(s) => s.iter().map(|s| s.as_str()).collect(),
+        }
     }
 }
 
