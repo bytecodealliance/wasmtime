@@ -144,6 +144,7 @@ impl ResourceDynamic {
 }
 
 unsafe impl ComponentType for ResourceDynamic {
+    const MAY_REQUIRE_REALLOC: bool = false;
     const ABI: CanonicalAbiInfo = HostResource::<Dynamic, u32>::ABI;
     type Lower = crate::ValRaw;
 
