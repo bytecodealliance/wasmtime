@@ -82,7 +82,9 @@ impl StoreOpaque {
         bytes_needed: u64,
     ) -> Result<()> {
         log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
-        assert!(bytes_needed > 0);
+        if bytes_needed == 0 {
+            return Ok(());
+        }
 
         let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
 
@@ -203,11 +205,15 @@ impl StoreOpaque {
                     let bytes_needed = oom.bytes_needed();
 
                     // Determine whether to collect or grow first.
-                    let should_collect_first = self.gc_store.as_ref().map_or(false, |gc_store| {
-                        let capacity = gc_store.gc_heap_capacity();
-                        let last_usage = gc_store.last_post_gc_allocated_bytes.unwrap_or(0);
-                        last_usage < capacity / 2
-                    });
+                    let should_collect_first =
+                        // The gc zeal infrastructure will use `bytes_needed =
+                        // 0` to trigger extra collections.
+                        bytes_needed == 0
+                        || self.gc_store.as_ref().map_or(false, |gc_store| {
+                            let capacity = gc_store.gc_heap_capacity();
+                            let last_usage = gc_store.last_post_gc_allocated_bytes.unwrap_or(0);
+                            last_usage < capacity / 2
+                        });
 
                     if should_collect_first {
                         // Collect first, then retry.
