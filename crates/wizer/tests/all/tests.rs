@@ -10,7 +10,7 @@ use wat::parse_str as wat_to_wasm;
 async fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
     let wasm = wat_to_wasm(wat)?;
-    wizen_and_run_wasm(args, expected, &wasm, get_wizer()).await
+    wizen_and_run_wasm("run", args, expected, &wasm, get_wizer()).await
 }
 
 fn get_wizer() -> Wizer {
@@ -33,6 +33,7 @@ async fn instantiate(store: &mut Store<p1::WasiP1Ctx>, module: &Module) -> Resul
 }
 
 async fn wizen_and_run_wasm(
+    export_name: &str,
     args: &[wasmtime::Val],
     expected: i32,
     wasm: &[u8],
@@ -73,8 +74,8 @@ async fn wizen_and_run_wasm(
 
     let instance = linker.instantiate_async(&mut store, &module).await?;
 
-    let run = instance.get_func(&mut store, "run").ok_or_else(|| {
-        wasmtime::format_err!("the test Wasm module does not export a `run` function")
+    let run = instance.get_func(&mut store, export_name).ok_or_else(|| {
+        wasmtime::format_err!("the test Wasm module does not export a `{export_name}` function")
     })?;
 
     let mut actual = vec![wasmtime::Val::I32(0)];
@@ -270,7 +271,7 @@ async fn reject_table_get_set() -> Result<()> {
     let _ = env_logger::try_init();
     let wizer = Wizer::new();
     let wasm = wat_to_wasm(wat)?;
-    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer).await;
+    let result = wizen_and_run_wasm("", &[], 42, &wasm, wizer).await;
 
     assert!(result.is_err());
 
@@ -335,7 +336,7 @@ async fn reject_table_grow_with_reference_types_enabled() -> wasmtime::Result<()
     let _ = env_logger::try_init();
     let wizer = Wizer::new();
     let wasm = wat_to_wasm(wat)?;
-    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer).await;
+    let result = wizen_and_run_wasm("", &[], 42, &wasm, wizer).await;
 
     assert!(result.is_err());
 
@@ -350,7 +351,10 @@ async fn reject_table_grow_with_reference_types_enabled() -> wasmtime::Result<()
 
 #[tokio::test]
 async fn indirect_call_with_reference_types() -> wasmtime::Result<()> {
-    let wat = r#"
+    run_wat(
+        &[],
+        42,
+        r#"
       (module
         (type $sig (func (result i32)))
         (table 0 funcref)
@@ -364,12 +368,9 @@ async fn indirect_call_with_reference_types() -> wasmtime::Result<()> {
           i32.const 0
           call_indirect $table1 (type $sig)
         )
-      )"#;
-
-    let _ = env_logger::try_init();
-    let wizer = Wizer::new();
-    let wasm = wat_to_wasm(wat)?;
-    wizen_and_run_wasm(&[], 42, &wasm, wizer).await
+      )"#,
+    )
+    .await
 }
 
 #[tokio::test]
@@ -468,11 +469,17 @@ async fn reject_data_drop() -> Result<()> {
 
 #[tokio::test]
 async fn rust_regex() -> Result<()> {
+    // The same test-program binary is run as both a module and a component,
+    // but the module exports need to be munged with the module- prefix in
+    // order to not conflict with the component exports.
+    let mut wizer = get_wizer();
+    wizer.init_func("module-wizer-initialize");
     wizen_and_run_wasm(
+        "module-run",
         &[wasmtime::Val::I32(13)],
         42,
         test_programs_artifacts::wizer_regex_bytes!(),
-        get_wizer(),
+        wizer,
     )
     .await
 }
@@ -639,7 +646,7 @@ async fn wasi_reactor_initializer_as_init_func() -> wasmtime::Result<()> {
     wizer.init_func("_initialize");
     let wasm = wat_to_wasm(wat)?;
     // we expect `_initialize` to be called _exactly_ once
-    wizen_and_run_wasm(&[], 1, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 1, &wasm, wizer).await
 }
 
 #[tokio::test]
@@ -664,7 +671,7 @@ async fn wasi_reactor_initializer_with_keep_init() -> wasmtime::Result<()> {
     wizer.keep_init_func(true);
     let wasm = wat_to_wasm(wat)?;
     // we expect `_initialize` to be un-exported and not called at run
-    wizen_and_run_wasm(&[], 2, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 2, &wasm, wizer).await
 }
 
 #[tokio::test]
@@ -778,7 +785,7 @@ async fn accept_bulk_memory_data_count() -> Result<()> {
     data.active(0, &ConstExpr::i32_const(4), vec![5, 6, 7, 8]);
     module.section(&data);
 
-    wizen_and_run_wasm(&[], 42, &module.finish(), get_wizer())
+    wizen_and_run_wasm("run", &[], 42, &module.finish(), get_wizer())
         .await
         .unwrap();
     Ok(())
@@ -879,7 +886,7 @@ async fn relaxed_simd_deterministic() -> Result<()> {
 
     // We'll get 0x4b000003 if we have the deterministic `relaxed_madd`
     // semantics. We might get 0x4b000002 if we don't.
-    wizen_and_run_wasm(&[], 0x4b800003, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 0x4b800003, &wasm, wizer).await
 }
 
 #[tokio::test]
@@ -939,7 +946,7 @@ async fn mixture_of_globals() -> Result<()> {
         "#,
     )?;
     let wizer = get_wizer();
-    wizen_and_run_wasm(&[], 42 + 2 + 43 + 4, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 42 + 2 + 43 + 4, &wasm, wizer).await
 }
 
 #[tokio::test]
@@ -981,7 +988,7 @@ async fn memory_init_and_data_segments() -> Result<()> {
         "#,
     )?;
     let wizer = get_wizer();
-    wizen_and_run_wasm(&[], 0x02010403 + 0x06050201, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 0x02010403 + 0x06050201, &wasm, wizer).await
 }
 
 #[tokio::test]
@@ -1006,5 +1013,5 @@ async fn memory64() -> Result<()> {
         "#,
     )?;
     let wizer = get_wizer();
-    wizen_and_run_wasm(&[], 10, &wasm, wizer).await
+    wizen_and_run_wasm("run", &[], 10, &wasm, wizer).await
 }
