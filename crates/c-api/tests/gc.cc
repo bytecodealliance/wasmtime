@@ -1,5 +1,3 @@
-#include <wasmtime/gc.hh>
-
 #include <gtest/gtest.h>
 #include <wasmtime.hh>
 

@@ -7,8 +7,8 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
-    Config, InstanceAllocationStrategy, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy,
-    RegallocAlgorithm, Result, Strategy,
+    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, RegallocAlgorithm, Result,
+    Strategy,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -721,7 +721,9 @@ pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
     pc: &wasmtime_pooling_allocation_config_t,
 ) {
     c.config
-        .allocation_strategy(InstanceAllocationStrategy::Pooling(pc.config.clone()));
+        .allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(
+            pc.config.clone(),
+        ));
 }
 
 #[unsafe(no_mangle)]

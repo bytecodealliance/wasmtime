@@ -7,9 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::{ptr, str};
-use wasmtime::{
-    AsContextMut, Func, Instance, Result, RootScope, StackCreator, StackMemory, Trap, Val,
-};
+use wasmtime::{AsContextMut, Func, Instance, Result, StackCreator, StackMemory, Trap, Val};
 
 use crate::{
     WASMTIME_I32, WasmtimeCaller, WasmtimeStoreContextMut, bad_utf8, handle_result, to_str,
@@ -223,7 +221,8 @@ fn handle_call_error(
 }
 
 async fn do_func_call_async(
-    mut store: RootScope<WasmtimeStoreContextMut<'_>>,
+    #[cfg(feature = "gc")] mut store: wasmtime::RootScope<WasmtimeStoreContextMut<'_>>,
+    #[cfg(not(feature = "gc"))] mut store: WasmtimeStoreContextMut<'_>,
     func: &Func,
     args: impl ExactSizeIterator<Item = Val>,
     results: &mut [MaybeUninit<wasmtime_val_t>],
@@ -248,7 +247,7 @@ async fn do_func_call_async(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
-    store: WasmtimeStoreContextMut<'a>,
+    mut store: WasmtimeStoreContextMut<'a>,
     func: &'a Func,
     args: *const wasmtime_val_t,
     nargs: usize,
@@ -257,14 +256,16 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
     trap_ret: &'a mut *mut wasm_trap_t,
     err_ret: &'a mut *mut wasmtime_error_t,
 ) -> Box<wasmtime_call_future_t<'a>> {
-    let mut scope = RootScope::new(store);
+    let _ = &mut store;
+    #[cfg(feature = "gc")]
+    let mut store = wasmtime::RootScope::new(store);
     let args = crate::slice_from_raw_parts(args, nargs)
         .iter()
-        .map(|i| i.to_val(&mut scope))
+        .map(|i| i.to_val(&mut store))
         .collect::<Vec<_>>();
     let results = crate::slice_from_raw_parts_mut(results, nresults);
     let fut = Box::pin(do_func_call_async(
-        scope,
+        store,
         func,
         args.into_iter(),
         results,

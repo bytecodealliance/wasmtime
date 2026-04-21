@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <wasmtime/func.hh>
 #include <wasmtime/linker.hh>
 
 using namespace wasmtime;
