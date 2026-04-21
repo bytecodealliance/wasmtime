@@ -122,7 +122,10 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/install-cargo-vet
+    - uses: ./.github/actions/cargo-install
+      with:
+        crate: cargo-vet
+        version: 0.10.2
     - id: vet
       run: cargo vet --locked
       continue-on-error: ${{ github.event_name == 'pull_request' }}
