@@ -959,6 +959,7 @@ macro_rules! forward_type_impls {
             type Lower = <$b as ComponentType>::Lower;
 
             const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
+            const MAY_REQUIRE_REALLOC: bool = <$b as ComponentType>::MAY_REQUIRE_REALLOC;
 
             #[inline]
             fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
@@ -1193,6 +1194,7 @@ macro_rules! floats {
             type Lower = ValRaw;
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
+            const MAY_REQUIRE_REALLOC: bool = false;
 
             fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
                 match ty {
@@ -1310,6 +1312,7 @@ unsafe impl ComponentType for bool {
     type Lower = ValRaw;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR1;
+    const MAY_REQUIRE_REALLOC: bool = false;
 
     fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
         match ty {
@@ -1376,6 +1379,7 @@ unsafe impl ComponentType for char {
     type Lower = ValRaw;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+    const MAY_REQUIRE_REALLOC: bool = false;
 
     fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
         match ty {
@@ -2534,6 +2538,7 @@ where
     type Lower = TupleLower<<u32 as ComponentType>::Lower, T::Lower>;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[None, Some(T::ABI)]);
+    const MAY_REQUIRE_REALLOC: bool = T::MAY_REQUIRE_REALLOC;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
@@ -2675,6 +2680,7 @@ where
     type Lower = ResultLower<T::Lower, E::Lower>;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[Some(T::ABI), Some(E::ABI)]);
+    const MAY_REQUIRE_REALLOC: bool = T::MAY_REQUIRE_REALLOC || E::MAY_REQUIRE_REALLOC;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
@@ -3032,6 +3038,7 @@ macro_rules! impl_component_ty_for_tuples {
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[
                 $($t::ABI),*
             ]);
+            const MAY_REQUIRE_REALLOC: bool = false $(|| $t::MAY_REQUIRE_REALLOC)*;
 
             const IS_RUST_UNIT_TYPE: bool = {
                 let mut _is_unit = true;

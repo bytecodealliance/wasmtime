@@ -359,6 +359,7 @@ fn expand_record_for_component_type(
     let mut lower_field_declarations = TokenStream::new();
     let mut abi_list = TokenStream::new();
     let mut unique_types = HashSet::new();
+    let mut may_require_realloc = TokenStream::new();
 
     for (index, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
         let generic = format_ident!("T{}", index);
@@ -370,6 +371,9 @@ fn expand_record_for_component_type(
 
         abi_list.extend(quote!(
             <#ty as #wt::component::ComponentType>::ABI,
+        ));
+        may_require_realloc.extend(quote!(
+            <#ty as #wt::component::ComponentType>::MAY_REQUIRE_REALLOC ||
         ));
 
         unique_types.insert(ty);
@@ -408,6 +412,7 @@ fn expand_record_for_component_type(
 
             const ABI: #internal::CanonicalAbiInfo =
                 #internal::CanonicalAbiInfo::record_static(&[#abi_list]);
+            const MAY_REQUIRE_REALLOC: bool = #may_require_realloc false;
 
             #[inline]
             fn typecheck(
@@ -961,6 +966,7 @@ impl Expander for ComponentTypeExpander {
         let mut lower_generic_args = TokenStream::new();
         let mut abi_list = TokenStream::new();
         let mut unique_types = HashSet::new();
+        let mut may_require_realloc = TokenStream::new();
 
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
             let rename = find_rename(attrs)?;
@@ -969,6 +975,9 @@ impl Expander for ComponentTypeExpander {
 
             if let Some(ty) = ty {
                 abi_list.extend(quote!(Some(<#ty as #wt::component::ComponentType>::ABI),));
+                may_require_realloc.extend(quote!(
+                    <#ty as #wt::component::ComponentType>::MAY_REQUIRE_REALLOC ||
+                ));
 
                 case_names_and_checks.extend(
                     quote!((#name, Some(<#ty as #wt::component::ComponentType>::typecheck)),),
@@ -1032,6 +1041,7 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::variant_static(&[#abi_list]);
+                const MAY_REQUIRE_REALLOC: bool = #may_require_realloc false;
             }
 
             unsafe impl #impl_generics #internal::ComponentVariant for #name #ty_generics #where_clause {
@@ -1093,6 +1103,7 @@ impl Expander for ComponentTypeExpander {
 
                 const ABI: #internal::CanonicalAbiInfo =
                     #internal::CanonicalAbiInfo::enum_(#cases_len);
+                const MAY_REQUIRE_REALLOC: bool = false;
             }
 
             unsafe impl #internal::ComponentVariant for #name {

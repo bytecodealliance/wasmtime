@@ -272,6 +272,7 @@ impl ResourceAny {
 
 unsafe impl ComponentType for ResourceAny {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
+    const MAY_REQUIRE_REALLOC: bool = false;
 
     type Lower = <u32 as ComponentType>::Lower;
 
