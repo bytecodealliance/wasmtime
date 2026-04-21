@@ -20,8 +20,7 @@ macro_rules! ref_wrapper {
             to_raw: $to_raw:ident,
             from_raw: $from_raw:ident,
         )?
-        }
-    ) => {
+   }) => {
         pub struct $c {
             store_id: u64,
             a: u32,

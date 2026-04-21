@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/types/structref.h
  *
- * APIs for interacting with WebAssembly GC `anyref` type in Wasmtime.
+ * APIs for interacting with WebAssembly GC `structref` type in Wasmtime.
  */
 
 #ifndef WASMTIME_TYPES_STRUCTREF_H
