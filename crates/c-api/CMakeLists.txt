@@ -6,6 +6,7 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 option(WASMTIME_FASTEST_RUNTIME "Set flags designed to optimize runtime performance" OFF)
+option(WASMTIME_ALWAYS_INSTALL "Always install artifacts, even if wasmtime is a subproject" OFF)
 set(WASMTIME_TARGET "" CACHE STRING "Rust target to build for")
 
 if(WASMTIME_TARGET STREQUAL "")
@@ -13,6 +14,18 @@ if(WASMTIME_TARGET STREQUAL "")
   string(REGEX MATCH "host: ([^ \n]*)" RUSTC_HOST ${RUSTC_VERSION})
   string(STRIP ${CMAKE_MATCH_1} RUSTC_HOST_TARGET)
   set(WASMTIME_TARGET ${RUSTC_HOST_TARGET})
+endif()
+
+# Check to see if we are being built as part of a vendored dependency
+# NOTE:
+# CMake >=3.21 has `PROJECT_IS_TOP_LEVEL`, which would be nice to use,
+# however for compatibility this is the best workaround.
+#
+# Also, you can't inline the `if` condition into the set, because CMake
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  set(WASMTIME_IS_VENDORED FALSE)
+else()
+  set(WASMTIME_IS_VENDORED TRUE)
 endif()
 
 include(cmake/features.cmake)
@@ -118,18 +131,31 @@ target_include_directories(wasmtime
 configure_file(include/wasmtime/conf.h.in include/wasmtime/conf.h)
 
 include(GNUInstallDirs)
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ TYPE INCLUDE)
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ TYPE INCLUDE
-        FILES_MATCHING REGEX "\\.hh?$")
-install(FILES ${WASMTIME_SHARED_FILES} ${WASMTIME_STATIC_FILES}
-        DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Install the headers and static objects if:
+# * wasmtime is vendored, and `WASMTIME_ALWAYS_INSTALL` is set
+# * wasmtime is not vendored
+if((NOT WASMTIME_IS_VENDORED) OR WASMTIME_ALWAYS_INSTALL)
+  message("Installing wasmtime headers and static library")
+  install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ TYPE INCLUDE)
+  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ TYPE INCLUDE
+          FILES_MATCHING REGEX "\\.hh?$")
+  install(FILES ${WASMTIME_STATIC_FILES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
 
-if(WASMTIME_TARGET MATCHES "apple")
-  # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
-  # directive than the default one that comes out of the linker when typically
-  # doing `cargo build`. For more info see #984
-  set(INSTALLED_LIB ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libwasmtime.dylib)
-  install(CODE "execute_process(COMMAND install_name_tool -id \"@rpath/libwasmtime.dylib\" ${INSTALLED_LIB})")
+# Install the shared objects if:
+# * wasmtime is vendored and shared libraries are enabled
+# * wasmtime is vendored, shared libraries are not enabled, but `WASMTIME_ALWAYS_INSTALL` is set
+# * wasmtime is not vendored
+if((WASMTIME_IS_VENDORED AND BUILD_SHARED_LIBS) OR ((NOT WASMTIME_IS_VENDORED) OR WASMTIME_ALWAYS_INSTALL))
+  message("Installing wasmtime shared library")
+  install(FILES ${WASMTIME_SHARED_FILES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  if(WASMTIME_TARGET MATCHES "apple")
+    # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
+    # directive than the default one that comes out of the linker when typically
+    # doing `cargo build`. For more info see #984
+    set(INSTALLED_LIB ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libwasmtime.dylib)
+    install(CODE "execute_process(COMMAND install_name_tool -id \"@rpath/libwasmtime.dylib\" ${INSTALLED_LIB})")
+  endif()
 endif()
 
 set(DOXYGEN_CONF_IN ${CMAKE_CURRENT_SOURCE_DIR}/doxygen.conf.in)

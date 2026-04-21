@@ -48,6 +48,15 @@
  * shared library instead. You must distribute the appropriate shared library
  * for your platform if you do this.
  *
+ * The `WASMTIME_ALWAYS_INSTALL` variable is provided as when used as a
+ * subproject, the default behaviour is to not install any of the headers or
+ * static libraries. So as to provide them as installation artifacts for users
+ * who still wish to have them, this will re-enable their install, even if used
+ * as a subproject.
+ *
+ * If `BUILD_SHARED_LIBS` is set, even as a subproject the shared objects will
+ * be added to the installation artifacts as not to cause any breakages.
+ *
  * ## Linking against the C API
  *
  * You'll want to arrange the `include` directory of the C API to be in your
