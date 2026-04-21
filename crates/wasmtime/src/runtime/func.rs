@@ -1197,38 +1197,35 @@ impl Func {
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
-        unsafe {
-            let f = self.vm_func_ref(store);
-            VMFunctionImport {
-                // Note that this is a load-bearing `unwrap` here, but is
-                // never expected to trip at runtime. The general problem is
-                // that host functions do not have a `wasm_call` function so
-                // the `VMFuncRef` type has an optional pointer there. This is
-                // only able to be filled out when a function is "paired" with
-                // a module where trampolines are present to fill out
-                // `wasm_call` pointers.
-                //
-                // This pairing of modules doesn't happen explicitly but is
-                // instead managed lazily throughout Wasmtime. Specifically the
-                // way this works is one of:
-                //
-                // * When a host function is created the store's list of
-                //   modules are searched for a wasm trampoline. If not found
-                //   the `wasm_call` field is left blank.
-                //
-                // * When a module instantiation happens, which uses this
-                //   function, the module will be used to fill any outstanding
-                //   holes that it has trampolines for.
-                //
-                // This means that by the time we get to this point any
-                // relevant holes should be filled out. Thus if this panic
-                // actually triggers then it's indicative of a missing `fill`
-                // call somewhere else.
-                wasm_call: f.as_ref().wasm_call.unwrap(),
-                array_call: f.as_ref().array_call,
-                vmctx: f.as_ref().vmctx,
-            }
-        }
+        // Safety: it should be fine to dereference the funcref pointer while we
+        // borrow the store.
+        let func_ref = unsafe { self.vm_func_ref(store).as_ref() };
+
+        // Note that this is a load-bearing `unwrap` here, but is never expected
+        // to trip at runtime. The general problem is that host functions do not
+        // have a `wasm_call` function so the `VMFuncRef` type has an optional
+        // pointer there. This is only able to be filled out when a function is
+        // "paired" with a module where trampolines are present to fill out
+        // `wasm_call` pointers.
+        //
+        // This pairing of modules doesn't happen explicitly but is instead
+        // managed lazily throughout Wasmtime. Specifically the way this works
+        // is one of:
+        //
+        // * When a host function is created the store's list of modules are
+        //   searched for a wasm trampoline. If not found the `wasm_call` field
+        //   is left blank.
+        //
+        // * When a module instantiation happens, which uses this function, the
+        //   module will be used to fill any outstanding holes that it has
+        //   trampolines for.
+        //
+        // This means that by the time we get to this point any relevant holes
+        // should be filled out. Thus if this panic actually triggers then it's
+        // indicative of a missing `fill` call somewhere else.
+        let func_import = func_ref.as_vm_function_import().unwrap();
+
+        func_import.clone()
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {

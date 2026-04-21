@@ -68,31 +68,55 @@ pub struct VMArrayCallFunction(VMFunctionBody);
 pub struct VMWasmCallFunction(VMFunctionBody);
 
 /// An imported function.
-#[derive(Debug, Copy, Clone)]
+///
+/// Basically the same as `VMFuncRef`, except that `wasm_call` is not optional.
+#[derive(Debug, Clone)]
 #[repr(C)]
 pub struct VMFunctionImport {
-    /// Function pointer to use when calling this imported function from Wasm.
-    pub wasm_call: VmPtr<VMWasmCallFunction>,
-
-    /// Function pointer to use when calling this imported function with the
-    /// "array" calling convention that `Func::new` et al use.
+    /// Same as `VMFuncRef::array_call`.
     pub array_call: VmPtr<VMArrayCallFunction>,
 
-    /// The VM state associated with this function.
+    /// Same as `VMFuncRef::wasm_call`, except always non-null. Must be filled
+    /// in by the time Wasm is importing this function!
+    pub wasm_call: VmPtr<VMWasmCallFunction>,
+
+    /// Function signature's _actual_ type id.
     ///
-    /// For Wasm functions defined by core wasm instances this will be `*mut
-    /// VMContext`, but for lifted/lowered component model functions this will
-    /// be a `VMComponentContext`, and for a host function it will be a
-    /// `VMHostFuncContext`, etc.
+    /// This is the type that the function was defined with, not the type that
+    /// it was imported as. These two can be different in the face of subtyping
+    /// and we need the former for to correctly implement dynamic downcasts.
+    pub type_index: VMSharedTypeIndex,
+
+    /// Same as `VMFuncRef::vmctx`.
     pub vmctx: VmPtr<VMOpaqueContext>,
+    // If more elements are added here, remember to add offset_of tests below!
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
 unsafe impl VmSafe for VMFunctionImport {}
 
+impl VMFunctionImport {
+    /// Convert `&VMFunctionImport` into `&VMFuncRef`.
+    pub fn as_func_ref(&self) -> &VMFuncRef {
+        // Safety: `VMFunctionImport` and `VMFuncRef` have the same
+        // representation.
+        unsafe { Self::as_non_null_func_ref(NonNull::from(self)).as_ref() }
+    }
+
+    /// Convert `NonNull<VMFunctionImport>` into `NonNull<VMFuncRef>`.
+    pub fn as_non_null_func_ref(p: NonNull<VMFunctionImport>) -> NonNull<VMFuncRef> {
+        p.cast()
+    }
+
+    /// Convert `*mut VMFunctionImport` into `*mut VMFuncRef`.
+    pub fn as_func_ref_ptr(p: *mut VMFunctionImport) -> *mut VMFuncRef {
+        p.cast()
+    }
+}
+
 #[cfg(test)]
 mod test_vmfunction_import {
-    use super::VMFunctionImport;
+    use super::{VMFuncRef, VMFunctionImport};
     use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
@@ -106,16 +130,41 @@ mod test_vmfunction_import {
             usize::from(offsets.size_of_vmfunction_import())
         );
         assert_eq!(
-            offset_of!(VMFunctionImport, wasm_call),
-            usize::from(offsets.vmfunction_import_wasm_call())
-        );
-        assert_eq!(
             offset_of!(VMFunctionImport, array_call),
             usize::from(offsets.vmfunction_import_array_call())
         );
         assert_eq!(
+            offset_of!(VMFunctionImport, wasm_call),
+            usize::from(offsets.vmfunction_import_wasm_call())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, type_index),
+            usize::from(offsets.vmfunction_import_type_index())
+        );
+        assert_eq!(
             offset_of!(VMFunctionImport, vmctx),
             usize::from(offsets.vmfunction_import_vmctx())
+        );
+    }
+
+    #[test]
+    fn vmfunction_import_and_vmfunc_ref_have_same_layout() {
+        assert_eq!(size_of::<VMFunctionImport>(), size_of::<VMFuncRef>());
+        assert_eq!(
+            offset_of!(VMFunctionImport, array_call),
+            offset_of!(VMFuncRef, array_call),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, wasm_call),
+            offset_of!(VMFuncRef, wasm_call),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, type_index),
+            offset_of!(VMFuncRef, type_index),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, vmctx),
+            offset_of!(VMFuncRef, vmctx),
         );
     }
 }
@@ -966,6 +1015,16 @@ impl VMFuncRef {
                 args_and_results.cast(),
                 args_and_results.len(),
             )
+        }
+    }
+
+    pub(crate) fn as_vm_function_import(&self) -> Option<&VMFunctionImport> {
+        if self.wasm_call.is_some() {
+            // Safety: `VMFuncRef` and `VMFunctionImport` have the same layout
+            // and `wasm_call` is non-null.
+            Some(unsafe { NonNull::from(self).cast::<VMFunctionImport>().as_ref() })
+        } else {
+            None
         }
     }
 }

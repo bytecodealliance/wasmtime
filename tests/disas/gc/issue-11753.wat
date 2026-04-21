@@ -51,8 +51,8 @@
 ;;       movl    %eax, %eax
 ;;       movl    $0x2a, 0x18(%rcx, %rax)
 ;;       movq    %rcx, 0x10(%rsp)
-;;       movq    0x30(%rbx), %rax
-;;       movq    0x40(%rbx), %rdi
+;;       movq    0x38(%rbx), %rax
+;;       movq    0x48(%rbx), %rdi
 ;;       movq    %rbx, %rsi
 ;;       movq    %rbx, 8(%rsp)
 ;;       callq   *%rax
