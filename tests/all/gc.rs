@@ -1,5 +1,6 @@
 use super::ref_types_module;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
@@ -1924,6 +1925,40 @@ fn gc_heap_guard_pages_but_no_memory_guard_pages() -> Result<()> {
     // Also exercise the memory access to make sure it works with bounds checks.
     let result = load.call(&mut store, (0,))?;
     assert_eq!(result, 0);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13037_drc_leak_passing_objects_already_in_over_approx_stack_roots_list() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.collector(Collector::DeferredReferenceCounting);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"(module (func (export "nop") (param externref)))"#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let nop = instance.get_typed_func::<Option<Rooted<ExternRef>>, ()>(&mut store, "nop")?;
+
+    let dropped = Arc::new(AtomicBool::new(false));
+    {
+        let mut scope = RootScope::new(&mut store);
+        let ext = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+
+        nop.call(&mut scope, Some(ext))?;
+        nop.call(&mut scope, Some(ext))?;
+    }
+
+    store.gc(None)?;
+
+    assert!(dropped.load(Ordering::SeqCst));
 
     Ok(())
 }
