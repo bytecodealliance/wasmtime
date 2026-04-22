@@ -419,39 +419,6 @@ impl Config {
         if !self.module_config.config.threads_enabled {
             let memory_config = self.wasmtime.memory_config.clone();
             memory_config.configure(&mut cfg);
-        };
-
-        // If malloc-based memory is going to be used, which requires these
-        // options set to specific values (and Pulley auto-sets some of them)
-        // then be sure to cap `memory_reservation_for_growth` and
-        // `gc_heap_reservation_for_growth` at a smaller value than the
-        // default. For malloc-based memory/heaps, reservation beyond the end
-        // isn't captured by `StoreLimiter` so we need to be sure it's small
-        // enough to not blow OOM limits while fuzzing.
-        let is_pulley = self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley;
-        let signals_traps = cfg.opts.signals_based_traps == Some(true);
-        if signals_traps || is_pulley {
-            if ((signals_traps && cfg.opts.memory_guard_size == Some(0)) || is_pulley)
-                && cfg.opts.memory_reservation == Some(0)
-                && cfg.opts.memory_init_cow == Some(false)
-            {
-                let growth = &mut cfg.opts.memory_reservation_for_growth;
-                let max = 1 << 20;
-                *growth = match *growth {
-                    Some(n) => Some(n.min(max)),
-                    None => Some(max),
-                };
-            }
-            if ((signals_traps && cfg.opts.gc_heap_guard_size == Some(0)) || is_pulley)
-                && cfg.opts.gc_heap_reservation == Some(0)
-            {
-                let growth = &mut cfg.opts.gc_heap_reservation_for_growth;
-                let max = 1 << 20;
-                *growth = match *growth {
-                    Some(n) => Some(n.min(max)),
-                    None => Some(max),
-                };
-            }
         }
 
         log::debug!("creating wasmtime config with CLI options:\n{cfg}");
@@ -861,16 +828,46 @@ impl WasmtimeConfig {
             }
         }
 
+        // If malloc-based memory is going to be used, which requires these
+        // options set to specific values (and Pulley auto-sets some of them)
+        // then be sure to cap `memory_reservation_for_growth` and
+        // `gc_heap_reservation_for_growth` at a smaller value than the
+        // default. For malloc-based memory/heaps, reservation beyond the end
+        // isn't captured by `StoreLimiter` so we need to be sure it's small
+        // enough to not blow OOM limits while fuzzing.
+        let is_pulley = self.compiler_strategy == CompilerStrategy::CraneliftPulley;
+        let mcfg = &mut self.memory_config;
+        if self.signals_based_traps || is_pulley {
+            if mcfg.memory_guard_size == Some(0)
+                && mcfg.memory_reservation == Some(0)
+                && !mcfg.memory_init_cow
+            {
+                let growth = &mut mcfg.memory_reservation_for_growth;
+                let max = 1 << 20;
+                *growth = match *growth {
+                    Some(n) => Some(n.min(max)),
+                    None => Some(max),
+                };
+            }
+            if mcfg.gc_heap_guard_size == Some(0) && mcfg.gc_heap_reservation == Some(0) {
+                let growth = &mut mcfg.gc_heap_reservation_for_growth;
+                let max = 1 << 20;
+                *growth = match *growth {
+                    Some(n) => Some(n.min(max)),
+                    None => Some(max),
+                };
+            }
+        }
+
         // When using the pooling allocator, GC heap tunables must match memory
         // tunables.
         if let InstanceAllocationStrategy::Pooling(_) = &self.strategy {
-            self.memory_config.gc_heap_reservation = self.memory_config.memory_reservation;
-            self.memory_config.gc_heap_guard_size = self.memory_config.memory_guard_size;
-            self.memory_config.gc_heap_reservation_for_growth =
-                self.memory_config.memory_reservation_for_growth;
+            mcfg.gc_heap_reservation = mcfg.memory_reservation;
+            mcfg.gc_heap_guard_size = mcfg.memory_guard_size;
+            mcfg.gc_heap_reservation_for_growth = mcfg.memory_reservation_for_growth;
             // memory_may_move is not in MemoryConfig, but gc_heap_may_move
             // must not conflict. Set it to None so the default matches.
-            self.memory_config.gc_heap_may_move = None;
+            mcfg.gc_heap_may_move = None;
         }
     }
 }
