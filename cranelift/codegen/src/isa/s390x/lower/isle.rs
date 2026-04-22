@@ -213,75 +213,43 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn mie3_enabled(&mut self, _: Type) -> Option<()> {
-        if self.backend.isa_flags.has_mie3() {
-            Some(())
-        } else {
-            None
-        }
+    fn mie3_enabled(&mut self) -> bool {
+        self.backend.isa_flags.has_mie3()
     }
 
     #[inline]
-    fn mie3_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.backend.isa_flags.has_mie3() {
-            Some(())
-        } else {
-            None
-        }
+    fn mie3_disabled(&mut self) -> bool {
+        !self.backend.isa_flags.has_mie3()
     }
 
     #[inline]
-    fn mie4_enabled(&mut self, _: Type) -> Option<()> {
-        if self.backend.isa_flags.has_mie4() {
-            Some(())
-        } else {
-            None
-        }
+    fn mie4_enabled(&mut self) -> bool {
+        self.backend.isa_flags.has_mie4()
     }
 
     #[inline]
-    fn mie4_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.backend.isa_flags.has_mie4() {
-            Some(())
-        } else {
-            None
-        }
+    fn mie4_disabled(&mut self) -> bool {
+        !self.backend.isa_flags.has_mie4()
     }
 
     #[inline]
-    fn vxrs_ext2_enabled(&mut self, _: Type) -> Option<()> {
-        if self.backend.isa_flags.has_vxrs_ext2() {
-            Some(())
-        } else {
-            None
-        }
+    fn vxrs_ext2_enabled(&mut self) -> bool {
+        self.backend.isa_flags.has_vxrs_ext2()
     }
 
     #[inline]
-    fn vxrs_ext2_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.backend.isa_flags.has_vxrs_ext2() {
-            Some(())
-        } else {
-            None
-        }
+    fn vxrs_ext2_disabled(&mut self) -> bool {
+        !self.backend.isa_flags.has_vxrs_ext2()
     }
 
     #[inline]
-    fn vxrs_ext3_enabled(&mut self, _: Type) -> Option<()> {
-        if self.backend.isa_flags.has_vxrs_ext3() {
-            Some(())
-        } else {
-            None
-        }
+    fn vxrs_ext3_enabled(&mut self) -> bool {
+        self.backend.isa_flags.has_vxrs_ext3()
     }
 
     #[inline]
-    fn vxrs_ext3_disabled(&mut self, _: Type) -> Option<()> {
-        if !self.backend.isa_flags.has_vxrs_ext3() {
-            Some(())
-        } else {
-            None
-        }
+    fn vxrs_ext3_disabled(&mut self) -> bool {
+        !self.backend.isa_flags.has_vxrs_ext3()
     }
 
     #[inline]
