@@ -26,7 +26,7 @@ impl Wizer {
 
         let mut cx = parse::parse(wasm)?;
         let instrumented_wasm = instrument::instrument(&mut cx)?;
-        self.debug_assert_valid_wasm(&instrumented_wasm);
+        self.debug_assert_valid_wasm(&instrumented_wasm, "instrumented component");
 
         Ok((cx, instrumented_wasm))
     }
@@ -43,7 +43,7 @@ impl Wizer {
 
         let snapshot = snapshot::snapshot(&cx, instance).await;
         let rewritten_wasm = self.rewrite_component(&mut cx, &snapshot);
-        self.debug_assert_valid_wasm(&rewritten_wasm);
+        self.debug_assert_valid_wasm(&rewritten_wasm, "rewritten component");
 
         Ok(rewritten_wasm)
     }
