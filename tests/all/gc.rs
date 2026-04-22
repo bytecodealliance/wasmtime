@@ -1898,6 +1898,7 @@ fn gc_heap_guard_pages_but_no_memory_guard_pages() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn issue_13037_drc_leak_passing_objects_already_in_over_approx_stack_roots_list() -> Result<()> {
     let _ = env_logger::try_init();
 
