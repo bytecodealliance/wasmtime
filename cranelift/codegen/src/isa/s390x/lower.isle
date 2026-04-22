@@ -721,14 +721,14 @@
                                (trap_code_integer_overflow))))
 (rule 1 (maybe_trap_if_sdiv_overflow true $I128 $I128 x y)
       (let (
-            ;; We need to trap when y == INT_MIN && x == -1
-            ;; y == INT_MIN is implemented as y == -y, as -INT_MIN == INT_MIN.
-            ;; This checks that y == -y, by using Not-Xor for bitwise
-            ;; equality, producing all 0b1's (-1u128) when y == -y.
-            ;; Then it uses band to include the x == -1 check as well.
-            ;; using (band x (bnot (bxor y neg_division))) variant of vec eval
-            (neg_divisor Reg (vec_neg $I128 y))
-            (reg Reg (vec_eval $I128 0b00001001 x y neg_divisor))
+            ;; We need to trap when x == INT_MIN && y == -1
+            ;; y == INT_MIN is implemented as x == -x, as -INT_MIN == INT_MIN.
+            ;; This checks that x == -x, by using Not-Xor for bitwise
+            ;; equality, producing all 0b1's (-1u128) when x == -x.
+            ;; Then it uses band to include the y == -1 check as well.
+            ;; using (band y (bnot (bxor x neg_division))) variant of vec eval
+            (neg_dividend Reg (vec_neg $I128 x))
+            (reg Reg (vec_eval $I128 0b00001001 y x neg_dividend))
             ;; finally, we check that the combination of x & y == -y is -1
             (flags ProducesFlags (vec_elt_icmps reg (vec_imm $I128 -1))))
         (trap_if flags
@@ -1167,9 +1167,9 @@
 (rule 17 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ y (bnot _ z)))))
       (vec_eval ty 0b00000010 x y z))
 (rule 18 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ (band _ x (bnot _ y)) z)))
-      (vec_eval ty 0b00000100 y x z))
+      (vec_eval ty 0b00000100 x y z))
 (rule 19 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (band _ x (band _ (bnot _ y) z))))
-      (vec_eval ty 0b00000100 z x y))
+      (vec_eval ty 0b00000100 x y z))
 
 ;; Not-and three vector registers
 (rule 20 (lower (has_type (and (vxrs_ext3_enabled) (vr128_ty ty)) (bnot _ (band _ (band _ x y) z))))
