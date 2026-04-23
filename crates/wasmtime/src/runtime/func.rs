@@ -1064,6 +1064,10 @@ impl Func {
         self.vm_func_ref(store).as_ptr().cast()
     }
 
+    pub(crate) fn to_val_raw(&self, store: &mut StoreOpaque) -> ValRaw {
+        ValRaw::funcref(self.to_raw_(store))
+    }
+
     /// Invokes this function with the `params` given, returning the results
     /// asynchronously.
     ///

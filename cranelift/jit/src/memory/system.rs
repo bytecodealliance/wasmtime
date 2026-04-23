@@ -1,21 +1,15 @@
-use cranelift_module::{ModuleError, ModuleResult};
-
-#[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-use memmap2::MmapMut;
-
-#[cfg(not(any(feature = "selinux-fix", windows)))]
-use std::alloc;
 use std::io;
 use std::mem;
 use std::ptr;
+
+use cranelift_module::{ModuleError, ModuleResult};
+use memmap2::MmapMut;
 
 use super::{BranchProtection, JITMemoryKind, JITMemoryProvider};
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
-    #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
     map: Option<MmapMut>,
-
     ptr: *mut u8,
     len: usize,
 }
@@ -24,9 +18,7 @@ impl PtrLen {
     /// Create a new empty `PtrLen`.
     fn new() -> Self {
         Self {
-            #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
             map: None,
-
             ptr: ptr::null_mut(),
             len: 0,
         }
@@ -34,7 +26,6 @@ impl PtrLen {
 
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
-    #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
     fn with_size(size: usize) -> io::Result<Self> {
         let alloc_size = region::page::ceil(size as *const ()) as usize;
         MmapMut::map_anon(alloc_size).map(|mut mmap| {
@@ -47,69 +38,7 @@ impl PtrLen {
             }
         })
     }
-
-    #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-    fn with_size(size: usize) -> io::Result<Self> {
-        assert_ne!(size, 0);
-        let page_size = region::page::size();
-        let alloc_size = region::page::ceil(size as *const ()) as usize;
-        let layout = alloc::Layout::from_size_align(alloc_size, page_size).unwrap();
-        // Safety: We assert that the size is non-zero above.
-        let ptr = unsafe { alloc::alloc(layout) };
-
-        if !ptr.is_null() {
-            Ok(Self {
-                ptr,
-                len: alloc_size,
-            })
-        } else {
-            Err(io::Error::from(io::ErrorKind::OutOfMemory))
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    fn with_size(size: usize) -> io::Result<Self> {
-        use windows_sys::Win32::System::Memory::{
-            MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc,
-        };
-
-        // VirtualAlloc always rounds up to the next multiple of the page size
-        let ptr = unsafe {
-            VirtualAlloc(
-                ptr::null_mut(),
-                size,
-                MEM_COMMIT | MEM_RESERVE,
-                PAGE_READWRITE,
-            )
-        };
-        if !ptr.is_null() {
-            Ok(Self {
-                ptr: ptr as *mut u8,
-                len: region::page::ceil(size as *const ()) as usize,
-            })
-        } else {
-            Err(io::Error::last_os_error())
-        }
-    }
 }
-
-// `MMapMut` from `cfg(feature = "selinux-fix")` already deallocates properly.
-#[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-impl Drop for PtrLen {
-    fn drop(&mut self) {
-        if !self.ptr.is_null() {
-            let page_size = region::page::size();
-            let layout = alloc::Layout::from_size_align(self.len, page_size).unwrap();
-            unsafe {
-                region::protect(self.ptr, self.len, region::Protection::READ_WRITE)
-                    .expect("unable to unprotect memory");
-                alloc::dealloc(self.ptr, layout)
-            }
-        }
-    }
-}
-
-// TODO: add a `Drop` impl for `cfg(target_os = "windows")`
 
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
@@ -201,13 +130,9 @@ impl Memory {
 
     /// Iterates non protected memory allocations that are of not zero bytes in size.
     fn non_protected_allocations_iter(&self) -> impl Iterator<Item = &PtrLen> {
-        let iter = self.allocations[self.already_protected..].iter();
-
-        #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-        return iter.filter(|&PtrLen { map, len, .. }| *len != 0 && map.is_some());
-
-        #[cfg(any(target_os = "windows", not(feature = "selinux-fix")))]
-        return iter.filter(|&PtrLen { len, .. }| *len != 0);
+        self.allocations[self.already_protected..]
+            .iter()
+            .filter(|&PtrLen { map, len, .. }| *len != 0 && map.is_some())
     }
 
     /// Frees all allocated memory regions that would be leaked otherwise.
