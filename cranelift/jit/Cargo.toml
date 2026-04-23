@@ -24,7 +24,7 @@ anyhow = { workspace = true }
 region = "3.0.2"
 libc = { workspace = true }
 target-lexicon = { workspace = true }
-memmap2 = "0.2.1"
+memmap2 = { version = "0.2.1", optional = true }
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
 
@@ -37,6 +37,7 @@ features = [
 ]
 
 [features]
+selinux-fix = ['memmap2']
 default = []
 
 wasmtime-unwinder = ["dep:wasmtime-unwinder"]
