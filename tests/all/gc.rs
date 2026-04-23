@@ -1707,6 +1707,67 @@ fn select_gc_ref_stack_map() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn dropped_passive_elems_do_not_leak() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $a (array (mut externref)))
+                (type $aa (array (ref $a)))
+
+                (elem $e (ref $a) (array.new_default $a (i32.const 1)))
+
+                (func (export "run") (param $x externref)
+                    (local $l (ref null $aa))
+
+                    ;; Create an array from the passive element segment.
+                    (local.set $l (array.new_elem $aa $e (i32.const 0) (i32.const 1)))
+
+                    ;; Put our externref into the passive element segment's array:
+                    ;; `l[0][0] = x`.
+                    (array.set $a
+                               (array.get $aa (local.get $l) (i32.const 0))
+                               (i32.const 0)
+                               (local.get $x))
+
+                    ;; Drop the passive element segment. This should make `x`
+                    ;; unreachable upon return, since we aren't keeping our
+                    ;; array live nor the passive element segment.
+                    (elem.drop $e)
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    {
+        let mut store = RootScope::new(&mut store);
+        let e = ExternRef::new(&mut store, SetFlagOnDrop(dropped.clone()))?;
+
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<Rooted<ExternRef>, ()>(&mut store, "run")?;
+        run.call(&mut store, e)?;
+    }
+
+    store.gc(None)?;
+    assert!(dropped.load(SeqCst));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn gc_heap_does_not_grow_unboundedly() -> Result<()> {
     let _ = env_logger::try_init();
 

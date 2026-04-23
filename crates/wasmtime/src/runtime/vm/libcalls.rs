@@ -528,7 +528,8 @@ fn table_init(
 // Implementation of `elem.drop`.
 fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) -> Result<()> {
     let elem_index = ElemIndex::from_u32(elem_index);
-    store.instance_mut(instance).elem_drop(elem_index)?;
+    let (gc_store, instance) = store.optional_gc_store_and_instance_mut(instance);
+    instance.elem_drop(gc_store, elem_index)?;
     Ok(())
 }
 
