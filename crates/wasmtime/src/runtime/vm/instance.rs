@@ -13,7 +13,7 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGlobalKind, VMStore,
+    GcStore, HostResult, Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMGlobalKind, VMStore,
     VMStoreRawPtr, VmPtr, VmSafe, WasmFault, catch_unwind_and_record_trap,
 };
 use crate::store::{
@@ -133,7 +133,7 @@ pub struct Instance {
     //
     // TODO(#12621): This should be a `TrySecondaryMap<PassiveElemIndex, _>`
     // but that type is currently footgun-y / isn't actually OOM-safe yet.
-    passive_elements: TryVec<Option<(NeedsGcRooting, TryVec<ValRaw>)>>,
+    passive_elements: TryVec<PassiveElementSegment>,
 
     /// Stores the dropped passive data segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
@@ -225,8 +225,8 @@ impl Instance {
         gc_roots: &mut crate::vm::GcRootsList,
     ) {
         for segment in self.passive_elements_mut().iter_mut() {
-            if let Some((wasmtime_environ::NeedsGcRooting::Yes, elems)) = segment {
-                for e in elems {
+            if segment.needs_gc_rooting() == NeedsGcRooting::Yes {
+                for e in segment.elements() {
                     let Some(root) = e.as_vmgc_ref_ptr() else {
                         continue;
                     };
@@ -912,16 +912,12 @@ impl Instance {
             return &[];
         };
 
-        let Some((_, seg)) = &self.passive_elements[passive.index()] else {
-            return &[];
-        };
-
-        &**seg
+        self.passive_elements[passive.index()].elements()
     }
 
     pub(crate) fn passive_elements_mut(
         self: Pin<&mut Self>,
-    ) -> Pin<&mut TryVec<Option<(NeedsGcRooting, TryVec<ValRaw>)>>> {
+    ) -> Pin<&mut TryVec<PassiveElementSegment>> {
         // SAFETY: Not moving data out of `self`.
         Pin::new(&mut unsafe { self.get_unchecked_mut() }.passive_elements)
     }
@@ -996,6 +992,7 @@ impl Instance {
     /// Drop an element.
     pub(crate) fn elem_drop(
         self: Pin<&mut Self>,
+        gc_store: Option<&mut GcStore>,
         elem_index: ElemIndex,
     ) -> Result<(), OutOfMemory> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
@@ -1010,7 +1007,7 @@ impl Instance {
             return Ok(());
         };
 
-        self.passive_elements_mut()[passive_index.index()] = None;
+        self.passive_elements_mut()[passive_index.index()].clear(gc_store);
         Ok(())
     }
 
@@ -1920,5 +1917,79 @@ impl<T: InstanceLayout> Drop for OwnedInstance<T> {
             ptr::drop_in_place(self.instance.as_ptr());
             alloc::alloc::dealloc(self.instance.as_ptr().cast(), layout);
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PassiveElementSegment {
+    needs_gc_rooting: NeedsGcRooting,
+    elements: TryVec<ValRaw>,
+}
+
+impl PassiveElementSegment {
+    /// Create a new passive element segment with the given capacity.
+    pub(crate) fn new(
+        needs_gc_rooting: NeedsGcRooting,
+        capacity: usize,
+    ) -> Result<Self, OutOfMemory> {
+        Ok(Self {
+            needs_gc_rooting,
+            elements: TryVec::with_capacity(capacity)?,
+        })
+    }
+
+    /// Push a value onto this passive element segment.
+    ///
+    /// NB: Does not type check the value, relies on callers to ensure the value
+    /// is of the correct type (generally, due to validation).
+    pub(crate) fn push(&mut self, store: &mut StoreOpaque, val: Val) -> Result<()> {
+        let val = {
+            let mut store = AutoAssertNoGc::new(store);
+            val.to_raw_(&mut store)?
+        };
+        let val = self.clone_gc_ref(store, val);
+        self.elements.push(val)?;
+        Ok(())
+    }
+
+    fn clone_gc_ref(&mut self, store: &mut StoreOpaque, val: ValRaw) -> ValRaw {
+        if let NeedsGcRooting::Yes = self.needs_gc_rooting {
+            let gc_ref = val.get_anyref();
+            if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
+                if let Some(gc_store) = store.optional_gc_store_mut() {
+                    return ValRaw::anyref(gc_store.clone_gc_ref(&gc_ref).as_raw_u32());
+                }
+            }
+        }
+        val
+    }
+
+    /// Clear this segment's elements.
+    pub(crate) fn clear(&mut self, mut gc_store: Option<&mut GcStore>) {
+        for val in mem::take(&mut self.elements) {
+            self.drop_gc_ref(&mut gc_store, val);
+        }
+    }
+
+    fn drop_gc_ref(&mut self, gc_store: &mut Option<&mut GcStore>, val: ValRaw) {
+        if let NeedsGcRooting::Yes = self.needs_gc_rooting {
+            let gc_ref = val.get_anyref();
+            if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
+                if let Some(gc_store) = gc_store.as_deref_mut() {
+                    let _ = gc_store.drop_gc_ref(gc_ref);
+                }
+            }
+        }
+    }
+
+    /// Whether this segment needs GC rooting and tracing.
+    #[cfg(feature = "gc")]
+    pub(crate) fn needs_gc_rooting(&self) -> NeedsGcRooting {
+        self.needs_gc_rooting
+    }
+
+    /// The elements of this segment.
+    pub(crate) fn elements(&self) -> &[ValRaw] {
+        &self.elements
     }
 }
