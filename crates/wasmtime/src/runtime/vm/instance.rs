@@ -1922,7 +1922,10 @@ impl<T: InstanceLayout> Drop for OwnedInstance<T> {
 
 #[derive(Debug)]
 pub(crate) struct PassiveElementSegment {
-    #[cfg_attr(feature = "gc", expect(unused, reason = "easier than cfg'ing away"))]
+    #[cfg_attr(
+        not(feature = "gc"),
+        expect(unused, reason = "easier than cfg'ing away")
+    )]
     needs_gc_rooting: NeedsGcRooting,
     elements: TryVec<ValRaw>,
 }
