@@ -4523,6 +4523,12 @@ criteria = "safe-to-deploy"
 delta = "0.103.10 -> 0.103.12"
 notes = "Minor updates to address recent vulnerabilities, nothing awry."
 
+[[audits.rustls-webpki]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.103.12 -> 0.103.13"
+notes = "Minor fixes for the bug being fixed in this release, nothing awry."
+
 [[audits.safetensors]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
