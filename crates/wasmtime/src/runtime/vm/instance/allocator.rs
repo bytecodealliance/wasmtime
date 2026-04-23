@@ -6,7 +6,8 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo};
-use crate::store::{Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::store::{Asyncness, InstanceId, StoreOpaque, StoreResourceLimiter};
+use crate::vm::instance::PassiveElementSegment;
 use crate::{OpaqueRootScope, Val};
 use core::future::Future;
 use core::pin::Pin;
@@ -859,40 +860,34 @@ async fn initialize_passive_elements(
     for (idx, segment) in &module.passive_elements {
         match segment {
             TableSegmentElements::Functions(func_indices) => {
-                let mut vals = TryVec::with_capacity(func_indices.len())?;
+                let mut segment =
+                    PassiveElementSegment::new(NeedsGcRooting::No, func_indices.len())?;
                 for func_idx in func_indices {
                     let (instance, registry) =
                         store.instance_and_module_registry_mut(context.instance);
                     // SAFETY: `store_id` is for the store that owns this instance.
                     let func = unsafe { instance.get_exported_func(registry, store_id, *func_idx) };
-                    vals.push(func.to_val_raw(store))?;
+                    segment.push(store, func.into())?;
                 }
                 let instance = store.instance_mut(context.instance);
                 debug_assert_eq!(instance.passive_elements.len(), idx.index());
-                instance
-                    .passive_elements_mut()
-                    .push(Some((NeedsGcRooting::No, vals)))?;
+                instance.passive_elements_mut().push(segment)?;
             }
             TableSegmentElements::Expressions {
                 needs_gc_rooting,
                 exprs,
             } => {
-                let mut vals = TryVec::with_capacity(exprs.len())?;
+                let mut segment = PassiveElementSegment::new(*needs_gc_rooting, exprs.len())?;
                 for expr in exprs {
                     let mut store = OpaqueRootScope::new(&mut *store);
-
                     let val = const_evaluator
                         .eval(&mut store, limiter.as_deref_mut(), context, expr)
                         .await?;
-
-                    let mut store = AutoAssertNoGc::new(&mut store);
-                    vals.push(val.to_raw_(&mut store)?)?;
+                    segment.push(&mut store, *val)?;
                 }
                 let instance = store.instance_mut(context.instance);
                 debug_assert_eq!(instance.passive_elements.len(), idx.index());
-                instance
-                    .passive_elements_mut()
-                    .push(Some((*needs_gc_rooting, vals)))?;
+                instance.passive_elements_mut().push(segment)?;
             }
         }
     }
