@@ -17,6 +17,7 @@ use cranelift_module::{
 use log::info;
 use std::cell::RefCell;
 use std::collections::HashMap;
+#[cfg(not(target_os = "uefi"))]
 use std::ffi::CString;
 use std::io::Write;
 use target_lexicon::PointerWidth;
@@ -88,7 +89,13 @@ impl JITBuilder {
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         let symbols = HashMap::new();
+
+        #[cfg(not(target_os = "uefi"))]
         let lookup_symbols = vec![Box::new(lookup_with_dlsym) as Box<_>];
+
+        #[cfg(target_os = "uefi")]
+        let lookup_symbols = vec![];
+
         Self {
             isa,
             symbols,
@@ -656,7 +663,7 @@ impl Module for JITModule {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(target_os = "uefi")))]
 fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();

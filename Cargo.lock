@@ -3208,12 +3208,12 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 [[package]]
 name = "region"
 version = "3.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b6ebd13bc009aef9cd476c1310d49ac354d36e240cf1bd753290f3dc7199a7"
+source = "git+https://github.com/RossComputerGuy/region-rs?branch=fix%2Fuefi#8f86bd4cd9951e61c20b9c2ed1048fd3f5e5955f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
  "mach2",
+ "r-efi",
  "windows-sys 0.52.0",
 ]
 
