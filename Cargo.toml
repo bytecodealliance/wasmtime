@@ -437,7 +437,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "tls1
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
-openssl = "0.10.73"
+openssl = "0.10.78"
 openssl-sys = "0.9.109"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
