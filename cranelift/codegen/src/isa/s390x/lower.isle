@@ -118,25 +118,25 @@
 (rule 16 (lower (iadd $I64
            (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))
            y))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (load_logical_indexed_addr x y z shift))
 
 (rule 17 (lower (iadd $I64
            y
            (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (load_logical_indexed_addr y x z shift))
 
 (rule 18 (lower (iadd $I64
            (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))
            y))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (load_indexed_addr x y z shift))
 
 (rule 19 (lower (iadd $I64
            y
           (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z))) (u8_from_value shift))))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (load_indexed_addr y x z shift))
 
 ;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1665,7 +1665,7 @@
 ;; Count leading zeros pre-z17, via FLOGR on an input zero-extended to 64 bits,
 ;; with the result compensated for the extra bits.
 (rule 1 (lower (clz (fits_in_64 ty) x))
-      (if-let false (mie4_enabled))
+      (if-let false (has_mie4))
       (let ((ext_reg Reg (put_in_reg_zext64 x))
             ;; Ask for a value of 64 in the all-zero 64-bit input case.
             ;; After compensation this will match the expected semantics.
@@ -1686,7 +1686,7 @@
 ;; Count leading zeros on z17, via CLZG on an input zero-extended to 64 bits,
 ;; with the result compensated for the extra bits.
 (rule 3 (lower (clz (fits_in_64 ty) x))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (let ((ext_reg Reg (put_in_reg_zext64 x))
             (clz Reg (clz_reg ext_reg)))
         (clz_offset ty clz)))
@@ -1713,7 +1713,7 @@
 ;;        cls(x) == clz(x ^ (x >> 63)) - 1
 ;; where x is the sign-extended input.
 (rule 1 (lower (cls (fits_in_64 ty) x))
-      (if-let false (mie4_enabled))
+      (if-let false (has_mie4))
       (let ((ext_reg Reg (put_in_reg_sext64 x))
             (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
             (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
@@ -1737,7 +1737,7 @@
 
 ;; Count leading sign-bit copies on z17, similar to above.
 (rule 3 (lower (cls (fits_in_64 ty) x))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (let ((ext_reg Reg (put_in_reg_sext64 x))
             (signbit_copies Reg (ashr_imm $I64 ext_reg 63))
             (inv_reg Reg (xor_reg $I64 ext_reg signbit_copies))
@@ -1770,7 +1770,7 @@
 ;; the input type size.  This way the 64-bit algorithm above will handle
 ;; that case correctly automatically.
 (rule 2 (lower (ctz (gpr32_ty ty) x))
-      (if-let false (mie4_enabled))
+      (if-let false (has_mie4))
       (let ((rx Reg (or_uimm16shifted $I64 x (ctz_guardbit ty)))
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg 64 lastbit)))
@@ -1786,7 +1786,7 @@
 ;; result with the value -1 via a conditional move, which will then lead to
 ;; the correct result after the final subtraction from 63.
 (rule 1 (lower (ctz (gpr64_ty _ty) x))
-      (if-let false (mie4_enabled))
+      (if-let false (has_mie4))
       (let ((rx Reg x)
             (lastbit Reg (and_reg $I64 rx (neg_reg $I64 rx)))
             (clz Reg (clz_flogr_reg -1 lastbit)))
@@ -1806,12 +1806,12 @@
 ;; Count leading zeros on z17, via CTZG on types smaller than 64-bit,
 ;; using the same guard bit mechanism as above.
 (rule 5 (lower (ctz (gpr32_ty ty) x))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (ctz_reg (or_uimm16shifted $I64 x (ctz_guardbit ty))))
 
 ;; Count leading zeros on z17, via CTZG directly on 64-bit types.
 (rule 4 (lower (ctz (gpr64_ty _) x))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (ctz_reg x))
 
 ;; Count trailing zeros, 128-bit full vector on z17.

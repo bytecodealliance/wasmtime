@@ -1582,8 +1582,8 @@
 
 (decl pure has_mie3 () bool)
 (extern constructor has_mie3 has_mie3)
-(decl pure mie4_enabled () bool)
-(extern constructor mie4_enabled mie4_enabled)
+(decl pure has_mie4 () bool)
+(extern constructor has_mie4 has_mie4)
 
 (decl pure vxrs_ext2_enabled () bool)
 (extern constructor vxrs_ext2_enabled vxrs_ext2_enabled)
@@ -1946,28 +1946,28 @@
           (iadd $I64 (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
                        (u8_from_value shift)) y)
           (i64_from_offset offset))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (memarg_reg_plus_off (load_logical_indexed_addr x y z shift) offset 0 flags))
 
 (rule 3 (lower_address flags
           (iadd $I64 y (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
                          (u8_from_value shift)))
           (i64_from_offset offset))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (memarg_reg_plus_off (load_logical_indexed_addr y x z shift) offset 0 flags))
 
 (rule 4 (lower_address flags
           (iadd $I64 (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z)))
                        (u8_from_value shift)) y)
           (i64_from_offset offset))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (memarg_reg_plus_off (load_indexed_addr x y z shift) offset 0 flags))
 
 (rule 5 (lower_address flags
           (iadd $I64 y (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z)))
                          (u8_from_value shift)))
           (i64_from_offset offset))
-      (if-let true (mie4_enabled))
+      (if-let true (has_mie4))
       (memarg_reg_plus_off (load_indexed_addr y x z shift) offset 0 flags))
 
 ;; Lower an address plus a small bias into a `MemArg`.
