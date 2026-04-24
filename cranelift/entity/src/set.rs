@@ -29,7 +29,7 @@ where
     K: fmt::Debug + EntityRef,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_set().entries(self.keys()).finish()
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 
@@ -199,7 +199,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec::Vec;
+    use alloc::{format, vec::Vec};
     use core::u32;
 
     // `EntityRef` impl for testing.
@@ -306,5 +306,14 @@ mod tests {
         }
 
         assert!(m.is_empty());
+    }
+
+    #[test]
+    fn fmt_debug() {
+        let mut s = EntitySet::new();
+        s.insert(E(2));
+        s.insert(E(4));
+        // The `Debug` formatting should only show the elements within the set.
+        assert_eq!(format!("{s:?}"), "{E(2), E(4)}");
     }
 }
