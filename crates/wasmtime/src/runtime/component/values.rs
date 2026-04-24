@@ -947,8 +947,8 @@ fn lift_flat_pointer_pair(
 }
 
 fn load_flat_pointer_pair(bytes: &[u8]) -> (usize, usize) {
-    let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
-    let len = u32::from_le_bytes(bytes[4..].try_into().unwrap()) as usize;
+    let ptr = u32::from_le_bytes(*bytes[..4].as_array().unwrap()) as usize;
+    let len = u32::from_le_bytes(*bytes[4..].as_array().unwrap()) as usize;
     (ptr, len)
 }
 
