@@ -1581,6 +1581,9 @@ fn instantiate_global_init_oom() -> Result<()> {
     config.memory_may_move(false);
     config.memory_reservation(64 << 10);
     config.memory_reservation_for_growth(0);
+    config.gc_heap_may_move(false);
+    config.gc_heap_reservation(64 << 10);
+    config.gc_heap_reservation_for_growth(0);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -1611,6 +1614,9 @@ fn elem_const_eval_oom() -> Result<()> {
     config.memory_may_move(false);
     config.memory_reservation(64 << 10);
     config.memory_reservation_for_growth(0);
+    config.gc_heap_may_move(false);
+    config.gc_heap_reservation(64 << 10);
+    config.gc_heap_reservation_for_growth(0);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -1845,7 +1851,7 @@ fn issue_13141_gc_heap_may_not_move() -> Result<()> {
     let mut config = Config::new();
     config.wasm_gc(true);
     config.gc_heap_may_move(false);
-    config.gc_heap_reservation(0);
+
     let engine = Engine::new(&config)?;
 
     let module = Module::new(
@@ -2021,5 +2027,121 @@ fn issue_13037_drc_leak_passing_objects_already_in_over_approx_stack_roots_list(
 
     assert!(dropped.load(Ordering::SeqCst));
 
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13173_gc_heap_uses_gc_tunables_no_signals() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::DeferredReferenceCounting);
+    // Set `memory_reservation=0` while leaving `gc_heap_reservation` at its
+    // default (4GB on 64-bit). Before the fix, the GC heap would incorrectly
+    // use `memory_reservation=0`, giving it 0 capacity and causing segfaults
+    // as the heap base pointer changed on every growth.
+    config.memory_reservation(0);
+    config.signals_based_traps(false);
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (type $arr (array (mut i32)))
+            (func (export "run") (result i32)
+                (local $i i32)
+                (local $a (ref $arr))
+                (local.set $a (array.new_default $arr (i32.const 64)))
+                (block $break
+                    (loop $loop
+                        (br_if $break (i32.ge_u (local.get $i) (i32.const 1000)))
+                        (array.set $arr
+                            (local.get $a)
+                            (i32.const 0)
+                            (i32.add
+                                (array.get $arr (local.get $a) (i32.const 0))
+                                (i32.const 1)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br $loop)
+                    )
+                )
+                (array.get $arr (local.get $a) (i32.const 0))
+            )
+        )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let result = run.call(&mut store, ())?;
+    assert_eq!(result, 1000);
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13173_gc_heap_uses_gc_tunables_guard_size_mismatch() -> Result<()> {
+    if std::mem::size_of::<usize>() < std::mem::size_of::<u64>()
+        || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
+    {
+        return Ok(());
+    }
+
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::DeferredReferenceCounting);
+    // Set `memory_reservation=0` and a large `gc_heap_guard_size` while leaving
+    // `memory_guard_size` at its default. Before the fix, the GC heap would use
+    // `memory_guard_size` (small) instead of `gc_heap_guard_size` (large), causing
+    // Cranelift-generated code that relies on virtual memory protection for
+    // accesses within the gc_heap_guard_size to segfault.
+    config.memory_reservation(0);
+    config.gc_heap_guard_size(1 << 29); // 512MB GC heap guard
+    config.memory_guard_size(32 * 1024 * 1024); // 32MB linear memory guard
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (type $arr (array (mut i32)))
+            (func (export "run") (result i32)
+                (local $i i32)
+                (local $a (ref $arr))
+                (local.set $a (array.new_default $arr (i32.const 64)))
+                (block $break
+                    (loop $loop
+                        (br_if $break (i32.ge_u (local.get $i) (i32.const 1000)))
+                        (array.set $arr
+                            (local.get $a)
+                            (i32.const 0)
+                            (i32.add
+                                (array.get $arr (local.get $a) (i32.const 0))
+                                (i32.const 1)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br $loop)
+                    )
+                )
+                (array.get $arr (local.get $a) (i32.const 0))
+            )
+        )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let result = run.call(&mut store, ())?;
+    assert_eq!(result, 1000);
     Ok(())
 }

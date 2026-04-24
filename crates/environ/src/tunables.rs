@@ -392,13 +392,7 @@ impl<'a> MemoryTunables<'a> {
     pub fn may_move(&self) -> bool {
         match self.kind {
             MemoryKind::LinearMemory => self.tunables.memory_may_move,
-            MemoryKind::GcHeap => {
-                // XXX: Lazy GC heap allocation means that the GC heap's base
-                // may always "move" in that it is initially null and then gets
-                // initialized after being lazily allocated.
-                let _ = self.tunables.gc_heap_may_move;
-                true
-            }
+            MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
         }
     }
 

@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::future::Future;
 use core::pin::Pin;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryTunables, Module,
-    StaticModuleIndex, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryKind, MemoryTunables,
+    Module, StaticModuleIndex, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -176,6 +176,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
+        memory_kind: MemoryKind,
     ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
         if cfg!(debug_assertions) {
             let module = request.runtime_info.env_module();
@@ -191,7 +192,9 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
                     shared_memory.clone().as_memory(),
                 ))
             }),
-            None => self.ondemand.allocate_memory(request, ty, memory_index),
+            None => self
+                .ondemand
+                .allocate_memory(request, ty, memory_index, memory_kind),
         }
     }
 

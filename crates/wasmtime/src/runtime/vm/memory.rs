@@ -244,10 +244,11 @@ impl Memory {
         creator: &dyn RuntimeMemoryCreator,
         memory_image: Option<&Arc<MemoryImage>>,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
+        kind: MemoryKind,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let tunables = engine.tunables();
-        let memory_tunables = MemoryTunables::new(tunables, MemoryKind::LinearMemory);
+        let memory_tunables = MemoryTunables::new(tunables, kind);
         let allocation = creator.new_memory(ty, &memory_tunables, minimum, maximum)?;
 
         let memory = LocalMemory::new(ty, &memory_tunables, allocation, memory_image)?;
