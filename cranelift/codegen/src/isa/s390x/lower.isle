@@ -1123,7 +1123,7 @@
 
 ;; z14 version using XOR with -1.
 (rule 1 (lower (bnot (fits_in_64 ty) x))
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (not_reg ty x))
 
 ;; Vector version using vector NOR.
@@ -1576,7 +1576,7 @@
 
 ;; z14 version using XOR with -1.
 (rule 1 (lower (bitselect (fits_in_64 ty) x y z))
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (let ((rx Reg x)
             (if_true Reg (and_reg ty y rx))
             (if_false Reg (and_reg ty z (not_reg ty rx))))
@@ -1841,20 +1841,20 @@
 ;; via an explicit and operation.)
 
 (rule (lower (popcnt $I16 x))
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (let ((cnt2 Reg (popcnt_byte x))
             (cnt1 Reg (add_reg $I32 cnt2 (lshr_imm $I32 cnt2 8))))
         (and_uimm16shifted $I32 cnt1 (uimm16shifted 255 0))))
 
 (rule (lower (popcnt $I32 x))
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (let ((cnt4 Reg (popcnt_byte x))
             (cnt2 Reg (add_reg $I32 cnt4 (lshl_imm $I32 cnt4 16)))
             (cnt1 Reg (add_reg $I32 cnt2 (lshl_imm $I32 cnt2 8))))
         (lshr_imm $I32 cnt1 24)))
 
 (rule (lower (popcnt $I64 x))
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (let ((cnt8 Reg (popcnt_byte x))
             (cnt4 Reg (add_reg $I64 cnt8 (lshl_imm $I64 cnt8 32)))
             (cnt2 Reg (add_reg $I64 cnt4 (lshl_imm $I64 cnt4 16)))
@@ -3542,12 +3542,12 @@
       (push_alu_reg ib (aluop_not_and ty) tmp val (bswap_reg ty src)))
 (rule 2 (atomic_rmw_body ib (ty_32_or_64 ty) (bigendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (push_not_reg ib ty tmp
         (push_alu_reg ib (aluop_and ty) tmp val src)))
 (rule 1 (atomic_rmw_body ib (ty_32_or_64 ty) (littleendian)
                        (AtomicRmwOp.Nand) tmp val src)
-      (if-let true (mie3_disabled))
+      (if-let false (mie3_enabled))
       (push_not_reg ib ty tmp
         (push_alu_reg ib (aluop_and ty) tmp val (bswap_reg ty src))))
 

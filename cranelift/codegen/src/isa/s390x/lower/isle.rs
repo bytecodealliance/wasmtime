@@ -218,11 +218,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn mie3_disabled(&mut self) -> bool {
-        !self.backend.isa_flags.has_mie3()
-    }
-
-    #[inline]
     fn mie4_enabled(&mut self) -> bool {
         self.backend.isa_flags.has_mie4()
     }

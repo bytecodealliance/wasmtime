@@ -1582,8 +1582,6 @@
 
 (decl pure mie3_enabled () bool)
 (extern constructor mie3_enabled mie3_enabled)
-(decl pure mie3_disabled () bool)
-(extern constructor mie3_disabled mie3_disabled)
 (decl pure mie4_enabled () bool)
 (extern constructor mie4_enabled mie4_enabled)
 (decl pure mie4_disabled () bool)
