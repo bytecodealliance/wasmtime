@@ -223,7 +223,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn vxrs_ext2_enabled(&mut self) -> bool {
+    fn has_vxrs_ext2(&mut self) -> bool {
         self.backend.isa_flags.has_vxrs_ext2()
     }
 

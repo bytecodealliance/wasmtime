@@ -1585,8 +1585,8 @@
 (decl pure has_mie4 () bool)
 (extern constructor has_mie4 has_mie4)
 
-(decl pure vxrs_ext2_enabled () bool)
-(extern constructor vxrs_ext2_enabled vxrs_ext2_enabled)
+(decl pure has_vxrs_ext2 () bool)
+(extern constructor has_vxrs_ext2 has_vxrs_ext2)
 (decl pure vxrs_ext3_enabled () bool)
 (extern constructor vxrs_ext3_enabled vxrs_ext3_enabled)
 
@@ -4973,7 +4973,7 @@
 
 (decl fcvt_flt_ty (Type Type) Type)
 (rule 1 (fcvt_flt_ty (fits_in_32 ty) $F32)
-      (if-let true (vxrs_ext2_enabled))
+      (if-let true (has_vxrs_ext2))
       $F32)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F32) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F64) $F64)
@@ -4981,7 +4981,7 @@
 
 (decl fcvt_int_ty (Type Type) Type)
 (rule 1 (fcvt_int_ty (fits_in_32 ty) $F32)
-      (if-let true (vxrs_ext2_enabled))
+      (if-let true (has_vxrs_ext2))
       $I32)
 (rule (fcvt_int_ty (fits_in_64 ty) $F32) $I64)
 (rule (fcvt_int_ty (fits_in_64 ty) $F64) $I64)
