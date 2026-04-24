@@ -44,8 +44,8 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
-use super::VMArrayRef;
 use super::free_list::FreeList;
+use super::{VMArrayRef, VMGcObjectData};
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
@@ -60,7 +60,7 @@ use core::{
     alloc::Layout,
     any::Any,
     mem,
-    ops::{Deref, DerefMut},
+    ops::{Deref, DerefMut, Range},
     ptr::NonNull,
 };
 use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
@@ -71,6 +71,8 @@ use wasmtime_environ::{
 
 #[expect(clippy::cast_possible_truncation, reason = "known to not overflow")]
 const GC_REF_ARRAY_ELEMS_OFFSET: u32 = ARRAY_LENGTH_OFFSET + (mem::size_of::<u32>() as u32);
+
+const MAX_ARRAY_STACK_DEPTH: usize = 1024;
 
 /// The deferred reference-counting (DRC) collector.
 ///
@@ -208,6 +210,14 @@ struct DrcHeap {
     /// help us catch unexpected re-entry, similar to how a `RefCell` would.
     dec_ref_stack: Option<Vec<VMGcRef>>,
 
+    /// An explicit stack for arrays that are too large to push all their
+    /// elements onto `dec_ref_stack` at once. Each entry is an array GC
+    /// reference and the range of element indices remaining to process.
+    large_array_dec_ref_stack: Option<Vec<(VMGcRef, Range<u32>)>>,
+
+    /// A batched set of GC refs to deallocate all at once.
+    to_dealloc: Option<Vec<VMGcRef>>,
+
     /// Running total of bytes currently allocated (live objects) in this heap.
     allocated_bytes: usize,
 }
@@ -227,6 +237,8 @@ impl DrcHeap {
             vmmemory: None,
             free_list: None,
             dec_ref_stack: Some(Vec::with_capacity(1)),
+            large_array_dec_ref_stack: Some(Vec::with_capacity(1)),
+            to_dealloc: Some(Vec::with_capacity(1)),
             allocated_bytes: 0,
         })
     }
@@ -282,115 +294,143 @@ impl DrcHeap {
     ) {
         let mut stack = self.dec_ref_stack.take().unwrap();
         debug_assert!(stack.is_empty());
+
+        let mut large_array_stack = self.large_array_dec_ref_stack.take().unwrap();
+        debug_assert!(large_array_stack.is_empty());
+
+        let mut to_dealloc = self.to_dealloc.take().unwrap();
+        debug_assert!(to_dealloc.is_empty());
+
         stack.push(gc_ref.unchecked_copy());
 
-        while let Some(gc_ref) = stack.pop() {
-            debug_assert!(!gc_ref.is_i31());
+        while !stack.is_empty() || !large_array_stack.is_empty() {
+            while let Some(gc_ref) = stack.pop() {
+                debug_assert!(!gc_ref.is_i31());
 
-            // Read the DRC header once to get ref_count, type, and object_size.
-            let drc_header = self.index_mut(drc_ref(&gc_ref));
-            log::trace!(
-                "decrement {:#p} ref count -> {}",
-                gc_ref,
-                drc_header.ref_count - 1
-            );
-            if !drc_header.dec_ref() {
-                continue;
-            }
-            // Ref count reached zero.
-
-            // Extract type and size from the header we already read (avoiding
-            // re-reading from heap).
-            let ty = drc_header.header.ty();
-            let object_size = drc_header.object_size;
-
-            // Trace: enqueue child GC refs for dec-ref'ing.
-            if let Some(ty) = ty {
-                match &self.trace_infos[&ty] {
-                    TraceInfo::Struct { gc_ref_offsets } => {
-                        stack.reserve(gc_ref_offsets.len());
-
-                        let object_start =
-                            usize::try_from(gc_ref.as_heap_index().unwrap().get()).unwrap();
-                        let heap = self.heap_slice();
-                        for offset in gc_ref_offsets {
-                            let offset = usize::try_from(*offset).unwrap();
-
-                            // Read gc ref fields directly from the heap slice,
-                            // avoiding the overhead of repeatedly indexing into
-                            // the heap via the object header.
-                            let field_start = object_start + offset;
-                            let field_end = field_start + mem::size_of::<VMGcRef>();
-                            debug_assert!(
-                                field_end <= object_start + usize::try_from(object_size).unwrap()
-                            );
-                            let raw = *heap[field_start..field_end].as_array().unwrap();
-                            let raw = u32::from_le_bytes(raw);
-
-                            if let Some(child) = VMGcRef::from_raw_u32(raw)
-                                && !child.is_i31()
-                            {
-                                debug_assert!({
-                                    let header = self.header(&child);
-                                    let kind = header.kind().as_u32();
-                                    VMGcKind::try_from_u32(kind).is_some()
-                                });
-                                stack.push(child);
-                            }
-                        }
-                    }
-                    TraceInfo::Array { gc_ref_elems } => {
-                        if *gc_ref_elems {
-                            let data = self.gc_object_data(&gc_ref);
-                            let len = self.array_len(gc_ref.as_arrayref_unchecked());
-                            stack.reserve(usize::try_from(len).unwrap());
-                            for i in 0..len {
-                                let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
-                                    + i * u32::try_from(mem::size_of::<u32>()).unwrap();
-                                let raw = data.read_u32(elem_offset);
-                                if let Some(child) = VMGcRef::from_raw_u32(raw)
-                                    && !child.is_i31()
-                                {
-                                    debug_assert!({
-                                        let header = self.header(&child);
-                                        let kind = header.kind().as_u32();
-                                        VMGcKind::try_from_u32(kind).is_some()
-                                    });
-                                    stack.push(child);
-                                }
-                            }
-                        }
-                    }
+                // Read the DRC header once to get ref_count, type, and object_size.
+                let drc_header = self.index_mut(drc_ref(&gc_ref));
+                log::trace!(
+                    "decrement {:#p} ref count -> {}",
+                    gc_ref,
+                    drc_header.ref_count - 1
+                );
+                if !drc_header.dec_ref() {
+                    continue;
                 }
-            } else {
-                // Handle `externref` host data. Only `externref`s have host
-                // data, and `ty` is `None` only for `externref`s, so we skip
-                // this for `struct` and `array` objects entirely.
-                debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
-                let externref = gc_ref.as_typed::<VMDrcExternRef>(self).unwrap();
-                let host_data_id = self.index(externref).host_data;
-                host_data_table.dealloc(host_data_id);
+
+                // Extract type and size from the header we already read (avoiding
+                // re-reading from heap).
+                let ty = drc_header.header.ty();
+
+                // Trace: enqueue child GC refs for dec-ref'ing.
+                if let Some(ty) = ty {
+                    match &self.trace_infos[&ty] {
+                        TraceInfo::Struct { gc_ref_offsets } => {
+                            stack.reserve(gc_ref_offsets.len());
+                            let data = self.gc_object_data(&gc_ref);
+                            for offset in gc_ref_offsets {
+                                Self::trace_offset(&mut stack, data, *offset);
+                            }
+                        }
+                        TraceInfo::Array { gc_ref_elems: true } => {
+                            let len = self.array_len(gc_ref.as_arrayref_unchecked());
+                            let len_usize = usize::try_from(len).unwrap();
+
+                            if stack.len() + len_usize <= MAX_ARRAY_STACK_DEPTH {
+                                let data = self.gc_object_data(&gc_ref);
+                                stack.reserve(len_usize);
+                                for i in 0..len {
+                                    Self::trace_array_elem(&mut stack, data, i);
+                                }
+                            } else {
+                                // Only push the first `n` elements onto the
+                                // stack; process the rest via the
+                                // `large_array_stack`.
+                                let n = MAX_ARRAY_STACK_DEPTH.saturating_sub(stack.len());
+                                let n = u32::try_from(n).unwrap();
+                                let data = self.gc_object_data(&gc_ref);
+                                for i in 0..n {
+                                    Self::trace_array_elem(&mut stack, data, i);
+                                }
+                                large_array_stack.push((gc_ref.unchecked_copy(), n..len));
+
+                                // Don't fallthrough and push onto `to_dealloc`
+                                // yet; only do that after we've processed all
+                                // elements. This ensures we don't push it
+                                // multiple times.
+                                continue;
+                            }
+                        }
+                        TraceInfo::Array {
+                            gc_ref_elems: false,
+                        } => {}
+                    }
+                } else {
+                    // Handle `externref` host data. Only `externref`s have host
+                    // data, and `ty` is `None` only for `externref`s, so we skip
+                    // this for `struct` and `array` objects entirely.
+                    debug_assert!(drc_header.header.kind().matches(VMGcKind::ExternRef));
+                    let externref = gc_ref.as_typed::<VMDrcExternRef>(self).unwrap();
+                    let host_data_id = self.index(externref).host_data;
+                    host_data_table.dealloc(host_data_id);
+                }
+
+                to_dealloc.push(gc_ref);
             }
 
-            // Deallocate using the object_size we already read.
-            let alloc_size = FreeList::aligned_size(object_size).unwrap();
-            let index = gc_ref.as_heap_index().unwrap();
+            if let Some((gc_ref, mut elems)) = large_array_stack.pop() {
+                // Add the next chunk of array elements onto the stack.
+                let data = self.gc_object_data(&gc_ref);
+                for i in elems.by_ref().take(MAX_ARRAY_STACK_DEPTH) {
+                    Self::trace_array_elem(&mut stack, data, i);
+                }
 
-            if cfg!(gc_zeal) {
-                let idx = usize::try_from(index.get()).unwrap();
-                self.heap_slice_mut()[idx..][..usize::try_from(alloc_size).unwrap()].fill(POISON);
+                // If we are done processing this array, then enqueue it for
+                // deallocation. Otherwise, push it back onto the
+                // `large_array_stack` for continued processing once the regular
+                // stack is exhausted again.
+                if elems.is_empty() {
+                    to_dealloc.push(gc_ref);
+                } else {
+                    large_array_stack.push((gc_ref, elems));
+                }
             }
+        }
 
-            self.free_list
-                .as_mut()
-                .unwrap()
-                .dealloc_fast(index, alloc_size);
-            self.allocated_bytes -= usize::try_from(alloc_size).unwrap();
+        // Deallocate the dead objects and return their memory blocks to the
+        // free list.
+        for gc_ref in to_dealloc.drain(..) {
+            self.dealloc(gc_ref);
         }
 
         debug_assert!(stack.is_empty());
         debug_assert!(self.dec_ref_stack.is_none());
         self.dec_ref_stack = Some(stack);
+
+        debug_assert!(large_array_stack.is_empty());
+        debug_assert!(self.large_array_dec_ref_stack.is_none());
+        self.large_array_dec_ref_stack = Some(large_array_stack);
+
+        debug_assert!(to_dealloc.is_empty());
+        debug_assert!(self.to_dealloc.is_none());
+        self.to_dealloc = Some(to_dealloc);
+    }
+
+    #[inline]
+    fn trace_array_elem(stack: &mut Vec<VMGcRef>, data: &VMGcObjectData, i: u32) {
+        let elem_offset =
+            GC_REF_ARRAY_ELEMS_OFFSET + i * u32::try_from(mem::size_of::<u32>()).unwrap();
+        Self::trace_offset(stack, data, elem_offset)
+    }
+
+    #[inline]
+    fn trace_offset(stack: &mut Vec<VMGcRef>, data: &VMGcObjectData, offset: u32) {
+        let raw = data.read_u32(offset);
+        if let Some(gc_ref) = VMGcRef::from_raw_u32(raw)
+            && !gc_ref.is_i31()
+        {
+            stack.push(gc_ref);
+        }
     }
 
     /// Ensure that we have tracing information for the given type.
@@ -863,6 +903,8 @@ unsafe impl GcHeap for DrcHeap {
             over_approximated_stack_roots,
             free_list,
             dec_ref_stack,
+            large_array_dec_ref_stack,
+            to_dealloc,
             memory,
             vmmemory,
             allocated_bytes,
@@ -879,6 +921,12 @@ unsafe impl GcHeap for DrcHeap {
         *vmmemory = None;
         *allocated_bytes = 0;
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
+        debug_assert!(
+            large_array_dec_ref_stack
+                .as_ref()
+                .is_some_and(|s| s.is_empty())
+        );
+        debug_assert!(to_dealloc.as_ref().is_some_and(|d| d.is_empty()));
 
         memory.take().unwrap()
     }
