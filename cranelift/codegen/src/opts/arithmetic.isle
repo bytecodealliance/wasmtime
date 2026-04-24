@@ -321,6 +321,77 @@
 (rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
 (rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
 
+;; ((x + y) - (x + z)) --> (y - z)
+(rule (simplify (isub ty (iadd ty x y) (iadd ty x z))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty x y) (iadd ty z x))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty y x) (iadd ty x z))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty y x) (iadd ty z x))) (isub ty y z))
+
+;; ((x - z) - (y - z)) --> (x - y)
+(rule (simplify (isub ty (isub ty x z) (isub ty y z))) (isub ty x y))
+
+;; ((x - y) - (x - z)) --> (z - y)
+(rule (simplify (isub ty (isub ty x y) (isub ty x z))) (isub ty z y))
+
+;; umin(x, y) + umax(x, y) --> x + y
+(rule (simplify (iadd ty (umin ty x y) (umax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty x y) (umin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty x y) (umax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty y x) (umin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty y x) (umax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty x y) (umin ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty y x) (umax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty y x) (umin ty y x))) (iadd ty x y))
+
+;; smin(x, y) + smax(x, y) --> x + y
+(rule (simplify (iadd ty (smin ty x y) (smax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty x y) (smin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty x y) (smax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty y x) (smin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty y x) (smax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty x y) (smin ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty y x) (smax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty y x) (smin ty y x))) (iadd ty x y))
+
+;; ((x + z) - (y + z)) --> (x - y)
+(rule (simplify (isub ty (iadd ty x z) (iadd ty y z))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty x z) (iadd ty z y))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty z x) (iadd ty y z))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty z x) (iadd ty z y))) (isub ty x y))
+
+;; ((x - y) + (y + z)) --> (x + z)
+(rule (simplify (iadd ty (isub ty x y) (iadd ty y z))) (iadd ty x z))
+(rule (simplify (iadd ty (iadd ty y z) (isub ty x y))) (iadd ty x z))
+(rule (simplify (iadd ty (isub ty x y) (iadd ty z y))) (iadd ty x z))
+(rule (simplify (iadd ty (iadd ty z y) (isub ty x y))) (iadd ty x z))
+
+;; (x - (x + y)) --> -y
+(rule (simplify (isub ty x (iadd ty x y))) (ineg ty y))
+(rule (simplify (isub ty x (iadd ty y x))) (ineg ty y))
+
+;; (x + (y + (z - x))) --> (y + z)
+(rule (simplify (iadd ty x (iadd ty y (isub ty z x)))) (iadd ty y z))
+(rule (simplify (iadd ty (iadd ty y (isub ty z x)) x)) (iadd ty y z))
+(rule (simplify (iadd ty x (iadd ty (isub ty z x) y))) (iadd ty y z))
+(rule (simplify (iadd ty (iadd ty (isub ty z x) y) x)) (iadd ty y z))
+
+;; Helper to create a "true" value for a comparison. For scalar integers this is
+;; a value of 1 but for vectors this is -1 since each lane is filled with all
+;; 1s.
+(decl cmp_true (Type) Value)
+(rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
+(rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
+
+;; (x + y) == (y + x) --> true
+(rule (simplify (eq ty (iadd cty x y) (iadd cty y x))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty x y) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (cmp_true ty))
+
+;; (x - y) != x --> y != 0
+(rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))
+(rule (simplify (ne cty x (isub ty x y))) (ne cty y (iconst_u ty 0)))
+
 ;; (x - y) == x --> y == 0
 (rule (simplify (eq cty (isub ty x y) x)) (eq cty y (iconst_u ty 0)))
 (rule (simplify (eq cty x (isub ty x y))) (eq cty y (iconst_u ty 0)))
@@ -337,13 +408,6 @@
 ;; -((-y) * x) --> x * y
 (rule (simplify (ineg ty (imul ty (ineg ty y) x))) (imul ty x y))
 (rule (simplify (ineg ty (imul ty x (ineg ty y)))) (imul ty x y))
-
-;; Helper to create a "true" value for a comparison. For scalar integers this is
-;; a value of 1 but for vectors this is -1 since each lane is filled with all
-;; 1s.
-(decl cmp_true (Type) Value)
-(rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
-(rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
 
 ;; max(x, y) >= x
 (rule (simplify (sge ty (smax ty x y) x)) (cmp_true ty))
