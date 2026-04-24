@@ -2061,7 +2061,7 @@
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (fcvt_from_uint $F32X4 x @ (value_type $I32X4)))
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
           (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
@@ -2112,7 +2112,7 @@
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (fcvt_from_sint $F32X4 x @ (value_type $I32X4)))
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
           (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
@@ -2196,7 +2196,7 @@
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
 (rule (lower (fcvt_to_uint_sat $I32X4 x @ (value_type $F32X4)))
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_pack_usat $I64X2
         (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 x x)))
@@ -2238,7 +2238,7 @@
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
 (rule (lower (fcvt_to_sint_sat $I32X4 src @ (value_type $F32X4)))
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
         (vec_pack_ssat $I64X2
@@ -2392,13 +2392,13 @@
 
 ;; On z14, use a little-endian load to GPR followed by vec_insert_lane.
 (rule (vec_load_lane_little ty @ (multi_lane 16 _) dst addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane ty dst (loadrev16 addr) lane_imm (zero_reg)))
 (rule (vec_load_lane_little ty @ (multi_lane 32 _) dst addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane ty dst (loadrev32 addr) lane_imm (zero_reg)))
 (rule (vec_load_lane_little ty @ (multi_lane 64 _) dst addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane ty dst (loadrev64 addr) lane_imm (zero_reg)))
 
 ;; Helper to implement a generic little-endian variant of vec_load_lane_undef.
@@ -2421,13 +2421,13 @@
 
 ;; On z14, use a little-endian load to GPR followed by vec_insert_lane_undef.
 (rule (vec_load_lane_little_undef ty @ (multi_lane 16 _) addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane_undef ty (loadrev16 addr) lane_imm (zero_reg)))
 (rule (vec_load_lane_little_undef ty @ (multi_lane 32 _) addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane_undef ty (loadrev32 addr) lane_imm (zero_reg)))
 (rule (vec_load_lane_little_undef ty @ (multi_lane 64 _) addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_insert_lane_undef ty (loadrev64 addr) lane_imm (zero_reg)))
 
 
@@ -2477,13 +2477,13 @@
 
 ;; On z14, use vec_extract_lane followed by a little-endian store from GPR.
 (rule (vec_store_lane_little ty @ (multi_lane 16 _) src addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (storerev16 (vec_extract_lane ty src lane_imm (zero_reg)) addr))
 (rule (vec_store_lane_little ty @ (multi_lane 32 _) src addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (storerev32 (vec_extract_lane ty src lane_imm (zero_reg)) addr))
 (rule (vec_store_lane_little ty @ (multi_lane 64 _) src addr lane_imm)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (storerev64 (vec_extract_lane ty src lane_imm (zero_reg)) addr))
 
 
@@ -2535,13 +2535,13 @@
 
 ;; On z14, use a little-endian load (via GPR) and replicate.
 (rule (vec_load_replicate_little ty @ (multi_lane 16 _) addr)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_replicate_lane ty (vec_load_lane_little_undef ty addr 0) 0))
 (rule (vec_load_replicate_little ty @ (multi_lane 32 _) addr)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_replicate_lane ty (vec_load_lane_little_undef ty addr 0) 0))
 (rule (vec_load_replicate_little ty @ (multi_lane 64 _) addr)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_replicate_lane ty (vec_load_lane_little_undef ty addr 0) 0))
 
 
@@ -2930,7 +2930,7 @@
 
 ;; Full-vector byte-reversed load via GPRs on z14.
 (rule (vec_load_full_rev (vr128_ty ty) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (let ((lo_addr MemArg (lower_address_bias flags addr offset 0))
             (hi_addr MemArg (lower_address_bias flags addr offset 8))
             (lo_val Reg (loadrev64 lo_addr))
@@ -2966,13 +2966,13 @@
 
 ;; Element-wise byte-reversed load as element-swapped byte-reversed load on z14.
 (rule (vec_load_byte_rev ty @ (multi_lane 64 2) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
 (rule (vec_load_byte_rev ty @ (multi_lane 32 4) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
 (rule (vec_load_byte_rev ty @ (multi_lane 16 8) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load_full_rev ty flags addr offset)))
 
 
@@ -3005,13 +3005,13 @@
 
 ;; Element-reversed load as element-swapped direct load on z14.
 (rule (vec_load_elt_rev ty @ (multi_lane 64 2) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
 (rule (vec_load_elt_rev ty @ (multi_lane 32 4) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
 (rule (vec_load_elt_rev ty @ (multi_lane 16 8) flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_elt_rev ty (vec_load ty (lower_address flags addr offset))))
 
 
@@ -3270,7 +3270,7 @@
 
 ;; Full-vector byte-reversed store via GPRs on z14.
 (rule (vec_store_full_rev _ val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (let ((lo_addr MemArg (lower_address_bias flags addr offset 0))
             (hi_addr MemArg (lower_address_bias flags addr offset 8))
             (lo_val Reg (vec_extract_lane $I64X2 val 1 (zero_reg)))
@@ -3307,13 +3307,13 @@
 
 ;; Element-wise byte-reversed load as element-swapped byte-reversed store on z14.
 (rule (vec_store_byte_rev ty @ (multi_lane 64 2) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
 (rule (vec_store_byte_rev ty @ (multi_lane 32 4) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
 (rule (vec_store_byte_rev ty @ (multi_lane 16 8) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store_full_rev ty (vec_elt_rev ty val) flags addr offset))
 
 
@@ -3345,13 +3345,13 @@
 
 ;; Element-reversed store as element-swapped direct store on z14.
 (rule (vec_store_elt_rev ty @ (multi_lane 64 2) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
 (rule (vec_store_elt_rev ty @ (multi_lane 32 4) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
 (rule (vec_store_elt_rev ty @ (multi_lane 16 8) val flags addr offset)
-      (if-let true (vxrs_ext2_disabled))
+      (if-let false (vxrs_ext2_enabled))
       (vec_store (vec_elt_rev ty val) (lower_address flags addr offset)))
 
 

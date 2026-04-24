@@ -1587,8 +1587,6 @@
 
 (decl pure vxrs_ext2_enabled () bool)
 (extern constructor vxrs_ext2_enabled vxrs_ext2_enabled)
-(decl pure vxrs_ext2_disabled () bool)
-(extern constructor vxrs_ext2_disabled vxrs_ext2_disabled)
 (decl pure vxrs_ext3_enabled () bool)
 (extern constructor vxrs_ext3_enabled vxrs_ext3_enabled)
 (decl pure vxrs_ext3_disabled () bool)
