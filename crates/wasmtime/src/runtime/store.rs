@@ -116,7 +116,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, MemoryKind, TripleExt};
+use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
 
 mod context;
 pub use self::context::*;
@@ -1969,7 +1969,12 @@ impl StoreOpaque {
 
             let (mem_alloc_index, mem) = engine
                 .allocator()
-                .allocate_memory(&mut request, &mem_ty, None, MemoryKind::GcHeap)
+                .allocate_memory(
+                    &mut request,
+                    &mem_ty,
+                    None,
+                    wasmtime_environ::MemoryKind::GcHeap,
+                )
                 .await?;
 
             // Then, allocate the actual GC heap, passing in that memory
