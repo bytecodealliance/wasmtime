@@ -21,7 +21,7 @@ namespace wasmtime {
  *
  * Note that this type does not itself own any resources. It points to resources
  * owned within a `Store` and the `Store` must be passed in as the first
- * argument to the functions defined on `Table`. Note that if the wrong `Store`
+ * argument to the functions defined on `Memory`. Note that if the wrong `Store`
  * is passed in then the process will be aborted.
  */
 class Memory {

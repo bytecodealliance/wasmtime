@@ -153,8 +153,8 @@ class Component {
    * The `instance` argument is an optionally provided index which is the
    * instance under which the `name` should be looked up.
    */
-  std::optional<ExportIndex> export_index(ExportIndex *instance,
-                                          std::string_view name) {
+  std::optional<ExportIndex> export_index(const ExportIndex *instance,
+                                          std::string_view name) const {
     auto ret = wasmtime_component_get_export_index(
         capi(), instance ? instance->capi() : nullptr, name.data(),
         name.size());

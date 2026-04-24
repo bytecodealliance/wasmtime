@@ -1,6 +1,7 @@
 #ifndef WASMTIME_EQREF_CLASS_HH
 #define WASMTIME_EQREF_CLASS_HH
 
+#include <optional>
 #include <wasmtime/conf.h>
 
 #ifdef WASMTIME_FEATURE_GC
@@ -74,12 +75,12 @@ public:
   /// Downcast this `eqref` into a `structref`.
   //
   // as_struct() defined after StructRef below.
-  StructRef as_struct(Store::Context cx) const;
+  std::optional<StructRef> as_struct(Store::Context cx) const;
 
   /// Downcast this `eqref` into an `arrayref`.
   //
   // as_array() defined after ArrayRef below.
-  ArrayRef as_array(Store::Context cx) const;
+  std::optional<ArrayRef> as_array(Store::Context cx) const;
 };
 
 } // namespace wasmtime

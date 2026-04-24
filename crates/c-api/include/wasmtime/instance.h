@@ -160,7 +160,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_pre_instantiate(
  * delete it via `wasmtime_module_delete`.
  */
 WASM_API_EXTERN wasmtime_module_t *
-wasmtime_instance_pre_module(wasmtime_instance_pre_t *instance_pre);
+wasmtime_instance_pre_module(const wasmtime_instance_pre_t *instance_pre);
 
 #ifdef __cplusplus
 } // extern "C"

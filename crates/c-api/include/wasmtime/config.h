@@ -206,6 +206,8 @@ WASMTIME_CONFIG_PROP(void, shared_memory, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_tail_call, bool)
 
+#ifdef WASMTIME_FEATURE_GC
+
 /**
  * \brief Configures whether the WebAssembly reference types proposal is
  * enabled.
@@ -228,6 +230,8 @@ WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
  * This setting is `false` by default.
  */
 WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
+
+#endif // WASMTIME_FEATURE_GC
 
 /**
  * \brief Enables or disables GC support in Wasmtime entirely.
@@ -301,12 +305,16 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 
+#ifdef WASMTIME_FEATURE_GC
+
 /**
  * \brief Configures whether the WebAssembly exceptions proposal is enabled.
  *
  * This setting is `false` by default.
  */
 WASMTIME_CONFIG_PROP(void, wasm_exceptions, bool)
+
+#endif // WASMTIME_FEATURE_GC
 
 /**
  * \brief Configures whether the WebAssembly custom-page-sizes proposal is
