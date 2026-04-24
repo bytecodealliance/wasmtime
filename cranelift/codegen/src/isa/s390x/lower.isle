@@ -246,12 +246,12 @@
 
 ;; Absolute value of a 128-bit integer on z17.
 (rule 4 (lower (iabs $I128 x))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_abs $I128 x))
 
 ;; Absolute value of a 128-bit integer pre-z17.
 (rule 0 (lower (iabs $I128 x))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((zero Reg (vec_imm $I128 0))
             (pos Reg x)
             (neg Reg (vec_sub $I128 zero pos))
@@ -276,12 +276,12 @@
 
 ;; Negate a 128-bit integer on z17.
 (rule 4 (lower (ineg $I128 x))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_neg $I128 x))
 
 ;; Negate a 128-bit integer pre-z17.
 (rule 0 (lower (ineg $I128 x))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (vec_sub $I128 (vec_imm $I128 0) x))
 
 
@@ -297,7 +297,7 @@
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (umax $I128 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi y_reg x_reg)))
@@ -305,7 +305,7 @@
 
 ;; Unsigned maximum of two 128-bit integers on z17.
 (rule 3 (lower (umax $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_umax $I128 x y))
 
 ;; Unsigned maximum of two vector registers.
@@ -325,7 +325,7 @@
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (umin $I128 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi x_reg y_reg)))
@@ -333,7 +333,7 @@
 
 ;; Unsigned minimum of two 128-bit integers on z17.
 (rule 3 (lower (umin $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_umin $I128 x y))
 
 ;; Unsigned minimum of two vector registers.
@@ -353,7 +353,7 @@
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (smax $I128 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi y_reg x_reg)))
@@ -361,7 +361,7 @@
 
 ;; Signed maximum of two 128-bit integers on z17.
 (rule 3 (lower (smax $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_smax $I128 x y))
 
 ;; Signed maximum of two vector registers.
@@ -381,7 +381,7 @@
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (smin $I128 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi x_reg y_reg)))
@@ -389,7 +389,7 @@
 
 ;; Signed minimum of two 128-bit integers on z17.
 (rule 3 (lower (smin $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_smin $I128 x y))
 
 ;; Signed minimum of two vector registers.
@@ -460,12 +460,12 @@
 
 ;; Multiply two vector registers - doubleword on z17.
 (rule 1 (vec_mul_impl $I64X2 x y)
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_mul $I64X2 x y))
 
 ;; Multiply two vector registers - doubleword pre-z17.  Has to be scalarized.
 (rule (vec_mul_impl $I64X2 x y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (mov_to_vec128 $I64X2
                      (mul_reg $I64 (vec_extract_lane $I64X2 x 0 (zero_reg))
                                    (vec_extract_lane $I64X2 y 0 (zero_reg)))
@@ -474,12 +474,12 @@
 
 ;; Multiply two vector registers - quadword on z17.
 (rule 1 (vec_mul_impl $I128 x y)
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_mul $I128 x y))
 
 ;; Multiply two vector registers - quadword pre-z17.
 (rule (vec_mul_impl $I128 x y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_hi Reg (vec_extract_lane $I64X2 x 0 (zero_reg)))
             (x_lo Reg (vec_extract_lane $I64X2 x 1 (zero_reg)))
             (y_hi Reg (vec_extract_lane $I64X2 y 0 (zero_reg)))
@@ -530,13 +530,13 @@
 
 ;; Multiply high part unsigned, vector types with 64-bit elements on z17.
 (rule 1 (lower (umulhi $I64X2 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_umulhi $I64X2 x y))
 
 ;; Multiply high part unsigned, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
 (rule (lower (umulhi $I64X2 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((pair_0 RegPair (umul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (regpair_hi pair_0))
@@ -574,13 +574,13 @@
 
 ;; Multiply high part signed, vector types with 64-bit elements on z17.
 (rule 1 (lower (smulhi $I64X2 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_smulhi $I64X2 x y))
 
 ;; Multiply high part signed, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
 (rule (lower (smulhi $I64X2 x y))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
@@ -660,12 +660,12 @@
 
 ;; Implement `udiv` for 128-bit integers on z17 (only).
 (rule 1 (lower (udiv $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_udiv $I128 x y))
 
 ;; Implement `urem` for 128-bit integers on z17 (only).
 (rule 1 (lower (urem $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_urem $I128 x y))
 
 
@@ -806,14 +806,14 @@
 
 ;; Implement `sdiv` for 128-bit integers on z17 (only).
 (rule 1 (lower (sdiv $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (let ((OFcheck bool (div_overflow_check_needed y))
             (_ Reg (maybe_trap_if_sdiv_overflow OFcheck $I128 $I128 x y)))
         (vec_sdiv $I128 x y)))
 
 ;; Implement `srem` for 128-bit integers on z17 (only).
 (rule 1 (lower (srem $I128 x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (let ((OFcheck bool (div_overflow_check_needed y))
             (top Reg (maybe_avoid_srem_overflow OFcheck $I128 x y)))
         (vec_srem $I128 top y)))
@@ -1176,10 +1176,10 @@
       (vec_and $F64X2 x y))
 
 (rule 12 (lower (band (vr128_ty ty) (band _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000001 x y z))
 (rule 13 (lower (band (vr128_ty ty) x (band _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000001 x y z))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
@@ -1202,70 +1202,70 @@
 
 ;; And-not three vector registers.
 (rule 14 (lower (band (vr128_ty ty) (band _ (bnot _ x) y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00010000 x y z))
 (rule 15 (lower (band (vr128_ty ty) (bnot _ x) (band _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00010000 x y z))
 (rule 16 (lower (band (vr128_ty ty) (band _ x y) (bnot _ z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000010 x y z))
 (rule 17 (lower (band (vr128_ty ty) x (band _ y (bnot _ z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000010 x y z))
 (rule 18 (lower (band (vr128_ty ty) (band _ x (bnot _ y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000100 x y z))
 (rule 19 (lower (band (vr128_ty ty) x (band _ (bnot _ y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000100 x y z))
 
 ;; Not-and three vector registers
 (rule 20 (lower (bnot (vr128_ty ty) (band _ (band _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11111110 x y z))
 (rule 21 (lower (bnot (vr128_ty ty) (band _ x (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11111110 x y z))
 
 ;; And-Nand three vector registers
 (rule 20 (lower (band (vr128_ty ty) (bnot _ (band _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01010100 x y z))
 (rule 21 (lower (band (vr128_ty ty) x (bnot _ (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00001110 x y z))
 
 ;; And-Or 3 vector registers
 (rule 22 (lower (band (vr128_ty ty) x (bor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000111 x y z))
 (rule 23 (lower (band (vr128_ty ty) (bor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00010101 x y z))
 
 ;; And-Nor 3 vector registers
 (rule 24 (lower (band (vr128_ty ty) x (bnot _ (bor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00001000 x y z))
 (rule 25 (lower (band (vr128_ty ty) (bnot _ (bor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01000000 x y z))
 
 ;; And-Xor 3 vector registers
 (rule 26 (lower (band (vr128_ty ty) x (bxor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000110 x y z))
 (rule 27 (lower (band (vr128_ty ty) (bxor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00010100 x y z))
 
 ;; And-Nxor 3 vector registers
 (rule 28 (lower (band (vr128_ty ty) x (bnot _ (bxor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00001001 x y z))
 (rule 29 (lower (band (vr128_ty ty) (bnot _ (bxor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01000001 x y z))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1300,10 +1300,10 @@
 
 ;; Or three vector registers.
 (rule 12 (lower (bor (vr128_ty ty) (bor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01111111 x y z))
 (rule 13 (lower (bor (vr128_ty ty) x (bor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01111111 x y z))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
@@ -1326,102 +1326,102 @@
 
 ;; 3-input bor with a single not
 (rule 14 (lower (bor (vr128_ty ty) (bor _ (bnot _ x) y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11110111 x y z))
 (rule 15 (lower (bor (vr128_ty ty) (bnot _ x) (bor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11110111 x y z))
 (rule 16 (lower (bor (vr128_ty ty) (bor _ x (bnot _ y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11011111 x y z))
 (rule 17 (lower (bor (vr128_ty ty) x (bor _ (bnot _ y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11011111 x y z))
 (rule 18 (lower (bor (vr128_ty ty) (bor _ x y) (bnot _ z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10111111 x y z))
 (rule 19 (lower (bor (vr128_ty ty) x (bor _ y (bnot _ z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10111111 x y z))
 
 ;; 3-input bnor
 (rule 20 (lower (bnot (vr128_ty ty) (bor _ (bor _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10000000 x y z))
 (rule 21 (lower (bnot (vr128_ty ty) (bor _ x (bor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10000000 x y z))
 
 ;; Or-Nor
 (rule 20 (lower (bor (vr128_ty ty) (bnot _ (bor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11010101 x y z))
 (rule 21 (lower (bor (vr128_ty ty) x (bnot _ (bor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10001111 x y z))
 
 ;; Or-And
 (rule 22 (lower (bor (vr128_ty ty) (band _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01010111 x y z))
 (rule 23 (lower (bor (vr128_ty ty) x (band _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00011111 x y z))
 
 ;; Or-Nand
 (rule 24 (lower (bor (vr128_ty ty) (bnot _ (band _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11111101 x y z))
 (rule 25 (lower (bor (vr128_ty ty) x (bnot _ (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11101111 x y z))
 
 ;; Or-Xor
 (rule 26 (lower (bor (vr128_ty ty) (bxor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01111101 x y z))
 (rule 27 (lower (bor (vr128_ty ty) x (bxor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101111 x y z))
 
 ;; Or-Nxor
 (rule 28 (lower (bor (vr128_ty ty) (bnot _ (bxor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11010111 x y z))
 (rule 29 (lower (bor (vr128_ty ty) x (bnot _ (bxor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10011111 x y z))
 
 ;; Nor-And
 (rule 30 (lower (bnot (vr128_ty ty) (bor _ (band _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10101000 x y z))
 (rule 31 (lower (bnot (vr128_ty ty) (bor _ x (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11100000 x y z))
 
 ;; Nor-Nand
 (rule 32 (lower (bnot (vr128_ty ty) (bor _ (bnot _ (band _ x y)) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00000010 x y z))
 (rule 33 (lower (bnot (vr128_ty ty) (bor _ x (bnot _ (band _ y z)))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00010000 x y z))
 
 ;; Nor-Xor
 (rule 34 (lower (bnot (vr128_ty ty) (bor _ (bxor _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10000010 x y z))
 (rule 35 (lower (bnot (vr128_ty ty) (bor _ x (bxor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010000 x y z))
 
 ;; Nor-Nxor
 (rule 36 (lower (bnot (vr128_ty ty) (bor _ (bnot _ (bxor _ x y)) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00101000 x y z))
 (rule 37 (lower (bnot (vr128_ty ty) (bor _ x (bnot _ (bxor _ y z)))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01100000 x y z))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1470,98 +1470,98 @@
 
 ;; 3-input Xor
 (rule 10 (lower (bxor (vr128_ty ty) (bxor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101001 x y z))
 (rule 11 (lower (bxor (vr128_ty ty) x (bxor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101001 x y z))
 
 ;; Xor-And
 (rule 12 (lower (bxor (vr128_ty ty) (band _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01010110 x y z))
 (rule 13 (lower (bxor (vr128_ty ty) x (band _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00011110 x y z))
 
 ;; Xor-Nand
 (rule 14 (lower (bxor (vr128_ty ty) (bnot _ (band _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10101001 x y z))
 (rule 15 (lower (bxor (vr128_ty ty) x (bnot _ (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11100001 x y z))
 
 ;; Xor-Or
 (rule 16 (lower (bxor (vr128_ty ty) (bor _ x y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101010 x y z))
 (rule 17 (lower (bxor (vr128_ty ty) x (bor _ y z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01111000 x y z))
 
 ;; Xor-Nor
 (rule 18 (lower (bxor (vr128_ty ty) (bnot _ (bor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010101 x y z))
 (rule 19 (lower (bxor (vr128_ty ty) x (bnot _ (bor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10000111 x y z))
 
 ;; Xor-Nxor
 (rule 18 (lower (bxor (vr128_ty ty) (bnot _ (bxor _ x y)) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010110 x y z))
 (rule 19 (lower (bxor (vr128_ty ty) x (bnot _ (bxor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010110 x y z))
 
 ;; 3-input Nxor
 (rule 20 (lower (bnot (vr128_ty ty) (bxor _ (bxor _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010110 x y z))
 (rule 21 (lower (bnot (vr128_ty ty) (bxor _ x (bxor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010110 x y z))
 
 ;; Nxor-And
 (rule 22 (lower (bnot (vr128_ty ty) (bxor _ (band _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10101001 x y z))
 (rule 23 (lower (bnot (vr128_ty ty) (bxor _ x (band _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b11100001 x y z))
 
 ;; Nxor-Nand
 (rule 24 (lower (bnot (vr128_ty ty) (bxor _ (bnot _ (band _ x y)) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01010110 x y z))
 (rule 25 (lower (bnot (vr128_ty ty) (bxor _ x (bnot _ (band _ y z)))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b00011110 x y z))
 
 ;; Nxor-Or
 (rule 26 (lower (bnot (vr128_ty ty) (bxor _ (bor _ x y) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10010101 x y z))
 (rule 27 (lower (bnot (vr128_ty ty) (bxor _ x (bor _ y z))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10000111 x y z))
 
 ;; Nxor-Nor
 (rule 28 (lower (bnot (vr128_ty ty) (bxor _ (bnot _ (bor _ x y)) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101010 x y z))
 (rule 29 (lower (bnot (vr128_ty ty) (bxor _ x (bnot _ (bor _ y z)))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01111000 x y z))
 
 ;; Xor-Nxor
 (rule 18 (lower (bnot (vr128_ty ty) (bxor _ (bnot _ (bxor _ x y)) z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101001 x y z))
 (rule 19 (lower (bnot (vr128_ty ty) (bxor _ x (bnot _ (bxor _ y z)))))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01101001 x y z))
 
 ;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1588,13 +1588,13 @@
 
 ;; Bitselect-not vector registers.
 (rule 5 (lower (bitselect (vr128_ty ty) x (bnot _ y) z))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b01011100 x y z))
 (rule 6 (lower (bitselect (vr128_ty ty) x y (bnot _ z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10100011 x y z))
 (rule 7 (lower (bitselect (vr128_ty ty) x (bnot _ y) (bnot _ z)))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_eval ty 0b10101100 x y z))
 
 ;; Special-case some float-selection instructions for min/max
@@ -1674,7 +1674,7 @@
 
 ;; Count leading zeros, 128-bit full vector pre-z17.
 (rule (lower (clz $I128 x))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((clz_vec Reg (vec_clz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (clz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 clz_vec 0))
@@ -1693,7 +1693,7 @@
 
 ;; Count leading zeros, 128-bit full vector on z17.
 (rule 2 (lower (clz $I128 x))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_clz $I128 x))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1722,7 +1722,7 @@
 
 ;; Count leading sign-bit copies, 128-bit full vector pre-z17.
 (rule (lower (cls $I128 x))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((x_reg Reg x)
             (ones Reg (vec_imm_splat $I8X16 255))
             (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1746,7 +1746,7 @@
 
 ;; Count leading sign-bit copies, 128-bit full vector on z17.
 (rule 2 (lower (cls $I128 x))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (let ((x_reg Reg x)
             (ones Reg (vec_imm_splat $I8X16 255))
             (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1794,7 +1794,7 @@
 
 ;; Count trailing zeros, 128-bit full vector pre-z17.
     (rule 0 (lower (ctz $I128 x))
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (let ((ctz_vec Reg (vec_ctz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (ctz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 ctz_vec 0))
@@ -1816,7 +1816,7 @@
 
 ;; Count trailing zeros, 128-bit full vector on z17.
 (rule 3 (lower (ctz $I128 x))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_ctz $I128 x))
 
 
@@ -2747,7 +2747,7 @@
 ;;;; Rules for `blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (blendv (ty_vec128 ty) p x y))
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (vec_blend ty p x y))
 
 
@@ -3943,53 +3943,53 @@
 
 ;; Compare (signed) 128-bit integers on z17.
 (rule 2 (icmp_val _ int_cc @ (signed) x @ (value_type (vr128_ty _)) y)
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (bool (vec_elt_icmps x y) (intcc_as_cond int_cc)))
 
 ;; Compare (unsigned) 128-bit integers on z17.
 (rule 1 (icmp_val _ int_cc @ (unsigned) x @ (value_type (vr128_ty _)) y)
-      (if-let true (vxrs_ext3_enabled))
+      (if-let true (has_vxrs_ext3))
       (bool (vec_elt_icmpu x y) (intcc_as_cond int_cc)))
 
 ;; Compare 128-bit integers for equality pre-z17.
 ;; Implemented via element-wise comparison using the all-element true CC flag.
 (rule (icmp_val _ (IntCC.Equal) x @ (value_type (vr128_ty _)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (bool (vec_cmpeqs $I64X2 x y)
             (floatcc_as_cond (FloatCC.Equal))))
 (rule (icmp_val _ (IntCC.NotEqual) x @ (value_type (vr128_ty _)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (bool (vec_cmpeqs $I64X2 x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
 
 ;; Compare (signed) 128-bit integers for relational inequality pre-z17.
 ;; Implemented via synthetic instruction using VECG and VCHLGS.
 (rule (icmp_val _ (IntCC.SignedGreaterThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (vec_int128_scmphi x y))
 (rule (icmp_val _ (IntCC.SignedLessThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (vec_int128_scmphi y x))
 (rule (icmp_val _ (IntCC.SignedGreaterThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (invert_bool (vec_int128_scmphi y x)))
 (rule (icmp_val _ (IntCC.SignedLessThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (invert_bool (vec_int128_scmphi x y)))
 
 ;; Compare (unsigned) 128-bit integers for relational inequality pre-z17.
 ;; Implemented via synthetic instruction using VECLG and VCHLGS.
 (rule (icmp_val _ (IntCC.UnsignedGreaterThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (vec_int128_ucmphi x y))
 (rule (icmp_val _ (IntCC.UnsignedLessThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (vec_int128_ucmphi y x))
 (rule (icmp_val _ (IntCC.UnsignedGreaterThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (invert_bool (vec_int128_ucmphi y x)))
 (rule (icmp_val _ (IntCC.UnsignedLessThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let false (vxrs_ext3_enabled))
+      (if-let false (has_vxrs_ext3))
       (invert_bool (vec_int128_ucmphi x y)))
 
 
