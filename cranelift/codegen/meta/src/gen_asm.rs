@@ -19,6 +19,9 @@ fn include_inst(inst: &Inst) -> bool {
 }
 
 /// Returns the Rust type used for the `IsleConstructorRaw` variants.
+///
+/// RegMem operand types are width-tagged based on the DSL operand width
+/// (e.g. `rm8` → `GprMem8`, `xmm_m128` with `align` → `XmmMemAligned128`).
 fn rust_param_raw(op: &Operand) -> String {
     match op.location.kind() {
         OperandKind::Imm(loc) => {
@@ -32,7 +35,8 @@ fn rust_param_raw(op: &Operand) -> String {
         OperandKind::RegMem(rm) => {
             let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
-            format!("&{reg}Mem{aligned}")
+            let bits = rm.bits();
+            format!("&{reg}Mem{aligned}{bits}")
         }
         OperandKind::Mem(_) => {
             format!("&SyntheticAmode")
@@ -243,7 +247,8 @@ pub fn generate_rust_macro(f: &mut Formatter, insts: &[Inst]) {
 }
 
 /// Returns the type of this operand in ISLE as a part of the ISLE "raw"
-/// constructors.
+/// constructors. RegMem operand types are width-tagged based on the DSL
+/// operand width; see [`rust_param_raw`].
 fn isle_param_raw(op: &Operand) -> String {
     match op.location.kind() {
         OperandKind::Imm(loc) => {
@@ -265,7 +270,8 @@ fn isle_param_raw(op: &Operand) -> String {
         OperandKind::RegMem(rm) => {
             let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
-            format!("{reg}Mem{aligned}")
+            let bits = rm.bits();
+            format!("{reg}Mem{aligned}{bits}")
         }
     }
 }

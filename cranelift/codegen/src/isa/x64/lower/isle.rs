@@ -43,10 +43,224 @@ type BoxAtomic128XchgSeqArgs = Box<Atomic128XchgSeqArgs>;
 /// need to fix the types we'll use.
 type AssemblerInst = asm::Inst<CraneliftRegisters>;
 
+#[derive(Clone)]
 pub struct SinkableLoad {
     inst: Inst,
     addr_input: InsnInput,
     offset: i32,
+}
+
+/// Width-tagged wrappers around [`SinkableLoad`].
+///
+/// A `SinkableLoad` is a load instruction that's a candidate to be sunk (fused)
+/// into another instruction as a memory operand. Because an ISLE rule can be
+/// written where the *consumer* instruction expects a different-width load
+/// than the original CLIF load, using an untagged `SinkableLoad` makes it easy
+/// to construct a "load N bytes into an instruction that reads M bytes" bug
+/// (the exact class we're catching with sized `XmmMem{N}` / `GprMem{N}`
+/// elsewhere).
+///
+/// These newtypes pin the width at the type level: `SinkableLoadN` can only
+/// be constructed via `sinkable_load_N`, which extracts only when the source
+/// `Value`'s CLIF type is exactly N bits wide. A converter
+/// `SinkableLoadN -> {Gpr,Xmm}MemN` is then safe.
+#[derive(Clone)]
+pub struct SinkableLoad8(SinkableLoad);
+#[derive(Clone)]
+pub struct SinkableLoad16(SinkableLoad);
+#[derive(Clone)]
+pub struct SinkableLoad32(SinkableLoad);
+#[derive(Clone)]
+pub struct SinkableLoad64(SinkableLoad);
+#[derive(Clone)]
+pub struct SinkableLoad128(SinkableLoad);
+
+/// Generate the sized-operand helpers for one GPR width. Invoked inside
+/// the `impl generated_code::Context for IsleContext` block.
+///
+/// Parameters: the bit width, the sized newtype names, and explicit names
+/// for each generated method. See the invocation sites for layout.
+macro_rules! sized_gpr_mem_helpers {
+    (
+        $n:literal, $gpr_mem_n:ident, $gpr_mem_imm_n:ident,
+        $put_in_gpr_mem_n:ident, $put_in_gpr_mem_imm_n:ident,
+        $gpr_to_gpr_mem_n:ident, $gpr_to_gpr_mem_imm_n:ident,
+        $gpr_mem_imm_n_imm:ident,
+        $gpr_mem_n_to_gpr_mem:ident, $gpr_mem_imm_n_to_gpr_mem_imm:ident
+    ) => {
+        fn $put_in_gpr_mem_n(&mut self, val: Value) -> $gpr_mem_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_gpr_mem_n),
+                $n,
+            );
+            $gpr_mem_n::unwrap_new(self.put_in_reg_mem(val))
+        }
+
+        fn $put_in_gpr_mem_imm_n(&mut self, val: Value) -> $gpr_mem_imm_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_gpr_mem_imm_n),
+                $n,
+            );
+            $gpr_mem_imm_n::unwrap_new(self.put_in_reg_mem_imm(val))
+        }
+
+        #[inline]
+        fn $gpr_to_gpr_mem_n(&mut self, gpr: Gpr) -> $gpr_mem_n {
+            $gpr_mem_n::from(gpr)
+        }
+
+        #[inline]
+        fn $gpr_to_gpr_mem_imm_n(&mut self, gpr: Gpr) -> $gpr_mem_imm_n {
+            $gpr_mem_imm_n::from(gpr)
+        }
+
+        #[inline]
+        fn $gpr_mem_imm_n_imm(&mut self, simm32: u32) -> $gpr_mem_imm_n {
+            $gpr_mem_imm_n::unwrap_new(RegMemImm::Imm { simm32 })
+        }
+
+        #[inline]
+        fn $gpr_mem_n_to_gpr_mem(&mut self, x: &$gpr_mem_n) -> GprMem {
+            GprMem::unwrap_new(x.clone().into())
+        }
+
+        #[inline]
+        fn $gpr_mem_imm_n_to_gpr_mem_imm(&mut self, x: &$gpr_mem_imm_n) -> GprMemImm {
+            GprMemImm::unwrap_new(x.clone().into())
+        }
+    };
+}
+
+/// Generate the sized-operand helpers for one XMM width. Invoked inside
+/// the `impl generated_code::Context for IsleContext` block. Covers the
+/// non-aligned/aligned variants plus their `Imm` forms.
+macro_rules! sized_xmm_mem_helpers {
+    (
+        $n:literal,
+        $xmm_mem_n:ident, $xmm_mem_aligned_n:ident,
+        $xmm_mem_imm_n:ident, $xmm_mem_aligned_imm_n:ident,
+        $put_in_xmm_mem_n:ident, $put_in_xmm_mem_aligned_n:ident,
+        $put_in_xmm_mem_imm_n:ident, $put_in_xmm_mem_aligned_imm_n:ident,
+        $xmm_to_xmm_mem_n:ident, $xmm_to_xmm_mem_aligned_n:ident,
+        $xmm_to_xmm_mem_imm_n:ident, $xmm_to_xmm_mem_aligned_imm_n:ident,
+        $xmm_mem_imm_n_imm:ident,
+        $xmm_mem_n_to_xmm_mem:ident, $xmm_mem_aligned_n_to_xmm_mem_aligned:ident,
+        $xmm_mem_imm_n_to_xmm_mem_imm:ident,
+        $xmm_mem_aligned_imm_n_to_xmm_mem_aligned_imm:ident
+    ) => {
+        fn $put_in_xmm_mem_n(&mut self, val: Value) -> $xmm_mem_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_xmm_mem_n),
+                $n,
+            );
+            $xmm_mem_n::unwrap_new(self.put_in_xmm_mem(val).to_reg_mem())
+        }
+
+        fn $put_in_xmm_mem_aligned_n(&mut self, val: Value) -> $xmm_mem_aligned_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_xmm_mem_aligned_n),
+                $n,
+            );
+            let sized = $xmm_mem_n::unwrap_new(self.put_in_xmm_mem(val).to_reg_mem());
+            // Round-trip through the un-sized aligning helper so unaligned
+            // memory sources are copied to a register first.
+            let aligned = self.xmm_mem_to_xmm_mem_aligned(&XmmMem::unwrap_new(sized.into()));
+            $xmm_mem_aligned_n::unwrap_new(aligned.into())
+        }
+
+        fn $put_in_xmm_mem_imm_n(&mut self, val: Value) -> $xmm_mem_imm_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_xmm_mem_imm_n),
+                $n,
+            );
+            $xmm_mem_imm_n::unwrap_new(self.put_in_xmm_mem_imm(val).into())
+        }
+
+        fn $put_in_xmm_mem_aligned_imm_n(&mut self, val: Value) -> $xmm_mem_aligned_imm_n {
+            let ty = self.lower_ctx.dfg().value_type(val);
+            assert_eq!(
+                ty.bits(),
+                $n,
+                "{}: expected a {}-bit value, got value of type {ty}",
+                stringify!($put_in_xmm_mem_aligned_imm_n),
+                $n,
+            );
+            let imm = self.put_in_xmm_mem_imm(val);
+            let aligned = self.xmm_mem_imm_to_xmm_mem_aligned_imm(&imm);
+            $xmm_mem_aligned_imm_n::unwrap_new(aligned.into())
+        }
+
+        #[inline]
+        fn $xmm_to_xmm_mem_n(&mut self, xmm: Xmm) -> $xmm_mem_n {
+            $xmm_mem_n::from(xmm)
+        }
+
+        #[inline]
+        fn $xmm_to_xmm_mem_aligned_n(&mut self, xmm: Xmm) -> $xmm_mem_aligned_n {
+            $xmm_mem_aligned_n::from(xmm)
+        }
+
+        #[inline]
+        fn $xmm_to_xmm_mem_imm_n(&mut self, xmm: Xmm) -> $xmm_mem_imm_n {
+            $xmm_mem_imm_n::from(xmm)
+        }
+
+        #[inline]
+        fn $xmm_to_xmm_mem_aligned_imm_n(&mut self, xmm: Xmm) -> $xmm_mem_aligned_imm_n {
+            $xmm_mem_aligned_imm_n::from(xmm)
+        }
+
+        #[inline]
+        fn $xmm_mem_imm_n_imm(&mut self, simm32: u32) -> $xmm_mem_imm_n {
+            $xmm_mem_imm_n::unwrap_new(RegMemImm::Imm { simm32 })
+        }
+
+        #[inline]
+        fn $xmm_mem_n_to_xmm_mem(&mut self, x: &$xmm_mem_n) -> XmmMem {
+            XmmMem::unwrap_new(x.clone().into())
+        }
+
+        #[inline]
+        fn $xmm_mem_aligned_n_to_xmm_mem_aligned(
+            &mut self,
+            x: &$xmm_mem_aligned_n,
+        ) -> XmmMemAligned {
+            XmmMemAligned::unwrap_new(x.clone().into())
+        }
+
+        #[inline]
+        fn $xmm_mem_imm_n_to_xmm_mem_imm(&mut self, x: &$xmm_mem_imm_n) -> XmmMemImm {
+            XmmMemImm::unwrap_new(x.clone().into())
+        }
+
+        #[inline]
+        fn $xmm_mem_aligned_imm_n_to_xmm_mem_aligned_imm(
+            &mut self,
+            x: &$xmm_mem_aligned_imm_n,
+        ) -> XmmMemAlignedImm {
+            XmmMemAlignedImm::unwrap_new(x.clone().into())
+        }
+    };
 }
 
 /// The main entry point for lowering with ISLE.
@@ -379,6 +593,111 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         None
     }
 
+    // Width-tagged sinkable-load extractors. Each only fires when the `Value`
+    // being sunk has a CLIF type of exactly N bits, so the resulting
+    // `SinkableLoadN` carries that width in its type and can be folded into
+    // an N-bit memory operand without a dynamic width check.
+
+    fn sinkable_load_8(&mut self, val: Value) -> Option<SinkableLoad8> {
+        if self.lower_ctx.dfg().value_type(val).bits() != 8 {
+            return None;
+        }
+        self.sinkable_load_exact(val).map(SinkableLoad8)
+    }
+
+    fn sinkable_load_16(&mut self, val: Value) -> Option<SinkableLoad16> {
+        if self.lower_ctx.dfg().value_type(val).bits() != 16 {
+            return None;
+        }
+        self.sinkable_load_exact(val).map(SinkableLoad16)
+    }
+
+    fn sinkable_load_32(&mut self, val: Value) -> Option<SinkableLoad32> {
+        if self.lower_ctx.dfg().value_type(val).bits() != 32 {
+            return None;
+        }
+        self.sinkable_load_exact(val).map(SinkableLoad32)
+    }
+
+    fn sinkable_load_64(&mut self, val: Value) -> Option<SinkableLoad64> {
+        if self.lower_ctx.dfg().value_type(val).bits() != 64 {
+            return None;
+        }
+        self.sinkable_load_exact(val).map(SinkableLoad64)
+    }
+
+    fn sinkable_load_128(&mut self, val: Value) -> Option<SinkableLoad128> {
+        if self.lower_ctx.dfg().value_type(val).bits() != 128 {
+            return None;
+        }
+        self.sinkable_load_exact(val).map(SinkableLoad128)
+    }
+
+    // Conversions from width-tagged sinkable loads to sized memory operands.
+    // These are safe because the width was pinned at extractor tim.e
+
+    #[inline]
+    fn sink_load_8(&mut self, load: &SinkableLoad8) -> SyntheticAmode {
+        self.sink_load(&load.0)
+    }
+    #[inline]
+    fn sink_load_16(&mut self, load: &SinkableLoad16) -> SyntheticAmode {
+        self.sink_load(&load.0)
+    }
+    #[inline]
+    fn sink_load_32(&mut self, load: &SinkableLoad32) -> SyntheticAmode {
+        self.sink_load(&load.0)
+    }
+    #[inline]
+    fn sink_load_64(&mut self, load: &SinkableLoad64) -> SyntheticAmode {
+        self.sink_load(&load.0)
+    }
+    #[inline]
+    fn sink_load_128(&mut self, load: &SinkableLoad128) -> SyntheticAmode {
+        self.sink_load(&load.0)
+    }
+
+    // Direct sized-memory wrappers. Each sinks the load and then wraps the
+    // resulting address at the matching width. Safe by construction.
+
+    #[inline]
+    fn sink_load_8_to_gpr_mem_8(&mut self, load: &SinkableLoad8) -> GprMem8 {
+        GprMem8::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_16_to_gpr_mem_16(&mut self, load: &SinkableLoad16) -> GprMem16 {
+        GprMem16::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_32_to_gpr_mem_32(&mut self, load: &SinkableLoad32) -> GprMem32 {
+        GprMem32::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_64_to_gpr_mem_64(&mut self, load: &SinkableLoad64) -> GprMem64 {
+        GprMem64::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+
+    #[inline]
+    fn sink_load_8_to_xmm_mem_8(&mut self, load: &SinkableLoad8) -> XmmMem8 {
+        XmmMem8::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_16_to_xmm_mem_16(&mut self, load: &SinkableLoad16) -> XmmMem16 {
+        XmmMem16::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_32_to_xmm_mem_32(&mut self, load: &SinkableLoad32) -> XmmMem32 {
+        XmmMem32::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_64_to_xmm_mem_64(&mut self, load: &SinkableLoad64) -> XmmMem64 {
+        XmmMem64::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+    #[inline]
+    fn sink_load_128_to_xmm_mem_128(&mut self, load: &SinkableLoad128) -> XmmMem128 {
+        XmmMem128::unwrap_new(RegMem::mem(self.sink_load(&load.0)))
+    }
+
     fn sink_load(&mut self, load: &SinkableLoad) -> SyntheticAmode {
         self.lower_ctx.sink_inst(load.inst);
         let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
@@ -421,6 +740,164 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         SyntheticAmode::ConstantOffset(c)
     }
 
+    /// Wrap a `VCodeConstant` that holds a 128-bit value as an `XmmMem128`
+    /// operand. The caller is responsible for ensuring the pool entry is
+    /// actually 128 bits wide (e.g. via `emit_u128_le_const`). There is
+    /// intentionally no auto-conversion `VCodeConstant -> XmmMem128`
+    /// because `VCodeConstant` doesn't carry width.
+    #[inline]
+    fn const_to_xmm_mem_128(&mut self, c: VCodeConstant) -> XmmMem128 {
+        XmmMem128::unwrap_new(RegMem::mem(SyntheticAmode::ConstantOffset(c)))
+    }
+
+    /// Wrap a `SyntheticAmode` as a 128-bit XMM memory operand. Pins the
+    /// width at the call site; no auto-conversion is provided.
+    #[inline]
+    fn synthetic_amode_to_xmm_mem_128(&mut self, amode: &SyntheticAmode) -> XmmMem128 {
+        XmmMem128::unwrap_new(RegMem::mem(amode.clone()))
+    }
+
+    /// Wrap a `SyntheticAmode` as a 64-bit XMM memory operand.
+    #[inline]
+    fn synthetic_amode_to_xmm_mem_64(&mut self, amode: &SyntheticAmode) -> XmmMem64 {
+        XmmMem64::unwrap_new(RegMem::mem(amode.clone()))
+    }
+
+    /// Wrap a `SyntheticAmode` as a 32-bit XMM memory operand.
+    #[inline]
+    fn synthetic_amode_to_xmm_mem_32(&mut self, amode: &SyntheticAmode) -> XmmMem32 {
+        XmmMem32::unwrap_new(RegMem::mem(amode.clone()))
+    }
+
+    /// Unchecked narrowing from an un-sized `GprMem` to a sized
+    /// `GprMem{N}`. Used only by `x64_movzx` / `x64_movsx`, whose
+    /// per-ExtMode rules statically pin the source width.
+    #[inline]
+    fn gpr_mem_as_gpr_mem_8(&mut self, gm: &GprMem) -> GprMem8 {
+        GprMem8::unwrap_new(gm.clone().into())
+    }
+    #[inline]
+    fn gpr_mem_as_gpr_mem_16(&mut self, gm: &GprMem) -> GprMem16 {
+        GprMem16::unwrap_new(gm.clone().into())
+    }
+    #[inline]
+    fn gpr_mem_as_gpr_mem_32(&mut self, gm: &GprMem) -> GprMem32 {
+        GprMem32::unwrap_new(gm.clone().into())
+    }
+    #[inline]
+    fn gpr_mem_as_gpr_mem_64(&mut self, gm: &GprMem) -> GprMem64 {
+        GprMem64::unwrap_new(gm.clone().into())
+    }
+
+    /// Unchecked narrowing from an un-sized `XmmMem` / `XmmMemAligned`
+    /// to a sized variant. Used at fixed-width call sites (e.g. vector
+    /// shift helpers `x64_psllw` etc.) where the width is implied by
+    /// the opcode rather than a Cranelift `Type`.
+    #[inline]
+    fn xmm_mem_as_xmm_mem_32(&mut self, xm: &XmmMem) -> XmmMem32 {
+        XmmMem32::unwrap_new(xm.clone().into())
+    }
+    #[inline]
+    fn xmm_mem_as_xmm_mem_64(&mut self, xm: &XmmMem) -> XmmMem64 {
+        XmmMem64::unwrap_new(xm.clone().into())
+    }
+    #[inline]
+    fn xmm_mem_as_xmm_mem_128(&mut self, xm: &XmmMem) -> XmmMem128 {
+        XmmMem128::unwrap_new(xm.clone().into())
+    }
+    #[inline]
+    fn xmm_mem_aligned_as_xmm_mem_aligned_32(&mut self, xm: &XmmMemAligned) -> XmmMemAligned32 {
+        XmmMemAligned32::unwrap_new(xm.clone().into())
+    }
+    #[inline]
+    fn xmm_mem_aligned_as_xmm_mem_aligned_64(&mut self, xm: &XmmMemAligned) -> XmmMemAligned64 {
+        XmmMemAligned64::unwrap_new(xm.clone().into())
+    }
+    #[inline]
+    fn xmm_mem_aligned_as_xmm_mem_aligned_128(&mut self, xm: &XmmMemAligned) -> XmmMemAligned128 {
+        XmmMemAligned128::unwrap_new(xm.clone().into())
+    }
+
+    fn gpr_mem_8_for_ty(&mut self, ty: Type, gm: &GprMem) -> GprMem8 {
+        assert_eq!(
+            ty.bits(),
+            8,
+            "gpr_mem_8_for_ty: expected an 8-bit Type, got {ty}",
+        );
+        GprMem8::unwrap_new(gm.clone().into())
+    }
+    fn gpr_mem_16_for_ty(&mut self, ty: Type, gm: &GprMem) -> GprMem16 {
+        assert_eq!(
+            ty.bits(),
+            16,
+            "gpr_mem_16_for_ty: expected a 16-bit Type, got {ty}",
+        );
+        GprMem16::unwrap_new(gm.clone().into())
+    }
+    fn gpr_mem_32_for_ty(&mut self, ty: Type, gm: &GprMem) -> GprMem32 {
+        assert_eq!(
+            ty.bits(),
+            32,
+            "gpr_mem_32_for_ty: expected a 32-bit Type, got {ty}",
+        );
+        GprMem32::unwrap_new(gm.clone().into())
+    }
+    fn gpr_mem_64_for_ty(&mut self, ty: Type, gm: &GprMem) -> GprMem64 {
+        assert_eq!(
+            ty.bits(),
+            64,
+            "gpr_mem_64_for_ty: expected a 64-bit Type, got {ty}",
+        );
+        GprMem64::unwrap_new(gm.clone().into())
+    }
+    fn gpr_mem_as_gpr_mem_32_or_widened_in_reg(&mut self, ty: Type, gm: &GprMem) -> GprMem32 {
+        let safe = match gm.clone().to_reg_mem() {
+            _ if ty.bits() == 32 => true,
+            RegMem::Reg { .. } => true,
+            RegMem::Mem {
+                addr: SyntheticAmode::ConstantOffset(_),
+            } => true,
+            RegMem::Mem { .. } => false,
+        };
+        assert!(
+            safe,
+            "gpr_mem_as_gpr_mem_32_or_widened_in_reg: cannot widen a {ty} memory operand"
+        );
+        GprMem32::unwrap_new(gm.clone().into())
+    }
+    fn xmm_mem_32_for_ty(&mut self, ty: Type, xm: &XmmMem) -> XmmMem32 {
+        assert_eq!(
+            ty.bits(),
+            32,
+            "xmm_mem_32_for_ty: expected a 32-bit Type, got {ty}",
+        );
+        XmmMem32::unwrap_new(xm.clone().into())
+    }
+    fn xmm_mem_64_for_ty(&mut self, ty: Type, xm: &XmmMem) -> XmmMem64 {
+        assert_eq!(
+            ty.bits(),
+            64,
+            "xmm_mem_64_for_ty: expected a 64-bit Type, got {ty}",
+        );
+        XmmMem64::unwrap_new(xm.clone().into())
+    }
+    fn xmm_mem_128_for_ty(&mut self, ty: Type, xm: &XmmMem) -> XmmMem128 {
+        assert_eq!(
+            ty.bits(),
+            128,
+            "xmm_mem_128_for_ty: expected a 128-bit Type, got {ty}",
+        );
+        XmmMem128::unwrap_new(xm.clone().into())
+    }
+    fn xmm_mem_aligned_128_for_ty(&mut self, ty: Type, xm: &XmmMemAligned) -> XmmMemAligned128 {
+        assert_eq!(
+            ty.bits(),
+            128,
+            "xmm_mem_aligned_128_for_ty: expected a 128-bit Type, got {ty}",
+        );
+        XmmMemAligned128::unwrap_new(xm.clone().into())
+    }
+
     #[inline]
     fn writable_gpr_to_reg(&mut self, r: WritableGpr) -> WritableReg {
         r.to_writable_reg()
@@ -429,6 +906,104 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn writable_xmm_to_reg(&mut self, r: WritableXmm) -> WritableReg {
         r.to_writable_reg()
+    }
+
+    #[inline]
+    fn synthetic_amode_to_gpr_mem_8(&mut self, amode: &SyntheticAmode) -> GprMem8 {
+        GprMem8::unwrap_new(RegMem::mem(amode.clone()))
+    }
+    #[inline]
+    fn synthetic_amode_to_gpr_mem_16(&mut self, amode: &SyntheticAmode) -> GprMem16 {
+        GprMem16::unwrap_new(RegMem::mem(amode.clone()))
+    }
+    #[inline]
+    fn synthetic_amode_to_gpr_mem_32(&mut self, amode: &SyntheticAmode) -> GprMem32 {
+        GprMem32::unwrap_new(RegMem::mem(amode.clone()))
+    }
+    #[inline]
+    fn synthetic_amode_to_gpr_mem_64(&mut self, amode: &SyntheticAmode) -> GprMem64 {
+        GprMem64::unwrap_new(RegMem::mem(amode.clone()))
+    }
+    #[inline]
+    fn synthetic_amode_to_xmm_mem_8(&mut self, amode: &SyntheticAmode) -> XmmMem8 {
+        XmmMem8::unwrap_new(RegMem::mem(amode.clone()))
+    }
+    #[inline]
+    fn synthetic_amode_to_xmm_mem_16(&mut self, amode: &SyntheticAmode) -> XmmMem16 {
+        XmmMem16::unwrap_new(RegMem::mem(amode.clone()))
+    }
+
+    #[inline]
+    fn reg_to_gpr_mem_8(&mut self, r: Reg) -> GprMem8 {
+        GprMem8::unwrap_new(RegMem::reg(r))
+    }
+    #[inline]
+    fn reg_to_gpr_mem_16(&mut self, r: Reg) -> GprMem16 {
+        GprMem16::unwrap_new(RegMem::reg(r))
+    }
+    #[inline]
+    fn reg_to_gpr_mem_32(&mut self, r: Reg) -> GprMem32 {
+        GprMem32::unwrap_new(RegMem::reg(r))
+    }
+    #[inline]
+    fn reg_to_gpr_mem_64(&mut self, r: Reg) -> GprMem64 {
+        GprMem64::unwrap_new(RegMem::reg(r))
+    }
+
+    #[inline]
+    fn writable_gpr_to_gpr_mem_8(&mut self, r: WritableGpr) -> GprMem8 {
+        GprMem8::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+    #[inline]
+    fn writable_gpr_to_gpr_mem_16(&mut self, r: WritableGpr) -> GprMem16 {
+        GprMem16::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+    #[inline]
+    fn writable_gpr_to_gpr_mem_32(&mut self, r: WritableGpr) -> GprMem32 {
+        GprMem32::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+    #[inline]
+    fn writable_gpr_to_gpr_mem_64(&mut self, r: WritableGpr) -> GprMem64 {
+        GprMem64::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+    #[inline]
+    fn writable_xmm_to_xmm_mem_128(&mut self, r: WritableXmm) -> XmmMem128 {
+        XmmMem128::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+    #[inline]
+    fn writable_xmm_to_xmm_mem_aligned_128(&mut self, r: WritableXmm) -> XmmMemAligned128 {
+        XmmMemAligned128::unwrap_new(RegMem::reg(r.to_reg().to_reg()))
+    }
+
+    #[inline]
+    fn xmm_mem_32_to_xmm_mem_aligned_32(&mut self, x: &XmmMem32) -> XmmMemAligned32 {
+        match XmmMemAligned32::new(x.clone().into()) {
+            Some(a) => a,
+            None => match x.clone().into() {
+                RegMem::Mem { addr } => self.load_xmm_unaligned(addr).into(),
+                _ => unreachable!(),
+            },
+        }
+    }
+    #[inline]
+    fn xmm_mem_64_to_xmm_mem_aligned_64(&mut self, x: &XmmMem64) -> XmmMemAligned64 {
+        match XmmMemAligned64::new(x.clone().into()) {
+            Some(a) => a,
+            None => match x.clone().into() {
+                RegMem::Mem { addr } => self.load_xmm_unaligned(addr).into(),
+                _ => unreachable!(),
+            },
+        }
+    }
+    #[inline]
+    fn xmm_mem_128_to_xmm_mem_aligned_128(&mut self, x: &XmmMem128) -> XmmMemAligned128 {
+        match XmmMemAligned128::new(x.clone().into()) {
+            Some(a) => a,
+            None => match x.clone().into() {
+                RegMem::Mem { addr } => self.load_xmm_unaligned(addr).into(),
+                _ => unreachable!(),
+            },
+        }
     }
 
     fn ishl_i8x16_mask_for_const(&mut self, amt: u32) -> SyntheticAmode {
@@ -576,6 +1151,178 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn gpr_to_gpr_mem_imm(&mut self, gpr: Gpr) -> GprMemImm {
         GprMemImm::from(gpr)
     }
+
+    // ---- Sized operand conversions ----
+    //
+    // For each sized newtype `{Gpr,Xmm}Mem{Imm,Aligned,AlignedImm}{N}`, we
+    // generate a small fixed set of helpers:
+    //
+    //   * `put_in_..._N(Value)` converts a CLIF `Value` to the sized
+    //     operand. It **release-asserts** (not `debug_assert!`) that the
+    //     value's CLIF type is N bits wide, so a width mismatch at lowering
+    //     time becomes a hard failure instead of silently emitting a wider
+    //     load than intended.
+    //   * `{gpr,xmm}_to_..._N({Gpr,Xmm})` wraps a typed register into the
+    //     sized operand unconditionally -- `Gpr`/`Xmm` carry no width; the
+    //     consumer's instruction determines it.
+    //   * `..._N_to_...` downcasts a sized operand back to its un-sized
+    //     form. These are transition bridges into still-un-sized helpers
+    //     (mostly auto-generated assembler constructors); they should
+    //     go away as the refactor proceeds.
+    //
+    // A `{gpr,xmm}_mem_imm_N_imm(u32)` typed-immediate constructor is also
+    // provided so call sites can build `GprMemImm{N}` without having to
+    // pierce the sized wrapper via `RegMemImm.Imm`.
+
+    sized_gpr_mem_helpers!(
+        8,
+        GprMem8,
+        GprMemImm8,
+        put_in_gpr_mem_8,
+        put_in_gpr_mem_imm_8,
+        gpr_to_gpr_mem_8,
+        gpr_to_gpr_mem_imm_8,
+        gpr_mem_imm_8_imm,
+        gpr_mem_8_to_gpr_mem,
+        gpr_mem_imm_8_to_gpr_mem_imm
+    );
+    sized_gpr_mem_helpers!(
+        16,
+        GprMem16,
+        GprMemImm16,
+        put_in_gpr_mem_16,
+        put_in_gpr_mem_imm_16,
+        gpr_to_gpr_mem_16,
+        gpr_to_gpr_mem_imm_16,
+        gpr_mem_imm_16_imm,
+        gpr_mem_16_to_gpr_mem,
+        gpr_mem_imm_16_to_gpr_mem_imm
+    );
+    sized_gpr_mem_helpers!(
+        32,
+        GprMem32,
+        GprMemImm32,
+        put_in_gpr_mem_32,
+        put_in_gpr_mem_imm_32,
+        gpr_to_gpr_mem_32,
+        gpr_to_gpr_mem_imm_32,
+        gpr_mem_imm_32_imm,
+        gpr_mem_32_to_gpr_mem,
+        gpr_mem_imm_32_to_gpr_mem_imm
+    );
+    sized_gpr_mem_helpers!(
+        64,
+        GprMem64,
+        GprMemImm64,
+        put_in_gpr_mem_64,
+        put_in_gpr_mem_imm_64,
+        gpr_to_gpr_mem_64,
+        gpr_to_gpr_mem_imm_64,
+        gpr_mem_imm_64_imm,
+        gpr_mem_64_to_gpr_mem,
+        gpr_mem_imm_64_to_gpr_mem_imm
+    );
+
+    sized_xmm_mem_helpers!(
+        8,
+        XmmMem8,
+        XmmMemAligned8,
+        XmmMemImm8,
+        XmmMemAlignedImm8,
+        put_in_xmm_mem_8,
+        put_in_xmm_mem_aligned_8,
+        put_in_xmm_mem_imm_8,
+        put_in_xmm_mem_aligned_imm_8,
+        xmm_to_xmm_mem_8,
+        xmm_to_xmm_mem_aligned_8,
+        xmm_to_xmm_mem_imm_8,
+        xmm_to_xmm_mem_aligned_imm_8,
+        xmm_mem_imm_8_imm,
+        xmm_mem_8_to_xmm_mem,
+        xmm_mem_aligned_8_to_xmm_mem_aligned,
+        xmm_mem_imm_8_to_xmm_mem_imm,
+        xmm_mem_aligned_imm_8_to_xmm_mem_aligned_imm
+    );
+    sized_xmm_mem_helpers!(
+        16,
+        XmmMem16,
+        XmmMemAligned16,
+        XmmMemImm16,
+        XmmMemAlignedImm16,
+        put_in_xmm_mem_16,
+        put_in_xmm_mem_aligned_16,
+        put_in_xmm_mem_imm_16,
+        put_in_xmm_mem_aligned_imm_16,
+        xmm_to_xmm_mem_16,
+        xmm_to_xmm_mem_aligned_16,
+        xmm_to_xmm_mem_imm_16,
+        xmm_to_xmm_mem_aligned_imm_16,
+        xmm_mem_imm_16_imm,
+        xmm_mem_16_to_xmm_mem,
+        xmm_mem_aligned_16_to_xmm_mem_aligned,
+        xmm_mem_imm_16_to_xmm_mem_imm,
+        xmm_mem_aligned_imm_16_to_xmm_mem_aligned_imm
+    );
+    sized_xmm_mem_helpers!(
+        32,
+        XmmMem32,
+        XmmMemAligned32,
+        XmmMemImm32,
+        XmmMemAlignedImm32,
+        put_in_xmm_mem_32,
+        put_in_xmm_mem_aligned_32,
+        put_in_xmm_mem_imm_32,
+        put_in_xmm_mem_aligned_imm_32,
+        xmm_to_xmm_mem_32,
+        xmm_to_xmm_mem_aligned_32,
+        xmm_to_xmm_mem_imm_32,
+        xmm_to_xmm_mem_aligned_imm_32,
+        xmm_mem_imm_32_imm,
+        xmm_mem_32_to_xmm_mem,
+        xmm_mem_aligned_32_to_xmm_mem_aligned,
+        xmm_mem_imm_32_to_xmm_mem_imm,
+        xmm_mem_aligned_imm_32_to_xmm_mem_aligned_imm
+    );
+    sized_xmm_mem_helpers!(
+        64,
+        XmmMem64,
+        XmmMemAligned64,
+        XmmMemImm64,
+        XmmMemAlignedImm64,
+        put_in_xmm_mem_64,
+        put_in_xmm_mem_aligned_64,
+        put_in_xmm_mem_imm_64,
+        put_in_xmm_mem_aligned_imm_64,
+        xmm_to_xmm_mem_64,
+        xmm_to_xmm_mem_aligned_64,
+        xmm_to_xmm_mem_imm_64,
+        xmm_to_xmm_mem_aligned_imm_64,
+        xmm_mem_imm_64_imm,
+        xmm_mem_64_to_xmm_mem,
+        xmm_mem_aligned_64_to_xmm_mem_aligned,
+        xmm_mem_imm_64_to_xmm_mem_imm,
+        xmm_mem_aligned_imm_64_to_xmm_mem_aligned_imm
+    );
+    sized_xmm_mem_helpers!(
+        128,
+        XmmMem128,
+        XmmMemAligned128,
+        XmmMemImm128,
+        XmmMemAlignedImm128,
+        put_in_xmm_mem_128,
+        put_in_xmm_mem_aligned_128,
+        put_in_xmm_mem_imm_128,
+        put_in_xmm_mem_aligned_imm_128,
+        xmm_to_xmm_mem_128,
+        xmm_to_xmm_mem_aligned_128,
+        xmm_to_xmm_mem_imm_128,
+        xmm_to_xmm_mem_aligned_imm_128,
+        xmm_mem_imm_128_imm,
+        xmm_mem_128_to_xmm_mem,
+        xmm_mem_aligned_128_to_xmm_mem_aligned,
+        xmm_mem_imm_128_to_xmm_mem_imm,
+        xmm_mem_aligned_imm_128_to_xmm_mem_aligned_imm
+    );
 
     #[inline]
     fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
@@ -1111,6 +1858,47 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    // Sized variants of `is_xmm`/`is_mem`. Each extracts the inner
+    // `Xmm`/`SyntheticAmode` from a `XmmMem{N}`. No width check is
+    // needed -- the sized wrapper already pinned it.
+
+    fn is_xmm_32(&mut self, src: &XmmMem32) -> Option<Xmm> {
+        match src.clone().into() {
+            RegMem::Reg { reg } => Xmm::new(reg),
+            _ => None,
+        }
+    }
+    fn is_xmm_64(&mut self, src: &XmmMem64) -> Option<Xmm> {
+        match src.clone().into() {
+            RegMem::Reg { reg } => Xmm::new(reg),
+            _ => None,
+        }
+    }
+    fn is_xmm_128(&mut self, src: &XmmMem128) -> Option<Xmm> {
+        match src.clone().into() {
+            RegMem::Reg { reg } => Xmm::new(reg),
+            _ => None,
+        }
+    }
+    fn is_mem_32(&mut self, src: &XmmMem32) -> Option<SyntheticAmode> {
+        match src.clone().into() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
+        }
+    }
+    fn is_mem_64(&mut self, src: &XmmMem64) -> Option<SyntheticAmode> {
+        match src.clone().into() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
+        }
+    }
+    fn is_mem_128(&mut self, src: &XmmMem128) -> Option<SyntheticAmode> {
+        match src.clone().into() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
+        }
+    }
+
     // Custom constructors for `mulx` which only calculates the high half of the
     // result meaning that the same output operand is used in both destination
     // registers. This is in contrast to the assembler-generated version of this
@@ -1180,17 +1968,25 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_gpr_mem_to_assembler_read_gpr_mem(&self, read: &GprMem) -> asm::GprMem<Gpr, Gpr> {
+    // These convert helpers are called from code generated by the
+    // `cranelift-assembler-x64` crate; each accepts any sized
+    // `{Gpr,Xmm}Mem{Aligned}{N}` newtype via `Clone + Into<RegMem>`, so
+    // the width-tagged types produced by the generator flow through a
+    // single implementation.
+
+    fn convert_gpr_mem_to_assembler_read_gpr_mem<T: Clone + Into<RegMem>>(
+        &self,
+        read: &T,
+    ) -> asm::GprMem<Gpr, Gpr> {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
             RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_xmm_mem_to_assembler_read_xmm_mem_aligned(
+    fn convert_xmm_mem_to_assembler_read_xmm_mem_aligned<T: Clone + Into<RegMem>>(
         &self,
-        read: &XmmMemAligned,
+        read: &T,
     ) -> asm::XmmMem<Xmm, Gpr> {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::XmmMem::Xmm(Xmm::new(reg).unwrap()),
@@ -1198,18 +1994,19 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_xmm_mem_to_assembler_read_xmm_mem(&self, read: &XmmMem) -> asm::XmmMem<Xmm, Gpr> {
+    fn convert_xmm_mem_to_assembler_read_xmm_mem<T: Clone + Into<RegMem>>(
+        &self,
+        read: &T,
+    ) -> asm::XmmMem<Xmm, Gpr> {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::XmmMem::Xmm(Xmm::new(reg).unwrap()),
             RegMem::Mem { addr } => asm::XmmMem::Mem(addr.into()),
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_xmm_mem_to_assembler_write_xmm_mem(
+    fn convert_xmm_mem_to_assembler_write_xmm_mem<T: Clone + Into<RegMem>>(
         &self,
-        write: &XmmMem,
+        write: &T,
     ) -> asm::XmmMem<Writable<Xmm>, Gpr> {
         match write.clone().into() {
             RegMem::Reg { reg } => asm::XmmMem::Xmm(Writable::from_reg(Xmm::new(reg).unwrap())),
@@ -1217,10 +2014,9 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_xmm_mem_to_assembler_write_xmm_mem_aligned(
+    fn convert_xmm_mem_to_assembler_write_xmm_mem_aligned<T: Clone + Into<RegMem>>(
         &self,
-        write: &XmmMemAligned,
+        write: &T,
     ) -> asm::XmmMem<Writable<Xmm>, Gpr> {
         match write.clone().into() {
             RegMem::Reg { reg } => asm::XmmMem::Xmm(Writable::from_reg(Xmm::new(reg).unwrap())),
@@ -1228,10 +2024,9 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_gpr_mem_to_assembler_read_write_gpr_mem(
+    fn convert_gpr_mem_to_assembler_read_write_gpr_mem<T: Clone + Into<RegMem>>(
         &mut self,
-        read: &GprMem,
+        read: &T,
     ) -> asm::GprMem<PairedGpr, Gpr> {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::GprMem::Gpr(
@@ -1243,10 +2038,9 @@ impl IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    /// Helper used by code generated by the `cranelift-assembler-x64` crate.
-    fn convert_gpr_mem_to_assembler_write_gpr_mem(
+    fn convert_gpr_mem_to_assembler_write_gpr_mem<T: Clone + Into<RegMem>>(
         &mut self,
-        read: &GprMem,
+        read: &T,
     ) -> asm::GprMem<WritableGpr, Gpr> {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::GprMem::Gpr(WritableGpr::from_reg(Gpr::new(reg).unwrap())),
