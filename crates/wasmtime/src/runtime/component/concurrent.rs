@@ -1695,6 +1695,7 @@ impl StoreOpaque {
     /// needed too.
     fn set_thread(&mut self, thread: impl Into<CurrentThread>) -> Result<CurrentThread> {
         let thread = thread.into();
+        let state = self.concurrent_state_mut();
         let old_thread = mem::replace(&mut state.current_thread, thread);
 
         // First thing to do after swapping threads is updating the context
@@ -1706,13 +1707,15 @@ impl StoreOpaque {
         // this may be forgotten.
         if let Some(old_thread) = old_thread.guest() {
             let old_context = self.vm_store_context().component_context;
-            state.get_mut(old_thread.thread)?.context = old_context;
+            self.concurrent_state_mut()
+                .get_mut(old_thread.thread)?
+                .context = old_context;
         }
         if cfg!(debug_assertions) {
             self.vm_store_context_mut().component_context = [u32::MAX; 2];
         }
         if let Some(thread) = thread.guest() {
-            let thread = state.get_mut(thread.thread)?;
+            let thread = self.concurrent_state_mut().get_mut(thread.thread)?;
             let context = thread.context;
             if cfg!(debug_assertions) {
                 thread.context = [u32::MAX; 2];
@@ -1734,7 +1737,7 @@ impl StoreOpaque {
                 .set_task_may_block(false)
         }
 
-        if let Some(thread) = thread.guest() {
+        if thread.guest().is_some() {
             self.set_task_may_block()?;
         }
 

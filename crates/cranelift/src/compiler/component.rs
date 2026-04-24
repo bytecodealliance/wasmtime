@@ -1547,7 +1547,7 @@ impl<'a> TrampolineCompiler<'a> {
                 .with_alias_region(Some(ir::AliasRegion::Vmctx))
                 .with_can_move(),
             caller_vmctx,
-            i32::try_from(self.offsets.ptr.vmctx_store_context()).unwrap(),
+            i32::from(self.offsets.ptr.vmctx_store_context()),
         )
     }
 
