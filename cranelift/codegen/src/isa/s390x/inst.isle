@@ -1584,8 +1584,6 @@
 (extern constructor mie3_enabled mie3_enabled)
 (decl pure mie4_enabled () bool)
 (extern constructor mie4_enabled mie4_enabled)
-(decl pure mie4_disabled () bool)
-(extern constructor mie4_disabled mie4_disabled)
 
 (decl pure vxrs_ext2_enabled () bool)
 (extern constructor vxrs_ext2_enabled vxrs_ext2_enabled)
