@@ -694,15 +694,43 @@
 (type WritableGpr (primitive WritableGpr))
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
+(type GprMem8 extern (enum))
+(type GprMem16 extern (enum))
+(type GprMem32 extern (enum))
+(type GprMem64 extern (enum))
 (type GprMemImm extern (enum))
+(type GprMemImm8 extern (enum))
+(type GprMemImm16 extern (enum))
+(type GprMemImm32 extern (enum))
+(type GprMemImm64 extern (enum))
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
 (type OptionWritableXmm (primitive OptionWritableXmm))
 (type XmmMem extern (enum))
+(type XmmMem8 extern (enum))
+(type XmmMem16 extern (enum))
+(type XmmMem32 extern (enum))
+(type XmmMem64 extern (enum))
+(type XmmMem128 extern (enum))
 (type XmmMemAligned extern (enum))
+(type XmmMemAligned8 extern (enum))
+(type XmmMemAligned16 extern (enum))
+(type XmmMemAligned32 extern (enum))
+(type XmmMemAligned64 extern (enum))
+(type XmmMemAligned128 extern (enum))
 (type XmmMemImm extern (enum))
+(type XmmMemImm8 extern (enum))
+(type XmmMemImm16 extern (enum))
+(type XmmMemImm32 extern (enum))
+(type XmmMemImm64 extern (enum))
+(type XmmMemImm128 extern (enum))
 (type XmmMemAlignedImm extern (enum))
+(type XmmMemAlignedImm8 extern (enum))
+(type XmmMemAlignedImm16 extern (enum))
+(type XmmMemAlignedImm32 extern (enum))
+(type XmmMemAlignedImm64 extern (enum))
+(type XmmMemAlignedImm128 extern (enum))
 
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
@@ -874,6 +902,211 @@
 (rule (put_in_gpr_mem_imm val)
       (gpr_mem_imm_new (put_in_reg_mem_imm val)))
 
+;; Sized operand helpers.
+;;
+;; It is possible to convert:
+;; * Value -> sized operand (checks size dynamically)
+;; * Reg -> sized operand (the size is a check for the memory operand
+;;                         size; it's fine to upsize a register)
+;; * immediate -> sized operand (likewise)
+;; * sized operand -> unsized operand (it's always safe to drop
+;;                                     the type-level information)
+
+(decl put_in_gpr_mem_8 (Value) GprMem8)
+(extern constructor put_in_gpr_mem_8 put_in_gpr_mem_8)
+(decl put_in_gpr_mem_imm_8 (Value) GprMemImm8)
+(extern constructor put_in_gpr_mem_imm_8 put_in_gpr_mem_imm_8)
+(decl gpr_to_gpr_mem_8 (Gpr) GprMem8)
+(extern constructor gpr_to_gpr_mem_8 gpr_to_gpr_mem_8)
+(decl gpr_to_gpr_mem_imm_8 (Gpr) GprMemImm8)
+(extern constructor gpr_to_gpr_mem_imm_8 gpr_to_gpr_mem_imm_8)
+(decl gpr_mem_imm_8_imm (u32) GprMemImm8)
+(extern constructor gpr_mem_imm_8_imm gpr_mem_imm_8_imm)
+(decl gpr_mem_8_to_gpr_mem (GprMem8) GprMem)
+(extern constructor gpr_mem_8_to_gpr_mem gpr_mem_8_to_gpr_mem)
+(decl gpr_mem_imm_8_to_gpr_mem_imm (GprMemImm8) GprMemImm)
+(extern constructor gpr_mem_imm_8_to_gpr_mem_imm gpr_mem_imm_8_to_gpr_mem_imm)
+
+(decl put_in_gpr_mem_16 (Value) GprMem16)
+(extern constructor put_in_gpr_mem_16 put_in_gpr_mem_16)
+(decl put_in_gpr_mem_imm_16 (Value) GprMemImm16)
+(extern constructor put_in_gpr_mem_imm_16 put_in_gpr_mem_imm_16)
+(decl gpr_to_gpr_mem_16 (Gpr) GprMem16)
+(extern constructor gpr_to_gpr_mem_16 gpr_to_gpr_mem_16)
+(decl gpr_to_gpr_mem_imm_16 (Gpr) GprMemImm16)
+(extern constructor gpr_to_gpr_mem_imm_16 gpr_to_gpr_mem_imm_16)
+(decl gpr_mem_imm_16_imm (u32) GprMemImm16)
+(extern constructor gpr_mem_imm_16_imm gpr_mem_imm_16_imm)
+(decl gpr_mem_16_to_gpr_mem (GprMem16) GprMem)
+(extern constructor gpr_mem_16_to_gpr_mem gpr_mem_16_to_gpr_mem)
+(decl gpr_mem_imm_16_to_gpr_mem_imm (GprMemImm16) GprMemImm)
+(extern constructor gpr_mem_imm_16_to_gpr_mem_imm gpr_mem_imm_16_to_gpr_mem_imm)
+
+(decl put_in_gpr_mem_32 (Value) GprMem32)
+(extern constructor put_in_gpr_mem_32 put_in_gpr_mem_32)
+(decl put_in_gpr_mem_imm_32 (Value) GprMemImm32)
+(extern constructor put_in_gpr_mem_imm_32 put_in_gpr_mem_imm_32)
+(decl gpr_to_gpr_mem_32 (Gpr) GprMem32)
+(extern constructor gpr_to_gpr_mem_32 gpr_to_gpr_mem_32)
+(decl gpr_to_gpr_mem_imm_32 (Gpr) GprMemImm32)
+(extern constructor gpr_to_gpr_mem_imm_32 gpr_to_gpr_mem_imm_32)
+(decl gpr_mem_imm_32_imm (u32) GprMemImm32)
+(extern constructor gpr_mem_imm_32_imm gpr_mem_imm_32_imm)
+(decl gpr_mem_32_to_gpr_mem (GprMem32) GprMem)
+(extern constructor gpr_mem_32_to_gpr_mem gpr_mem_32_to_gpr_mem)
+(decl gpr_mem_imm_32_to_gpr_mem_imm (GprMemImm32) GprMemImm)
+(extern constructor gpr_mem_imm_32_to_gpr_mem_imm gpr_mem_imm_32_to_gpr_mem_imm)
+
+(decl put_in_gpr_mem_64 (Value) GprMem64)
+(extern constructor put_in_gpr_mem_64 put_in_gpr_mem_64)
+(decl put_in_gpr_mem_imm_64 (Value) GprMemImm64)
+(extern constructor put_in_gpr_mem_imm_64 put_in_gpr_mem_imm_64)
+(decl gpr_to_gpr_mem_64 (Gpr) GprMem64)
+(extern constructor gpr_to_gpr_mem_64 gpr_to_gpr_mem_64)
+(decl gpr_to_gpr_mem_imm_64 (Gpr) GprMemImm64)
+(extern constructor gpr_to_gpr_mem_imm_64 gpr_to_gpr_mem_imm_64)
+(decl gpr_mem_imm_64_imm (u32) GprMemImm64)
+(extern constructor gpr_mem_imm_64_imm gpr_mem_imm_64_imm)
+(decl gpr_mem_64_to_gpr_mem (GprMem64) GprMem)
+(extern constructor gpr_mem_64_to_gpr_mem gpr_mem_64_to_gpr_mem)
+(decl gpr_mem_imm_64_to_gpr_mem_imm (GprMemImm64) GprMemImm)
+(extern constructor gpr_mem_imm_64_to_gpr_mem_imm gpr_mem_imm_64_to_gpr_mem_imm)
+
+(decl put_in_xmm_mem_8 (Value) XmmMem8)
+(extern constructor put_in_xmm_mem_8 put_in_xmm_mem_8)
+(decl put_in_xmm_mem_aligned_8 (Value) XmmMemAligned8)
+(extern constructor put_in_xmm_mem_aligned_8 put_in_xmm_mem_aligned_8)
+(decl put_in_xmm_mem_imm_8 (Value) XmmMemImm8)
+(extern constructor put_in_xmm_mem_imm_8 put_in_xmm_mem_imm_8)
+(decl put_in_xmm_mem_aligned_imm_8 (Value) XmmMemAlignedImm8)
+(extern constructor put_in_xmm_mem_aligned_imm_8 put_in_xmm_mem_aligned_imm_8)
+(decl xmm_to_xmm_mem_8 (Xmm) XmmMem8)
+(extern constructor xmm_to_xmm_mem_8 xmm_to_xmm_mem_8)
+(decl xmm_to_xmm_mem_aligned_8 (Xmm) XmmMemAligned8)
+(extern constructor xmm_to_xmm_mem_aligned_8 xmm_to_xmm_mem_aligned_8)
+(decl xmm_to_xmm_mem_imm_8 (Xmm) XmmMemImm8)
+(extern constructor xmm_to_xmm_mem_imm_8 xmm_to_xmm_mem_imm_8)
+(decl xmm_to_xmm_mem_aligned_imm_8 (Xmm) XmmMemAlignedImm8)
+(extern constructor xmm_to_xmm_mem_aligned_imm_8 xmm_to_xmm_mem_aligned_imm_8)
+(decl xmm_mem_imm_8_imm (u32) XmmMemImm8)
+(extern constructor xmm_mem_imm_8_imm xmm_mem_imm_8_imm)
+(decl xmm_mem_8_to_xmm_mem (XmmMem8) XmmMem)
+(extern constructor xmm_mem_8_to_xmm_mem xmm_mem_8_to_xmm_mem)
+(decl xmm_mem_aligned_8_to_xmm_mem_aligned (XmmMemAligned8) XmmMemAligned)
+(extern constructor xmm_mem_aligned_8_to_xmm_mem_aligned xmm_mem_aligned_8_to_xmm_mem_aligned)
+(decl xmm_mem_imm_8_to_xmm_mem_imm (XmmMemImm8) XmmMemImm)
+(extern constructor xmm_mem_imm_8_to_xmm_mem_imm xmm_mem_imm_8_to_xmm_mem_imm)
+(decl xmm_mem_aligned_imm_8_to_xmm_mem_aligned_imm (XmmMemAlignedImm8) XmmMemAlignedImm)
+(extern constructor xmm_mem_aligned_imm_8_to_xmm_mem_aligned_imm xmm_mem_aligned_imm_8_to_xmm_mem_aligned_imm)
+
+(decl put_in_xmm_mem_16 (Value) XmmMem16)
+(extern constructor put_in_xmm_mem_16 put_in_xmm_mem_16)
+(decl put_in_xmm_mem_aligned_16 (Value) XmmMemAligned16)
+(extern constructor put_in_xmm_mem_aligned_16 put_in_xmm_mem_aligned_16)
+(decl put_in_xmm_mem_imm_16 (Value) XmmMemImm16)
+(extern constructor put_in_xmm_mem_imm_16 put_in_xmm_mem_imm_16)
+(decl put_in_xmm_mem_aligned_imm_16 (Value) XmmMemAlignedImm16)
+(extern constructor put_in_xmm_mem_aligned_imm_16 put_in_xmm_mem_aligned_imm_16)
+(decl xmm_to_xmm_mem_16 (Xmm) XmmMem16)
+(extern constructor xmm_to_xmm_mem_16 xmm_to_xmm_mem_16)
+(decl xmm_to_xmm_mem_aligned_16 (Xmm) XmmMemAligned16)
+(extern constructor xmm_to_xmm_mem_aligned_16 xmm_to_xmm_mem_aligned_16)
+(decl xmm_to_xmm_mem_imm_16 (Xmm) XmmMemImm16)
+(extern constructor xmm_to_xmm_mem_imm_16 xmm_to_xmm_mem_imm_16)
+(decl xmm_to_xmm_mem_aligned_imm_16 (Xmm) XmmMemAlignedImm16)
+(extern constructor xmm_to_xmm_mem_aligned_imm_16 xmm_to_xmm_mem_aligned_imm_16)
+(decl xmm_mem_imm_16_imm (u32) XmmMemImm16)
+(extern constructor xmm_mem_imm_16_imm xmm_mem_imm_16_imm)
+(decl xmm_mem_16_to_xmm_mem (XmmMem16) XmmMem)
+(extern constructor xmm_mem_16_to_xmm_mem xmm_mem_16_to_xmm_mem)
+(decl xmm_mem_aligned_16_to_xmm_mem_aligned (XmmMemAligned16) XmmMemAligned)
+(extern constructor xmm_mem_aligned_16_to_xmm_mem_aligned xmm_mem_aligned_16_to_xmm_mem_aligned)
+(decl xmm_mem_imm_16_to_xmm_mem_imm (XmmMemImm16) XmmMemImm)
+(extern constructor xmm_mem_imm_16_to_xmm_mem_imm xmm_mem_imm_16_to_xmm_mem_imm)
+(decl xmm_mem_aligned_imm_16_to_xmm_mem_aligned_imm (XmmMemAlignedImm16) XmmMemAlignedImm)
+(extern constructor xmm_mem_aligned_imm_16_to_xmm_mem_aligned_imm xmm_mem_aligned_imm_16_to_xmm_mem_aligned_imm)
+
+(decl put_in_xmm_mem_32 (Value) XmmMem32)
+(extern constructor put_in_xmm_mem_32 put_in_xmm_mem_32)
+(decl put_in_xmm_mem_aligned_32 (Value) XmmMemAligned32)
+(extern constructor put_in_xmm_mem_aligned_32 put_in_xmm_mem_aligned_32)
+(decl put_in_xmm_mem_imm_32 (Value) XmmMemImm32)
+(extern constructor put_in_xmm_mem_imm_32 put_in_xmm_mem_imm_32)
+(decl put_in_xmm_mem_aligned_imm_32 (Value) XmmMemAlignedImm32)
+(extern constructor put_in_xmm_mem_aligned_imm_32 put_in_xmm_mem_aligned_imm_32)
+(decl xmm_to_xmm_mem_32 (Xmm) XmmMem32)
+(extern constructor xmm_to_xmm_mem_32 xmm_to_xmm_mem_32)
+(decl xmm_to_xmm_mem_aligned_32 (Xmm) XmmMemAligned32)
+(extern constructor xmm_to_xmm_mem_aligned_32 xmm_to_xmm_mem_aligned_32)
+(decl xmm_to_xmm_mem_imm_32 (Xmm) XmmMemImm32)
+(extern constructor xmm_to_xmm_mem_imm_32 xmm_to_xmm_mem_imm_32)
+(decl xmm_to_xmm_mem_aligned_imm_32 (Xmm) XmmMemAlignedImm32)
+(extern constructor xmm_to_xmm_mem_aligned_imm_32 xmm_to_xmm_mem_aligned_imm_32)
+(decl xmm_mem_imm_32_imm (u32) XmmMemImm32)
+(extern constructor xmm_mem_imm_32_imm xmm_mem_imm_32_imm)
+(decl xmm_mem_32_to_xmm_mem (XmmMem32) XmmMem)
+(extern constructor xmm_mem_32_to_xmm_mem xmm_mem_32_to_xmm_mem)
+(decl xmm_mem_aligned_32_to_xmm_mem_aligned (XmmMemAligned32) XmmMemAligned)
+(extern constructor xmm_mem_aligned_32_to_xmm_mem_aligned xmm_mem_aligned_32_to_xmm_mem_aligned)
+(decl xmm_mem_imm_32_to_xmm_mem_imm (XmmMemImm32) XmmMemImm)
+(extern constructor xmm_mem_imm_32_to_xmm_mem_imm xmm_mem_imm_32_to_xmm_mem_imm)
+(decl xmm_mem_aligned_imm_32_to_xmm_mem_aligned_imm (XmmMemAlignedImm32) XmmMemAlignedImm)
+(extern constructor xmm_mem_aligned_imm_32_to_xmm_mem_aligned_imm xmm_mem_aligned_imm_32_to_xmm_mem_aligned_imm)
+
+(decl put_in_xmm_mem_64 (Value) XmmMem64)
+(extern constructor put_in_xmm_mem_64 put_in_xmm_mem_64)
+(decl put_in_xmm_mem_aligned_64 (Value) XmmMemAligned64)
+(extern constructor put_in_xmm_mem_aligned_64 put_in_xmm_mem_aligned_64)
+(decl put_in_xmm_mem_imm_64 (Value) XmmMemImm64)
+(extern constructor put_in_xmm_mem_imm_64 put_in_xmm_mem_imm_64)
+(decl put_in_xmm_mem_aligned_imm_64 (Value) XmmMemAlignedImm64)
+(extern constructor put_in_xmm_mem_aligned_imm_64 put_in_xmm_mem_aligned_imm_64)
+(decl xmm_to_xmm_mem_64 (Xmm) XmmMem64)
+(extern constructor xmm_to_xmm_mem_64 xmm_to_xmm_mem_64)
+(decl xmm_to_xmm_mem_aligned_64 (Xmm) XmmMemAligned64)
+(extern constructor xmm_to_xmm_mem_aligned_64 xmm_to_xmm_mem_aligned_64)
+(decl xmm_to_xmm_mem_imm_64 (Xmm) XmmMemImm64)
+(extern constructor xmm_to_xmm_mem_imm_64 xmm_to_xmm_mem_imm_64)
+(decl xmm_to_xmm_mem_aligned_imm_64 (Xmm) XmmMemAlignedImm64)
+(extern constructor xmm_to_xmm_mem_aligned_imm_64 xmm_to_xmm_mem_aligned_imm_64)
+(decl xmm_mem_imm_64_imm (u32) XmmMemImm64)
+(extern constructor xmm_mem_imm_64_imm xmm_mem_imm_64_imm)
+(decl xmm_mem_64_to_xmm_mem (XmmMem64) XmmMem)
+(extern constructor xmm_mem_64_to_xmm_mem xmm_mem_64_to_xmm_mem)
+(decl xmm_mem_aligned_64_to_xmm_mem_aligned (XmmMemAligned64) XmmMemAligned)
+(extern constructor xmm_mem_aligned_64_to_xmm_mem_aligned xmm_mem_aligned_64_to_xmm_mem_aligned)
+(decl xmm_mem_imm_64_to_xmm_mem_imm (XmmMemImm64) XmmMemImm)
+(extern constructor xmm_mem_imm_64_to_xmm_mem_imm xmm_mem_imm_64_to_xmm_mem_imm)
+(decl xmm_mem_aligned_imm_64_to_xmm_mem_aligned_imm (XmmMemAlignedImm64) XmmMemAlignedImm)
+(extern constructor xmm_mem_aligned_imm_64_to_xmm_mem_aligned_imm xmm_mem_aligned_imm_64_to_xmm_mem_aligned_imm)
+
+(decl put_in_xmm_mem_128 (Value) XmmMem128)
+(extern constructor put_in_xmm_mem_128 put_in_xmm_mem_128)
+(decl put_in_xmm_mem_aligned_128 (Value) XmmMemAligned128)
+(extern constructor put_in_xmm_mem_aligned_128 put_in_xmm_mem_aligned_128)
+(decl put_in_xmm_mem_imm_128 (Value) XmmMemImm128)
+(extern constructor put_in_xmm_mem_imm_128 put_in_xmm_mem_imm_128)
+(decl put_in_xmm_mem_aligned_imm_128 (Value) XmmMemAlignedImm128)
+(extern constructor put_in_xmm_mem_aligned_imm_128 put_in_xmm_mem_aligned_imm_128)
+(decl xmm_to_xmm_mem_128 (Xmm) XmmMem128)
+(extern constructor xmm_to_xmm_mem_128 xmm_to_xmm_mem_128)
+(decl xmm_to_xmm_mem_aligned_128 (Xmm) XmmMemAligned128)
+(extern constructor xmm_to_xmm_mem_aligned_128 xmm_to_xmm_mem_aligned_128)
+(decl xmm_to_xmm_mem_imm_128 (Xmm) XmmMemImm128)
+(extern constructor xmm_to_xmm_mem_imm_128 xmm_to_xmm_mem_imm_128)
+(decl xmm_to_xmm_mem_aligned_imm_128 (Xmm) XmmMemAlignedImm128)
+(extern constructor xmm_to_xmm_mem_aligned_imm_128 xmm_to_xmm_mem_aligned_imm_128)
+(decl xmm_mem_imm_128_imm (u32) XmmMemImm128)
+(extern constructor xmm_mem_imm_128_imm xmm_mem_imm_128_imm)
+(decl xmm_mem_128_to_xmm_mem (XmmMem128) XmmMem)
+(extern constructor xmm_mem_128_to_xmm_mem xmm_mem_128_to_xmm_mem)
+(decl xmm_mem_aligned_128_to_xmm_mem_aligned (XmmMemAligned128) XmmMemAligned)
+(extern constructor xmm_mem_aligned_128_to_xmm_mem_aligned xmm_mem_aligned_128_to_xmm_mem_aligned)
+(decl xmm_mem_imm_128_to_xmm_mem_imm (XmmMemImm128) XmmMemImm)
+(extern constructor xmm_mem_imm_128_to_xmm_mem_imm xmm_mem_imm_128_to_xmm_mem_imm)
+(decl xmm_mem_aligned_imm_128_to_xmm_mem_aligned_imm (XmmMemAlignedImm128) XmmMemAlignedImm)
+(extern constructor xmm_mem_aligned_imm_128_to_xmm_mem_aligned_imm xmm_mem_aligned_imm_128_to_xmm_mem_aligned_imm)
+
 ;; Put a value into a XMM.
 ;;
 ;; Asserts that the value goes into a XMM.
@@ -985,6 +1218,20 @@
 (decl is_mem (SyntheticAmode) XmmMem)
 (extern extractor is_mem is_mem)
 
+;; Extract a register or amode from a size-newtyped operand.
+(decl is_xmm_32 (Xmm) XmmMem32)
+(extern extractor is_xmm_32 is_xmm_32)
+(decl is_xmm_64 (Xmm) XmmMem64)
+(extern extractor is_xmm_64 is_xmm_64)
+(decl is_xmm_128 (Xmm) XmmMem128)
+(extern extractor is_xmm_128 is_xmm_128)
+(decl is_mem_32 (SyntheticAmode) XmmMem32)
+(extern extractor is_mem_32 is_mem_32)
+(decl is_mem_64 (SyntheticAmode) XmmMem64)
+(extern extractor is_mem_64 is_mem_64)
+(decl is_mem_128 (SyntheticAmode) XmmMem128)
+(extern extractor is_mem_128 is_mem_128)
+
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure has_avx512vl () bool)
@@ -1089,6 +1336,65 @@
 (decl sink_load_to_xmm_mem (SinkableLoad) XmmMem)
 (rule (sink_load_to_xmm_mem load)
       (reg_mem_to_xmm_mem load))
+
+;; Width-tagged sinkable loads. Unlike the un-sized `SinkableLoad`, these
+;; newtypes carry the CLIF type width in their static type; their
+;; extractors (`sinkable_load_N`) only fire when the loaded `Value` is
+;; exactly N bits wide. Converting a `SinkableLoadN` to an N-bit memory
+;; operand is then always safe.
+
+(type SinkableLoad8   extern (enum))
+(type SinkableLoad16  extern (enum))
+(type SinkableLoad32  extern (enum))
+(type SinkableLoad64  extern (enum))
+(type SinkableLoad128 extern (enum))
+
+(decl sinkable_load_8   (SinkableLoad8)   Value)
+(extern extractor sinkable_load_8   sinkable_load_8)
+(decl sinkable_load_16  (SinkableLoad16)  Value)
+(extern extractor sinkable_load_16  sinkable_load_16)
+(decl sinkable_load_32  (SinkableLoad32)  Value)
+(extern extractor sinkable_load_32  sinkable_load_32)
+(decl sinkable_load_64  (SinkableLoad64)  Value)
+(extern extractor sinkable_load_64  sinkable_load_64)
+(decl sinkable_load_128 (SinkableLoad128) Value)
+(extern extractor sinkable_load_128 sinkable_load_128)
+
+;; Actually sink a width-tagged load, returning its address. The returned
+;; `SyntheticAmode` is then wrapped at the known width to form the final
+;; memory operand.
+(decl sink_load_8   (SinkableLoad8)   SyntheticAmode)
+(extern constructor sink_load_8   sink_load_8)
+(decl sink_load_16  (SinkableLoad16)  SyntheticAmode)
+(extern constructor sink_load_16  sink_load_16)
+(decl sink_load_32  (SinkableLoad32)  SyntheticAmode)
+(extern constructor sink_load_32  sink_load_32)
+(decl sink_load_64  (SinkableLoad64)  SyntheticAmode)
+(extern constructor sink_load_64  sink_load_64)
+(decl sink_load_128 (SinkableLoad128) SyntheticAmode)
+(extern constructor sink_load_128 sink_load_128)
+
+;; Sized conversions from sinkable loads to operands. The width is
+;; already fixed, so no dynamic check is needed.
+(decl sink_load_8_to_gpr_mem_8     (SinkableLoad8)   GprMem8)
+(extern constructor sink_load_8_to_gpr_mem_8     sink_load_8_to_gpr_mem_8)
+(decl sink_load_16_to_gpr_mem_16   (SinkableLoad16)  GprMem16)
+(extern constructor sink_load_16_to_gpr_mem_16   sink_load_16_to_gpr_mem_16)
+(decl sink_load_32_to_gpr_mem_32   (SinkableLoad32)  GprMem32)
+(extern constructor sink_load_32_to_gpr_mem_32   sink_load_32_to_gpr_mem_32)
+(decl sink_load_64_to_gpr_mem_64   (SinkableLoad64)  GprMem64)
+(extern constructor sink_load_64_to_gpr_mem_64   sink_load_64_to_gpr_mem_64)
+
+(decl sink_load_8_to_xmm_mem_8     (SinkableLoad8)   XmmMem8)
+(extern constructor sink_load_8_to_xmm_mem_8     sink_load_8_to_xmm_mem_8)
+(decl sink_load_16_to_xmm_mem_16   (SinkableLoad16)  XmmMem16)
+(extern constructor sink_load_16_to_xmm_mem_16   sink_load_16_to_xmm_mem_16)
+(decl sink_load_32_to_xmm_mem_32   (SinkableLoad32)  XmmMem32)
+(extern constructor sink_load_32_to_xmm_mem_32   sink_load_32_to_xmm_mem_32)
+(decl sink_load_64_to_xmm_mem_64   (SinkableLoad64)  XmmMem64)
+(extern constructor sink_load_64_to_xmm_mem_64   sink_load_64_to_xmm_mem_64)
+(decl sink_load_128_to_xmm_mem_128 (SinkableLoad128) XmmMem128)
+(extern constructor sink_load_128_to_xmm_mem_128 sink_load_128_to_xmm_mem_128)
 
 (decl sink_load_to_reg_mem (SinkableLoad) RegMem)
 (rule (sink_load_to_reg_mem load) (RegMem.Mem load))
@@ -1290,7 +1596,7 @@
 (rule (vec_int_type (multi_lane 64 2)) $I64X2)
 
 ;; Performs an xor operation of the two operands specified.
-(decl x64_xor_vector (Type Xmm XmmMem) Xmm)
+(decl x64_xor_vector (Type Xmm XmmMem128) Xmm)
 (rule 1 (x64_xor_vector $F16 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F32 x y) (x64_xorps x y))
 (rule 1 (x64_xor_vector $F64 x y) (x64_xorpd x y))
@@ -1370,10 +1676,10 @@
 (decl x64_load_xmm (Type SyntheticAmode) Xmm)
 (rule 1 (x64_load_xmm $F32 addr) (x64_movss_load addr))
 (rule 1 (x64_load_xmm $F64 addr) (x64_movsd_load addr))
-(rule 1 (x64_load_xmm $F128 addr) (x64_movdqu_load addr))
+(rule 1 (x64_load_xmm $F128 addr) (x64_movdqu_load (synthetic_amode_to_xmm_mem_128 addr)))
 (rule 1 (x64_load_xmm $F32X4 addr) (x64_movups_load addr))
 (rule 1 (x64_load_xmm $F64X2 addr) (x64_movupd_load addr))
-(rule 0 (x64_load_xmm (multi_lane _bits _lanes) addr) (x64_movdqu_load addr))
+(rule 0 (x64_load_xmm (multi_lane _bits _lanes) addr) (x64_movdqu_load (synthetic_amode_to_xmm_mem_128 addr)))
 
 (decl x64_mov (SyntheticAmode) Reg)
 (spec (x64_mov addr)
@@ -1402,23 +1708,24 @@
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
                   (= mode (ExtMode.LQ)))))
-(rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm src))
-(rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm src))
-(rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm src))
-(rule (x64_movzx (ExtMode.WQ) src) (x64_movzwq_rm src))
+
+(rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm (gpr_mem_as_gpr_mem_8  src)))
+(rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm (gpr_mem_as_gpr_mem_8  src)))
+(rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm (gpr_mem_as_gpr_mem_16 src)))
+(rule (x64_movzx (ExtMode.WQ) src) (x64_movzwq_rm (gpr_mem_as_gpr_mem_16 src)))
 ;; This instruction selection may seem strange but is correct in 64-bit mode:
 ;; section 3.4.1.1 of the Intel manual says that "32-bit operands generate a
 ;; 32-bit result, zero-extended to a 64-bit result in the destination
 ;; general-purpose register." This is applicable beyond `mov` but we use this
 ;; fact to zero-extend `src` into `dst`.
-(rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm src))
+(rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm (gpr_mem_as_gpr_mem_32 src)))
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
-(rule (x64_movsx (ExtMode.BL) src) (x64_movsbl_rm src))
-(rule (x64_movsx (ExtMode.BQ) src) (x64_movsbq_rm src))
-(rule (x64_movsx (ExtMode.WL) src) (x64_movswl_rm src))
-(rule (x64_movsx (ExtMode.WQ) src) (x64_movswq_rm src))
-(rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
+(rule (x64_movsx (ExtMode.BL) src) (x64_movsbl_rm (gpr_mem_as_gpr_mem_8  src)))
+(rule (x64_movsx (ExtMode.BQ) src) (x64_movsbq_rm (gpr_mem_as_gpr_mem_8  src)))
+(rule (x64_movsx (ExtMode.WL) src) (x64_movswl_rm (gpr_mem_as_gpr_mem_16 src)))
+(rule (x64_movsx (ExtMode.WQ) src) (x64_movswq_rm (gpr_mem_as_gpr_mem_16 src)))
+(rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm (gpr_mem_as_gpr_mem_32 src)))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
 (rule (x64_movss_load from) (x64_movss_a_m_or_avx from))
@@ -1452,14 +1759,14 @@
         (x64_vmovd_b from))
 
 ;; Helper for creating `movd` instructions.
-(decl x64_movd_to_xmm (GprMem) Xmm)
+(decl x64_movd_to_xmm (GprMem32) Xmm)
 (rule (x64_movd_to_xmm from) (x64_movd_a from))
 (rule 1 (x64_movd_to_xmm from)
         (if-let true (has_avx))
         (x64_vmovd_a from))
 
 ;; Helper for creating `movq` instructions.
-(decl x64_movq_to_xmm (GprMem) Xmm)
+(decl x64_movq_to_xmm (GprMem64) Xmm)
 (rule (x64_movq_to_xmm src) (x64_movq_a src))
 (rule 1 (x64_movq_to_xmm from)
         (if-let true (has_avx))
@@ -1472,28 +1779,30 @@
         (if-let true (has_avx))
         (x64_vmovq_b from))
 
-(decl x64_movdqu_load (XmmMem) Xmm)
+(decl x64_movdqu_load (XmmMem128) Xmm)
 (rule (x64_movdqu_load from) (x64_movdqu_a_or_avx from))
 
 (decl x64_movdqu_store (SyntheticAmode Xmm) SideEffectNoResult)
 (rule (x64_movdqu_store addr data) (x64_movdqu_b_mem_or_avx addr data))
 
-(decl x64_pmovsxbw (XmmMem) Xmm)
+;; Packed sign/zero-extend helpers. All of these read 64 bits from memory
+;; (`xmm_m64`) and extend up into a full XMM register.
+(decl x64_pmovsxbw (XmmMem64) Xmm)
 (rule (x64_pmovsxbw from) (x64_pmovsxbw_a_or_avx from))
 
-(decl x64_pmovzxbw (XmmMem) Xmm)
+(decl x64_pmovzxbw (XmmMem64) Xmm)
 (rule (x64_pmovzxbw from) (x64_pmovzxbw_a_or_avx from))
 
-(decl x64_pmovsxwd (XmmMem) Xmm)
+(decl x64_pmovsxwd (XmmMem64) Xmm)
 (rule (x64_pmovsxwd from) (x64_pmovsxwd_a_or_avx from))
 
-(decl x64_pmovzxwd (XmmMem) Xmm)
+(decl x64_pmovzxwd (XmmMem64) Xmm)
 (rule (x64_pmovzxwd from) (x64_pmovzxwd_a_or_avx from))
 
-(decl x64_pmovsxdq (XmmMem) Xmm)
+(decl x64_pmovsxdq (XmmMem64) Xmm)
 (rule (x64_pmovsxdq from) (x64_pmovsxdq_a_or_avx from))
 
-(decl x64_pmovzxdq (XmmMem) Xmm)
+(decl x64_pmovzxdq (XmmMem64) Xmm)
 (rule (x64_pmovzxdq from) (x64_pmovzxdq_a_or_avx from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
@@ -1600,10 +1909,10 @@
 (rule 1 (x64_add_raw $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_add_raw $I8  src1 (is_gpr_mem src2)) (x64_addb_rm_raw src1 src2))
-(rule 0 (x64_add_raw $I16 src1 (is_gpr_mem src2)) (x64_addw_rm_raw src1 src2))
-(rule 0 (x64_add_raw $I32 src1 (is_gpr_mem src2)) (x64_addl_rm_raw src1 src2))
-(rule 0 (x64_add_raw $I64 src1 (is_gpr_mem src2)) (x64_addq_rm_raw src1 src2))
+(rule 0 (x64_add_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_addb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_add_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_addw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_add_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_addl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_add_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_addq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; When the overflow flag is not considered, we can use wider instructions than
 ;; necessary for 8/16-bit register-to-register operations to avoid CPU false
@@ -1633,7 +1942,7 @@
 (decl x64_adc_raw (Type Gpr GprMemImm) AssemblerOutputs)
 (rule 2 (x64_adc_raw $I64 src1 (is_simm8 src2))   (x64_adcq_mi_sxb_raw src1 src2))
 (rule 1 (x64_adc_raw $I64 src1 (is_simm32 src2))  (x64_adcq_mi_sxl_raw src1 src2))
-(rule 0 (x64_adc_raw $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 src2))
+(rule 0 (x64_adc_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; Normal use of the `adc` instruction consumes a previously-produced flag.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
@@ -1661,10 +1970,10 @@
 (rule 2 (x64_sub_raw $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_sub_raw $I8  src1 (is_gpr_mem src2)) (x64_subb_rm_raw src1 src2))
-(rule 0 (x64_sub_raw $I16 src1 (is_gpr_mem src2)) (x64_subw_rm_raw src1 src2))
-(rule 0 (x64_sub_raw $I32 src1 (is_gpr_mem src2)) (x64_subl_rm_raw src1 src2))
-(rule 0 (x64_sub_raw $I64 src1 (is_gpr_mem src2)) (x64_subq_rm_raw src1 src2))
+(rule 0 (x64_sub_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_subb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_sub_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_subw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_sub_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_subl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_sub_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_subq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; When the overflow flag is not considered, we can use wider instructions than
 ;; necessary for 8/16-bit register-to-register operations to avoid CPU false
@@ -1702,10 +2011,10 @@
 (rule 1 (x64_sbb_raw $I64 src1 (is_simm32 src2))  (x64_sbbq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_sbb_raw $I8  src1 (is_gpr_mem src2)) (x64_sbbb_rm_raw src1 src2))
-(rule 0 (x64_sbb_raw $I16 src1 (is_gpr_mem src2)) (x64_sbbw_rm_raw src1 src2))
-(rule 0 (x64_sbb_raw $I32 src1 (is_gpr_mem src2)) (x64_sbbl_rm_raw src1 src2))
-(rule 0 (x64_sbb_raw $I64 src1 (is_gpr_mem src2)) (x64_sbbq_rm_raw src1 src2))
+(rule 0 (x64_sbb_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_sbbb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_sbb_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_sbbw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_sbb_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_sbbl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_sbb_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_sbbq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; When the overflow flag is not considered, we can use wider instructions than
 ;; necessary for 8/16-bit register-to-register operations to avoid CPU false
@@ -1736,12 +2045,12 @@
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`). For the 8-bit rules, see `x64_mul8`.
 (decl x64_mul_raw (Type bool Gpr GprMem) AssemblerOutputs)
-(rule (x64_mul_raw $I16 false src1 src2) (x64_mulw_m_raw src1 src2))
-(rule (x64_mul_raw $I32 false src1 src2) (x64_mull_m_raw src1 src2))
-(rule (x64_mul_raw $I64 false src1 src2) (x64_mulq_m_raw src1 src2))
-(rule (x64_mul_raw $I16 true src1 src2)  (x64_imulw_m_raw src1 src2))
-(rule (x64_mul_raw $I32 true src1 src2)  (x64_imull_m_raw src1 src2))
-(rule (x64_mul_raw $I64 true src1 src2)  (x64_imulq_m_raw src1 src2))
+(rule (x64_mul_raw ty @ $I16 false src1 src2) (x64_mulw_m_raw  src1 (gpr_mem_16_for_ty ty src2)))
+(rule (x64_mul_raw ty @ $I32 false src1 src2) (x64_mull_m_raw  src1 (gpr_mem_32_for_ty ty src2)))
+(rule (x64_mul_raw ty @ $I64 false src1 src2) (x64_mulq_m_raw  src1 (gpr_mem_64_for_ty ty src2)))
+(rule (x64_mul_raw ty @ $I16 true src1 src2)  (x64_imulw_m_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule (x64_mul_raw ty @ $I32 true src1 src2)  (x64_imull_m_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule (x64_mul_raw ty @ $I64 true src1 src2)  (x64_imulq_m_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 (decl x64_mul (Type bool Gpr GprMem) ValueRegs)
 (rule 0 (x64_mul ty signed src1 src2)
@@ -1752,18 +2061,18 @@
 ;; Note that mulx returns the high bits in the first result and the low bits in
 ;; the second result, so here the result registers are swapped to match
 ;; `x64_mul` above.
-(rule 1 (x64_mul $I32 false src1 src2)
+(rule 1 (x64_mul ty @ $I32 false src1 src2)
   (if-let true (has_bmi2))
-  (let ((regs ValueRegs (x64_mulxl_rvm src2 src1)))
+  (let ((regs ValueRegs (x64_mulxl_rvm (gpr_mem_32_for_ty ty src2) src1)))
     (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
-(rule 1 (x64_mul $I64 false src1 src2)
+(rule 1 (x64_mul ty @ $I64 false src1 src2)
   (if-let true (has_bmi2))
-  (let ((regs ValueRegs (x64_mulxq_rvm src2 src1)))
+  (let ((regs ValueRegs (x64_mulxq_rvm (gpr_mem_64_for_ty ty src2) src1)))
     (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
 
 (decl x64_mulx_hi (Type Gpr GprMem) Gpr)
-(rule (x64_mulx_hi $I32 src1 src2) (x64_mulxl_rvm_hi src2 src1))
-(rule (x64_mulx_hi $I64 src1 src2) (x64_mulxq_rvm_hi src2 src1))
+(rule (x64_mulx_hi ty @ $I32 src1 src2) (x64_mulxl_rvm_hi (gpr_mem_32_for_ty ty src2) src1))
+(rule (x64_mulx_hi ty @ $I64 src1 src2) (x64_mulxq_rvm_hi (gpr_mem_64_for_ty ty src2) src1))
 
 (decl x64_mulxl_rvm_hi (GprMem Gpr) Gpr)
 (extern constructor x64_mulxl_rvm_hi x64_mulxl_rvm_hi)
@@ -1780,25 +2089,26 @@
 
 ;; Helper for creating `imul` instructions.
 (decl x64_imul (Type Gpr GprMem) Gpr)
-(rule (x64_imul $I16 src1 src2) (x64_imulw_rm src1 src2))
-(rule (x64_imul $I32 src1 src2) (x64_imull_rm src1 src2))
-(rule (x64_imul $I64 src1 src2) (x64_imulq_rm src1 src2))
+(rule (x64_imul ty @ $I16 src1 src2) (x64_imulw_rm src1 (gpr_mem_16_for_ty ty src2)))
+(rule (x64_imul ty @ $I32 src1 src2) (x64_imull_rm src1 (gpr_mem_32_for_ty ty src2)))
+(rule (x64_imul ty @ $I64 src1 src2) (x64_imulq_rm src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; Helper for creating `imul` instructions with an immediate operand. Match
 ;; 8-bit immediates first to allow a smaller instruction encoding.
 (decl x64_imul_imm (Type GprMem i32) Gpr)
-(rule 2 (x64_imul_imm $I16 src1 (i8_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I32 src1 (i8_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I64 src1 (i8_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
-(rule 1 (x64_imul_imm $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi src1 (i16_cast_unsigned src2)))
-(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_cast_unsigned src2)))
-(rule 1 (x64_imul_imm $I64 src1 src2) (x64_imulq_rmi_sxl src1 src2))
+(rule 2 (x64_imul_imm ty @ $I16 src1 (i8_from_i32 src2))  (x64_imulw_rmi_sxb (gpr_mem_16_for_ty ty src1) src2))
+(rule 2 (x64_imul_imm ty @ $I32 src1 (i8_from_i32 src2))  (x64_imull_rmi_sxb (gpr_mem_32_for_ty ty src1) src2))
+(rule 2 (x64_imul_imm ty @ $I64 src1 (i8_from_i32 src2))  (x64_imulq_rmi_sxb (gpr_mem_64_for_ty ty src1) src2))
+(rule 1 (x64_imul_imm ty @ $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi (gpr_mem_16_for_ty ty src1) (i16_cast_unsigned src2)))
+(rule 1 (x64_imul_imm ty @ $I32 src1 src2) (x64_imull_rmi (gpr_mem_32_for_ty ty src1) (i32_cast_unsigned src2)))
+(rule 1 (x64_imul_imm ty @ $I64 src1 src2) (x64_imulq_rmi_sxl (gpr_mem_64_for_ty ty src1) src2))
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`) for 8-bit operands.
 (decl x64_mul8_raw (bool Gpr GprMem) AssemblerOutputs)
-(rule (x64_mul8_raw false src1 src2) (x64_mulb_m_raw src1 src2))
-(rule (x64_mul8_raw true src1 src2)  (x64_imulb_m_raw src1 src2))
+;; Fixed 8-bit: no `Type` in scope, so use the unchecked narrow.
+(rule (x64_mul8_raw false src1 src2) (x64_mulb_m_raw  src1 (gpr_mem_as_gpr_mem_8 src2)))
+(rule (x64_mul8_raw true  src1 src2) (x64_imulb_m_raw src1 (gpr_mem_as_gpr_mem_8 src2)))
 
 (decl x64_mul8 (bool Gpr GprMem) Gpr)
 (rule (x64_mul8 signed src1 src2)
@@ -1829,10 +2139,10 @@
 (rule 1 (x64_and $I16 src1 (is_gpr src2))     (x64_andl_rm src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_and $I8  src1 (is_gpr_mem src2)) (x64_andb_rm src1 src2))
-(rule 0 (x64_and $I16 src1 (is_gpr_mem src2)) (x64_andw_rm src1 src2))
-(rule 0 (x64_and $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 src2))
-(rule 0 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
+(rule 0 (x64_and ty @ $I8  src1 (is_gpr_mem src2)) (x64_andb_rm src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_and ty @ $I16 src1 (is_gpr_mem src2)) (x64_andw_rm src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_and ty @ $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_and ty @ $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 (gpr_mem_64_for_ty ty src2)))
 
 
 
@@ -1850,10 +2160,10 @@
 (rule 1 (x64_or_raw $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_or_raw $I8  src1 (is_gpr_mem src2)) (x64_orb_rm_raw src1 src2))
-(rule 0 (x64_or_raw $I16 src1 (is_gpr_mem src2)) (x64_orw_rm_raw src1 src2))
-(rule 0 (x64_or_raw $I32 src1 (is_gpr_mem src2)) (x64_orl_rm_raw src1 src2))
-(rule 0 (x64_or_raw $I64 src1 (is_gpr_mem src2)) (x64_orq_rm_raw src1 src2))
+(rule 0 (x64_or_raw ty @ $I8  src1 (is_gpr_mem src2)) (x64_orb_rm_raw src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_or_raw ty @ $I16 src1 (is_gpr_mem src2)) (x64_orw_rm_raw src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_or_raw ty @ $I32 src1 (is_gpr_mem src2)) (x64_orl_rm_raw src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_or_raw ty @ $I64 src1 (is_gpr_mem src2)) (x64_orq_rm_raw src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; When flags are not considered, we can use wider instructions than necessary
 ;; for 8/16-bit register-to-register operations to avoid CPU false dependencies.
@@ -1894,10 +2204,10 @@
 (rule 1 (x64_xor $I16 src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_xor $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm src1 src2))
-(rule 0 (x64_xor $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 src2))
-(rule 0 (x64_xor $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 src2))
-(rule 0 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
+(rule 0 (x64_xor ty @ $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_xor ty @ $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_xor ty @ $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_xor ty @ $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; Helper for `andn` instructions
 ;;
@@ -1905,10 +2215,10 @@
 ;; those bit-widths the 32-bit version of the instruction is used which has the
 ;; desired semantics for the lower bits of the register.
 (decl x64_andn (Type Gpr GprMem) Gpr)
-(rule (x64_andn $I8 src1 src2) (x64_andnl_rvm src1 src2))
-(rule (x64_andn $I16 src1 src2) (x64_andnl_rvm src1 src2))
-(rule (x64_andn $I32 src1 src2) (x64_andnl_rvm src1 src2))
-(rule (x64_andn $I64 src1 src2) (x64_andnq_rvm src1 src2))
+(rule (x64_andn ty @ $I8  src1 src2) (x64_andnl_rvm src1 (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty src2)))
+(rule (x64_andn ty @ $I16 src1 src2) (x64_andnl_rvm src1 (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty src2)))
+(rule (x64_andn ty @ $I32 src1 src2) (x64_andnl_rvm src1 (gpr_mem_32_for_ty ty src2)))
+(rule (x64_andn ty @ $I64 src1 src2) (x64_andnq_rvm src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables
@@ -2076,8 +2386,8 @@
 
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
 (decl x64_bzhi (Type GprMem Gpr) Gpr)
-(rule (x64_bzhi $I32 src1 src2) (x64_bzhil_rmv src1 src2))
-(rule (x64_bzhi $I64 src1 src2) (x64_bzhiq_rmv src1 src2))
+(rule (x64_bzhi ty @ $I32 src1 src2) (x64_bzhil_rmv (gpr_mem_32_for_ty ty src1) src2))
+(rule (x64_bzhi ty @ $I64 src1 src2) (x64_bzhiq_rmv (gpr_mem_64_for_ty ty src1) src2))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
@@ -2101,13 +2411,18 @@
 (rule 1 (x64_cmp $I64 src1 (is_simm32 src2)) (x64_cmpq_mi src1 src2))
 
 ;; Base case: rhs is a GprMem operand.
-(rule 0 (x64_cmp $I8 src1 (is_gpr_mem src2)) (x64_cmpb_rm src1 src2))
-(rule 0 (x64_cmp $I16 src1 (is_gpr_mem src2)) (x64_cmpw_rm src1 src2))
-(rule 0 (x64_cmp $I32 src1 (is_gpr_mem src2)) (x64_cmpl_rm src1 src2))
-(rule 0 (x64_cmp $I64 src1 (is_gpr_mem src2)) (x64_cmpq_rm src1 src2))
+(rule 0 (x64_cmp ty @ $I8  src1 (is_gpr_mem src2)) (x64_cmpb_rm src1 (gpr_mem_8_for_ty  ty src2)))
+(rule 0 (x64_cmp ty @ $I16 src1 (is_gpr_mem src2)) (x64_cmpw_rm src1 (gpr_mem_16_for_ty ty src2)))
+(rule 0 (x64_cmp ty @ $I32 src1 (is_gpr_mem src2)) (x64_cmpl_rm src1 (gpr_mem_32_for_ty ty src2)))
+(rule 0 (x64_cmp ty @ $I64 src1 (is_gpr_mem src2)) (x64_cmpq_rm src1 (gpr_mem_64_for_ty ty src2)))
 
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
-(decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
+;;
+;; `src2` takes a CLIF `Value`, not a sized operand, so the dispatch on
+;; `Type` pins the width via the `Value -> XmmMem{N}` auto-conversion
+;; (which release-asserts the value's CLIF width matches N). No trust
+;; cast is needed.
+(decl x64_ucomis (Type Xmm Value) ProducesFlags)
 (rule (x64_ucomis $F32 src1 src2) (x64_ucomiss_a_or_avx src1 src2))
 (rule (x64_ucomis $F64 src1 src2) (x64_ucomisd_a_or_avx src1 src2))
 
@@ -2119,13 +2434,13 @@
 (rule 1 (x64_test $I32 src1 (is_imm32 src2)) (x64_testl_mi src1 src2))
 (rule 1 (x64_test $I64 src1 (is_simm32 src2)) (x64_testq_mi src1 src2))
 
-(rule 0 (x64_test $I8 src1 (is_gpr_mem src2)) (x64_testb_mr src2 src1))
-(rule 0 (x64_test $I16 src1 (is_gpr_mem src2)) (x64_testw_mr src2 src1))
-(rule 0 (x64_test $I32 src1 (is_gpr_mem src2)) (x64_testl_mr src2 src1))
-(rule 0 (x64_test $I64 src1 (is_gpr_mem src2)) (x64_testq_mr src2 src1))
+(rule 0 (x64_test ty @ $I8  src1 (is_gpr_mem src2)) (x64_testb_mr (gpr_mem_8_for_ty  ty src2) src1))
+(rule 0 (x64_test ty @ $I16 src1 (is_gpr_mem src2)) (x64_testw_mr (gpr_mem_16_for_ty ty src2) src1))
+(rule 0 (x64_test ty @ $I32 src1 (is_gpr_mem src2)) (x64_testl_mr (gpr_mem_32_for_ty ty src2) src1))
+(rule 0 (x64_test ty @ $I64 src1 (is_gpr_mem src2)) (x64_testq_mr (gpr_mem_64_for_ty ty src2) src1))
 
 ;; Helper for creating `ptest` instructions.
-(decl x64_ptest (Xmm XmmMem) ProducesFlags)
+(decl x64_ptest (Xmm XmmMem128) ProducesFlags)
 (rule (x64_ptest src1 src2) (x64_ptest_rm_or_avx src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
@@ -2142,38 +2457,38 @@
 ;; same instruction but disassemblers only print one mnemonic and that's the
 ;; name used here.
 (decl cmove (Type CC GprMem Gpr) ConsumesFlags)
-(rule 0 (cmove (fits_in_32 _) (CC.O) c a) (x64_cmovol_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NO) c a) (x64_cmovnol_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.B) c a) (x64_cmovbl_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NB) c a) (x64_cmovael_rm a c)) ;;  nb == ae
-(rule 0 (cmove (fits_in_32 _) (CC.Z) c a) (x64_cmovel_rm a c))   ;;   z ==  e
-(rule 0 (cmove (fits_in_32 _) (CC.NZ) c a) (x64_cmovnel_rm a c)) ;;  nz == ne
-(rule 0 (cmove (fits_in_32 _) (CC.BE) c a) (x64_cmovbel_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NBE) c a) (x64_cmoval_rm a c)) ;; nbe ==  a
-(rule 0 (cmove (fits_in_32 _) (CC.S) c a) (x64_cmovsl_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NS) c a) (x64_cmovnsl_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.L) c a) (x64_cmovll_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NL) c a) (x64_cmovgel_rm a c)) ;;  nl == ge
-(rule 0 (cmove (fits_in_32 _) (CC.LE) c a) (x64_cmovlel_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NLE) c a) (x64_cmovgl_rm a c)) ;; nle ==  g
-(rule 0 (cmove (fits_in_32 _) (CC.P) c a) (x64_cmovpl_rm a c))
-(rule 0 (cmove (fits_in_32 _) (CC.NP) c a) (x64_cmovnpl_rm a c))
-(rule 1 (cmove $I64 (CC.O) c a) (x64_cmovoq_rm a c))
-(rule 1 (cmove $I64 (CC.NO) c a) (x64_cmovnoq_rm a c))
-(rule 1 (cmove $I64 (CC.B) c a) (x64_cmovbq_rm a c))
-(rule 1 (cmove $I64 (CC.NB) c a) (x64_cmovaeq_rm a c)) ;;  nb == ae
-(rule 1 (cmove $I64 (CC.Z) c a) (x64_cmoveq_rm a c))   ;;   z ==  e
-(rule 1 (cmove $I64 (CC.NZ) c a) (x64_cmovneq_rm a c)) ;;  nz == ne
-(rule 1 (cmove $I64 (CC.BE) c a) (x64_cmovbeq_rm a c))
-(rule 1 (cmove $I64 (CC.NBE) c a) (x64_cmovaq_rm a c)) ;; nbe ==  a
-(rule 1 (cmove $I64 (CC.S) c a) (x64_cmovsq_rm a c))
-(rule 1 (cmove $I64 (CC.NS) c a) (x64_cmovnsq_rm a c))
-(rule 1 (cmove $I64 (CC.L) c a) (x64_cmovlq_rm a c))
-(rule 1 (cmove $I64 (CC.NL) c a) (x64_cmovgeq_rm a c)) ;;  nl == ge
-(rule 1 (cmove $I64 (CC.LE) c a) (x64_cmovleq_rm a c))
-(rule 1 (cmove $I64 (CC.NLE) c a) (x64_cmovgq_rm a c)) ;; nle ==  g
-(rule 1 (cmove $I64 (CC.P) c a) (x64_cmovpq_rm a c))
-(rule 1 (cmove $I64 (CC.NP) c a) (x64_cmovnpq_rm a c))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.O)   c a) (x64_cmovol_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NO)  c a) (x64_cmovnol_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.B)   c a) (x64_cmovbl_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NB)  c a) (x64_cmovael_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;;  nb == ae
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.Z)   c a) (x64_cmovel_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;;   z ==  e
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NZ)  c a) (x64_cmovnel_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;;  nz == ne
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.BE)  c a) (x64_cmovbel_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NBE) c a) (x64_cmoval_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;; nbe ==  a
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.S)   c a) (x64_cmovsl_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NS)  c a) (x64_cmovnsl_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.L)   c a) (x64_cmovll_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NL)  c a) (x64_cmovgel_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;;  nl == ge
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.LE)  c a) (x64_cmovlel_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NLE) c a) (x64_cmovgl_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c))) ;; nle ==  g
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.P)   c a) (x64_cmovpl_rm  a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 0 (cmove ty @ (fits_in_32 _) (CC.NP)  c a) (x64_cmovnpl_rm a (gpr_mem_as_gpr_mem_32_or_widened_in_reg ty c)))
+(rule 1 (cmove ty @ $I64 (CC.O)   c a) (x64_cmovoq_rm  a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NO)  c a) (x64_cmovnoq_rm a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.B)   c a) (x64_cmovbq_rm  a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NB)  c a) (x64_cmovaeq_rm a (gpr_mem_64_for_ty ty c))) ;;  nb == ae
+(rule 1 (cmove ty @ $I64 (CC.Z)   c a) (x64_cmoveq_rm  a (gpr_mem_64_for_ty ty c))) ;;   z ==  e
+(rule 1 (cmove ty @ $I64 (CC.NZ)  c a) (x64_cmovneq_rm a (gpr_mem_64_for_ty ty c))) ;;  nz == ne
+(rule 1 (cmove ty @ $I64 (CC.BE)  c a) (x64_cmovbeq_rm a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NBE) c a) (x64_cmovaq_rm  a (gpr_mem_64_for_ty ty c))) ;; nbe ==  a
+(rule 1 (cmove ty @ $I64 (CC.S)   c a) (x64_cmovsq_rm  a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NS)  c a) (x64_cmovnsq_rm a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.L)   c a) (x64_cmovlq_rm  a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NL)  c a) (x64_cmovgeq_rm a (gpr_mem_64_for_ty ty c))) ;;  nl == ge
+(rule 1 (cmove ty @ $I64 (CC.LE)  c a) (x64_cmovleq_rm a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NLE) c a) (x64_cmovgq_rm  a (gpr_mem_64_for_ty ty c))) ;; nle ==  g
+(rule 1 (cmove ty @ $I64 (CC.P)   c a) (x64_cmovpq_rm  a (gpr_mem_64_for_ty ty c)))
+(rule 1 (cmove ty @ $I64 (CC.NP)  c a) (x64_cmovnpq_rm a (gpr_mem_64_for_ty ty c)))
 
 (decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
@@ -2217,236 +2532,236 @@
 
 
 ;; Helpers for creating vector `add` instructions.
-(decl x64_addss (Xmm XmmMem) Xmm)
+(decl x64_addss (Xmm XmmMem32) Xmm)
 (rule (x64_addss src1 src2) (x64_addss_a_or_avx src1 src2))
 
-(decl x64_addsd (Xmm XmmMem) Xmm)
+(decl x64_addsd (Xmm XmmMem64) Xmm)
 (rule (x64_addsd src1 src2) (x64_addsd_a_or_avx src1 src2))
 
-(decl x64_addps (Xmm XmmMem) Xmm)
+(decl x64_addps (Xmm XmmMem128) Xmm)
 (rule (x64_addps src1 src2) (x64_addps_a_or_avx src1 src2))
 
-(decl x64_addpd (Xmm XmmMem) Xmm)
+(decl x64_addpd (Xmm XmmMem128) Xmm)
 (rule (x64_addpd src1 src2) (x64_addpd_a_or_avx src1 src2))
 
-(decl x64_paddb (Xmm XmmMem) Xmm)
+(decl x64_paddb (Xmm XmmMem128) Xmm)
 (rule (x64_paddb src1 src2) (x64_paddb_a_or_avx src1 src2))
 
-(decl x64_paddw (Xmm XmmMem) Xmm)
+(decl x64_paddw (Xmm XmmMem128) Xmm)
 (rule (x64_paddw src1 src2) (x64_paddw_a_or_avx src1 src2))
 
-(decl x64_paddd (Xmm XmmMem) Xmm)
+(decl x64_paddd (Xmm XmmMem128) Xmm)
 (rule (x64_paddd src1 src2) (x64_paddd_a_or_avx src1 src2))
 
-(decl x64_paddq (Xmm XmmMem) Xmm)
+(decl x64_paddq (Xmm XmmMem128) Xmm)
 (rule (x64_paddq src1 src2) (x64_paddq_a_or_avx src1 src2))
 
-(decl x64_paddsb (Xmm XmmMem) Xmm)
+(decl x64_paddsb (Xmm XmmMem128) Xmm)
 (rule (x64_paddsb src1 src2) (x64_paddsb_a_or_avx src1 src2))
 
-(decl x64_paddsw (Xmm XmmMem) Xmm)
+(decl x64_paddsw (Xmm XmmMem128) Xmm)
 (rule (x64_paddsw src1 src2) (x64_paddsw_a_or_avx src1 src2))
 
-(decl x64_phaddw (Xmm XmmMem) Xmm)
+(decl x64_phaddw (Xmm XmmMem128) Xmm)
 (rule (x64_phaddw src1 src2) (x64_phaddw_a_or_avx src1 src2))
 
-(decl x64_phaddd (Xmm XmmMem) Xmm)
+(decl x64_phaddd (Xmm XmmMem128) Xmm)
 (rule (x64_phaddd src1 src2) (x64_phaddd_a_or_avx src1 src2))
 
-(decl x64_paddusb (Xmm XmmMem) Xmm)
+(decl x64_paddusb (Xmm XmmMem128) Xmm)
 (rule (x64_paddusb src1 src2) (x64_paddusb_a_or_avx src1 src2))
 
-(decl x64_paddusw (Xmm XmmMem) Xmm)
+(decl x64_paddusw (Xmm XmmMem128) Xmm)
 (rule (x64_paddusw src1 src2) (x64_paddusw_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `sub` instructions.
-(decl x64_subss (Xmm XmmMem) Xmm)
+(decl x64_subss (Xmm XmmMem32) Xmm)
 (rule (x64_subss src1 src2) (x64_subss_a_or_avx src1 src2))
 
-(decl x64_subsd (Xmm XmmMem) Xmm)
+(decl x64_subsd (Xmm XmmMem64) Xmm)
 (rule (x64_subsd src1 src2) (x64_subsd_a_or_avx src1 src2))
 
-(decl x64_subps (Xmm XmmMem) Xmm)
+(decl x64_subps (Xmm XmmMem128) Xmm)
 (rule (x64_subps src1 src2) (x64_subps_a_or_avx src1 src2))
 
-(decl x64_subpd (Xmm XmmMem) Xmm)
+(decl x64_subpd (Xmm XmmMem128) Xmm)
 (rule (x64_subpd src1 src2) (x64_subpd_a_or_avx src1 src2))
 
-(decl x64_psubb (Xmm XmmMem) Xmm)
+(decl x64_psubb (Xmm XmmMem128) Xmm)
 (rule (x64_psubb src1 src2) (x64_psubb_a_or_avx src1 src2))
 
-(decl x64_psubw (Xmm XmmMem) Xmm)
+(decl x64_psubw (Xmm XmmMem128) Xmm)
 (rule (x64_psubw src1 src2) (x64_psubw_a_or_avx src1 src2))
 
-(decl x64_psubd (Xmm XmmMem) Xmm)
+(decl x64_psubd (Xmm XmmMem128) Xmm)
 (rule (x64_psubd src1 src2) (x64_psubd_a_or_avx src1 src2))
 
-(decl x64_psubq (Xmm XmmMem) Xmm)
+(decl x64_psubq (Xmm XmmMem128) Xmm)
 (rule (x64_psubq src1 src2) (x64_psubq_a_or_avx src1 src2))
 
-(decl x64_psubsb (Xmm XmmMem) Xmm)
+(decl x64_psubsb (Xmm XmmMem128) Xmm)
 (rule (x64_psubsb src1 src2) (x64_psubsb_a_or_avx src1 src2))
 
-(decl x64_psubsw (Xmm XmmMem) Xmm)
+(decl x64_psubsw (Xmm XmmMem128) Xmm)
 (rule (x64_psubsw src1 src2) (x64_psubsw_a_or_avx src1 src2))
 
-(decl x64_psubusb (Xmm XmmMem) Xmm)
+(decl x64_psubusb (Xmm XmmMem128) Xmm)
 (rule (x64_psubusb src1 src2) (x64_psubusb_a_or_avx src1 src2))
 
-(decl x64_psubusw (Xmm XmmMem) Xmm)
+(decl x64_psubusw (Xmm XmmMem128) Xmm)
 (rule (x64_psubusw src1 src2) (x64_psubusw_a_or_avx src1 src2))
 
-;; Helpers for creating `pavg*` instructions.
-(decl x64_pavgb (Xmm XmmMem) Xmm)
+;; Helpers for creating `pavg*` instructions (128-bit packed).
+(decl x64_pavgb (Xmm XmmMem128) Xmm)
 (rule (x64_pavgb src1 src2) (x64_pavgb_a_or_avx src1 src2))
 
-(decl x64_pavgw (Xmm XmmMem) Xmm)
+(decl x64_pavgw (Xmm XmmMem128) Xmm)
 (rule (x64_pavgw src1 src2) (x64_pavgw_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `and` instructions.
-(decl x64_pand (Xmm XmmMem) Xmm)
+(decl x64_pand (Xmm XmmMem128) Xmm)
 (rule (x64_pand src1 src2) (x64_pand_a_or_avx src1 src2))
 
-(decl x64_andps (Xmm XmmMem) Xmm)
+(decl x64_andps (Xmm XmmMem128) Xmm)
 (rule (x64_andps src1 src2) (x64_andps_a_or_avx src1 src2))
 
-(decl x64_andpd (Xmm XmmMem) Xmm)
+(decl x64_andpd (Xmm XmmMem128) Xmm)
 (rule (x64_andpd src1 src2) (x64_andpd_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `or` instructions.
-(decl x64_por (Xmm XmmMem) Xmm)
+(decl x64_por (Xmm XmmMem128) Xmm)
 (rule (x64_por src1 src2) (x64_por_a_or_avx src1 src2))
 
-(decl x64_orps (Xmm XmmMem) Xmm)
+(decl x64_orps (Xmm XmmMem128) Xmm)
 (rule (x64_orps src1 src2) (x64_orps_a_or_avx src1 src2))
 
-(decl x64_orpd (Xmm XmmMem) Xmm)
+(decl x64_orpd (Xmm XmmMem128) Xmm)
 (rule (x64_orpd src1 src2) (x64_orpd_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `xor` instructions.
-(decl x64_pxor (Xmm XmmMem) Xmm)
+(decl x64_pxor (Xmm XmmMem128) Xmm)
 (rule (x64_pxor src1 src2) (x64_pxor_a_or_avx src1 src2))
 
-(decl x64_xorps (Xmm XmmMem) Xmm)
+(decl x64_xorps (Xmm XmmMem128) Xmm)
 (rule (x64_xorps src1 src2) (x64_xorps_a_or_avx src1 src2))
 
-(decl x64_xorpd (Xmm XmmMem) Xmm)
+(decl x64_xorpd (Xmm XmmMem128) Xmm)
 (rule (x64_xorpd src1 src2) (x64_xorpd_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `andn` instructions.
-(decl x64_andnps (Xmm XmmMem) Xmm)
+(decl x64_andnps (Xmm XmmMem128) Xmm)
 (rule (x64_andnps src1 src2) (x64_andnps_a_or_avx src1 src2))
 
-(decl x64_andnpd (Xmm XmmMem) Xmm)
+(decl x64_andnpd (Xmm XmmMem128) Xmm)
 (rule (x64_andnpd src1 src2) (x64_andnpd_a_or_avx src1 src2))
 
-(decl x64_pandn (Xmm XmmMem) Xmm)
+(decl x64_pandn (Xmm XmmMem128) Xmm)
 (rule (x64_pandn src1 src2) (x64_pandn_a_or_avx src1 src2))
 
 ;; Helper for creating vector `mul` instructions.
-(decl x64_mulss (Xmm XmmMem) Xmm)
+(decl x64_mulss (Xmm XmmMem32) Xmm)
 (rule (x64_mulss src1 src2) (x64_mulss_a_or_avx src1 src2))
 
-(decl x64_mulsd (Xmm XmmMem) Xmm)
+(decl x64_mulsd (Xmm XmmMem64) Xmm)
 (rule (x64_mulsd src1 src2) (x64_mulsd_a_or_avx src1 src2))
 
-(decl x64_mulps (Xmm XmmMem) Xmm)
+(decl x64_mulps (Xmm XmmMem128) Xmm)
 (rule (x64_mulps src1 src2) (x64_mulps_a_or_avx src1 src2))
 
-(decl x64_mulpd (Xmm XmmMem) Xmm)
+(decl x64_mulpd (Xmm XmmMem128) Xmm)
 (rule (x64_mulpd src1 src2) (x64_mulpd_a_or_avx src1 src2))
 
-(decl x64_pmullw (Xmm XmmMem) Xmm)
+(decl x64_pmullw (Xmm XmmMem128) Xmm)
 (rule (x64_pmullw src1 src2) (x64_pmullw_a_or_avx src1 src2))
 
-(decl x64_pmulld (Xmm XmmMem) Xmm)
+(decl x64_pmulld (Xmm XmmMem128) Xmm)
 (rule (x64_pmulld src1 src2) (x64_pmulld_a_or_avx src1 src2))
 
-(decl x64_pmulhw (Xmm XmmMem) Xmm)
+(decl x64_pmulhw (Xmm XmmMem128) Xmm)
 (rule (x64_pmulhw src1 src2) (x64_pmulhw_a_or_avx src1 src2))
 
-(decl x64_pmulhrsw (Xmm XmmMem) Xmm)
+(decl x64_pmulhrsw (Xmm XmmMem128) Xmm)
 (rule (x64_pmulhrsw src1 src2) (x64_pmulhrsw_a_or_avx src1 src2))
 
-(decl x64_pmulhuw (Xmm XmmMem) Xmm)
+(decl x64_pmulhuw (Xmm XmmMem128) Xmm)
 (rule (x64_pmulhuw src1 src2) (x64_pmulhuw_a_or_avx src1 src2))
 
-(decl x64_pmuldq (Xmm XmmMem) Xmm)
+(decl x64_pmuldq (Xmm XmmMem128) Xmm)
 (rule (x64_pmuldq src1 src2) (x64_pmuldq_a_or_avx src1 src2))
 
-(decl x64_pmuludq (Xmm XmmMem) Xmm)
+(decl x64_pmuludq (Xmm XmmMem128) Xmm)
 (rule (x64_pmuludq src1 src2) (x64_pmuludq_a_or_avx src1 src2))
 
 ;; Helpers for creating vector `div` instructions.
-(decl x64_divss (Xmm XmmMem) Xmm)
+(decl x64_divss (Xmm XmmMem32) Xmm)
 (rule (x64_divss src1 src2) (x64_divss_a_or_avx src1 src2))
 
-(decl x64_divsd (Xmm XmmMem) Xmm)
+(decl x64_divsd (Xmm XmmMem64) Xmm)
 (rule (x64_divsd src1 src2) (x64_divsd_a_or_avx src1 src2))
 
-(decl x64_divps (Xmm XmmMem) Xmm)
+(decl x64_divps (Xmm XmmMem128) Xmm)
 (rule (x64_divps src1 src2) (x64_divps_a_or_avx src1 src2))
 
-(decl x64_divpd (Xmm XmmMem) Xmm)
+(decl x64_divpd (Xmm XmmMem128) Xmm)
 (rule (x64_divpd src1 src2) (x64_divpd_a_or_avx src1 src2))
 
 ;; Helpers for creating `unpack` instructions.
-(decl x64_punpckhwd (Xmm XmmMem) Xmm)
+(decl x64_punpckhwd (Xmm XmmMem128) Xmm)
 (rule (x64_punpckhwd src1 src2) (x64_punpckhwd_a_or_avx src1 src2))
 
-(decl x64_punpcklwd (Xmm XmmMem) Xmm)
+(decl x64_punpcklwd (Xmm XmmMem128) Xmm)
 (rule (x64_punpcklwd src1 src2) (x64_punpcklwd_a_or_avx src1 src2))
 
-(decl x64_punpckldq (Xmm XmmMem) Xmm)
+(decl x64_punpckldq (Xmm XmmMem128) Xmm)
 (rule (x64_punpckldq src1 src2) (x64_punpckldq_a_or_avx src1 src2))
 
-(decl x64_punpckhdq (Xmm XmmMem) Xmm)
+(decl x64_punpckhdq (Xmm XmmMem128) Xmm)
 (rule (x64_punpckhdq src1 src2) (x64_punpckhdq_a_or_avx src1 src2))
 
-(decl x64_punpcklqdq (Xmm XmmMem) Xmm)
+(decl x64_punpcklqdq (Xmm XmmMem128) Xmm)
 (rule (x64_punpcklqdq src1 src2) (x64_punpcklqdq_a_or_avx src1 src2))
 
-(decl x64_punpckhqdq (Xmm XmmMem) Xmm)
+(decl x64_punpckhqdq (Xmm XmmMem128) Xmm)
 (rule (x64_punpckhqdq src1 src2) (x64_punpckhqdq_a_or_avx src1 src2))
 
-(decl x64_unpcklps (Xmm XmmMem) Xmm)
+(decl x64_unpcklps (Xmm XmmMem128) Xmm)
 (rule (x64_unpcklps src1 src2) (x64_unpcklps_a_or_avx src1 src2))
 
-(decl x64_unpcklpd (Xmm XmmMem) Xmm)
+(decl x64_unpcklpd (Xmm XmmMem128) Xmm)
 (rule (x64_unpcklpd src1 src2) (x64_unpcklpd_a_or_avx src1 src2))
 
-(decl x64_unpckhps (Xmm XmmMem) Xmm)
+(decl x64_unpckhps (Xmm XmmMem128) Xmm)
 (rule (x64_unpckhps src1 src2) (x64_unpckhps_a_or_avx src1 src2))
 
-(decl x64_punpcklbw (Xmm XmmMem) Xmm)
+(decl x64_punpcklbw (Xmm XmmMem128) Xmm)
 (rule (x64_punpcklbw src1 src2) (x64_punpcklbw_a_or_avx src1 src2))
 
-(decl x64_punpckhbw (Xmm XmmMem) Xmm)
+(decl x64_punpckhbw (Xmm XmmMem128) Xmm)
 (rule  (x64_punpckhbw src1 src2) (x64_punpckhbw_a_or_avx src1 src2))
 
 ;; Helper for creating `blendvpd` instructions.
-(decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
+(decl x64_blendvpd (Xmm XmmMem128 Xmm) Xmm)
 (rule 0 (x64_blendvpd src1 src2 mask) (x64_blendvpd_rm0 src1 src2 mask))
 (rule 1 (x64_blendvpd src1 src2 mask)
       (if-let true (has_avx))
       (x64_vblendvpd_rvmr src1 src2 mask))
 
 ;; Helper for creating `blendvps` instructions.
-(decl x64_blendvps (Xmm XmmMem Xmm) Xmm)
+(decl x64_blendvps (Xmm XmmMem128 Xmm) Xmm)
 (rule 0 (x64_blendvps src1 src2 mask) (x64_blendvps_rm0 src1 src2 mask))
 (rule 1 (x64_blendvps src1 src2 mask)
       (if-let true (has_avx))
       (x64_vblendvps_rvmr src1 src2 mask))
 
 ;; Helper for creating `pblendvb` instructions.
-(decl x64_pblendvb (Xmm XmmMem Xmm) Xmm)
+(decl x64_pblendvb (Xmm XmmMem128 Xmm) Xmm)
 (rule 0 (x64_pblendvb src1 src2 mask) (x64_pblendvb_rm src1 src2 mask))
 (rule 1 (x64_pblendvb src1 src2 mask)
       (if-let true (has_avx))
       (x64_vpblendvb_rvmr src1 src2 mask))
 
 ;; Helper for creating `pblendw` instructions.
-(decl x64_pblendw (Xmm XmmMem u8) Xmm)
+(decl x64_pblendw (Xmm XmmMem128 u8) Xmm)
 (rule (x64_pblendw src1 src2 imm) (x64_pblendw_rmi_or_avx src1 src2 imm))
 
 ;; Helper for creating `movsd`/`movss` instructions which create a new vector
@@ -2468,59 +2783,59 @@
 (rule (x64_movlhps src1 src2) (x64_movlhps_rm_or_avx src1 src2))
 
 ;; Helpers for creating `pmaxs*` instructions.
-(decl x64_pmaxs (Type Xmm XmmMem) Xmm)
+(decl x64_pmaxs (Type Xmm XmmMem128) Xmm)
 (rule (x64_pmaxs $I8X16 x y) (x64_pmaxsb_a_or_avx x y))
 (rule (x64_pmaxs $I16X8 x y) (x64_pmaxsw_a_or_avx x y))
 (rule (x64_pmaxs $I32X4 x y) (x64_pmaxsd_a_or_avx x y))
 ;; No $I64X2 version (PMAXSQ) in SSE4.1.
 
 ;; Helpers for creating `pmins*` instructions.
-(decl x64_pmins (Type Xmm XmmMem) Xmm)
+(decl x64_pmins (Type Xmm XmmMem128) Xmm)
 (rule (x64_pmins $I8X16 x y) (x64_pminsb_a_or_avx x y))
 (rule (x64_pmins $I16X8 x y) (x64_pminsw_a_or_avx x y))
 (rule (x64_pmins $I32X4 x y) (x64_pminsd_a_or_avx x y))
 ;; No $I64X2 version (PMINSQ) in SSE4.1.
 
 ;; Helpers for creating `pmaxu*` instructions.
-(decl x64_pmaxu (Type Xmm XmmMem) Xmm)
+(decl x64_pmaxu (Type Xmm XmmMem128) Xmm)
 (rule (x64_pmaxu $I8X16 x y) (x64_pmaxub_a_or_avx x y))
 (rule (x64_pmaxu $I16X8 x y) (x64_pmaxuw_a_or_avx x y))
 (rule (x64_pmaxu $I32X4 x y) (x64_pmaxud_a_or_avx x y))
 ;; No $I64X2 version (PMAXUQ) in SSE4.1.
 
 ;; Helper for creating `pminu*` instructions.
-(decl x64_pminu (Type Xmm XmmMem) Xmm)
+(decl x64_pminu (Type Xmm XmmMem128) Xmm)
 (rule (x64_pminu $I8X16 x y) (x64_pminub_a_or_avx x y))
 (rule (x64_pminu $I16X8 x y) (x64_pminuw_a_or_avx x y))
 (rule (x64_pminu $I32X4 x y) (x64_pminud_a_or_avx x y))
 ;; No $I64X2 version (PMINUQ) in SSE4.1.
 
 ;; Helper for creating `packsswb` instructions.
-(decl x64_packsswb (Xmm XmmMem) Xmm)
+(decl x64_packsswb (Xmm XmmMem128) Xmm)
 (rule (x64_packsswb src1 src2) (x64_packsswb_a_or_avx src1 src2))
 
 ;; Helper for creating `packssdw` instructions.
-(decl x64_packssdw (Xmm XmmMem) Xmm)
+(decl x64_packssdw (Xmm XmmMem128) Xmm)
 (rule (x64_packssdw src1 src2) (x64_packssdw_a_or_avx src1 src2))
 
 ;; Helper for creating `packuswb` instructions.
-(decl x64_packuswb (Xmm XmmMem) Xmm)
+(decl x64_packuswb (Xmm XmmMem128) Xmm)
 (rule (x64_packuswb src1 src2) (x64_packuswb_a_or_avx src1 src2))
 
 ;; Helper for creating `packusdw` instructions.
-(decl x64_packusdw (Xmm XmmMem) Xmm)
+(decl x64_packusdw (Xmm XmmMem128) Xmm)
 (rule (x64_packusdw src1 src2) (x64_packusdw_a_or_avx src1 src2))
 
 ;; Helper for creating `palignr` instructions.
-(decl x64_palignr (Xmm XmmMem u8) Xmm)
+(decl x64_palignr (Xmm XmmMem128 u8) Xmm)
 (rule (x64_palignr src1 src2 imm) (x64_palignr_a_or_avx src1 src2 imm))
 
 ;; Helpers for creating `cmpp*` instructions.
-(decl x64_cmpp (Type Xmm XmmMem FcmpImm) Xmm)
+(decl x64_cmpp (Type Xmm XmmMem128 FcmpImm) Xmm)
 (rule (x64_cmpp $F32X4 x y imm) (x64_cmpps x y imm))
 (rule (x64_cmpp $F64X2 x y imm) (x64_cmppd x y imm))
 
-(decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
+(decl x64_cmpps (Xmm XmmMem128 FcmpImm) Xmm)
 (rule 1 (x64_cmpps src1 src2 imm)
       (if-let true (has_avx))
       (x64_vcmpps_b src1 src2 (encode_fcmp_imm imm)))
@@ -2529,42 +2844,39 @@
 ;; Note that `Size32` is intentional despite this being used for 64-bit
 ;; operations, since this presumably induces the correct encoding of the
 ;; instruction.
-(decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
+(decl x64_cmppd (Xmm XmmMem128 FcmpImm) Xmm)
 (rule 1 (x64_cmppd src1 src2 imm)
       (if-let true (has_avx))
       (x64_vcmppd_b src1 src2 (encode_fcmp_imm imm)))
 (rule 0 (x64_cmppd src1 src2 imm) (x64_cmppd_a src1 src2 (encode_fcmp_imm imm)))
 
-;; Helper for creating `pinsrb` instructions.
+;; Helpers for creating `pinsr*` instructions.
 (decl x64_pinsrb (Xmm GprMem u8) Xmm)
 (rule 1 (x64_pinsrb src1 src2 lane)
       (if-let true (has_avx))
-      (x64_vpinsrb_b src1 src2 lane))
-(rule 0 (x64_pinsrb src1 src2 lane) (x64_pinsrb_a src1 src2 lane))
+      (x64_vpinsrb_b src1 (gpr_mem_as_gpr_mem_32 src2) lane))
+(rule 0 (x64_pinsrb src1 src2 lane) (x64_pinsrb_a src1 (gpr_mem_as_gpr_mem_32 src2) lane))
 
-;; Helper for creating `pinsrw` instructions.
 (decl x64_pinsrw (Xmm GprMem u8) Xmm)
 (rule 1 (x64_pinsrw src1 src2 lane)
       (if-let true (has_avx))
-      (x64_vpinsrw_b src1 src2 lane))
-(rule 0 (x64_pinsrw src1 src2 lane) (x64_pinsrw_a src1 src2 lane))
+      (x64_vpinsrw_b src1 (gpr_mem_as_gpr_mem_32 src2) lane))
+(rule 0 (x64_pinsrw src1 src2 lane) (x64_pinsrw_a src1 (gpr_mem_as_gpr_mem_32 src2) lane))
 
-;; Helper for creating `pinsrd` instructions.
 (decl x64_pinsrd (Xmm GprMem u8) Xmm)
 (rule 1 (x64_pinsrd src1 src2 lane)
       (if-let true (has_avx))
-      (x64_vpinsrd_b src1 src2 lane))
-(rule 0 (x64_pinsrd src1 src2 lane) (x64_pinsrd_a src1 src2 lane))
+      (x64_vpinsrd_b src1 (gpr_mem_as_gpr_mem_32 src2) lane))
+(rule 0 (x64_pinsrd src1 src2 lane) (x64_pinsrd_a src1 (gpr_mem_as_gpr_mem_32 src2) lane))
 
-;; Helper for creating `pinsrq` instructions.
 (decl x64_pinsrq (Xmm GprMem u8) Xmm)
 (rule 1 (x64_pinsrq src1 src2 lane)
       (if-let true (has_avx))
-      (x64_vpinsrq_b src1 src2 lane))
-(rule 0 (x64_pinsrq src1 src2 lane) (x64_pinsrq_a src1 src2 lane))
+      (x64_vpinsrq_b src1 (gpr_mem_as_gpr_mem_64 src2) lane))
+(rule 0 (x64_pinsrq src1 src2 lane) (x64_pinsrq_a src1 (gpr_mem_as_gpr_mem_64 src2) lane))
 
 ;; Helper for creating `roundss` instructions.
-(decl x64_roundss (XmmMem RoundImm) Xmm)
+(decl x64_roundss (XmmMem32 RoundImm) Xmm)
 (rule 1 (x64_roundss src1 round)
         (if-let true (has_avx))
         (x64_vroundss_rvmi (xmm_zero $F32X4) src1 (encode_round_imm round)))
@@ -2572,7 +2884,7 @@
         (x64_roundss_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
-(decl x64_roundsd (XmmMem RoundImm) Xmm)
+(decl x64_roundsd (XmmMem64 RoundImm) Xmm)
 (rule 1 (x64_roundsd src1 round)
         (if-let true (has_avx))
         (x64_vroundsd_rvmi (xmm_zero $F64X2) src1 (encode_round_imm round)))
@@ -2580,7 +2892,7 @@
         (x64_roundsd_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundps` instructions.
-(decl x64_roundps (XmmMem RoundImm) Xmm)
+(decl x64_roundps (XmmMem128 RoundImm) Xmm)
 (rule 1 (x64_roundps src1 round)
       (if-let true (has_avx))
       (x64_vroundps_rmi src1 (encode_round_imm round)))
@@ -2588,52 +2900,52 @@
       (x64_roundps_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundpd` instructions.
-(decl x64_roundpd (XmmMem RoundImm) Xmm)
+(decl x64_roundpd (XmmMem128 RoundImm) Xmm)
 (rule 1 (x64_roundpd src1 round)
       (if-let true (has_avx))
       (x64_vroundpd_rmi src1 (encode_round_imm round)))
 (rule 0 (x64_roundpd src1 round)
       (x64_roundpd_rmi src1 (encode_round_imm round)))
 
-;; Helper for creating `pmaddwd` instructions.
-(decl x64_pmaddwd (Xmm XmmMem) Xmm)
+;; Helpers for creating `pmadd*` instructions.
+(decl x64_pmaddwd (Xmm XmmMem128) Xmm)
 (rule 0 (x64_pmaddwd src1 src2) (x64_pmaddwd_a_or_avx src1 src2))
 
-(decl x64_pmaddubsw (Xmm XmmMem) Xmm)
+(decl x64_pmaddubsw (Xmm XmmMem128) Xmm)
 (rule (x64_pmaddubsw src1 src2) (x64_pmaddubsw_a_or_avx src1 src2))
 
 ;; Helper for creating `insertps` instructions.
-(decl x64_insertps (Xmm XmmMem u8) Xmm)
+(decl x64_insertps (Xmm XmmMem32 u8) Xmm)
 (rule 0 (x64_insertps src1 src2 lane) (x64_insertps_a_or_avx src1 src2 lane))
 
 ;; Helper for creating `pshufd` instructions.
-(decl x64_pshufd (XmmMem u8) Xmm)
+(decl x64_pshufd (XmmMem128 u8) Xmm)
 (rule (x64_pshufd src imm) (x64_pshufd_a src imm))
 (rule 1 (x64_pshufd src imm)
       (if-let true (has_avx))
       (x64_vpshufd_a src imm))
 
 ;; Helper for creating `pshufb` instructions.
-(decl x64_pshufb (Xmm XmmMem) Xmm)
+(decl x64_pshufb (Xmm XmmMem128) Xmm)
 (rule (x64_pshufb src1 src2) (x64_pshufb_a_or_avx src1 src2))
 
 ;; Helper for creating `shufpd` instructions.
-(decl x64_shufpd (Xmm XmmMem u8) Xmm)
+(decl x64_shufpd (Xmm XmmMem128 u8) Xmm)
 (rule (x64_shufpd src1 src2 byte) (x64_shufpd_a_or_avx src1 src2 byte))
 
 ;; Helper for creating `shufps` instructions.
-(decl x64_shufps (Xmm XmmMem u8) Xmm)
+(decl x64_shufps (Xmm XmmMem128 u8) Xmm)
 (rule (x64_shufps src1 src2 byte) (x64_shufps_a_or_avx src1 src2 byte))
 
 ;; Helper for creating `pshuflw` instructions.
-(decl x64_pshuflw (XmmMem u8) Xmm)
+(decl x64_pshuflw (XmmMem128 u8) Xmm)
 (rule (x64_pshuflw src imm) (x64_pshuflw_a src imm))
 (rule 1 (x64_pshuflw src imm)
       (if-let true (has_avx))
       (x64_vpshuflw_a src imm))
 
 ;; Helper for creating `pshufhw` instructions.
-(decl x64_pshufhw (XmmMem u8) Xmm)
+(decl x64_pshufhw (XmmMem128 u8) Xmm)
 (rule (x64_pshufhw src imm) (x64_pshufhw_a src imm))
 (rule 1 (x64_pshufhw src imm)
       (if-let true (has_avx))
@@ -2642,68 +2954,64 @@
 
 
 ;; Helper for creating `vcvtudq2ps` instructions.
-(decl x64_vcvtudq2ps (XmmMem) Xmm)
+(decl x64_vcvtudq2ps (XmmMem128) Xmm)
 (rule (x64_vcvtudq2ps src) (x64_vcvtudq2ps_a src))
 
 ;; Helper for creating `vpabsq` instructions.
-(decl x64_vpabsq (XmmMem) Xmm)
+(decl x64_vpabsq (XmmMem128) Xmm)
 (rule (x64_vpabsq src) (x64_vpabsq_c src))
 
 ;; Helper for creating `vpopcntb` instructions.
-(decl x64_vpopcntb (XmmMem) Xmm)
+(decl x64_vpopcntb (XmmMem128) Xmm)
 (rule (x64_vpopcntb src) (x64_vpopcntb_a src))
 
 ;; Helper for creating `vpmullq` instructions.
-;;
-;; Requires AVX-512 vl and dq.
-(decl x64_vpmullq (Xmm XmmMem) Xmm)
+(decl x64_vpmullq (Xmm XmmMem128) Xmm)
 (rule (x64_vpmullq src1 src2) (x64_vpmullq_c src1 src2))
 
 ;; Helper for creating `vpermi2b` instructions.
-;;
-;; Requires AVX-512 vl and vbmi extensions.
-(decl x64_vpermi2b (Xmm Xmm XmmMem) Xmm)
+(decl x64_vpermi2b (Xmm Xmm XmmMem128) Xmm)
 (rule (x64_vpermi2b src1 src2 src3) (x64_vpermi2b_a src1 src2 src3))
 
 ;; Helpers for creating vector `shift` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psllw src1 (is_xmm_mem src2))  (x64_psllw_a_or_avx src1 src2))
+(rule 1 (x64_psllw src1 (is_xmm_mem src2))  (x64_psllw_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psllw src1 (is_imm8_xmm src2)) (x64_psllw_b_or_avx src1 src2))
 
 (decl x64_pslld (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_pslld src1 (is_xmm_mem src2))  (x64_pslld_a_or_avx src1 src2))
+(rule 1 (x64_pslld src1 (is_xmm_mem src2))  (x64_pslld_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_pslld src1 (is_imm8_xmm src2)) (x64_pslld_b_or_avx src1 src2))
 
 (decl x64_psllq (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psllq src1 (is_xmm_mem src2))  (x64_psllq_a_or_avx src1 src2))
+(rule 1 (x64_psllq src1 (is_xmm_mem src2))  (x64_psllq_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psllq src1 (is_imm8_xmm src2)) (x64_psllq_b_or_avx src1 src2))
 
 (decl x64_psrlw (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psrlw src1 (is_xmm_mem src2))  (x64_psrlw_a_or_avx src1 src2))
+(rule 1 (x64_psrlw src1 (is_xmm_mem src2))  (x64_psrlw_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psrlw src1 (is_imm8_xmm src2)) (x64_psrlw_b_or_avx src1 src2))
 
 (decl x64_psrld (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psrld src1 (is_xmm_mem src2))  (x64_psrld_a_or_avx src1 src2))
+(rule 1 (x64_psrld src1 (is_xmm_mem src2))  (x64_psrld_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psrld src1 (is_imm8_xmm src2)) (x64_psrld_b_or_avx src1 src2))
 
 (decl x64_psrlq (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a_or_avx src1 src2))
+(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b_or_avx src1 src2))
 
 (decl x64_psraw (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a_or_avx src1 src2))
+(rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psraw src1 (is_imm8_xmm src2)) (x64_psraw_b_or_avx src1 src2))
 
 (decl x64_psrad (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psrad src1 (is_xmm_mem src2))  (x64_psrad_a_or_avx src1 src2))
+(rule 1 (x64_psrad src1 (is_xmm_mem src2))  (x64_psrad_a_or_avx src1 (xmm_mem_as_xmm_mem_128 src2)))
 (rule 0 (x64_psrad src1 (is_imm8_xmm src2)) (x64_psrad_b_or_avx src1 src2))
 
 ;; Helper for creating `vpsraq` instructions.
-(decl x64_vpsraq (Xmm XmmMem) Xmm)
+(decl x64_vpsraq (Xmm XmmMem128) Xmm)
 (rule (x64_vpsraq src1 src2) (x64_vpsraq_g src1 src2))
 
 ;; Helper for creating `vpsraq` instructions.
-(decl x64_vpsraq_imm (XmmMem u8) Xmm)
+(decl x64_vpsraq_imm (XmmMem128 u8) Xmm)
 (rule (x64_vpsraq_imm src imm) (x64_vpsraq_f src imm))
 
 ;; Helper for creating `pextr*` instructions.
@@ -2784,21 +3092,21 @@
 
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)
-(rule (x64_lzcnt $I16 src) (x64_lzcntw_rm src))
-(rule (x64_lzcnt $I32 src) (x64_lzcntl_rm src))
-(rule (x64_lzcnt $I64 src) (x64_lzcntq_rm src))
+(rule (x64_lzcnt ty @ $I16 src) (x64_lzcntw_rm (gpr_mem_16_for_ty ty src)))
+(rule (x64_lzcnt ty @ $I32 src) (x64_lzcntl_rm (gpr_mem_32_for_ty ty src)))
+(rule (x64_lzcnt ty @ $I64 src) (x64_lzcntq_rm (gpr_mem_64_for_ty ty src)))
 
 ;; Helper for creating `tzcnt` instructions.
 (decl x64_tzcnt (Type GprMem) Gpr)
-(rule (x64_tzcnt $I16 src) (x64_tzcntw_a src))
-(rule (x64_tzcnt $I32 src) (x64_tzcntl_a src))
-(rule (x64_tzcnt $I64 src) (x64_tzcntq_a src))
+(rule (x64_tzcnt ty @ $I16 src) (x64_tzcntw_a (gpr_mem_16_for_ty ty src)))
+(rule (x64_tzcnt ty @ $I32 src) (x64_tzcntl_a (gpr_mem_32_for_ty ty src)))
+(rule (x64_tzcnt ty @ $I64 src) (x64_tzcntq_a (gpr_mem_64_for_ty ty src)))
 
 ;; Helper for creating `bsr` instructions.
 (decl x64_bsr (Type GprMem) ProducesFlags)
-(rule (x64_bsr $I16 src) (asm_produce_flags (x64_bsrw_rm_raw src)))
-(rule (x64_bsr $I32 src) (asm_produce_flags (x64_bsrl_rm_raw src)))
-(rule (x64_bsr $I64 src) (asm_produce_flags (x64_bsrq_rm_raw src)))
+(rule (x64_bsr ty @ $I16 src) (asm_produce_flags (x64_bsrw_rm_raw (gpr_mem_16_for_ty ty src))))
+(rule (x64_bsr ty @ $I32 src) (asm_produce_flags (x64_bsrl_rm_raw (gpr_mem_32_for_ty ty src))))
+(rule (x64_bsr ty @ $I64 src) (asm_produce_flags (x64_bsrq_rm_raw (gpr_mem_64_for_ty ty src))))
 
 ;; Helper for creating `bsr + cmov` instruction pairs that produce the
 ;; result of the `bsr`, or `alt` if the input was zero.
@@ -2814,9 +3122,9 @@
 
 ;; Helper for creating `bsf` instructions.
 (decl x64_bsf (Type GprMem) ProducesFlags)
-(rule (x64_bsf $I16 src) (asm_produce_flags (x64_bsfw_rm_raw src)))
-(rule (x64_bsf $I32 src) (asm_produce_flags (x64_bsfl_rm_raw src)))
-(rule (x64_bsf $I64 src) (asm_produce_flags (x64_bsfq_rm_raw src)))
+(rule (x64_bsf ty @ $I16 src) (asm_produce_flags (x64_bsfw_rm_raw (gpr_mem_16_for_ty ty src))))
+(rule (x64_bsf ty @ $I32 src) (asm_produce_flags (x64_bsfl_rm_raw (gpr_mem_32_for_ty ty src))))
+(rule (x64_bsf ty @ $I64 src) (asm_produce_flags (x64_bsfq_rm_raw (gpr_mem_64_for_ty ty src))))
 
 ;; Helper for creating `bsf + cmov` instruction pairs that produce the
 ;; result of the `bsf`, or `alt` if the input was zero.
@@ -2832,137 +3140,212 @@
 
 ;; Helper for creating `blsi` instructions.
 (decl x64_blsi (Type GprMem) Gpr)
-(rule (x64_blsi $I32 src) (x64_blsil_vm src))
-(rule (x64_blsi $I64 src) (x64_blsiq_vm src))
+(rule (x64_blsi ty @ $I32 src) (x64_blsil_vm (gpr_mem_32_for_ty ty src)))
+(rule (x64_blsi ty @ $I64 src) (x64_blsiq_vm (gpr_mem_64_for_ty ty src)))
 
 ;; Helper for creating `blsmsk` instructions.
 (decl x64_blsmsk (Type GprMem) Gpr)
-(rule (x64_blsmsk $I32 src) (x64_blsmskl_vm src))
-(rule (x64_blsmsk $I64 src) (x64_blsmskq_vm src))
+(rule (x64_blsmsk ty @ $I32 src) (x64_blsmskl_vm (gpr_mem_32_for_ty ty src)))
+(rule (x64_blsmsk ty @ $I64 src) (x64_blsmskq_vm (gpr_mem_64_for_ty ty src)))
 
 ;; Helper for creating `blsr` instructions.
 (decl x64_blsr (Type GprMem) Gpr)
-(rule (x64_blsr $I32 src) (x64_blsrl_vm src))
-(rule (x64_blsr $I64 src) (x64_blsrq_vm src))
+(rule (x64_blsr ty @ $I32 src) (x64_blsrl_vm (gpr_mem_32_for_ty ty src)))
+(rule (x64_blsr ty @ $I64 src) (x64_blsrq_vm (gpr_mem_64_for_ty ty src)))
 
 ;; Helper for creating `bt` instructions.
 (decl x64_bt (Type GprMem Gpr) ProducesFlags)
-(rule (x64_bt $I16 src1 src2) (x64_btw_mr src1 src2))
-(rule (x64_bt $I32 src1 src2) (x64_btl_mr src1 src2))
-(rule (x64_bt $I64 src1 src2) (x64_btq_mr src1 src2))
+(rule (x64_bt ty @ $I16 src1 src2) (x64_btw_mr (gpr_mem_16_for_ty ty src1) src2))
+(rule (x64_bt ty @ $I32 src1 src2) (x64_btl_mr (gpr_mem_32_for_ty ty src1) src2))
+(rule (x64_bt ty @ $I64 src1 src2) (x64_btq_mr (gpr_mem_64_for_ty ty src1) src2))
 
 ;; Helper for creating `bt` instructions.
 (decl x64_bt_imm (Type GprMem u8) ProducesFlags)
-(rule (x64_bt_imm $I16 src imm) (x64_btw_mi src imm))
-(rule (x64_bt_imm $I32 src imm) (x64_btl_mi src imm))
-(rule (x64_bt_imm $I64 src imm) (x64_btq_mi src imm))
+(rule (x64_bt_imm ty @ $I16 src imm) (x64_btw_mi (gpr_mem_16_for_ty ty src) imm))
+(rule (x64_bt_imm ty @ $I32 src imm) (x64_btl_mi (gpr_mem_32_for_ty ty src) imm))
+(rule (x64_bt_imm ty @ $I64 src imm) (x64_btq_mi (gpr_mem_64_for_ty ty src) imm))
 
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
-(rule (x64_sarx $I32 val amt) (x64_sarxl_rmv val amt))
-(rule (x64_sarx $I64 val amt) (x64_sarxq_rmv val amt))
+(rule (x64_sarx ty @ $I32 val amt) (x64_sarxl_rmv (gpr_mem_32_for_ty ty val) amt))
+(rule (x64_sarx ty @ $I64 val amt) (x64_sarxq_rmv (gpr_mem_64_for_ty ty val) amt))
 
 ;; Helper for creating `shrx` instructions.
 (decl x64_shrx (Type GprMem Gpr) Gpr)
-(rule (x64_shrx $I32 val amt) (x64_shrxl_rmv val amt))
-(rule (x64_shrx $I64 val amt) (x64_shrxq_rmv val amt))
+(rule (x64_shrx ty @ $I32 val amt) (x64_shrxl_rmv (gpr_mem_32_for_ty ty val) amt))
+(rule (x64_shrx ty @ $I64 val amt) (x64_shrxq_rmv (gpr_mem_64_for_ty ty val) amt))
 
 ;; Helper for creating `shlx` instructions.
 (decl x64_shlx (Type GprMem Gpr) Gpr)
-(rule (x64_shlx $I32 val amt) (x64_shlxl_rmv val amt))
-(rule (x64_shlx $I64 val amt) (x64_shlxq_rmv val amt))
+(rule (x64_shlx ty @ $I32 val amt) (x64_shlxl_rmv (gpr_mem_32_for_ty ty val) amt))
+(rule (x64_shlx ty @ $I64 val amt) (x64_shlxq_rmv (gpr_mem_64_for_ty ty val) amt))
 
 ;; Helper for creating `rorx` instructions.
 (decl x64_rorx (Type GprMem u8) Gpr)
-(rule (x64_rorx $I32 src imm) (x64_rorxl_rmi src imm))
-(rule (x64_rorx $I64 src imm) (x64_rorxq_rmi src imm))
+(rule (x64_rorx ty @ $I32 src imm) (x64_rorxl_rmi (gpr_mem_32_for_ty ty src) imm))
+(rule (x64_rorx ty @ $I64 src imm) (x64_rorxq_rmi (gpr_mem_64_for_ty ty src) imm))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type GprMem) Gpr)
-(rule (x64_popcnt $I16 src) (x64_popcntw_rm src))
-(rule (x64_popcnt $I32 src) (x64_popcntl_rm src))
-(rule (x64_popcnt $I64 src) (x64_popcntq_rm src))
+(rule (x64_popcnt ty @ $I16 src) (x64_popcntw_rm (gpr_mem_16_for_ty ty src)))
+(rule (x64_popcnt ty @ $I32 src) (x64_popcntl_rm (gpr_mem_32_for_ty ty src)))
+(rule (x64_popcnt ty @ $I64 src) (x64_popcntq_rm (gpr_mem_64_for_ty ty src)))
 
-;; Helpers for creating `min*` instructions.
-(decl x64_minss (Xmm XmmMem) Xmm)
+;; Helpers for creating `min*` instructions. Scalar `minss`/`minsd` read
+;; 32/64 bits; packed `minps`/`minpd` are 128-bit.
+(decl x64_minss (Xmm XmmMem32) Xmm)
 (rule (x64_minss src1 src2) (x64_minss_a_or_avx src1 src2))
 
-(decl x64_minsd (Xmm XmmMem) Xmm)
+(decl x64_minsd (Xmm XmmMem64) Xmm)
 (rule (x64_minsd src1 src2) (x64_minsd_a_or_avx src1 src2))
 
-(decl x64_minps (Xmm XmmMem) Xmm)
+(decl x64_minps (Xmm XmmMem128) Xmm)
 (rule (x64_minps src1 src2) (x64_minps_a_or_avx src1 src2))
 
-(decl x64_minpd (Xmm XmmMem) Xmm)
+(decl x64_minpd (Xmm XmmMem128) Xmm)
 (rule (x64_minpd src1 src2) (x64_minpd_a_or_avx src1 src2))
 
-(decl x64_maxss (Xmm XmmMem) Xmm)
+(decl x64_maxss (Xmm XmmMem32) Xmm)
 (rule (x64_maxss src1 src2) (x64_maxss_a_or_avx src1 src2))
 
-(decl x64_maxsd (Xmm XmmMem) Xmm)
+(decl x64_maxsd (Xmm XmmMem64) Xmm)
 (rule (x64_maxsd src1 src2) (x64_maxsd_a_or_avx src1 src2))
 
-(decl x64_maxps (Xmm XmmMem) Xmm)
+(decl x64_maxps (Xmm XmmMem128) Xmm)
 (rule (x64_maxps src1 src2) (x64_maxps_a_or_avx src1 src2))
 
-(decl x64_maxpd (Xmm XmmMem) Xmm)
+(decl x64_maxpd (Xmm XmmMem128) Xmm)
 (rule (x64_maxpd src1 src2) (x64_maxpd_a_or_avx src1 src2))
 
-;; Helper for creating `vfmadd213*` instructions
-(decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd213 $F32 a b c)   (x64_vfmadd213ss_a a b c))
-(rule (x64_vfmadd213 $F64 a b c)   (x64_vfmadd213sd_a a b c))
-(rule (x64_vfmadd213 $F32X4 a b c) (x64_vfmadd213ps_a a b c))
-(rule (x64_vfmadd213 $F64X2 a b c) (x64_vfmadd213pd_a a b c))
+;; FMA helpers.
 
-;; Helper for creating `vfmadd132*` instructions
-(decl x64_vfmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd132 $F32 a b c)   (x64_vfmadd132ss_a a b c))
-(rule (x64_vfmadd132 $F64 a b c)   (x64_vfmadd132sd_a a b c))
-(rule (x64_vfmadd132 $F32X4 a b c) (x64_vfmadd132ps_a a b c))
-(rule (x64_vfmadd132 $F64X2 a b c) (x64_vfmadd132pd_a a b c))
+;; --- vfmadd213 ---
+(decl x64_vfmadd213 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfmadd213 $F32   a b c) (x64_vfmadd213_f32   a b c))
+(rule (x64_vfmadd213 $F64   a b c) (x64_vfmadd213_f64   a b c))
+(rule (x64_vfmadd213 $F32X4 a b c) (x64_vfmadd213_f32x4 a b c))
+(rule (x64_vfmadd213 $F64X2 a b c) (x64_vfmadd213_f64x2 a b c))
 
-;; Helper for creating `vfnmadd213*` instructions
-(decl x64_vfnmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd213 $F32 a b c)   (x64_vfnmadd213ss_a a b c))
-(rule (x64_vfnmadd213 $F64 a b c)   (x64_vfnmadd213sd_a a b c))
-(rule (x64_vfnmadd213 $F32X4 a b c) (x64_vfnmadd213ps_a a b c))
-(rule (x64_vfnmadd213 $F64X2 a b c) (x64_vfnmadd213pd_a a b c))
+(decl x64_vfmadd213_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfmadd213_f32   a b c) (x64_vfmadd213ss_a a b c))
+(decl x64_vfmadd213_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfmadd213_f64   a b c) (x64_vfmadd213sd_a a b c))
+(decl x64_vfmadd213_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmadd213_f32x4 a b c) (x64_vfmadd213ps_a a b c))
+(decl x64_vfmadd213_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmadd213_f64x2 a b c) (x64_vfmadd213pd_a a b c))
 
-;; Helper for creating `vfnmadd132*` instructions
-(decl x64_vfnmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd132 $F32 a b c)   (x64_vfnmadd132ss_a a b c))
-(rule (x64_vfnmadd132 $F64 a b c)   (x64_vfnmadd132sd_a a b c))
-(rule (x64_vfnmadd132 $F32X4 a b c) (x64_vfnmadd132ps_a a b c))
-(rule (x64_vfnmadd132 $F64X2 a b c) (x64_vfnmadd132pd_a a b c))
+;; --- vfmadd132 ---
+(decl x64_vfmadd132 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfmadd132 $F32   a b c) (x64_vfmadd132_f32   a b c))
+(rule (x64_vfmadd132 $F64   a b c) (x64_vfmadd132_f64   a b c))
+(rule (x64_vfmadd132 $F32X4 a b c) (x64_vfmadd132_f32x4 a b c))
+(rule (x64_vfmadd132 $F64X2 a b c) (x64_vfmadd132_f64x2 a b c))
 
-;; Helper for creating `vfmsub213*` instructions
-(decl x64_vfmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub213 $F32 a b c)   (x64_vfmsub213ss_a a b c))
-(rule (x64_vfmsub213 $F64 a b c)   (x64_vfmsub213sd_a a b c))
-(rule (x64_vfmsub213 $F32X4 a b c) (x64_vfmsub213ps_a a b c))
-(rule (x64_vfmsub213 $F64X2 a b c) (x64_vfmsub213pd_a a b c))
+(decl x64_vfmadd132_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfmadd132_f32   a b c) (x64_vfmadd132ss_a a b c))
+(decl x64_vfmadd132_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfmadd132_f64   a b c) (x64_vfmadd132sd_a a b c))
+(decl x64_vfmadd132_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmadd132_f32x4 a b c) (x64_vfmadd132ps_a a b c))
+(decl x64_vfmadd132_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmadd132_f64x2 a b c) (x64_vfmadd132pd_a a b c))
 
-;; Helper for creating `vfmsub132*` instructions
-(decl x64_vfmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub132 $F32 a b c)   (x64_vfmsub132ss_a a b c))
-(rule (x64_vfmsub132 $F64 a b c)   (x64_vfmsub132sd_a a b c))
-(rule (x64_vfmsub132 $F32X4 a b c) (x64_vfmsub132ps_a a b c))
-(rule (x64_vfmsub132 $F64X2 a b c) (x64_vfmsub132pd_a a b c))
+;; --- vfnmadd213 ---
+(decl x64_vfnmadd213 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfnmadd213 $F32   a b c) (x64_vfnmadd213_f32   a b c))
+(rule (x64_vfnmadd213 $F64   a b c) (x64_vfnmadd213_f64   a b c))
+(rule (x64_vfnmadd213 $F32X4 a b c) (x64_vfnmadd213_f32x4 a b c))
+(rule (x64_vfnmadd213 $F64X2 a b c) (x64_vfnmadd213_f64x2 a b c))
 
-;; Helper for creating `vfnmsub213*` instructions
-(decl x64_vfnmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub213 $F32 a b c)   (x64_vfnmsub213ss_a a b c))
-(rule (x64_vfnmsub213 $F64 a b c)   (x64_vfnmsub213sd_a a b c))
-(rule (x64_vfnmsub213 $F32X4 a b c) (x64_vfnmsub213ps_a a b c))
-(rule (x64_vfnmsub213 $F64X2 a b c) (x64_vfnmsub213pd_a a b c))
+(decl x64_vfnmadd213_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfnmadd213_f32   a b c) (x64_vfnmadd213ss_a a b c))
+(decl x64_vfnmadd213_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfnmadd213_f64   a b c) (x64_vfnmadd213sd_a a b c))
+(decl x64_vfnmadd213_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmadd213_f32x4 a b c) (x64_vfnmadd213ps_a a b c))
+(decl x64_vfnmadd213_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmadd213_f64x2 a b c) (x64_vfnmadd213pd_a a b c))
 
-;; Helper for creating `vfnmsub132*` instructions
-(decl x64_vfnmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub132 $F32 a b c)   (x64_vfnmsub132ss_a a b c))
-(rule (x64_vfnmsub132 $F64 a b c)   (x64_vfnmsub132sd_a a b c))
-(rule (x64_vfnmsub132 $F32X4 a b c) (x64_vfnmsub132ps_a a b c))
-(rule (x64_vfnmsub132 $F64X2 a b c) (x64_vfnmsub132pd_a a b c))
+;; --- vfnmadd132 ---
+(decl x64_vfnmadd132 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfnmadd132 $F32   a b c) (x64_vfnmadd132_f32   a b c))
+(rule (x64_vfnmadd132 $F64   a b c) (x64_vfnmadd132_f64   a b c))
+(rule (x64_vfnmadd132 $F32X4 a b c) (x64_vfnmadd132_f32x4 a b c))
+(rule (x64_vfnmadd132 $F64X2 a b c) (x64_vfnmadd132_f64x2 a b c))
+
+(decl x64_vfnmadd132_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfnmadd132_f32   a b c) (x64_vfnmadd132ss_a a b c))
+(decl x64_vfnmadd132_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfnmadd132_f64   a b c) (x64_vfnmadd132sd_a a b c))
+(decl x64_vfnmadd132_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmadd132_f32x4 a b c) (x64_vfnmadd132ps_a a b c))
+(decl x64_vfnmadd132_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmadd132_f64x2 a b c) (x64_vfnmadd132pd_a a b c))
+
+;; --- vfmsub213 ---
+(decl x64_vfmsub213 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfmsub213 $F32   a b c) (x64_vfmsub213_f32   a b c))
+(rule (x64_vfmsub213 $F64   a b c) (x64_vfmsub213_f64   a b c))
+(rule (x64_vfmsub213 $F32X4 a b c) (x64_vfmsub213_f32x4 a b c))
+(rule (x64_vfmsub213 $F64X2 a b c) (x64_vfmsub213_f64x2 a b c))
+
+(decl x64_vfmsub213_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfmsub213_f32   a b c) (x64_vfmsub213ss_a a b c))
+(decl x64_vfmsub213_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfmsub213_f64   a b c) (x64_vfmsub213sd_a a b c))
+(decl x64_vfmsub213_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmsub213_f32x4 a b c) (x64_vfmsub213ps_a a b c))
+(decl x64_vfmsub213_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmsub213_f64x2 a b c) (x64_vfmsub213pd_a a b c))
+
+;; --- vfmsub132 ---
+(decl x64_vfmsub132 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfmsub132 $F32   a b c) (x64_vfmsub132_f32   a b c))
+(rule (x64_vfmsub132 $F64   a b c) (x64_vfmsub132_f64   a b c))
+(rule (x64_vfmsub132 $F32X4 a b c) (x64_vfmsub132_f32x4 a b c))
+(rule (x64_vfmsub132 $F64X2 a b c) (x64_vfmsub132_f64x2 a b c))
+
+(decl x64_vfmsub132_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfmsub132_f32   a b c) (x64_vfmsub132ss_a a b c))
+(decl x64_vfmsub132_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfmsub132_f64   a b c) (x64_vfmsub132sd_a a b c))
+(decl x64_vfmsub132_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmsub132_f32x4 a b c) (x64_vfmsub132ps_a a b c))
+(decl x64_vfmsub132_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfmsub132_f64x2 a b c) (x64_vfmsub132pd_a a b c))
+
+;; --- vfnmsub213 ---
+(decl x64_vfnmsub213 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfnmsub213 $F32   a b c) (x64_vfnmsub213_f32   a b c))
+(rule (x64_vfnmsub213 $F64   a b c) (x64_vfnmsub213_f64   a b c))
+(rule (x64_vfnmsub213 $F32X4 a b c) (x64_vfnmsub213_f32x4 a b c))
+(rule (x64_vfnmsub213 $F64X2 a b c) (x64_vfnmsub213_f64x2 a b c))
+
+(decl x64_vfnmsub213_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfnmsub213_f32   a b c) (x64_vfnmsub213ss_a a b c))
+(decl x64_vfnmsub213_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfnmsub213_f64   a b c) (x64_vfnmsub213sd_a a b c))
+(decl x64_vfnmsub213_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmsub213_f32x4 a b c) (x64_vfnmsub213ps_a a b c))
+(decl x64_vfnmsub213_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmsub213_f64x2 a b c) (x64_vfnmsub213pd_a a b c))
+
+;; --- vfnmsub132 ---
+(decl x64_vfnmsub132 (Type Xmm Xmm Value) Xmm)
+(rule (x64_vfnmsub132 $F32   a b c) (x64_vfnmsub132_f32   a b c))
+(rule (x64_vfnmsub132 $F64   a b c) (x64_vfnmsub132_f64   a b c))
+(rule (x64_vfnmsub132 $F32X4 a b c) (x64_vfnmsub132_f32x4 a b c))
+(rule (x64_vfnmsub132 $F64X2 a b c) (x64_vfnmsub132_f64x2 a b c))
+
+(decl x64_vfnmsub132_f32   (Xmm Xmm XmmMem32)  Xmm)
+(rule (x64_vfnmsub132_f32   a b c) (x64_vfnmsub132ss_a a b c))
+(decl x64_vfnmsub132_f64   (Xmm Xmm XmmMem64)  Xmm)
+(rule (x64_vfnmsub132_f64   a b c) (x64_vfnmsub132sd_a a b c))
+(decl x64_vfnmsub132_f32x4 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmsub132_f32x4 a b c) (x64_vfnmsub132ps_a a b c))
+(decl x64_vfnmsub132_f64x2 (Xmm Xmm XmmMem128) Xmm)
+(rule (x64_vfnmsub132_f64x2 a b c) (x64_vfnmsub132pd_a a b c))
 
 ;; Note, the `vfmsub231` and `vfnmsub231*` instructions are omitted, because
 ;; instruction selection happens before register allocation and therefore there
@@ -2976,54 +3359,54 @@
 ;; operation on the low bits of the second register. This introduces
 ;; a data-dependency on the contents of the first register which is modeled
 ;; here.
-(decl x64_sqrtss (Xmm XmmMem) Xmm)
+(decl x64_sqrtss (Xmm XmmMem32) Xmm)
 (rule (x64_sqrtss x y) (x64_sqrtss_a_or_avx x y))
 
 ;; Helper for creating `sqrtsd` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for explanation of why this has two args.
-(decl x64_sqrtsd (Xmm XmmMem) Xmm)
+(decl x64_sqrtsd (Xmm XmmMem64) Xmm)
 (rule 0 (x64_sqrtsd x y) (x64_sqrtsd_a_or_avx x y))
 
 ;; Helper for creating `sqrtps` instructions.
-(decl x64_sqrtps (XmmMem) Xmm)
+(decl x64_sqrtps (XmmMem128) Xmm)
 (rule (x64_sqrtps x) (x64_sqrtps_a_or_avx x))
 
 ;; Helper for creating `sqrtpd` instructions.
-(decl x64_sqrtpd (XmmMem) Xmm)
+(decl x64_sqrtpd (XmmMem128) Xmm)
 (rule (x64_sqrtpd x) (x64_sqrtpd_a_or_avx x))
 
 ;; Helper for creating `reciprocal` instructions.
 ;;
 ;; Helper for creating `rcpps` instructions.
-(decl x64_rcpps (XmmMem) Xmm)
+(decl x64_rcpps (XmmMem128) Xmm)
 (rule (x64_rcpps x) (x64_rcpps_rm_or_avx x))
 
 ;; Helper for creating `rcpss` instructions.
-(decl x64_rcpss (XmmMem) Xmm)
+(decl x64_rcpss (XmmMem32) Xmm)
 (rule (x64_rcpss x) (x64_rcpss_rm x))
 
 ;; Helper for creating `vrsqrtss` instructions.
-(decl x64_vrcpss (Xmm XmmMem) Xmm)
+(decl x64_vrcpss (Xmm XmmMem32) Xmm)
 (rule (x64_vrcpss x y) (x64_vrcpss_rvm x y))
 
 ;; Helper for creating `rsqrtps` instructions.
-(decl x64_rsqrtps (XmmMem) Xmm)
+(decl x64_rsqrtps (XmmMem128) Xmm)
 (rule (x64_rsqrtps x) (x64_rsqrtps_rm_or_avx x))
 
 ;; Helper for creating `rsqrtss` instructions.
-(decl x64_rsqrtss (XmmMem) Xmm)
+(decl x64_rsqrtss (XmmMem32) Xmm)
 (rule (x64_rsqrtss x) (x64_rsqrtss_rm x))
 
 ;; Helper for creating `vrsqrtss` instructions.
-(decl x64_vrsqrtss (Xmm XmmMem) Xmm)
+(decl x64_vrsqrtss (Xmm XmmMem32) Xmm)
 (rule (x64_vrsqrtss x y) (x64_vrsqrtss_rvm x y))
 
 
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
-(decl x64_cvtss2sd (Xmm XmmMem) Xmm)
+(decl x64_cvtss2sd (Xmm XmmMem32) Xmm)
 (rule 1 (x64_cvtss2sd x y)
         (if-let true (has_avx))
         (x64_vcvtss2sd_b x y))
@@ -3032,35 +3415,35 @@
 ;; Helper for creating `cvtsd2ss` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for why this has two args (same reasoning, different op)
-(decl x64_cvtsd2ss (Xmm XmmMem) Xmm)
+(decl x64_cvtsd2ss (Xmm XmmMem64) Xmm)
 (rule 1 (x64_cvtsd2ss x y)
         (if-let true (has_avx))
         (x64_vcvtsd2ss_b x y))
 (rule 0 (x64_cvtsd2ss x y) (x64_cvtsd2ss_a x y))
 
 ;; Helper for creating `cvtdq2ps` instructions.
-(decl x64_cvtdq2ps (XmmMem) Xmm)
+(decl x64_cvtdq2ps (XmmMem128) Xmm)
 (rule 1 (x64_cvtdq2ps x)
         (if-let true (has_avx))
         (x64_vcvtdq2ps_a x))
 (rule (x64_cvtdq2ps x) (x64_cvtdq2ps_a x))
 
 ;; Helper for creating `cvtps2pd` instructions.
-(decl x64_cvtps2pd (XmmMem) Xmm)
+(decl x64_cvtps2pd (XmmMem64) Xmm)
 (rule 1 (x64_cvtps2pd x)
         (if-let true (has_avx))
         (x64_vcvtps2pd_a x))
 (rule 0 (x64_cvtps2pd x) (x64_cvtps2pd_a x))
 
 ;; Helper for creating `cvtpd2ps` instructions.
-(decl x64_cvtpd2ps (XmmMem) Xmm)
+(decl x64_cvtpd2ps (XmmMem128) Xmm)
 (rule 1 (x64_cvtpd2ps x)
         (if-let true (has_avx))
         (x64_vcvtpd2ps_a x))
 (rule 0 (x64_cvtpd2ps x) (x64_cvtpd2ps_a x))
 
 ;; Helper for creating `cvtdq2pd` instructions.
-(decl x64_cvtdq2pd (XmmMem) Xmm)
+(decl x64_cvtdq2pd (XmmMem64) Xmm)
 (rule 1 (x64_cvtdq2pd x)
         (if-let true (has_avx))
         (x64_vcvtdq2pd_a x))
@@ -3068,42 +3451,43 @@
 
 ;; Helper for creating `cvtsi2ss` instructions.
 (decl x64_cvtsi2ss (Type Xmm GprMem) Xmm)
-(rule 1 (x64_cvtsi2ss $I32 x y)
+(rule 1 (x64_cvtsi2ss ty @ $I32 x y)
         (if-let true (has_avx))
-        (x64_vcvtsi2ssl_b x y))
-(rule 1 (x64_cvtsi2ss $I64 x y)
+        (x64_vcvtsi2ssl_b x (gpr_mem_32_for_ty ty y)))
+(rule 1 (x64_cvtsi2ss ty @ $I64 x y)
         (if-let true (has_avx))
-        (x64_vcvtsi2ssq_b x y))
-(rule 0 (x64_cvtsi2ss $I32 x y) (x64_cvtsi2ssl_a x y))
-(rule 0 (x64_cvtsi2ss $I64 x y) (x64_cvtsi2ssq_a x y))
+        (x64_vcvtsi2ssq_b x (gpr_mem_64_for_ty ty y)))
+(rule 0 (x64_cvtsi2ss ty @ $I32 x y) (x64_cvtsi2ssl_a x (gpr_mem_32_for_ty ty y)))
+(rule 0 (x64_cvtsi2ss ty @ $I64 x y) (x64_cvtsi2ssq_a x (gpr_mem_64_for_ty ty y)))
 
 ;; Helper for creating `cvtsi2sd` instructions.
 (decl x64_cvtsi2sd (Type Xmm GprMem) Xmm)
-(rule 1 (x64_cvtsi2sd $I32 x y)
+(rule 1 (x64_cvtsi2sd ty @ $I32 x y)
         (if-let true (has_avx))
-        (x64_vcvtsi2sdl_b x y))
-(rule 1 (x64_cvtsi2sd $I64 x y)
+        (x64_vcvtsi2sdl_b x (gpr_mem_32_for_ty ty y)))
+(rule 1 (x64_cvtsi2sd ty @ $I64 x y)
         (if-let true (has_avx))
-        (x64_vcvtsi2sdq_b x y))
-(rule 0 (x64_cvtsi2sd $I32 x y) (x64_cvtsi2sdl_a x y))
-(rule 0 (x64_cvtsi2sd $I64 x y) (x64_cvtsi2sdq_a x y))
+        (x64_vcvtsi2sdq_b x (gpr_mem_64_for_ty ty y)))
+(rule 0 (x64_cvtsi2sd ty @ $I32 x y) (x64_cvtsi2sdl_a x (gpr_mem_32_for_ty ty y)))
+(rule 0 (x64_cvtsi2sd ty @ $I64 x y) (x64_cvtsi2sdq_a x (gpr_mem_64_for_ty ty y)))
 
 ;; Helper for creating `cvttps2dq` instructions.
-(decl x64_cvttps2dq (XmmMem) Xmm)
+(decl x64_cvttps2dq (XmmMem128) Xmm)
 (rule 1 (x64_cvttps2dq x)
         (if-let true (has_avx))
         (x64_vcvttps2dq_a x))
 (rule 0 (x64_cvttps2dq x) (x64_cvttps2dq_a x))
 
 ;; Helper for creating `cvttpd2dq` instructions.
-(decl x64_cvttpd2dq (XmmMem) Xmm)
+(decl x64_cvttpd2dq (XmmMem128) Xmm)
 (rule 1 (x64_cvttpd2dq x)
         (if-let true (has_avx))
         (x64_vcvttpd2dq_a x))
 (rule 0 (x64_cvttpd2dq x) (x64_cvttpd2dq_a x))
 
 ;; Helpers for creating `pcmpeq*` instructions.
-(decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
+;; 128-bit packed compare-for-equal, dispatched by lane type.
+(decl x64_pcmpeq (Type Xmm XmmMem128) Xmm)
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
 (rule (x64_pcmpeq $I16X8 x y) (x64_pcmpeqw x y))
 (rule (x64_pcmpeq $I32X4 x y) (x64_pcmpeqd x y))
@@ -3121,21 +3505,22 @@
                (cmp32_swapped Xmm (x64_pshufd cmp32 0b10_11_00_01)))
             (x64_pand cmp32 cmp32_swapped)))
 
-;; Helpers for creating `pcmpeq*` instructions.
-(decl x64_pcmpeqb (Xmm XmmMem) Xmm)
+;; Helpers for creating `pcmpeq*` instructions (all 128-bit packed).
+(decl x64_pcmpeqb (Xmm XmmMem128) Xmm)
 (rule (x64_pcmpeqb x y) (x64_pcmpeqb_a_or_avx x y))
 
-(decl x64_pcmpeqw (Xmm XmmMem) Xmm)
+(decl x64_pcmpeqw (Xmm XmmMem128) Xmm)
 (rule (x64_pcmpeqw x y) (x64_pcmpeqw_a_or_avx x y))
 
-(decl x64_pcmpeqd (Xmm XmmMem) Xmm)
+(decl x64_pcmpeqd (Xmm XmmMem128) Xmm)
 (rule (x64_pcmpeqd x y) (x64_pcmpeqd_a_or_avx x y))
 
-(decl x64_pcmpeqq (Xmm XmmMem) Xmm)
+(decl x64_pcmpeqq (Xmm XmmMem128) Xmm)
 (rule (x64_pcmpeqq x y) (x64_pcmpeqq_a_or_avx x y))
 
-;; Helpers for creating `pcmpgt*` instructions.
-(decl x64_pcmpgt (Type Xmm XmmMem) Xmm)
+;; Helpers for creating `pcmpgt*` instructions. These are 128-bit packed
+;; compares regardless of lane width.
+(decl x64_pcmpgt (Type Xmm XmmMem128) Xmm)
 (rule (x64_pcmpgt $I8X16 x y) (x64_pcmpgtb_a_or_avx x y))
 (rule (x64_pcmpgt $I16X8 x y) (x64_pcmpgtw_a_or_avx x y))
 (rule (x64_pcmpgt $I32X4 x y) (x64_pcmpgtd_a_or_avx x y))
@@ -3178,7 +3563,7 @@
 ;; 32-bits are equal then the lower 32-bits comparison is used instead.
 (rule 0 (x64_pcmpgt $I64X2 x y)
         (let (
-            (mask Xmm (x64_movdqu_load (emit_u128_le_const 0x00000000_80000000_00000000_80000000)))
+            (mask Xmm (x64_movdqu_load (emit_xmm_mem_128_le_const 0x00000000_80000000_00000000_80000000)))
             (x_masked           Xmm (x64_pxor mask x))
             (y_masked           Xmm (x64_pxor mask y))
             (cmp32              Xmm (x64_pcmpgtd_a x_masked y_masked))
@@ -3302,25 +3687,25 @@
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
 
 ;; Helper for creating `movddup` instructions
-(decl x64_movddup (XmmMem) Xmm)
+(decl x64_movddup (XmmMem64) Xmm)
 (rule (x64_movddup src) (x64_movddup_a src))
 (rule 1 (x64_movddup src)
         (if-let true (has_avx))
         (x64_vmovddup_a src))
 
 ;; Helpers for creating `vpbroadcast*` instructions.
-(decl x64_vpbroadcastb (XmmMem) Xmm)
+(decl x64_vpbroadcastb (XmmMem8) Xmm)
 (rule (x64_vpbroadcastb src) (x64_vpbroadcastb_a src))
 
-(decl x64_vpbroadcastw (XmmMem) Xmm)
+(decl x64_vpbroadcastw (XmmMem16) Xmm)
 (rule (x64_vpbroadcastw src) (x64_vpbroadcastw_a src))
 
-(decl x64_vpbroadcastd (XmmMem) Xmm)
+(decl x64_vpbroadcastd (XmmMem32) Xmm)
 (rule (x64_vpbroadcastd src) (x64_vpbroadcastd_a src))
 
-(decl x64_vbroadcastss (XmmMem) Xmm)
-(rule 1 (x64_vbroadcastss (is_xmm src)) (x64_vbroadcastss_a_r src))
-(rule 0 (x64_vbroadcastss (is_mem src)) (x64_vbroadcastss_a_m src))
+(decl x64_vbroadcastss (XmmMem32) Xmm)
+(rule 1 (x64_vbroadcastss (is_xmm_32 src)) (x64_vbroadcastss_a_r src))
+(rule 0 (x64_vbroadcastss (is_mem_32 src)) (x64_vbroadcastss_a_m src))
 
 ;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3839,14 +4224,14 @@
 ;; Two registers are returned through `ValueRegs` where the first is the
 ;; quotient and the second is the remainder.
 (decl x64_div (Type Gpr Gpr GprMem TrapCode) ValueRegs)
-(rule (x64_div $I16 lo hi divisor code) (x64_divw_m lo hi divisor code))
-(rule (x64_div $I32 lo hi divisor code) (x64_divl_m lo hi divisor code))
-(rule (x64_div $I64 lo hi divisor code) (x64_divq_m lo hi divisor code))
+(rule (x64_div ty @ $I16 lo hi divisor code) (x64_divw_m lo hi (gpr_mem_16_for_ty ty divisor) code))
+(rule (x64_div ty @ $I32 lo hi divisor code) (x64_divl_m lo hi (gpr_mem_32_for_ty ty divisor) code))
+(rule (x64_div ty @ $I64 lo hi divisor code) (x64_divq_m lo hi (gpr_mem_64_for_ty ty divisor) code))
 
 (decl x64_idiv (Type Gpr Gpr GprMem TrapCode) ValueRegs)
-(rule (x64_idiv $I16 lo hi divisor code) (x64_idivw_m lo hi divisor code))
-(rule (x64_idiv $I32 lo hi divisor code) (x64_idivl_m lo hi divisor code))
-(rule (x64_idiv $I64 lo hi divisor code) (x64_idivq_m lo hi divisor code))
+(rule (x64_idiv ty @ $I16 lo hi divisor code) (x64_idivw_m lo hi (gpr_mem_16_for_ty ty divisor) code))
+(rule (x64_idiv ty @ $I32 lo hi divisor code) (x64_idivl_m lo hi (gpr_mem_32_for_ty ty divisor) code))
+(rule (x64_idiv ty @ $I64 lo hi divisor code) (x64_idivq_m lo hi (gpr_mem_64_for_ty ty divisor) code))
 
 ;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3950,6 +4335,39 @@
 (convert WritableGpr GprMemImm writable_gpr_to_gpr_mem_imm)
 (convert WritableGpr ValueRegs writable_gpr_to_value_regs)
 
+;; Sized GPR auto-conversions. `Value` -> `GprMem{N}` / `GprMemImm{N}`
+;; asserts that the value's CLIF width is N bits; `Gpr` -> sized is
+;; infallible (Gpr carries no width0.
+;;
+;; `RegMem{,Imm}` -> sized is intentionally not provided:
+;; those carry no width, so callers must use an explicit width cast.
+
+(convert Value GprMem8    put_in_gpr_mem_8)
+(convert Value GprMem16   put_in_gpr_mem_16)
+(convert Value GprMem32   put_in_gpr_mem_32)
+(convert Value GprMem64   put_in_gpr_mem_64)
+(convert Value GprMemImm8  put_in_gpr_mem_imm_8)
+(convert Value GprMemImm16 put_in_gpr_mem_imm_16)
+(convert Value GprMemImm32 put_in_gpr_mem_imm_32)
+(convert Value GprMemImm64 put_in_gpr_mem_imm_64)
+(convert Gpr GprMem8    gpr_to_gpr_mem_8)
+(convert Gpr GprMem16   gpr_to_gpr_mem_16)
+(convert Gpr GprMem32   gpr_to_gpr_mem_32)
+(convert Gpr GprMem64   gpr_to_gpr_mem_64)
+(convert Gpr GprMemImm8  gpr_to_gpr_mem_imm_8)
+(convert Gpr GprMemImm16 gpr_to_gpr_mem_imm_16)
+(convert Gpr GprMemImm32 gpr_to_gpr_mem_imm_32)
+(convert Gpr GprMemImm64 gpr_to_gpr_mem_imm_64)
+
+(convert GprMem8    GprMem gpr_mem_8_to_gpr_mem)
+(convert GprMem16   GprMem gpr_mem_16_to_gpr_mem)
+(convert GprMem32   GprMem gpr_mem_32_to_gpr_mem)
+(convert GprMem64   GprMem gpr_mem_64_to_gpr_mem)
+(convert GprMemImm8  GprMemImm gpr_mem_imm_8_to_gpr_mem_imm)
+(convert GprMemImm16 GprMemImm gpr_mem_imm_16_to_gpr_mem_imm)
+(convert GprMemImm32 GprMemImm gpr_mem_imm_32_to_gpr_mem_imm)
+(convert GprMemImm64 GprMemImm gpr_mem_imm_64_to_gpr_mem_imm)
+
 (convert Xmm InstOutput output_xmm)
 (convert Value Xmm put_in_xmm)
 (convert Value XmmMem put_in_xmm_mem)
@@ -3983,6 +4401,92 @@
 (convert XmmMem XmmMemAligned xmm_mem_to_xmm_mem_aligned)
 (convert XmmMemImm XmmMemAlignedImm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
+(rule (xmm_mem_to_xmm_mem_aligned_from_sized_8 x)
+      (xmm_mem_to_xmm_mem_aligned (xmm_mem_8_to_xmm_mem x)))
+(rule (xmm_mem_to_xmm_mem_aligned_from_sized_16 x)
+      (xmm_mem_to_xmm_mem_aligned (xmm_mem_16_to_xmm_mem x)))
+(rule (xmm_mem_to_xmm_mem_aligned_from_sized_32 x)
+      (xmm_mem_to_xmm_mem_aligned (xmm_mem_32_to_xmm_mem x)))
+(rule (xmm_mem_to_xmm_mem_aligned_from_sized_64 x)
+      (xmm_mem_to_xmm_mem_aligned (xmm_mem_64_to_xmm_mem x)))
+(rule (xmm_mem_to_xmm_mem_aligned_from_sized_128 x)
+      (xmm_mem_to_xmm_mem_aligned (xmm_mem_128_to_xmm_mem x)))
+
+(decl xmm_mem_to_xmm_mem_aligned_from_sized_8   (XmmMem8)   XmmMemAligned)
+(decl xmm_mem_to_xmm_mem_aligned_from_sized_16  (XmmMem16)  XmmMemAligned)
+(decl xmm_mem_to_xmm_mem_aligned_from_sized_32  (XmmMem32)  XmmMemAligned)
+(decl xmm_mem_to_xmm_mem_aligned_from_sized_64  (XmmMem64)  XmmMemAligned)
+(decl xmm_mem_to_xmm_mem_aligned_from_sized_128 (XmmMem128) XmmMemAligned)
+
+(convert XmmMem8   XmmMemAligned xmm_mem_to_xmm_mem_aligned_from_sized_8)
+(convert XmmMem16  XmmMemAligned xmm_mem_to_xmm_mem_aligned_from_sized_16)
+(convert XmmMem32  XmmMemAligned xmm_mem_to_xmm_mem_aligned_from_sized_32)
+(convert XmmMem64  XmmMemAligned xmm_mem_to_xmm_mem_aligned_from_sized_64)
+(convert XmmMem128 XmmMemAligned xmm_mem_to_xmm_mem_aligned_from_sized_128)
+
+(convert Value XmmMem8     put_in_xmm_mem_8)
+(convert Value XmmMem16    put_in_xmm_mem_16)
+(convert Value XmmMem32    put_in_xmm_mem_32)
+(convert Value XmmMem64    put_in_xmm_mem_64)
+(convert Value XmmMem128   put_in_xmm_mem_128)
+(convert Value XmmMemAligned8   put_in_xmm_mem_aligned_8)
+(convert Value XmmMemAligned16  put_in_xmm_mem_aligned_16)
+(convert Value XmmMemAligned32  put_in_xmm_mem_aligned_32)
+(convert Value XmmMemAligned64  put_in_xmm_mem_aligned_64)
+(convert Value XmmMemAligned128 put_in_xmm_mem_aligned_128)
+(convert Value XmmMemImm8     put_in_xmm_mem_imm_8)
+(convert Value XmmMemImm16    put_in_xmm_mem_imm_16)
+(convert Value XmmMemImm32    put_in_xmm_mem_imm_32)
+(convert Value XmmMemImm64    put_in_xmm_mem_imm_64)
+(convert Value XmmMemImm128   put_in_xmm_mem_imm_128)
+(convert Value XmmMemAlignedImm8   put_in_xmm_mem_aligned_imm_8)
+(convert Value XmmMemAlignedImm16  put_in_xmm_mem_aligned_imm_16)
+(convert Value XmmMemAlignedImm32  put_in_xmm_mem_aligned_imm_32)
+(convert Value XmmMemAlignedImm64  put_in_xmm_mem_aligned_imm_64)
+(convert Value XmmMemAlignedImm128 put_in_xmm_mem_aligned_imm_128)
+
+(convert Xmm XmmMem8     xmm_to_xmm_mem_8)
+(convert Xmm XmmMem16    xmm_to_xmm_mem_16)
+(convert Xmm XmmMem32    xmm_to_xmm_mem_32)
+(convert Xmm XmmMem64    xmm_to_xmm_mem_64)
+(convert Xmm XmmMem128   xmm_to_xmm_mem_128)
+(convert Xmm XmmMemAligned8   xmm_to_xmm_mem_aligned_8)
+(convert Xmm XmmMemAligned16  xmm_to_xmm_mem_aligned_16)
+(convert Xmm XmmMemAligned32  xmm_to_xmm_mem_aligned_32)
+(convert Xmm XmmMemAligned64  xmm_to_xmm_mem_aligned_64)
+(convert Xmm XmmMemAligned128 xmm_to_xmm_mem_aligned_128)
+(convert Xmm XmmMemImm8     xmm_to_xmm_mem_imm_8)
+(convert Xmm XmmMemImm16    xmm_to_xmm_mem_imm_16)
+(convert Xmm XmmMemImm32    xmm_to_xmm_mem_imm_32)
+(convert Xmm XmmMemImm64    xmm_to_xmm_mem_imm_64)
+(convert Xmm XmmMemImm128   xmm_to_xmm_mem_imm_128)
+(convert Xmm XmmMemAlignedImm8   xmm_to_xmm_mem_aligned_imm_8)
+(convert Xmm XmmMemAlignedImm16  xmm_to_xmm_mem_aligned_imm_16)
+(convert Xmm XmmMemAlignedImm32  xmm_to_xmm_mem_aligned_imm_32)
+(convert Xmm XmmMemAlignedImm64  xmm_to_xmm_mem_aligned_imm_64)
+(convert Xmm XmmMemAlignedImm128 xmm_to_xmm_mem_aligned_imm_128)
+
+(convert XmmMem8     XmmMem xmm_mem_8_to_xmm_mem)
+(convert XmmMem16    XmmMem xmm_mem_16_to_xmm_mem)
+(convert XmmMem32    XmmMem xmm_mem_32_to_xmm_mem)
+(convert XmmMem64    XmmMem xmm_mem_64_to_xmm_mem)
+(convert XmmMem128   XmmMem xmm_mem_128_to_xmm_mem)
+(convert XmmMemAligned8   XmmMemAligned xmm_mem_aligned_8_to_xmm_mem_aligned)
+(convert XmmMemAligned16  XmmMemAligned xmm_mem_aligned_16_to_xmm_mem_aligned)
+(convert XmmMemAligned32  XmmMemAligned xmm_mem_aligned_32_to_xmm_mem_aligned)
+(convert XmmMemAligned64  XmmMemAligned xmm_mem_aligned_64_to_xmm_mem_aligned)
+(convert XmmMemAligned128 XmmMemAligned xmm_mem_aligned_128_to_xmm_mem_aligned)
+(convert XmmMemImm8     XmmMemImm xmm_mem_imm_8_to_xmm_mem_imm)
+(convert XmmMemImm16    XmmMemImm xmm_mem_imm_16_to_xmm_mem_imm)
+(convert XmmMemImm32    XmmMemImm xmm_mem_imm_32_to_xmm_mem_imm)
+(convert XmmMemImm64    XmmMemImm xmm_mem_imm_64_to_xmm_mem_imm)
+(convert XmmMemImm128   XmmMemImm xmm_mem_imm_128_to_xmm_mem_imm)
+(convert XmmMemAlignedImm8   XmmMemAlignedImm xmm_mem_aligned_imm_8_to_xmm_mem_aligned_imm)
+(convert XmmMemAlignedImm16  XmmMemAlignedImm xmm_mem_aligned_imm_16_to_xmm_mem_aligned_imm)
+(convert XmmMemAlignedImm32  XmmMemAlignedImm xmm_mem_aligned_imm_32_to_xmm_mem_aligned_imm)
+(convert XmmMemAlignedImm64  XmmMemAlignedImm xmm_mem_aligned_imm_64_to_xmm_mem_aligned_imm)
+(convert XmmMemAlignedImm128 XmmMemAlignedImm xmm_mem_aligned_imm_128_to_xmm_mem_aligned_imm)
+
 (convert Gpr Imm8Gpr gpr_to_imm8_gpr)
 
 (convert Amode SyntheticAmode amode_to_synthetic_amode)
@@ -4003,7 +4507,115 @@
 (convert SinkableLoad RegMemImm sink_load_to_reg_mem_imm)
 (convert SinkableLoad GprMemImm sink_load_to_gpr_mem_imm)
 (convert SinkableLoad XmmMem sink_load_to_xmm_mem)
+
+;; Width-tagged sinkable-load conversions. Each is guaranteed safe by the
+;; fact that the source `SinkableLoadN` newtype can only be obtained from
+;; an extractor that checked the Value's CLIF type width matches N.
+(convert SinkableLoad8   GprMem8   sink_load_8_to_gpr_mem_8)
+(convert SinkableLoad16  GprMem16  sink_load_16_to_gpr_mem_16)
+(convert SinkableLoad32  GprMem32  sink_load_32_to_gpr_mem_32)
+(convert SinkableLoad64  GprMem64  sink_load_64_to_gpr_mem_64)
+(convert SinkableLoad8   XmmMem8   sink_load_8_to_xmm_mem_8)
+(convert SinkableLoad16  XmmMem16  sink_load_16_to_xmm_mem_16)
+(convert SinkableLoad32  XmmMem32  sink_load_32_to_xmm_mem_32)
+(convert SinkableLoad64  XmmMem64  sink_load_64_to_xmm_mem_64)
+(convert SinkableLoad128 XmmMem128 sink_load_128_to_xmm_mem_128)
 (convert SinkableLoad SyntheticAmode sink_load)
+
+;; Auto-conversions from `Amode` / `SyntheticAmode` to the sized
+;; `GprMem{N}` / `XmmMem{N}` / `XmmMemAligned{N}` operand types.
+;;
+;; Note that these are unchecked casts that allow a bare amode to
+;; become a GprMem of any width; but we've judged this to be fine,
+;; because when feeding a bare amode into a potentially
+;; memory-accessing instruction, one is already opting into accessing
+;; memory of the width that the instruction implies. The
+;; specific-width operand types enforce safety one level up, when we
+;; autoconvert a `Value` to a `GprMem{N}`.
+;;
+;; And in addition to that, these autoconversions are actually really
+;; quite necessary for ergonomics: without them, we would need to
+;; update a *bunch* of `to_amode`-invoking callsites to have explicit
+;; casts that would serve no real purpose since the caller is already
+;; typically type-specific and is doing low-level construction of
+;; memory accesses.
+(convert SyntheticAmode GprMem8           synthetic_amode_to_gpr_mem_8)
+(convert SyntheticAmode GprMem16          synthetic_amode_to_gpr_mem_16)
+(convert SyntheticAmode GprMem32          synthetic_amode_to_gpr_mem_32)
+(convert SyntheticAmode GprMem64          synthetic_amode_to_gpr_mem_64)
+(convert SyntheticAmode XmmMem8           synthetic_amode_to_xmm_mem_8)
+(convert SyntheticAmode XmmMem16          synthetic_amode_to_xmm_mem_16)
+(convert SyntheticAmode XmmMem32          synthetic_amode_to_xmm_mem_32)
+(convert SyntheticAmode XmmMem64          synthetic_amode_to_xmm_mem_64)
+(convert SyntheticAmode XmmMem128         synthetic_amode_to_xmm_mem_128)
+(convert SyntheticAmode XmmMemAligned128  synthetic_amode_to_xmm_mem_aligned_128)
+
+(convert Amode GprMem8           amode_to_gpr_mem_8)
+(convert Amode GprMem16          amode_to_gpr_mem_16)
+(convert Amode GprMem32          amode_to_gpr_mem_32)
+(convert Amode GprMem64          amode_to_gpr_mem_64)
+(convert Amode XmmMem8           amode_to_xmm_mem_8)
+(convert Amode XmmMem16          amode_to_xmm_mem_16)
+(convert Amode XmmMem32          amode_to_xmm_mem_32)
+(convert Amode XmmMem64          amode_to_xmm_mem_64)
+(convert Amode XmmMem128         amode_to_xmm_mem_128)
+(convert Amode XmmMemAligned128  amode_to_xmm_mem_aligned_128)
+
+
+(convert Reg GprMem8  reg_to_gpr_mem_8)
+(convert Reg GprMem16 reg_to_gpr_mem_16)
+(convert Reg GprMem32 reg_to_gpr_mem_32)
+(convert Reg GprMem64 reg_to_gpr_mem_64)
+
+(convert WritableGpr GprMem8  writable_gpr_to_gpr_mem_8)
+(convert WritableGpr GprMem16 writable_gpr_to_gpr_mem_16)
+(convert WritableGpr GprMem32 writable_gpr_to_gpr_mem_32)
+(convert WritableGpr GprMem64 writable_gpr_to_gpr_mem_64)
+(convert WritableXmm XmmMem128         writable_xmm_to_xmm_mem_128)
+(convert WritableXmm XmmMemAligned128  writable_xmm_to_xmm_mem_aligned_128)
+
+;; Sized `XmmMem{N} -> XmmMemAligned{N}` bridges: if the operand is a
+;; register or aligned memory, pass through; otherwise emit an unaligned
+;; 16-byte load into an XMM register. Only N=128 is actually used by the
+;; asm DSL (the `align(xmm_mN)` qualifier is only applied to xmm_m128),
+;; but we provide the other sizes for completeness.
+(convert XmmMem32  XmmMemAligned32  xmm_mem_32_to_xmm_mem_aligned_32)
+(convert XmmMem64  XmmMemAligned64  xmm_mem_64_to_xmm_mem_aligned_64)
+(convert XmmMem128 XmmMemAligned128 xmm_mem_128_to_xmm_mem_aligned_128)
+
+;; Explicit `Type`-parameterized narrowing helpers. Used where a
+;; `Type`-parameterized helper (e.g. `x64_add_raw`, `x64_div`,
+;; `cmove`) has an un-sized `GprMem` / `XmmMem` / `XmmMemAligned`
+;; operand in scope and needs to pass it to a now-sized asm helper.
+;;
+;; The `Type` argument is the helper's 's own `Type` parameter,
+;; to be cross-checked against the asserted size.
+(decl gpr_mem_8_for_ty  (Type GprMem) GprMem8)
+(extern constructor gpr_mem_8_for_ty  gpr_mem_8_for_ty)
+(decl gpr_mem_16_for_ty (Type GprMem) GprMem16)
+(extern constructor gpr_mem_16_for_ty gpr_mem_16_for_ty)
+(decl gpr_mem_32_for_ty (Type GprMem) GprMem32)
+(extern constructor gpr_mem_32_for_ty gpr_mem_32_for_ty)
+(decl gpr_mem_64_for_ty (Type GprMem) GprMem64)
+(extern constructor gpr_mem_64_for_ty gpr_mem_64_for_ty)
+
+;; Narrow a `GprMem` to `GprMem32` for use at a 32-bit asm helper that is
+;; being applied to a `Type` of 8, 16, or 32 bits. At `Type` width 32 any
+;; memory operand is safe (we read the exact source width). At narrower
+;; widths only a register source or a pool-emitted constant reference is
+;; permitted. Note that the sinkable-load infrastructure explicitly
+;; avoids sinking loads narrower than 32 bits; so this is an assert
+;; local to the use-site that verifies that that logic works.
+(decl gpr_mem_as_gpr_mem_32_or_widened_in_reg (Type GprMem) GprMem32)
+(extern constructor gpr_mem_as_gpr_mem_32_or_widened_in_reg gpr_mem_as_gpr_mem_32_or_widened_in_reg)
+(decl xmm_mem_32_for_ty  (Type XmmMem) XmmMem32)
+(extern constructor xmm_mem_32_for_ty  xmm_mem_32_for_ty)
+(decl xmm_mem_64_for_ty  (Type XmmMem) XmmMem64)
+(extern constructor xmm_mem_64_for_ty  xmm_mem_64_for_ty)
+(decl xmm_mem_128_for_ty (Type XmmMem) XmmMem128)
+(extern constructor xmm_mem_128_for_ty xmm_mem_128_for_ty)
+(decl xmm_mem_aligned_128_for_ty (Type XmmMemAligned) XmmMemAligned128)
+(extern constructor xmm_mem_aligned_128_for_ty xmm_mem_aligned_128_for_ty)
 
 (decl reg_to_xmm_mem (Reg) XmmMem)
 (rule (reg_to_xmm_mem r)
@@ -4058,6 +4670,135 @@
 (rule (const_to_xmm_mem c) (const_to_synthetic_amode c))
 (decl const_to_reg_mem (VCodeConstant) RegMem)
 (rule (const_to_reg_mem c) (RegMem.Mem (const_to_synthetic_amode c)))
+
+;; Sized `VCodeConstant / SyntheticAmode / Amode -> XmmMem{N}`
+;; helpers.  These are explicit (not auto-`convert`) because the
+;; source types don't carry width: using the wrong helper for the
+;; actual pool entry or load size is a bug, so the call site should
+;; specify the intended width. Use these at the point of emission of a
+;; known-width constant (e.g. paired with `emit_u128_le_const`) or
+;; when synthesizing a load from an `Amode` that's known to be 128
+;; bits wide.
+(decl const_to_xmm_mem_128 (VCodeConstant) XmmMem128)
+(extern constructor const_to_xmm_mem_128 const_to_xmm_mem_128)
+(decl synthetic_amode_to_xmm_mem_8 (SyntheticAmode) XmmMem8)
+(extern constructor synthetic_amode_to_xmm_mem_8 synthetic_amode_to_xmm_mem_8)
+(decl synthetic_amode_to_xmm_mem_16 (SyntheticAmode) XmmMem16)
+(extern constructor synthetic_amode_to_xmm_mem_16 synthetic_amode_to_xmm_mem_16)
+(decl synthetic_amode_to_xmm_mem_32 (SyntheticAmode) XmmMem32)
+(extern constructor synthetic_amode_to_xmm_mem_32 synthetic_amode_to_xmm_mem_32)
+(decl synthetic_amode_to_xmm_mem_64 (SyntheticAmode) XmmMem64)
+(extern constructor synthetic_amode_to_xmm_mem_64 synthetic_amode_to_xmm_mem_64)
+(decl synthetic_amode_to_xmm_mem_128 (SyntheticAmode) XmmMem128)
+(extern constructor synthetic_amode_to_xmm_mem_128 synthetic_amode_to_xmm_mem_128)
+;; Aligned 128-bit memory: go through the un-sized alignment check, which
+;; copies unaligned memory to a register via a 16-byte `movdqu` load.
+(decl synthetic_amode_to_xmm_mem_aligned_128 (SyntheticAmode) XmmMemAligned128)
+(rule (synthetic_amode_to_xmm_mem_aligned_128 amode)
+      (xmm_mem_128_to_xmm_mem_aligned_128 (synthetic_amode_to_xmm_mem_128 amode)))
+
+;; Amode -> sized bridges. Each routes through the `SyntheticAmode.Real`
+;; wrapping and the matching sized conversion above.
+(decl amode_to_gpr_mem_8   (Amode) GprMem8)
+(rule (amode_to_gpr_mem_8 a)   (synthetic_amode_to_gpr_mem_8   (amode_to_synthetic_amode a)))
+(decl amode_to_gpr_mem_16  (Amode) GprMem16)
+(rule (amode_to_gpr_mem_16 a)  (synthetic_amode_to_gpr_mem_16  (amode_to_synthetic_amode a)))
+(decl amode_to_gpr_mem_32  (Amode) GprMem32)
+(rule (amode_to_gpr_mem_32 a)  (synthetic_amode_to_gpr_mem_32  (amode_to_synthetic_amode a)))
+(decl amode_to_gpr_mem_64  (Amode) GprMem64)
+(rule (amode_to_gpr_mem_64 a)  (synthetic_amode_to_gpr_mem_64  (amode_to_synthetic_amode a)))
+(decl amode_to_xmm_mem_8   (Amode) XmmMem8)
+(rule (amode_to_xmm_mem_8 a)   (synthetic_amode_to_xmm_mem_8   (amode_to_synthetic_amode a)))
+(decl amode_to_xmm_mem_16  (Amode) XmmMem16)
+(rule (amode_to_xmm_mem_16 a)  (synthetic_amode_to_xmm_mem_16  (amode_to_synthetic_amode a)))
+(decl amode_to_xmm_mem_32  (Amode) XmmMem32)
+(rule (amode_to_xmm_mem_32 a)  (synthetic_amode_to_xmm_mem_32  (amode_to_synthetic_amode a)))
+(decl amode_to_xmm_mem_64  (Amode) XmmMem64)
+(rule (amode_to_xmm_mem_64 a)  (synthetic_amode_to_xmm_mem_64  (amode_to_synthetic_amode a)))
+;; (amode_to_xmm_mem_128 already exists below; keep a single source of
+;; truth by routing through the SyntheticAmode variant.)
+(decl amode_to_xmm_mem_aligned_128 (Amode) XmmMemAligned128)
+(rule (amode_to_xmm_mem_aligned_128 a)
+      (synthetic_amode_to_xmm_mem_aligned_128 (amode_to_synthetic_amode a)))
+(decl synthetic_amode_to_gpr_mem_8 (SyntheticAmode) GprMem8)
+(extern constructor synthetic_amode_to_gpr_mem_8 synthetic_amode_to_gpr_mem_8)
+(decl synthetic_amode_to_gpr_mem_16 (SyntheticAmode) GprMem16)
+(extern constructor synthetic_amode_to_gpr_mem_16 synthetic_amode_to_gpr_mem_16)
+(decl synthetic_amode_to_gpr_mem_32 (SyntheticAmode) GprMem32)
+(extern constructor synthetic_amode_to_gpr_mem_32 synthetic_amode_to_gpr_mem_32)
+(decl synthetic_amode_to_gpr_mem_64 (SyntheticAmode) GprMem64)
+(extern constructor synthetic_amode_to_gpr_mem_64 synthetic_amode_to_gpr_mem_64)
+
+(decl reg_to_gpr_mem_8  (Reg) GprMem8)
+(extern constructor reg_to_gpr_mem_8  reg_to_gpr_mem_8)
+(decl reg_to_gpr_mem_16 (Reg) GprMem16)
+(extern constructor reg_to_gpr_mem_16 reg_to_gpr_mem_16)
+(decl reg_to_gpr_mem_32 (Reg) GprMem32)
+(extern constructor reg_to_gpr_mem_32 reg_to_gpr_mem_32)
+(decl reg_to_gpr_mem_64 (Reg) GprMem64)
+(extern constructor reg_to_gpr_mem_64 reg_to_gpr_mem_64)
+
+(decl writable_gpr_to_gpr_mem_8  (WritableGpr) GprMem8)
+(extern constructor writable_gpr_to_gpr_mem_8  writable_gpr_to_gpr_mem_8)
+(decl writable_gpr_to_gpr_mem_16 (WritableGpr) GprMem16)
+(extern constructor writable_gpr_to_gpr_mem_16 writable_gpr_to_gpr_mem_16)
+(decl writable_gpr_to_gpr_mem_32 (WritableGpr) GprMem32)
+(extern constructor writable_gpr_to_gpr_mem_32 writable_gpr_to_gpr_mem_32)
+(decl writable_gpr_to_gpr_mem_64 (WritableGpr) GprMem64)
+(extern constructor writable_gpr_to_gpr_mem_64 writable_gpr_to_gpr_mem_64)
+(decl writable_xmm_to_xmm_mem_128         (WritableXmm) XmmMem128)
+(extern constructor writable_xmm_to_xmm_mem_128         writable_xmm_to_xmm_mem_128)
+(decl writable_xmm_to_xmm_mem_aligned_128 (WritableXmm) XmmMemAligned128)
+(extern constructor writable_xmm_to_xmm_mem_aligned_128 writable_xmm_to_xmm_mem_aligned_128)
+
+(decl xmm_mem_32_to_xmm_mem_aligned_32   (XmmMem32)  XmmMemAligned32)
+(extern constructor xmm_mem_32_to_xmm_mem_aligned_32   xmm_mem_32_to_xmm_mem_aligned_32)
+(decl xmm_mem_64_to_xmm_mem_aligned_64   (XmmMem64)  XmmMemAligned64)
+(extern constructor xmm_mem_64_to_xmm_mem_aligned_64   xmm_mem_64_to_xmm_mem_aligned_64)
+(decl xmm_mem_128_to_xmm_mem_aligned_128 (XmmMem128) XmmMemAligned128)
+(extern constructor xmm_mem_128_to_xmm_mem_aligned_128 xmm_mem_128_to_xmm_mem_aligned_128)
+
+;; Unchecked narrowing from un-sized memory-operand types to their sized
+;; counterparts. Use these at callsites where the helper's own name
+;; pins the width (so no `Type` is in scope to double-check against) --
+;; e.g., `x64_movzx` / `x64_movsx` dispatch on an `ExtMode` literal,
+;; `x64_movd_to_xmm` is intrinsically 32-bit, vector shifts like
+;; `x64_pslld` are intrinsically 128-bit. For `Type`-parameterized
+;; dispatchers, prefer the `..._for_ty` variants above, which also
+;; assert consistency between the dispatcher's `Type` and the target
+;; width.
+(decl gpr_mem_as_gpr_mem_8  (GprMem) GprMem8)
+(extern constructor gpr_mem_as_gpr_mem_8  gpr_mem_as_gpr_mem_8)
+(decl gpr_mem_as_gpr_mem_16 (GprMem) GprMem16)
+(extern constructor gpr_mem_as_gpr_mem_16 gpr_mem_as_gpr_mem_16)
+(decl gpr_mem_as_gpr_mem_32 (GprMem) GprMem32)
+(extern constructor gpr_mem_as_gpr_mem_32 gpr_mem_as_gpr_mem_32)
+(decl gpr_mem_as_gpr_mem_64 (GprMem) GprMem64)
+(extern constructor gpr_mem_as_gpr_mem_64 gpr_mem_as_gpr_mem_64)
+
+(decl xmm_mem_as_xmm_mem_32  (XmmMem) XmmMem32)
+(extern constructor xmm_mem_as_xmm_mem_32  xmm_mem_as_xmm_mem_32)
+(decl xmm_mem_as_xmm_mem_64  (XmmMem) XmmMem64)
+(extern constructor xmm_mem_as_xmm_mem_64  xmm_mem_as_xmm_mem_64)
+(decl xmm_mem_as_xmm_mem_128 (XmmMem) XmmMem128)
+(extern constructor xmm_mem_as_xmm_mem_128 xmm_mem_as_xmm_mem_128)
+
+(decl xmm_mem_aligned_as_xmm_mem_aligned_32  (XmmMemAligned) XmmMemAligned32)
+(extern constructor xmm_mem_aligned_as_xmm_mem_aligned_32  xmm_mem_aligned_as_xmm_mem_aligned_32)
+(decl xmm_mem_aligned_as_xmm_mem_aligned_64  (XmmMemAligned) XmmMemAligned64)
+(extern constructor xmm_mem_aligned_as_xmm_mem_aligned_64  xmm_mem_aligned_as_xmm_mem_aligned_64)
+(decl xmm_mem_aligned_as_xmm_mem_aligned_128 (XmmMemAligned) XmmMemAligned128)
+(extern constructor xmm_mem_aligned_as_xmm_mem_aligned_128 xmm_mem_aligned_as_xmm_mem_aligned_128)
+(decl amode_to_xmm_mem_128 (Amode) XmmMem128)
+(rule (amode_to_xmm_mem_128 amode)
+      (synthetic_amode_to_xmm_mem_128 (amode_to_synthetic_amode amode)))
+
+;; Emit a 128-bit little-endian constant into the pool and return it as a
+;; sized `XmmMem128` operand -- the normal path for 128-bit masks built
+;; in-line at the callsite.
+(decl emit_xmm_mem_128_le_const (u128) XmmMem128)
+(rule (emit_xmm_mem_128_le_const c)
+      (const_to_xmm_mem_128 (emit_u128_le_const c)))
 
 (decl xmm_to_xmm_mem_aligned (Xmm) XmmMemAligned)
 (rule (xmm_to_xmm_mem_aligned reg) (xmm_mem_to_xmm_mem_aligned reg))

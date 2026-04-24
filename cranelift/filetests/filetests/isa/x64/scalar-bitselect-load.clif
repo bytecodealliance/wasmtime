@@ -1,0 +1,93 @@
+test compile precise-output
+target x86_64 sse41
+
+function %bitselect_f32_loads(i64, i64, i64) -> f32 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = load.f32 v0
+    v4 = load.f32 v1
+    v5 = load.f32 v2
+    v6 = bitselect v3, v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movss (%rdi), %xmm3
+;   movss (%rsi), %xmm2
+;   movss (%rdx), %xmm1
+;   movdqa %xmm3, %xmm0
+;   andps %xmm2, %xmm0
+;   uninit  %xmm2
+;   pcmpeqd %xmm2, %xmm2
+;   xorps %xmm2, %xmm3
+;   andps %xmm1, %xmm3
+;   orps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm3 ; trap: heap_oob
+;   movss (%rsi), %xmm2 ; trap: heap_oob
+;   movss (%rdx), %xmm1 ; trap: heap_oob
+;   movdqa %xmm3, %xmm0
+;   andps %xmm2, %xmm0
+;   pcmpeqd %xmm2, %xmm2
+;   xorps %xmm2, %xmm3
+;   andps %xmm1, %xmm3
+;   orps %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bitselect_f64_loads(i64, i64, i64) -> f64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = load.f64 v0
+    v4 = load.f64 v1
+    v5 = load.f64 v2
+    v6 = bitselect v3, v4, v5
+    return v6
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movsd (%rdi), %xmm3
+;   movsd (%rsi), %xmm2
+;   movsd (%rdx), %xmm1
+;   movdqa %xmm3, %xmm0
+;   andpd %xmm2, %xmm0
+;   uninit  %xmm2
+;   pcmpeqd %xmm2, %xmm2
+;   xorpd %xmm2, %xmm3
+;   andpd %xmm1, %xmm3
+;   orpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsd (%rdi), %xmm3 ; trap: heap_oob
+;   movsd (%rsi), %xmm2 ; trap: heap_oob
+;   movsd (%rdx), %xmm1 ; trap: heap_oob
+;   movdqa %xmm3, %xmm0
+;   andpd %xmm2, %xmm0
+;   pcmpeqd %xmm2, %xmm2
+;   xorpd %xmm2, %xmm3
+;   andpd %xmm1, %xmm3
+;   orpd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
