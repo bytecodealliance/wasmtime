@@ -266,15 +266,6 @@ pub struct TableSegment {
     pub elements: TableSegmentElements,
 }
 
-/// Does something need GC rooting?
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum NeedsGcRooting {
-    /// GC rooting is needed.
-    Yes,
-    /// GC rooting is not needed.
-    No,
-}
-
 /// Elements of a table segment, either a list of functions or list of arbitrary
 /// expressions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -284,9 +275,8 @@ pub enum TableSegmentElements {
     Functions(Box<[FuncIndex]>),
     /// Arbitrary expressions, aka either functions, null or a load of a global.
     Expressions {
-        /// Is this expression's result of a type that needs GC rooting and
-        /// tracing?
-        needs_gc_rooting: NeedsGcRooting,
+        /// The type of each element in `exprs`.
+        ty: WasmRefType,
         /// The const expressions for this segment's elements.
         exprs: Box<[ConstExpr]>,
     },

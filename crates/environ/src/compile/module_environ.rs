@@ -3,6 +3,7 @@ use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
     TableSegmentElements,
 };
+use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
@@ -11,7 +12,6 @@ use crate::{
     Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
     WasmValType, WasmparserTypeConverter,
 };
-use crate::{NeedsGcRooting, prelude::*};
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
@@ -543,11 +543,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 }
                             }
                             TableSegmentElements::Expressions {
-                                needs_gc_rooting: if ty.is_vmgcref_type_and_not_i31() {
-                                    NeedsGcRooting::Yes
-                                } else {
-                                    NeedsGcRooting::No
-                                },
+                                ty,
                                 exprs: exprs.into(),
                             }
                         }
