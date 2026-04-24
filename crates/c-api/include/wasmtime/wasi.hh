@@ -51,8 +51,7 @@ class WasiConfig {
       names.push_back(name.c_str());
       values.push_back(value.c_str());
     }
-    wasi_config_set_env(ptr.get(), env.size(), names.data(),
-                        values.data());
+    wasi_config_set_env(ptr.get(), env.size(), names.data(), values.data());
   }
 
   /// Indicates that the entire environment of this process should be inherited
