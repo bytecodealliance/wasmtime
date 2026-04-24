@@ -251,7 +251,7 @@
 
 ;; Absolute value of a 128-bit integer pre-z17.
 (rule 0 (lower (iabs $I128 x))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((zero Reg (vec_imm $I128 0))
             (pos Reg x)
             (neg Reg (vec_sub $I128 zero pos))
@@ -281,7 +281,7 @@
 
 ;; Negate a 128-bit integer pre-z17.
 (rule 0 (lower (ineg $I128 x))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (vec_sub $I128 (vec_imm $I128 0) x))
 
 
@@ -297,7 +297,7 @@
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (umax $I128 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi y_reg x_reg)))
@@ -325,7 +325,7 @@
 
 ;; Unsigned maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (umin $I128 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_ucmphi x_reg y_reg)))
@@ -353,7 +353,7 @@
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (smax $I128 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi y_reg x_reg)))
@@ -381,7 +381,7 @@
 
 ;; Signed maximum of two 128-bit integers pre-z17 - expand to icmp + select.
 (rule 1 (lower (smin $I128 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_reg Reg (put_in_reg x))
             (y_reg Reg (put_in_reg y))
             (cond ProducesBool (vec_int128_scmphi x_reg y_reg)))
@@ -465,7 +465,7 @@
 
 ;; Multiply two vector registers - doubleword pre-z17.  Has to be scalarized.
 (rule (vec_mul_impl $I64X2 x y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (mov_to_vec128 $I64X2
                      (mul_reg $I64 (vec_extract_lane $I64X2 x 0 (zero_reg))
                                    (vec_extract_lane $I64X2 y 0 (zero_reg)))
@@ -479,7 +479,7 @@
 
 ;; Multiply two vector registers - quadword pre-z17.
 (rule (vec_mul_impl $I128 x y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_hi Reg (vec_extract_lane $I64X2 x 0 (zero_reg)))
             (x_lo Reg (vec_extract_lane $I64X2 x 1 (zero_reg)))
             (y_hi Reg (vec_extract_lane $I64X2 y 0 (zero_reg)))
@@ -536,7 +536,7 @@
 ;; Multiply high part unsigned, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
 (rule (lower (umulhi $I64X2 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((pair_0 RegPair (umul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (regpair_hi pair_0))
@@ -580,7 +580,7 @@
 ;; Multiply high part signed, vector types with 64-bit elements pre-z17.
 ;; Has to be scalarized.
 (rule (lower (smulhi $I64X2 x y))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
             (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
@@ -1674,7 +1674,7 @@
 
 ;; Count leading zeros, 128-bit full vector pre-z17.
 (rule (lower (clz $I128 x))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((clz_vec Reg (vec_clz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (clz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 clz_vec 0))
@@ -1722,7 +1722,7 @@
 
 ;; Count leading sign-bit copies, 128-bit full vector pre-z17.
 (rule (lower (cls $I128 x))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((x_reg Reg x)
             (ones Reg (vec_imm_splat $I8X16 255))
             (signbit_copies Reg (vec_ashr_by_bit (vec_ashr_by_byte x_reg ones) ones))
@@ -1794,7 +1794,7 @@
 
 ;; Count trailing zeros, 128-bit full vector pre-z17.
     (rule 0 (lower (ctz $I128 x))
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (let ((ctz_vec Reg (vec_ctz $I64X2 x))
             (zero Reg (vec_imm $I64X2 0))
             (ctz_hi Reg (vec_permute_dw_imm $I64X2 zero 0 ctz_vec 0))
@@ -3954,42 +3954,42 @@
 ;; Compare 128-bit integers for equality pre-z17.
 ;; Implemented via element-wise comparison using the all-element true CC flag.
 (rule (icmp_val _ (IntCC.Equal) x @ (value_type (vr128_ty _)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (bool (vec_cmpeqs $I64X2 x y)
             (floatcc_as_cond (FloatCC.Equal))))
 (rule (icmp_val _ (IntCC.NotEqual) x @ (value_type (vr128_ty _)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (bool (vec_cmpeqs $I64X2 x y)
             (floatcc_as_cond (FloatCC.NotEqual))))
 
 ;; Compare (signed) 128-bit integers for relational inequality pre-z17.
 ;; Implemented via synthetic instruction using VECG and VCHLGS.
 (rule (icmp_val _ (IntCC.SignedGreaterThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (vec_int128_scmphi x y))
 (rule (icmp_val _ (IntCC.SignedLessThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (vec_int128_scmphi y x))
 (rule (icmp_val _ (IntCC.SignedGreaterThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (invert_bool (vec_int128_scmphi y x)))
 (rule (icmp_val _ (IntCC.SignedLessThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (invert_bool (vec_int128_scmphi x y)))
 
 ;; Compare (unsigned) 128-bit integers for relational inequality pre-z17.
 ;; Implemented via synthetic instruction using VECLG and VCHLGS.
 (rule (icmp_val _ (IntCC.UnsignedGreaterThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (vec_int128_ucmphi x y))
 (rule (icmp_val _ (IntCC.UnsignedLessThan) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (vec_int128_ucmphi y x))
 (rule (icmp_val _ (IntCC.UnsignedGreaterThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (invert_bool (vec_int128_ucmphi y x)))
 (rule (icmp_val _ (IntCC.UnsignedLessThanOrEqual) x @ (value_type (vr128_ty ty)) y)
-      (if-let true (vxrs_ext3_disabled))
+      (if-let false (vxrs_ext3_enabled))
       (invert_bool (vec_int128_ucmphi x y)))
 
 

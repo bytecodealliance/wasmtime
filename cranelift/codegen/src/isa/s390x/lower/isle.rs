@@ -233,11 +233,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn vxrs_ext3_disabled(&mut self) -> bool {
-        !self.backend.isa_flags.has_vxrs_ext3()
-    }
-
-    #[inline]
     fn writable_gpr(&mut self, regno: u8) -> WritableReg {
         writable_gpr(regno)
     }
