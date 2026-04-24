@@ -14,8 +14,8 @@ use core::pin::Pin;
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityRef, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, SizeOverflow, TableInitialValue, TableSegmentElements, Trap,
-    VMOffsets, WasmRefType,
+    MemoryInitializer, MemoryKind, Module, SizeOverflow, TableInitialValue, TableSegmentElements,
+    Trap, VMOffsets, WasmRefType,
 };
 
 #[cfg(feature = "gc")]
@@ -195,6 +195,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
+        memory_kind: MemoryKind,
     ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>>;
 
     /// Deallocate an instance's previously allocated memory.
@@ -418,7 +419,7 @@ impl dyn InstanceAllocator + '_ {
                 .expect("should be a defined memory since we skipped imported ones");
 
             let memory = self
-                .allocate_memory(request, ty, Some(memory_index))
+                .allocate_memory(request, ty, Some(memory_index), MemoryKind::LinearMemory)
                 .await?;
             memories.push(memory)?;
         }

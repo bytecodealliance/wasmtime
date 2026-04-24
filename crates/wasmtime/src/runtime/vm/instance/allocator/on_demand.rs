@@ -10,7 +10,9 @@ use crate::runtime::vm::table::Table;
 use alloc::sync::Arc;
 use core::future::Future;
 use core::pin::Pin;
-use wasmtime_environ::{DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, VMOffsets};
+use wasmtime_environ::{
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryKind, Module, VMOffsets,
+};
 
 #[cfg(feature = "gc")]
 use crate::runtime::vm::{GcHeap, GcHeapAllocationIndex, GcRuntime};
@@ -115,7 +117,10 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         request: &'a mut InstanceAllocationRequest<'b, 'c>,
         ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
+        memory_kind: MemoryKind,
     ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
+        debug_assert_eq!(memory_index.is_none(), memory_kind == MemoryKind::GcHeap);
+
         let creator = self
             .mem_creator
             .as_deref()
@@ -135,6 +140,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 creator,
                 image,
                 request.limiter.as_deref_mut(),
+                memory_kind,
             )
             .await?;
             Ok((allocation_index, memory))
