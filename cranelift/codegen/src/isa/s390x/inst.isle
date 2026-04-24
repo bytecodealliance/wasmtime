@@ -1580,8 +1580,8 @@
 
 ;; Helpers for querying enabled ISA extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pure mie3_enabled () bool)
-(extern constructor mie3_enabled mie3_enabled)
+(decl pure has_mie3 () bool)
+(extern constructor has_mie3 has_mie3)
 (decl pure mie4_enabled () bool)
 (extern constructor mie4_enabled mie4_enabled)
 
