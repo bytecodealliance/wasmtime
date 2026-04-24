@@ -36,9 +36,9 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
-    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
-    NeedsGcRooting, PtrSize, TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC,
-    VMOffsets, VMSharedTypeIndex, packed_option::ReservedValue,
+    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PtrSize,
+    TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex,
+    WasmRefType, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -225,7 +225,7 @@ impl Instance {
         gc_roots: &mut crate::vm::GcRootsList,
     ) {
         for segment in self.passive_elements_mut().iter_mut() {
-            if segment.needs_gc_rooting() == NeedsGcRooting::Yes {
+            if segment.needs_gc_rooting {
                 for e in segment.elements() {
                     let Some(root) = e.as_vmgc_ref_ptr() else {
                         continue;
@@ -1922,70 +1922,65 @@ impl<T: InstanceLayout> Drop for OwnedInstance<T> {
 
 #[derive(Debug)]
 pub(crate) struct PassiveElementSegment {
-    needs_gc_rooting: NeedsGcRooting,
+    needs_gc_rooting: bool,
     elements: TryVec<ValRaw>,
 }
 
 impl PassiveElementSegment {
     /// Create a new passive element segment with the given capacity.
-    pub(crate) fn new(
-        needs_gc_rooting: NeedsGcRooting,
-        capacity: usize,
-    ) -> Result<Self, OutOfMemory> {
+    pub(crate) fn new(ty: WasmRefType, capacity: usize) -> Result<Self, OutOfMemory> {
         Ok(Self {
-            needs_gc_rooting,
+            needs_gc_rooting: ty.is_vmgcref_type_and_not_i31(),
             elements: TryVec::with_capacity(capacity)?,
         })
     }
 
     /// Push a value onto this passive element segment.
     ///
-    /// NB: Does not type check the value, relies on callers to ensure the value
-    /// is of the correct type (generally, due to validation).
+    /// NB: Does not type check the value, relies on callers to ensure the
+    /// value is of the correct type (generally, due to validation).
     pub(crate) fn push(&mut self, store: &mut StoreOpaque, val: Val) -> Result<()> {
-        let val = {
+        let mut val = {
             let mut store = AutoAssertNoGc::new(store);
             val.to_raw_(&mut store)?
         };
-        let val = self.clone_gc_ref(store, val);
+        if self.needs_gc_rooting {
+            // Note that `anyref` accessors and constructors are used here
+            // without actually checking the type of this segment or value. The
+            // representation and handling of all three is the same which means
+            // that this should work out.
+            let gc_ref = val.get_anyref();
+            debug_assert_eq!(gc_ref, val.get_exnref());
+            debug_assert_eq!(gc_ref, val.get_externref());
+            if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
+                if let Some(gc_store) = store.optional_gc_store_mut() {
+                    val = ValRaw::anyref(gc_store.clone_gc_ref(&gc_ref).as_raw_u32());
+                }
+            }
+        }
         self.elements.push(val)?;
         Ok(())
     }
 
-    fn clone_gc_ref(&mut self, store: &mut StoreOpaque, val: ValRaw) -> ValRaw {
-        if let NeedsGcRooting::Yes = self.needs_gc_rooting {
-            let gc_ref = val.get_anyref();
-            if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
-                if let Some(gc_store) = store.optional_gc_store_mut() {
-                    return ValRaw::anyref(gc_store.clone_gc_ref(&gc_ref).as_raw_u32());
-                }
-            }
-        }
-        val
-    }
-
     /// Clear this segment's elements.
     pub(crate) fn clear(&mut self, mut gc_store: Option<&mut GcStore>) {
-        for val in mem::take(&mut self.elements) {
-            self.drop_gc_ref(&mut gc_store, val);
+        let elements = mem::take(&mut self.elements);
+        if !self.needs_gc_rooting {
+            return;
         }
-    }
-
-    fn drop_gc_ref(&mut self, gc_store: &mut Option<&mut GcStore>, val: ValRaw) {
-        if let NeedsGcRooting::Yes = self.needs_gc_rooting {
+        for val in elements {
+            // Like above, `anyref` accessors are used here even if this
+            // element segment has a different type because all of the vmgcref
+            // types are treated the same way.
             let gc_ref = val.get_anyref();
+            debug_assert_eq!(gc_ref, val.get_exnref());
+            debug_assert_eq!(gc_ref, val.get_externref());
             if let Some(gc_ref) = VMGcRef::from_raw_u32(gc_ref) {
                 if let Some(gc_store) = gc_store.as_deref_mut() {
                     let _ = gc_store.drop_gc_ref(gc_ref);
                 }
             }
         }
-    }
-
-    /// Whether this segment needs GC rooting and tracing.
-    #[cfg(feature = "gc")]
-    pub(crate) fn needs_gc_rooting(&self) -> NeedsGcRooting {
-        self.needs_gc_rooting
     }
 
     /// The elements of this segment.

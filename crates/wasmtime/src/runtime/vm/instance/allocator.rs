@@ -14,8 +14,8 @@ use core::pin::Pin;
 use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityRef, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, NeedsGcRooting, SizeOverflow, TableInitialValue,
-    TableSegmentElements, Trap, VMOffsets,
+    MemoryInitializer, Module, SizeOverflow, TableInitialValue, TableSegmentElements, Trap,
+    VMOffsets, WasmRefType,
 };
 
 #[cfg(feature = "gc")]
@@ -597,10 +597,7 @@ async fn initialize_tables(
                     table.set_(&mut store, i, func.into())?;
                 }
             }
-            TableSegmentElements::Expressions {
-                exprs,
-                needs_gc_rooting: _,
-            } => {
+            TableSegmentElements::Expressions { exprs, ty: _ } => {
                 for (i, expr) in positions.zip(exprs) {
                     let val = const_evaluator
                         .eval(&mut store, limiter.as_deref_mut(), context, expr)
@@ -861,7 +858,7 @@ async fn initialize_passive_elements(
         match segment {
             TableSegmentElements::Functions(func_indices) => {
                 let mut segment =
-                    PassiveElementSegment::new(NeedsGcRooting::No, func_indices.len())?;
+                    PassiveElementSegment::new(WasmRefType::FUNCREF, func_indices.len())?;
                 for func_idx in func_indices {
                     let (instance, registry) =
                         store.instance_and_module_registry_mut(context.instance);
@@ -873,11 +870,8 @@ async fn initialize_passive_elements(
                 debug_assert_eq!(instance.passive_elements.len(), idx.index());
                 instance.passive_elements_mut().push(segment)?;
             }
-            TableSegmentElements::Expressions {
-                needs_gc_rooting,
-                exprs,
-            } => {
-                let mut segment = PassiveElementSegment::new(*needs_gc_rooting, exprs.len())?;
+            TableSegmentElements::Expressions { ty, exprs } => {
+                let mut segment = PassiveElementSegment::new(*ty, exprs.len())?;
                 for expr in exprs {
                     let mut store = OpaqueRootScope::new(&mut *store);
                     let val = const_evaluator
