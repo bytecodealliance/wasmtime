@@ -65,8 +65,7 @@
 ;; @0155                               jump block4
 ;;
 ;;                                 block4:
-;; @0153                               v4 = load.i64 notrap aligned readonly can_move v0+72
-;;                                     v17 = load.i64 notrap aligned readonly can_move vmctx v4+16
+;;                                     v17 = load.i64 notrap aligned readonly can_move vmctx v0+8
 ;;                                     v18 = load.i64 notrap aligned readonly can_move vmctx v17+104
 ;;                                     v20 = load.i8 notrap aligned v18
 ;;                                     jump block5

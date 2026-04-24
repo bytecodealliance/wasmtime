@@ -476,14 +476,6 @@ pub enum Trampoline {
     Trap,
     EnterSyncCall,
     ExitSyncCall,
-    ContextGet {
-        instance: RuntimeComponentInstanceIndex,
-        slot: u32,
-    },
-    ContextSet {
-        instance: RuntimeComponentInstanceIndex,
-        slot: u32,
-    },
     ThreadIndex,
     ThreadNewIndirect {
         instance: RuntimeComponentInstanceIndex,
@@ -1167,14 +1159,6 @@ impl LinearizeDfg<'_> {
             Trampoline::Trap => info::Trampoline::Trap,
             Trampoline::EnterSyncCall => info::Trampoline::EnterSyncCall,
             Trampoline::ExitSyncCall => info::Trampoline::ExitSyncCall,
-            Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
-                instance: *instance,
-                slot: *slot,
-            },
-            Trampoline::ContextSet { instance, slot } => info::Trampoline::ContextSet {
-                instance: *instance,
-                slot: *slot,
-            },
             Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
             Trampoline::ThreadNewIndirect {
                 instance,

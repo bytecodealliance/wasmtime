@@ -1282,6 +1282,15 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
+
+    /// The `context.{get,set}` values for the current thread in the component
+    /// model. This is only used for `component-model-async` and slot[1] is only
+    /// used for `component-model-threading`. Despite the conditional use nature
+    /// this is unconditionally present as it avoids the need to make logic in
+    /// `VMOffsets` conditional.
+    ///
+    /// This is saved/restored when threads are swapped in the component model.
+    pub component_context: [u32; 2],
 }
 
 impl VMStoreContext {
@@ -1366,6 +1375,7 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            component_context: [0; 2],
         }
     }
 }
@@ -1435,6 +1445,10 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, store_data),
             usize::from(offsets.ptr.vmstore_context_store_data())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, component_context),
+            usize::from(offsets.ptr.vmstore_context_component_context())
         );
     }
 }

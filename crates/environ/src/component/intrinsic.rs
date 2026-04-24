@@ -22,6 +22,11 @@ macro_rules! for_each_unsafe_intrinsic {
 
             "u64-native-load" => U64NativeLoad : u64_native_load(address: u64) -> u64;
             "u64-native-store" => U64NativeStore : u64_native_store(address: u64, value: u64);
+
+            "context-get-i32-0" => ContextGetI32_0 : context_get_i32_0() -> u32;
+            "context-set-i32-0" => ContextSetI32_0 : context_set_i32_0(val: u32);
+            "context-get-i32-1" => ContextGetI32_1 : context_get_i32_1() -> u32;
+            "context-set-i32-1" => ContextSetI32_1 : context_set_i32_1(val: u32);
         }
     };
 }

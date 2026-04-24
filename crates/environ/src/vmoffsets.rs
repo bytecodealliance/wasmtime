@@ -250,6 +250,16 @@ pub trait PtrSize {
         self.vmstore_context_stack_chain() + self.size_of_vmstack_chain()
     }
 
+    /// Return the offset of the `async_guard_range` field of `VMStoreContext`.
+    fn vmstore_context_async_guard_range(&self) -> u8 {
+        self.vmstore_context_store_data() + self.size()
+    }
+
+    /// Return the offset of the `component_context` field of `VMStoreContext`.
+    fn vmstore_context_component_context(&self) -> u8 {
+        self.vmstore_context_async_guard_range() + 2 * self.size()
+    }
+
     // Offsets within `VMMemoryDefinition`
 
     /// The offset of the `base` field.

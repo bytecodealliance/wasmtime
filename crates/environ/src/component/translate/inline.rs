@@ -1074,24 +1074,24 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ContextGet { func, i } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::ContextGet {
-                        instance: frame.instance,
-                        slot: *i,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+                let intrinsic = match i {
+                    0 => UnsafeIntrinsic::ContextGetI32_0,
+                    1 => UnsafeIntrinsic::ContextGetI32_1,
+                    _ => unreachable!(),
+                };
+                frame
+                    .funcs
+                    .push((*func, dfg::CoreDef::UnsafeIntrinsic(*func, intrinsic)));
             }
             ContextSet { func, i } => {
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::ContextSet {
-                        instance: frame.instance,
-                        slot: *i,
-                    },
-                ));
-                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
+                let intrinsic = match i {
+                    0 => UnsafeIntrinsic::ContextSetI32_0,
+                    1 => UnsafeIntrinsic::ContextSetI32_1,
+                    _ => unreachable!(),
+                };
+                frame
+                    .funcs
+                    .push((*func, dfg::CoreDef::UnsafeIntrinsic(*func, intrinsic)));
             }
             ThreadIndex { func } => {
                 let index = self
