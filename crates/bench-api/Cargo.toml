@@ -24,6 +24,7 @@ target-lexicon = { workspace = true }
 wasmtime = { workspace = true, default-features = true, features = ["winch", "pulley"] }
 wasmtime-cli-flags = { workspace = true, default-features = true, features = [
     "cranelift",
+    "gc",
 ] }
 wasmtime-wasi = { workspace = true, features = ['p1'] }
 wasmtime-wasi-nn = { workspace = true, optional = true }
