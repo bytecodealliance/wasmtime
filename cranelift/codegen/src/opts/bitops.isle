@@ -20,10 +20,10 @@
 
 ;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
 ;; This identity also holds for non-integer types, vectors, and wider types.
-(rule (simplify (bxor (ty_int ty) x (bnot ty x))) (subsume (iconst_s ty -1)))
-(rule (simplify (bxor (ty_int ty) (bnot ty x) x)) (subsume (iconst_s ty -1)))
-(rule (simplify (bor (ty_int ty) x (bnot ty x))) (subsume (iconst_s ty -1)))
-(rule (simplify (bor (ty_int ty) (bnot ty x) x)) (subsume (iconst_s ty -1)))
+(rule (simplify (bxor ty x (bnot ty x))) (subsume (iconst_s ty -1)))
+(rule (simplify (bxor ty (bnot ty x) x)) (subsume (iconst_s ty -1)))
+(rule (simplify (bor ty x (bnot ty x))) (subsume (iconst_s ty -1)))
+(rule (simplify (bor ty (bnot ty x) x)) (subsume (iconst_s ty -1)))
 
 ;; x & x == x & -1 == x.
 (rule (simplify (band ty x x)) (subsume x))
@@ -32,8 +32,8 @@
 
 ;; x & 0 == x & not(x) == not(x) & x == 0.
 (rule (simplify (band ty _ zero @ (iconst_u ty 0))) (subsume zero))
-(rule (simplify (band (ty_int ty) x (bnot ty x))) (subsume (iconst_u ty 0)))
-(rule (simplify (band (ty_int ty) (bnot ty x) x)) (subsume (iconst_u ty 0)))
+(rule (simplify (band ty x (bnot ty x))) (subsume (iconst_u ty 0)))
+(rule (simplify (band ty (bnot ty x) x)) (subsume (iconst_u ty 0)))
 
 ;; (x & y) ^ (x ^ y) == x | y
 (rule (simplify (bxor ty (band ty X Y) (bxor ty X Y))) (bor ty X Y))
