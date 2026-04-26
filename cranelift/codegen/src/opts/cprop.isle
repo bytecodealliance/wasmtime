@@ -146,6 +146,11 @@
        (bxor ty k @ (iconst ty _) x))
       (bxor ty x k))
 
+(rule (simplify (smin ty k @ (iconst ty _) x)) (smin ty x k))
+(rule (simplify (umin ty k @ (iconst ty _) x)) (umin ty x k))
+(rule (simplify (smax ty k @ (iconst ty _) x)) (smax ty x k))
+(rule (simplify (umax ty k @ (iconst ty _) x)) (umax ty x k))
+
 (rule (simplify
        (icmp ty cc k @ (iconst _ _) x))
       (icmp ty (intcc_swap_args cc) x k))

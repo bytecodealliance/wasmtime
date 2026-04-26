@@ -421,6 +421,46 @@ block0(v0: i32):
 ; nextln: v4 = iadd v0, v3  ; v3 = 1
 ; nextln: return v4
 
+function %smin_const_lhs(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -7
+    v2 = smin v1, v0
+    return v2
+}
+
+; check: v3 = smin v0, v1  ; v1 = -7
+; nextln: return v3
+
+function %umin_const_lhs(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = umin v1, v0
+    return v2
+}
+
+; check: v3 = umin v0, v1  ; v1 = 7
+; nextln: return v3
+
+function %smax_const_lhs(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -7
+    v2 = smax v1, v0
+    return v2
+}
+
+; check: v3 = smax v0, v1  ; v1 = -7
+; nextln: return v3
+
+function %umax_const_lhs(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = umax v1, v0
+    return v2
+}
+
+; check: v3 = umax v0, v1  ; v1 = 7
+; nextln: return v3
+
 function %bswap_i16() -> i16 {
 block0:
     v0 = iconst.i16 0x1234
