@@ -657,6 +657,12 @@ jobs:
       env:
         RUSTFLAGS: "--cfg arc_try_new"
 
+    # Smoke test the coverage script.
+    - run: rustup component add llvm-tools
+    - run: ./scripts/coverage.rs --test all --test wast gc
+    - run: test -d report/
+    - run: test -f report/index.html
+
     # Ensure that fuzzers still build.
     #
     # Install the OCaml packages necessary for fuzz targets that use the
