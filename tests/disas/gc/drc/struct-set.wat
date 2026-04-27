@@ -104,8 +104,8 @@
 ;; @004a                               v33 = iconst.i64 8
 ;; @004a                               v18 = iadd v16, v33  ; v33 = 8
 ;; @004a                               v19 = load.i64 notrap aligned v18
-;;                                     v69 = iconst.i64 1
-;; @004a                               v20 = iadd v19, v69  ; v69 = 1
+;;                                     v68 = iconst.i64 1
+;; @004a                               v20 = iadd v19, v68  ; v68 = 1
 ;; @004a                               store notrap aligned v20, v18
 ;; @004a                               jump block3
 ;;

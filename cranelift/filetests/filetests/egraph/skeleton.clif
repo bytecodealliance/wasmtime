@@ -90,9 +90,9 @@ block0:
 
 ; function %cprop_udiv() -> i32 fast {
 ; block0:
-;     v18 = iconst.i32 1
-;     v2 -> v18
-;     return v18  ; v18 = 1
+;     v16 = iconst.i32 1
+;     v2 -> v16
+;     return v16  ; v16 = 1
 ; }
 
 function %cprop_urem() -> i32 {
@@ -105,9 +105,9 @@ block0:
 
 ; function %cprop_urem() -> i32 fast {
 ; block0:
-;     v37 = iconst.i32 6
-;     v2 -> v37
-;     return v37  ; v37 = 6
+;     v33 = iconst.i32 6
+;     v2 -> v33
+;     return v33  ; v33 = 6
 ; }
 
 function %cprop_sdiv() -> i32 {
@@ -181,11 +181,10 @@ block0:
 
 ; function %cprop_srem() -> i32 fast {
 ; block0:
-;     v28 = iconst.i32 -3
-;     v2 -> v28
-;     return v28  ; v28 = -3
+;     v26 = iconst.i32 -3
+;     v2 -> v26
+;     return v26  ; v26 = -3
 ; }
-
 
 function %udiv_by_one(i32) -> i32 {
 block0(v0: i32):

@@ -33,12 +33,12 @@
 ;;                                     store notrap v4, v60
 ;; @0025                               v17 = load.i64 notrap aligned readonly v0+32
 ;; @0025                               v18 = load.i32 notrap aligned v17
-;;                                     v82 = iconst.i32 7
-;; @0025                               v21 = uadd_overflow_trap v18, v82, user17  ; v82 = 7
-;;                                     v89 = iconst.i32 -8
-;; @0025                               v23 = band v21, v89  ; v89 = -8
-;;                                     v74 = iconst.i32 24
-;; @0025                               v24 = uadd_overflow_trap v23, v74, user17  ; v74 = 24
+;;                                     v80 = iconst.i32 7
+;; @0025                               v21 = uadd_overflow_trap v18, v80, user17  ; v80 = 7
+;;                                     v86 = iconst.i32 -8
+;; @0025                               v23 = band v21, v86  ; v86 = -8
+;;                                     v73 = iconst.i32 24
+;; @0025                               v24 = uadd_overflow_trap v23, v73, user17  ; v73 = 24
 ;; @0025                               v56 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0025                               v26 = load.i64 notrap aligned v56+40
 ;; @0025                               v25 = uextend.i64 v24
@@ -46,12 +46,12 @@
 ;; @0025                               brif v27, block2, block3
 ;;
 ;;                                 block2:
-;;                                     v90 = iconst.i32 -1476394984
+;;                                     v87 = iconst.i32 -1476394984
 ;; @0025                               v31 = load.i64 notrap aligned readonly can_move v56+32
-;;                                     v175 = band.i32 v21, v89  ; v89 = -8
-;;                                     v176 = uextend.i64 v175
-;; @0025                               v33 = iadd v31, v176
-;; @0025                               store notrap aligned v90, v33  ; v90 = -1476394984
+;;                                     v162 = band.i32 v21, v86  ; v86 = -8
+;;                                     v163 = uextend.i64 v162
+;; @0025                               v33 = iadd v31, v163
+;; @0025                               store notrap aligned v87, v33  ; v87 = -1476394984
 ;; @0025                               v37 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0025                               v38 = load.i32 notrap aligned readonly can_move v37
 ;; @0025                               store notrap aligned v38, v33+4
@@ -62,16 +62,16 @@
 ;; @0025                               store notrap aligned v6, v39  ; v6 = 3
 ;;                                     v49 = load.i32 notrap v62
 ;;                                     v64 = iconst.i64 12
-;;                                     v103 = iadd v33, v64  ; v64 = 12
-;; @0025                               store notrap aligned little v49, v103
+;;                                     v98 = iadd v33, v64  ; v64 = 12
+;; @0025                               store notrap aligned little v49, v98
 ;;                                     v48 = load.i32 notrap v61
-;;                                     v106 = iconst.i64 16
-;;                                     v112 = iadd v33, v106  ; v106 = 16
-;; @0025                               store notrap aligned little v48, v112
+;;                                     v101 = iconst.i64 16
+;;                                     v106 = iadd v33, v101  ; v101 = 16
+;; @0025                               store notrap aligned little v48, v106
 ;;                                     v47 = load.i32 notrap v60
-;;                                     v129 = iconst.i64 20
-;;                                     v135 = iadd v33, v129  ; v129 = 20
-;; @0025                               store notrap aligned little v47, v135
+;;                                     v121 = iconst.i64 20
+;;                                     v126 = iadd v33, v121  ; v121 = 20
+;; @0025                               store notrap aligned little v47, v126
 ;; @0029                               jump block1
 ;;
 ;;                                 block3 cold:
@@ -80,6 +80,6 @@
 ;; @0025                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v177 = band.i32 v21, v89  ; v89 = -8
-;; @0029                               return v177
+;;                                     v164 = band.i32 v21, v86  ; v86 = -8
+;; @0029                               return v164
 ;; }

@@ -137,14 +137,14 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @0048                               v12 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v48 = iconst.i64 8
-;; @0048                               v14 = iadd v12, v48  ; v48 = 8
+;;                                     v47 = iconst.i64 8
+;; @0048                               v14 = iadd v12, v47  ; v47 = 8
 ;; @0048                               v17 = load.i64 user5 aligned table v14
 ;; @004a                               v18 = load.i64 user15 aligned readonly v17+8
 ;; @004a                               v19 = load.i64 notrap aligned readonly v17+24
 ;; @004a                               v20 = call_indirect sig0, v18(v19, v0, v2, v3, v4, v5)
-;;                                     v56 = iconst.i64 16
-;; @005b                               v28 = iadd v12, v56  ; v56 = 16
+;;                                     v54 = iconst.i64 16
+;; @005b                               v28 = iadd v12, v54  ; v54 = 16
 ;; @005b                               v31 = load.i64 user5 aligned table v28
 ;; @005d                               v32 = load.i64 user15 aligned readonly v31+8
 ;; @005d                               v33 = load.i64 notrap aligned readonly v31+24
@@ -167,14 +167,14 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @0075                               v12 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v48 = iconst.i64 8
-;; @0075                               v14 = iadd v12, v48  ; v48 = 8
+;;                                     v47 = iconst.i64 8
+;; @0075                               v14 = iadd v12, v47  ; v47 = 8
 ;; @0075                               v17 = load.i64 user5 aligned table v14
 ;; @0075                               v18 = load.i64 user6 aligned readonly v17+8
 ;; @0075                               v19 = load.i64 notrap aligned readonly v17+24
 ;; @0075                               v20 = call_indirect sig0, v18(v19, v0, v2, v3, v4, v5)
-;;                                     v56 = iconst.i64 16
-;; @0087                               v28 = iadd v12, v56  ; v56 = 16
+;;                                     v54 = iconst.i64 16
+;; @0087                               v28 = iadd v12, v54  ; v54 = 16
 ;; @0087                               v31 = load.i64 user5 aligned table v28
 ;; @0087                               v32 = load.i64 user6 aligned readonly v31+8
 ;; @0087                               v33 = load.i64 notrap aligned readonly v31+24
