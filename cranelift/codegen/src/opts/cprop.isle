@@ -457,3 +457,8 @@
 (decl ieee128_constant (Ieee128) Constant)
 (extern constructor ieee128_constant ieee128_constant)
 (extern extractor ieee128_constant ieee128_constant_extractor)
+
+;; a special case of ~a = -a - 1
+;; ~(x + y) = -(x + y) - 1 = (~x) - y = (~x) + (-y)
+;; bnot pushed to the leaf so that it not only canonicalzes the IR but also folds the constant y into -y
+(rule (simplify (bnot (fits_in_64 ty) (iadd ty x (iconst ty y)))) (iadd ty (bnot ty x) (iconst ty (imm64_neg ty y))))
