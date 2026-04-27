@@ -228,6 +228,9 @@ impl Config {
             pooling.total_tables = pooling.total_tables.max(limits::TABLES);
             pooling.max_tables_per_module =
                 pooling.max_tables_per_module.max(limits::TABLES_PER_MODULE);
+            pooling.max_tables_per_component = pooling
+                .max_tables_per_component
+                .max(limits::TABLES_PER_MODULE);
             pooling.max_memories_per_module = pooling
                 .max_memories_per_module
                 .max(limits::MEMORIES_PER_MODULE);
