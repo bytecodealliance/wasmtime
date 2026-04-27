@@ -65,10 +65,7 @@ impl DiffEngine for WasmtimeEngine {
     }
 
     fn is_non_deterministic_error(&self, err: &Error) -> bool {
-        match err.downcast_ref::<Trap>() {
-            Some(trap) => super::wasmtime_trap_is_non_deterministic(trap),
-            None => false,
-        }
+        super::wasmtime_error_is_non_deterministic(err)
     }
 }
 
