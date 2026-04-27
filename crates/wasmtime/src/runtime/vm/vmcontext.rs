@@ -18,7 +18,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -1290,7 +1291,7 @@ pub struct VMStoreContext {
     /// `VMOffsets` conditional.
     ///
     /// This is saved/restored when threads are swapped in the component model.
-    pub component_context: [u32; 2],
+    pub component_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
 }
 
 impl VMStoreContext {
@@ -1375,7 +1376,7 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
-            component_context: [0; 2],
+            component_context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
         }
     }
 }
@@ -1448,7 +1449,17 @@ mod test_vmstore_context {
         );
         assert_eq!(
             offset_of!(VMStoreContext, component_context),
-            usize::from(offsets.ptr.vmstore_context_component_context())
+            usize::from(offsets.ptr.vmstore_context_component_context_slot(0))
+        );
+
+        // Make sure that the calculation for the size of a slot is also
+        // accurate.
+        let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
+            - offsets.ptr.vmstore_context_component_context_slot(0);
+        let default = VMStoreContext::default();
+        assert_eq!(
+            size_of_val(&default.component_context[0]),
+            usize::from(slot_width)
         );
     }
 }

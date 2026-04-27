@@ -83,7 +83,6 @@ use std::ptr::{self, NonNull};
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{TableDebug, TableId};
-use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -92,6 +91,7 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
 use wasmtime_environ::packed_option::ReservedValue;
+use wasmtime_environ::{NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 
 pub use abort::JoinHandle;
 pub use future_stream_any::{FutureAny, StreamAny};
@@ -1712,13 +1712,13 @@ impl StoreOpaque {
                 .context = old_context;
         }
         if cfg!(debug_assertions) {
-            self.vm_store_context_mut().component_context = [u32::MAX; 2];
+            self.vm_store_context_mut().component_context = [u32::MAX; NUM_COMPONENT_CONTEXT_SLOTS];
         }
         if let Some(thread) = thread.guest() {
             let thread = self.concurrent_state_mut().get_mut(thread.thread)?;
             let context = thread.context;
             if cfg!(debug_assertions) {
-                thread.context = [u32::MAX; 2];
+                thread.context = [u32::MAX; NUM_COMPONENT_CONTEXT_SLOTS];
             }
             self.vm_store_context_mut().component_context = context;
         }
@@ -4428,7 +4428,7 @@ enum GuestThreadState {
 pub struct GuestThread {
     /// Context-local state used to implement the `context.{get,set}`
     /// intrinsics.
-    context: [u32; 2],
+    context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
     /// The owning guest task.
     parent_task: TableId<GuestTask>,
     /// If present, indicates that the thread is currently waiting on the
@@ -4460,7 +4460,7 @@ impl GuestThread {
     fn new_implicit(state: &mut ConcurrentState, parent_task: TableId<GuestTask>) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         Ok(Self {
-            context: [0; 2],
+            context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedImplicit,
@@ -4478,7 +4478,7 @@ impl GuestThread {
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         Ok(Self {
-            context: [0; 2],
+            context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedExplicit(start_func),

@@ -1552,6 +1552,8 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn translate_context_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) {
+        // This is the width of the type being loaded from Wasmtime's
+        // `VMStoreContext` slot and it depends on the intrinsic.
         let ty = match intrinsic {
             UnsafeIntrinsic::ContextGetI32_0
             | UnsafeIntrinsic::ContextSetI32_0
@@ -1559,14 +1561,16 @@ impl<'a> TrampolineCompiler<'a> {
             | UnsafeIntrinsic::ContextSetI32_1 => ir::types::I32,
             _ => unreachable!(),
         };
-        let context_slot_size = 4;
+
         let slot = match intrinsic {
             UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextSetI32_0 => 0,
             UnsafeIntrinsic::ContextGetI32_1 | UnsafeIntrinsic::ContextSetI32_1 => 1,
             _ => unreachable!(),
         };
-        let offset =
-            self.offsets.ptr.vmstore_context_component_context() + slot * context_slot_size;
+        let offset = self
+            .offsets
+            .ptr
+            .vmstore_context_component_context_slot(slot);
         let params = self.abi_load_params();
         let vmstore_context = self.load_vm_store_context();
         match intrinsic {
