@@ -83,7 +83,6 @@ use std::ptr::{self, NonNull};
 use std::task::{Context, Poll, Waker};
 use std::vec::Vec;
 use table::{TableDebug, TableId};
-use wasmtime_environ::Trap;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS, OptionsIndex, PREPARE_ASYNC_NO_RESULT, PREPARE_ASYNC_WITH_RESULT,
@@ -92,6 +91,7 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
 };
 use wasmtime_environ::packed_option::ReservedValue;
+use wasmtime_environ::{NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 
 pub use abort::JoinHandle;
 pub use future_stream_any::{FutureAny, StreamAny};
@@ -1688,22 +1688,56 @@ impl StoreOpaque {
             .instance_state(instance.index)
     }
 
+    /// Configure the currently running `thread`.
+    ///
+    /// This will save off any state necessary for the previous thread, if
+    /// applicable, and then it'll additionally update state for `thread` if
+    /// needed too.
     fn set_thread(&mut self, thread: impl Into<CurrentThread>) -> Result<CurrentThread> {
+        let thread = thread.into();
+        let state = self.concurrent_state_mut();
+        let old_thread = mem::replace(&mut state.current_thread, thread);
+
+        // First thing to do after swapping threads is updating the context
+        // slots for this thread within the store. This restores the behavior of
+        // `context.{get,set}`. This involves taking the old state out of the
+        // store, saving it in the thread that's being swapped from, and doing
+        // the inverse for the new thread. When debug assertions are enabled
+        // this also leaves behind sentinel values to try to uncover bugs where
+        // this may be forgotten.
+        if let Some(old_thread) = old_thread.guest() {
+            let old_context = self.vm_store_context().component_context;
+            self.concurrent_state_mut()
+                .get_mut(old_thread.thread)?
+                .context = old_context;
+        }
+        if cfg!(debug_assertions) {
+            self.vm_store_context_mut().component_context = [u32::MAX; NUM_COMPONENT_CONTEXT_SLOTS];
+        }
+        if let Some(thread) = thread.guest() {
+            let thread = self.concurrent_state_mut().get_mut(thread.thread)?;
+            let context = thread.context;
+            if cfg!(debug_assertions) {
+                thread.context = [u32::MAX; NUM_COMPONENT_CONTEXT_SLOTS];
+            }
+            self.vm_store_context_mut().component_context = context;
+        }
+
         // Each time we switch threads, we conservatively set `task_may_block`
         // to `false` for the component instance we're switching away from (if
         // any), meaning it will be `false` for any new thread created for that
         // instance unless explicitly set otherwise.
+        //
+        // Additionally if we're switching to a new thread, set its component
+        // instance's `task_may_block` according to where it left off.
         let state = self.concurrent_state_mut();
-        let old_thread = mem::replace(&mut state.current_thread, thread.into());
         if let Some(old_thread) = old_thread.guest() {
             let instance = state.get_mut(old_thread.task)?.instance.instance;
             self.component_instance_mut(instance)
                 .set_task_may_block(false)
         }
 
-        // If we're switching to a new thread, set its component instance's
-        // `task_may_block` according to where it left off.
-        if self.concurrent_state_mut().current_thread.guest().is_some() {
+        if thread.guest().is_some() {
             self.set_task_may_block()?;
         }
 
@@ -2143,9 +2177,9 @@ impl Instance {
             }
         }
 
-        store.concurrent_state_mut().delete(guest_thread.thread)?;
-        store.concurrent_state_mut().delete(sync_call_set)?;
-        let task = store.concurrent_state_mut().get_mut(guest_thread.task)?;
+        state.delete(guest_thread.thread)?;
+        state.delete(sync_call_set)?;
+        let task = state.get_mut(guest_thread.task)?;
         task.threads.remove(&guest_thread.thread);
         Ok(())
     }
@@ -2369,10 +2403,10 @@ impl Instance {
                     self.task_complete(store, guest_thread.task, result, Status::Returned)?;
                 }
 
+                store.set_thread(old_thread)?;
+
                 // This is a callback-less call, so the implicit thread has now completed
                 self.cleanup_thread(store, guest_thread, callee_instance.index)?;
-
-                store.set_thread(old_thread)?;
 
                 let state = store.concurrent_state_mut();
                 let task = state.get_mut(guest_thread.task)?;
@@ -2731,6 +2765,8 @@ impl Instance {
         let old_set = guest_waitable.common(state)?.set;
         let set = state.get_mut(caller.thread)?.sync_call_set;
         guest_waitable.join(state, Some(set))?;
+
+        store.0.set_thread(CurrentThread::None)?;
 
         // ... and suspend this fiber temporarily while we wait for it to start.
         //
@@ -3327,6 +3363,8 @@ impl Instance {
                 // on a separate fiber if we're running in an async store.
                 unsafe { callee.call_unchecked(store.as_context_mut(), &mut params)? };
 
+                store.0.set_thread(old_thread)?;
+
                 self.cleanup_thread(store.0, guest_thread, runtime_instance)?;
                 log::trace!("explicit thread {guest_thread:?} completed");
                 let state = store.0.concurrent_state_mut();
@@ -3334,7 +3372,6 @@ impl Instance {
                 if task.threads.is_empty() && !task.returned_or_cancelled() {
                     bail!(Trap::NoAsyncResult);
                 }
-                store.0.set_thread(old_thread)?;
                 let state = store.0.concurrent_state_mut();
                 if let Some(t) = old_thread.guest() {
                     state.get_mut(t.thread)?.state = GuestThreadState::Running;
@@ -3776,14 +3813,6 @@ impl Instance {
         } else {
             bail!(Trap::SubtaskCancelAfterTerminal);
         }
-    }
-
-    pub(crate) fn context_get(self, store: &mut StoreOpaque, slot: u32) -> Result<u32> {
-        store.concurrent_state_mut().context_get(slot)
-    }
-
-    pub(crate) fn context_set(self, store: &mut StoreOpaque, slot: u32, value: u32) -> Result<()> {
-        store.concurrent_state_mut().context_set(slot, value)
     }
 }
 
@@ -4399,7 +4428,7 @@ enum GuestThreadState {
 pub struct GuestThread {
     /// Context-local state used to implement the `context.{get,set}`
     /// intrinsics.
-    context: [u32; 2],
+    context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
     /// The owning guest task.
     parent_task: TableId<GuestTask>,
     /// If present, indicates that the thread is currently waiting on the
@@ -4431,7 +4460,7 @@ impl GuestThread {
     fn new_implicit(state: &mut ConcurrentState, parent_task: TableId<GuestTask>) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         Ok(Self {
-            context: [0; 2],
+            context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedImplicit,
@@ -4449,7 +4478,7 @@ impl GuestThread {
     ) -> Result<Self> {
         let sync_call_set = state.push(WaitableSet::default())?;
         Ok(Self {
-            context: [0; 2],
+            context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
             wake_on_cancel: None,
             state: GuestThreadState::NotStartedExplicit(start_func),
@@ -5118,22 +5147,6 @@ impl ConcurrentState {
         } else {
             false
         }
-    }
-
-    /// Implements the `context.get` intrinsic.
-    pub(crate) fn context_get(&mut self, slot: u32) -> Result<u32> {
-        let thread = self.current_guest_thread()?;
-        let val = self.get_mut(thread.thread)?.context[usize::try_from(slot)?];
-        log::trace!("context_get {thread:?} slot {slot} val {val:#x}");
-        Ok(val)
-    }
-
-    /// Implements the `context.set` intrinsic.
-    pub(crate) fn context_set(&mut self, slot: u32, val: u32) -> Result<()> {
-        let thread = self.current_guest_thread()?;
-        log::trace!("context_set {thread:?} slot {slot} val {val:#x}");
-        self.get_mut(thread.thread)?.context[usize::try_from(slot)?] = val;
-        Ok(())
     }
 
     /// Returns whether there's a pending cancellation on the current guest thread,

@@ -18,7 +18,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -1282,6 +1283,15 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
+
+    /// The `context.{get,set}` values for the current thread in the component
+    /// model. This is only used for `component-model-async` and slot[1] is only
+    /// used for `component-model-threading`. Despite the conditional use nature
+    /// this is unconditionally present as it avoids the need to make logic in
+    /// `VMOffsets` conditional.
+    ///
+    /// This is saved/restored when threads are swapped in the component model.
+    pub component_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
 }
 
 impl VMStoreContext {
@@ -1366,6 +1376,7 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            component_context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
         }
     }
 }
@@ -1435,6 +1446,20 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, store_data),
             usize::from(offsets.ptr.vmstore_context_store_data())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, component_context),
+            usize::from(offsets.ptr.vmstore_context_component_context_slot(0))
+        );
+
+        // Make sure that the calculation for the size of a slot is also
+        // accurate.
+        let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
+            - offsets.ptr.vmstore_context_component_context_slot(0);
+        let default = VMStoreContext::default();
+        assert_eq!(
+            size_of_val(&default.component_context[0]),
+            usize::from(slot_width)
         );
     }
 }

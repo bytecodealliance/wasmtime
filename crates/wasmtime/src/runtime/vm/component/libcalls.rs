@@ -1327,27 +1327,6 @@ fn error_context_drop(
 }
 
 #[cfg(feature = "component-model-async")]
-fn context_get(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    _caller_instance: u32,
-    slot: u32,
-) -> Result<u32> {
-    instance.context_get(store, slot)
-}
-
-#[cfg(feature = "component-model-async")]
-fn context_set(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    _caller_instance: u32,
-    slot: u32,
-    val: u32,
-) -> Result<()> {
-    instance.context_set(store, slot, val)
-}
-
-#[cfg(feature = "component-model-async")]
 fn thread_index(store: &mut dyn VMStore, instance: Instance) -> Result<u32> {
     instance.thread_index(store)
 }

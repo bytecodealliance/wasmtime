@@ -1118,28 +1118,6 @@ pub enum Trampoline {
     /// pushed by `EnterSyncCall`.
     ExitSyncCall,
 
-    /// Intrinsic used to implement the `context.get` component model builtin.
-    ///
-    /// The payload here represents that this is accessing the Nth slot of local
-    /// storage.
-    ContextGet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// Which slot to access.
-        slot: u32,
-    },
-
-    /// Intrinsic used to implement the `context.set` component model builtin.
-    ///
-    /// The payload here represents that this is accessing the Nth slot of local
-    /// storage.
-    ContextSet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// Which slot to update.
-        slot: u32,
-    },
-
     /// Intrinsic used to implement the `thread.index` component model builtin.
     ThreadIndex,
 
@@ -1256,8 +1234,6 @@ impl Trampoline {
             Trap => format!("trap"),
             EnterSyncCall => format!("enter-sync-call"),
             ExitSyncCall => format!("exit-sync-call"),
-            ContextGet { .. } => format!("context-get"),
-            ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),
             ThreadNewIndirect { .. } => format!("thread-new-indirect"),
             ThreadSuspendToSuspended { .. } => format!("thread-suspend-to-suspended"),
