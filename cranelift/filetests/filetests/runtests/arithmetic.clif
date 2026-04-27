@@ -1039,3 +1039,29 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_ugt_x_umax(0, 0) == 0
 ; run: %test_ugt_x_umax(1, 2) == 0
+
+function %fold_bnot_iadd_const_i32_rt(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; run: %fold_bnot_iadd_const_i32_rt(0) == -6
+; run: %fold_bnot_iadd_const_i32_rt(7) == -13
+; run: %fold_bnot_iadd_const_i32_rt(-5) == -1
+; run: %fold_bnot_iadd_const_i32_rt(0x7fffffff) == 0x7ffffffb
+
+function %fold_bnot_iadd_neg_const_i64_rt(i64) -> i64 fast {
+block0(v0: i64):
+    v1 = iconst.i64 -7
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; run: %fold_bnot_iadd_neg_const_i64_rt(0) == 6
+; run: %fold_bnot_iadd_neg_const_i64_rt(7) == -1
+; run: %fold_bnot_iadd_neg_const_i64_rt(-1) == 7
+; run: %fold_bnot_iadd_neg_const_i64_rt(0x80000000_00000000) == 0x80000000_00000006

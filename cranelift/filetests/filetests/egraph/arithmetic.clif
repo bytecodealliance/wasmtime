@@ -439,3 +439,28 @@ block0(v0: i32):
   ; return v6
 }
 
+;; ~(x + y) --> (~x) + (-y)
+function %bnot_iadd_const_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+    ; check: v4 = bnot v0
+    ; check: v5 = iconst.i32 -5
+    ; check: v6 = iadd v4, v5
+    ; check: return v6
+}
+
+;; ~(x + y) --> (~x) + (-y)
+function %bnot_iadd_neg_const_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -7
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+    ; check: v4 = bnot v0
+    ; check: v5 = iconst.i64 7
+    ; check: v6 = iadd v4, v5
+    ; check: return v6
+}
