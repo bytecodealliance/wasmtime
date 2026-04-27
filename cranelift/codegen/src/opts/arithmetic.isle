@@ -340,7 +340,10 @@
 
 ;; Helper to create a "true" value for a comparison. For scalar integers this is
 ;; a value of 1 but for vectors this is -1 since each lane is filled with all
-;; 1s.
+;; 1s. We use `(iconst_u ty 0)` for falses for both integers and vector. This is
+;; because of the Cranelift semantics:
+;; When comparing scalars, the result is 1 if the condition holds, or 0 otherwise.
+;; When comparing vectors, the result is -1 (all-ones) if the condition holds, or 0 otherwise.
 (decl cmp_true (Type) Value)
 (rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
 (rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))

@@ -101,7 +101,7 @@
 
 ;; Comparisons against largest/smallest signed/unsigned values:
 ;; ult(x, 0) == false.
-(rule (simplify (ult (fits_in_64 (ty_int bty)) x zero @ (iconst_u _ 0)))
+(rule (simplify (ult bty x zero @ (iconst_u _ 0)))
       (subsume (iconst_u bty 0)))
 
 ;; ule(x, 0) == eq(x, 0)
@@ -113,8 +113,8 @@
       (ne bty x zero))
 
 ;; uge(x, 0) == true.
-(rule (simplify (uge (fits_in_64 (ty_int bty)) x zero @ (iconst_u _ 0)))
-      (subsume (iconst_u bty 1)))
+(rule (simplify (uge bty x zero @ (iconst_u _ 0)))
+      (subsume (cmp_true bty)))
 
 ;; ult(x, UMAX) == ne(x, UMAX).
 (rule (simplify (ult (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
@@ -317,10 +317,10 @@
 (rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
-(rule (simplify (band (fits_in_64 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
+(rule (simplify (band ty (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
+(rule (simplify (band ty (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
+(rule (simplify (band ty (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
+(rule (simplify (band ty (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
 (rule
   (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))
