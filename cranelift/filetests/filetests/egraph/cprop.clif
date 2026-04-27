@@ -349,10 +349,10 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v15 = iconst.i32 333
-; check: v19 = iadd v1, v15
-; check: v20 = icmp eq v0, v19
-; nextln: return v20
+; check: v16 = iconst.i32 333
+; check: v18 = iadd v1, v16
+; check: v19 = icmp eq v0, v18
+; nextln: return v19
 
 function %icmp_subs_const_addends(i32, i32) -> i8 {
 block0(v0: i32, v1: i32):
@@ -364,10 +364,10 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v47 = iconst.i32 333
-; check: v49 = iadd v0, v47
-; check: v50 = icmp eq v1, v49
-; nextln: return v50
+; check: v40 = iconst.i32 333
+; check: v44 = iadd v0, v40
+; check: v45 = icmp eq v1, v44
+; nextln: return v45
 
 function %ireduce_iconst() -> i8 {
 block0:

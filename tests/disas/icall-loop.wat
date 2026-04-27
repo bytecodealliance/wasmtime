@@ -83,26 +83,26 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0038                               v6 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v37 = iconst.i64 8
-;; @0038                               v8 = iadd v6, v37  ; v37 = 8
+;;                                     v36 = iconst.i64 8
+;; @0038                               v8 = iadd v6, v36  ; v36 = 8
 ;;                                     v26 = iconst.i64 -2
 ;; @0038                               v14 = iconst.i32 0
-;;                                     v36 = iconst.i64 1
+;;                                     v35 = iconst.i64 1
 ;; @0038                               v19 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0038                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0034                               jump block2
 ;;
 ;;                                 block2:
-;;                                     v38 = iadd.i64 v6, v37  ; v37 = 8
-;; @0038                               v11 = load.i64 user5 aligned table v38
-;;                                     v39 = iconst.i64 -2
-;;                                     v40 = band v11, v39  ; v39 = -2
-;; @0038                               brif v11, block5(v40), block4
+;;                                     v37 = iadd.i64 v6, v36  ; v36 = 8
+;; @0038                               v11 = load.i64 user5 aligned table v37
+;;                                     v38 = iconst.i64 -2
+;;                                     v39 = band v11, v38  ; v38 = -2
+;; @0038                               brif v11, block5(v39), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v41 = iconst.i32 0
-;;                                     v42 = iconst.i64 1
-;; @0038                               v17 = call fn0(v0, v41, v42)  ; v41 = 0, v42 = 1
+;;                                     v40 = iconst.i32 0
+;;                                     v41 = iconst.i64 1
+;; @0038                               v17 = call fn0(v0, v40, v41)  ; v40 = 0, v41 = 1
 ;; @0038                               jump block5(v17)
 ;;
 ;;                                 block5(v13: i64):

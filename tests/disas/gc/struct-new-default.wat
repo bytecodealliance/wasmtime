@@ -57,10 +57,10 @@
 ;; @0023                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v71 = iconst.i32 0
+;;                                     v68 = iconst.i32 0
 ;;                                     v46 = iconst.i64 32
 ;; @0023                               v20 = iadd.i64 v17, v46  ; v46 = 32
-;; @0023                               store notrap aligned little v71, v20  ; v71 = 0
+;; @0023                               store notrap aligned little v68, v20  ; v68 = 0
 ;; @0023                               v6 = vconst.i8x16 const0
 ;;                                     v38 = iconst.i64 48
 ;; @0023                               v37 = iadd.i64 v17, v38  ; v38 = 48

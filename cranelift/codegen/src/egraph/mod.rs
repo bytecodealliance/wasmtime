@@ -302,7 +302,7 @@ where
         // infinite or problematic recursion, we bound the rewrite
         // depth to a small constant here.
         const REWRITE_LIMIT: usize = 5;
-        if ctx.rewrite_depth > REWRITE_LIMIT {
+        if ctx.rewrite_depth >= REWRITE_LIMIT {
             ctx.stats.rewrite_depth_limit += 1;
             return orig_value;
         }
