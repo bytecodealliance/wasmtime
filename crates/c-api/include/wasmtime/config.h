@@ -917,9 +917,9 @@ WASMTIME_CONFIG_PROP(void, wasm_component_model_async, bool)
  * component model.
  *
  * For more information see the Rust documentation at
- * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_builtins.
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_more_async_builtins.
  */
-WASMTIME_CONFIG_PROP(void, wasm_component_model_async_builtins, bool)
+WASMTIME_CONFIG_PROP(void, wasm_component_model_more_async_builtins, bool)
 
 /**
  * \brief Configures whether stackful coroutine support is enabled for async

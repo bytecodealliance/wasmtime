@@ -1,4 +1,5 @@
 ;;! component_model_async = true
+;;! component_model_more_async_builtins = true
 ;;! reference_types = true
 
 ;; This test has two components $C and $D, where $D imports and calls $C.

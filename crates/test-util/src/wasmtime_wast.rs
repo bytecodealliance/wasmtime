@@ -40,7 +40,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         extended_const,
         wide_arithmetic,
         component_model_async,
-        component_model_async_builtins,
+        component_model_more_async_builtins,
         component_model_async_stackful,
         component_model_threading,
         component_model_error_context,
@@ -72,7 +72,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let extended_const = extended_const.unwrap_or(false);
     let wide_arithmetic = wide_arithmetic.unwrap_or(false);
     let component_model_async = component_model_async.unwrap_or(false);
-    let component_model_async_builtins = component_model_async_builtins.unwrap_or(false);
+    let component_model_more_async_builtins = component_model_more_async_builtins.unwrap_or(false);
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
     let component_model_threading = component_model_threading.unwrap_or(false);
     let component_model_error_context = component_model_error_context.unwrap_or(false);
@@ -114,7 +114,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
         .wasm_component_model_async(component_model_async)
-        .wasm_component_model_async_builtins(component_model_async_builtins)
+        .wasm_component_model_more_async_builtins(component_model_more_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
         .wasm_component_model_threading(component_model_threading)
         .wasm_component_model_error_context(component_model_error_context)

@@ -1236,8 +1236,8 @@ impl Config {
     /// [proposal]:
     ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model-async")]
-    pub fn wasm_component_model_async_builtins(&mut self, enable: bool) -> &mut Self {
-        self.wasm_features(WasmFeatures::CM_ASYNC_BUILTINS, enable);
+    pub fn wasm_component_model_more_async_builtins(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_MORE_ASYNC_BUILTINS, enable);
         self
     }
 
@@ -2321,7 +2321,7 @@ impl Config {
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_ASYNC_STACKFUL
-            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_MORE_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
@@ -2615,7 +2615,7 @@ impl Config {
 
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC
-            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_MORE_ASYNC_BUILTINS
             | WasmFeatures::CM_ASYNC_STACKFUL
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT;

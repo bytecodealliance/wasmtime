@@ -19,7 +19,7 @@ compile() {
     -O memory-guard-size=0 \
     -O signals-based-traps=n \
     -D guest-debug=y \
-    -W function-references,component-model-async,component-model-async-stackful,component-model-async-builtins,component-model-error-context
+    -W function-references,component-model-async,component-model-async-stackful,component-model-more-async-builtins,component-model-error-context
 }
 
 compile ./tests/all/pulley_provenance_test.wat

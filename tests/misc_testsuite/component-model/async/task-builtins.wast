@@ -1,4 +1,5 @@
 ;;! component_model_async = true
+;;! component_model_more_async_builtins = true
 ;;! multi_memory = true
 ;;! reference_types = true
 
@@ -537,14 +538,14 @@
 
       (global $future-completed (mut i32) (i32.const 0))
       (global $stream-completed (mut i32) (i32.const 0))
-      
+
       ;; Callback invoked when a subtask completes. Since we joined both subtasks to the
       ;; same waitable set, this will be called once for each completion. We track which
       ;; subtasks have completed and only return when both are done.
       (func (export "run-cb") (param $event_code i32) (param $index i32) (param $payload i32) (result i32)
         (if (i32.ne (local.get $event_code) (i32.const 1 (; SUBTASK ;))) (then (unreachable)))
         (if (i32.ne (local.get $payload) (i32.const 2 (; RETURNED ;))) (then (unreachable)))
-        
+
         ;; Track which subtask completed
         (if (i32.eq (local.get $index) (global.get $future-subtask))
           (then
@@ -553,18 +554,18 @@
           (else
             (if (i32.eq (local.get $index) (global.get $stream-subtask))
               (then
-              (if (i32.ne (i32.load (global.get $stream-retp)) (i32.const 42)) (then (unreachable))) 
+              (if (i32.ne (i32.load (global.get $stream-retp)) (i32.const 42)) (then (unreachable)))
                 (global.set $stream-completed (i32.const 1)))
               (else unreachable))))
-        
+
         ;; If both completed, exit; otherwise keep waiting
-        (if (result i32) 
+        (if (result i32)
           (i32.and (i32.eq (global.get $future-completed) (i32.const 1))
                    (i32.eq (global.get $stream-completed) (i32.const 1)))
             (then
               (call $task.return (i32.const 42))
               (i32.const 0 (; EXIT ;)))
-            (else 
+            (else
               (i32.or (i32.const 2 (; WAIT ;)) (i32.shl (global.get $ws) (i32.const 4)))))
       )
 
@@ -618,7 +619,7 @@
         i32.const 400
         i32.ne
         if unreachable end
-        
+
         i32.const 500
         call $context.set
 
@@ -671,7 +672,7 @@
         (local.set $ret (call $future.read (local.get $fr) (i32.const 40)))
         (if (i32.ne (i32.const 0 (; COMPLETED ;)) (local.get $ret)) (then (unreachable)))
         (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
-  
+
         (call $task.return (i32.const 42))
         (i32.const 0 (; EXIT ;))
       )
@@ -684,7 +685,7 @@
         (local.set $ret (call $stream.read (local.get $sr) (i32.const 40) (i32.const 1)))
         (if (i32.ne (i32.const 0x10 (; COMPLETED | 1<<4 ;)) (local.get $ret)) (then (unreachable)))
         (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
-        
+
         (call $task.return (i32.const 42))
         (i32.const 0 (; EXIT ;))
       )

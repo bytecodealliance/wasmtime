@@ -13,9 +13,9 @@ using wasmtime::Store;
 
 TEST(component_async, config) {
   Config config;
-  wasmtime_config_wasm_component_model_async_set(config.capi(), true);
-  wasmtime_config_wasm_component_model_async_builtins_set(config.capi(), true);
-  wasmtime_config_wasm_component_model_async_stackful_set(config.capi(), true);
+  config.wasm_component_model_async(true);
+  config.wasm_component_model_more_async_builtins(true);
+  config.wasm_component_model_async_stackful(true);
   Engine engine(std::move(config));
 }
 
