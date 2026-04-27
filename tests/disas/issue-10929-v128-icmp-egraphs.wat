@@ -14,14 +14,14 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
+;;     const0 = 0xffffffffffffffffffffffffffffffff
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @001f                               v4 = bnot.i8x16 v2
-;; @0021                               v5 = bxor.i8x16 v2, v4
-;; @0023                               v6 = icmp.i8x16 ne v2, v5
+;;                                     v9 = vconst.i8x16 const0
+;; @0023                               v6 = icmp.i8x16 ne v2, v9  ; v9 = const0
 ;; @0025                               return v6
 ;; }
