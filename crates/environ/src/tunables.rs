@@ -255,7 +255,7 @@ impl Tunables {
             winch_callable: false,
             signals_based_traps: false,
             memory_init_cow: true,
-            inlining: false,
+            inlining: true,
             inlining_intra_module: IntraModuleInlining::WhenUsingGc,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,

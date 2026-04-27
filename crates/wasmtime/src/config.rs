@@ -2564,6 +2564,15 @@ impl Config {
             tunables.signals_based_traps = false;
         }
 
+        // Inlining currently falls over with the `stack_switch` instruction.
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        if features.contains(WasmFeatures::STACK_SWITCHING) {
+            if self.tunables.inlining == Some(true) {
+                bail!("cannot enable compiler inlining when stack switching is enabled");
+            }
+            tunables.inlining = false;
+        }
+
         self.tunables.configure(&mut tunables);
 
         // If no GC heap tunables are explicitly configured, copy the memory
