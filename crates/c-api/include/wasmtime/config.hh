@@ -697,10 +697,11 @@ public:
    * \brief Configures whether async built-in intrinsics are enabled for the
    * component model.
    *
-   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_builtins
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_more_async_builtins
    */
-  void wasm_component_model_async_builtins(bool enable) {
-    wasmtime_config_wasm_component_model_async_builtins_set(ptr.get(), enable);
+  void wasm_component_model_more_async_builtins(bool enable) {
+    wasmtime_config_wasm_component_model_more_async_builtins_set(ptr.get(),
+                                                                 enable);
   }
 
   /**

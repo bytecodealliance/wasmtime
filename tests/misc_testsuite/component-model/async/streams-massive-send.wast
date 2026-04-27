@@ -1,4 +1,5 @@
 ;;! component_model_async = true
+;;! component_model_more_async_builtins = true
 ;;! reference_types = true
 
 ;; This test exercises corner cases where extremely large values are sent

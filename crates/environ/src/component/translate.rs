@@ -1127,15 +1127,21 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ErrorContextDrop { func }
                         }
-                        wasmparser::CanonicalFunction::ContextGet(i) => {
+                        wasmparser::CanonicalFunction::ContextGet { slot, ty } => {
+                            if ty != wasmparser::ValType::I32 {
+                                bail!("unsupported context.get type: {ty:?}");
+                            }
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ContextGet { i, func }
+                            LocalInitializer::ContextGet { i: slot, func }
                         }
-                        wasmparser::CanonicalFunction::ContextSet(i) => {
+                        wasmparser::CanonicalFunction::ContextSet { slot, ty } => {
+                            if ty != wasmparser::ValType::I32 {
+                                bail!("unsupported context.set type: {ty:?}");
+                            }
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::ContextSet { i, func }
+                            LocalInitializer::ContextSet { i: slot, func }
                         }
                         wasmparser::CanonicalFunction::ThreadIndex => {
                             let func = self.core_func_signature(core_func_index)?;
