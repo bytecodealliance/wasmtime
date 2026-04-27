@@ -538,6 +538,10 @@ impl WastContext {
             || (expected.contains("null function") && (actual.contains("uninitialized element") || actual.contains("null reference")))
             // GC tests say "null $kind reference" but we just say "null reference".
             || (expected.contains("null") && expected.contains("reference") && actual.contains("null reference"))
+            // upstream component model tests expect slightly different error
+            // messages than we generate.
+            || (expected.contains("cannot write") && actual.contains("cannot write"))
+            || (expected.contains("cannot read") && actual.contains("cannot read"))
         {
             return Ok(());
         }
