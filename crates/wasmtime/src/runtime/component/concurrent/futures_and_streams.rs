@@ -3512,7 +3512,7 @@ impl Instance {
         };
 
         if done {
-            bail!("cannot write to stream after being notified that the readable end dropped");
+            bail!("cannot write after being notified that the readable end dropped");
         }
 
         *state = TransmitLocalState::Busy;
@@ -3724,10 +3724,7 @@ impl Instance {
         if result != ReturnCode::Blocked {
             *self.id().get_mut(store.0).get_mut_by_index(ty, handle)?.1 =
                 TransmitLocalState::Write {
-                    done: matches!(
-                        (result, ty),
-                        (ReturnCode::Dropped(_), TransmitIndex::Stream(_))
-                    ),
+                    done: matches!(result, ReturnCode::Dropped(_)),
                 };
         }
 
@@ -3767,7 +3764,7 @@ impl Instance {
         };
 
         if done {
-            bail!("cannot read from stream after being notified that the writable end dropped");
+            bail!("cannot read after being notified that the writable end dropped");
         }
 
         *state = TransmitLocalState::Busy;
