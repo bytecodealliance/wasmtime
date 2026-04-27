@@ -1,4 +1,4 @@
-#!/usr/bin/env -S cargo +nightly -Zscript -q --
+#!/usr/bin/env -S cargo -Zscript -q --
 
 //! Generate an LLVM source-based coverage report for `cargo test`.
 //!
