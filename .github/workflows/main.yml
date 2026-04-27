@@ -658,10 +658,12 @@ jobs:
         RUSTFLAGS: "--cfg arc_try_new"
 
     # Smoke test the coverage script.
+    - run: rustup target add wasm32-unknown-unknown
     - run: rustup component add llvm-tools
-    - run: ./scripts/coverage.rs --test all --test wast gc
+    - run: ./scripts/coverage.rs --test wast gc
     - run: test -d report/
     - run: test -f report/index.html
+    - run: set -e; set -o pipefail; find report | grep -q gc\\.rs\\.html
 
     # Ensure that fuzzers still build.
     #
