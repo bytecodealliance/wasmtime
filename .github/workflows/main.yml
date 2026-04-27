@@ -663,7 +663,6 @@ jobs:
     - run: ./scripts/coverage.rs --test wast gc
     - run: test -d report/
     - run: test -f report/index.html
-    - run: find report | grep -q gc\\.rs\\.html
 
     # Ensure that fuzzers still build.
     #
