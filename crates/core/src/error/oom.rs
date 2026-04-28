@@ -20,8 +20,8 @@ use core::{fmt, mem, ptr::NonNull};
 /// would not be considered a security vulnerability.[^limits]
 ///
 /// [^limits]: Note that unconstrained guest-controlled resource usage is still
-/// be considered a vulnerability. Wasmtime has tier 1 support for limiting
-/// guest resources, but not for handling OOMs within those limits.
+/// considered a vulnerability. Wasmtime has tier 1 support for limiting guest
+/// resources, but not for handling OOMs within those limits.
 ///
 /// ## Where Wasmtime Attempts to Handle OOM
 ///
@@ -42,25 +42,26 @@ use core::{fmt, mem, ptr::NonNull};
 /// should generally document this fact by listing `OutOfMemory` as one of the
 /// potential errors returned.
 ///
-/// | **Where**                              | **Handles OOM?** |
-/// |----------------------------------------|------------------|
-/// | **Compiler**                           | **No**           |
-/// | &emsp;`wasmtime::Module::new`          | No               |
-/// | &emsp;`wasmtime::Component::new`       | No               |
-/// | &emsp;`wasmtime::CodeBuilder`          | No               |
-/// | &emsp;Etc...                           | No               |
-/// | **Runtime**                            | **Yes**          |
-/// | &emsp;`wasmtime::Store`                | Yes              |
-/// | &emsp;`wasmtime::Linker`               | Yes              |
-/// | &emsp;`wasmtime::Module::deserialize`  | Yes              |
-/// | &emsp;`wasmtime::Instance`             | Yes              |
-/// | &emsp;`wasmtime::Func::call`           | Yes              |
-/// | &emsp;Etc...                           | Yes              |
-/// | **WASI Implementations and Host APIs** | **Depends**      |
-/// | &emsp;`wasmtime_wasi`                  | No               |
-/// | &emsp;`wasmtime_wasi_http`             | No               |
-/// | &emsp;`wasmtime_wasi_*`                | No               |
-/// | &emsp;Your embedding's APIs            | If *you* implement OOM handling |
+/// | **Where**                                       | **Handles OOM?**                |
+/// |-------------------------------------------------|---------------------------------|
+/// | **Compiler**                                    | **No**                          |
+/// | &emsp;`wasmtime::Module::new`                   | No                              |
+/// | &emsp;`wasmtime::Component::new`                | No                              |
+/// | &emsp;`wasmtime::CodeBuilder`                   | No                              |
+/// | &emsp;Other compilation APIs...                 | No                              |
+/// | **Runtime**                                     | **Yes**                         |
+/// | &emsp;`wasmtime::Store`                         | Yes                             |
+/// | &emsp;`wasmtime::Linker`                        | Yes                             |
+/// | &emsp;`wasmtime::Module::deserialize`           | Yes                             |
+/// | &emsp;`wasmtime::Instance`                      | Yes                             |
+/// | &emsp;`wasmtime::Func::call`                    | Yes                             |
+/// | &emsp;Component Model concurrency/async APIs    | Not yet                         |
+/// | &emsp;Other instantiation and execution APIs... | Yes                             |
+/// | **WASI Implementations and Host APIs**          | **Depends**                     |
+/// | &emsp;`wasmtime_wasi`                           | No                              |
+/// | &emsp;`wasmtime_wasi_http`                      | No                              |
+/// | &emsp;`wasmtime_wasi_*`                         | No                              |
+/// | &emsp;Your embedding's APIs                     | If *you* implement OOM handling |
 ///
 /// If you encounter an unhandled OOM inside Wasmtime, and it is within a
 /// portion of code where it should be handled, then please [file an
