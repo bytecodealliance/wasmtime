@@ -17,7 +17,6 @@ use wasmparser::component_types::{
 use wasmparser::names::KebabString;
 use wasmparser::types::TypesRef;
 use wasmparser::{PrimitiveValType, Validator};
-use wasmtime_component_util::FlagsSize;
 
 mod resources;
 pub use resources::ResourcesBuilder;
@@ -87,7 +86,7 @@ macro_rules! intern_and_fill_flat_types {
         } else {
             let idx = $me.component_types.$name.push($val.clone());
             let mut info = TypeInformation::new();
-            info.$name($me, &$val);
+            info.$name($me, idx);
             let idx2 = $me.type_info.$name.push(info);
             assert_eq!(idx, idx2);
             $me.$name.insert($val, idx);
@@ -925,78 +924,6 @@ where
     return idx;
 }
 
-struct FlatTypesStorage {
-    // This could be represented as `Vec<FlatType>` but on 64-bit architectures
-    // that's 24 bytes. Otherwise `FlatType` is 1 byte large and
-    // `MAX_FLAT_TYPES` is 16, so it should ideally be more space-efficient to
-    // use a flat array instead of a heap-based vector.
-    memory32: [FlatType; MAX_FLAT_TYPES],
-    memory64: [FlatType; MAX_FLAT_TYPES],
-
-    // Tracks the number of flat types pushed into this storage. If this is
-    // `MAX_FLAT_TYPES + 1` then this storage represents an un-reprsentable
-    // type in flat types.
-    len: u8,
-}
-
-impl FlatTypesStorage {
-    const fn new() -> FlatTypesStorage {
-        FlatTypesStorage {
-            memory32: [FlatType::I32; MAX_FLAT_TYPES],
-            memory64: [FlatType::I32; MAX_FLAT_TYPES],
-            len: 0,
-        }
-    }
-
-    fn as_flat_types(&self) -> Option<FlatTypes<'_>> {
-        let len = usize::from(self.len);
-        if len > MAX_FLAT_TYPES {
-            assert_eq!(len, MAX_FLAT_TYPES + 1);
-            None
-        } else {
-            Some(FlatTypes {
-                memory32: &self.memory32[..len],
-                memory64: &self.memory64[..len],
-            })
-        }
-    }
-
-    /// Pushes a new flat type into this list using `t32` for 32-bit memories
-    /// and `t64` for 64-bit memories.
-    ///
-    /// Returns whether the type was actually pushed or whether this list of
-    /// flat types just exceeded the maximum meaning that it is now
-    /// unrepresentable with a flat list of types.
-    fn push(&mut self, t32: FlatType, t64: FlatType) -> bool {
-        let len = usize::from(self.len);
-        if len < MAX_FLAT_TYPES {
-            self.memory32[len] = t32;
-            self.memory64[len] = t64;
-            self.len += 1;
-            true
-        } else {
-            // If this was the first one to go over then flag the length as
-            // being incompatible with a flat representation.
-            if len == MAX_FLAT_TYPES {
-                self.len += 1;
-            }
-            false
-        }
-    }
-}
-
-impl FlatType {
-    fn join(&mut self, other: FlatType) {
-        if *self == other {
-            return;
-        }
-        *self = match (*self, other) {
-            (FlatType::I32, FlatType::F32) | (FlatType::F32, FlatType::I32) => FlatType::I32,
-            _ => FlatType::I64,
-        };
-    }
-}
-
 #[derive(Default)]
 struct TypeInformationCache {
     records: PrimaryMap<TypeRecordIndex, TypeInformation>,
@@ -1013,7 +940,7 @@ struct TypeInformationCache {
 
 struct TypeInformation {
     depth: u32,
-    flat: FlatTypesStorage,
+    flat: FlatTypesStorage<MAX_FLAT_TYPES>,
     has_borrow: bool,
 }
 
@@ -1046,190 +973,73 @@ impl TypeInformation {
         info
     }
 
-    /// Builds up all flat types internally using the specified representation
-    /// for all of the component fields of the record.
-    fn build_record<'a>(&mut self, types: impl Iterator<Item = &'a TypeInformation>) {
+    /// Build up the type information for a interface type based on its
+    /// info and field info.
+    fn build<'a>(
+        &mut self,
+        types: &ComponentTypesBuilder,
+        iface_ty: InterfaceType,
+        fields: impl IntoIterator<Item = &'a InterfaceType>,
+    ) {
         self.depth = 1;
-        for info in types {
+        for sub in fields {
+            let info = types.type_information(sub);
             self.depth = self.depth.max(1 + info.depth);
             self.has_borrow = self.has_borrow || info.has_borrow;
-            match info.flat.as_flat_types() {
-                Some(types) => {
-                    for (t32, t64) in types.memory32.iter().zip(types.memory64) {
-                        if !self.flat.push(*t32, *t64) {
-                            break;
-                        }
-                    }
-                }
-                None => {
-                    self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
-                }
-            }
         }
+        self.flat = types
+            .component_types()
+            .flat_interface_type(&iface_ty, MAX_FLAT_TYPES)
+            .unwrap_or_else(|| FlatTypesStorage::overflow());
     }
 
-    /// Builds up the flat types used to represent a `variant` which notably
-    /// handles "join"ing types together so each case is representable as a
-    /// single flat list of types.
-    ///
-    /// The iterator item is:
-    ///
-    /// * `None` - no payload for this case
-    /// * `Some(None)` - this case has a payload but can't be represented with
-    ///   flat types
-    /// * `Some(Some(types))` - this case has a payload and is represented with
-    ///   the types specified in the flat representation.
-    fn build_variant<'a, I>(&mut self, cases: I)
-    where
-        I: IntoIterator<Item = Option<&'a TypeInformation>>,
-    {
-        let cases = cases.into_iter();
-        self.flat.push(FlatType::I32, FlatType::I32);
-        self.depth = 1;
-
-        for info in cases {
-            let info = match info {
-                Some(info) => info,
-                // If this case doesn't have a payload then it doesn't change
-                // the depth/flat representation
-                None => continue,
-            };
-            self.depth = self.depth.max(1 + info.depth);
-            self.has_borrow = self.has_borrow || info.has_borrow;
-
-            // If this variant is already unrepresentable in a flat
-            // representation then this can be skipped.
-            if usize::from(self.flat.len) > MAX_FLAT_TYPES {
-                continue;
-            }
-
-            let types = match info.flat.as_flat_types() {
-                Some(types) => types,
-                // If this case isn't representable with a flat list of types
-                // then this variant also isn't representable.
-                None => {
-                    self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
-                    continue;
-                }
-            };
-            // If the case used all of the flat types then the discriminant
-            // added for this variant means that this variant is no longer
-            // representable.
-            if types.memory32.len() >= MAX_FLAT_TYPES {
-                self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap();
-                continue;
-            }
-            let dst = self
-                .flat
-                .memory32
-                .iter_mut()
-                .zip(&mut self.flat.memory64)
-                .skip(1);
-            for (i, ((t32, t64), (dst32, dst64))) in types
-                .memory32
-                .iter()
-                .zip(types.memory64)
-                .zip(dst)
-                .enumerate()
-            {
-                if i + 1 < usize::from(self.flat.len) {
-                    // If this index hs already been set by some previous case
-                    // then the types are joined together.
-                    dst32.join(*t32);
-                    dst64.join(*t64);
-                } else {
-                    // Otherwise if this is the first time that the
-                    // representation has gotten this large then the destination
-                    // is simply whatever the type is. The length is also
-                    // increased here to indicate this.
-                    self.flat.len += 1;
-                    *dst32 = *t32;
-                    *dst64 = *t64;
-                }
-            }
-        }
+    fn records(&mut self, types: &ComponentTypesBuilder, idx: TypeRecordIndex) {
+        let fields = types.component_types()[idx].fields.iter().map(|f| &f.ty);
+        self.build(types, InterfaceType::Record(idx), fields);
     }
 
-    fn records(&mut self, types: &ComponentTypesBuilder, ty: &TypeRecord) {
-        self.build_record(ty.fields.iter().map(|f| types.type_information(&f.ty)));
+    fn tuples(&mut self, types: &ComponentTypesBuilder, idx: TypeTupleIndex) {
+        let fields = types.component_types()[idx].types.iter();
+        self.build(types, InterfaceType::Tuple(idx), fields);
     }
 
-    fn tuples(&mut self, types: &ComponentTypesBuilder, ty: &TypeTuple) {
-        self.build_record(ty.types.iter().map(|t| types.type_information(t)));
+    fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, idx: TypeFixedLengthListIndex) {
+        let fields = std::iter::once(&types.component_types()[idx].element);
+        self.build(types, InterfaceType::FixedLengthList(idx), fields);
     }
 
-    fn fixed_length_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedLengthList) {
-        let element_info = types.type_information(&ty.element);
-        self.depth = 1 + element_info.depth;
-        self.has_borrow = element_info.has_borrow;
-        match element_info.flat.as_flat_types() {
-            Some(types) => {
-                'outer: for _ in 0..ty.size {
-                    for (t32, t64) in types.memory32.iter().zip(types.memory64) {
-                        if !self.flat.push(*t32, *t64) {
-                            break 'outer;
-                        }
-                    }
-                }
-            }
-            None => self.flat.len = u8::try_from(MAX_FLAT_TYPES + 1).unwrap(),
-        }
+    fn enums(&mut self, types: &ComponentTypesBuilder, idx: TypeEnumIndex) {
+        self.build(types, InterfaceType::Enum(idx), []);
     }
 
-    fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {
-        self.depth = 1;
-        self.flat.push(FlatType::I32, FlatType::I32);
+    fn flags(&mut self, types: &ComponentTypesBuilder, idx: TypeFlagsIndex) {
+        self.build(types, InterfaceType::Flags(idx), []);
     }
 
-    fn flags(&mut self, _types: &ComponentTypesBuilder, ty: &TypeFlags) {
-        self.depth = 1;
-        match FlagsSize::from_count(ty.names.len()) {
-            FlagsSize::Size0 => {}
-            FlagsSize::Size1 | FlagsSize::Size2 => {
-                self.flat.push(FlatType::I32, FlatType::I32);
-            }
-            FlagsSize::Size4Plus(n) => {
-                for _ in 0..n {
-                    self.flat.push(FlatType::I32, FlatType::I32);
-                }
-            }
-        }
+    fn variants(&mut self, types: &ComponentTypesBuilder, idx: TypeVariantIndex) {
+        let sub = types.component_types()[idx].cases.values().flatten();
+        self.build(types, InterfaceType::Variant(idx), sub);
     }
 
-    fn variants(&mut self, types: &ComponentTypesBuilder, ty: &TypeVariant) {
-        self.build_variant(
-            ty.cases
-                .iter()
-                .map(|(_, c)| c.as_ref().map(|ty| types.type_information(ty))),
-        )
+    fn results(&mut self, types: &ComponentTypesBuilder, idx: TypeResultIndex) {
+        let ty = &types.component_types()[idx];
+        let sub = ty.ok.iter().chain(ty.err.iter());
+        self.build(types, InterfaceType::Result(idx), sub);
     }
 
-    fn results(&mut self, types: &ComponentTypesBuilder, ty: &TypeResult) {
-        self.build_variant([
-            ty.ok.as_ref().map(|ty| types.type_information(ty)),
-            ty.err.as_ref().map(|ty| types.type_information(ty)),
-        ])
+    fn options(&mut self, types: &ComponentTypesBuilder, idx: TypeOptionIndex) {
+        let sub = std::iter::once(&types.component_types()[idx].ty);
+        self.build(types, InterfaceType::Option(idx), sub);
     }
 
-    fn options(&mut self, types: &ComponentTypesBuilder, ty: &TypeOption) {
-        self.build_variant([None, Some(types.type_information(&ty.ty))]);
+    fn lists(&mut self, types: &ComponentTypesBuilder, idx: TypeListIndex) {
+        let sub = std::iter::once(&types.component_types()[idx].element);
+        self.build(types, InterfaceType::List(idx), sub);
     }
 
-    fn lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeList) {
-        *self = TypeInformation::string();
-        let info = types.type_information(&ty.element);
-        self.depth += info.depth;
-        self.has_borrow = info.has_borrow;
-    }
-
-    fn maps(&mut self, types: &ComponentTypesBuilder, ty: &TypeMap) {
-        // Maps are represented as list<tuple<k, v>> in canonical ABI
-        // So we use POINTER_PAIR like lists, and calculate depth/borrow from key and value
-        *self = TypeInformation::string();
-        let key_info = types.type_information(&ty.key);
-        let value_info = types.type_information(&ty.value);
-        // Depth is max of key/value depths, plus 1 for the extra map layer.
-        self.depth = key_info.depth.max(value_info.depth) + 1;
-        self.has_borrow = key_info.has_borrow || value_info.has_borrow;
+    fn maps(&mut self, types: &ComponentTypesBuilder, idx: TypeMapIndex) {
+        let ty = &types.component_types()[idx];
+        let sub = [&ty.key, &ty.value];
+        self.build(types, InterfaceType::Map(idx), sub);
     }
 }
