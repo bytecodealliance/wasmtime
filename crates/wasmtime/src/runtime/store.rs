@@ -2336,7 +2336,7 @@ impl StoreOpaque {
         if let Some(pending_exception) = self.pending_exception.as_mut() {
             unsafe {
                 let root = pending_exception.as_gc_ref_mut();
-                gc_roots_list.add_root(root.into(), "Pending exception");
+                gc_roots_list.add_vmgcref_root(root.into(), "Pending exception");
             }
         }
         log::trace!("End trace GC roots :: pending exception");

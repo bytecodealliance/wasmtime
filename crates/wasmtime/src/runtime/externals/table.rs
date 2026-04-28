@@ -542,7 +542,7 @@ impl Table {
         for gc_ref in table.gc_refs_mut() {
             if let Some(gc_ref) = gc_ref {
                 unsafe {
-                    gc_roots_list.add_root(gc_ref.into(), "Wasm table element");
+                    gc_roots_list.add_vmgcref_root(gc_ref.into(), "Wasm table element");
                 }
             }
         }

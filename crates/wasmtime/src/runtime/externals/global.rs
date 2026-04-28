@@ -304,7 +304,7 @@ impl Global {
 
             if let Some(gc_ref) = unsafe { self.definition(store).as_ref().as_gc_ref() } {
                 unsafe {
-                    gc_roots_list.add_root(gc_ref.into(), "Wasm global");
+                    gc_roots_list.add_vmgcref_root(gc_ref.into(), "Wasm global");
                 }
             }
         }

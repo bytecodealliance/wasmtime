@@ -227,15 +227,16 @@ impl Instance {
         for segment in self.passive_elements_mut().iter_mut() {
             if segment.needs_gc_rooting {
                 for e in segment.elements() {
-                    let Some(root) = e.as_vmgc_ref_ptr() else {
+                    if e.get_vmgcref().is_none() {
                         continue;
-                    };
-                    let root: SendSyncPtr<super::VMGcRef> = root.into();
+                    }
+
+                    let root: SendSyncPtr<ValRaw> = e.into();
 
                     // Safety: We know this is a type that needs GC rooting and
                     // the lifetime is implied by our safety contract.
                     unsafe {
-                        gc_roots.add_root(root, "passive element segment");
+                        gc_roots.add_val_raw_root(root, "passive element segment");
                     }
                 }
             }

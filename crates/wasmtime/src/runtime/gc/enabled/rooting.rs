@@ -452,7 +452,7 @@ impl RootSet {
         log::trace!("Begin trace user LIFO roots");
         for root in &mut self.lifo_roots {
             unsafe {
-                gc_roots_list.add_root((&mut root.gc_ref).into(), "user LIFO root");
+                gc_roots_list.add_vmgcref_root((&mut root.gc_ref).into(), "user LIFO root");
             }
         }
         log::trace!("End trace user LIFO roots");
@@ -460,7 +460,7 @@ impl RootSet {
         log::trace!("Begin trace user owned roots");
         for (_id, root) in self.owned_rooted.iter_mut() {
             unsafe {
-                gc_roots_list.add_root(root.into(), "user owned root");
+                gc_roots_list.add_vmgcref_root(root.into(), "user owned root");
             }
         }
         log::trace!("End trace user owned roots");

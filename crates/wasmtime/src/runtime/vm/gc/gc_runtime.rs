@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
-    VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef,
+    VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef, ValRaw,
 };
 use crate::store::Asyncness;
 use crate::vm::VMMemoryDefinition;
@@ -575,12 +575,18 @@ pub struct GcRootsList(Vec<RawGcRoot>);
 )]
 enum RawGcRoot {
     Stack(SendSyncPtr<u32>),
-    NonStack(SendSyncPtr<VMGcRef>),
+    VMGcRef(SendSyncPtr<VMGcRef>),
+    ValRaw(SendSyncPtr<ValRaw>),
 }
 
 #[cfg(feature = "gc")]
 impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid stack-map slot on the Wasm stack and must
+    /// remain valid for the duration of the `'a` lifetime.
     #[inline]
     pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u32>) {
         unsafe {
@@ -595,15 +601,37 @@ impl GcRootsList {
     }
 
     /// Add a GC root to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid `VMGcRef` and must remain valid for the
+    /// duration of the `'a` lifetime.
     #[inline]
-    pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
+    pub unsafe fn add_vmgcref_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
         unsafe {
             log::trace!(
-                "Adding non-stack root: {why}: {:#p}",
+                "Adding VMGcRef root: {why}: {:#p}",
                 ptr_to_root.as_ref().unchecked_copy()
             );
         }
-        self.0.push(RawGcRoot::NonStack(ptr_to_root))
+        self.0.push(RawGcRoot::VMGcRef(ptr_to_root))
+    }
+
+    /// Add a GC root to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid `ValRaw` that is a GC reference and must
+    /// remain valid for the duration of the `'a` lifetime.
+    #[inline]
+    pub unsafe fn add_val_raw_root(&mut self, ptr_to_root: SendSyncPtr<ValRaw>, why: &str) {
+        unsafe {
+            log::trace!(
+                "Adding ValRaw root: {why}: {:#x}",
+                ptr_to_root.as_ref().get_anyref()
+            );
+        }
+        self.0.push(RawGcRoot::ValRaw(ptr_to_root))
     }
 
     /// Get an iterator over all roots in this list.
@@ -677,10 +705,14 @@ impl GcRoot<'_> {
     #[inline]
     pub fn get(&self) -> VMGcRef {
         match self.raw {
-            RawGcRoot::NonStack(ptr) => unsafe { ptr::read(ptr.as_ptr()) },
+            RawGcRoot::VMGcRef(ptr) => unsafe { ptr::read(ptr.as_ptr()) },
             RawGcRoot::Stack(ptr) => unsafe {
                 let raw: u32 = ptr::read(ptr.as_ptr());
                 VMGcRef::from_raw_u32(raw).expect("non-null")
+            },
+            RawGcRoot::ValRaw(ptr) => unsafe {
+                let val: ValRaw = ptr::read(ptr.as_ptr());
+                val.get_vmgcref().expect("non-null")
             },
         }
     }
@@ -694,11 +726,15 @@ impl GcRoot<'_> {
     /// referencing.
     pub fn set(&mut self, new_ref: VMGcRef) {
         match self.raw {
-            RawGcRoot::NonStack(ptr) => unsafe {
+            RawGcRoot::VMGcRef(ptr) => unsafe {
                 ptr::write(ptr.as_ptr(), new_ref);
             },
             RawGcRoot::Stack(ptr) => unsafe {
                 ptr::write(ptr.as_ptr(), new_ref.as_raw_u32());
+            },
+            RawGcRoot::ValRaw(ptr) => unsafe {
+                let val = ValRaw::vmgcref(Some(new_ref));
+                ptr::write(ptr.as_ptr(), val);
             },
         }
     }

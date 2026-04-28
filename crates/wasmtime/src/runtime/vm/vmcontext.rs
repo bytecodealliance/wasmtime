@@ -1725,6 +1725,19 @@ impl ValRaw {
         ValRaw { exnref: r.to_le() }
     }
 
+    #[inline]
+    #[cfg(feature = "gc")]
+    pub(crate) fn vmgcref(r: Option<VMGcRef>) -> ValRaw {
+        let raw = r.map_or(0, |r| r.as_raw_u32());
+
+        // NB: All `VMGcRef`-based `ValRaw`s are the same.
+        debug_assert_eq!(raw, ValRaw::anyref(raw).get_exnref());
+        debug_assert_eq!(raw, ValRaw::exnref(raw).get_externref());
+        debug_assert_eq!(raw, ValRaw::externref(raw).get_anyref());
+
+        ValRaw::anyref(raw)
+    }
+
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_i32(&self) -> i32 {
@@ -1798,15 +1811,11 @@ impl ValRaw {
         exnref
     }
 
-    /// Convert this `&ValRaw` into a pointer to its inner `VMGcRef`.
-    #[cfg(feature = "gc")]
-    pub(crate) fn as_vmgc_ref_ptr(&self) -> Option<NonNull<crate::vm::VMGcRef>> {
-        if self.get_anyref() == 0 {
-            return None;
-        }
-        let ptr = &raw const self.anyref;
-        let ptr = NonNull::new(ptr.cast_mut()).unwrap();
-        Some(ptr.cast())
+    /// Get the inner `VMGcRef`.
+    pub(crate) fn get_vmgcref(&self) -> Option<crate::vm::VMGcRef> {
+        debug_assert_eq!(self.get_anyref(), self.get_exnref());
+        debug_assert_eq!(self.get_anyref(), self.get_externref());
+        VMGcRef::from_raw_u32(self.get_anyref())
     }
 }
 
