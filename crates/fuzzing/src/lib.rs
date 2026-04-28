@@ -49,7 +49,6 @@ pub fn init_fuzzing() {
 /// before the fuzz target itself.
 pub fn misc_init() {
     init_fuzzing();
-    oracles::component_async::init();
 }
 
 fn block_on<F: Future>(future: F) -> F::Output {
