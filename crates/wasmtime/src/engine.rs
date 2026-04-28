@@ -101,6 +101,10 @@ impl Engine {
     /// For example, feature `reference_types` will need to set
     /// the compiler setting `unwind_info` to `true`, but explicitly
     /// disable these two compiler settings will cause errors.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(config: &Config) -> Result<Engine> {
         let config = config.clone();
         let (mut tunables, features) = config.validate()?;

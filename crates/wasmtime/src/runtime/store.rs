@@ -736,6 +736,12 @@ impl<T> Store<T> {
     }
 
     /// Like `Store::new` but returns an error on allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(engine: &Engine, data: T) -> Result<Self> {
         let store_data = StoreData::new(engine);
         log::trace!("creating new store {:?}", store_data.id());
@@ -1034,6 +1040,10 @@ impl<T> Store<T> {
     ///
     /// This function will return an error if fuel consumption is not enabled
     /// via [`Config::consume_fuel`](crate::Config::consume_fuel).
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get_fuel(&self) -> Result<u64> {
         self.inner.get_fuel()
     }
@@ -1057,6 +1067,10 @@ impl<T> Store<T> {
     ///
     /// This function will return an error if fuel consumption is not enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel).
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
         self.inner.set_fuel(fuel)
     }
