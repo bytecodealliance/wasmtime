@@ -1,4 +1,5 @@
 ;;! component_model_async = true
+;;! component_model_more_async_builtins = true
 ;;! reference_types = true
 ;;! gc_types = true
 ;;! multi_memory = true
@@ -35,13 +36,13 @@
     (import "child" (instance $child
       (export "run" (func async (param "x" $future)))
     ))
-             
+
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
     (core module $m
       (import "" "new" (func $new (result i64)))
       (import "" "child-run" (func $child-run (param i32)))
-  
+
       (func (export "run")
         (call $child-run (i32.wrap_i64 (call $new)))
       )
@@ -52,7 +53,7 @@
         (export "child-run" (func $child-run))
       ))
     ))
-  
+
     (func (export "run") async
       (canon lift (core func $i "run")))
   )
@@ -98,11 +99,11 @@
     ))
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
-  
+
     (core module $m
       (import "" "new" (func $new (result i64)))
       (import "" "child-run" (func $child-run (param i32)))
-  
+
       (func (export "run")
         (call $child-run (i32.wrap_i64 (call $new)))
       )
@@ -113,7 +114,7 @@
         (export "child-run" (func $child-run))
       ))
     ))
-  
+
     (func (export "run")
       (canon lift (core func $i "run")))
   )
@@ -162,11 +163,11 @@
     ))
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
-  
+
     (core module $m
       (import "" "new" (func $new (result i64)))
       (import "" "child-run" (func $child-run (param i32)))
-  
+
       (func (export "run")
         (call $child-run (i32.wrap_i64 (call $new)))
       )
@@ -177,7 +178,7 @@
         (export "child-run" (func $child-run))
       ))
     ))
-  
+
     (func (export "run") async
       (canon lift (core func $i "run")))
   )
@@ -231,11 +232,11 @@
     ))
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
-  
+
     (core module $m
       (import "" "new" (func $new (result i64)))
       (import "" "child-run" (func $child-run (param i32)))
-  
+
       (func (export "run")
         (call $child-run (i32.wrap_i64 (call $new)))
       )
@@ -246,7 +247,7 @@
         (export "child-run" (func $child-run))
       ))
     ))
-  
+
     (func (export "run") async
       (canon lift (core func $i "run")))
   )

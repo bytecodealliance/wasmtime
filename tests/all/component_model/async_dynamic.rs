@@ -197,7 +197,6 @@ async fn stream_any_smoke() -> Result<()> {
 
     (core module $m
         (import "" "stream.new" (func $stream.new (result i64)))
-        (import "" "stream.write" (func $stream.write (param i32 i32 i32) (result i32)))
         (import "" "task.return" (func $task.return))
         (import "" "waitable-set.new" (func $waitable-set.new (result i32)))
         (import "" "waitable.join" (func $waitable.join (param i32 i32)))
@@ -237,7 +236,6 @@ async fn stream_any_smoke() -> Result<()> {
         (func (export "cb") (param i32 i32 i32) (result i32) unreachable)
     )
     (core func $stream.new (canon stream.new $s))
-    (core func $stream.write (canon stream.write $s (memory $libc "mem")))
     (core func $task.return (canon task.return))
     (core func $waitable-set.new (canon waitable-set.new))
     (core func $waitable.join (canon waitable.join))
@@ -246,7 +244,6 @@ async fn stream_any_smoke() -> Result<()> {
     (core instance $i (instantiate $m
         (with "" (instance
             (export "stream.new" (func $stream.new))
-            (export "stream.write" (func $stream.write))
             (export "task.return" (func $task.return))
             (export "waitable-set.new" (func $waitable-set.new))
             (export "waitable.join" (func $waitable.join))

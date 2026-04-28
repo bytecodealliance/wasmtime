@@ -202,7 +202,7 @@ fn component_test_config(test: &Path) -> TestConfig {
         {
             ret.component_model_async = Some(true);
             ret.component_model_async_stackful = Some(true);
-            ret.component_model_async_builtins = Some(true);
+            ret.component_model_more_async_builtins = Some(true);
             ret.component_model_threading = Some(true);
         }
         if parent.ends_with("wasm-tools") {
@@ -275,7 +275,7 @@ macro_rules! foreach_config_option {
             hogs_memory
             nan_canonicalization
             component_model_async
-            component_model_async_builtins
+            component_model_more_async_builtins
             component_model_async_stackful
             component_model_threading
             component_model_error_context
@@ -467,12 +467,16 @@ impl WastTest {
             return true;
         }
 
-        // These tests in the `component-model` submodule have not yet been
-        // updated to account for the recent threading-related intrinsic
-        // changes
         let unsupported = [
+            // These tests in the `component-model` submodule have not yet been
+            // updated to account for the recent threading-related intrinsic
+            // changes
             "test/async/same-component-stream-future.wast",
             "test/async/trap-if-block-and-sync.wast",
+            // These tests assert different errors and aren't updated for
+            // memory64.
+            "test/wasm-tools/memory64.wast",
+            "test/wasm-tools/resources.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;

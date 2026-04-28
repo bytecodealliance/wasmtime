@@ -322,7 +322,7 @@ async fn task_deletion() -> Result<()> {
     config.wasm_component_model_async(true);
     config.wasm_component_model_threading(true);
     config.wasm_component_model_async_stackful(true);
-    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_more_async_builtins(true);
     let engine = Engine::new(&config)?;
     let component = Component::new(
         &engine,
@@ -1054,7 +1054,7 @@ async fn stream_cancel_read_async_does_not_corrupt_state() -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_more_async_builtins(true);
     config.wasm_component_model_async_stackful(true);
     let engine = Engine::new(&config)?;
 
@@ -1190,7 +1190,7 @@ async fn concurrent_sync_calls_to_async_host() -> Result<()> {
 
     let mut config = Config::new();
     config.wasm_component_model_async(true);
-    config.wasm_component_model_async_builtins(true);
+    config.wasm_component_model_more_async_builtins(true);
     config.wasm_component_model_async_stackful(true);
     config.wasm_component_model_threading(true);
     let engine = Engine::new(&config)?;

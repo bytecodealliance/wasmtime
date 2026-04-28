@@ -1,5 +1,5 @@
 ;;! component_model_async = true
-;;! component_model_async_builtins = true
+;;! component_model_more_async_builtins = true
 
 ;; stream.cancel-read
 (component
