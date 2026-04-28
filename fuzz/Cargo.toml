@@ -125,3 +125,10 @@ path = "fuzz_targets/gc_ops.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "component_async"
+path = "fuzz_targets/component_async.rs"
+test = false
+doc = false
+bench = false

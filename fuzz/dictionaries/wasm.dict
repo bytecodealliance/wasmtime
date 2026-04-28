@@ -1,0 +1,862 @@
+# ============================================================================
+# WebAssembly Binary Format Dictionary for libFuzzer
+# ============================================================================
+#
+# This dictionary supplies tokens from the WebAssembly binary format
+# (https://webassembly.github.io/spec/core/binary/) to help libFuzzer
+# construct valid-looking Wasm modules faster.
+#
+# Targets that benefit: compile, instantiate
+# These targets consume raw bytes and attempt to parse them as Wasm binaries,
+# so seeding the mutator with known structural tokens dramatically improves
+# the fuzzer's ability to explore interesting code paths.
+#
+# Format: "keyword"="hex-escaped value"
+#   - libFuzzer inserts/replaces these tokens during mutation.
+#   - See https://llvm.org/docs/LibFuzzer.html#dictionaries
+# ============================================================================
+
+
+# ── Module header ─────────────────────────────────────────────────────────────
+# Every valid Wasm binary starts with the 4-byte magic number and version.
+
+# Magic number: \0asm
+wasm_magic="\x00\x61\x73\x6d"
+
+# Version 1 (current spec version, little-endian u32)
+wasm_version="\x01\x00\x00\x00"
+
+# Full 8-byte module preamble (magic + version)
+wasm_preamble="\x00\x61\x73\x6d\x01\x00\x00\x00"
+
+
+# ── Section IDs ───────────────────────────────────────────────────────────────
+# Each section starts with a one-byte ID followed by a LEB128-encoded size.
+# Sections must appear in order of their ID (except custom sections, ID 0).
+
+# Custom section (ID 0) — can appear anywhere; carries names, debug info, etc.
+section_custom="\x00"
+
+# Type section (ID 1) — function signatures (param types → result types)
+section_type="\x01"
+
+# Import section (ID 2) — imported functions, tables, memories, globals
+section_import="\x02"
+
+# Function section (ID 3) — maps function index → type index
+section_function="\x03"
+
+# Table section (ID 4) — table definitions (funcref/externref)
+section_table="\x04"
+
+# Memory section (ID 5) — linear memory definitions
+section_memory="\x05"
+
+# Global section (ID 6) — global variable definitions
+section_global="\x06"
+
+# Export section (ID 7) — exported functions, tables, memories, globals
+section_export="\x07"
+
+# Start section (ID 8) — designates the start function
+section_start="\x08"
+
+# Element section (ID 9) — table element initializers
+section_element="\x09"
+
+# Code section (ID 10) — function bodies (locals + instructions)
+section_code="\x0a"
+
+# Data section (ID 11) — memory data initializers
+section_data="\x0b"
+
+# Data count section (ID 12) — required count for bulk-memory proposal
+section_datacount="\x0c"
+
+# Tag section (ID 13) — exception handling tags
+section_tag="\x0d"
+
+
+# ── Value types ───────────────────────────────────────────────────────────────
+# Used in function signatures, locals, globals, and block types.
+
+# i32 — 32-bit integer
+valtype_i32="\x7f"
+
+# i64 — 64-bit integer
+valtype_i64="\x7e"
+
+# f32 — 32-bit IEEE 754 float
+valtype_f32="\x7d"
+
+# f64 — 64-bit IEEE 754 float
+valtype_f64="\x7c"
+
+# v128 — 128-bit SIMD vector
+valtype_v128="\x7b"
+
+# funcref — reference to a function
+valtype_funcref="\x70"
+
+# externref — opaque host reference
+valtype_externref="\x6f"
+
+# nullfuncref (typed function references proposal)
+valtype_nullfuncref="\x73"
+
+# nullexternref (typed function references proposal)
+valtype_nullexternref="\x72"
+
+# nullref (GC proposal)
+valtype_nullref="\x71"
+
+# i31ref (GC proposal — small tagged integer)
+valtype_i31ref="\x6c"
+
+# structref (GC proposal)
+valtype_structref="\x6b"
+
+# arrayref (GC proposal)
+valtype_arrayref="\x6a"
+
+# anyref / any (GC proposal — top type for internal references)
+valtype_anyref="\x6e"
+
+# eqref / eq (GC proposal — equality-comparable references)
+valtype_eqref="\x6d"
+
+# ref (typed reference, followed by heap type)
+valtype_ref="\x64"
+
+# ref null (nullable typed reference, followed by heap type)
+valtype_refnull="\x63"
+
+
+# ── Composite type constructors ──────────────────────────────────────────────
+# Markers in the type section for different kinds of type definitions.
+
+# Function type constructor — begins a (params*) → (results*) signature
+type_func="\x60"
+
+# Struct type (GC proposal)
+type_struct="\x5f"
+
+# Array type (GC proposal)
+type_array="\x5e"
+
+# Sub type (GC proposal — declares subtyping relationship)
+type_sub="\x50"
+
+# Sub type final (GC proposal — sealed, no further subtyping)
+type_sub_final="\x4f"
+
+# Recursive type group (GC proposal — mutually recursive types)
+type_rec="\x4e"
+
+
+# ── Block types ───────────────────────────────────────────────────────────────
+# Used after block/loop/if instructions to declare the block signature.
+
+# Empty block type (no params, no results) — 0x40
+blocktype_void="\x40"
+
+
+# ── Import/export descriptor kinds ───────────────────────────────────────────
+# The "kind" byte that follows an import/export name.
+
+# Function import/export
+desc_func="\x00"
+
+# Table import/export
+desc_table="\x01"
+
+# Memory import/export
+desc_memory="\x02"
+
+# Global import/export
+desc_global="\x03"
+
+# Tag import/export (exception handling)
+desc_tag="\x04"
+
+
+# ── Limits ────────────────────────────────────────────────────────────────────
+# Precede min (and optionally max) sizes for memories and tables.
+
+# Limits flag: has minimum only
+limits_min="\x00"
+
+# Limits flag: has minimum and maximum
+limits_minmax="\x01"
+
+# Limits flag: shared (threads proposal) — memory is shared
+limits_shared="\x03"
+
+
+# ── Mutability ────────────────────────────────────────────────────────────────
+# Used in global definitions and imports.
+
+# Immutable global (const)
+mut_const="\x00"
+
+# Mutable global (var)
+mut_var="\x01"
+
+
+# ── Control-flow instructions ────────────────────────────────────────────────
+
+# unreachable — traps unconditionally
+op_unreachable="\x00"
+
+# nop — does nothing
+op_nop="\x01"
+
+# block — begins a block (followed by blocktype)
+op_block="\x02"
+
+# loop — begins a loop (followed by blocktype)
+op_loop="\x03"
+
+# if — begins conditional (followed by blocktype)
+op_if="\x04"
+
+# else — separates if-true / if-false arms
+op_else="\x05"
+
+# end — terminates block/loop/if/function body
+op_end="\x0b"
+
+# br — unconditional branch (followed by label index)
+op_br="\x0c"
+
+# br_if — conditional branch
+op_br_if="\x0d"
+
+# br_table — indexed branch (switch)
+op_br_table="\x0e"
+
+# return — return from function
+op_return="\x0f"
+
+# call — direct function call (followed by func index)
+op_call="\x10"
+
+# call_indirect — indirect call through table (followed by type index, table index)
+op_call_indirect="\x11"
+
+# return_call — tail call (followed by func index)
+op_return_call="\x12"
+
+# return_call_indirect — indirect tail call
+op_return_call_indirect="\x13"
+
+# call_ref — call via typed function reference
+op_call_ref="\x14"
+
+# return_call_ref — tail call via typed function reference
+op_return_call_ref="\x15"
+
+
+# ── Exception handling instructions ──────────────────────────────────────────
+
+# try_table — structured exception handler (followed by blocktype and handler table)
+op_try_table="\x1f"
+
+# throw — throw an exception (followed by tag index)
+op_throw="\x08"
+
+# throw_ref — rethrow from exnref
+op_throw_ref="\x0a"
+
+
+# ── Parametric instructions ──────────────────────────────────────────────────
+
+# drop — discard top-of-stack value
+op_drop="\x1a"
+
+# select — conditional select between two values
+op_select="\x1b"
+
+# select (typed) — typed select with explicit value types
+op_select_typed="\x1c"
+
+
+# ── Variable instructions ────────────────────────────────────────────────────
+
+# local.get — read a local variable
+op_local_get="\x20"
+
+# local.set — write a local variable
+op_local_set="\x21"
+
+# local.tee — write a local and keep value on stack
+op_local_tee="\x22"
+
+# global.get — read a global variable
+op_global_get="\x23"
+
+# global.set — write a mutable global
+op_global_set="\x24"
+
+
+# ── Table instructions ───────────────────────────────────────────────────────
+
+# table.get — read table element
+op_table_get="\x25"
+
+# table.set — write table element
+op_table_set="\x26"
+
+
+# ── Memory load instructions ─────────────────────────────────────────────────
+# Each is followed by alignment (LEB128) and offset (LEB128).
+
+# i32.load — load 4-byte i32
+op_i32_load="\x28"
+
+# i64.load — load 8-byte i64
+op_i64_load="\x29"
+
+# f32.load — load 4-byte f32
+op_f32_load="\x2a"
+
+# f64.load — load 8-byte f64
+op_f64_load="\x2b"
+
+# i32.load8_s — sign-extending 1-byte load
+op_i32_load8_s="\x2c"
+
+# i32.load8_u — zero-extending 1-byte load
+op_i32_load8_u="\x2d"
+
+# i32.load16_s — sign-extending 2-byte load
+op_i32_load16_s="\x2e"
+
+# i32.load16_u — zero-extending 2-byte load
+op_i32_load16_u="\x2f"
+
+# i64.load8_s
+op_i64_load8_s="\x30"
+
+# i64.load8_u
+op_i64_load8_u="\x31"
+
+# i64.load16_s
+op_i64_load16_s="\x32"
+
+# i64.load16_u
+op_i64_load16_u="\x33"
+
+# i64.load32_s
+op_i64_load32_s="\x34"
+
+# i64.load32_u
+op_i64_load32_u="\x35"
+
+
+# ── Memory store instructions ────────────────────────────────────────────────
+
+# i32.store — store 4-byte i32
+op_i32_store="\x36"
+
+# i64.store — store 8-byte i64
+op_i64_store="\x37"
+
+# f32.store — store 4-byte f32
+op_f32_store="\x38"
+
+# f64.store — store 8-byte f64
+op_f64_store="\x39"
+
+# i32.store8
+op_i32_store8="\x3a"
+
+# i32.store16
+op_i32_store16="\x3b"
+
+# i64.store8
+op_i64_store8="\x3c"
+
+# i64.store16
+op_i64_store16="\x3d"
+
+# i64.store32
+op_i64_store32="\x3e"
+
+
+# ── Memory size/grow ──────────────────────────────────────────────────────────
+
+# memory.size — current memory size in pages (followed by memory index, usually 0x00)
+op_memory_size="\x3f"
+
+# memory.grow — grow memory by N pages (followed by memory index, usually 0x00)
+op_memory_grow="\x40"
+
+
+# ── Constant instructions ────────────────────────────────────────────────────
+# Push an immediate constant. The immediate is LEB128 (integers) or IEEE 754 (floats).
+
+# i32.const — followed by LEB128 i32
+op_i32_const="\x41"
+
+# i64.const — followed by LEB128 i64
+op_i64_const="\x42"
+
+# f32.const — followed by 4-byte IEEE 754
+op_f32_const="\x43"
+
+# f64.const — followed by 8-byte IEEE 754
+op_f64_const="\x44"
+
+
+# ── i32 comparison instructions ──────────────────────────────────────────────
+
+# i32.eqz — test if zero
+op_i32_eqz="\x45"
+
+# i32.eq — equality
+op_i32_eq="\x46"
+
+# i32.ne — inequality
+op_i32_ne="\x47"
+
+# i32.lt_s — signed less-than
+op_i32_lt_s="\x48"
+
+# i32.lt_u — unsigned less-than
+op_i32_lt_u="\x49"
+
+# i32.gt_s — signed greater-than
+op_i32_gt_s="\x4a"
+
+# i32.gt_u — unsigned greater-than
+op_i32_gt_u="\x4b"
+
+# i32.le_s
+op_i32_le_s="\x4c"
+
+# i32.le_u
+op_i32_le_u="\x4d"
+
+# i32.ge_s
+op_i32_ge_s="\x4e"
+
+# i32.ge_u
+op_i32_ge_u="\x4f"
+
+
+# ── i64 comparison instructions ──────────────────────────────────────────────
+
+op_i64_eqz="\x50"
+op_i64_eq="\x51"
+op_i64_ne="\x52"
+op_i64_lt_s="\x53"
+op_i64_lt_u="\x54"
+op_i64_gt_s="\x55"
+op_i64_gt_u="\x56"
+op_i64_le_s="\x57"
+op_i64_le_u="\x58"
+op_i64_ge_s="\x59"
+op_i64_ge_u="\x5a"
+
+
+# ── f32 comparison instructions ──────────────────────────────────────────────
+
+op_f32_eq="\x5b"
+op_f32_ne="\x5c"
+op_f32_lt="\x5d"
+op_f32_gt="\x5e"
+op_f32_le="\x5f"
+op_f32_ge="\x60"
+
+
+# ── f64 comparison instructions ──────────────────────────────────────────────
+
+op_f64_eq="\x61"
+op_f64_ne="\x62"
+op_f64_lt="\x63"
+op_f64_gt="\x64"
+op_f64_le="\x65"
+op_f64_ge="\x66"
+
+
+# ── i32 arithmetic / bitwise instructions ────────────────────────────────────
+
+# i32.clz — count leading zeros
+op_i32_clz="\x67"
+
+# i32.ctz — count trailing zeros
+op_i32_ctz="\x68"
+
+# i32.popcnt — population count (number of 1-bits)
+op_i32_popcnt="\x69"
+
+# i32.add
+op_i32_add="\x6a"
+
+# i32.sub
+op_i32_sub="\x6b"
+
+# i32.mul
+op_i32_mul="\x6c"
+
+# i32.div_s — signed division
+op_i32_div_s="\x6d"
+
+# i32.div_u — unsigned division
+op_i32_div_u="\x6e"
+
+# i32.rem_s — signed remainder
+op_i32_rem_s="\x6f"
+
+# i32.rem_u — unsigned remainder
+op_i32_rem_u="\x70"
+
+# i32.and
+op_i32_and="\x71"
+
+# i32.or
+op_i32_or="\x72"
+
+# i32.xor
+op_i32_xor="\x73"
+
+# i32.shl — shift left
+op_i32_shl="\x74"
+
+# i32.shr_s — arithmetic shift right
+op_i32_shr_s="\x75"
+
+# i32.shr_u — logical shift right
+op_i32_shr_u="\x76"
+
+# i32.rotl — rotate left
+op_i32_rotl="\x77"
+
+# i32.rotr — rotate right
+op_i32_rotr="\x78"
+
+
+# ── i64 arithmetic / bitwise instructions ────────────────────────────────────
+
+op_i64_clz="\x79"
+op_i64_ctz="\x7a"
+op_i64_popcnt="\x7b"
+op_i64_add="\x7c"
+op_i64_sub="\x7d"
+op_i64_mul="\x7e"
+op_i64_div_s="\x7f"
+op_i64_div_u="\x80"
+op_i64_rem_s="\x81"
+op_i64_rem_u="\x82"
+op_i64_and="\x83"
+op_i64_or="\x84"
+op_i64_xor="\x85"
+op_i64_shl="\x86"
+op_i64_shr_s="\x87"
+op_i64_shr_u="\x88"
+op_i64_rotl="\x89"
+op_i64_rotr="\x8a"
+
+
+# ── Conversion / truncation instructions ─────────────────────────────────────
+
+# i32.wrap_i64 — truncate i64 to i32
+op_i32_wrap_i64="\xa7"
+
+# i32.trunc_f32_s — truncate f32 to signed i32
+op_i32_trunc_f32_s="\xa8"
+
+# i32.trunc_f32_u
+op_i32_trunc_f32_u="\xa9"
+
+# i32.trunc_f64_s
+op_i32_trunc_f64_s="\xaa"
+
+# i32.trunc_f64_u
+op_i32_trunc_f64_u="\xab"
+
+# i64.extend_i32_s — sign-extend i32 to i64
+op_i64_extend_i32_s="\xac"
+
+# i64.extend_i32_u — zero-extend i32 to i64
+op_i64_extend_i32_u="\xad"
+
+# i32.extend8_s — sign-extend 8-bit value in i32
+op_i32_extend8_s="\xc0"
+
+# i32.extend16_s — sign-extend 16-bit value in i32
+op_i32_extend16_s="\xc1"
+
+# i64.extend8_s
+op_i64_extend8_s="\xc2"
+
+# i64.extend16_s
+op_i64_extend16_s="\xc3"
+
+# i64.extend32_s
+op_i64_extend32_s="\xc4"
+
+
+# ── Reference instructions ───────────────────────────────────────────────────
+
+# ref.null — push a null reference (followed by heap type)
+op_ref_null="\xd0"
+
+# ref.is_null — test if reference is null
+op_ref_is_null="\xd1"
+
+# ref.func — reference to function by index
+op_ref_func="\xd2"
+
+# ref.eq — compare two references for equality (GC proposal)
+op_ref_eq="\xd3"
+
+# ref.as_non_null — assert non-null (typed function references)
+op_ref_as_non_null="\xd4"
+
+# br_on_null — branch if reference is null
+op_br_on_null="\xd5"
+
+# br_on_non_null — branch if reference is non-null
+op_br_on_non_null="\xd6"
+
+
+# ── Multi-byte prefix opcodes ────────────────────────────────────────────────
+# These prefixes introduce "families" of instructions encoded as prefix + LEB128.
+
+# 0xFC prefix — saturating truncations, bulk memory, table ops
+op_prefix_fc="\xfc"
+
+# 0xFD prefix — SIMD (128-bit vector) instructions
+op_prefix_fd="\xfd"
+
+# 0xFE prefix — atomics / threads instructions
+op_prefix_fe="\xfe"
+
+# 0xFB prefix — GC instructions (struct/array/cast)
+op_prefix_fb="\xfb"
+
+
+# ── Bulk memory operations (0xFC prefix) ─────────────────────────────────────
+# Second byte (LEB128) follows the 0xFC prefix.
+
+# memory.init — initialize memory from data segment
+op_memory_init="\xfc\x08"
+
+# data.drop — discard a data segment
+op_data_drop="\xfc\x09"
+
+# memory.copy — copy between memories
+op_memory_copy="\xfc\x0a"
+
+# memory.fill — fill memory with a byte value
+op_memory_fill="\xfc\x0b"
+
+# table.init — initialize table from element segment
+op_table_init="\xfc\x0c"
+
+# elem.drop — discard an element segment
+op_elem_drop="\xfc\x0d"
+
+# table.copy — copy between tables
+op_table_copy="\xfc\x0e"
+
+# table.grow — grow a table
+op_table_grow="\xfc\x0f"
+
+# table.size — current table size
+op_table_size="\xfc\x10"
+
+# table.fill — fill table with a value
+op_table_fill="\xfc\x11"
+
+# Saturating truncation instructions (non-trapping float-to-int)
+op_i32_trunc_sat_f32_s="\xfc\x00"
+op_i32_trunc_sat_f32_u="\xfc\x01"
+op_i32_trunc_sat_f64_s="\xfc\x02"
+op_i32_trunc_sat_f64_u="\xfc\x03"
+op_i64_trunc_sat_f32_s="\xfc\x04"
+op_i64_trunc_sat_f32_u="\xfc\x05"
+op_i64_trunc_sat_f64_s="\xfc\x06"
+op_i64_trunc_sat_f64_u="\xfc\x07"
+
+
+# ── GC instructions (0xFB prefix) ────────────────────────────────────────────
+
+# struct.new — allocate a struct (followed by type index)
+op_struct_new="\xfb\x00"
+
+# struct.new_default — allocate zeroed struct
+op_struct_new_default="\xfb\x01"
+
+# struct.get — read a struct field
+op_struct_get="\xfb\x02"
+
+# struct.get_s — read struct field with sign extension
+op_struct_get_s="\xfb\x03"
+
+# struct.get_u — read struct field with zero extension
+op_struct_get_u="\xfb\x04"
+
+# struct.set — write a struct field
+op_struct_set="\xfb\x05"
+
+# array.new — allocate an array with initial value
+op_array_new="\xfb\x06"
+
+# array.new_default — allocate zeroed array
+op_array_new_default="\xfb\x07"
+
+# array.new_fixed — allocate array from stack values
+op_array_new_fixed="\xfb\x08"
+
+# array.get — read array element
+op_array_get="\xfb\x0b"
+
+# array.get_s
+op_array_get_s="\xfb\x0c"
+
+# array.get_u
+op_array_get_u="\xfb\x0d"
+
+# array.set — write array element
+op_array_set="\xfb\x0e"
+
+# array.len — get array length
+op_array_len="\xfb\x0f"
+
+# array.copy — copy between arrays
+op_array_copy="\xfb\x11"
+
+# ref.test — test if reference is of a given type
+op_ref_test="\xfb\x14"
+
+# ref.test null — test with null handling
+op_ref_test_null="\xfb\x15"
+
+# ref.cast — cast reference to a given type
+op_ref_cast="\xfb\x16"
+
+# ref.cast null
+op_ref_cast_null="\xfb\x17"
+
+# br_on_cast — branch on successful cast
+op_br_on_cast="\xfb\x18"
+
+# br_on_cast_fail — branch on failed cast
+op_br_on_cast_fail="\xfb\x19"
+
+# any.convert_extern — convert externref to anyref
+op_any_convert_extern="\xfb\x1a"
+
+# extern.convert_any — convert anyref to externref
+op_extern_convert_any="\xfb\x1b"
+
+# ref.i31 — wrap i32 into i31ref
+op_ref_i31="\xfb\x1c"
+
+# i31.get_s — extract i32 from i31ref (sign-extend)
+op_i31_get_s="\xfb\x1d"
+
+# i31.get_u — extract i32 from i31ref (zero-extend)
+op_i31_get_u="\xfb\x1e"
+
+
+# ── Atomic instructions (0xFE prefix, threads proposal) ──────────────────────
+
+# memory.atomic.notify — wake waiters
+op_atomic_notify="\xfe\x00"
+
+# memory.atomic.wait32 — block until notified (i32)
+op_atomic_wait32="\xfe\x01"
+
+# memory.atomic.wait64 — block until notified (i64)
+op_atomic_wait64="\xfe\x02"
+
+# atomic.fence — memory fence
+op_atomic_fence="\xfe\x03"
+
+# i32.atomic.load
+op_i32_atomic_load="\xfe\x10"
+
+# i64.atomic.load
+op_i64_atomic_load="\xfe\x11"
+
+# i32.atomic.store
+op_i32_atomic_store="\xfe\x17"
+
+# i64.atomic.store
+op_i64_atomic_store="\xfe\x18"
+
+# i32.atomic.rmw.add
+op_i32_atomic_rmw_add="\xfe\x1e"
+
+# i32.atomic.rmw.cmpxchg
+op_i32_atomic_rmw_cmpxchg="\xfe\x48"
+
+
+# ── Common LEB128-encoded small integers ─────────────────────────────────────
+# These appear everywhere: section sizes, counts, indices, etc.
+# Small values are extremely common in valid Wasm.
+
+leb_0="\x00"
+leb_1="\x01"
+leb_2="\x02"
+leb_3="\x03"
+leb_4="\x04"
+leb_5="\x05"
+leb_8="\x08"
+leb_16="\x10"
+leb_32="\x20"
+leb_64="\x40"
+leb_128="\x80\x01"
+leb_256="\x80\x02"
+
+
+# ── Useful multi-byte patterns ───────────────────────────────────────────────
+# Common structural patterns that appear in Wasm binaries.
+
+# Minimal type section: 1 type, func type with 0 params → 0 results
+# Section ID 0x01, size 4, count 1, functype 0x60, 0 params, 0 results
+minimal_type_section="\x01\x04\x01\x60\x00\x00"
+
+# Func type: () → (i32) — common return-an-int signature
+functype_void_to_i32="\x60\x00\x01\x7f"
+
+# Func type: (i32) → (i32)
+functype_i32_to_i32="\x60\x01\x7f\x01\x7f"
+
+# Func type: (i32, i32) → (i32)
+functype_i32i32_to_i32="\x60\x02\x7f\x7f\x01\x7f"
+
+# Func type: () → () — void function
+functype_void_to_void="\x60\x00\x00"
+
+# Minimal function section: 1 function referencing type index 0
+minimal_func_section="\x03\x02\x01\x00"
+
+# Minimal code section: 1 body, 2 bytes, 0 locals, end
+minimal_code_section="\x0a\x04\x01\x02\x00\x0b"
+
+# Minimal memory: 1 memory, has-min-only, min=1 page (64 KiB)
+minimal_memory_section="\x05\x03\x01\x00\x01"
+
+# Export descriptor for function index 0 ("" with 0 chars)
+export_func_0="\x07\x05\x01\x00\x00\x00"
+
+# Common custom section name: "name" (the name section for debug info)
+name_section="\x00\x04name"
+
+# Memory index 0 (used after memory.size / memory.grow)
+memidx_0="\x00"
+
+
+# ── Minimal valid Wasm modules ────────────────────────────────────────────────
+# Complete tiny modules that the fuzzer can use as mutation starting points.
+
+# Smallest valid module: just the header (no sections)
+module_empty="\x00\x61\x73\x6d\x01\x00\x00\x00"
+
+# Module with one empty function: type () → (), func section, code section
+module_one_func="\x00\x61\x73\x6d\x01\x00\x00\x00\x01\x04\x01\x60\x00\x00\x03\x02\x01\x00\x0a\x04\x01\x02\x00\x0b"
