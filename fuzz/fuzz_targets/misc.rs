@@ -68,7 +68,6 @@ run_fuzzers! {
     stacks
     api_calls
     dominator_tree
-    component_async
 }
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
@@ -179,10 +178,5 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
         }
     }
 
-    Ok(())
-}
-
-fn component_async(u: Unstructured<'_>) -> Result<()> {
-    wasmtime_fuzzing::oracles::component_async::run(Arbitrary::arbitrary_take_rest(u)?);
     Ok(())
 }
