@@ -523,16 +523,6 @@
 (rule (simplify (bor ty (bxor ty (band ty z y) x) y)) (bor ty x y))
 (rule (simplify (bor ty y (bxor ty (band ty z y) x))) (bor ty x y))
 
-; ((x & y) ^ y) + z --> (y + z) - (x & y)
-(rule (simplify (iadd ty (bxor ty (band ty x y) y) z)) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty z (bxor ty (band ty x y) y))) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty (bxor ty y (band ty x y)) z)) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty z (bxor ty y (band ty x y)))) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty (bxor ty (band ty y x) y) z)) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty z (bxor ty (band ty y x) y))) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty (bxor ty y (band ty y x)) z)) (isub ty (iadd ty y z) (band ty x y)))
-(rule (simplify (iadd ty z (bxor ty y (band ty y x)))) (isub ty (iadd ty y z) (band ty x y)))
-
 ; y & (~y | x) --> y & x
 (rule (simplify (band ty y (bor ty (bnot ty y) x))) (band ty y x))
 (rule (simplify (band ty (bor ty (bnot ty y) x) y)) (band ty y x))
