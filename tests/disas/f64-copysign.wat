@@ -30,15 +30,15 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x38(%rdi), %rcx
-;;       vmovsd  0xfff3(%rcx), %xmm4
-;;       vxorpd  %xmm3, %xmm3, %xmm5
-;;       movabsq $9223372036854775808, %r11
-;;       vmovq   %r11, %xmm2
-;;       vandnpd %xmm5, %xmm2, %xmm5
-;;       vandpd  %xmm4, %xmm2, %xmm6
-;;       vorpd   %xmm6, %xmm5, %xmm0
-;;       vmovsd  %xmm0, (%rcx)
+;;       movq    0x60(%rdi), %rax
+;;       vmovsd  0xfff3(%rax), %xmm3
+;;       vxorpd  %xmm2, %xmm2, %xmm4
+;;       movabsq $9223372036854775808, %r10
+;;       vmovq   %r10, %xmm1
+;;       vandnpd %xmm4, %xmm1, %xmm4
+;;       vandpd  %xmm3, %xmm1, %xmm5
+;;       vorpd   %xmm5, %xmm4, %xmm7
+;;       vmovsd  %xmm7, (%rax)
 ;;       xorl    %eax, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
