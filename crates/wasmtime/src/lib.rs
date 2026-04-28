@@ -520,7 +520,7 @@ pub use wasmtime_environ::{FuncIndex, StaticModuleIndex};
 #[cfg(feature = "anyhow")]
 pub use wasmtime_environ::anyhow;
 
-pub use self::error::{Error, Result, bail, ensure, format_err};
+pub use self::error::{Error, OutOfMemory, Result, bail, ensure, format_err};
 
 /// A re-exported instance of Wasmtime's `wasmparser` dependency.
 ///

@@ -65,6 +65,10 @@ impl Table {
     /// [`Store::limiter_async`](`crate::Store::limiter_async`).  When using an
     /// async resource limiter, use [`Table::new_async`] instead.
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Examples
     ///
     /// ```
@@ -103,6 +107,12 @@ impl Table {
     ///
     /// You must use this variant with [`Store`](`crate::Store`)s which have a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn new_async(
         mut store: impl AsContextMut,
@@ -212,6 +222,10 @@ impl Table {
     /// the right type to be stored in this table, or if `val` belongs to a
     /// different store.
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
@@ -276,6 +290,10 @@ impl Table {
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
     /// [`Store::limiter_async`](`crate::Store::limiter_async`)).  When using an
     /// async resource limiter, use [`Table::grow_async`] instead.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -344,6 +362,12 @@ impl Table {
     /// Required when using a
     /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// This function will panic when if the store doesn't own the table.
@@ -365,6 +389,10 @@ impl Table {
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables, or if the source table's element type does not match
     /// the destination table's element type.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -488,6 +516,10 @@ impl Table {
     /// * the region to be filled is out of bounds, or
     ///
     /// * `val` comes from a different `Store` from this table.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///

@@ -186,6 +186,12 @@ impl<T: 'static> Linker<T> {
 
     /// Returns the [`types::Component`] corresponding to `component` with resource
     /// types imported by it replaced using imports present in [`Self`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn substituted_component_type(&self, component: &Component) -> Result<types::Component> {
         let cx = self.typecheck(&component)?;
         Ok(types::Component::from(
@@ -215,6 +221,10 @@ impl<T: 'static> Linker<T> {
     /// Returns an error if this linker doesn't define a name that the
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
         let cx = self.typecheck(&component)?;
 
@@ -279,6 +289,10 @@ impl<T: 'static> Linker<T> {
     /// `component` requires or if it is of the wrong type. Additionally this
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -300,6 +314,10 @@ impl<T: 'static> Linker<T> {
     /// `component` requires or if it is of the wrong type. Additionally this
     /// can return an error if something goes wrong during instantiation such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
@@ -318,6 +336,12 @@ impl<T: 'static> Linker<T> {
     ///
     /// By default a [`Linker`] will error when unknown imports are encountered when instantiating a [`Component`].
     /// This changes this behavior from an instant error to a trap that will happen if the import is called.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn define_unknown_imports_as_traps(&mut self, component: &Component) -> Result<()> {
         use wasmtime_environ::component::ComponentTypes;
         use wasmtime_environ::component::TypeDef;
@@ -433,6 +457,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// guest, see the [`func_wrap_async`] method.
     ///
     /// [`func_wrap_async`]: LinkerInstance::func_wrap_async
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more words and examples
     pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<()>
@@ -656,6 +686,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_new(
         &mut self,
         name: &str,
@@ -724,6 +760,12 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// This can be used to provide a core wasm [`Module`] as an import to a
     /// component. The [`Module`] provided is saved within the linker for the
     /// specified `name` in this instance.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
         self.insert(name, Definition::Module(module.clone()))?;
         Ok(())
@@ -751,6 +793,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// The provided `dtor` closure returns an error if something goes wrong
     /// when a guest calls the `dtor` to drop a `Resource<T>` such as
     /// a runtime trap or a runtime limit being exceeded.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn resource(
         &mut self,
         name: &str,

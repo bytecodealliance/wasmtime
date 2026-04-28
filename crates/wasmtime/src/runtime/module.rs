@@ -404,6 +404,12 @@ impl Module {
     /// those defined by any version of wasmtime. (this means that if you cache
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let code = engine.load_code_bytes(bytes.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)

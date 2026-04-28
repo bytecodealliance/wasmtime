@@ -182,6 +182,10 @@ impl Instance {
     /// Returns an error if `name` isn't a function export or if the export's
     /// type did not match `Params` or `Results`
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
@@ -1159,6 +1163,12 @@ impl<T: 'static> InstancePre<T> {
     }
 
     /// Performs the instantiation process into the store specified.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
@@ -1175,6 +1185,12 @@ impl<T: 'static> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     ///
     /// Exactly like [`Self::instantiate`] except for use on async stores.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
