@@ -11,8 +11,7 @@ block0(v0: i8):
     return
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
+; check: str lr, [sp, #-16]!
 ; nextln: block0:
 ; check-not: uxtb w0, w0
 ; nextln: load_ext_name_far x2, User(userextname0)+0
@@ -28,8 +27,7 @@ block0(v0: i8):
     return
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
+; check: str lr, [sp, #-16]!
 ; nextln: block0:
 ; nextln: uxtb w0, w0
 ; nextln: load_ext_name_far x4, User(userextname0)+0

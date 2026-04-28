@@ -88,20 +88,18 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   bl 0
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
-;   bl #8 ; reloc_external Call %simple_leaf 0
-;   ldp x29, x30, [sp], #0x10
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
+;   bl #4 ; reloc_external Call %simple_leaf 0
+;   ldr x30, [sp], #0x10
 ;   ret
 
 ;; Test 4: Non-leaf function with indirect call
@@ -114,20 +112,18 @@ block0(v0: i32, v1: i64):
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   blr x1
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
 ;   blr x1
-;   ldp x29, x30, [sp], #0x10
+;   ldr x30, [sp], #0x10
 ;   ret
 
 ;; Test 5: Leaf function with memory operations (should still be leaf)

@@ -151,24 +151,23 @@ block0(v0: i64):
 
 ; VCode:
 ;   bti c
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   load_ext_name_far x3, TestCase(%g)+0
 ;   blr x3
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   hint #0x22
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0xc
-;   ldr x3, #0x14
-;   b #0x1c
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x8
+;   ldr x3, #0x10
+;   b #0x18
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x3
-;   ldp x29, x30, [sp], #0x10
+;   ldr x30, [sp], #0x10
 ;   ret
+

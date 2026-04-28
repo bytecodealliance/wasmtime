@@ -1,0 +1,68 @@
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=false
+target aarch64
+
+;; Eligible regular-call function should avoid establishing fp.
+function %regular_call_lr_only() -> i64 system_v {
+    fn0 = colocated %leaf() -> i64 system_v
+block0:
+    v0 = call fn0()
+    return v0
+}
+
+; VCode:
+;   str lr, [sp, #-16]!
+; block0:
+;   bl 0
+;   ldr lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
+;   bl #4 ; reloc_external Call %leaf 0
+;   ldr x30, [sp], #0x10
+;   ret
+
+;; Incoming stack args force fp/lr frame setup.
+function %regular_call_needs_fp(i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 system_v {
+    fn0 = colocated %leaf() -> i64 system_v
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64):
+    v9 = call fn0()
+    return v9
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call %leaf 0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %leaf() -> i64 {
+block0:
+    v0 = iconst.i64 42
+    return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #42
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x2a
+;   ret
