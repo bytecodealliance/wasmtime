@@ -421,6 +421,54 @@ block0(v0: i32):
 ; nextln: v4 = iadd v0, v3  ; v3 = 1
 ; nextln: return v4
 
+function %smin_const_lhs_reassoc_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 4
+    v2 = smin v1, v0
+    v3 = iconst.i32 -9
+    v4 = smin v3, v2
+    return v4
+}
+
+; check: v12 = smin v0, v3  ; v3 = -9
+; nextln: return v12
+
+function %umin_const_lhs_reassoc_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 13
+    v2 = umin v1, v0
+    v3 = iconst.i32 7
+    v4 = umin v3, v2
+    return v4
+}
+
+; check: v12 = umin v0, v3  ; v3 = 7
+; nextln: return v12
+
+function %smax_const_lhs_reassoc_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -9
+    v2 = smax v1, v0
+    v3 = iconst.i32 4
+    v4 = smax v3, v2
+    return v4
+}
+
+; check: v12 = smax v0, v3  ; v3 = 4
+; nextln: return v12
+
+function %umax_const_lhs_reassoc_fold(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = umax v1, v0
+    v3 = iconst.i32 13
+    v4 = umax v3, v2
+    return v4
+}
+
+; check: v12 = umax v0, v3  ; v3 = 13
+; nextln: return v12
+
 function %bswap_i16() -> i16 {
 block0:
     v0 = iconst.i16 0x1234
