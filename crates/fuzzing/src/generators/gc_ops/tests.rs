@@ -35,14 +35,14 @@ fn is_subtype_index(
     }
 
     let sub = match encoding_order
-        .get(usize::try_from(sub_index).expect("sub_index is out of bounds"))
+        .get(usize::try_from(sub_index).unwrap())
         .copied()
     {
         Some(t) => t,
         None => return false,
     };
     let sup = match encoding_order
-        .get(usize::try_from(sup_index).expect("sup_index is out of bounds"))
+        .get(usize::try_from(sup_index).unwrap())
         .copied()
     {
         Some(t) => t,
@@ -61,6 +61,7 @@ fn empty_test_ops() -> GcOps {
             table_size: 5,
             max_rec_groups: 5,
             max_types: 5,
+            max_fields: 10,
         },
         ops: vec![],
         types: Types::new(),
@@ -80,6 +81,7 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
             table_size,
             max_rec_groups: 7,
             max_types: 10,
+            max_fields: 10,
         },
         ops: vec![
             GcOp::NullExtern,
@@ -105,7 +107,7 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
             let is_final = false;
             let supertype = None;
             t.types
-                .insert_empty_struct(TypeId(i), gid, is_final, supertype);
+                .insert_struct(TypeId(i), gid, is_final, supertype, Vec::new());
         }
     }
 
@@ -116,6 +118,7 @@ fn test_ops(num_params: u32, num_globals: u32, table_size: u32) -> GcOps {
 fn assert_valid_wasm(ops: &mut GcOps) {
     let wasm = ops.to_wasm_binary();
     let feats = wasmparser::WasmFeatures::default();
+    eprintln!("wat: {}", wasmprinter::print_bytes(&wasm).unwrap());
     feats.reference_types();
     feats.gc();
     let mut validator = wasmparser::Validator::new_with_features(feats);
@@ -335,10 +338,10 @@ fn sort_types_by_supertype_orders_supertype_before_subtype_across_rec_groups() {
     let d = TypeId(3);
 
     // Cross-rec-group chain: C <: A <: B <: D.
-    types.insert_empty_struct(a, ga, false, Some(b)); // A <: B
-    types.insert_empty_struct(b, gb, false, Some(d)); // B <: D
-    types.insert_empty_struct(c, gc, false, Some(a)); // C <: A
-    types.insert_empty_struct(d, gd, false, None); // D
+    types.insert_struct(a, ga, false, Some(b), Vec::new()); // A <: B
+    types.insert_struct(b, gb, false, Some(d), Vec::new()); // B <: D
+    types.insert_struct(c, gc, false, Some(a), Vec::new()); // C <: A
+    types.insert_struct(d, gd, false, None, Vec::new()); // D
 
     let mut sorted = Vec::new();
     types.sort_types_topo(&mut sorted);
@@ -364,8 +367,8 @@ fn fixup_preserves_subtyping_within_same_rec_group() {
 
     // Both types are in the same rec group.
     // The second subtypes the first.
-    types.insert_empty_struct(super_ty, g, false, None);
-    types.insert_empty_struct(sub_ty, g, false, Some(super_ty));
+    types.insert_struct(super_ty, g, false, None, Vec::new());
+    types.insert_struct(sub_ty, g, false, Some(super_ty), Vec::new());
 
     let limits = GcOpsLimits {
         num_params: 0,
@@ -373,6 +376,7 @@ fn fixup_preserves_subtyping_within_same_rec_group() {
         table_size: 0,
         max_rec_groups: 10,
         max_types: 10,
+        max_fields: 10,
     };
 
     types.fixup(&limits, &mut Vec::new());
@@ -405,14 +409,14 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
     let d = TypeId(3);
 
     // Rec(a)
-    types.insert_empty_struct(a, g_a, false, Some(d));
+    types.insert_struct(a, g_a, false, Some(d), Vec::new());
 
     // Rec(b, c)
-    types.insert_empty_struct(b, g_bc, false, None);
-    types.insert_empty_struct(c, g_bc, false, Some(a));
+    types.insert_struct(b, g_bc, false, None, Vec::new());
+    types.insert_struct(c, g_bc, false, Some(a), Vec::new());
 
     // Rec(d)
-    types.insert_empty_struct(d, g_d, false, Some(c));
+    types.insert_struct(d, g_d, false, Some(c), Vec::new());
 
     let limits = GcOpsLimits {
         num_params: 0,
@@ -420,6 +424,7 @@ fn fixup_breaks_one_edge_in_multi_rec_group_type_cycle() {
         table_size: 0,
         max_rec_groups: 10,
         max_types: 10,
+        max_fields: 10,
     };
 
     types.fixup(&limits, &mut Vec::new());
@@ -462,12 +467,12 @@ fn sort_rec_groups_topo_orders_dependencies_first() {
     let e = TypeId(4);
     let f = TypeId(5);
 
-    types.insert_empty_struct(a, g0, false, Some(b)); // g0 -> g1
-    types.insert_empty_struct(b, g1, false, Some(c)); // g1 -> g2
-    types.insert_empty_struct(c, g2, false, Some(d)); // g2 ->g3
-    types.insert_empty_struct(d, g3, false, None);
-    types.insert_empty_struct(e, g0, false, None);
-    types.insert_empty_struct(f, g2, false, None);
+    types.insert_struct(a, g0, false, Some(b), Vec::new()); // g0 -> g1
+    types.insert_struct(b, g1, false, Some(c), Vec::new()); // g1 -> g2
+    types.insert_struct(c, g2, false, Some(d), Vec::new()); // g2 ->g3
+    types.insert_struct(d, g3, false, None, Vec::new());
+    types.insert_struct(e, g0, false, None, Vec::new());
+    types.insert_struct(f, g2, false, None, Vec::new());
 
     let type_to_group = types.type_to_group_map();
     let mut sorted = Vec::new();
@@ -528,18 +533,18 @@ fn break_rec_group_cycles() {
     //  | g0 |------>| g1 |------>| g2 |------>| g3 |
     //  +----+       +----+       +----+       +----+
 
-    types.insert_empty_struct(a0, g0, false, Some(b0)); // g0 -> g1
-    types.insert_empty_struct(a1, g0, false, None);
+    types.insert_struct(a0, g0, false, Some(b0), Vec::new()); // g0 -> g1
+    types.insert_struct(a1, g0, false, None, Vec::new());
 
-    types.insert_empty_struct(b0, g1, false, None);
-    types.insert_empty_struct(b1, g1, false, Some(c0)); // g1 -> g2
+    types.insert_struct(b0, g1, false, None, Vec::new());
+    types.insert_struct(b1, g1, false, Some(c0), Vec::new()); // g1 -> g2
 
-    types.insert_empty_struct(c0, g2, false, None);
-    types.insert_empty_struct(c1, g2, false, Some(a1)); // g2 -> g0 (outer back edge)
-    types.insert_empty_struct(c2, g2, false, Some(d0)); // g2 -> g3
+    types.insert_struct(c0, g2, false, None, Vec::new());
+    types.insert_struct(c1, g2, false, Some(a1), Vec::new()); // g2 -> g0 (outer back edge)
+    types.insert_struct(c2, g2, false, Some(d0), Vec::new()); // g2 -> g3
 
-    types.insert_empty_struct(d0, g3, false, None);
-    types.insert_empty_struct(d1, g3, false, Some(b0)); // g3 -> g1 (inner back edge)
+    types.insert_struct(d0, g3, false, None, Vec::new());
+    types.insert_struct(d1, g3, false, Some(b0), Vec::new()); // g3 -> g1 (inner back edge)
 
     // Type graph is acyclic — breaking supertype cycles changes nothing.
     types.break_supertype_cycles();
@@ -608,10 +613,10 @@ fn is_subtype_index_accepts_chain() {
     //   0 -> TypeId(1)
     //   1 -> TypeId(2)
     //   2 -> TypeId(3)
-    types.insert_empty_struct(TypeId(1), g0, false, None);
-    types.insert_empty_struct(TypeId(2), g1, false, Some(TypeId(1)));
-    types.insert_empty_struct(TypeId(3), g2, false, Some(TypeId(2)));
-    types.insert_empty_struct(TypeId(4), g3, false, Some(TypeId(3)));
+    types.insert_struct(TypeId(1), g0, false, None, Vec::new());
+    types.insert_struct(TypeId(2), g1, false, Some(TypeId(1)), Vec::new());
+    types.insert_struct(TypeId(3), g2, false, Some(TypeId(2)), Vec::new());
+    types.insert_struct(TypeId(4), g3, false, Some(TypeId(3)), Vec::new());
 
     let order = encoding_order(&types);
 
@@ -661,8 +666,8 @@ fn is_subtype_index_encoding_order_differs_from_key_order() {
     // BTreeMap key order:  [TypeId(1), TypeId(10)]  -> dense 0=TypeId(1), 1=TypeId(10)
     // Encoding order:      [TypeId(10), TypeId(1)]  -> dense 0=TypeId(10), 1=TypeId(1)
     //   (g0 must come before g1 because g1's type has a supertype in g0)
-    types.insert_empty_struct(TypeId(10), g0, false, None);
-    types.insert_empty_struct(TypeId(1), g1, false, Some(TypeId(10)));
+    types.insert_struct(TypeId(10), g0, false, None, Vec::new());
+    types.insert_struct(TypeId(1), g1, false, Some(TypeId(10)), Vec::new());
 
     let order = encoding_order(&types);
 
@@ -693,9 +698,9 @@ fn stacktype_fixup_accepts_subtype_for_supertype_requirement() {
     //   0 -> TypeId(1)
     //   1 -> TypeId(2)
     //   2 -> TypeId(3)
-    types.insert_empty_struct(TypeId(1), g, false, None);
-    types.insert_empty_struct(TypeId(2), g, false, Some(TypeId(1)));
-    types.insert_empty_struct(TypeId(3), g, false, Some(TypeId(2)));
+    types.insert_struct(TypeId(1), g, false, None, Vec::new());
+    types.insert_struct(TypeId(2), g, false, Some(TypeId(1)), Vec::new());
+    types.insert_struct(TypeId(3), g, false, Some(TypeId(2)), Vec::new());
 
     let num_types = u32::try_from(types.type_defs.len()).unwrap();
     let order = encoding_order(&types);
@@ -772,17 +777,18 @@ fn cast_test_ops(ops: Vec<GcOp>) -> GcOps {
             table_size: 0,
             max_rec_groups: 5,
             max_types: 10,
+            max_fields: 10,
         },
         ops,
         types: Types::new(),
     };
     let g = RecGroupId(0);
     t.types.insert_rec_group(g);
-    t.types.insert_empty_struct(TypeId(1), g, false, None);
+    t.types.insert_struct(TypeId(1), g, false, None, Vec::new());
     t.types
-        .insert_empty_struct(TypeId(2), g, false, Some(TypeId(1)));
+        .insert_struct(TypeId(2), g, false, Some(TypeId(1)), Vec::new());
     t.types
-        .insert_empty_struct(TypeId(3), g, false, Some(TypeId(2)));
+        .insert_struct(TypeId(3), g, false, Some(TypeId(2)), Vec::new());
     t
 }
 
@@ -799,14 +805,15 @@ fn flat_cast_test_ops(ops: Vec<GcOp>) -> GcOps {
             table_size: 0,
             max_rec_groups: 5,
             max_types: 10,
+            max_fields: 10,
         },
         ops,
         types: Types::new(),
     };
     let g = RecGroupId(0);
     t.types.insert_rec_group(g);
-    t.types.insert_empty_struct(TypeId(1), g, false, None);
-    t.types.insert_empty_struct(TypeId(2), g, false, None);
+    t.types.insert_struct(TypeId(1), g, false, None, Vec::new());
+    t.types.insert_struct(TypeId(2), g, false, None, Vec::new());
     t
 }
 

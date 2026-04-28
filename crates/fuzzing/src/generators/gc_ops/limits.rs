@@ -13,6 +13,8 @@ pub const NUM_GLOBALS_RANGE: RangeInclusive<u32> = 0..=10;
 pub const TABLE_SIZE_RANGE: RangeInclusive<u32> = 0..=100;
 /// Range for the maximum number of rec groups.
 pub const MAX_REC_GROUPS_RANGE: RangeInclusive<u32> = 0..=10;
+/// Range for the maximum number of fields per struct type.
+pub const MAX_FIELDS_RANGE: RangeInclusive<u32> = 0..=8;
 /// Maximum number of operations.
 pub const MAX_OPS: usize = 100;
 
@@ -24,7 +26,9 @@ pub struct GcOpsLimits {
     pub(crate) table_size: u32,
     pub(crate) max_rec_groups: u32,
     pub(crate) max_types: u32,
+    pub(crate) max_fields: u32,
 }
+
 impl GcOpsLimits {
     /// Fixup the limits to ensure they are within the valid range.
     pub(crate) fn fixup(&mut self) {
@@ -36,6 +40,7 @@ impl GcOpsLimits {
             table_size,
             max_rec_groups,
             max_types,
+            max_fields,
         } = self;
 
         let clamp = |limit: &mut u32, range: RangeInclusive<u32>| {
@@ -46,5 +51,6 @@ impl GcOpsLimits {
         clamp(num_globals, NUM_GLOBALS_RANGE);
         clamp(max_rec_groups, MAX_REC_GROUPS_RANGE);
         clamp(max_types, MAX_TYPES_RANGE);
+        clamp(max_fields, MAX_FIELDS_RANGE);
     }
 }

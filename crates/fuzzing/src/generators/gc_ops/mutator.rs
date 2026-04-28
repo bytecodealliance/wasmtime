@@ -1,7 +1,7 @@
 //! Mutators for the `gc` operations.
 use crate::generators::gc_ops::limits::GcOpsLimits;
 use crate::generators::gc_ops::ops::{GcOp, GcOps};
-use crate::generators::gc_ops::types::{TypeId, Types};
+use crate::generators::gc_ops::types::{CompositeType, FieldType, StructField, TypeId, Types};
 use mutatis::{
     Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult, mutators as m,
 };
@@ -22,15 +22,11 @@ impl TypesMutator {
         types: &mut Types,
         limits: &GcOpsLimits,
     ) -> mutatis::Result<()> {
-        if c.shrink()
-            || types.type_defs.len()
-                >= usize::try_from(limits.max_types).expect("max_types is too large")
-        {
+        if c.shrink() || types.type_defs.len() >= usize::try_from(limits.max_types).unwrap() {
             return Ok(());
         }
 
-        let max_rec_groups =
-            usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large");
+        let max_rec_groups = usize::try_from(limits.max_rec_groups).unwrap();
         if types.rec_groups.is_empty() && max_rec_groups == 0 {
             return Ok(());
         }
@@ -54,8 +50,9 @@ impl TypesMutator {
             } else {
                 None
             };
-            types.insert_empty_struct(tid, gid, is_final, supertype);
-            log::debug!("Added empty struct {tid:?} to rec group {gid:?}");
+            // Add struct with no fields; fields can be added later by `mutate_struct_fields`.
+            types.insert_struct(tid, gid, is_final, supertype, Vec::new());
+            log::debug!("Added struct {tid:?} to rec group {gid:?}");
             Ok(())
         })?;
         Ok(())
@@ -200,10 +197,8 @@ impl TypesMutator {
     ) -> mutatis::Result<()> {
         if c.shrink()
             || types.rec_groups.is_empty()
-            || types.rec_groups.len()
-                >= usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
-            || types.type_defs.len()
-                >= usize::try_from(limits.max_types).expect("max_types is too large")
+            || types.rec_groups.len() >= usize::try_from(limits.max_rec_groups).unwrap()
+            || types.type_defs.len() >= usize::try_from(limits.max_types).unwrap()
         {
             return Ok(());
         }
@@ -218,16 +213,17 @@ impl TypesMutator {
                 return Ok(());
             }
 
-            // Collect (TypeId, is_final, supertype) for members of the source group.
-            let members: SmallVec<[(TypeId, bool, Option<TypeId>); 32]> = src_members
-                .iter()
-                .filter_map(|tid| {
-                    types
-                        .type_defs
-                        .get(tid)
-                        .map(|def| (*tid, def.is_final, def.supertype))
-                })
-                .collect();
+            // Collect (TypeId, is_final, supertype, fields) for members of the source group.
+            let members: SmallVec<[(TypeId, bool, Option<TypeId>, Vec<StructField>); 32]> =
+                src_members
+                    .iter()
+                    .filter_map(|tid| {
+                        types.type_defs.get(tid).map(|def| {
+                            let CompositeType::Struct(ref st) = def.composite_type;
+                            (*tid, def.is_final, def.supertype, st.fields.clone())
+                        })
+                    })
+                    .collect();
 
             if members.is_empty() {
                 return Ok(());
@@ -239,15 +235,15 @@ impl TypesMutator {
 
             // Allocate fresh type ids for each member and build old-to-new map.
             let mut old_to_new: BTreeMap<TypeId, TypeId> = BTreeMap::new();
-            for (old_tid, _, _) in &members {
+            for (old_tid, _, _, _) in &members {
                 old_to_new.insert(*old_tid, types.fresh_type_id(ctx.rng()));
             }
 
             // Insert duplicated defs, rewriting intra-group supertype edges to cloned ids.
-            for (old_tid, is_final, supertype) in &members {
+            for (old_tid, is_final, supertype, fields) in &members {
                 let new_tid = old_to_new[old_tid];
                 let mapped_super = supertype.map(|st| *old_to_new.get(&st).unwrap_or(&st));
-                types.insert_empty_struct(new_tid, new_gid, *is_final, mapped_super);
+                types.insert_struct(new_tid, new_gid, *is_final, mapped_super, fields.clone());
             }
 
             log::debug!(
@@ -332,8 +328,7 @@ impl TypesMutator {
         if c.shrink()
             || types.rec_groups.is_empty()
             || types.type_defs.len() < 2
-            || types.rec_groups.len()
-                >= usize::try_from(limits.max_rec_groups).expect("max_rec_groups is too large")
+            || types.rec_groups.len() >= usize::try_from(limits.max_rec_groups).unwrap()
         {
             return Ok(());
         }
@@ -390,6 +385,19 @@ impl TypesMutator {
         Ok(())
     }
 
+    /// Mutate struct fields (add/remove/modify via `m::vec`).
+    fn mutate_struct_fields(
+        &mut self,
+        c: &mut Candidates<'_>,
+        types: &mut Types,
+    ) -> mutatis::Result<()> {
+        for (_, def) in types.type_defs.iter_mut() {
+            let CompositeType::Struct(ref mut st) = def.composite_type;
+            m::vec(StructFieldMutator).mutate(c, &mut st.fields)?;
+        }
+        Ok(())
+    }
+
     /// Run all type / rec-group mutations. [`GcOpsLimits`] come from [`GcOps`].
     fn mutate_with_limits(
         &mut self,
@@ -405,8 +413,43 @@ impl TypesMutator {
         self.remove_group(c, types)?;
         self.merge_groups(c, types)?;
         self.split_group(c, types, limits)?;
+        self.mutate_struct_fields(c, types)?;
+
         Ok(())
     }
+}
+
+/// Mutator for [`StructField`]: used by `m::vec` to add, remove, and
+/// modify fields within a struct type.
+#[derive(Debug, Default)]
+pub struct StructFieldMutator;
+
+impl Mutate<StructField> for StructFieldMutator {
+    fn mutate(&mut self, c: &mut Candidates<'_>, field: &mut StructField) -> MutResult<()> {
+        c.mutation(|ctx| {
+            let old = format!("{field:?}");
+            field.field_type = FieldType::random(ctx.rng());
+            field.mutable = (ctx.rng().gen_u32() % 2) == 0;
+            log::debug!("Mutated field {old} -> {field:?}");
+            Ok(())
+        })?;
+        Ok(())
+    }
+}
+
+impl Generate<StructField> for StructFieldMutator {
+    fn generate(&mut self, ctx: &mut Context) -> MutResult<StructField> {
+        let field = StructField {
+            field_type: FieldType::random(ctx.rng()),
+            mutable: (ctx.rng().gen_u32() % 2) == 0,
+        };
+        log::debug!("Generated field {field:?}");
+        Ok(field)
+    }
+}
+
+impl DefaultMutate for StructField {
+    type DefaultMutate = StructFieldMutator;
 }
 
 /// Mutator for [`GcOps`].
@@ -465,7 +508,7 @@ impl Generate<GcOps> for GcOpsMutator {
         let mut ops = GcOps::default();
         let mut session = mutatis::Session::new();
 
-        for _ in 0..64 {
+        for _ in 0..2048 {
             session.mutate(&mut ops)?;
         }
 

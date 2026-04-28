@@ -3,7 +3,7 @@
 use crate::generators::gc_ops::types::StackType;
 use crate::generators::gc_ops::{
     limits::GcOpsLimits,
-    types::{CompositeType, RecGroupId, StructType, TypeId, Types},
+    types::{CompositeType, RecGroupId, TypeId, Types},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -70,14 +70,12 @@ impl GcOps {
         );
 
         // 1: "run"
-        let mut params: Vec<ValType> = Vec::with_capacity(
-            usize::try_from(self.limits.num_params).expect("num_params is too large"),
-        );
+        let mut params: Vec<ValType> =
+            Vec::with_capacity(usize::try_from(self.limits.num_params).unwrap());
         for _i in 0..self.limits.num_params {
             params.push(ValType::EXTERNREF);
         }
-        let params_len =
-            u32::try_from(params.len()).expect("params len should be within u32 range");
+        let params_len = u32::try_from(params.len()).unwrap();
         let results = vec![];
         types.ty().function(params, results);
 
@@ -122,18 +120,28 @@ impl GcOps {
         let encode_ty_id = |ty_id: &TypeId| -> wasm_encoder::SubType {
             let def = &self.types.type_defs[ty_id];
             match &def.composite_type {
-                CompositeType::Struct(StructType {}) => wasm_encoder::SubType {
-                    is_final: def.is_final,
-                    supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
-                    composite_type: wasm_encoder::CompositeType {
-                        inner: wasm_encoder::CompositeInnerType::Struct(wasm_encoder::StructType {
-                            fields: Box::new([]),
-                        }),
-                        shared: false,
-                        describes: None,
-                        descriptor: None,
-                    },
-                },
+                CompositeType::Struct(st) => {
+                    let fields: Box<[wasm_encoder::FieldType]> = st
+                        .fields
+                        .iter()
+                        .map(|f| wasm_encoder::FieldType {
+                            element_type: f.field_type.to_storage_type(),
+                            mutable: f.mutable,
+                        })
+                        .collect();
+                    wasm_encoder::SubType {
+                        is_final: def.is_final,
+                        supertype_idx: def.supertype.map(|st| type_ids_to_index[&st]),
+                        composite_type: wasm_encoder::CompositeType {
+                            inner: wasm_encoder::CompositeInnerType::Struct(
+                                wasm_encoder::StructType { fields },
+                            ),
+                            shared: false,
+                            describes: None,
+                            descriptor: None,
+                        },
+                    }
+                }
             }
         };
 
@@ -316,10 +324,22 @@ impl GcOps {
             typed_table_base,
         };
 
+        // Build a flat encoding order for field lookups during encoding.
+        let encoding_order: Vec<TypeId> = encoding_order_grouped
+            .iter()
+            .flat_map(|(_, members)| members.iter().copied())
+            .collect();
+
         let mut func = Function::new(local_decls);
         func.instruction(&Instruction::Loop(wasm_encoder::BlockType::Empty));
         for op in &self.ops {
-            op.encode(&mut func, scratch_local, storage_bases);
+            op.encode(
+                &mut func,
+                scratch_local,
+                storage_bases,
+                &self.types,
+                &encoding_order,
+            );
         }
         func.instruction(&Instruction::Br(0));
         func.instruction(&Instruction::End);
@@ -601,6 +621,20 @@ macro_rules! for_each_gc_op {
                 super_type_index = super_type_index.checked_rem(num_types)?;
             })]
             RefCastDownward { sub_type_index: u32, super_type_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            StructGet { type_index: u32, field_index: u32 },
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            StructSet { type_index: u32, field_index: u32 },
         }
     };
 }
@@ -733,7 +767,7 @@ impl GcOp {
                         Self::$op $( { $($field),* } )? => {
                             $(
                                 $(
-                                    #[allow(unused_mut, reason = "macro code")]
+                                    #[allow(unused_mut, unused_assignments, reason = "macro code")]
                                     let mut $field = *$field;
                                 )*
                                 let $limits = limits;
@@ -779,7 +813,14 @@ impl GcOp {
         for_each_gc_op!(define_gc_op_generate)
     }
 
-    fn encode(&self, func: &mut Function, scratch_local: u32, encoding_bases: WasmEncodingBases) {
+    fn encode(
+        &self,
+        func: &mut Function,
+        scratch_local: u32,
+        encoding_bases: WasmEncodingBases,
+        types: &Types,
+        encoding_order: &[TypeId],
+    ) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
@@ -835,6 +876,14 @@ impl GcOp {
                 )));
             }
             Self::StructNew { type_index: x } => {
+                if let Some(tid) = encoding_order.get(usize::try_from(x).unwrap()) {
+                    if let Some(def) = types.type_defs.get(tid) {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        for field in &st.fields {
+                            field.field_type.emit_default_const(func);
+                        }
+                    }
+                }
                 func.instruction(&Instruction::StructNew(encoding_bases.struct_type_base + x));
             }
             Self::TakeStructCall => {
@@ -966,6 +1015,99 @@ impl GcOp {
                 func.instruction(&Instruction::RefNull(sub_heap_type));
 
                 func.instruction(&Instruction::End);
+            }
+            Self::StructGet {
+                type_index,
+                field_index,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let fields = encoding_order
+                    .get(usize::try_from(type_index).unwrap())
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .map(|def| {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        &st.fields[..]
+                    });
+
+                match fields {
+                    Some(fields) if !fields.is_empty() => {
+                        let typed_local = encoding_bases.typed_local_base + type_index;
+                        // Guard against null: save ref, check, skip if null.
+                        func.instruction(&Instruction::LocalTee(typed_local));
+                        func.instruction(&Instruction::RefIsNull);
+                        func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                        func.instruction(&Instruction::Else);
+                        func.instruction(&Instruction::LocalGet(typed_local));
+                        let idx = field_index % u32::try_from(fields.len()).unwrap();
+                        if fields[usize::try_from(idx).unwrap()].field_type.is_packed() {
+                            func.instruction(&Instruction::StructGetS {
+                                struct_type_index: wasm_type,
+                                field_index: idx,
+                            });
+                        } else {
+                            func.instruction(&Instruction::StructGet {
+                                struct_type_index: wasm_type,
+                                field_index: idx,
+                            });
+                        }
+                        // Drop the result — field values are not tracked
+                        // on the abstract stack.
+                        func.instruction(&Instruction::Drop);
+                        func.instruction(&Instruction::End);
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
+            }
+            Self::StructSet {
+                type_index,
+                field_index,
+            } => {
+                let wasm_type = encoding_bases.struct_type_base + type_index;
+                let fields = encoding_order
+                    .get(usize::try_from(type_index).unwrap())
+                    .and_then(|tid| types.type_defs.get(tid))
+                    .map(|def| {
+                        let CompositeType::Struct(ref st) = def.composite_type;
+                        &st.fields[..]
+                    });
+
+                match fields {
+                    Some(fields) if !fields.is_empty() => {
+                        let len = fields.len();
+                        let start = (usize::try_from(field_index).unwrap()) % len;
+                        let mutable_field = (0..len)
+                            .map(|offset| (start + offset) % len)
+                            .find(|&i| fields[i].mutable);
+
+                        match mutable_field {
+                            Some(idx) => {
+                                let typed_local = encoding_bases.typed_local_base + type_index;
+
+                                // Wasm stack: [struct_ref]
+                                func.instruction(&Instruction::LocalTee(typed_local));
+                                func.instruction(&Instruction::RefIsNull);
+                                func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                                func.instruction(&Instruction::Else);
+                                func.instruction(&Instruction::LocalGet(typed_local));
+                                fields[idx].field_type.emit_default_const(func);
+                                let idx = u32::try_from(idx).unwrap();
+                                func.instruction(&Instruction::StructSet {
+                                    struct_type_index: wasm_type,
+                                    field_index: idx,
+                                });
+                                func.instruction(&Instruction::End);
+                            }
+                            None => {
+                                func.instruction(&Instruction::Drop);
+                            }
+                        }
+                    }
+                    _ => {
+                        func.instruction(&Instruction::Drop);
+                    }
+                }
             }
         }
     }
