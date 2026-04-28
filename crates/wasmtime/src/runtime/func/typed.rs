@@ -92,6 +92,10 @@ where
     /// Panics if `store` does not contain this function.
     ///
     /// [`Trap`]: crate::Trap
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
@@ -117,6 +121,10 @@ where
     /// connected to a synchronous store.
     ///
     /// [`Trap`]: crate::Trap
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,

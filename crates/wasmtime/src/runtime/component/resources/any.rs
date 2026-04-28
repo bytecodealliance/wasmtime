@@ -72,6 +72,10 @@ impl ResourceAny {
     /// This method will return an error if `resource` has already been "taken"
     /// and has ownership transferred elsewhere which can happen in situations
     /// such as when it's already lowered into a component.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_from_resource<T: 'static>(
         resource: Resource<T>,
         store: impl AsContextMut,
@@ -80,6 +84,12 @@ impl ResourceAny {
     }
 
     /// See [`Resource::try_from_resource_any`]
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_into_resource<T: 'static>(self, store: impl AsContextMut) -> Result<Resource<T>> {
         Resource::try_from_resource_any(self, store)
     }
@@ -146,6 +156,12 @@ impl ResourceAny {
     /// properly cleaned up. For owned resources this may execute the
     /// guest-defined destructor if applicable (or the host-defined destructor
     /// if one was specified).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         store.0.validate_sync_call()?;
@@ -154,6 +170,12 @@ impl ResourceAny {
 
     /// Same as [`ResourceAny::resource_drop`] except for use with async stores
     /// to execute the destructor [asynchronously](crate#async).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn resource_drop_async(self, mut store: impl AsContextMut<Data: Send>) -> Result<()> {
         let mut store = store.as_context_mut();

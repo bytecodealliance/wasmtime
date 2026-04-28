@@ -24,6 +24,12 @@ impl Tag {
     }
 
     /// Create a new tag instance from a given TagType.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(mut store: impl AsContextMut, ty: &TagType) -> Result<Tag> {
         generate_tag_export(store.as_context_mut().0, ty)
     }

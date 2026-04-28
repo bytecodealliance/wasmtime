@@ -355,6 +355,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn define(
         &mut self,
         store: impl AsContext<Data = T>,
@@ -377,6 +381,12 @@ impl<T> Linker<T> {
     /// This is only relevant when working with the module linking proposal
     /// where one-level names are allowed (in addition to two-level names).
     /// Otherwise this method need not be used.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn define_name(
         &mut self,
         store: impl AsContext<Data = T>,
@@ -409,6 +419,12 @@ impl<T> Linker<T> {
     ///
     /// Panics if the given function type is not associated with the same engine
     /// as this linker.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_new(
         &mut self,
         module: &str,
@@ -537,6 +553,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn func_wrap<Params, Args>(
         &mut self,
         module: &str,
@@ -623,6 +643,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instance(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -833,6 +857,12 @@ impl<T> Linker<T> {
     /// Define automatic instantiations of a [`Module`] in this linker.
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn module_async(
         &mut self,
@@ -960,6 +990,10 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if any shadowing violations happen while defining new
     /// items, or if the original item wasn't defined.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn alias(
         &mut self,
         module: &str,
@@ -985,6 +1019,10 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if any shadowing violations happen while defining new
     /// items.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
         let module = self.pool.insert(module)?;
         let as_module = self.pool.insert(as_module)?;
@@ -1090,6 +1128,12 @@ impl<T> Linker<T> {
 
     /// Attempts to instantiate the `module` provided. This is the same as
     /// [`Linker::instantiate`], except for async `Store`s.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
@@ -1151,6 +1195,10 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate_pre(&self, module: &Module) -> Result<InstancePre<T>>
     where
         T: 'static,
@@ -1231,6 +1279,12 @@ impl<T> Linker<T> {
     ///
     /// This function will panic if the `store` provided does not come from the
     /// same [`Engine`] that this linker was created with.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1279,6 +1333,12 @@ impl<T> Linker<T> {
 
     /// Same as [`Linker::get_by_import`] but returns an error instead of
     /// panicking on allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_get_by_import(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1312,6 +1372,12 @@ impl<T> Linker<T> {
     /// Panics if the default function found is not owned by `store`. This
     /// function will also panic if the `store` provided does not come from the
     /// same [`Engine`] that this linker was created with.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get_default(&self, mut store: impl AsContextMut<Data = T>, module: &str) -> Result<Func>
     where
         T: 'static,

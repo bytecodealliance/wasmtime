@@ -206,6 +206,12 @@ impl Component {
     ///
     /// For more information see the [`Module::deserialize`] method.
     ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Unsafety
     ///
     /// The unsafety of this method is the same as that of the

@@ -381,6 +381,12 @@ impl Func {
 
     /// Same as [`Func::new`] but returns an error instead of panicking on
     /// allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_new<T: 'static>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -814,6 +820,12 @@ impl Func {
 
     /// Fallible version of [`Func::wrap`] that returns an error on
     /// out-of-memory instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_wrap<T, Params, Results>(
         mut store: impl AsContextMut<Data = T>,
         func: impl IntoFunc<T, Params, Results>,
@@ -942,6 +954,10 @@ impl Func {
     /// Panics if `store` does not own this function.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn call(
         &self,
         mut store: impl AsContextMut,
@@ -1089,6 +1105,10 @@ impl Func {
     /// Panics if this is called on a function in a synchronous store. This
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,
