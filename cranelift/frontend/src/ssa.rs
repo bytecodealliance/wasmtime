@@ -8,7 +8,7 @@
 //! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
