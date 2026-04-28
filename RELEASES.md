@@ -1,3 +1,17 @@
+## 24.0.8
+
+Released 2026-04-30.
+
+### Fixed
+
+* Fixed a bug in lowering of `f64.copysign` on x86-64 whereby when combined
+  with an `f64.load`, the resulting machine code could read 16 bytes rather
+  than 8 bytes. This could result in a segfault when Wasmtime is configured
+  without signals-based traps.
+  [GHSA-vc8c-j3xm-xj73](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-vc8c-j3xm-xj73)
+
+--------------------------------------------------------------------------------
+
 ## 24.0.7
 
 Released 2026-04-09.
