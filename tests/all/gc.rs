@@ -1,4 +1,5 @@
 use super::ref_types_module;
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
@@ -2026,7 +2027,59 @@ fn issue_13037_drc_leak_passing_objects_already_in_over_approx_stack_roots_list(
     store.gc(None)?;
 
     assert!(dropped.load(Ordering::SeqCst));
+    Ok(())
+}
 
+fn copying_store_with_gc_zeal(counter: u32) -> Result<(Store<()>, Engine)> {
+    let _ = env_logger::try_init();
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::Copying);
+    let _ = config.gc_zeal_alloc_counter(NonZeroU32::new(counter));
+    let engine = Engine::new(&config)?;
+    let store = Store::new(&engine, ());
+    Ok((store, engine))
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn copying_collector_externref_survives_gc() -> Result<()> {
+    let (mut store, engine) = copying_store_with_gc_zeal(1)?;
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (import "" "gc" (func $gc))
+            (func (export "roundtrip") (param externref) (result externref)
+                (call $gc)
+                (local.get 0)
+            )
+        )
+        "#,
+    )?;
+    let gc_func = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        caller.gc(None)
+    });
+    let instance = Instance::new(&mut store, &module, &[gc_func.into()])?;
+    let roundtrip = instance
+        .get_typed_func::<Option<Rooted<ExternRef>>, Option<Rooted<ExternRef>>>(
+            &mut store,
+            "roundtrip",
+        )?;
+
+    {
+        let val = ExternRef::new(&mut store, 42u32)?;
+        let result = roundtrip.call(&mut store, Some(val))?;
+        let result = result.unwrap();
+        let data = result
+            .data(&store)?
+            .expect("should have data")
+            .downcast_ref::<u32>()
+            .copied()
+            .unwrap();
+        assert_eq!(data, 42u32);
+    }
     Ok(())
 }
 
@@ -2081,6 +2134,71 @@ fn issue_13173_gc_heap_uses_gc_tunables_no_signals() -> Result<()> {
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let result = run.call(&mut store, ())?;
     assert_eq!(result, 1000);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn copying_collector_many_externrefs() -> Result<()> {
+    let (mut store, engine) = copying_store_with_gc_zeal(2)?;
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (import "" "gc" (func $gc))
+            (import "" "make" (func $make (param i32) (result externref)))
+            (import "" "check" (func $check (param externref i32)))
+
+            (func (export "test")
+                (local $a externref)
+                (local $b externref)
+                (local $c externref)
+
+                (local.set $a (call $make (i32.const 100)))
+                (local.set $b (call $make (i32.const 200)))
+                (local.set $c (call $make (i32.const 300)))
+
+                (call $gc)
+
+                (call $check (local.get $a) (i32.const 100))
+                (call $check (local.get $b) (i32.const 200))
+                (call $check (local.get $c) (i32.const 300))
+            )
+        )
+        "#,
+    )?;
+
+    let gc_func = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| -> Result<()> {
+        caller.gc(None)
+    });
+    let make = Func::wrap(
+        &mut store,
+        |mut caller: Caller<'_, ()>, val: i32| -> Result<Option<Rooted<ExternRef>>> {
+            Ok(Some(ExternRef::new(&mut caller, val)?))
+        },
+    );
+    let check = Func::wrap(
+        &mut store,
+        |caller: Caller<'_, ()>, ext: Option<Rooted<ExternRef>>, expected: i32| -> Result<()> {
+            let ext = ext.unwrap();
+            let val = *ext
+                .data(&caller)?
+                .expect("data")
+                .downcast_ref::<i32>()
+                .unwrap();
+            assert_eq!(val, expected, "externref value mismatch after GC");
+            Ok(())
+        },
+    );
+
+    let instance = Instance::new(
+        &mut store,
+        &module,
+        &[gc_func.into(), make.into(), check.into()],
+    )?;
+    let test = instance.get_typed_func::<(), ()>(&mut store, "test")?;
+    test.call(&mut store, ())?;
     Ok(())
 }
 
@@ -2143,5 +2261,49 @@ fn issue_13173_gc_heap_uses_gc_tunables_guard_size_mismatch() -> Result<()> {
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let result = run.call(&mut store, ())?;
     assert_eq!(result, 1000);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn copying_collector_gc_zeal_counter_stress() -> Result<()> {
+    // Many allocations with different `gc_zeal_alloc_counter` values to stress
+    // GC timing.
+    for counter in [2, 3, 5, 7, 10] {
+        let (mut store, engine) = copying_store_with_gc_zeal(counter)?;
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+                (type $box (struct (field i32)))
+
+                (func (export "test") (result i32)
+                    (local $keep (ref null $box))
+                    (local $i i32)
+
+                    (local.set $keep (struct.new $box (i32.const 12345)))
+
+                    (local.set $i (i32.const 0))
+                    (block $done
+                        (loop $loop
+                            (br_if $done (i32.ge_u (local.get $i) (i32.const 30)))
+                            (drop (struct.new $box (local.get $i)))
+                            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                            (br $loop)
+                        )
+                    )
+
+                    (struct.get $box 0 (local.get $keep))
+                )
+            )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let test = instance.get_typed_func::<(), i32>(&mut store, "test")?;
+        let result = test.call(&mut store, ())?;
+        assert_eq!(result, 12345, "failed with gc_zeal_counter={counter}");
+    }
+
     Ok(())
 }

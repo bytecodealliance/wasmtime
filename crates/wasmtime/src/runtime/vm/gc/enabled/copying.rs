@@ -15,8 +15,8 @@ use super::trace_info::{TraceInfo, TraceInfos};
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
     GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
+    VMMemoryDefinition,
 };
-use crate::vm::VMMemoryDefinition;
 use crate::{Engine, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull};
@@ -730,7 +730,9 @@ unsafe impl GcHeap for CopyingHeap {
         let size = u32::try_from(layout.size()).unwrap();
         // Round up the allocation size to ALIGN so that the next bump-pointer
         // allocation is also aligned.
-        let size = (size + ALIGN - 1) & !(ALIGN - 1);
+        let size = size
+            .checked_next_multiple_of(ALIGN)
+            .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.allocate(size) {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
