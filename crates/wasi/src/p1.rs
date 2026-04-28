@@ -532,10 +532,19 @@ impl Transaction<'_> {
     /// # Errors
     ///
     /// Returns [`types::Errno::Spipe`] if the descriptor corresponds to stdio
-    fn get_seekable(&self, fd: types::Fd) -> Result<&File> {
+    async fn get_seekable(&mut self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.used.get(&fd) {
-            Some(Descriptor::File(file)) => Ok(file),
+            Some(Descriptor::File(file)) => {
+                let descriptor_type = self.view.filesystem().get_type(file.fd.borrowed()).await?;
+                if matches!(
+                    descriptor_type,
+                    filesystem::DescriptorType::CharacterDevice | filesystem::DescriptorType::Fifo
+                ) {
+                    return Err(types::Errno::Spipe.into());
+                }
+                Ok(file)
+            }
             Some(
                 Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. },
             ) => {
@@ -863,7 +872,7 @@ wiggle::from_witx!({
             fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
             fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
             path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-            path_rename, path_symlink, path_unlink_file
+            path_rename, path_symlink, path_unlink_file, fd_tell,
         }
     },
     errors: { errno => trappable Error },
@@ -882,7 +891,7 @@ pub(crate) mod sync {
                 fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
                 fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
                 path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-                path_rename, path_symlink, path_unlink_file
+                path_rename, path_symlink, path_unlink_file, fd_tell,
             }
         },
         errors: { errno => trappable Error },
@@ -1889,8 +1898,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize, types::Error> {
-        let t = self.transact()?;
-        let File { fd, position, .. } = t.get_seekable(fd)?;
+        let mut t = self.transact()?;
+        let File { fd, position, .. } = t.get_seekable(fd).await?;
         let fd = fd.borrowed();
         let position = position.clone();
         drop(t);
@@ -1928,7 +1937,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     /// Return the current offset of a file descriptor.
     /// NOTE: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
     #[instrument(skip(self, _memory))]
-    fn fd_tell(
+    async fn fd_tell(
         &mut self,
         _memory: &mut GuestMemory<'_>,
         fd: types::Fd,
@@ -1936,6 +1945,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         let pos = self
             .transact()?
             .get_seekable(fd)
+            .await
             .map(|File { position, .. }| position.load(Ordering::Relaxed))?;
         Ok(pos)
     }
