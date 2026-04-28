@@ -2,13 +2,14 @@
 
 use clap::Parser;
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::{
     fmt, fs,
     num::NonZeroU32,
     path::{Path, PathBuf},
     time::Duration,
 };
-use wasmtime::{Config, Result, bail, error::Context as _};
+use wasmtime::{Config, Result, WasmBacktraceDetails, bail, error::Context as _};
 
 pub mod opt;
 
@@ -307,6 +308,8 @@ wasmtime_option_group! {
         /// Allow the debugger component to inherit stderr. Off by
         /// default.
         pub inherit_stderr: Option<bool>,
+        /// Maximum number of frames to capture in backtraces.
+        pub max_backtrace: Option<usize>,
     }
 
     enum Debug {
@@ -944,6 +947,16 @@ impl CommonOptions {
         }
         if let Some(enable) = self.debug.address_map {
             config.generate_address_map(enable);
+        }
+        if let Some(frames) = self.debug.max_backtrace {
+            match NonZeroUsize::new(frames) {
+                None => {
+                    config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
+                }
+                Some(amt) => {
+                    config.wasm_backtrace_max_frames(Some(amt));
+                }
+            }
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
