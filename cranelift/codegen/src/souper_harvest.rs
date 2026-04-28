@@ -113,6 +113,7 @@ fn harvest_candidate_lhs(
                 | ir::Opcode::BorImm
                 | ir::Opcode::Bxor
                 | ir::Opcode::BxorImm
+                | ir::Opcode::Bnot
                 | ir::Opcode::Ishl
                 | ir::Opcode::IshlImm
                 | ir::Opcode::Sshr
@@ -332,6 +333,14 @@ fn harvest_candidate_lhs(
                             r#type: souper_type_of(&func.dfg, val),
                         }
                         .into();
+                        ast::Instruction::Xor { a, b }.into()
+                    }
+                    (ir::Opcode::Bnot, _) => {
+                        let a = arg(allocs, 0);
+                        let b = ast::Constant {
+                            value: -1,
+                            r#type: souper_type_of(&func.dfg, val),
+                        }.into();
                         ast::Instruction::Xor { a, b }.into()
                     }
                     (ir::Opcode::Ishl, _) => {
