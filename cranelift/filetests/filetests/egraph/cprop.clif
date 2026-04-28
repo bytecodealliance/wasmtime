@@ -430,8 +430,8 @@ block0(v0: i32):
     return v4
 }
 
-; check: v13 = smin v0, v3  ; v3 = -9
-; nextln: return v13
+; check: v12 = smin v0, v3  ; v3 = -9
+; nextln: return v12
 
 function %umin_const_lhs_reassoc_fold(i32) -> i32 {
 block0(v0: i32):
@@ -442,8 +442,8 @@ block0(v0: i32):
     return v4
 }
 
-; check: v13 = umin v0, v3  ; v3 = 7
-; nextln: return v13
+; check: v12 = umin v0, v3  ; v3 = 7
+; nextln: return v12
 
 function %smax_const_lhs_reassoc_fold(i32) -> i32 {
 block0(v0: i32):
@@ -454,8 +454,8 @@ block0(v0: i32):
     return v4
 }
 
-; check: v13 = smax v0, v3  ; v3 = 4
-; nextln: return v13
+; check: v12 = smax v0, v3  ; v3 = 4
+; nextln: return v12
 
 function %umax_const_lhs_reassoc_fold(i32) -> i32 {
 block0(v0: i32):
@@ -466,8 +466,8 @@ block0(v0: i32):
     return v4
 }
 
-; check: v13 = umax v0, v3  ; v3 = 13
-; nextln: return v13
+; check: v12 = umax v0, v3  ; v3 = 13
+; nextln: return v12
 
 function %bswap_i16() -> i16 {
 block0:
