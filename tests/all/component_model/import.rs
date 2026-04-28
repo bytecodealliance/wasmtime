@@ -337,7 +337,9 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
 )
     "#;
 
-    let engine = super::engine();
+    let mut config = Config::new();
+    config.compiler_inlining(false);
+    let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
     linker.root().func_wrap("thunk", |_, _: ()| -> Result<()> {
         panic!("should not get here")
