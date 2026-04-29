@@ -131,7 +131,7 @@ impl TraceInfos {
         let info = match gc_layout {
             GcLayout::Array(l) => {
                 if l.elems_are_gc_refs {
-                    debug_assert_eq!(l.elem_offset(0), self.gc_ref_array_elems_offset);
+                    debug_assert_eq!(l.elem_offset(0), Some(self.gc_ref_array_elems_offset));
                 }
                 TraceInfo::Array {
                     gc_ref_elems: l.elems_are_gc_refs,
