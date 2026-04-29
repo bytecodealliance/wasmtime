@@ -372,6 +372,14 @@ impl DataFlowGraph {
         self.value_is_valid(value) && !matches!(self.values[value].into(), ValueData::Alias { .. })
     }
 
+    /// Is the given value an alias?
+    pub fn value_is_alias(&self, v: Value) -> bool {
+        match ValueData::from(self.values[v]) {
+            ValueData::Alias { .. } => true,
+            ValueData::Inst { .. } | ValueData::Param { .. } | ValueData::Union { .. } => false,
+        }
+    }
+
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
         self.values[v].ty()

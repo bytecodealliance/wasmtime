@@ -367,7 +367,8 @@ impl LivenessAnalysis {
     }
 
     /// Process a value's definition, removing it from the currently-live set.
-    fn process_def(&mut self, val: ir::Value) {
+    fn process_def(&mut self, func: &Function, val: ir::Value) {
+        debug_assert!(!func.dfg.value_is_alias(val));
         if self.currently_live.remove(&val) {
             log::trace!("liveness:   defining {val:?}, removing it from the live set");
         }
@@ -385,6 +386,7 @@ impl LivenessAnalysis {
         // Keep order deterministic since we add stack map entries in this
         // order.
         live.sort();
+        debug_assert!(live.iter().all(|v| !func.dfg.value_is_alias(*v)));
 
         self.live_across_any_safepoint.extend(live.iter().copied());
         self.safepoints.insert(inst, live);
@@ -393,6 +395,7 @@ impl LivenessAnalysis {
     /// Process a use of a needs-stack-map value, inserting it into the
     /// currently-live set.
     fn process_use(&mut self, func: &Function, inst: Inst, val: Value) {
+        debug_assert!(!func.dfg.value_is_alias(val));
         if self.currently_live.insert(val) {
             log::trace!(
                 "liveness:   found use of {val:?}, marking it live: {inst:?}: {}",
@@ -423,7 +426,7 @@ impl LivenessAnalysis {
         while let Some(inst) = option_inst {
             // Process any needs-stack-map values defined by this instruction.
             for val in func.dfg.inst_results(inst) {
-                self.process_def(*val);
+                self.process_def(func, *val);
             }
 
             // If this instruction is a safepoint and we've been asked to record
@@ -447,7 +450,7 @@ impl LivenessAnalysis {
         // After we've processed this block's instructions, remove its
         // parameters from the live set. This is part of step (1).
         for val in func.dfg.block_params(block) {
-            self.process_def(*val);
+            self.process_def(func, *val);
         }
     }
 
@@ -482,6 +485,11 @@ impl LivenessAnalysis {
                 let successor_index = usize::try_from(successor_index).unwrap();
                 self.live_outs[block_index].extend(self.live_ins[successor_index].iter().copied());
             }
+            debug_assert!(
+                self.live_outs[block_index]
+                    .iter()
+                    .all(|v| !func.dfg.value_is_alias(*v))
+            );
 
             // Process the block to compute its live-in set, but do not record
             // safepoints yet, as we haven't yet processed loop back edges (see
@@ -491,6 +499,11 @@ impl LivenessAnalysis {
             // The live-in set for a block is the set of values that are still
             // live after the block's instructions have been processed.
             self.live_ins[block_index].extend(self.currently_live.iter().copied());
+            debug_assert!(
+                self.live_ins[block_index]
+                    .iter()
+                    .all(|v| !func.dfg.value_is_alias(*v))
+            );
 
             // If the live-in set changed, then we need to revisit all this
             // block's predecessors.
@@ -552,6 +565,7 @@ impl StackSlots {
     }
 
     fn get_or_create_stack_slot(&mut self, func: &mut Function, val: ir::Value) -> ir::StackSlot {
+        debug_assert!(!func.dfg.value_is_alias(val));
         *self.stack_slots.entry(val).or_insert_with(|| {
             log::trace!("rewriting:     {val:?} needs a stack slot");
             let ty = func.dfg.value_type(val);
@@ -631,6 +645,7 @@ impl SafepointSpiller {
     ///
     /// The given cursor must point just after this value's definition.
     fn rewrite_def(&mut self, pos: &mut FuncCursor<'_>, val: ir::Value) {
+        debug_assert!(!pos.func.dfg.value_is_alias(val));
         if let Some(slot) = self.stack_slots.get(val) {
             let i = pos.ins().stack_store(val, slot, 0);
             log::trace!(
@@ -664,6 +679,8 @@ impl SafepointSpiller {
             .expect("should only call `rewrite_safepoint` on safepoint instructions");
 
         for val in live {
+            debug_assert!(!func.dfg.value_is_alias(*val));
+
             // Get or create the stack slot for this live needs-stack-map value.
             let slot = self.stack_slots.get_or_create_stack_slot(func, *val);
 
@@ -692,6 +709,7 @@ impl SafepointSpiller {
     /// The given cursor must point just before the use of the value that we are
     /// replacing.
     fn rewrite_use(&mut self, pos: &mut FuncCursor<'_>, val: &mut ir::Value) -> bool {
+        debug_assert!(!pos.func.dfg.value_is_alias(*val));
         if !self.liveness.live_across_any_safepoint.contains(*val) {
             return false;
         }
@@ -763,6 +781,7 @@ impl SafepointSpiller {
                 vals.extend(pos.func.dfg.inst_values(inst));
                 let mut replaced_any = false;
                 for val in &mut vals {
+                    *val = pos.func.dfg.resolve_aliases(*val);
                     replaced_any |= self.rewrite_use(&mut pos, val);
                 }
                 if replaced_any {
@@ -1846,13 +1865,15 @@ block0(v0: i32):
     v2 -> v1
     v4 -> v1
     stack_store v1, ss0  ; v1 = 42
-    v13 = stack_load.i32 ss0
-    call fn0(v13), stack_map=[i32 @ ss0+0]
+    v17 = stack_load.i32 ss0
+    call fn0(v17), stack_map=[i32 @ ss0+0]
     brif v0, block1, block2
 
 block1:
-    call fn0(v2), stack_map=[i32 @ ss0+0]  ; v2 = 42
-    call fn0(v2)  ; v2 = 42
+    v12 = stack_load.i32 ss0
+    call fn0(v12), stack_map=[i32 @ ss0+0]
+    v11 = stack_load.i32 ss0
+    call fn0(v11)
     v3 = iconst.i32 36
     stack_store v3, ss0  ; v3 = 36
     v10 = stack_load.i32 ss0
@@ -1861,14 +1882,16 @@ block1:
     jump block3(v9)
 
 block2:
-    call fn0(v4), stack_map=[i32 @ ss0+0]  ; v4 = 42
-    call fn0(v4)  ; v4 = 42
+    v16 = stack_load.i32 ss0
+    call fn0(v16), stack_map=[i32 @ ss0+0]
+    v15 = stack_load.i32 ss0
+    call fn0(v15)
     v5 = iconst.i32 36
     stack_store v5, ss1  ; v5 = 36
-    v12 = stack_load.i32 ss1
-    call fn0(v12), stack_map=[i32 @ ss1+0]
-    v11 = stack_load.i32 ss1
-    jump block3(v11)
+    v14 = stack_load.i32 ss1
+    call fn0(v14), stack_map=[i32 @ ss1+0]
+    v13 = stack_load.i32 ss1
+    jump block3(v13)
 
 block3(v6: i32):
     stack_store v6, ss0
@@ -2731,38 +2754,44 @@ block3:
     jump block2(v7)
 
 block4:
-    v26 = stack_load.i32 ss1
-    jump block5(v26)
+    v32 = stack_load.i32 ss1
+    jump block5(v32)
 
 block5(v20: i32):
     v19 -> v20
     stack_store v20, ss2
     v9 = iconst.i32 0
-    v10 = icmp.i32 eq v8, v9  ; v9 = 0
+    v31 = stack_load.i32 ss0
+    v10 = icmp eq v31, v9  ; v9 = 0
     brif v10, block8(v9), block6  ; v9 = 0
 
 block6:
-    v11 = call fn3(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v30 = stack_load.i32 ss0
+    v11 = call fn3(v30), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
     v12 = iconst.i32 -1091584273
     v13 = icmp eq v11, v12  ; v12 = -1091584273
     v14 = iconst.i32 1
     brif v13, block8(v14), block7  ; v14 = 1
 
 block7:
-    v15 = call fn4(v8, v12), stack_map=[i32 @ ss0+0, i32 @ ss2+0]  ; v12 = -1091584273
+    v29 = stack_load.i32 ss0
+    v15 = call fn4(v29, v12), stack_map=[i32 @ ss0+0, i32 @ ss2+0]  ; v12 = -1091584273
     jump block8(v15)
 
 block8(v16: i32):
     trapz v16, user1
-    call fn5(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v28 = stack_load.i32 ss0
+    call fn5(v28), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
     v17 = call fn6(), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
-    brif v17, block5(v19), block9
+    v27 = stack_load.i32 ss2
+    brif v17, block5(v27), block9
 
 block9:
-    v25 = stack_load.i32 ss2
-    call fn7(v25), stack_map=[i32 @ ss2+0]
+    v26 = stack_load.i32 ss2
+    call fn7(v26), stack_map=[i32 @ ss2+0]
     v23 = call fn8(), stack_map=[i32 @ ss2+0]
-    brif v23, block10, block1(v19)
+    v25 = stack_load.i32 ss2
+    brif v23, block10, block1(v25)
 
 block10:
     return
@@ -2874,6 +2903,116 @@ block10:
         assert!(
             output.contains("try_call fn0(), sig0, block1, [], stack_map=[i32 @ ss0+0]"),
             "try_call should have stack_map entry for v0 (spilled to ss0), got:\n{output}"
+        );
+    }
+
+    #[test]
+    fn rewrite_uses_of_alias_values() {
+        let _ = env_logger::try_init();
+
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(ir::types::I32));
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        // fn0: () -> i32 (returns a gc ref)
+        let name0 = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(ir::types::I32));
+        let signature = builder.func.import_signature(sig);
+        let fn0 = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name0),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        // fn1: (i32) -> () (consumes a gc ref)
+        let name1 = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 1,
+            });
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(ir::types::I32));
+        let signature = builder.func.import_signature(sig);
+        let fn1 = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name1),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        let var = builder.declare_var(ir::types::I32);
+        builder.declare_var_needs_stack_map(var);
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        let v0 = builder.func.dfg.block_params(block0)[0];
+        let inst = builder.ins().call(fn0, &[]);
+        let v1 = builder.func.dfg.first_result(inst);
+        builder.def_var(var, v1);
+        builder.ins().brif(v0, block1, &[], block2, &[]);
+
+        builder.switch_to_block(block1);
+        builder.def_var(var, v1);
+        builder.ins().jump(block2, &[]);
+
+        builder.switch_to_block(block2);
+        let v2 = builder.use_var(var);
+        builder.ins().call(fn1, &[v2]);
+        let v3 = builder.use_var(var);
+        builder.ins().call(fn1, &[v3]);
+        builder.ins().return_(&[]);
+
+        builder.seal_all_blocks();
+
+        builder.finalize();
+
+        // The SSA construction / `Variable` infrastructure makes this value
+        // into an alias. But it is also an alias of a value that needs
+        // inclusion in stack maps, so we should reload it from the stack before
+        // it is passed into `fn1` in the disassembly below, rather than pass
+        // the original or aliased value directly.
+        assert!(func.dfg.value_is_alias(v3));
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %sample(i32) system_v {
+    ss0 = explicit_slot 4, align = 4
+    sig0 = () -> i32 system_v
+    sig1 = (i32) system_v
+    fn0 = colocated u0:0 sig0
+    fn1 = colocated u0:1 sig1
+
+block0(v0: i32):
+    v1 = call fn0()
+    v2 -> v1
+    stack_store v1, ss0
+    brif v0, block1, block2
+
+block1:
+    jump block2
+
+block2:
+    v4 = stack_load.i32 ss0
+    call fn1(v4), stack_map=[i32 @ ss0+0]
+    v3 = stack_load.i32 ss0
+    call fn1(v3)
+    return
+}
+            "#,
         );
     }
 }
