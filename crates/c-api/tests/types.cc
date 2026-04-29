@@ -12,17 +12,19 @@ template <typename T, typename E> T unwrap(Result<T, E> result) {
 }
 
 TEST(ValType, Smoke) {
-  EXPECT_EQ(ValType(ValKind::I32)->kind(), ValKind::I32);
-  EXPECT_EQ(ValType(ValKind::I64)->kind(), ValKind::I64);
-  EXPECT_EQ(ValType(ValKind::F32)->kind(), ValKind::F32);
-  EXPECT_EQ(ValType(ValKind::F64)->kind(), ValKind::F64);
-  EXPECT_EQ(ValType(ValKind::V128)->kind(), ValKind::V128);
-  EXPECT_EQ(ValType(ValKind::FuncRef)->kind(), ValKind::FuncRef);
-  EXPECT_EQ(ValType(ValKind::ExternRef)->kind(), ValKind::ExternRef);
+  EXPECT_EQ(ValType::i32(), ValType::i32());
+  EXPECT_EQ(ValType::i64(), ValType::i64());
+  EXPECT_EQ(ValType::f32(), ValType::f32());
+  EXPECT_EQ(ValType::f64(), ValType::f64());
+  EXPECT_EQ(ValType::v128(), ValType::v128());
+  EXPECT_EQ(ValType::funcref(), ValType::funcref());
+  EXPECT_EQ(ValType::externref(), ValType::externref());
+  EXPECT_EQ(ValType::exnref(), ValType::exnref());
+  EXPECT_EQ(ValType::anyref(), ValType::anyref());
 
-  ValType t(ValKind::I32);
-  t = ValKind::I64;
-  ValType t2(ValKind::F32);
+  ValType t(ValType::i32());
+  t = ValType::i64();
+  ValType t2(ValType::f32());
   t = t2;
   ValType t3(t2);
 
@@ -40,20 +42,20 @@ TEST(MemoryType, Smoke) {
 }
 
 TEST(TableType, Smoke) {
-  TableType t(ValKind::FuncRef, 1);
+  TableType t(ValType::funcref(), 1);
 
   EXPECT_EQ(t->min(), 1);
   EXPECT_EQ(t->max(), std::nullopt);
-  EXPECT_EQ(t->element().kind(), ValKind::FuncRef);
+  EXPECT_EQ(t->element(), ValType::funcref());
 
   TableType t2 = t;
   t2 = t;
 }
 
 TEST(GlobalType, Smoke) {
-  GlobalType t(ValKind::FuncRef, true);
+  GlobalType t(ValType::funcref(), true);
 
-  EXPECT_EQ(t->content().kind(), ValKind::FuncRef);
+  EXPECT_EQ(t->content(), ValType::funcref());
   EXPECT_TRUE(t->is_mutable());
 
   GlobalType t2 = t;
@@ -89,7 +91,7 @@ TEST(ModuleType, Smoke) {
   auto e = *exports.begin();
   EXPECT_EQ(e.name(), "x");
   auto export_ty = std::get<GlobalType::Ref>(ExternType::from_export(e));
-  EXPECT_EQ(export_ty.content().kind(), ValKind::I32);
+  EXPECT_EQ(export_ty.content(), ValType::i32());
   EXPECT_FALSE(export_ty.is_mutable());
 
   for (auto &exp : exports) {

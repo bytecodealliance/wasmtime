@@ -17,7 +17,7 @@ namespace wasmtime {
 /// `ExternRef`.
 template <> struct detail::WasmType<std::optional<ExternRef>> {
   static const bool valid = true;
-  static const ValKind kind = ValKind::ExternRef;
+  static ValType valtype() { return ValType::externref(); }
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     std::optional<ExternRef> &&ref) {
     if (ref) {

@@ -1,5 +1,4 @@
 use crate::{CExternType, wasm_externtype_t, wasm_valtype_t};
-use std::cell::OnceCell;
 use wasmtime::GlobalType;
 
 pub type wasm_mutability_t = u8;
@@ -18,7 +17,6 @@ wasmtime_c_api_macros::declare_ty!(wasm_globaltype_t);
 #[derive(Clone)]
 pub(crate) struct CGlobalType {
     pub(crate) ty: GlobalType,
-    content_cache: OnceCell<wasm_valtype_t>,
 }
 
 impl wasm_globaltype_t {
@@ -45,10 +43,7 @@ impl wasm_globaltype_t {
 
 impl CGlobalType {
     pub(crate) fn new(ty: GlobalType) -> CGlobalType {
-        CGlobalType {
-            ty,
-            content_cache: OnceCell::new(),
-        }
+        CGlobalType { ty }
     }
 }
 
@@ -63,16 +58,13 @@ pub extern "C" fn wasm_globaltype_new(
         WASM_VAR => Var,
         _ => return None,
     };
-    let ty = GlobalType::new(ty.ty.clone(), mutability);
+    let ty = GlobalType::new((*ty).clone(), mutability);
     Some(Box::new(wasm_globaltype_t::new(ty)))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_content(gt: &wasm_globaltype_t) -> &wasm_valtype_t {
-    let gt = gt.ty();
-    gt.content_cache.get_or_init(|| wasm_valtype_t {
-        ty: gt.ty.content().clone(),
-    })
+    gt.ty().ty.content()
 }
 
 #[unsafe(no_mangle)]

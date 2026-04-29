@@ -15,7 +15,7 @@ TEST(Exception, ConstructAndExamine) {
   auto cx = store.context();
 
   // Create a tag type with (i32, i64) payload.
-  FuncType ft({ValKind::I32, ValKind::I64}, {});
+  FuncType ft({ValType::i32(), ValType::i64()}, {});
   TagType tt(ft);
 
   // Create a tag instance.
@@ -61,7 +61,7 @@ TEST(Exception, TagFromModule) {
   auto tt = tag.type(cx);
   auto func = tt->functype();
   EXPECT_EQ(func->params().size(), 1u);
-  EXPECT_EQ(func->params().begin()->kind(), ValKind::I32);
+  EXPECT_EQ(*func->params().begin(), ValType::i32());
 }
 
 TEST(Exception, HostThrowWasmCatch) {
@@ -69,7 +69,7 @@ TEST(Exception, HostThrowWasmCatch) {
   Store store(engine);
   auto cx = store.context();
 
-  FuncType tag_ft({ValKind::I32}, {});
+  FuncType tag_ft({ValType::i32()}, {});
   TagType tt(tag_ft);
   auto tag = Tag::create(cx, tt).unwrap();
 

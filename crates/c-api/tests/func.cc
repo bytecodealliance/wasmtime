@@ -19,7 +19,7 @@ TEST(TypedFunc, Smoke) {
   EXPECT_TRUE((thunk.typed<empty_t, empty_t>(store)));
 
   Func pi32(
-      store, FuncType({ValKind::I32}, {}),
+      store, FuncType({ValType::i32()}, {}),
       [](auto caller, auto params, auto results) { return std::monostate(); });
 
   EXPECT_FALSE((pi32.typed<float, empty_t>(store)));
@@ -29,7 +29,7 @@ TEST(TypedFunc, Smoke) {
   EXPECT_TRUE((pi32.typed<uint32_t, empty_t>(store)));
 
   Func rets(
-      store, FuncType({}, {ValKind::F32, ValKind::F64}),
+      store, FuncType({}, {ValType::f32(), ValType::f64()}),
       [](auto caller, auto params, auto results) { return std::monostate(); });
 
   EXPECT_FALSE((rets.typed<empty_t, std::tuple<int, int>>(store)));
@@ -51,7 +51,7 @@ TEST(TypedFunc, Call) {
   }
 
   {
-    Func f(store, FuncType({ValKind::I32}, {}),
+    Func f(store, FuncType({ValType::i32()}, {}),
            [](auto caller, auto params, auto results) {
              EXPECT_EQ(params[0].i32(), 1);
              return std::monostate();
@@ -65,7 +65,8 @@ TEST(TypedFunc, Call) {
   }
   {
     Func f(store,
-           FuncType({ValKind::F32, ValKind::I64}, {ValKind::I32, ValKind::F64}),
+           FuncType({ValType::f32(), ValType::i64()},
+                    {ValType::i32(), ValType::f64()}),
            [](auto caller, auto params, auto results) {
              EXPECT_EQ(params[0].f32(), 1);
              EXPECT_EQ(params[1].i64(), 2);
@@ -84,8 +85,8 @@ TEST(TypedFunc, Call) {
   }
 
   {
-    FuncType ty({ValKind::ExternRef, ValKind::ExternRef},
-                {ValKind::ExternRef, ValKind::ExternRef});
+    FuncType ty({ValType::externref(), ValType::externref()},
+                {ValType::externref(), ValType::externref()});
     Func f(store, ty, [](auto caller, auto params, auto results) {
       caller.context().gc().unwrap();
       EXPECT_TRUE(params[0].externref());
@@ -113,8 +114,8 @@ TEST(TypedFunc, Call) {
               return std::monostate();
             });
 
-    FuncType ty({ValKind::FuncRef, ValKind::FuncRef},
-                {ValKind::FuncRef, ValKind::FuncRef});
+    FuncType ty({ValType::funcref(), ValType::funcref()},
+                {ValType::funcref(), ValType::funcref()});
 
     Func f(store, ty, [&](auto caller, auto params, auto results) {
       EXPECT_TRUE(params[0].funcref());
@@ -142,7 +143,7 @@ TEST(TypedFunc, Call) {
   }
 
   {
-    FuncType ty({ValKind::V128}, {ValKind::V128});
+    FuncType ty({ValType::v128()}, {ValType::v128()});
 
     Func f(store, ty, [&](auto caller, auto params, auto results) {
       V128 ret;
@@ -167,18 +168,18 @@ TEST(TypedFunc, Call) {
 }
 
 void assert_types_eq(ValType::ListRef actual,
-                     std::initializer_list<ValKind> expected) {
+                     std::initializer_list<ValType> expected) {
   EXPECT_EQ(expected.size(), actual.size());
-  std::vector<ValKind> actual_vec;
+  std::vector<ValType> actual_vec;
   for (auto ty : actual) {
-    actual_vec.push_back(ty.kind());
+    actual_vec.push_back(ty);
   }
-  std::vector<ValKind> expected_vec(expected);
+  std::vector<ValType> expected_vec(expected);
   EXPECT_EQ(actual_vec, expected_vec);
 }
 
-void assert_func_type(FuncType actual, std::initializer_list<ValKind> params,
-                      std::initializer_list<ValKind> results) {
+void assert_func_type(FuncType actual, std::initializer_list<ValType> params,
+                      std::initializer_list<ValType> results) {
   assert_types_eq(actual->params(), params);
   assert_types_eq(actual->results(), results);
 }
@@ -189,53 +190,53 @@ TEST(TypedFunc, WrapAndTypes) {
   Func f = Func::wrap(store, []() {});
   assert_func_type(f.type(store), {}, {});
   f = Func::wrap(store, []() { return int32_t(1); });
-  assert_func_type(f.type(store), {}, {ValKind::I32});
+  assert_func_type(f.type(store), {}, {ValType::i32()});
   f = Func::wrap(store, []() { return int64_t(1); });
-  assert_func_type(f.type(store), {}, {ValKind::I64});
+  assert_func_type(f.type(store), {}, {ValType::i64()});
   f = Func::wrap(store, []() { return float(1); });
-  assert_func_type(f.type(store), {}, {ValKind::F32});
+  assert_func_type(f.type(store), {}, {ValType::f32()});
   f = Func::wrap(store, []() { return double(1); });
-  assert_func_type(f.type(store), {}, {ValKind::F64});
+  assert_func_type(f.type(store), {}, {ValType::f64()});
   f = Func::wrap(store, []() { return V128(); });
-  assert_func_type(f.type(store), {}, {ValKind::V128});
+  assert_func_type(f.type(store), {}, {ValType::v128()});
   f = Func::wrap(store,
                  []() { return std::make_tuple(int32_t(1), int32_t(2)); });
-  assert_func_type(f.type(store), {}, {ValKind::I32, ValKind::I32});
+  assert_func_type(f.type(store), {}, {ValType::i32(), ValType::i32()});
   f = Func::wrap(store, []() { return std::optional<Func>(std::nullopt); });
-  assert_func_type(f.type(store), {}, {ValKind::FuncRef});
+  assert_func_type(f.type(store), {}, {ValType::funcref()});
   f = Func::wrap(store,
                  []() { return std::optional<ExternRef>(std::nullopt); });
-  assert_func_type(f.type(store), {}, {ValKind::ExternRef});
+  assert_func_type(f.type(store), {}, {ValType::externref()});
   f = Func::wrap(
       store, []() { return Result<std::monostate, Trap>(std::monostate()); });
   assert_func_type(f.type(store), {}, {});
   f = Func::wrap(store, []() { return Result<int32_t, Trap>(1); });
-  assert_func_type(f.type(store), {}, {ValKind::I32});
+  assert_func_type(f.type(store), {}, {ValType::i32()});
   f = Func::wrap(store, []() { return Result<float, Trap>(1); });
-  assert_func_type(f.type(store), {}, {ValKind::F32});
+  assert_func_type(f.type(store), {}, {ValType::f32()});
   f = Func::wrap(store, []() {
     return Result<std::tuple<int32_t, int32_t>, Trap>({1, 2});
   });
-  assert_func_type(f.type(store), {}, {ValKind::I32, ValKind::I32});
+  assert_func_type(f.type(store), {}, {ValType::i32(), ValType::i32()});
 
   f = Func::wrap(store, [](int32_t a) {});
-  assert_func_type(f.type(store), {ValKind::I32}, {});
+  assert_func_type(f.type(store), {ValType::i32()}, {});
   f = Func::wrap(store, [](int64_t a) {});
-  assert_func_type(f.type(store), {ValKind::I64}, {});
+  assert_func_type(f.type(store), {ValType::i64()}, {});
   f = Func::wrap(store, [](float a) {});
-  assert_func_type(f.type(store), {ValKind::F32}, {});
+  assert_func_type(f.type(store), {ValType::f32()}, {});
   f = Func::wrap(store, [](double a) {});
-  assert_func_type(f.type(store), {ValKind::F64}, {});
+  assert_func_type(f.type(store), {ValType::f64()}, {});
   f = Func::wrap(store, [](V128 a) {});
-  assert_func_type(f.type(store), {ValKind::V128}, {});
+  assert_func_type(f.type(store), {ValType::v128()}, {});
   f = Func::wrap(store, [](std::optional<Func> a) {});
-  assert_func_type(f.type(store), {ValKind::FuncRef}, {});
+  assert_func_type(f.type(store), {ValType::funcref()}, {});
   f = Func::wrap(store, [](std::optional<ExternRef> a) {});
-  assert_func_type(f.type(store), {ValKind::ExternRef}, {});
+  assert_func_type(f.type(store), {ValType::externref()}, {});
   f = Func::wrap(store, [](Caller a) {});
   assert_func_type(f.type(store), {}, {});
   f = Func::wrap(store, [](Caller a, int32_t b) {});
-  assert_func_type(f.type(store), {ValKind::I32}, {});
+  assert_func_type(f.type(store), {ValType::i32()}, {});
 }
 
 TEST(TypedFunc, WrapRuntime) {

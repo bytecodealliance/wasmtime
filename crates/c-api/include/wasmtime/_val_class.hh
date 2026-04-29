@@ -28,6 +28,18 @@ struct V128 {
   }
 };
 
+enum class ValKind {
+  I32 = WASMTIME_I32,
+  I64 = WASMTIME_I64,
+  F32 = WASMTIME_F32,
+  F64 = WASMTIME_F64,
+  V128 = WASMTIME_V128,
+  FuncRef = WASMTIME_FUNCREF,
+  ExternRef = WASMTIME_EXTERNREF,
+  AnyRef = WASMTIME_ANYREF,
+  ExnRef = WASMTIME_EXNREF,
+};
+
 /**
  * \brief Representation of a generic WebAssembly value.
  *

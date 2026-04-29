@@ -20,7 +20,7 @@ TEST(ExportType, Smoke) {
   auto e = *exports.begin();
   EXPECT_EQ(e.name(), "x");
   auto export_ty = std::get<GlobalType::Ref>(ExternType::from_export(e));
-  EXPECT_EQ(export_ty.content().kind(), ValKind::I32);
+  EXPECT_EQ(export_ty.content(), ValType::i32());
   EXPECT_FALSE(export_ty.is_mutable());
 
   for (auto &exp : exports) {

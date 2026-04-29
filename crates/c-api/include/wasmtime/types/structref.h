@@ -19,16 +19,36 @@ extern "C" {
 
 /**
  * \brief Discriminant for storage types in struct/array field types.
- *
- * Extends #wasmtime_valkind_t with packed storage types
- * #WASMTIME_STORAGE_KIND_I8 and #WASMTIME_STORAGE_KIND_I16.
  */
-typedef uint8_t wasmtime_storage_kind_t;
+typedef uint8_t wasmtime_storage_type_kind_t;
 
-/// \brief An 8-bit packed integer (only valid inside struct/array fields).
-#define WASMTIME_STORAGE_KIND_I8 9
-/// \brief A 16-bit packed integer (only valid inside struct/array fields).
-#define WASMTIME_STORAGE_KIND_I16 10
+/// \brief An 8-bit packed integer
+#define WASMTIME_STORAGE_TYPE_KIND_I8 0
+/// \brief A 16-bit packed integer
+#define WASMTIME_STORAGE_TYPE_KIND_I16 1
+/// \brief A regular value type (i32, f64, funcref, etc).
+#define WASMTIME_STORAGE_TYPE_KIND_VALTYPE 2
+
+/// \brief A storage type descriptor for struct/array fields.
+typedef struct wasmtime_storage_type {
+  /// The kind of storage type this is.
+  wasmtime_storage_type_kind_t kind;
+  /// if `kind` is `WASMTIME_STORAGE_TYPE_KIND_VALTYPE`, then this is
+  /// set.
+  wasm_valtype_t *valtype;
+} wasmtime_storage_type_t;
+
+/// \brief Clone a storage type into `out`.
+WASM_API_EXTERN void
+wasmtime_storage_type_clone(const wasmtime_storage_type_t *storage,
+                            wasmtime_storage_type_t *out);
+
+/// \brief Delete a storage type.
+///
+/// Only necessary for `WASMTIME_STORAGE_TYPE_KIND_VALTYPE` when the value
+/// type is a concrete reference type.
+WASM_API_EXTERN void
+wasmtime_storage_type_delete(wasmtime_storage_type_t *storage);
 
 /**
  * \typedef wasmtime_field_type_t
@@ -38,14 +58,20 @@ typedef uint8_t wasmtime_storage_kind_t;
  * \brief Describes the type and mutability of a struct field or array element.
  */
 typedef struct wasmtime_field_type {
-  /// The storage type of this field. Use #WASMTIME_I32, #WASMTIME_I64,
-  /// #WASMTIME_F32, etc. for value types, or #WASMTIME_STORAGE_KIND_I8 /
-  /// #WASMTIME_STORAGE_KIND_I16 for packed types.
-  wasmtime_storage_kind_t kind;
   /// Whether this field is mutable. `true` for mutable, `false` for
   /// immutable.
   bool mutable_;
+  /// The type stored in this field.
+  wasmtime_storage_type_t storage;
 } wasmtime_field_type_t;
+
+/// \brief Clone a field type into `out`.
+WASM_API_EXTERN void
+wasmtime_field_type_clone(const wasmtime_field_type_t *field,
+                          wasmtime_field_type_t *out);
+
+/// \brief Delete a field type.
+WASM_API_EXTERN void wasmtime_field_type_delete(wasmtime_field_type_t *field);
 
 /**
  * \brief An opaque handle to a WebAssembly struct type definition.
@@ -72,9 +98,27 @@ wasmtime_struct_type_new(const wasm_engine_t *engine,
                          const wasmtime_field_type_t *fields, size_t nfields);
 
 /**
+ * \brief Clone a struct type.
+ */
+WASM_API_EXTERN wasmtime_struct_type_t *
+wasmtime_struct_type_copy(const wasmtime_struct_type_t *ty);
+
+/**
  * \brief Delete a struct type.
  */
 WASM_API_EXTERN void wasmtime_struct_type_delete(wasmtime_struct_type_t *ty);
+
+/// \brief Get the number of fields in a struct type.
+WASM_API_EXTERN size_t
+wasmtime_struct_type_num_fields(const wasmtime_struct_type_t *ty);
+
+/// \brief Get the field type of a struct type's field by index.
+///
+/// Returns `true` if `index` is in-bounds and `out` is filled in. Returns
+/// `false` if `index` is out-of-bounds and `out` is not modified.
+WASM_API_EXTERN bool
+wasmtime_struct_type_field(const wasmtime_struct_type_t *ty, size_t index,
+                           wasmtime_field_type_t *out);
 
 #ifdef __cplusplus
 } // extern "C"

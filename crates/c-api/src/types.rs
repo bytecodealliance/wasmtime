@@ -37,8 +37,12 @@ pub use self::val::*;
 #[cfg(feature = "gc")]
 mod arrayref;
 #[cfg(feature = "gc")]
+mod exn;
+#[cfg(feature = "gc")]
 mod structref;
 #[cfg(feature = "gc")]
 pub use self::arrayref::*;
+#[cfg(feature = "gc")]
+pub use self::exn::*;
 #[cfg(feature = "gc")]
 pub use self::structref::*;

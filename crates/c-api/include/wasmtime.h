@@ -220,8 +220,7 @@
 #include <wasmtime/table.h>
 #include <wasmtime/tag.h>
 #include <wasmtime/trap.h>
-#include <wasmtime/types/arrayref.h>
-#include <wasmtime/types/structref.h>
+#include <wasmtime/types.h>
 #include <wasmtime/val.h>
 #include <wasmtime/wat.h>
 // IWYU pragma: end_exports

@@ -1,13 +1,57 @@
-use wasmtime::{FieldType, Mutability, StorageType, StructType, ValType};
+use crate::wasm_valtype_t;
+use std::mem::{ManuallyDrop, MaybeUninit};
+use wasmtime::{FieldType, Mutability, StorageType, StructType};
 
-pub type wasmtime_storage_kind_t = u8;
-pub const WASMTIME_STORAGE_KIND_I8: wasmtime_storage_kind_t = 9;
-pub const WASMTIME_STORAGE_KIND_I16: wasmtime_storage_kind_t = 10;
+#[repr(C, u8)]
+#[derive(Clone)]
+pub enum wasmtime_storage_type_t {
+    I8,
+    I16,
+    Val(Box<wasm_valtype_t>),
+}
+
+impl From<StorageType> for wasmtime_storage_type_t {
+    fn from(ty: StorageType) -> Self {
+        match ty {
+            StorageType::I8 => Self::I8,
+            StorageType::I16 => Self::I16,
+            StorageType::ValType(ty) => Self::Val(Box::new(ty.into())),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_storage_type_clone(
+    storage: &wasmtime_storage_type_t,
+    out: &mut MaybeUninit<wasmtime_storage_type_t>,
+) {
+    out.write(storage.clone());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_storage_type_delete(
+    out: Option<&mut ManuallyDrop<wasmtime_storage_type_t>>,
+) {
+    if let Some(out) = out {
+        unsafe {
+            ManuallyDrop::drop(out);
+        }
+    }
+}
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct wasmtime_field_type_t {
-    pub kind: wasmtime_storage_kind_t,
     pub mutable_: bool,
+    pub storage: wasmtime_storage_type_t,
+}
+
+impl From<FieldType> for wasmtime_field_type_t {
+    fn from(field: FieldType) -> Self {
+        let mutable_ = field.mutability() == Mutability::Var;
+        let storage = field.element_type().clone().into();
+        Self { mutable_, storage }
+    }
 }
 
 impl wasmtime_field_type_t {
@@ -17,28 +61,39 @@ impl wasmtime_field_type_t {
         } else {
             Mutability::Const
         };
-        let storage = match self.kind {
-            WASMTIME_STORAGE_KIND_I8 => StorageType::I8,
-            WASMTIME_STORAGE_KIND_I16 => StorageType::I16,
-            crate::WASMTIME_I32 => StorageType::ValType(ValType::I32),
-            crate::WASMTIME_I64 => StorageType::ValType(ValType::I64),
-            crate::WASMTIME_F32 => StorageType::ValType(ValType::F32),
-            crate::WASMTIME_F64 => StorageType::ValType(ValType::F64),
-            crate::WASMTIME_V128 => StorageType::ValType(ValType::V128),
-            crate::WASMTIME_FUNCREF => StorageType::ValType(ValType::FUNCREF),
-            crate::WASMTIME_EXTERNREF => StorageType::ValType(ValType::EXTERNREF),
-            crate::WASMTIME_ANYREF => StorageType::ValType(ValType::ANYREF),
-            crate::WASMTIME_EXNREF => StorageType::ValType(ValType::EXNREF),
-            other => panic!("unknown wasmtime_storage_kind_t: {other}"),
+        let storage = match &self.storage {
+            wasmtime_storage_type_t::I8 => StorageType::I8,
+            wasmtime_storage_type_t::I16 => StorageType::I16,
+            wasmtime_storage_type_t::Val(ty) => StorageType::ValType((**ty).clone()),
         };
         FieldType::new(mutability, storage)
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_field_type_clone(
+    field: &wasmtime_field_type_t,
+    out: &mut MaybeUninit<wasmtime_field_type_t>,
+) {
+    out.write(field.clone());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_field_type_delete(
+    out: Option<&mut ManuallyDrop<wasmtime_field_type_t>>,
+) {
+    if let Some(out) = out {
+        unsafe {
+            ManuallyDrop::drop(out);
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct wasmtime_struct_type_t {
     pub(crate) ty: StructType,
 }
-wasmtime_c_api_macros::declare_own!(wasmtime_struct_type_t);
+wasmtime_c_api_macros::declare_ty!(wasmtime_struct_type_t);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_struct_type_new(
@@ -50,4 +105,24 @@ pub extern "C" fn wasmtime_struct_type_new(
     let field_types: Vec<FieldType> = fields.iter().map(|f| f.to_wasmtime()).collect();
     let ty = StructType::new(&engine.engine, field_types).expect("failed to create struct type");
     Box::new(wasmtime_struct_type_t { ty })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_struct_type_num_fields(ty: &wasmtime_struct_type_t) -> usize {
+    ty.ty.fields().len()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_struct_type_field(
+    ty: &wasmtime_struct_type_t,
+    index: usize,
+    out: &mut MaybeUninit<wasmtime_field_type_t>,
+) -> bool {
+    match ty.ty.field(index) {
+        Some(field) => {
+            out.write(field.into());
+            true
+        }
+        None => false,
+    }
 }

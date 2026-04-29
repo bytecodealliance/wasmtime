@@ -1,13 +1,13 @@
 #[cfg(feature = "gc")]
 use crate::r#ref::ref_to_val;
-use crate::{WASM_I32, from_valtype, into_valtype, wasm_valkind_t, wasmtime_valkind_t};
+use crate::{WASM_EXTERNREF, WASM_F32, WASM_F64, WASM_FUNCREF, WASM_I32, WASM_I64, wasm_valkind_t};
 #[cfg(feature = "gc")]
 use crate::{wasm_ref_t, wasmtime_anyref_t, wasmtime_exnref_t, wasmtime_externref_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
-use wasmtime::{AsContextMut, Func, Val, ValType};
+use wasmtime::{AsContextMut, Func, Val};
 #[cfg(feature = "gc")]
-use wasmtime::{HeapType, Ref, RootScope};
+use wasmtime::{Ref, RootScope};
 
 #[repr(C)]
 pub struct wasm_val_t {
@@ -31,8 +31,8 @@ pub union wasm_val_union {
 #[cfg(feature = "gc")]
 impl Drop for wasm_val_t {
     fn drop(&mut self) {
-        match into_valtype(self.kind) {
-            ValType::Ref(_) => unsafe {
+        match self.kind {
+            WASM_FUNCREF | WASM_EXTERNREF => unsafe {
                 if !self.of.ref_.is_null() {
                     drop(Box::from_raw(self.of.ref_));
                 }
@@ -55,8 +55,8 @@ impl Clone for wasm_val_t {
 
         #[cfg(feature = "gc")]
         unsafe {
-            match into_valtype(self.kind) {
-                ValType::Ref(_) if !self.of.ref_.is_null() => {
+            match self.kind {
+                WASM_FUNCREF | WASM_EXTERNREF if !self.of.ref_.is_null() => {
                     ret.of.ref_ = Box::into_raw(Box::new((*self.of.ref_).clone()));
                 }
                 _ => {}
@@ -80,24 +80,24 @@ impl wasm_val_t {
     pub fn from_val(val: Val) -> wasm_val_t {
         match val {
             Val::I32(i) => wasm_val_t {
-                kind: from_valtype(&ValType::I32),
+                kind: WASM_I32,
                 of: wasm_val_union { i32: i },
             },
             Val::I64(i) => wasm_val_t {
-                kind: from_valtype(&ValType::I64),
+                kind: WASM_I64,
                 of: wasm_val_union { i64: i },
             },
             Val::F32(f) => wasm_val_t {
-                kind: from_valtype(&ValType::F32),
+                kind: WASM_F32,
                 of: wasm_val_union { u32: f },
             },
             Val::F64(f) => wasm_val_t {
-                kind: from_valtype(&ValType::F64),
+                kind: WASM_F64,
                 of: wasm_val_union { u64: f },
             },
             #[cfg(feature = "gc")]
             Val::FuncRef(f) => wasm_val_t {
-                kind: from_valtype(&ValType::FUNCREF),
+                kind: WASM_FUNCREF,
                 of: wasm_val_union {
                     ref_: f.map_or(ptr::null_mut(), |f| {
                         Box::into_raw(Box::new(wasm_ref_t {
@@ -117,26 +117,20 @@ impl wasm_val_t {
     }
 
     pub fn val(&self) -> Val {
-        match into_valtype(self.kind) {
-            ValType::I32 => Val::from(unsafe { self.of.i32 }),
-            ValType::I64 => Val::from(unsafe { self.of.i64 }),
-            ValType::F32 => Val::from(unsafe { self.of.f32 }),
-            ValType::F64 => Val::from(unsafe { self.of.f64 }),
+        match self.kind {
+            WASM_I32 => Val::from(unsafe { self.of.i32 }),
+            WASM_I64 => Val::from(unsafe { self.of.i64 }),
+            WASM_F32 => Val::from(unsafe { self.of.f32 }),
+            WASM_F64 => Val::from(unsafe { self.of.f64 }),
             #[cfg(feature = "gc")]
-            ValType::Ref(r) => match r.heap_type() {
-                HeapType::Func => unsafe {
-                    if self.of.ref_.is_null() {
-                        assert!(r.is_nullable());
-                        Val::FuncRef(None)
-                    } else {
-                        ref_to_val(&*self.of.ref_)
-                    }
-                },
-                _ => unreachable!("wasm_val_t cannot contain non-function reference values"),
+            WASM_FUNCREF => unsafe {
+                if self.of.ref_.is_null() {
+                    Val::FuncRef(None)
+                } else {
+                    ref_to_val(&*self.of.ref_)
+                }
             },
-            #[cfg(not(feature = "gc"))]
-            ValType::Ref(_) => unimplemented!("wasm_val_t: reference types require gc feature"),
-            ValType::V128 => unimplemented!("wasm_val_t: v128"),
+            _ => crate::abort("unsupported val discriminant"),
         }
     }
 }
@@ -156,6 +150,17 @@ pub struct wasmtime_val_t {
     pub kind: wasmtime_valkind_t,
     pub of: wasmtime_val_union,
 }
+
+pub type wasmtime_valkind_t = u8;
+pub const WASMTIME_I32: wasmtime_valkind_t = 0;
+pub const WASMTIME_I64: wasmtime_valkind_t = 1;
+pub const WASMTIME_F32: wasmtime_valkind_t = 2;
+pub const WASMTIME_F64: wasmtime_valkind_t = 3;
+pub const WASMTIME_V128: wasmtime_valkind_t = 4;
+pub const WASMTIME_FUNCREF: wasmtime_valkind_t = 5;
+pub const WASMTIME_EXTERNREF: wasmtime_valkind_t = 6;
+pub const WASMTIME_ANYREF: wasmtime_valkind_t = 7;
+pub const WASMTIME_EXNREF: wasmtime_valkind_t = 8;
 
 #[repr(C)]
 pub union wasmtime_val_union {

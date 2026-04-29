@@ -67,7 +67,7 @@ template <typename T> struct WasmTypeList {
   static T load(Store::Context cx, wasmtime_val_raw_t *storage) {
     return WasmType<T>::load(cx, storage);
   }
-  static std::vector<ValType> types() { return {WasmType<T>::kind}; }
+  static std::vector<ValType> types() { return {WasmType<T>::valtype()}; }
 };
 
 /// A "trait" for what can be returned from closures specified to `Func::wrap`.

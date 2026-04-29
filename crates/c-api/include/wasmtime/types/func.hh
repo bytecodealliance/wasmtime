@@ -5,7 +5,7 @@
 #ifndef WASMTIME_TYPES_FUNC_HH
 #define WASMTIME_TYPES_FUNC_HH
 
-#include <wasmtime/types/val.hh>
+#include <wasmtime/types/_val_class.hh>
 
 namespace wasmtime {
 
@@ -97,6 +97,14 @@ public:
   /// \brief Returns the underlying `Ref`, a non-owning reference pointing to
   /// this instance.
   Ref *operator*() { return &ref; }
+
+  /**
+   * \brief Releases the underlying C API pointer.
+   */
+  wasm_functype_t *capi_release() {
+    ref = nullptr;
+    return ptr.release();
+  }
 };
 
 }; // namespace wasmtime

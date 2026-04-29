@@ -144,7 +144,7 @@ TEST(types, module_type) {
   EXPECT_EQ(export_ty->ref().name(), "x");
   auto export_item_ty = ExternType::from_export(export_ty->ref());
   auto global_ty = std::get<wasmtime::GlobalType::Ref>(export_item_ty);
-  EXPECT_EQ(global_ty.content().kind(), wasmtime::ValKind::I32);
+  EXPECT_EQ(global_ty.content(), wasmtime::ValType::i32());
   EXPECT_TRUE(global_ty.is_mutable());
 }
 

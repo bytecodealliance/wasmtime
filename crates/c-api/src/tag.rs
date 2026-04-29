@@ -11,7 +11,7 @@ pub unsafe extern "C" fn wasmtime_tag_new(
     tt: &wasm_tagtype_t,
     ret: &mut MaybeUninit<Tag>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let tag_type = tt.to_tag_type(store.engine());
+    let tag_type = tt.ty(store.engine());
     handle_result(Tag::new(&mut store, &tag_type), |tag| {
         ret.write(tag);
     })
@@ -24,7 +24,7 @@ pub extern "C" fn wasmtime_tag_type(
     tag: &Tag,
 ) -> Box<wasm_tagtype_t> {
     let ty = tag.ty(store);
-    Box::new(wasm_tagtype_t::from_tag_type(ty))
+    Box::new(wasm_tagtype_t::new(ty))
 }
 
 /// Tests whether two tags are the same (identity equality).

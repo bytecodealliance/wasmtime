@@ -97,10 +97,10 @@ TEST(StructRef, CreateAndReadFields) {
   auto cx = store.context();
 
   // Create a struct type with two mutable i32 fields.
-  auto ty = StructType::create(engine, {
-                                           FieldType::mut_(WASMTIME_I32),
-                                           FieldType::mut_(WASMTIME_I32),
-                                       });
+  auto ty = StructType(engine, {
+                                   FieldType::mut_(ValType::i32()),
+                                   FieldType::mut_(ValType::i32()),
+                               });
   auto pre = StructRefPre::create(cx, ty);
 
   // Allocate a struct with field values 10 and 20.
@@ -134,9 +134,9 @@ TEST(StructRef, UpcastAndDowncast) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = StructType::create(engine, {
-                                           FieldType::const_(WASMTIME_I32),
-                                       });
+  auto ty = StructType(engine, {
+                                   FieldType::const_(ValType::i32()),
+                               });
   auto pre = StructRefPre::create(cx, ty);
 
   auto result = StructRef::create(cx, pre, {Val(int32_t(99))});
@@ -169,7 +169,7 @@ TEST(ArrayRef, CreateAndReadElements) {
   auto cx = store.context();
 
   // Create an array type with mutable i32 elements.
-  auto ty = ArrayType::create(engine, FieldType::mut_(WASMTIME_I32));
+  ArrayType ty(engine, FieldType::mut_(ValType::i32()));
   auto pre = ArrayRefPre::create(cx, ty);
 
   // Allocate an array of 5 elements, all initialized to 7.
@@ -205,7 +205,7 @@ TEST(ArrayRef, UpcastAndDowncast) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = ArrayType::create(engine, FieldType::const_(WASMTIME_I32));
+  ArrayType ty(engine, FieldType::const_(ValType::i32()));
   auto pre = ArrayRefPre::create(cx, ty);
 
   auto result = ArrayRef::create(cx, pre, Val(int32_t(99)), 3);
@@ -265,7 +265,7 @@ TEST(AnyRef, DowncastStruct) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = StructType::create(engine, {FieldType::const_(WASMTIME_I32)});
+  auto ty = StructType(engine, {FieldType::const_(ValType::i32())});
   auto pre = StructRefPre::create(cx, ty);
   auto result = StructRef::create(cx, pre, {Val(int32_t(77))});
   ASSERT_TRUE(result);
@@ -293,7 +293,7 @@ TEST(AnyRef, DowncastArray) {
   Store store(engine);
   auto cx = store.context();
 
-  auto ty = ArrayType::create(engine, FieldType::const_(WASMTIME_I32));
+  auto ty = ArrayType(engine, FieldType::const_(ValType::i32()));
   auto pre = ArrayRefPre::create(cx, ty);
   auto result = ArrayRef::create(cx, pre, Val(int32_t(55)), 2);
   ASSERT_TRUE(result);

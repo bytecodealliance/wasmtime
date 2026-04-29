@@ -8,6 +8,7 @@
 #include <wasmtime/types/import.hh>
 #include <wasmtime/types/memory.hh>
 #include <wasmtime/types/table.hh>
+#include <wasmtime/types/exnref.hh>
 #include <wasmtime/types/tag.hh>
 #include <wasmtime/types/val.hh>
 

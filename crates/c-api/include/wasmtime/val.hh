@@ -88,7 +88,7 @@ inline std::optional<ExternRef> Val::externref() const {
 /// Type information for the `V128` host value used as a wasm value.
 template <> struct detail::WasmType<V128> {
   static const bool valid = true;
-  static const ValKind kind = ValKind::V128;
+  static ValType valtype() { return ValType::v128(); }
   static void store(Store::Context cx, wasmtime_val_raw_t *p, const V128 &t) {
     (void)cx;
     memcpy(&p->v128[0], &t.v128[0], sizeof(wasmtime_v128));

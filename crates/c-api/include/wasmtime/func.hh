@@ -18,7 +18,7 @@ namespace detail {
 #define NATIVE_WASM_TYPE(native, valkind, field)                               \
   template <> struct WasmType<native> {                                        \
     static const bool valid = true;                                            \
-    static const ValKind kind = ValKind::valkind;                              \
+    static ValType valtype() { return ValType::valkind(); }                    \
     static void store(Store::Context cx, wasmtime_val_raw_t *p,                \
                       const native &t) {                                       \
       (void)cx;                                                                \
@@ -30,14 +30,40 @@ namespace detail {
     }                                                                          \
   };
 
-NATIVE_WASM_TYPE(int32_t, I32, i32)
-NATIVE_WASM_TYPE(uint32_t, I32, i32)
-NATIVE_WASM_TYPE(int64_t, I64, i64)
-NATIVE_WASM_TYPE(uint64_t, I64, i64)
-NATIVE_WASM_TYPE(float, F32, f32)
-NATIVE_WASM_TYPE(double, F64, f64)
+NATIVE_WASM_TYPE(int32_t, i32, i32)
+NATIVE_WASM_TYPE(uint32_t, i32, i32)
+NATIVE_WASM_TYPE(int64_t, i64, i64)
+NATIVE_WASM_TYPE(uint64_t, i64, i64)
+NATIVE_WASM_TYPE(float, f32, f32)
+NATIVE_WASM_TYPE(double, f64, f64)
 
 #undef NATIVE_WASM_TYPE
+
+/// Definition for the `funcref` native wasm type
+template <> struct WasmType<std::optional<Func>> {
+  /// @private
+  static const bool valid = true;
+  /// @private
+  static ValType valtype() { return ValType::funcref(); }
+  /// @private
+  static void store(Store::Context cx, wasmtime_val_raw_t *p,
+                    const std::optional<Func> func) {
+    if (func) {
+      p->funcref = wasmtime_func_to_raw(cx.capi(), &func->capi());
+    } else {
+      p->funcref = 0;
+    }
+  }
+  /// @private
+  static std::optional<Func> load(Store::Context cx, wasmtime_val_raw_t *p) {
+    if (p->funcref == 0) {
+      return std::nullopt;
+    }
+    wasmtime_func_t ret;
+    wasmtime_func_from_raw(cx.capi(), p->funcref, &ret);
+    return ret;
+  }
+};
 
 /// std::monostate translates to an empty list of types.
 template <> struct WasmTypeList<std::monostate> {
@@ -67,7 +93,7 @@ template <typename... T> struct WasmTypeList<std::tuple<T...>> {
       return false;
     }
     size_t n = 0;
-    return ((WasmType<T>::kind == types.begin()[n++].kind()) && ...);
+    return ((WasmType<T>::valtype() == types.begin()[n++]) && ...);
   }
   static void store(Store::Context cx, wasmtime_val_raw_t *storage,
                     std::tuple<T...> &&t) {
@@ -91,7 +117,7 @@ template <typename... T> struct WasmTypeList<std::tuple<T...>> {
     (void)cx;
     return std::tuple<T...>{WasmType<T>::load(cx, storage++)...}; // NOLINT
   }
-  static std::vector<ValType> types() { return {WasmType<T>::kind...}; }
+  static std::vector<ValType> types() { return {WasmType<T>::valtype()...}; }
 };
 
 /// Host functions can return nothing

@@ -8,8 +8,9 @@ TEST(Instance, Smoke) {
   Engine engine;
   Store store(engine);
   Memory m = Memory::create(store, MemoryType(1)).unwrap();
-  Global g = Global::create(store, GlobalType(ValKind::I32, false), 1).unwrap();
-  Table t = Table::create(store, TableType(ValKind::FuncRef, 1),
+  Global g =
+      Global::create(store, GlobalType(ValType::i32(), false), 1).unwrap();
+  Table t = Table::create(store, TableType(ValType::funcref(), 1),
                           std::optional<Func>())
                 .unwrap();
   Func f(store, FuncType({}, {}),

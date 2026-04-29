@@ -54,7 +54,7 @@ pub extern "C" fn wasm_tabletype_new(
     ty: Box<wasm_valtype_t>,
     limits: &wasm_limits_t,
 ) -> Option<Box<wasm_tabletype_t>> {
-    let ty = ty.ty.as_ref()?.clone();
+    let ty = (*ty).as_ref()?.clone();
     Some(Box::new(wasm_tabletype_t::new(TableType::new(
         ty,
         limits.min,
@@ -65,9 +65,8 @@ pub extern "C" fn wasm_tabletype_new(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasm_tabletype_element(tt: &wasm_tabletype_t) -> &wasm_valtype_t {
     let tt = tt.ty();
-    tt.element_cache.get_or_init(|| wasm_valtype_t {
-        ty: ValType::Ref(tt.ty.element().clone()),
-    })
+    tt.element_cache
+        .get_or_init(|| ValType::Ref(tt.ty.element().clone()))
 }
 
 #[unsafe(no_mangle)]
