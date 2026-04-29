@@ -2272,6 +2272,8 @@ fn copying_collector_gc_zeal_counter_stress() -> Result<()> {
     // GC timing.
     for counter in [2, 3, 5, 7, 10] {
         let (mut store, engine) = copying_store_with_gc_zeal(counter)?;
+        log::debug!("Testing with gc_zeal_alloc_counter = {counter}");
+
         let module = Module::new(
             &engine,
             r#"
