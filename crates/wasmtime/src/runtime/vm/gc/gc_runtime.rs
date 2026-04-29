@@ -586,7 +586,7 @@ impl GcRootsList {
     /// # Safety
     ///
     /// The pointer must be to a valid stack-map slot on the Wasm stack and must
-    /// remain valid for the duration of the `'a` lifetime.
+    /// remain valid while registered within this `GcRootsList`.
     #[inline]
     pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u32>) {
         unsafe {
@@ -604,8 +604,8 @@ impl GcRootsList {
     ///
     /// # Safety
     ///
-    /// The pointer must be to a valid `VMGcRef` and must remain valid for the
-    /// duration of the `'a` lifetime.
+    /// The pointer must be to a valid `VMGcRef` and must remain valid while
+    /// registered within this `GcRootsList`.
     #[inline]
     pub unsafe fn add_vmgcref_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
         unsafe {
@@ -622,7 +622,7 @@ impl GcRootsList {
     /// # Safety
     ///
     /// The pointer must be to a valid `ValRaw` that is a GC reference and must
-    /// remain valid for the duration of the `'a` lifetime.
+    /// remain valid while registered within this `GcRootsList`.
     #[inline]
     pub unsafe fn add_val_raw_root(&mut self, ptr_to_root: SendSyncPtr<ValRaw>, why: &str) {
         unsafe {
