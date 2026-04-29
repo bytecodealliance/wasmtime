@@ -792,9 +792,13 @@ unsafe impl GcHeap for CopyingHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
+        let layout = layout
+            .layout(length)
+            .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
+
         let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout.layout(length),
+            layout,
         )? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,
