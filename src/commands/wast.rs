@@ -78,6 +78,7 @@ impl WastCommand {
                 suppress_prints: false,
             })
             .expect("error instantiating \"spectest\"");
+        wast_context.register_wasmtime()?;
 
         if let Some(path) = &self.precompile_save {
             wast_context.precompile_save(path);
