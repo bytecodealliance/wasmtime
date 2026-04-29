@@ -378,6 +378,7 @@ impl GcStore {
         self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into());
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn reset_gc_zeal_alloc_counter(&mut self) {
         #[cfg(gc_zeal)]
         {
