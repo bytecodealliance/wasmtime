@@ -1726,7 +1726,6 @@ impl ValRaw {
     }
 
     #[inline]
-    #[cfg(feature = "gc")]
     pub(crate) fn vmgcref(r: Option<VMGcRef>) -> ValRaw {
         let raw = r.map_or(0, |r| r.as_raw_u32());
 
