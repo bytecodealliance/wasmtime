@@ -506,6 +506,7 @@ default = [
   "component-model-async",
   "threads",
   "gc",
+  "gc-copying",
   "gc-drc",
   "gc-null",
   "stack-switching",

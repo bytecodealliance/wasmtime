@@ -134,6 +134,7 @@ default = [
   'backtrace',
   'cache',
   'gc',
+  'gc-copying',
   'gc-drc',
   'gc-null',
   'wat',
