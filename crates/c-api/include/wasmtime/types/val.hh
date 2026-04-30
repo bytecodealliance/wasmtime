@@ -22,7 +22,7 @@ namespace wasmtime {
 class HeapType {
   wasmtime_heaptype_t ty;
 
-  constexpr HeapType(wasmtime_heaptype_kind_t ty) { this->ty.kind = ty; }
+  HeapType(wasmtime_heaptype_kind_t ty) { this->ty.kind = ty; }
 
 public:
   /// Copy constructor.
