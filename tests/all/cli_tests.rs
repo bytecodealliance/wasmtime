@@ -2881,6 +2881,32 @@ start a print 1234
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn p3_cli_serve_post_return() -> Result<()> {
+        let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_COMPONENT, move |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+            cmd.arg("--max-instance-reuse-count=1");
+        })?;
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty());
+
+        let (stdout, stderr) = server.finish()?;
+        println!("stdout: {stdout}");
+        println!("stderr: {stderr}");
+
+        assert!(stdout.contains("please see me"));
+        Ok(())
+    }
 }
 
 #[test]

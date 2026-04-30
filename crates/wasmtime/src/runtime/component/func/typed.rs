@@ -214,9 +214,7 @@ where
 
             impl<'a, T> Drop for SignalOnDrop<'a, T> {
                 fn drop(&mut self) {
-                    self.task
-                        .host_future_dropped(self.store.as_context_mut())
-                        .unwrap();
+                    self.task.host_future_dropped(self.store.0).unwrap();
                 }
             }
 

@@ -3,7 +3,7 @@
 
 #[cfg(feature = "p3")]
 use crate::p3;
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::{FuturesUnordered, Stream};
 use std::collections::VecDeque;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::future;
@@ -350,101 +350,166 @@ where
                 accept_task(task, &mut futures, &mut reuse_count);
             }
 
+            // This is the main driver loop for this worker. This is modeled as
+            // a `poll_fn` which internally loops around the possible events.
+            // Events are sourced from the locals here, pinned outside of the
+            // `poll_fn` closure.
+            let mut futures = pin!(futures);
+            let mut idle_timeout_set = false;
+            let mut idle_timeout = pin!(tokio::time::sleep(Duration::MAX));
             let handler = self.handler.clone();
-            while !(futures.is_empty() && reuse_count >= max_instance_reuse_count) {
-                let new_task = {
-                    let future_count = futures.len();
-                    let mut next_future = pin!(async {
-                        if futures.is_empty() {
-                            future::pending().await
-                        } else {
-                            futures.next().await.unwrap()
-                        }
-                    });
-                    let mut next_task = pin!(tokio::time::timeout(
-                        if future_count == 0 {
-                            idle_instance_timeout
-                        } else {
-                            Duration::MAX
-                        },
-                        handler.0.task_queue.pop()
-                    ));
-                    // Poll any existing tasks, and if they're all `Pending`
-                    // _and_ we haven't reached any reuse limits yet, poll for a
-                    // new task from the queue.
-                    //
-                    // Note the the order of operations here is important.  By
-                    // polling `next_future` first, we'll discover any tasks that
-                    // may have timed out, at which point we'll stop accepting
-                    // new tasks altogether (see below for details).  This is
-                    // especially important in the case where the task was
-                    // blocked on a synchronous call to a host function which
-                    // has exclusive access to the `Store`; once that call
-                    // finishes, the first think we need to do is time out the
-                    // task.  If we were to poll for a new task first, then we'd
-                    // have to wait for _that_ task to finish or time out before
-                    // we could kill the instance.
-                    future::poll_fn(|cx| match next_future.as_mut().poll(cx) {
-                        Poll::Pending => {
-                            // Note that `Pending` here doesn't necessarily mean
-                            // all tasks are blocked on I/O.  They might simply
-                            // be waiting for some deferred work to be done by
-                            // the next turn of the
-                            // `StoreContextMut::run_concurrent` event loop.
-                            // Therefore, we check `accept_concurrent` here and
-                            // only advertise we have capacity for another task
-                            // if either we have no tasks at all or all our
-                            // tasks really are blocked on I/O.
-                            self.set_available(
-                                reuse_count < max_instance_reuse_count
-                                    && future_count < max_instance_concurrent_reuse_count
-                                    && (future_count == 0 || accept_concurrent.load(Relaxed)),
-                            );
+            let mut incoming_tasks = pin!(futures::stream::unfold(
+                &handler.0.task_queue,
+                |queue| async move {
+                    let task = queue.pop().await;
+                    Some((task, queue))
+                }
+            ));
+            future::poll_fn(|cx| {
+                // See docs about the idle timeout handling at the very bottom
+                // for what this is doing.
+                let prev_idle_timeout_set = idle_timeout_set;
+                idle_timeout_set = false;
 
-                            if self.available {
-                                next_task.as_mut().poll(cx).map(Some)
-                            } else {
-                                Poll::Pending
-                            }
-                        }
-                        Poll::Ready(Ok(start_time)) => {
-                            // Task completed; carry on!
+                loop {
+                    // First, and crucially first , poll `futures` first. This
+                    // way we'll discover any tasks that may have timed out, at
+                    // which point we'll stop accepting new tasks altogether
+                    // (see below for details). This is especially important in
+                    // the case where the task was blocked on a synchronous call
+                    // to a host function which has exclusive access to the
+                    // `Store`; once that call finishes, the first thing we need
+                    // to do is time out the task. If we were to poll for a new
+                    // task first, then we'd have to wait for _that_ task to
+                    // finish or time out before we could kill the instance.
+                    match futures.as_mut().poll_next(cx) {
+                        // Task completed; carry on!
+                        Poll::Ready(Some(Ok(start_time))) => {
                             if let Some(start_time) = start_time {
                                 task_start_times.lock().unwrap().remove(start_time);
                             }
-                            Poll::Ready(None)
                         }
-                        Poll::Ready(Err(_)) => {
-                            // Task timed out; stop accepting new tasks, but
-                            // continue polling until any other, in-progress
-                            // tasks until they have either finished or timed
-                            // out.  This effectively kicks off a "graceful
-                            // shutdown" of the worker, allowing any other
-                            // concurrent tasks time to finish before we drop
-                            // the instance.
-                            //
-                            // TODO: We should also send a cancel request to the
-                            // timed-out task to give it a chance to shut down
-                            // gracefully (and delay dropping the instance for a
-                            // reasonable amount of time), but as of this
-                            // writing Wasmtime does not yet provide an API for
-                            // doing that.  See issue #11833.
+
+                        // Task timed out; stop accepting new tasks, but
+                        // continue polling until any other, in-progress tasks
+                        // until they have either finished or timed out. This
+                        // effectively kicks off a "graceful shutdown" of the
+                        // worker, allowing any other concurrent tasks time to
+                        // finish before we drop the instance.
+                        //
+                        // TODO: We should also send a cancel request to the
+                        // timed-out task to give it a chance to shut down
+                        // gracefully (and delay dropping the instance for a
+                        // reasonable amount of time), but as of this writing
+                        // Wasmtime does not yet provide an API for doing that.
+                        // See issue #11833.
+                        Poll::Ready(Some(Err(_))) => {
                             timed_out = true;
                             reuse_count = max_instance_reuse_count;
-                            Poll::Ready(None)
                         }
-                    })
-                    .await
-                };
 
-                match new_task {
-                    Some(Ok(task)) => {
-                        accept_task(task, &mut futures, &mut reuse_count);
+                        Poll::Ready(None) | Poll::Pending => {}
                     }
-                    Some(Err(_)) => break,
-                    None => {}
+
+                    // At this point `futures` is either empty or it's `Pending`
+                    // meaning nothing is ready. Note that `Pending` here
+                    // doesn't necessarily mean all tasks are blocked on I/O.
+                    // They might simply be waiting for some deferred work to be
+                    // done by the next turn of the
+                    // `StoreContextMut::run_concurrent` event loop.  Therefore,
+                    // we check `accept_concurrent` here and only advertise we
+                    // have capacity for another task if either we have no tasks
+                    // at all or all our tasks really are blocked on I/O.
+                    self.set_available(
+                        reuse_count < max_instance_reuse_count
+                            && futures.len() < max_instance_concurrent_reuse_count
+                            && (futures.is_empty() || accept_concurrent.load(Relaxed)),
+                    );
+
+                    // If we're available for accepting more requests after the
+                    // deduction above, then try to accept a new task. If that's
+                    // successful then push it into `futures` and turn this loop
+                    // again to see where we're at next time around.
+                    if self.available
+                        && let Poll::Ready(Some(task)) = incoming_tasks.as_mut().poll_next(cx)
+                    {
+                        accept_task(task, &mut futures, &mut reuse_count);
+                        continue;
+                    }
+
+                    // If, at this point, we still have some requests that are
+                    // being processed then go ahead and bail out of this
+                    // singular call to `poll` by saying we're not ready yet.
+                    // This means we unconditionally wait for events within
+                    // `futures` and we're also registered, optionally, for
+                    // listening for incoming connections. That's all the events
+                    // we're interested in, so this iteration of `poll` is complete.
+                    if !futures.is_empty() {
+                        break Poll::Pending;
+                    }
+
+                    // At this point `futures` is empty, and we haven't gotten
+                    // any incoming tasks. Check the store we're using to see if
+                    // there are any "interesting" tasks around. These are tasks
+                    // which act as effectively strong references to this worker
+                    // to keep it running. If there are still interesting tasks,
+                    // then we're done with this iteration of `poll`. We'll get
+                    // woken up when anything changes, but otherwise it's time
+                    // to let something else happen.
+                    //
+                    // This is all skipped if something has timed out though. In
+                    // that situation we're basically no longer interested in
+                    // this store so we're no longer cooperatively trying to let
+                    // it keep going.
+                    if !timed_out && !accessor.poll_no_interesting_tasks(cx).is_ready() {
+                        break Poll::Pending;
+                    }
+
+                    // And now at this point we (a) have no `futures`, (b) no
+                    // new connections came in, and (c) the store is completely
+                    // devoid of interesting work. In this situation if we're
+                    // not actually capable of accepting any more work, then
+                    // we're completely done and it's time to exit this worker.
+                    if !self.available {
+                        break Poll::Ready(());
+                    }
+
+                    // And now, finally, we wait for a timeout. Here we're just
+                    // like above except that we're candidate for accepting more
+                    // work in the future. If this is our first time here then
+                    // reset the idle timeout to `idle_instance_timeout` from
+                    // now, but othrewise just go take a look at `idle_timeout`
+                    // and see if it's elapsed yet.
+                    //
+                    // Note that the way that this entire loop is structured is
+                    // that we've already polled all the interesting sources of
+                    // events we're interested in at this point, for example
+                    // `futures`, `accessor`, and `incoming_tasks`. Here we add
+                    // `idle_timeout` to that set and once anything is ready and
+                    // fires then this entire loop will restart and we'll check
+                    // everything again.
+                    //
+                    // Also note that the idle timeout is supposed to start when
+                    // the store is itself entirely idle. The way this loop is
+                    // structured is that when we entire this `poll` closure the
+                    // `idle_timeout_set` variable is unconditionally set to
+                    // `false`. That way if we exit out for some other reason,
+                    // such as getting work, then the idle timeout will get
+                    // reset next time we fall down here. Otherwise though if we
+                    // fell down this far we actually want to preserve
+                    // `idle_timeout_set` from when we first started, so that's
+                    // restored here.
+                    idle_timeout_set = prev_idle_timeout_set;
+                    if !idle_timeout_set {
+                        idle_timeout
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + idle_instance_timeout);
+                        idle_timeout_set = true;
+                    }
+                    break idle_timeout.as_mut().poll(cx);
                 }
-            }
+            })
+            .await;
 
             accessor.with(|mut access| write_profile(access.as_context_mut()));
 

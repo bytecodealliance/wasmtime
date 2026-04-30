@@ -1,4 +1,3 @@
-use crate::component::RuntimeInstance;
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
@@ -605,10 +604,7 @@ impl Func {
     {
         let export = self.lifted_core_func(store.0);
         let (_options, _flags, _ty, raw_options) = self.abi_info(store.0);
-        let instance = RuntimeInstance {
-            instance: self.instance.id().instance(),
-            index: raw_options.instance,
-        };
+        let instance = self.instance.runtime_instance(raw_options.instance);
 
         if !store.0.may_enter(instance)? {
             bail!(crate::Trap::CannotEnterComponent);

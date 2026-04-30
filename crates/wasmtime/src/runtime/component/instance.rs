@@ -569,6 +569,13 @@ impl Instance {
             (&*component, store)
         }
     }
+
+    pub(crate) fn runtime_instance(&self, index: RuntimeComponentInstanceIndex) -> RuntimeInstance {
+        RuntimeInstance {
+            instance: self.id.instance(),
+            index,
+        }
+    }
 }
 
 /// Translates a `CoreDef`, a definition of a core wasm item, to an

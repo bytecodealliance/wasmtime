@@ -4,7 +4,6 @@ use crate::component::Instance;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
-use crate::runtime::component::RuntimeInstance;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::{ResourcePair, SuspensionTarget};
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
@@ -681,15 +680,9 @@ fn enter_sync_call(
     callee_instance: u32,
 ) -> Result<()> {
     store.enter_guest_sync_call(
-        Some(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        }),
+        Some(instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(caller_instance))),
         callee_async != 0,
-        RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
-        },
+        instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(callee_instance)),
     )
 }
 
@@ -708,10 +701,7 @@ fn backpressure_modify(
     increment: u8,
 ) -> Result<()> {
     store.backpressure_modify(
-        RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        },
+        instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(caller_instance)),
         |old| {
             if increment != 0 {
                 old.checked_add(1)
