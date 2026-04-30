@@ -7,10 +7,6 @@
 #ifndef WASMTIME_TYPES_STRUCTREF_H
 #define WASMTIME_TYPES_STRUCTREF_H
 
-#include <wasmtime/conf.h>
-
-#ifdef WASMTIME_FEATURE_GC
-
 #include <wasm.h>
 
 #ifdef __cplusplus
@@ -123,7 +119,5 @@ wasmtime_struct_type_field(const wasmtime_struct_type_t *ty, size_t index,
 #ifdef __cplusplus
 } // extern "C"
 #endif
-
-#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_TYPES_STRUCTREF_H

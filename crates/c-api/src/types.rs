@@ -15,34 +15,27 @@ impl wasm_limits_t {
     }
 }
 
+mod arrayref;
+mod exn;
 mod export;
 mod r#extern;
 mod func;
 mod global;
 mod import;
 mod memory;
+mod structref;
 mod table;
 mod tag;
 mod val;
+pub use self::arrayref::*;
+pub use self::exn::*;
 pub use self::export::*;
 pub use self::r#extern::*;
 pub use self::func::*;
 pub use self::global::*;
 pub use self::import::*;
 pub use self::memory::*;
+pub use self::structref::*;
 pub use self::table::*;
 pub use self::tag::*;
 pub use self::val::*;
-
-#[cfg(feature = "gc")]
-mod arrayref;
-#[cfg(feature = "gc")]
-mod exn;
-#[cfg(feature = "gc")]
-mod structref;
-#[cfg(feature = "gc")]
-pub use self::arrayref::*;
-#[cfg(feature = "gc")]
-pub use self::exn::*;
-#[cfg(feature = "gc")]
-pub use self::structref::*;

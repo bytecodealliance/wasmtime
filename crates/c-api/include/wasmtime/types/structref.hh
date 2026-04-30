@@ -5,10 +5,6 @@
 #ifndef WASMTIME_TYPES_STRUCTREF_HH
 #define WASMTIME_TYPES_STRUCTREF_HH
 
-#include <wasmtime/conf.h>
-
-#ifdef WASMTIME_FEATURE_GC
-
 #include <wasmtime/types/_structref_class.hh>
 #include <wasmtime/types/_val_class.hh>
 
@@ -20,7 +16,5 @@ inline StorageType::StorageType(const ValType &ty) {
 }
 
 } // namespace wasmtime
-
-#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_TYPES_STRUCTREF_HH

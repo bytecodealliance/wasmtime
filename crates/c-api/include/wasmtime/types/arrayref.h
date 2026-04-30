@@ -7,10 +7,6 @@
 #ifndef WASMTIME_TYPES_ARRAYREF_H
 #define WASMTIME_TYPES_ARRAYREF_H
 
-#include <wasmtime/conf.h>
-
-#ifdef WASMTIME_FEATURE_GC
-
 #include <wasm.h>
 #include <wasmtime/types/structref.h>
 
@@ -59,7 +55,5 @@ wasmtime_array_type_element(const wasmtime_array_type_t *ty,
 #ifdef __cplusplus
 } // extern "C"
 #endif
-
-#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_TYPES_ARRAYREF_H

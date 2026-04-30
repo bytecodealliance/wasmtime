@@ -5,10 +5,6 @@
 #ifndef WASMTIME_TYPES_ARRAYREF_HH
 #define WASMTIME_TYPES_ARRAYREF_HH
 
-#include <wasmtime/conf.h>
-
-#ifdef WASMTIME_FEATURE_GC
-
 #include <memory>
 #include <wasmtime/engine.hh>
 #include <wasmtime/types/arrayref.h>
@@ -37,7 +33,5 @@ class ArrayType {
 };
 
 } // namespace wasmtime
-
-#endif // WASMTIME_FEATURE_GC
 
 #endif // WASMTIME_TYPES_ARRAYREF_HH
