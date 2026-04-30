@@ -15,7 +15,7 @@ impl From<StorageType> for wasmtime_storage_type_t {
         match ty {
             StorageType::I8 => Self::I8,
             StorageType::I16 => Self::I16,
-            StorageType::ValType(ty) => Self::Val(Box::new(ty.into())),
+            StorageType::ValType(ty) => Self::Val(Box::new(ty)),
         }
     }
 }
