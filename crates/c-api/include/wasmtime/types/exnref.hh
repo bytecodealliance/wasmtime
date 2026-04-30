@@ -7,6 +7,7 @@
 
 #include <initializer_list>
 #include <memory>
+#include <vector>
 #include <wasmtime/engine.hh>
 #include <wasmtime/error.hh>
 #include <wasmtime/types/_val_class.hh>
