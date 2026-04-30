@@ -1,8 +1,11 @@
 #[cfg(feature = "gc")]
 use crate::r#ref::ref_to_val;
-use crate::{WASM_EXTERNREF, WASM_F32, WASM_F64, WASM_FUNCREF, WASM_I32, WASM_I64, wasm_valkind_t};
 #[cfg(feature = "gc")]
-use crate::{wasm_ref_t, wasmtime_anyref_t, wasmtime_exnref_t, wasmtime_externref_t};
+use crate::{
+    WASM_EXTERNREF, WASM_FUNCREF, wasm_ref_t, wasmtime_anyref_t, wasmtime_exnref_t,
+    wasmtime_externref_t,
+};
+use crate::{WASM_F32, WASM_F64, WASM_I32, WASM_I64, wasm_valkind_t};
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;
 use wasmtime::{AsContextMut, Func, Val};
