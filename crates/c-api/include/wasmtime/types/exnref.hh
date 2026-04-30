@@ -8,10 +8,10 @@
 #include <initializer_list>
 #include <memory>
 #include <wasmtime/engine.hh>
+#include <wasmtime/error.hh>
 #include <wasmtime/types/_val_class.hh>
 #include <wasmtime/types/exnref.h>
 #include <wasmtime/types/tag.hh>
-#include <wasmtime/error.hh>
 
 namespace wasmtime {
 
@@ -24,10 +24,10 @@ class ExnType {
 #undef wasmtime_exn_type_clone
 
 public:
-
   /// Creates a new exception type with the given parameter types.
-  static Result<ExnType> create(const Engine &engine, const std::initializer_list<ValType> &params) {
-    std::vector<const wasm_valtype_t*> tmp;
+  static Result<ExnType> create(const Engine &engine,
+                                const std::initializer_list<ValType> &params) {
+    std::vector<const wasm_valtype_t *> tmp;
     for (const auto &param : params)
       tmp.push_back(param.capi());
     wasm_valtype_vec_t params_vec;

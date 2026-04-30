@@ -77,7 +77,8 @@ TEST(ArrayType, Smoke) {
 
 TEST(ExnType, Smoke) {
   Engine engine;
-  ExnType ety = ExnType::create(engine, {ValType::i32(), ValType::i64()}).unwrap();
+  ExnType ety =
+      ExnType::create(engine, {ValType::i32(), ValType::i64()}).unwrap();
   HeapType hty(ety);
   auto exn_ty = hty.as_concrete_exn();
   ASSERT_NE(exn_ty, nullptr);
