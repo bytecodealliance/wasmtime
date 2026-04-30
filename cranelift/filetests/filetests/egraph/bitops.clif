@@ -204,6 +204,14 @@ block0(v0: i32x4):
 ; check: v5 = vconst.i32x4 const0
 ; check: return v5
 
+function %issue_13229_band_not_f64(f64) {
+block0(v0: f64):
+    v1 = band_not v0, v0
+    return
+}
+
+; check: return
+
 function %bitops_bmask(i64) -> i64 {
 block0(v0: i64):
     v1 = bnot v0
