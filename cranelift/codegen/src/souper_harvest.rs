@@ -454,8 +454,7 @@ fn harvest_candidate_lhs(
                                 ast::Instruction::Slt { a, b }.into()
                             }
                             ir::condcodes::IntCC::UnsignedLessThanOrEqual => {
-                                // FIXME
-                                ast::Instruction::Sle { a, b }.into()
+                                ast::Instruction::Ule { a, b }.into()
                             }
                             ir::condcodes::IntCC::SignedLessThanOrEqual => {
                                 ast::Instruction::Sle { a, b }.into()
