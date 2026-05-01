@@ -815,7 +815,7 @@ impl WasmtimeConfig {
         // enough to not blow OOM limits while fuzzing.
         let is_pulley = self.compiler_strategy == CompilerStrategy::CraneliftPulley;
         let mcfg = &mut self.memory_config;
-        if self.signals_based_traps || is_pulley {
+        if !self.signals_based_traps || is_pulley {
             if (mcfg.memory_guard_size == Some(0) || is_pulley)
                 && mcfg.memory_reservation == Some(0)
                 && !mcfg.memory_init_cow
