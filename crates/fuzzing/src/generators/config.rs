@@ -880,8 +880,7 @@ impl RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
             RegallocAlgorithm::SinglePass => {
-                // FIXME(#11850)
-                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = true;
+                const SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME: bool = false;
                 if SINGLE_PASS_KNOWN_BUGGY_AT_THIS_TIME {
                     wasmtime::RegallocAlgorithm::Backtracking
                 } else {
