@@ -487,7 +487,7 @@ where
                 .process_inst(self.func, self.alias_analysis_state, inst)
             {
                 OptResult::AliasedLoad(new_result) => {
-                    self.stats.alias_analysis_removed += 1;
+                    self.stats.alias_analysis_removed_load += 1;
                     let result = self.func.dfg.first_result(inst);
                     trace!(
                         " -> inst {} has result {} replaced with {}",
@@ -498,7 +498,7 @@ where
                     Some(SkeletonInstSimplification::Remove)
                 }
                 OptResult::IdempotentStore => {
-                    self.stats.alias_analysis_removed += 1;
+                    self.stats.alias_analysis_removed_store += 1;
                     Some(SkeletonInstSimplification::Remove)
                 }
                 OptResult::None => {
@@ -1067,7 +1067,8 @@ pub(crate) struct Stats {
     pub(crate) skeleton_inst: u64,
     pub(crate) skeleton_inst_simplified: u64,
     pub(crate) skeleton_inst_gvn: u64,
-    pub(crate) alias_analysis_removed: u64,
+    pub(crate) alias_analysis_removed_load: u64,
+    pub(crate) alias_analysis_removed_store: u64,
     pub(crate) new_inst: u64,
     pub(crate) union: u64,
     pub(crate) subsume: u64,

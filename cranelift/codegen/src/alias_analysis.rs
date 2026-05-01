@@ -349,6 +349,16 @@ impl<'a> AliasAnalysis<'a> {
                     mem_loc
                 );
 
+                // Is there a Value already known to be stored
+                // at this specific memory location?  If so,
+                // we can alias the load result to this
+                // already-known Value.
+                //
+                // Check if the definition dominates this
+                // location; it might not, if it comes from a
+                // load (stores will always dominate though if
+                // their `last_store` survives through
+                // meet-points to this use-site).
                 let aliased =
                     if let Some((def_inst, value)) = self.mem_values.get(&mem_loc).cloned() {
                         trace!(
@@ -370,6 +380,8 @@ impl<'a> AliasAnalysis<'a> {
                         None
                     };
 
+                // Otherwise, we can keep *this* load around
+                // as a new equivalent value.
                 if aliased.is_none() {
                     trace!(
                         " -> inserting load result v{} at loc {:?}",
