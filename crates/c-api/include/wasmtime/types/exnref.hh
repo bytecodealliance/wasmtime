@@ -20,6 +20,7 @@ namespace wasmtime {
  * \brief Owned handle to a WebAssembly exception type definition.
  */
 class ExnType {
+/// Workaround for slightly different naming conventions
 #define wasmtime_exn_type_clone wasmtime_exn_type_copy
   WASMTIME_CLONE_WRAPPER(ExnType, wasmtime_exn_type)
 #undef wasmtime_exn_type_clone
