@@ -590,6 +590,20 @@ impl WasmtimeOptionValue for wasmtime::Enabled {
     }
 }
 
+impl WasmtimeOptionValue for wasmtime::Inlining {
+    const VAL_HELP: &'static str = "[=y|n|gc|inter-module|intrinsics]";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            None => Ok(wasmtime::Inlining::Yes),
+            Some(val) => val.parse(),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
 impl WasmtimeOptionValue for WasiNnGraph {
     const VAL_HELP: &'static str = "=<format>::<dir>";
     fn parse(val: Option<&str>) -> Result<Self> {

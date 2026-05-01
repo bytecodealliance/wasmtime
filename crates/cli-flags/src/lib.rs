@@ -262,7 +262,9 @@ wasmtime_option_group! {
         pub native_unwind_info: Option<bool>,
 
         /// Whether to perform function inlining during compilation.
-        pub inlining: Option<bool>,
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
+        pub inlining: Option<wasmtime::Inlining>,
 
         #[prefixed = "cranelift"]
         #[serde(default)]

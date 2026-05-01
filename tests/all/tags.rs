@@ -78,3 +78,15 @@ fn wasm_import_tags() -> Result<()> {
 
     return Ok(());
 }
+
+// Tests that enabling inlining with stack switching, for now, returns an error.
+// If the support in Cranelift is fixed to the point that this is fine to
+// enable, then delete this test and the check in `config.rs` as well.
+#[test]
+fn stack_switching_disallows_inlining() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.compiler_inlining(wasmtime::Inlining::Yes);
+    assert!(Engine::new(&config).is_err());
+    return Ok(());
+}

@@ -87,9 +87,6 @@ impl CompilerBuilder for Builder {
             "wasmtime_linkopt_force_jump_veneer" => {
                 self.linkopts.force_jump_veneers = value.parse()?;
             }
-            "wasmtime_inlining_intra_module" => {
-                self.tunables.as_mut().unwrap().inlining_intra_module = value.parse()?;
-            }
             "wasmtime_inlining_small_callee_size" => {
                 self.tunables.as_mut().unwrap().inlining_small_callee_size = value.parse()?;
             }

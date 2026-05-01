@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Instance, Module, ModulePC, Mutability, Store, StoreContextMut, Val,
-    ValType,
+    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Store, StoreContextMut,
+    Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -74,7 +74,7 @@ fn test_stack_values<
 fn stack_values_two_frames() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
-    for inlining in [false, true] {
+    for inlining in [Inlining::No, Inlining::Yes] {
         test_stack_values(
             r#"
     (module
@@ -92,11 +92,6 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
     "#,
             |config| {
                 config.compiler_inlining(inlining);
-                if inlining {
-                    unsafe {
-                        config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
-                    }
-                }
             },
             |mut caller: Caller<'_, ()>| {
                 let stack = caller.debug_exit_frames().next().unwrap();
@@ -932,10 +927,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
     let (module, mut store) = get_module_and_store(
         |config| {
             config.wasm_exceptions(true);
-            config.compiler_inlining(true);
-            unsafe {
-                config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
-            }
+            config.compiler_inlining(Inlining::Yes);
         },
         r#"
     (module

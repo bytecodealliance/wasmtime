@@ -31,6 +31,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
+pub use wasmtime_environ::Inlining;
 
 pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: NonZeroUsize = NonZeroUsize::new(20).unwrap();
 
@@ -2262,9 +2263,8 @@ impl Config {
     /// when using a compilation strategy that does not support inlining, like
     /// Winch.
     ///
-    /// Note that inlining is still somewhat experimental at the moment (as of
-    /// the Wasmtime version 36).
-    pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
+    /// The default value for this is `Inlining::No`.
+    pub fn compiler_inlining(&mut self, inlining: Inlining) -> &mut Self {
         self.tunables.inlining = Some(inlining);
         self
     }
@@ -2562,6 +2562,17 @@ impl Config {
         #[cfg(feature = "debug")]
         if self.tunables.debug_guest == Some(true) {
             tunables.signals_based_traps = false;
+        }
+
+        // Inlining currently falls over with the `stack_switch` instruction.
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        if features.contains(WasmFeatures::STACK_SWITCHING) {
+            if let Some(inlining) = self.tunables.inlining
+                && inlining != Inlining::No
+            {
+                bail!("cannot enable compiler inlining when stack switching is enabled");
+            }
+            tunables.inlining = Inlining::No;
         }
 
         self.tunables.configure(&mut tunables);

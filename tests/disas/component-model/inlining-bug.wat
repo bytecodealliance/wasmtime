@@ -1,7 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
 ;;! filter = "wasm[2]--function"
-;;! flags = "-C inlining=y"
+;;! flags = "-C inlining=inter-module"
 
 (component
   (core module $A

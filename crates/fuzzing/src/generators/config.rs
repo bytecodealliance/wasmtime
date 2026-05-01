@@ -350,7 +350,7 @@ impl Config {
 
         self.wasmtime.codegen.configure(&mut cfg);
 
-        cfg.codegen.inlining = self.wasmtime.inlining;
+        cfg.codegen.inlining = self.wasmtime.inlining.map(|i| i.into());
 
         // If the wasm-smith-generated module use nan canonicalization then we
         // don't need to enable it, but if it doesn't enable it already then we
@@ -360,12 +360,6 @@ impl Config {
         // Only set cranelift specific flags when the Cranelift strategy is
         // chosen.
         if cranelift_strategy {
-            if let Some(option) = self.wasmtime.inlining_intra_module {
-                cfg.codegen.cranelift.push((
-                    "wasmtime_inlining_intra_module".to_string(),
-                    Some(option.to_string()),
-                ));
-            }
             if let Some(size) = self.wasmtime.inlining_small_callee_size {
                 cfg.codegen.cranelift.push((
                     "wasmtime_inlining_small_callee_size".to_string(),
@@ -579,8 +573,7 @@ pub struct WasmtimeConfig {
     force_jump_veneers: bool,
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
-    inlining: Option<bool>,
-    inlining_intra_module: Option<IntraModuleInlining>,
+    inlining: Option<Inlining>,
     inlining_small_callee_size: Option<u32>,
     inlining_sum_size_threshold: Option<u32>,
     use_precompiled_cwasm: bool,
@@ -892,18 +885,33 @@ impl RegallocAlgorithm {
 }
 
 #[derive(Arbitrary, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum IntraModuleInlining {
+enum Inlining {
     Yes,
+    InterModuleAndIntraGc,
+    InterModule,
+    Intrinsics,
     No,
-    WhenUsingGc,
 }
 
-impl std::fmt::Display for IntraModuleInlining {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            IntraModuleInlining::Yes => write!(f, "yes"),
-            IntraModuleInlining::No => write!(f, "no"),
-            IntraModuleInlining::WhenUsingGc => write!(f, "gc"),
+impl From<Inlining> for wasmtime::Inlining {
+    fn from(i: Inlining) -> Self {
+        let ret = match i {
+            Inlining::Yes => wasmtime::Inlining::Yes,
+            Inlining::InterModuleAndIntraGc => wasmtime::Inlining::InterModuleAndIntraGc,
+            Inlining::InterModule => wasmtime::Inlining::InterModule,
+            Inlining::Intrinsics => wasmtime::Inlining::Intrinsics,
+            Inlining::No => wasmtime::Inlining::No,
+        };
+
+        match ret {
+            wasmtime::Inlining::Yes
+            | wasmtime::Inlining::No
+            | wasmtime::Inlining::InterModuleAndIntraGc
+            | wasmtime::Inlining::InterModule
+            | wasmtime::Inlining::Intrinsics
+            // NOTE: if you add another arm here, be sure to update the
+            // `Inlining` enum above.
+            => ret,
         }
     }
 }

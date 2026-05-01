@@ -133,10 +133,7 @@ define_tunables! {
 
         /// Whether to enable inlining in Wasmtime's compilation orchestration
         /// or not.
-        pub inlining: bool,
-
-        /// Whether to inline calls within the same core Wasm module or not.
-        pub inlining_intra_module: IntraModuleInlining,
+        pub inlining: Inlining,
 
         /// The size of "small callees" that can be inlined regardless of the
         /// caller's size.
@@ -255,8 +252,7 @@ impl Tunables {
             winch_callable: false,
             signals_based_traps: false,
             memory_init_cow: true,
-            inlining: false,
-            inlining_intra_module: IntraModuleInlining::WhenUsingGc,
+            inlining: Inlining::No,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
@@ -426,27 +422,68 @@ impl fmt::Display for Collector {
     }
 }
 
-/// Whether to inline function calls within the same module.
+/// Inlining modes supported by Wasmtime.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[expect(missing_docs, reason = "self-describing variants")]
-pub enum IntraModuleInlining {
+pub enum Inlining {
+    /// All inlining is enabled wherever possible.
+    ///
+    /// This includes inter-module inlining (across modules) as well as
+    /// intra-module inlining (within a module).
+    ///
+    /// Note that this option does not at this time preserve backtraces in
+    /// WebAssembly traps.
     Yes,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is only allowed when the module is using GC.
+    ///
+    /// Note that this option does not at this time preserve backtraces in
+    /// WebAssembly traps.
+    InterModuleAndIntraGc,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is not allowed.
+    ///
+    /// Note that this option does not at this time preserve backtraces in
+    /// WebAssembly traps.
+    InterModule,
+
+    /// No module inlining is allowed, either inter- or intra-module. Only
+    /// inlining Wasmtime's intrinsics are allowed.
+    ///
+    /// This option, for example, preserves backtraces of WebAssembly.
+    Intrinsics,
+
+    /// Inlining is disabled entirely.
     No,
-    WhenUsingGc,
 }
 
-impl FromStr for IntraModuleInlining {
+impl FromStr for Inlining {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "y" | "yes" | "true" => Ok(Self::Yes),
             "n" | "no" | "false" => Ok(Self::No),
-            "gc" => Ok(Self::WhenUsingGc),
+            "gc" => Ok(Self::InterModuleAndIntraGc),
+            "inter-module" => Ok(Self::InterModuleAndIntraGc),
+            "intrinsics" => Ok(Self::Intrinsics),
             _ => bail!(
                 "invalid intra-module inlining option string: `{s}`, \
-                 only yes,no,gc accepted"
+                 only yes,no,gc,inter-module,intrinsics accepted"
             ),
+        }
+    }
+}
+
+impl fmt::Display for Inlining {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Inlining::Yes => write!(f, "yes"),
+            Inlining::InterModuleAndIntraGc => write!(f, "gc"),
+            Inlining::InterModule => write!(f, "inter-module"),
+            Inlining::Intrinsics => write!(f, "intrinsics"),
+            Inlining::No => write!(f, "no"),
         }
     }
 }
