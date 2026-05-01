@@ -1,7 +1,7 @@
 //! Support for egraphs represented in the DataFlowGraph.
 
 use crate::FxHashSet;
-use crate::alias_analysis::{AliasAnalysis, LastStores};
+use crate::alias_analysis::{AliasAnalysis, LastStores, OptResult};
 use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
@@ -480,31 +480,37 @@ where
         }
         // Otherwise, if a load or store, process it with the alias
         // analysis to see if we can optimize it (rewrite in terms of
-        // an earlier load or stored value).
-        else if let Some(new_result) =
-            self.alias_analysis
-                .process_inst(self.func, self.alias_analysis_state, inst)
-        {
-            self.stats.alias_analysis_removed += 1;
-            let result = self.func.dfg.first_result(inst);
-            trace!(
-                " -> inst {} has result {} replaced with {}",
-                inst, result, new_result
-            );
-            self.value_to_opt_value[result] = new_result;
-            self.available_block[result] = self.available_block[new_result];
-            Some(SkeletonInstSimplification::Remove)
-        }
-        // Otherwise, generic side-effecting op -- always keep it, and
-        // set its results to identity-map to original values.
+        // an earlier load or stored value, or remove an idempotent store).
         else {
-            // Set all results to identity-map to themselves
-            // in the value-to-opt-value map.
-            for &result in self.func.dfg.inst_results(inst) {
-                self.value_to_opt_value[result] = result;
-                self.available_block[result] = block;
+            match self
+                .alias_analysis
+                .process_inst(self.func, self.alias_analysis_state, inst)
+            {
+                OptResult::AliasedLoad(new_result) => {
+                    self.stats.alias_analysis_removed += 1;
+                    let result = self.func.dfg.first_result(inst);
+                    trace!(
+                        " -> inst {} has result {} replaced with {}",
+                        inst, result, new_result
+                    );
+                    self.value_to_opt_value[result] = new_result;
+                    self.available_block[result] = self.available_block[new_result];
+                    Some(SkeletonInstSimplification::Remove)
+                }
+                OptResult::IdempotentStore => {
+                    self.stats.alias_analysis_removed += 1;
+                    Some(SkeletonInstSimplification::Remove)
+                }
+                OptResult::None => {
+                    // Generic side-effecting op -- always keep it, and
+                    // set its results to identity-map to original values.
+                    for &result in self.func.dfg.inst_results(inst) {
+                        self.value_to_opt_value[result] = result;
+                        self.available_block[result] = block;
+                    }
+                    None
+                }
             }
-            None
         }
     }
 

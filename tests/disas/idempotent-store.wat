@@ -1,0 +1,35 @@
+;;! target = "x86_64"
+;;! test = "optimize"
+
+(module
+  (memory i32 1)
+
+  (func (export "f") (param i32 i32)
+    local.get 0
+    local.get 1
+    i32.store
+    local.get 0
+    local.get 1
+    i32.store
+  )
+)
+
+;; function u0:0(i64 vmctx, i64, i32, i32) tail {
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned gv3+64
+;;     gv5 = load.i64 notrap aligned readonly can_move gv3+56
+;;     stack_limit = gv2
+;;
+;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
+;; @0029                               v5 = load.i64 notrap aligned readonly can_move v0+56
+;; @0029                               v4 = uextend.i64 v2
+;; @0029                               v6 = iadd v5, v4
+;; @0029                               store little heap v3, v6
+;; @0033                               jump block1
+;;
+;;                                 block1:
+;; @0033                               return
+;; }
