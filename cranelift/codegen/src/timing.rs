@@ -291,7 +291,7 @@ mod enabled {
     impl Drop for DefaultTimingToken {
         fn drop(&mut self) {
             let now = monotonic_instant();
-            let duration = self.start.duration_since(now);
+            let duration = now.duration_since(self.start);
             log::debug!("timing: Ending {}: {}ms", self.pass, duration.as_millis());
             let old_cur = CURRENT_PASS.with(|p| p.replace(self.prev));
             assert_eq!(self.pass, old_cur, "Timing tokens dropped out of order");
