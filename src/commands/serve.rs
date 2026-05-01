@@ -666,6 +666,9 @@ impl ServeCommand {
                 component,
                 max_instance_reuse_count,
                 max_instance_concurrent_reuse_count,
+                // Give one shutdown guard to this handler which will track the
+                // full lifetime of any instances spawned.
+                _shutdown_guard: Box::new(shutdown.clone().increment()),
             },
             instance,
         );
@@ -688,6 +691,10 @@ impl ServeCommand {
 
             let stream = TokioIo::new(stream);
             let h = handler.clone();
+
+            // In addition to the shutdown guard given to the handler above,
+            // also give one to the tokio tasks doing HTTP I/O as well to ensure
+            // it keeps them alive too.
             let shutdown_guard = shutdown.clone().increment();
             tokio::task::spawn(async move {
                 if let Err(e) = http1::Builder::new()
@@ -738,6 +745,8 @@ impl ServeCommand {
             });
         }
 
+        drop(handler);
+
         // Upon exiting the loop we'll no longer process any more incoming
         // connections but there may still be outstanding connections
         // processing in child tasks. If there are wait for those to complete
@@ -762,6 +771,7 @@ struct HostHandlerState {
     component: Component,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
+    _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
 }
 
 impl HandlerState for HostHandlerState {
@@ -818,7 +828,7 @@ struct GracefulShutdownState {
 
 impl GracefulShutdown {
     /// Increments the number of active tasks and returns a guard indicating
-    fn increment(self: Arc<Self>) -> impl Drop {
+    fn increment(self: Arc<Self>) -> impl Drop + Send + Sync {
         struct Guard(Arc<GracefulShutdown>);
 
         let mut state = self.state.lock().unwrap();
