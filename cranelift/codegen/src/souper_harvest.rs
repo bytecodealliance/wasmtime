@@ -340,7 +340,8 @@ fn harvest_candidate_lhs(
                         let b = ast::Constant {
                             value: -1,
                             r#type: souper_type_of(&func.dfg, val),
-                        }.into();
+                        }
+                        .into();
                         ast::Instruction::Xor { a, b }.into()
                     }
                     (ir::Opcode::Ishl, _) => {
@@ -443,7 +444,7 @@ fn harvest_candidate_lhs(
                     | (ir::Opcode::IcmpImm, ir::InstructionData::IntCompare { cond, .. }) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        match cond {
+                        let cmp = match cond {
                             ir::condcodes::IntCC::Equal => ast::Instruction::Eq { a, b }.into(),
                             ir::condcodes::IntCC::NotEqual => ast::Instruction::Ne { a, b }.into(),
                             ir::condcodes::IntCC::UnsignedLessThan => {
@@ -453,12 +454,23 @@ fn harvest_candidate_lhs(
                                 ast::Instruction::Slt { a, b }.into()
                             }
                             ir::condcodes::IntCC::UnsignedLessThanOrEqual => {
+                                // FIXME
                                 ast::Instruction::Sle { a, b }.into()
                             }
                             ir::condcodes::IntCC::SignedLessThanOrEqual => {
                                 ast::Instruction::Sle { a, b }.into()
                             }
                             _ => ast::AssignmentRhs::Var,
+                        };
+
+                        match cmp {
+                            ast::AssignmentRhs::Var => ast::AssignmentRhs::Var,
+                            cmp => {
+                                let cmp = lhs
+                                    .assignment(None, Some(ast::Type { width: 1 }), cmp, vec![])
+                                    .into();
+                                ast::Instruction::Zext { a: cmp }.into()
+                            }
                         }
                     }
                     (ir::Opcode::Popcnt, _) => {
@@ -543,15 +555,7 @@ fn souper_type_of(dfg: &ir::DataFlowGraph, val: ir::Value) -> Option<ast::Type> 
     let ty = dfg.value_type(val);
     assert!(ty.is_int());
     assert_eq!(ty.lane_count(), 1);
-    let width = match dfg.value_def(val).inst() {
-        Some(inst)
-            if dfg.insts[inst].opcode() == ir::Opcode::IcmpImm
-                || dfg.insts[inst].opcode() == ir::Opcode::Icmp =>
-        {
-            1
-        }
-        _ => ty.bits().try_into().unwrap(),
-    };
+    let width = ty.bits().try_into().unwrap();
     Some(ast::Type { width })
 }
 
