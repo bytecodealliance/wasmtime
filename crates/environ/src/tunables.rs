@@ -430,28 +430,26 @@ pub enum Inlining {
     /// This includes inter-module inlining (across modules) as well as
     /// intra-module inlining (within a module).
     ///
-    /// Note that this option does not at this time preserve backtraces in
-    /// WebAssembly traps.
+    /// Note that backtraces may omit inlined stack frames.
     Yes,
 
     /// Inter-module inlining (across modules) is allowed, but intra-module
     /// (within a module) is only allowed when the module is using GC.
     ///
-    /// Note that this option does not at this time preserve backtraces in
-    /// WebAssembly traps.
+    /// Note that backtraces may omit inlined stack frames.
     InterModuleAndIntraGc,
 
     /// Inter-module inlining (across modules) is allowed, but intra-module
     /// (within a module) is not allowed.
     ///
-    /// Note that this option does not at this time preserve backtraces in
-    /// WebAssembly traps.
+    /// Note that backtraces may omit inlined stack frames.
     InterModule,
 
     /// No module inlining is allowed, either inter- or intra-module. Only
     /// inlining Wasmtime's intrinsics are allowed.
     ///
-    /// This option, for example, preserves backtraces of WebAssembly.
+    /// This option, for example, never emits WebAssembly stack frames from
+    /// backtraces.
     Intrinsics,
 
     /// Inlining is disabled entirely.
