@@ -10,7 +10,7 @@ use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
     AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
-    InstructionData, MemFlags, Opcode, StackSlot, TrapCode, Type, Value,
+    InstructionData, JumpTable, MemFlags, Opcode, StackSlot, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
@@ -238,6 +238,18 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     #[inline]
     fn value_type(&mut self, val: Value) -> Type {
         self.ctx.func.dfg.value_type(val)
+    }
+
+    fn resolve_jump_table_entry(&mut self, table: JumpTable, index: u64) -> BlockCall {
+        let jt_data = &self.ctx.func.dfg.jump_tables[table];
+        let entries = jt_data.as_slice();
+        if let Ok(index) = usize::try_from(index)
+            && index < entries.len()
+        {
+            entries[index]
+        } else {
+            jt_data.default_block()
+        }
     }
 
     fn iconst_sextend_etor(

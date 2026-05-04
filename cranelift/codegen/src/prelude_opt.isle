@@ -36,6 +36,12 @@
 (decl value_array_3_ctor (Value Value Value) ValueArray3)
 (extern constructor value_array_3_ctor value_array_3_ctor)
 
+;; Resolve a constant index into a jump table, returning the target
+;; BlockCall. If the index is in bounds, returns the indexed entry;
+;; otherwise returns the default block.
+(decl pure resolve_jump_table_entry (JumpTable u64) BlockCall)
+(extern constructor resolve_jump_table_entry resolve_jump_table_entry)
+
 (rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
 (rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
 (rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))

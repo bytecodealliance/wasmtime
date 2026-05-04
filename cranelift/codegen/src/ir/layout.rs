@@ -288,6 +288,15 @@ impl Layout {
         }
     }
 
+    /// Remove all instructions from `block` and then remove it from
+    /// the layout.
+    pub fn remove_block_and_insts(&mut self, block: Block) {
+        while let Some(inst) = self.first_inst(block) {
+            self.remove_inst(inst);
+        }
+        self.remove_block(block);
+    }
+
     /// Remove `block` from the layout.
     pub fn remove_block(&mut self, block: Block) {
         debug_assert!(self.is_block_inserted(block), "block not in the layout");

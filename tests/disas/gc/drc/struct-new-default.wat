@@ -42,23 +42,13 @@
 ;;                                     v44 = iconst.i64 28
 ;; @0021                               v18 = iadd v16, v44  ; v44 = 28
 ;; @0021                               istore8 notrap aligned little v4, v18  ; v4 = 0
-;;                                     v42 = iconst.i32 1
-;; @0021                               brif v42, block3, block2  ; v42 = 1
-;;
-;;                                 block2:
-;; @0021                               v27 = iconst.i64 8
-;; @0021                               v28 = iadd.i64 v14, v27  ; v27 = 8
-;; @0021                               v29 = load.i64 notrap aligned v28
-;;                                     v38 = iconst.i64 1
-;; @0021                               v30 = iadd v29, v38  ; v38 = 1
-;; @0021                               store notrap aligned v30, v28
-;; @0021                               jump block3
+;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     v65 = iconst.i32 0
+;;                                     v64 = iconst.i32 0
 ;;                                     v43 = iconst.i64 32
 ;; @0021                               v19 = iadd.i64 v16, v43  ; v43 = 32
-;; @0021                               store notrap aligned little v65, v19  ; v65 = 0
+;; @0021                               store notrap aligned little v64, v19  ; v64 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

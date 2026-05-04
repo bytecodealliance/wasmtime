@@ -3415,261 +3415,260 @@ block2:
 ;   addi t6,t6,16
 ;   trap_if stk_ovf##(sp ult t6)
 ; block0:
-;   mv t0,a0
-;   li a0,0
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   li a2,4
-;   sd a2,0(a0)
-;   sd zero,0(a0)
-;   sd a2,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   li a1,1
-;   sd a1,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd a2,0(a0)
-;   sd a1,0(a0)
-;   li a4,1
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sd a2,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   li a3,9
-;   sd a3,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a3,0(a0)
-;   li a3,13
-;   sw a3,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a2,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
-;   sd a2,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   li a3,8
-;   sd a3,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd a2,0(a0)
-;   sd a3,0(a0)
-;   sw a4,0(a0)
-;   sd a1,0(a0)
-;   sw a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw a4,0(a0)
-;   sd a1,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a2,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sd zero,0(a0)
-;   sw a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
-;   sd zero,0(a0)
-;   sd a3,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   li a5,3
-;   sw a5,0(a0)
-;   sd a1,0(a0)
-;   sb a4,0(a0)
-;   sw zero,0(a0)
-;   sd a2,0(a0)
-;   sd zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd a3,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sd a2,0(a0)
-;   sw a4,0(a0)
-;   sd a1,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   li a5,8
-;   sw a5,0(a0)
-;   sw zero,0(a0)
-;   sd a3,0(a0)
-;   sw zero,0(a0)
-;   sw a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw a4,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw a5,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
-;   sd a3,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd a2,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sd a1,0(a0)
+;   li a1,0
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   li a3,4
+;   sd a3,0(a1)
+;   sd zero,0(a1)
+;   sd a3,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   li a2,1
+;   sd a2,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd a3,0(a1)
+;   sd a2,0(a1)
+;   li a5,1
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sd a3,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   li a4,9
+;   sd a4,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a4,0(a1)
+;   li a4,13
+;   sw a4,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a3,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
+;   sd a3,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   li a4,8
+;   sd a4,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd a3,0(a1)
+;   sd a4,0(a1)
+;   sw a5,0(a1)
+;   sd a2,0(a1)
+;   sw a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw a5,0(a1)
+;   sd a2,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a3,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sd zero,0(a1)
+;   sw a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
+;   sd zero,0(a1)
+;   sd a4,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   li t0,3
+;   sw t0,0(a1)
+;   sd a2,0(a1)
+;   sb a5,0(a1)
+;   sw zero,0(a1)
+;   sd a3,0(a1)
+;   sd zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd a4,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sd a3,0(a1)
+;   sw a5,0(a1)
+;   sd a2,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   li t0,8
+;   sw t0,0(a1)
+;   sw zero,0(a1)
+;   sd a4,0(a1)
+;   sw zero,0(a1)
+;   sw a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw a5,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw t0,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
+;   sd a4,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd a3,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sd a2,0(a1)
 ;   j label1
 ; block1:
-;   lui a0,435789
-;   addi a0,a0,3
-;   trap_if user11##(a0 ne zero)
+;   lui a1,435789
+;   addi a1,a1,3
+;   trap_if user11##(a1 ne zero)
 ;   j label2
 ; block2:
-;   lui a0,154029
-;   addi a0,a0,-1574
-;   trap_if user11##(a0 ne zero)
+;   lui a1,154029
+;   addi a1,a1,-1574
+;   trap_if user11##(a1 ne zero)
 ;   j label3
 ; block3:
 ;   j label4
 ; block4:
 ;   j label5
 ; block5:
-;   li a0,1
-;   trap_if user11##(a0 ne zero)
+;   li a1,1
+;   trap_if user11##(a1 ne zero)
 ;   j label6
 ; block6:
 ;   j label7
@@ -3694,18 +3693,18 @@ block2:
 ; block16:
 ;   j label17
 ; block17:
-;   lui a0,509913
-;   addi a0,a0,-193
-;   trap_if user11##(a0 ne zero)
+;   lui a1,509913
+;   addi a1,a1,-193
+;   trap_if user11##(a1 ne zero)
 ;   j label18
 ; block18:
 ;   j label19
 ; block19:
 ;   j label20
 ; block20:
-;   lui a0,373234
-;   addi a0,a0,1763
-;   trap_if user11##(a0 ne zero)
+;   lui a1,373234
+;   addi a1,a1,1763
+;   trap_if user11##(a1 ne zero)
 ;   j label21
 ; block21:
 ;   j label22
@@ -3718,16 +3717,16 @@ block2:
 ; block25:
 ;   j label26
 ; block26:
-;   lui a0,456913
-;   addi a0,a0,-324
-;   trap_if user11##(a0 ne zero)
+;   lui a1,456913
+;   addi a1,a1,-324
+;   trap_if user11##(a1 ne zero)
 ;   j label27
 ; block27:
 ;   j label28
 ; block28:
-;   lui a0,296162
-;   addi a0,a0,-1144
-;   trap_if user11##(a0 ne zero)
+;   lui a1,296162
+;   addi a1,a1,-1144
+;   trap_if user11##(a1 ne zero)
 ;   j label29
 ; block29:
 ;   j label30
@@ -3736,984 +3735,975 @@ block2:
 ; block31:
 ;   j label32
 ; block32:
-;   lui a0,69861
-;   addi a0,a0,-1634
-;   trap_if user11##(a0 ne zero)
+;   lui a1,69861
+;   addi a1,a1,-1634
+;   trap_if user11##(a1 ne zero)
 ;   j label33
 ; block33:
 ;   j label34
 ; block34:
 ;   j label35
 ; block35:
-;   lui a2,466898
-;   addi a4,a2,1094
-;   trap_if user11##(a4 ne zero)
+;   lui a1,466898
+;   addi a1,a1,1094
+;   trap_if user11##(a1 ne zero)
 ;   j label36
 ; block36:
 ;   j label37
 ; block37:
 ;   j label38
 ; block38:
-;   lui a0,-515203
-;   addi a0,a0,1463
-;   trap_if user11##(a0 ne zero)
+;   lui a3,-515203
+;   addi a5,a3,1463
+;   trap_if user11##(a5 ne zero)
 ;   j label39
 ; block39:
 ;   j label40
 ; block40:
-;   ld a1,[const(253)]
-;   li a0,0
-;   sd a1,0(a0)
-;   ld a1,[const(252)]
-;   sd a1,0(a0)
-;   ld a1,[const(251)]
-;   sd a1,0(a0)
-;   ld a1,[const(250)]
-;   sd a1,0(a0)
-;   ld a1,[const(249)]
-;   sd a1,0(a0)
-;   ld a1,[const(248)]
-;   sd a1,0(a0)
-;   ld a1,[const(247)]
-;   sd zero,0(a1)
-;   ld a1,[const(246)]
-;   sd a1,0(a0)
-;   ld a1,[const(245)]
-;   sd a1,0(a0)
-;   ld a1,[const(244)]
-;   sd a1,0(a0)
-;   ld a1,[const(243)]
-;   sd a1,0(a0)
-;   ld a1,[const(242)]
-;   sd a1,0(a0)
-;   li a1,1
-;   ld a2,[const(241)]
-;   sd a1,0(a2)
-;   ld a2,[const(240)]
-;   sd a2,0(a0)
-;   ld a2,[const(239)]
-;   sd a2,0(a0)
-;   ld a2,[const(238)]
-;   sd a2,0(a0)
-;   ld a2,[const(237)]
-;   sd a2,0(a0)
-;   ld a2,[const(236)]
+;   ld a2,[const(253)]
+;   li a1,0
+;   sd a2,0(a1)
+;   ld a2,[const(252)]
+;   sd a2,0(a1)
+;   ld a2,[const(251)]
+;   sd a2,0(a1)
+;   ld a2,[const(250)]
+;   sd a2,0(a1)
+;   ld a2,[const(249)]
+;   sd a2,0(a1)
+;   ld a2,[const(248)]
+;   sd a2,0(a1)
+;   ld a2,[const(247)]
 ;   sd zero,0(a2)
-;   ld a2,[const(235)]
-;   sd a2,0(a0)
-;   ld a2,[const(234)]
-;   sd a2,0(a0)
-;   ld a2,[const(233)]
-;   sd a2,0(a0)
-;   ld a2,[const(232)]
-;   sd a2,0(a0)
-;   ld a2,[const(231)]
-;   sd a2,0(a0)
-;   ld a2,[const(230)]
-;   sd a2,0(a0)
-;   ld a2,[const(229)]
-;   sd zero,0(a2)
-;   ld a2,[const(228)]
-;   sd zero,0(a2)
-;   ld a2,[const(227)]
-;   sd a2,0(a0)
-;   ld a2,[const(226)]
-;   sd a1,0(a2)
-;   ld a2,[const(225)]
-;   sd a2,0(a0)
-;   ld a2,[const(224)]
-;   sd a2,0(a0)
-;   ld a2,[const(223)]
-;   sd a2,0(a0)
-;   ld a2,[const(222)]
-;   sd zero,0(a2)
-;   ld a2,[const(221)]
-;   sd a2,0(a0)
-;   ld a2,[const(220)]
-;   sd a2,0(a0)
-;   ld a2,[const(219)]
-;   sd a2,0(a0)
-;   ld a2,[const(218)]
-;   sd a2,0(a0)
-;   ld a2,[const(217)]
-;   sd a2,0(a0)
-;   ld a2,[const(216)]
-;   sd a2,0(a0)
-;   ld a2,[const(215)]
-;   sd a2,0(a0)
-;   ld a2,[const(214)]
-;   sd a2,0(a0)
-;   ld a2,[const(213)]
-;   sd a2,0(a0)
+;   ld a2,[const(246)]
+;   sd a2,0(a1)
+;   ld a2,[const(245)]
+;   sd a2,0(a1)
+;   ld a2,[const(244)]
+;   sd a2,0(a1)
+;   ld a2,[const(243)]
+;   sd a2,0(a1)
+;   ld a2,[const(242)]
+;   sd a2,0(a1)
 ;   li a2,1
-;   ld a3,[const(212)]
-;   sw a2,0(a3)
-;   ld a3,[const(211)]
-;   sd a3,0(a0)
-;   ld a3,[const(210)]
-;   sd a3,0(a0)
-;   ld a3,[const(209)]
+;   ld a3,[const(241)]
+;   sd a2,0(a3)
+;   ld a3,[const(240)]
+;   sd a3,0(a1)
+;   ld a3,[const(239)]
+;   sd a3,0(a1)
+;   ld a3,[const(238)]
+;   sd a3,0(a1)
+;   ld a3,[const(237)]
+;   sd a3,0(a1)
+;   ld a3,[const(236)]
 ;   sd zero,0(a3)
-;   ld a3,[const(208)]
-;   sd a3,0(a0)
-;   ld a3,[const(207)]
-;   sd a3,0(a0)
-;   ld a3,[const(206)]
-;   sd a3,0(a0)
-;   sd zero,0(a0)
-;   li a3,0
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(205)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(204)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(203)]
-;   sd a4,0(a0)
-;   ld a4,[const(202)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(201)]
-;   ld a5,[const(200)]
-;   sd a4,0(a5)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(199)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(198)]
+;   ld a3,[const(235)]
+;   sd a3,0(a1)
+;   ld a3,[const(234)]
+;   sd a3,0(a1)
+;   ld a3,[const(233)]
+;   sd a3,0(a1)
+;   ld a3,[const(232)]
+;   sd a3,0(a1)
+;   ld a3,[const(231)]
+;   sd a3,0(a1)
+;   ld a3,[const(230)]
+;   sd a3,0(a1)
+;   ld a3,[const(229)]
+;   sd zero,0(a3)
+;   ld a3,[const(228)]
+;   sd zero,0(a3)
+;   ld a3,[const(227)]
+;   sd a3,0(a1)
+;   ld a3,[const(226)]
+;   sd a2,0(a3)
+;   ld a3,[const(225)]
+;   sd a3,0(a1)
+;   ld a3,[const(224)]
+;   sd a3,0(a1)
+;   ld a3,[const(223)]
+;   sd a3,0(a1)
+;   ld a3,[const(222)]
+;   sd zero,0(a3)
+;   ld a3,[const(221)]
+;   sd a3,0(a1)
+;   ld a3,[const(220)]
+;   sd a3,0(a1)
+;   ld a3,[const(219)]
+;   sd a3,0(a1)
+;   ld a3,[const(218)]
+;   sd a3,0(a1)
+;   ld a3,[const(217)]
+;   sd a3,0(a1)
+;   ld a3,[const(216)]
+;   sd a3,0(a1)
+;   ld a3,[const(215)]
+;   sd a3,0(a1)
+;   ld a3,[const(214)]
+;   sd a3,0(a1)
+;   ld a3,[const(213)]
+;   sd a3,0(a1)
+;   li a3,1
+;   ld a4,[const(212)]
+;   sw a3,0(a4)
+;   ld a4,[const(211)]
+;   sd a4,0(a1)
+;   ld a4,[const(210)]
+;   sd a4,0(a1)
+;   ld a4,[const(209)]
 ;   sd zero,0(a4)
-;   sw zero,0(a0)
-;   ld a4,[const(197)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(196)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(195)]
-;   sd a4,0(a0)
-;   ld a4,[const(194)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(193)]
-;   sd zero,0(a4)
-;   ld a4,[const(192)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(191)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(190)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(189)]
-;   sd a4,0(a0)
-;   ld a4,[const(188)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(187)]
-;   sd a4,0(a0)
-;   ld a4,[const(186)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(185)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(184)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(183)]
-;   sd a4,0(a0)
-;   ld a4,[const(182)]
-;   sd a4,0(a0)
-;   ld a4,[const(181)]
-;   ld a4,0(a4)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(180)]
-;   sd a4,0(a0)
-;   ld a4,[const(179)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
+;   ld a4,[const(208)]
+;   sd a4,0(a1)
+;   ld a4,[const(207)]
+;   sd a4,0(a1)
+;   ld a4,[const(206)]
+;   sd a4,0(a1)
+;   sd zero,0(a1)
+;   li a4,0
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(205)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(204)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(203)]
+;   sd a5,0(a1)
+;   ld a5,[const(202)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(201)]
+;   ld a6,[const(200)]
+;   sd a5,0(a6)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(199)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(198)]
+;   sd zero,0(a5)
+;   sw zero,0(a1)
+;   ld a5,[const(197)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(196)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(195)]
+;   sd a5,0(a1)
+;   ld a5,[const(194)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(193)]
+;   sd zero,0(a5)
+;   ld a5,[const(192)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(191)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(190)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(189)]
+;   sd a5,0(a1)
+;   ld a5,[const(188)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(187)]
+;   sd a5,0(a1)
+;   ld a5,[const(186)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(185)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(184)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(183)]
+;   sd a5,0(a1)
+;   ld a5,[const(182)]
+;   sd a5,0(a1)
+;   ld a5,[const(181)]
+;   ld a5,0(a5)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(180)]
+;   sd a5,0(a1)
+;   ld a5,[const(179)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
 ;   ld a5,[const(178)]
-;   sd a5,0(a0)
-;   ld a4,[const(177)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(176)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(175)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(174)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(173)]
-;   sd zero,0(a4)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(172)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(171)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(170)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(169)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(168)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(167)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(166)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(165)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(164)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(163)]
-;   sd a4,0(a0)
-;   ld a4,[const(162)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(161)]
-;   ld a4,0(a4)
-;   sw zero,0(a0)
-;   ld a4,[const(160)]
-;   sd a4,0(a0)
-;   ld a4,[const(159)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(158)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(157)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(156)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(155)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(154)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(153)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(152)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(151)]
-;   sd a4,0(a0)
-;   ld a4,[const(150)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(149)]
-;   sd a4,0(a0)
-;   ld a4,[const(148)]
-;   sd zero,0(a4)
-;   sw zero,0(a0)
-;   ld a4,[const(147)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(146)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(145)]
-;   sd a4,0(a0)
-;   ld a4,[const(144)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(143)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(142)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(141)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(140)]
-;   sd a4,0(a0)
-;   ld a4,[const(139)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(138)]
-;   sd a4,0(a0)
-;   ld a4,[const(137)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(136)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(135)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(134)]
-;   sd a4,0(a0)
-;   ld a4,[const(133)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(132)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(131)]
-;   sd a4,0(a0)
-;   ld a4,[const(130)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
+;   sd a5,0(a1)
+;   ld a5,[const(177)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(176)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(175)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(174)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(173)]
+;   sd zero,0(a5)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(172)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(171)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(170)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(169)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(168)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(167)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(166)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(165)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(164)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(163)]
+;   sd a5,0(a1)
+;   ld a5,[const(162)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(161)]
+;   ld a5,0(a5)
+;   sw zero,0(a1)
+;   ld a5,[const(160)]
+;   sd a5,0(a1)
+;   ld a5,[const(159)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(158)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(157)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(156)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(155)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(154)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(153)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(152)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(151)]
+;   sd a5,0(a1)
+;   ld a5,[const(150)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(149)]
+;   sd a5,0(a1)
+;   ld a5,[const(148)]
+;   sd zero,0(a5)
+;   sw zero,0(a1)
+;   ld a5,[const(147)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(146)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(145)]
+;   sd a5,0(a1)
+;   ld a5,[const(144)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(143)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(142)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(141)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(140)]
+;   sd a5,0(a1)
+;   ld a5,[const(139)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(138)]
+;   sd a5,0(a1)
+;   ld a5,[const(137)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(136)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(135)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(134)]
+;   sd a5,0(a1)
+;   ld a5,[const(133)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(132)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(131)]
+;   sd a5,0(a1)
+;   ld a5,[const(130)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
 ;   ld a5,[const(129)]
-;   sd a5,0(a0)
-;   ld a4,[const(128)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(127)]
-;   sd a4,0(a0)
-;   ld a4,[const(126)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(125)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(124)]
-;   sd a4,0(a0)
-;   ld a4,[const(123)]
-;   sd a4,0(a0)
-;   ld a4,[const(122)]
-;   sd a4,0(a0)
-;   ld a4,[const(121)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(120)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(119)]
-;   sd a4,0(a0)
-;   ld a4,[const(118)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(117)]
-;   sd a4,0(a0)
-;   ld a4,[const(116)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(115)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(114)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(113)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(112)]
-;   sd a4,0(a0)
-;   ld a4,[const(111)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(110)]
-;   sd a4,0(a0)
-;   ld a4,[const(109)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(108)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(107)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(106)]
-;   sd a1,0(a4)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(105)]
-;   sd zero,0(a4)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(104)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(103)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(102)]
-;   sd zero,0(a4)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(101)]
-;   sd a4,0(a0)
-;   ld a4,[const(100)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(99)]
-;   sd a1,0(a4)
-;   ld a4,[const(98)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(97)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(96)]
-;   sd a4,0(a0)
-;   ld a4,[const(95)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(94)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(93)]
-;   sd a1,0(a4)
-;   ld a4,[const(92)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(91)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   lui a4,309522
-;   addi a4,a4,-111
-;   ld a5,[const(90)]
-;   sw a4,0(a5)
-;   sw zero,0(a0)
-;   ld a4,[const(89)]
-;   sd a4,0(a0)
-;   ld a4,[const(88)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(87)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(86)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(85)]
-;   sd a4,0(a0)
-;   ld a4,[const(84)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(83)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(82)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(81)]
-;   sd a4,0(a0)
-;   ld a4,[const(80)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(79)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(78)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(77)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(76)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(75)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(74)]
-;   sd a4,0(a0)
-;   ld a4,[const(73)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(72)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(71)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(70)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(69)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(68)]
-;   sd a4,0(a0)
-;   ld a4,[const(67)]
-;   lw a4,0(a4)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(66)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(65)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(64)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(63)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(62)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(61)]
-;   sd a4,0(a0)
-;   ld a4,[const(60)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(59)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(58)]
-;   sw zero,0(a4)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(57)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(56)]
-;   sd a4,0(a0)
-;   ld a4,[const(55)]
-;   sw a2,0(a4)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(54)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(53)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(52)]
-;   sd a1,0(a4)
-;   sw zero,0(a0)
-;   ld a4,[const(51)]
-;   sd a4,0(a0)
-;   ld a4,[const(50)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(49)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(48)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
+;   sd a5,0(a1)
+;   ld a5,[const(128)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(127)]
+;   sd a5,0(a1)
+;   ld a5,[const(126)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(125)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(124)]
+;   sd a5,0(a1)
+;   ld a5,[const(123)]
+;   sd a5,0(a1)
+;   ld a5,[const(122)]
+;   sd a5,0(a1)
+;   ld a5,[const(121)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(120)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(119)]
+;   sd a5,0(a1)
+;   ld a5,[const(118)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(117)]
+;   sd a5,0(a1)
+;   ld a5,[const(116)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(115)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(114)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(113)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(112)]
+;   sd a5,0(a1)
+;   ld a5,[const(111)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(110)]
+;   sd a5,0(a1)
+;   ld a5,[const(109)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(108)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(107)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(106)]
+;   sd a2,0(a5)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(105)]
+;   sd zero,0(a5)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(104)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(103)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(102)]
+;   sd zero,0(a5)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(101)]
+;   sd a5,0(a1)
+;   ld a5,[const(100)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(99)]
+;   sd a2,0(a5)
+;   ld a5,[const(98)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(97)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(96)]
+;   sd a5,0(a1)
+;   ld a5,[const(95)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(94)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(93)]
+;   sd a2,0(a5)
+;   ld a5,[const(92)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(91)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   lui a5,309522
+;   addi a5,a5,-111
+;   ld t0,[const(90)]
+;   sw a5,0(t0)
+;   sw zero,0(a1)
+;   ld a5,[const(89)]
+;   sd a5,0(a1)
+;   ld a5,[const(88)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(87)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(86)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(85)]
+;   sd a5,0(a1)
+;   ld a5,[const(84)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(83)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(82)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(81)]
+;   sd a5,0(a1)
+;   ld a5,[const(80)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(79)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(78)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(77)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(76)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(75)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(74)]
+;   sd a5,0(a1)
+;   ld a5,[const(73)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(72)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(71)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(70)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(69)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(68)]
+;   sd a5,0(a1)
+;   ld a5,[const(67)]
+;   lw a5,0(a5)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(66)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(65)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(64)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(63)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(62)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(61)]
+;   sd a5,0(a1)
+;   ld a5,[const(60)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(59)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(58)]
+;   sw zero,0(a5)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(57)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(56)]
+;   sd a5,0(a1)
+;   ld a5,[const(55)]
+;   sw a3,0(a5)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(54)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(53)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(52)]
+;   sd a2,0(a5)
+;   sw zero,0(a1)
+;   ld a5,[const(51)]
+;   sd a5,0(a1)
+;   ld a5,[const(50)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(49)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(48)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
 ;   ld a5,[const(47)]
-;   sd a5,0(a0)
-;   ld a4,[const(46)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(45)]
-;   sd a4,0(a0)
-;   ld a4,[const(44)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(43)]
-;   sd a4,0(a0)
-;   ld a4,[const(42)]
-;   sd a1,0(a4)
-;   sw zero,0(a0)
-;   ld a4,[const(41)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(40)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(39)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(38)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(37)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(36)]
-;   sd a4,0(a0)
-;   ld a4,[const(35)]
-;   sd a1,0(a4)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   lw a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(34)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(33)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(32)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(31)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(30)]
-;   sd a1,0(a4)
-;   ld a4,[const(29)]
-;   sd zero,0(a4)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(28)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(27)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(26)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(25)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(24)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(23)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(22)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(21)]
-;   sd a4,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(20)]
-;   sd a4,0(a0)
-;   ld a4,[const(19)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(18)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(17)]
-;   sd zero,0(a4)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(16)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(15)]
-;   sd a4,0(a0)
-;   ld a4,[const(14)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(13)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a2,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(12)]
-;   sd a4,0(a0)
-;   ld a4,[const(11)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a4,[const(10)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   ld a4,[const(9)]
-;   sd a4,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sb a3,0(a0)
-;   sw zero,0(a0)
+;   sd a5,0(a1)
+;   ld a5,[const(46)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(45)]
+;   sd a5,0(a1)
+;   ld a5,[const(44)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(43)]
+;   sd a5,0(a1)
+;   ld a5,[const(42)]
+;   sd a2,0(a5)
+;   sw zero,0(a1)
+;   ld a5,[const(41)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(40)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(39)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(38)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(37)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(36)]
+;   sd a5,0(a1)
+;   ld a5,[const(35)]
+;   sd a2,0(a5)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   lw a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(34)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(33)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(32)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(31)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(30)]
+;   sd a2,0(a5)
+;   ld a5,[const(29)]
+;   sd zero,0(a5)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(28)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(27)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(26)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(25)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(24)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(23)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(22)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(21)]
+;   sd a5,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(20)]
+;   sd a5,0(a1)
+;   ld a5,[const(19)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(18)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(17)]
+;   sd zero,0(a5)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(16)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   ld a5,[const(15)]
+;   sd a5,0(a1)
+;   ld a5,[const(14)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a5,[const(13)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a3,0(a1)
+;   sw zero,0(a1)
+;   ld a3,[const(12)]
+;   sd a3,0(a1)
+;   ld a5,[const(11)]
+;   sd a5,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a3,[const(10)]
+;   sd a3,0(a1)
+;   sw zero,0(a1)
+;   ld a3,[const(9)]
+;   sd a3,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sb a4,0(a1)
+;   sw zero,0(a1)
 ;   ld a3,[const(8)]
-;   sd a1,0(a3)
-;   ld a1,[const(7)]
-;   sd a1,0(a0)
-;   sw zero,0(a0)
-;   ld a1,[const(6)]
-;   sd a1,0(a0)
-;   ld a1,[const(5)]
+;   sd a2,0(a3)
+;   ld a2,[const(7)]
+;   sd a2,0(a1)
+;   sw zero,0(a1)
+;   ld a2,[const(6)]
+;   sd a2,0(a1)
+;   ld a2,[const(5)]
 ;   lui a3,4
 ;   addi a3,a3,-1824
-;   sd a1,0(a3)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a1,[const(4)]
+;   sd a2,0(a3)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a2,[const(4)]
 ;   lui a3,4
 ;   addi a3,a3,-1700
-;   sd a1,0(a3)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a1,[const(3)]
+;   sd a2,0(a3)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a2,[const(3)]
 ;   lui a3,4
 ;   addi a3,a3,-1520
-;   sd a1,0(a3)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   ld a1,[const(2)]
+;   sd a2,0(a3)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   ld a2,[const(2)]
 ;   lui a3,4
 ;   addi a3,a3,-1592
-;   sd a1,0(a3)
-;   ld a1,[const(1)]
+;   sd a2,0(a3)
+;   ld a2,[const(1)]
 ;   lui a3,4
 ;   addi a3,a3,-1600
-;   sd a1,0(a3)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   ld a1,[const(0)]
+;   sd a2,0(a3)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   ld a2,[const(0)]
 ;   lui a3,4
 ;   addi a3,a3,-1436
-;   sd a1,0(a3)
-;   sw zero,0(a0)
-;   sd zero,0(a0)
-;   sw zero,0(a0)
-;   sext.w a0,a2
-;   bne a0,zero,taken(label42),not_taken(label41)
+;   sd a2,0(a3)
+;   sw zero,0(a1)
+;   sd zero,0(a1)
+;   sw zero,0(a1)
+;   j label41
 ; block41:
-;   lui a0,1
-;   addi a2,a0,-1080
-;   mv a1,t0
-;   mv a0,a1
-;   call userextname0
-;   udf##trap_code=user1
-; block42:
-;   mv a1,t0
 ;   li a2,1
 ;   li a3,2
-;   mv a0,a1
+;   mv a1,a0
 ;   call userextname1
 ;   udf##trap_code=user11
 ;
@@ -4729,1496 +4719,1491 @@ block2:
 ;   bgeu sp, t6, 6
 ;   c.unimp ; trap: stk_ovf
 ; block1: ; offset 0x18
-;   c.mv t0, a0
-;   c.li a0, 0
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.li a2, 4
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
+;   c.li a1, 0
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.li a3, 4
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.li a2, 1
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.li a5, 1
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.li a4, 9
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   c.li a4, 0xd
+;   c.sw a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.li a4, 8
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.li t0, 3
+;   sw t0, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sb a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.li t0, 8
+;   sw t0, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.sw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw t0, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+; block2: ; offset 0x33c
+;   lui a1, 0x6a64d
+;   c.addi a1, 3
+;   beqz a1, 6
+;   c.unimp ; trap: user11
+; block3: ; offset 0x348
+;   lui a1, 0x259ad
+;   addi a1, a1, -0x626
+;   beqz a1, 6
+;   c.unimp ; trap: user11
+; block4: ; offset 0x356
 ;   c.li a1, 1
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.li a4, 1
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.li a3, 9
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   c.li a3, 0xd
-;   c.sw a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.li a3, 8
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.li a5, 3
-;   c.sw a5, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sb a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.li a5, 8
-;   c.sw a5, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.sw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sw a5, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.sd a1, 0(a0) ; trap: heap_oob
-; block2: ; offset 0x338
-;   lui a0, 0x6a64d
-;   c.addi a0, 3
-;   beqz a0, 6
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block3: ; offset 0x344
-;   lui a0, 0x259ad
-;   addi a0, a0, -0x626
-;   beqz a0, 6
+; block5: ; offset 0x35e
+;   lui a1, 0x7c7d9
+;   addi a1, a1, -0xc1
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block4: ; offset 0x352
-;   c.li a0, 1
-;   beqz a0, 6
+; block6: ; offset 0x36c
+;   lui a1, 0x5b1f2
+;   addi a1, a1, 0x6e3
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block5: ; offset 0x35a
-;   lui a0, 0x7c7d9
-;   addi a0, a0, -0xc1
-;   beqz a0, 6
+; block7: ; offset 0x37a
+;   lui a1, 0x6f8d1
+;   addi a1, a1, -0x144
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block6: ; offset 0x368
-;   lui a0, 0x5b1f2
-;   addi a0, a0, 0x6e3
-;   beqz a0, 6
+; block8: ; offset 0x388
+;   lui a1, 0x484e2
+;   addi a1, a1, -0x478
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block7: ; offset 0x376
-;   lui a0, 0x6f8d1
-;   addi a0, a0, -0x144
-;   beqz a0, 6
+; block9: ; offset 0x396
+;   lui a1, 0x110e5
+;   addi a1, a1, -0x662
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block8: ; offset 0x384
-;   lui a0, 0x484e2
-;   addi a0, a0, -0x478
-;   beqz a0, 6
+; block10: ; offset 0x3a4
+;   lui a1, 0x71fd2
+;   addi a1, a1, 0x446
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block9: ; offset 0x392
-;   lui a0, 0x110e5
-;   addi a0, a0, -0x662
-;   beqz a0, 6
+; block11: ; offset 0x3b2
+;   lui a3, 0x8237d
+;   addi a5, a3, 0x5b7
+;   beqz a5, 6
 ;   c.unimp ; trap: user11
-; block10: ; offset 0x3a0
-;   lui a2, 0x71fd2
-;   addi a4, a2, 0x446
-;   beqz a4, 6
-;   c.unimp ; trap: user11
-; block11: ; offset 0x3ae
-;   lui a0, 0x8237d
-;   addi a0, a0, 0x5b7
-;   beqz a0, 6
-;   c.unimp ; trap: user11
-; block12: ; offset 0x3bc
+; block12: ; offset 0x3c0
 ;   c.j 4
 ;   c.unimp
 ;   auipc t6, 0
 ;   jalr zero, t6, 8
-; block13: ; offset 0x3c8
-;   auipc a1, 1
-;   ld a1, 0xd0(a1)
-;   c.li a0, 0
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xcc(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xca(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xc8(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xc6(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xc4(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xc2(a1)
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xbe(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xbc(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xba(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xb8(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, 0xb6(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   c.li a1, 1
+; block13: ; offset 0x3cc
+;   auipc a2, 1
+;   ld a2, 0xc4(a2)
+;   c.li a1, 0
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xc0(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xbe(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xbc(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xba(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xb8(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xb6(a2)
+;   sd zero, 0(a2) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xb2(a2)
-;   c.sd a1, 0(a2) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xb0(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xae(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xac(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xaa(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xa8(a2)
-;   sd zero, 0(a2) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xa4(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xa2(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xa0(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x9e(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x9c(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x9a(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x98(a2)
-;   sd zero, 0(a2) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x94(a2)
-;   sd zero, 0(a2) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x90(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x8e(a2)
-;   c.sd a1, 0(a2) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x8c(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x8a(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x88(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x86(a2)
-;   sd zero, 0(a2) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x82(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x80(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x7e(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x7c(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x7a(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x78(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x76(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x74(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0x72(a2)
-;   c.sd a2, 0(a0) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   c.li a2, 1
 ;   auipc a3, 1
-;   ld a3, 0x6e(a3)
-;   c.sw a2, 0(a3) ; trap: heap_oob
+;   ld a3, 0xa6(a3)
+;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x6c(a3)
-;   c.sd a3, 0(a0) ; trap: heap_oob
+;   ld a3, 0xa4(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x6a(a3)
-;   c.sd a3, 0(a0) ; trap: heap_oob
+;   ld a3, 0xa2(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x68(a3)
+;   ld a3, 0xa0(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x9e(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x9c(a3)
 ;   sd zero, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x64(a3)
-;   c.sd a3, 0(a0) ; trap: heap_oob
+;   ld a3, 0x98(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x62(a3)
-;   c.sd a3, 0(a0) ; trap: heap_oob
+;   ld a3, 0x96(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, 0x60(a3)
-;   c.sd a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.li a3, 0
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x50(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x4a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x44(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x42(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x34(a4)
-;   auipc a5, 1
-;   ld a5, 0x34(a5)
-;   c.sd a4, 0(a5) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x16(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xe(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x20(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x22(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x28(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x32(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x54(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x60(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x66(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x68(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x7a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x80(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x86(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x88(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x8a(a4)
-;   c.ld a4, 0(a4) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x94(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x96(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x9c(a5)
-;   c.sd a5, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x9e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xa4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xae(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xb8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xbe(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xd2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xd8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xde(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xe8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xee(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0xf4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x102(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x108(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x10e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x118(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x11a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x120(a4)
-;   c.ld a4, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x126(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x128(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x12e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x13c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x14a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x160(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x166(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x174(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x17e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x184(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x186(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x18c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x18e(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x196(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1ac(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1b2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1b4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1ce(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1d4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1de(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1ec(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1ee(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1f4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x1f6(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x200(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x20e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x218(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x21a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x220(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x232(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x234(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x23a(a5)
-;   c.sd a5, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x23c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x242(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x244(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x24e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x254(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x256(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x258(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x25a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x26c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x272(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x274(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x27a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x27c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x292(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2a0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2aa(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2b0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2b2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2c0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2c2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2c8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2e6(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2ec(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x2fe(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x31e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x334(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x342(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x352(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x354(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x35e(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x360(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x36a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x370(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x372(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x38c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x39a(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x39c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3ae(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   lui a4, 0x4b912
-;   addi a4, a4, -0x6f
-;   auipc a5, 1
-;   ld a5, -0x3c8(a5)
-;   c.sw a4, 0(a5) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3ce(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3d0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3d6(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3e4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3ee(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x3f0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x406(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x43c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x44a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x44c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x452(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x458(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x462(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x468(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x472(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x47c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x47e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x488(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x48e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x494(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4be(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4c4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4c6(a4)
-;   c.lw a4, 0(a4) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4d0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4da(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4e4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4f2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x4fc(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x502(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x504(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x50a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x510(a4)
-;   sw zero, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x528(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x52e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x530(a4)
-;   c.sw a2, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x53a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x54c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x55a(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x560(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x562(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x568(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x58e(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x598(a5)
-;   c.sd a5, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x59a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5a0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5a2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5c0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5c2(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5c8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5ce(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5d8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5ea(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5f0(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5fa(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x5fc(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   c.lw a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x610(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x61a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x628(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x632(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x64c(a4)
-;   c.sd a1, 0(a4) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x64e(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x66a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x678(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6ba(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6c4(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6ce(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6ec(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6f2(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x6f8(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x70a(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x70c(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x716(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x724(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x730(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x736(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x738(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x742(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a2, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x754(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x756(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x760(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, -0x766(a4)
-;   c.sd a4, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sb a3, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
+;   ld a3, 0x94(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, -0x778(a3)
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x77a(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x780(a1)
-;   c.sd a1, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x782(a1)
+;   ld a3, 0x92(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x90(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x8e(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x8c(a3)
+;   sd zero, 0(a3) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x88(a3)
+;   sd zero, 0(a3) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x84(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x82(a3)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x80(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x7e(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x7c(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x7a(a3)
+;   sd zero, 0(a3) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x76(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x74(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x72(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x70(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x6e(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x6c(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x6a(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x68(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x66(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.li a3, 1
+;   auipc a4, 1
+;   ld a4, 0x62(a4)
+;   c.sw a3, 0(a4) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x60(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x5e(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x5c(a4)
+;   sd zero, 0(a4) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x58(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x56(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x54(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.li a4, 0
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 0x44(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 0x3e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 0x38(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 0x36(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 0x28(a5)
+;   auipc a6, 1
+;   ld a6, 0x28(a6)
+;   sd a5, 0(a6) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, 8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xe(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x16(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x30(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x36(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x40(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x62(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x74(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x76(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x88(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x8e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x94(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x96(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x98(a5)
+;   c.ld a5, 0(a5) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xa2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xa4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xaa(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xac(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xb2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xbc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xc6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xcc(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xe0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xe6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xec(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xf6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xfc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x102(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x110(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x116(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x11c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x126(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x128(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x12e(a5)
+;   c.ld a5, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x134(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x136(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x13c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x14a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x158(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x16e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x174(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x182(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x18c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x192(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x194(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x19a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x19c(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1a4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1ba(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1c0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1c2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1dc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1e2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1ec(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1fa(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1fc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x202(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x204(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x20e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x21c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x226(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x228(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x22e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x240(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x242(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x248(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x24a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x250(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x252(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x25c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x262(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x264(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x266(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x268(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x27a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x280(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x282(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x288(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x28a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2a0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2ae(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2b8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2be(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2c0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2ce(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2d0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2d6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2f4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2fa(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x30c(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x32c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x342(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x350(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x360(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x362(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x36c(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x36e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x378(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x37e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x380(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x39a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3a8(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3aa(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3bc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   lui a5, 0x4b912
+;   addi a5, a5, -0x6f
+;   auipc t0, 1
+;   ld t0, -0x3d6(t0)
+;   sw a5, 0(t0) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3de(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3e0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3e6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3f4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3fe(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x400(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x416(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x44c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x45a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x45c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x462(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x468(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x472(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x478(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x482(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x48c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x48e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x498(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x49e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4a4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4ce(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4d4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4d6(a5)
+;   c.lw a5, 0(a5) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4e0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4ea(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4f4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x502(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x50c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x512(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x514(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x51a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x520(a5)
+;   sw zero, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x538(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x53e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x540(a5)
+;   c.sw a3, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x54a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x55c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x56a(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x570(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x572(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x578(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x59e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5a8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5aa(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5b0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5b2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5d0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5d2(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5d8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5de(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5e8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x5fa(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x600(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x60a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x60c(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   c.lw a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x620(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x62a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x638(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x642(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x65c(a5)
+;   c.sd a2, 0(a5) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x65e(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x67a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x688(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6ca(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6d4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6de(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x6fc(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x702(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x708(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x71a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x71c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x726(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x734(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x740(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x746(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x748(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x752(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a3, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, -0x764(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x766(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, -0x770(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, -0x776(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sb a4, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, -0x788(a3)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x78a(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x790(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x792(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x720
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x79a(a1)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x7aa(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x6a4
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x7b2(a1)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x7c2(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x5f0
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x7c6(a1)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x7d6(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x638
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x7ce(a1)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x7de(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x640
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   auipc a1, 1
-;   ld a1, -0x7de(a1)
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, -0x7ee(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x59c
-;   c.sd a1, 0(a3) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sd zero, 0(a0) ; trap: heap_oob
-;   sw zero, 0(a0) ; trap: heap_oob
-;   sext.w a0, a2
-;   bnez a0, 6
-;   c.j 0xa
-;   auipc t6, 1
-;   jalr zero, t6, -0x7e8
+;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   c.j 2
 ;   auipc t6, 0
 ;   jalr zero, t6, 0x7fc
 ;   c.unimp
@@ -7169,19 +7154,10 @@ block2:
 ;   c.addi4spn s0, sp, 0x84
 ;   andi a7, s11, -0x6ab
 ;   c.swsp t5, 0xb4(sp)
-; block14: ; offset 0x1c88
-;   c.lui a0, 1
-;   addi a2, a0, -0x438
-;   c.mv a1, t0
-;   c.mv a0, a1
-;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:988 0
-;   jalr ra
-;   c.unimp ; trap: user1
-; block15: ; offset 0x1c9c
-;   c.mv a1, t0
+; block14: ; offset 0x1c80
 ;   c.li a2, 1
 ;   c.li a3, 2
-;   c.mv a0, a1
+;   c.mv a1, a0
 ;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:1 0
 ;   jalr ra
 ;   c.unimp ; trap: user11
