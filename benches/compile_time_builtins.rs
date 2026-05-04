@@ -90,9 +90,6 @@ fn make_engine() -> Result<Engine, Error> {
     let mut config = Config::new();
     config.compiler_inlining(wasmtime::Inlining::Yes);
     config.concurrency_support(false);
-    unsafe {
-        config.cranelift_flag_set("wasmtime_inlining_intra_module", "yes");
-    }
     let engine = Engine::new(&config)?;
     Ok(engine)
 }
