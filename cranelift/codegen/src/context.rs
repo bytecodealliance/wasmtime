@@ -387,15 +387,11 @@ impl Context {
         log::debug!("egraph stats: {:?}", pass.stats);
         trace!("After egraph optimization:\n{}", self.func.display());
 
-        // Branch optimizations can invalidate these.
-        self.cfg.clear();
-        self.domtree.clear();
+        // Branch optimizations can invalidate these; recompute them.
+        self.compute_cfg();
+        self.compute_domtree();
 
-        if fisa.flags.enable_verifier() {
-            self.compute_cfg();
-            self.compute_domtree();
-            self.verify_if(fisa)?;
-        }
+        self.verify_if(fisa)?;
 
         Ok(())
     }
