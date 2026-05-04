@@ -1722,6 +1722,21 @@ impl<'a> TestCase<'a> {
 
         let mut options = u.arbitrary::<TestCaseOptions>()?;
 
+        // Handle async ABI options. If async is enabled then the function type
+        // in question must also be `async`.
+        if let LiftAbi::AsyncStackful | LiftAbi::AsyncCallback = options.caller_lift_abi {
+            options.guest_caller_async = true;
+        }
+        if let LiftAbi::AsyncStackful | LiftAbi::AsyncCallback = options.callee_lift_abi {
+            options.guest_callee_async = true;
+        }
+        if let LowerAbi::Async = options.caller_lower_abi {
+            options.guest_callee_async = true;
+        }
+        if let LowerAbi::Async = options.callee_lower_abi {
+            options.host_async = true;
+        }
+
         // Sync tasks cannot call async functions via a sync lower, nor can they
         // block in other ways (e.g. by calling `waitable-set.wait`, returning
         // `CALLBACK_CODE_WAIT`, etc.) prior to returning.  Therefore,

@@ -14,12 +14,12 @@
     (core instance $shim (instantiate $shim
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func $shim-export (param "p1" u32) (result u32)
+    (func $shim-export async (param "p1" u32) (result u32)
         (canon lift (core func $shim "export") async (callback (func $shim "callback")))
     )
 
     (component $inner
-        (import "import" (func $import (param "p1" u32) (result u32)))
+        (import "import" (func $import async (param "p1" u32) (result u32)))
         (core module $libc (memory (export "memory") 1))
         (core instance $libc (instantiate $libc))
         (core func $import (canon lower (func $import) async (memory $libc "memory")))
@@ -46,7 +46,7 @@
             ))
             (with "libc" (instance $libc))
         ))
-        (func (export "export") (param "p1" u32) (result u32)
+        (func (export "export") async (param "p1" u32) (result u32)
             (canon lift (core func $i "export") async (callback (func $i "callback")))
         )
     )
@@ -84,7 +84,7 @@
         ))
         (with "libc" (instance $libc))
     ))
-    (func (export "export") (param "p1" u32) (result u32)
+    (func (export "export") async (param "p1" u32) (result u32)
         (canon lift (core func $donut "export") async (callback (func $donut "callback")))
     )
 )

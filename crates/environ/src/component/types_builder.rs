@@ -325,17 +325,17 @@ impl ComponentTypesBuilder {
         let ty = &types[id];
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
-            self.register_abstract_component_entity_type(types, *ty);
+            self.register_abstract_component_entity_type(types, ty.ty);
             result.imports.insert(
                 name.clone(),
-                self.convert_component_entity_type(types, *ty)?,
+                self.convert_component_entity_type(types, ty.ty)?,
             );
         }
         for (name, ty) in ty.exports.iter() {
-            self.register_abstract_component_entity_type(types, *ty);
+            self.register_abstract_component_entity_type(types, ty.ty);
             result.exports.insert(
                 name.clone(),
-                self.convert_component_entity_type(types, *ty)?,
+                self.convert_component_entity_type(types, ty.ty)?,
             );
         }
         Ok(self.component_types.components.push(result))
@@ -350,10 +350,10 @@ impl ComponentTypesBuilder {
         let ty = &types[id];
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
-            self.register_abstract_component_entity_type(types, *ty);
+            self.register_abstract_component_entity_type(types, ty.ty);
             result.exports.insert(
                 name.clone(),
-                self.convert_component_entity_type(types, *ty)?,
+                self.convert_component_entity_type(types, ty.ty)?,
             );
         }
         Ok(self.component_types.component_instances.push(result))

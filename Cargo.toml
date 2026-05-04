@@ -769,3 +769,18 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
+
+[patch.crates-io]
+wasmparser = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wat = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wast = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasmprinter = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-encoder = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-smith = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-mutate = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wit-parser = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wit-component = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-wave = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-compose = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+wasm-metadata = { git = 'https://github.com/bytecodealliance/wasm-tools' }
+json-from-wast = { git = 'https://github.com/bytecodealliance/wasm-tools' }

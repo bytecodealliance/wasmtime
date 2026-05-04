@@ -472,6 +472,9 @@ impl WastTest {
             // changes
             "test/async/same-component-stream-future.wast",
             "test/async/trap-if-block-and-sync.wast",
+            // Not updated upstream yet
+            "test/async/cross-abi-calls.wast",
+            "test/async/trap-on-reenter.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;

@@ -108,7 +108,7 @@ mod no_imports_concurrent {
                         (with "" (instance (export "task.return" (func $task-return))))
                     ))
 
-                    (func $f (export "bar")
+                    (func $f (export "bar") async
                         (canon lift (core func $i "bar") async (callback (func $i "callback")))
                     )
 
