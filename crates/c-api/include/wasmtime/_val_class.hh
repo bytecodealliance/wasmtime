@@ -5,11 +5,11 @@
 #include <wasmtime/_anyref_class.hh>
 #include <wasmtime/_arrayref_class.hh>
 #include <wasmtime/_eqref_class.hh>
+#include <wasmtime/_exnref_class.hh>
 #include <wasmtime/_externref_class.hh>
 #include <wasmtime/_func_class.hh>
 #include <wasmtime/_store_class.hh>
 #include <wasmtime/_structref_class.hh>
-#include <wasmtime/_exnref_class.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>
 

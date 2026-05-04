@@ -6,10 +6,10 @@
 #define WASMTIME_VAL_HH
 
 #include <wasmtime/_anyref_class.hh>
+#include <wasmtime/_exnref_class.hh>
 #include <wasmtime/_externref_class.hh>
 #include <wasmtime/_func_class.hh>
 #include <wasmtime/_val_class.hh>
-#include <wasmtime/_exnref_class.hh>
 
 namespace wasmtime {
 
