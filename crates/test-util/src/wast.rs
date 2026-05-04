@@ -410,9 +410,7 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return config.wide_arithmetic()
-                        || (config.simd() && !config.spec_test())
-                        || config.threads();
+                    return (config.simd() && !config.spec_test()) || config.threads();
                 }
 
                 !cfg!(target_arch = "x86_64")
