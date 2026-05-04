@@ -108,8 +108,9 @@ fn create() -> GlobalStdin {
 
             // Extract the size hint from the request and cap it to `MAX_READ_SIZE_ALLOC`
             // to avoid guest-controlled unbounded allocation.
+            // The `.max(1)` ensures a zero-length read is never misinterpreted as EOF.
             let size_hint = match *lock {
-                StdinState::ReadRequested(size) => size.min(MAX_READ_SIZE_ALLOC).max(1024),
+                StdinState::ReadRequested(size) => size.min(MAX_READ_SIZE_ALLOC).max(1),
                 _ => unreachable!(),
             };
             drop(lock);
@@ -147,6 +148,9 @@ struct WasiStdin;
 #[async_trait::async_trait]
 impl InputStream for WasiStdin {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
+        if size == 0 {
+            return Ok(Bytes::new());
+        }
         let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
         match mem::replace(&mut *locked, StdinState::ReadRequested(size)) {
