@@ -19,6 +19,13 @@ pub const WASM_FUNCREF: wasm_valkind_t = 129;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasm_valtype_new(kind: wasm_valkind_t) -> Box<wasm_valtype_t> {
+    // The SysV AMD64 ABI does not require callers to zero/sign-extend
+    // sub-`int` arguments, and some C compilers (e.g. GCC) pass `WASM_FUNCREF`
+    // (= 129) sign-extended as `0xffffff81` in `%edi`. Without this volatile
+    // round-trip, rustc may compile the match below as a 32-bit comparison
+    // against the unextended register and fall through to the panic arm.
+    // See https://github.com/rust-lang/rust/issues/97463.
+    let kind = unsafe { std::ptr::read_volatile(&kind) };
     Box::new(match kind {
         WASM_I32 => ValType::I32,
         WASM_I64 => ValType::I64,
