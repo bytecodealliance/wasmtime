@@ -59,7 +59,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; risbgn %r1, %r2, 32, 48, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; risbgn %r1, %r2, 32, 47, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -70,7 +70,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   risbgn %r1, %r2, 0x20, 0x30, 0x10
+;   risbgn %r1, %r2, 0x20, 0x2f, 0x10
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x12
@@ -90,7 +90,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; risbgn %r1, %r5, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; risbgn %r1, %r5, 32, 39, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -102,7 +102,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   risbgn %r1, %r5, 0x20, 0x28, 0x18
+;   risbgn %r1, %r5, 0x20, 0x27, 0x18
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
@@ -349,7 +349,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 48, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 47, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -360,7 +360,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r2, 0x20, 0x30, 0x10
+;   rnsbg %r1, %r2, 0x20, 0x2f, 0x10
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x12
@@ -380,7 +380,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 39, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -392,7 +392,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r5, 0x20, 0x28, 0x18
+;   rnsbg %r1, %r5, 0x20, 0x27, 0x18
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
@@ -443,7 +443,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rosbg %r1, %r2, 32, 48, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rosbg %r1, %r2, 32, 47, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -454,7 +454,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rosbg %r1, %r2, 0x20, 0x30, 0x10
+;   rosbg %r1, %r2, 0x20, 0x2f, 0x10
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x12
@@ -474,7 +474,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rosbg %r1, %r5, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rosbg %r1, %r5, 32, 39, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -486,7 +486,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rosbg %r1, %r5, 0x20, 0x28, 0x18
+;   rosbg %r1, %r5, 0x20, 0x27, 0x18
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
@@ -537,7 +537,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r2, 32, 48, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r2, 32, 47, 16 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -548,7 +548,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rxsbg %r1, %r2, 0x20, 0x30, 0x10
+;   rxsbg %r1, %r2, 0x20, 0x2f, 0x10
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x12
@@ -568,7 +568,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r5, 32, 40, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rxsbg %r1, %r5, 32, 39, 24 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -580,7 +580,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rxsbg %r1, %r5, 0x20, 0x28, 0x18
+;   rxsbg %r1, %r5, 0x20, 0x27, 0x18
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x14
@@ -646,7 +646,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 48, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 47, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -657,7 +657,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r2, 0x20, 0x30, 0x10
+;   rnsbg %r1, %r2, 0x20, 0x2f, 0x10
 ;   xilf %r1, 0xffff0000
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
@@ -678,7 +678,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 39, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -690,7 +690,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r5, 0x20, 0x28, 0x18
+;   rnsbg %r1, %r5, 0x20, 0x27, 0x18
 ;   xilf %r1, 0xff000000
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
@@ -757,7 +757,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 65532
 ;   sllk %r2, %r2, 16
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; cr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 48, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; cr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 47, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -771,7 +771,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   rll %r1, %r0, 0(%r4)
 ;   cr %r2, %r1
 ;   jgnl 0x3c
-;   risbgn %r1, %r2, 0x20, 0x30, 0
+;   risbgn %r1, %r2, 0x20, 0x2f, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x18
@@ -791,7 +791,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r4, 24
 ;   lcr %r4, %r5
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; cr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 40, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r5) ; cr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 39, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r5)
 ;   br %r14
 ;
@@ -805,7 +805,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   rll %r1, %r0, 0(%r5)
 ;   cr %r2, %r1
 ;   jgnl 0x3a
-;   risbgn %r1, %r2, 0x20, 0x28, 0
+;   risbgn %r1, %r2, 0x20, 0x27, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
@@ -871,7 +871,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 65532
 ;   sllk %r2, %r2, 16
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; cr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 48, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; cr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 47, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -885,7 +885,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   rll %r1, %r0, 0(%r4)
 ;   cr %r2, %r1
 ;   jgnh 0x3c
-;   risbgn %r1, %r2, 0x20, 0x30, 0
+;   risbgn %r1, %r2, 0x20, 0x2f, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x18
@@ -905,7 +905,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r4, 24
 ;   lcr %r4, %r5
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; cr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 40, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r5) ; cr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 39, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r5)
 ;   br %r14
 ;
@@ -919,7 +919,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   rll %r1, %r0, 0(%r5)
 ;   cr %r2, %r1
 ;   jgnh 0x3a
-;   risbgn %r1, %r2, 0x20, 0x28, 0
+;   risbgn %r1, %r2, 0x20, 0x27, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
@@ -985,7 +985,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 65532
 ;   sllk %r2, %r2, 16
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; clr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 48, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; clr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 47, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -999,7 +999,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   rll %r1, %r0, 0(%r4)
 ;   clr %r2, %r1
 ;   jgnl 0x3c
-;   risbgn %r1, %r2, 0x20, 0x30, 0
+;   risbgn %r1, %r2, 0x20, 0x2f, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x18
@@ -1019,7 +1019,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r4, 24
 ;   lcr %r4, %r5
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; clr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 40, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r5) ; clr %r2, %r1 ; jgnl 1f ; risbgn %r1, %r2, 32, 39, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r5)
 ;   br %r14
 ;
@@ -1033,7 +1033,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   rll %r1, %r0, 0(%r5)
 ;   clr %r2, %r1
 ;   jgnl 0x3a
-;   risbgn %r1, %r2, 0x20, 0x28, 0
+;   risbgn %r1, %r2, 0x20, 0x27, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16
@@ -1099,7 +1099,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 65532
 ;   sllk %r2, %r2, 16
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; clr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 48, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; clr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 47, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -1113,7 +1113,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   rll %r1, %r0, 0(%r4)
 ;   clr %r2, %r1
 ;   jgnh 0x3c
-;   risbgn %r1, %r2, 0x20, 0x30, 0
+;   risbgn %r1, %r2, 0x20, 0x2f, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x18
@@ -1133,7 +1133,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   sllk %r2, %r4, 24
 ;   lcr %r4, %r5
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r5) ; clr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 40, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r5) ; clr %r2, %r1 ; jgnh 1f ; risbgn %r1, %r2, 32, 39, 0 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r5)
 ;   br %r14
 ;
@@ -1147,7 +1147,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   rll %r1, %r0, 0(%r5)
 ;   clr %r2, %r1
 ;   jgnh 0x3a
-;   risbgn %r1, %r2, 0x20, 0x28, 0
+;   risbgn %r1, %r2, 0x20, 0x27, 0
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
 ;   jglh 0x16

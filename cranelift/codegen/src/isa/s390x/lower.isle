@@ -3571,15 +3571,15 @@
                              WritableReg Reg Reg) Reg)
 ;; 8-bit case: use the low byte of "src" and the high byte of "val".
 (rule (atomic_rmw_body_rxsbg ib $I8 _ op tmp val src)
-      (push_rxsbg ib op tmp val src 32 40 24))
+      (push_rxsbg ib op tmp val src 32 39 24))
 ;; 16-bit big-endian case: use the low two bytes of "src" and the
 ;; high two bytes of "val".
 (rule 1 (atomic_rmw_body_rxsbg ib $I16 (bigendian) op tmp val src)
-      (push_rxsbg ib op tmp val src 32 48 16))
+      (push_rxsbg ib op tmp val src 32 47 16))
 ;; 16-bit little-endian case: use the low two bytes of "src", byte-swapped
 ;; so they end up in the high two bytes, and the low two bytes of "val".
 (rule (atomic_rmw_body_rxsbg ib $I16 (littleendian) op tmp val src)
-      (push_rxsbg ib op tmp val (bswap_reg $I32 src) 48 64 -16))
+      (push_rxsbg ib op tmp val (bswap_reg $I32 src) 48 63 -16))
 
 ;; Invert a subword.
 (decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlags WritableReg Reg) Reg)
@@ -3674,13 +3674,13 @@
       (let ((src_shifted Reg (lshl_imm $I32 src 24))
             (_ Reg (push_break_if ib (cmp_rr op src_shifted val)
                                      (invert_cond cond))))
-        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 40 0)))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 39 0)))
 ;; 16-bit big-endian case: similar, just shift the source by 16 bits.
 (rule 3 (atomic_rmw_body_minmax ib $I16 (bigendian) op cond tmp val src)
       (let ((src_shifted Reg (lshl_imm $I32 src 16))
             (_ Reg (push_break_if ib (cmp_rr op src_shifted val)
                                      (invert_cond cond))))
-        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 48 0)))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 47 0)))
 ;; 16-bit little-endian case: similar, but in addition byte-swap the
 ;; memory value before and after the operation, like for _addsub_.
 (rule (atomic_rmw_body_minmax ib $I16 (littleendian) op cond tmp val src)
@@ -3689,7 +3689,7 @@
             (_ Reg (push_break_if ib (cmp_rr op src_shifted val_swapped)
                                      (invert_cond cond)))
             (res_swapped Reg (push_rxsbg ib (RxSBGOp.Insert)
-                                tmp val_swapped src_shifted 32 48 0)))
+                                tmp val_swapped src_shifted 32 47 0)))
         (push_bswap_reg ib $I32 tmp res_swapped)))
 
 
@@ -3734,16 +3734,16 @@
 ;; break out of the loop, otherwise replace the target byte in "val" with
 ;; the low byte of "src2".
 (rule (atomic_cas_body ib $I8 _ tmp val src1 src2)
-      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 40 24)
+      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 39 24)
                                      (intcc_as_cond (IntCC.NotEqual)))))
-        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 40 24)))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 39 24)))
 
 ;; 16-bit big-endian case: Same as above, except with values in the high
 ;; two bytes of "val" and low two bytes of "src1" and "src2".
 (rule 1 (atomic_cas_body ib $I16 (bigendian) tmp val src1 src2)
-      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 48 16)
+      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 47 16)
                                      (intcc_as_cond (IntCC.NotEqual)))))
-        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 48 16)))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 47 16)))
 
 ;; 16-bit little-endian case: "val" here contains a little-endian value in the
 ;; *low* two bytes.  "src1" and "src2" contain native (i.e. big-endian) values
@@ -3755,9 +3755,9 @@
       (let ((src1_swapped Reg (bswap_reg $I32 src1))
             (src2_swapped Reg (bswap_reg $I32 src2))
             (_ Reg (push_break_if ib
-                     (rxsbg_test (RxSBGOp.Xor) val src1_swapped 48 64 -16)
+                     (rxsbg_test (RxSBGOp.Xor) val src1_swapped 48 63 -16)
                      (intcc_as_cond (IntCC.NotEqual)))))
-        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2_swapped 48 64 -16)))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2_swapped 48 63 -16)))
 
 
 ;;;; Rules for `atomic_load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

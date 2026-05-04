@@ -60,7 +60,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   sllk %r4, %r3, 3
 ;   nill %r3, 65532
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 48, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r2, 32, 47, 16 ; xilf %r1, 4294901760 ; rll %r1, %r1, 0(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 16(%r4)
 ;   br %r14
 ;
@@ -71,7 +71,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 0xfffc
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r2, 0x20, 0x30, 0x10
+;   rnsbg %r1, %r2, 0x20, 0x2f, 0x10
 ;   xilf %r1, 0xffff0000
 ;   rll %r1, %r1, 0(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
@@ -92,7 +92,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 39, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -104,7 +104,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r5, 0x20, 0x28, 0x18
+;   rnsbg %r1, %r5, 0x20, 0x27, 0x18
 ;   xilf %r1, 0xff000000
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
@@ -176,7 +176,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   nill %r3, 65532
 ;   lrvr %r2, %r2
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 16(%r4) ; rnsbg %r1, %r2, 48, 64, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 16(%r4) ; rnsbg %r1, %r2, 48, 63, 48 ; xilf %r1, 65535 ; rll %r1, %r1, 16(%r4) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 0(%r4)
 ;   lrvr %r2, %r2
 ;   br %r14
@@ -189,7 +189,7 @@ block0(v0: i64, v1: i64, v2: i16):
 ;   lrvr %r2, %r2
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0x10(%r4)
-;   rnsbg %r1, %r2, 0x30, 0x40, 0x30
+;   rnsbg %r1, %r2, 0x30, 0x3f, 0x30
 ;   xilf %r1, 0xffff
 ;   rll %r1, %r1, 0x10(%r4)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
@@ -211,7 +211,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   nill %r3, 65532
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3)
-;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 40, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
+;   0: rll %r1, %r0, 0(%r4) ; rnsbg %r1, %r5, 32, 39, 24 ; xilf %r1, 4278190080 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r3) ; jglh 0b ; 1:
 ;   rll %r2, %r0, 8(%r4)
 ;   br %r14
 ;
@@ -223,7 +223,7 @@ block0(v0: i64, v1: i64, v2: i8):
 ;   lcr %r2, %r4
 ;   l %r0, 0(%r3) ; trap: heap_oob
 ;   rll %r1, %r0, 0(%r4)
-;   rnsbg %r1, %r5, 0x20, 0x28, 0x18
+;   rnsbg %r1, %r5, 0x20, 0x27, 0x18
 ;   xilf %r1, 0xff000000
 ;   rll %r1, %r1, 0(%r2)
 ;   cs %r0, %r1, 0(%r3) ; trap: heap_oob
