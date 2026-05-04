@@ -9,6 +9,7 @@
 
 #ifdef WASMTIME_FEATURE_GC
 
+#include <wasmtime/types/val.h>
 #include <wasmtime/val.h>
 
 #ifdef __cplusplus
@@ -179,6 +180,17 @@ WASM_API_EXTERN bool wasmtime_anyref_is_array(wasmtime_context_t *context,
 WASM_API_EXTERN bool wasmtime_anyref_as_array(wasmtime_context_t *context,
                                               const wasmtime_anyref_t *anyref,
                                               wasmtime_arrayref_t *out);
+
+/**
+ * \brief Returns the type of the specified `anyref`.
+ *
+ * \return If `anyref` is NULL or represents `ref.null any`, then `false` is
+ * returned. Otherwise the type of this value is written to `out` which the
+ * caller must deallocate, and `true` is returned.
+ */
+WASM_API_EXTERN bool wasmtime_anyref_type(wasmtime_context_t *context,
+                                          const wasmtime_anyref_t *anyref,
+                                          wasmtime_heaptype_t *out);
 
 #ifdef __cplusplus
 } // extern "C"

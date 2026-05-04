@@ -9,6 +9,7 @@
 #include <wasmtime/_func_class.hh>
 #include <wasmtime/_store_class.hh>
 #include <wasmtime/_structref_class.hh>
+#include <wasmtime/_exnref_class.hh>
 #include <wasmtime/types/val.hh>
 #include <wasmtime/val.h>
 
@@ -106,6 +107,10 @@ public:
   /// Creates a new `anyref` WebAssembly value which is not `ref.null
   /// any`.
   Val(AnyRef ptr);
+  /// Creates a new `exnref` value.
+  Val(std::optional<ExnRef> ptr);
+  /// Creates a new `exnref` WebAssembly value which is not `ref.null exn`.
+  Val(ExnRef ptr);
 #endif
 
   /// Copy constructor to clone `other`.
@@ -221,6 +226,13 @@ public:
   /// Note that `anyref` is a nullable reference, hence the `optional` return
   /// value.
   std::optional<AnyRef> anyref() const;
+
+  /// Returns the underlying `exnref`, requires `kind() == KindExnRef` or
+  /// aborts the process.
+  ///
+  /// Note that `exnref` is a nullable reference, hence the `optional` return
+  /// value.
+  std::optional<ExnRef> exnref() const;
 #endif
 
   /// Returns the underlying `funcref`, requires `kind() == KindFuncRef` or

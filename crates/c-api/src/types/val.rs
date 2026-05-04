@@ -160,15 +160,13 @@ pub enum wasmtime_heaptype_t {
     NoExn,
 }
 
-impl From<&HeapType> for wasmtime_heaptype_t {
-    fn from(r: &HeapType) -> Self {
+impl From<HeapType> for wasmtime_heaptype_t {
+    fn from(r: HeapType) -> Self {
         match r {
             HeapType::Extern => Self::Extern,
             HeapType::NoExtern => Self::NoExtern,
             HeapType::Func => Self::Func,
-            HeapType::ConcreteFunc(f) => {
-                Self::ConcreteFunc(Box::new(wasm_functype_t::new(f.clone())))
-            }
+            HeapType::ConcreteFunc(f) => Self::ConcreteFunc(Box::new(wasm_functype_t::new(f))),
             HeapType::NoFunc => Self::NoFunc,
             HeapType::Any => Self::Any,
             HeapType::None => Self::None,
@@ -176,16 +174,14 @@ impl From<&HeapType> for wasmtime_heaptype_t {
             HeapType::I31 => Self::I31,
             HeapType::Array => Self::Array,
             HeapType::ConcreteArray(a) => {
-                Self::ConcreteArray(Box::new(wasmtime_array_type_t { ty: a.clone() }))
+                Self::ConcreteArray(Box::new(wasmtime_array_type_t { ty: a }))
             }
             HeapType::Struct => Self::Struct,
             HeapType::ConcreteStruct(s) => {
-                Self::ConcreteStruct(Box::new(wasmtime_struct_type_t { ty: s.clone() }))
+                Self::ConcreteStruct(Box::new(wasmtime_struct_type_t { ty: s }))
             }
             HeapType::Exn => Self::Exn,
-            HeapType::ConcreteExn(e) => {
-                Self::ConcreteExn(Box::new(wasmtime_exn_type_t { ty: e.clone() }))
-            }
+            HeapType::ConcreteExn(e) => Self::ConcreteExn(Box::new(wasmtime_exn_type_t { ty: e })),
             HeapType::NoExn => Self::NoExn,
             HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => {
                 crate::abort("missing support for contref")
@@ -224,7 +220,7 @@ impl From<&RefType> for wasmtime_reftype_t {
     fn from(r: &RefType) -> Self {
         Self {
             nullable: r.is_nullable(),
-            hty: r.heap_type().into(),
+            hty: r.heap_type().clone().into(),
         }
     }
 }

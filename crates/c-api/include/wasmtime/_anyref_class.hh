@@ -5,9 +5,11 @@
 
 #ifdef WASMTIME_FEATURE_GC
 
+#include <assert.h>
 #include <wasmtime/_store_class.hh>
 #include <wasmtime/anyref.h>
 #include <wasmtime/helpers.hh>
+#include <wasmtime/types/val.hh>
 
 namespace wasmtime {
 
@@ -51,22 +53,30 @@ class AnyRef {
   }
 
   /// \brief Returns `true` if this anyref is an eqref.
-  inline bool is_eqref(Store::Context cx) const;
+  bool is_eqref(Store::Context cx) const;
 
   /// \brief Returns `true` if this anyref is a structref.
-  inline bool is_struct(Store::Context cx) const;
+  bool is_struct(Store::Context cx) const;
 
   /// \brief Returns `true` if this anyref is an arrayref.
-  inline bool is_array(Store::Context cx) const;
+  bool is_array(Store::Context cx) const;
 
   /// \brief Downcast to eqref. Returns null eqref if not an eqref.
-  inline std::optional<EqRef> as_eqref(Store::Context cx) const;
+  std::optional<EqRef> as_eqref(Store::Context cx) const;
 
   /// \brief Downcast to structref. Returns null structref if not a structref.
-  inline std::optional<StructRef> as_struct(Store::Context cx) const;
+  std::optional<StructRef> as_struct(Store::Context cx) const;
 
   /// \brief Downcast to arrayref. Returns null arrayref if not an arrayref.
-  inline std::optional<ArrayRef> as_array(Store::Context cx) const;
+  std::optional<ArrayRef> as_array(Store::Context cx) const;
+
+  /// \brief Returns the type of this `AnyRef`.
+  HeapType ty(Store::Context cx) const {
+    wasmtime_heaptype_t out;
+    bool ok = wasmtime_anyref_type(cx.capi(), &raw, &out);
+    assert(ok);
+    return HeapType(out);
+  }
 };
 
 } // namespace wasmtime

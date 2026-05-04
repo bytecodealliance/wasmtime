@@ -8,6 +8,12 @@ pub struct wasmtime_array_type_t {
 }
 wasmtime_c_api_macros::declare_ty!(wasmtime_array_type_t);
 
+impl From<ArrayType> for wasmtime_array_type_t {
+    fn from(ty: ArrayType) -> Self {
+        Self { ty }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_array_type_new(
     engine: &crate::wasm_engine_t,

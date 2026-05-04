@@ -111,3 +111,13 @@ pub unsafe extern "C" fn wasmtime_structref_set_field(
         Err(e) => Some(Box::new(e.into())),
     }
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_structref_type(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    structref: Option<&wasmtime_structref_t>,
+) -> Option<Box<crate::wasmtime_struct_type_t>> {
+    let structref = structref.and_then(|a| a.as_wasmtime())?;
+    let ty = structref.ty(&mut cx).expect("should be rooted");
+    Some(Box::new(ty.into()))
+}

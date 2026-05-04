@@ -129,6 +129,17 @@ wasmtime_structref_set_field(wasmtime_context_t *context,
                              const wasmtime_structref_t *structref,
                              size_t index, const wasmtime_val_t *val);
 
+/**
+ * \brief Returns the type of the specified `structref`.
+ *
+ * \return If `structref` is NULL or represents `ref.null struct`, then NULL is
+ * returned. Otherwise the type of this value is returned. Callers must delete
+ * the returned value.
+ */
+WASM_API_EXTERN wasmtime_struct_type_t *
+wasmtime_structref_type(wasmtime_context_t *context,
+                        const wasmtime_structref_t *structref);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

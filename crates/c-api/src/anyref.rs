@@ -1,4 +1,7 @@
-use crate::{WasmtimeStoreContextMut, wasmtime_arrayref_t, wasmtime_eqref_t, wasmtime_structref_t};
+use crate::{
+    WasmtimeStoreContextMut, wasmtime_arrayref_t, wasmtime_eqref_t, wasmtime_heaptype_t,
+    wasmtime_structref_t,
+};
 use std::mem::MaybeUninit;
 use wasmtime::{AnyRef, ArrayRef, EqRef, I31, OwnedRooted, RootScope, StructRef};
 
@@ -288,4 +291,20 @@ pub unsafe extern "C" fn wasmtime_anyref_as_array(
     }
     crate::initialize(out, None::<OwnedRooted<ArrayRef>>.into());
     false
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_anyref_type(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    anyref: Option<&wasmtime_anyref_t>,
+    out: &mut MaybeUninit<wasmtime_heaptype_t>,
+) -> bool {
+    match anyref.and_then(|a| a.as_wasmtime()) {
+        Some(anyref) => {
+            let ty = anyref.ty(&mut cx).expect("should be rooted");
+            out.write(ty.into());
+            true
+        }
+        None => false,
+    }
 }

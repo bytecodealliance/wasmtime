@@ -9,6 +9,7 @@
 #include <wasmtime/_store_class.hh>
 #include <wasmtime/eqref.h>
 #include <wasmtime/helpers.hh>
+#include <wasmtime/types/val.hh>
 
 namespace wasmtime {
 
@@ -81,6 +82,14 @@ public:
   //
   // as_array() defined after ArrayRef below.
   std::optional<ArrayRef> as_array(Store::Context cx) const;
+
+  /// \brief Returns the type of this `EqRef`.
+  HeapType ty(Store::Context cx) const {
+    wasmtime_heaptype_t out;
+    bool ok = wasmtime_eqref_type(cx.capi(), &raw, &out);
+    assert(ok);
+    return HeapType(out);
+  }
 };
 
 } // namespace wasmtime

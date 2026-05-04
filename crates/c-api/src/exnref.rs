@@ -1,5 +1,6 @@
 use crate::{
-    WasmtimeStoreContextMut, handle_result, wasm_trap_t, wasmtime_error_t, wasmtime_val_t,
+    WasmtimeStoreContextMut, handle_result, wasm_trap_t, wasmtime_error_t, wasmtime_exn_type_t,
+    wasmtime_val_t,
 };
 use std::mem::MaybeUninit;
 use wasmtime::{AsContextMut, ExnRef, ExnRefPre, ExnType, RootScope, Tag};
@@ -111,4 +112,14 @@ pub extern "C" fn wasmtime_context_take_exception(
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_has_exception(store: WasmtimeStoreContextMut<'_>) -> bool {
     store.has_pending_exception()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_exnref_type(
+    mut cx: WasmtimeStoreContextMut<'_>,
+    exnref: Option<&wasmtime_exnref_t>,
+) -> Option<Box<wasmtime_exn_type_t>> {
+    let exnref = exnref.and_then(|a| a.as_wasmtime())?;
+    let ty = exnref.ty(&mut cx).expect("should be rooted");
+    Some(Box::new(ty.into()))
 }

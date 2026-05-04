@@ -11,6 +11,7 @@
 
 #ifdef WASMTIME_FEATURE_GC
 
+#include <wasmtime/types/val.h>
 #include <wasmtime/val.h>
 
 #ifdef __cplusplus
@@ -136,6 +137,17 @@ WASM_API_EXTERN bool wasmtime_eqref_is_struct(wasmtime_context_t *context,
 WASM_API_EXTERN bool wasmtime_eqref_as_struct(wasmtime_context_t *context,
                                               const wasmtime_eqref_t *eqref,
                                               wasmtime_structref_t *out);
+
+/**
+ * \brief Returns the type of the specified `eqref`.
+ *
+ * \return If `eqref` is NULL or represents `ref.null eq`, then `false` is
+ * returned. Otherwise the type of this value is written to `out` which the
+ * caller must deallocate, and `true` is returned.
+ */
+WASM_API_EXTERN bool wasmtime_eqref_type(wasmtime_context_t *context,
+                                         const wasmtime_eqref_t *eqref,
+                                         wasmtime_heaptype_t *out);
 
 #ifdef __cplusplus
 } // extern "C"

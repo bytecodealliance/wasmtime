@@ -95,6 +95,12 @@ pub struct wasmtime_struct_type_t {
 }
 wasmtime_c_api_macros::declare_ty!(wasmtime_struct_type_t);
 
+impl From<StructType> for wasmtime_struct_type_t {
+    fn from(ty: StructType) -> Self {
+        Self { ty }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_struct_type_new(
     engine: &crate::wasm_engine_t,

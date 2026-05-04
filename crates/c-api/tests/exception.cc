@@ -40,6 +40,12 @@ TEST(Exception, ConstructAndExamine) {
   auto f1 = exn.field(cx, 1).unwrap();
   EXPECT_EQ(f1.kind(), ValKind::I64);
   EXPECT_EQ(f1.i64(), 100);
+
+  auto fty = exn.ty(cx).tag_type()->functype();
+  EXPECT_EQ(fty->params().size(), 2);
+  EXPECT_EQ(*fty->params().begin(), ValType::i32());
+  EXPECT_EQ(*(fty->params().begin() + 1), ValType::i64());
+  EXPECT_EQ(fty->results().size(), 0);
 }
 
 TEST(Exception, TagFromModule) {
@@ -148,6 +154,13 @@ TEST(Exception, ExnRefRoundTripThroughVal) {
   // The returned value should be an exnref.
   auto &exnref_val = result.ok()[0];
   EXPECT_EQ(exnref_val.kind(), ValKind::ExnRef);
+
+  auto exnref = exnref_val.exnref();
+  ASSERT_TRUE(exnref);
+  auto fty = exnref->ty(cx).tag_type()->functype();
+  EXPECT_EQ(fty->params().size(), 1);
+  EXPECT_EQ(*fty->params().begin(), ValType::i32());
+  EXPECT_EQ(fty->results().size(), 0);
 
   // Pass the exnref back into a wasm function that extracts the i32 payload.
   Module module2 =

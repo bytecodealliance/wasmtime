@@ -27,11 +27,15 @@ TEST(EqRef, CopyAndMove) {
   // Move assignment
   EqRef eq5 = std::move(eq4);
 
+  EXPECT_TRUE(eq.ty(cx).is_i31());
+
   // Upcast to anyref and check value
   AnyRef upcast = eq.to_anyref();
   auto val = upcast.u31(cx);
   ASSERT_TRUE(val.has_value());
   EXPECT_EQ(*val, 42u);
+
+  EXPECT_TRUE(upcast.ty(cx).is_i31());
 }
 
 TEST(EqRef, NullEqRef) {
@@ -108,6 +112,7 @@ TEST(StructRef, CreateAndReadFields) {
       StructRef::create(cx, pre, {Val(int32_t(10)), Val(int32_t(20))});
   ASSERT_TRUE(result);
   StructRef s = result.ok();
+  EXPECT_EQ(s.ty(cx).num_fields(), 2);
 
   // Read fields back.
   auto v0 = s.field(cx, 0);
@@ -142,11 +147,17 @@ TEST(StructRef, UpcastAndDowncast) {
   auto result = StructRef::create(cx, pre, {Val(int32_t(99))});
   ASSERT_TRUE(result);
   StructRef s = result.ok();
+  EXPECT_EQ(s.ty(cx).num_fields(), 1);
 
   // Upcast to eqref.
   EqRef eq = s.to_eqref();
   EXPECT_TRUE(eq.is_struct(cx));
   EXPECT_FALSE(eq.is_i31(cx));
+
+  auto eqty = eq.ty(cx);
+  auto *sty = eqty.as_concrete_struct();
+  ASSERT_TRUE(sty);
+  EXPECT_EQ(sty->num_fields(), 1);
 
   // Downcast back to structref.
   auto s2_opt = eq.as_struct(cx);
@@ -159,6 +170,11 @@ TEST(StructRef, UpcastAndDowncast) {
   // Upcast to anyref.
   AnyRef any = s.to_anyref();
   EXPECT_FALSE(any.is_i31(cx));
+
+  auto anyty = any.ty(cx);
+  sty = anyty.as_concrete_struct();
+  ASSERT_TRUE(sty);
+  EXPECT_EQ(sty->num_fields(), 1);
 }
 
 TEST(ArrayRef, CreateAndReadElements) {
@@ -176,6 +192,7 @@ TEST(ArrayRef, CreateAndReadElements) {
   auto result = ArrayRef::create(cx, pre, Val(int32_t(7)), 5);
   ASSERT_TRUE(result);
   ArrayRef arr = result.ok();
+  EXPECT_TRUE(arr.ty(cx).element_type().is_mutable());
 
   // Check length.
   auto len_result = arr.len(cx);
@@ -211,12 +228,18 @@ TEST(ArrayRef, UpcastAndDowncast) {
   auto result = ArrayRef::create(cx, pre, Val(int32_t(99)), 3);
   ASSERT_TRUE(result);
   ArrayRef arr = result.ok();
+  EXPECT_FALSE(arr.ty(cx).element_type().is_mutable());
 
   // Upcast to eqref.
   EqRef eq = arr.to_eqref();
   EXPECT_TRUE(eq.is_array(cx));
   EXPECT_FALSE(eq.is_struct(cx));
   EXPECT_FALSE(eq.is_i31(cx));
+
+  auto eqty = eq.ty(cx);
+  auto *aty = eqty.as_concrete_array();
+  ASSERT_TRUE(aty);
+  EXPECT_FALSE(aty->element_type().is_mutable());
 
   // Downcast back to arrayref.
   auto arr2_opt = eq.as_array(cx);
@@ -233,6 +256,11 @@ TEST(ArrayRef, UpcastAndDowncast) {
   // Upcast to anyref.
   AnyRef any = arr.to_anyref();
   EXPECT_FALSE(any.is_i31(cx));
+
+  auto anyty = any.ty(cx);
+  aty = anyty.as_concrete_array();
+  ASSERT_TRUE(aty);
+  EXPECT_FALSE(aty->element_type().is_mutable());
 }
 
 TEST(AnyRef, DowncastI31) {
@@ -247,6 +275,7 @@ TEST(AnyRef, DowncastI31) {
   EXPECT_TRUE(any.is_eqref(cx));
   EXPECT_FALSE(any.is_struct(cx));
   EXPECT_FALSE(any.is_array(cx));
+  EXPECT_TRUE(any.ty(cx).is_i31());
 
   // Downcast to eqref.
   auto opt_eq = any.as_eqref(cx);
@@ -256,6 +285,7 @@ TEST(AnyRef, DowncastI31) {
   auto val = eq.i31_get_u(cx);
   ASSERT_TRUE(val.has_value());
   EXPECT_EQ(*val, 42u);
+  EXPECT_TRUE(eq.ty(cx).is_i31());
 }
 
 TEST(AnyRef, DowncastStruct) {

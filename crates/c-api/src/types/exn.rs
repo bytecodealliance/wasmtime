@@ -8,6 +8,12 @@ pub struct wasmtime_exn_type_t {
 }
 wasmtime_c_api_macros::declare_ty!(wasmtime_exn_type_t);
 
+impl From<ExnType> for wasmtime_exn_type_t {
+    fn from(ty: ExnType) -> Self {
+        Self { ty }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_exn_type_new(
     engine: &crate::wasm_engine_t,

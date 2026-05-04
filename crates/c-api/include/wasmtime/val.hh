@@ -9,6 +9,7 @@
 #include <wasmtime/_externref_class.hh>
 #include <wasmtime/_func_class.hh>
 #include <wasmtime/_val_class.hh>
+#include <wasmtime/_exnref_class.hh>
 
 namespace wasmtime {
 
@@ -81,6 +82,30 @@ inline std::optional<ExternRef> Val::externref() const {
   wasmtime_externref_t other;
   wasmtime_externref_clone(&val.of.externref, &other);
   return ExternRef(other);
+}
+
+inline Val::Val(std::optional<ExnRef> ptr) : val{} {
+  val.kind = WASMTIME_EXNREF;
+  if (ptr) {
+    val.of.exnref = *ptr->capi();
+    wasmtime_exnref_set_null(ptr->capi());
+  } else {
+    wasmtime_exnref_set_null(&val.of.exnref);
+  }
+}
+
+inline Val::Val(ExnRef ptr) : Val(std::optional(ptr)) {}
+
+inline std::optional<ExnRef> Val::exnref() const {
+  if (val.kind != WASMTIME_EXNREF) {
+    std::abort();
+  }
+  if (wasmtime_exnref_is_null(&val.of.exnref)) {
+    return std::nullopt;
+  }
+  wasmtime_exnref_t other;
+  wasmtime_exnref_clone(&val.of.exnref, &other);
+  return ExnRef(other);
 }
 
 #endif // WASMTIME_FEATURE_GC

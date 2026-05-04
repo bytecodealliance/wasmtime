@@ -56,6 +56,12 @@ class StructRef {
 
   /// Upcast to eqref.
   EqRef to_eqref() const;
+
+  /// \brief Returns the type of this `StructRef`.
+  StructType ty(Store::Context cx) const {
+    auto *ret = wasmtime_structref_type(cx.capi(), &raw);
+    return StructType(ret);
+  }
 };
 
 } // namespace wasmtime

@@ -11,6 +11,7 @@
 #include <wasmtime/exnref.h>
 #include <wasmtime/helpers.hh>
 #include <wasmtime/tag.hh>
+#include <wasmtime/types/exnref.hh>
 
 namespace wasmtime {
 
@@ -55,6 +56,12 @@ class ExnRef {
 
   /// Reads a field value by index.
   Result<Val> field(Store::Context cx, size_t index) const;
+
+  /// \brief Returns the type of this `ExnRef`.
+  ExnType ty(Store::Context cx) const {
+    auto *ret = wasmtime_exnref_type(cx.capi(), &raw);
+    return ExnType(ret);
+  }
 };
 
 } // namespace wasmtime

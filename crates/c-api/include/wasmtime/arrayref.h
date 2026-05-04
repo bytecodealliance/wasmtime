@@ -142,6 +142,17 @@ wasmtime_arrayref_set(wasmtime_context_t *context,
                       const wasmtime_arrayref_t *arrayref, uint32_t index,
                       const wasmtime_val_t *val);
 
+/**
+ * \brief Returns the type of the specified `arrayref`.
+ *
+ * \return If `arrayref` is NULL or represents `ref.null array`, then NULL is
+ * returned. Otherwise the type of this value is returned. Callers must delete
+ * the returned value.
+ */
+WASM_API_EXTERN wasmtime_array_type_t *
+wasmtime_arrayref_type(wasmtime_context_t *context,
+                       const wasmtime_arrayref_t *arrayref);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

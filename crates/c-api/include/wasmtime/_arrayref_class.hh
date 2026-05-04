@@ -69,6 +69,12 @@ public:
 
   /// Upcast to eqref.
   EqRef to_eqref() const;
+
+  /// \brief Returns the type of this `ArrayRef`.
+  ArrayType ty(Store::Context cx) const {
+    auto *ret = wasmtime_arrayref_type(cx.capi(), &raw);
+    return ArrayType(ret);
+  }
 };
 
 } // namespace wasmtime

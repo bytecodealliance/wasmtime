@@ -25,6 +25,11 @@ class HeapType {
   HeapType(wasmtime_heaptype_kind_t ty) { this->ty.kind = ty; }
 
 public:
+  /// Constructor from the raw C API representation.
+  HeapType(wasmtime_heaptype_t &ty) : ty(ty) {
+    ty.kind = WASMTIME_HEAPTYPE_KIND_NONE;
+  }
+
   /// Copy constructor.
   HeapType(const HeapType &other) { wasmtime_heaptype_clone(&other.ty, &ty); }
   /// Copy assignment operator.
