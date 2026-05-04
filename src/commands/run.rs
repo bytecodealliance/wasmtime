@@ -1121,6 +1121,18 @@ impl RunCommand {
                         // are enabled, then use the historical preview1
                         // implementation.
                         (Some(false), _) | (None, Some(true)) => {
+                            let flag = if self.run.common.wasi.preview2 == Some(false) {
+                                "-Spreview2=n"
+                            } else {
+                                "-Sthreads"
+                            };
+                            eprintln!(
+                                "\
+WARNING: the `{flag}` flag will be a hard error in Wasmtime 47.0.0 on 2026-07-20. \
+For more information see https://github.com/bytecodealliance/rfcs/pull/47 and \
+please reach out on Zulip with questions.
+                            "
+                            );
                             wasi_common::tokio::add_to_linker(linker, |host| {
                                 host.legacy_p1_ctx.as_mut().unwrap()
                             })?;
