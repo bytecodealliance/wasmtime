@@ -7095,6 +7095,18 @@ user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-05-04"
 end = "2024-07-06"
 
+[[trusted.mach2]]
+criteria = "safe-to-deploy"
+user-id = 51017 # Yuki Okushi (JohnTitor)
+start = "2021-11-15"
+end = "2027-05-04"
+
+[[trusted.mach2]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:JohnTitor/mach2"
+start = "2025-11-16"
+end = "2027-05-04"
+
 [[trusted.macro-string]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)

@@ -799,6 +799,18 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.mach2]]
+version = "0.4.3"
+when = "2025-06-22"
+user-id = 51017
+user-login = "JohnTitor"
+user-name = "Yuki Okushi"
+
+[[publisher.mach2]]
+version = "0.6.0"
+when = "2025-11-16"
+trusted-publisher = "github:JohnTitor/mach2"
+
 [[publisher.macro-string]]
 version = "0.2.0"
 when = "2026-02-24"
@@ -2953,12 +2965,6 @@ criteria = "safe-to-deploy"
 delta = "0.4.18 -> 0.4.20"
 notes = "Only cfg attribute and internal macro changes and module refactorings"
 aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.mach2]]
-who = "Gabriele Svelto <gsvelto@mozilla.com>"
-criteria = "safe-to-deploy"
-version = "0.4.1"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.num-conv]]
 who = "Alex Franchuk <afranchuk@mozilla.com>"
