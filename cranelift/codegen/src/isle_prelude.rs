@@ -545,7 +545,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn ty_iconst(&mut self, ty: Type) -> Option<Type> {
+        fn ty_int_vec128(&mut self, ty: Type) -> Option<Type> {
             if ty.is_int() || (ty.is_vector() && ty.bits() == 128 && ty.lane_type().is_int()) {
                 Some(ty)
             } else {

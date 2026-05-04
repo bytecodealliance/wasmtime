@@ -517,8 +517,8 @@
 (extern extractor ty_vec128 ty_vec128)
 
 ;; An extractor that matches types that support iconst_s/iconst_u construction.
-(decl ty_iconst (Type) Type)
-(extern extractor ty_iconst ty_iconst)
+(decl ty_int_vec128 (Type) Type)
+(extern extractor ty_int_vec128 ty_int_vec128)
 
 ;; An extractor that only matches dynamic vector types with a 64-bit
 ;; base type.
