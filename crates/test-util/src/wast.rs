@@ -477,6 +477,9 @@ impl WastTest {
             // memory64.
             "test/wasm-tools/memory64.wast",
             "test/wasm-tools/resources.wast",
+            // Not updated upstream yet
+            "test/async/cross-abi-calls.wast",
+            "test/async/trap-on-reenter.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;

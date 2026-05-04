@@ -769,3 +769,18 @@ fpr = "fpr"
 
 [workspace.metadata.typos.files]
 extend-exclude = [ "docs/js/mermaid*.js", "crates/wasi-nn/**/*.txt", "*.isle" ]
+
+[patch.crates-io]
+wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wit-parser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wit-component = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-wave = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-compose = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+wasm-metadata = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }
+json-from-wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'gate-async-on-sync-type' }

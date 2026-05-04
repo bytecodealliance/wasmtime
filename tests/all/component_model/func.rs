@@ -827,12 +827,12 @@ async fn async_reentrance() -> Result<()> {
             (core instance $shim (instantiate $shim
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func $shim-export (param "p1" u32) (result u32)
+            (func $shim-export async (param "p1" u32) (result u32)
                 (canon lift (core func $shim "export") async (callback (func $shim "callback")))
             )
 
             (component $inner
-                (import "import" (func $import (param "p1" u32) (result u32)))
+                (import "import" (func $import async (param "p1" u32) (result u32)))
                 (core module $libc (memory (export "memory") 1))
                 (core instance $libc (instantiate $libc))
                 (core func $import (canon lower (func $import) async (memory $libc "memory")))
@@ -859,7 +859,7 @@ async fn async_reentrance() -> Result<()> {
                     ))
                     (with "libc" (instance $libc))
                 ))
-                (func (export "export") (param "p1" u32) (result u32)
+                (func (export "export") async (param "p1" u32) (result u32)
                     (canon lift (core func $i "export") async (callback (func $i "callback")))
                 )
             )
@@ -897,7 +897,7 @@ async fn async_reentrance() -> Result<()> {
                 ))
                 (with "libc" (instance $libc))
             ))
-            (func (export "export") (param "p1" u32) (result u32)
+            (func (export "export") async (param "p1" u32) (result u32)
                 (canon lift (core func $donut "export") async (callback (func $donut "callback")))
             )
         )"#;
@@ -946,7 +946,7 @@ async fn missing_task_return_call_stackless() -> Result<()> {
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+            (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
         )"#,
         "wasm trap: async-lifted export failed to produce a result",
     )
@@ -988,7 +988,7 @@ async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
                 ))
                 (with "libc" (instance $libc))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+            (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
         )"#,
         "wasm trap: async-lifted export failed to produce a result",
     )
@@ -1028,7 +1028,7 @@ async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
                 ))
                 (with "libc" (instance $libc))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
+            (func (export "foo") async (canon lift (core func $i "foo") async))
         )"#,
         "wasm trap: async-lifted export failed to produce a result",
     )
@@ -1047,7 +1047,7 @@ async fn missing_task_return_call_stackful() -> Result<()> {
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
+            (func (export "foo") async (canon lift (core func $i "foo") async))
         )"#,
         "wasm trap: async-lifted export failed to produce a result",
     )
@@ -1066,7 +1066,7 @@ async fn task_return_type_mismatch() -> Result<()> {
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
+            (func (export "foo") async (canon lift (core func $i "foo") async))
         )"#,
         "invalid `task.return` signature and/or options for current task",
     )
@@ -1087,7 +1087,7 @@ async fn task_return_memory_mismatch() -> Result<()> {
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
+            (func (export "foo") async (canon lift (core func $i "foo") async))
         )"#,
         "invalid `task.return` signature and/or options for current task",
     )
@@ -1106,7 +1106,7 @@ async fn task_return_string_encoding_mismatch() -> Result<()> {
             (core instance $i (instantiate $m
                 (with "" (instance (export "task.return" (func $task-return))))
             ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
+            (func (export "foo") async (canon lift (core func $i "foo") async))
         )"#,
         "invalid `task.return` signature and/or options for current task",
     )
@@ -1244,7 +1244,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func
+            (type $t (func async
                 (param "p1" s8)              ;; offset  0, size 1
                 (param "p2" u64)             ;; offset  8, size 8
                 (param "p3" float32)         ;; offset 16, size 4
@@ -1715,7 +1715,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func (result $tuple)))
+            (type $t (func async (result $tuple)))
             (func (export "many-results") (type $t)
                 (canon lift
                     (core func $i "foo")

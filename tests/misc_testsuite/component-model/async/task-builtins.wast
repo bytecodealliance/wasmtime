@@ -295,13 +295,14 @@
         (realloc (func $libc "realloc"))
       )
     )
-    (core func $async-to-sync
-      (canon lower (func $a "run-sync")
-        async
-        (memory $libc "memory")
-        (realloc (func $libc "realloc"))
-      )
-    )
+    ;; NB: this is no longer valid after WebAssembly/component-model#646
+    (; (core func $async-to-sync ;)
+    (;   (canon lower (func $a "run-sync") ;)
+    (;     async ;)
+    (;     (memory $libc "memory") ;)
+    (;     (realloc (func $libc "realloc")) ;)
+    (;   ) ;)
+    (; ) ;)
     (core func $sync-to-async
       (canon lower (func $a "run-async")
         (memory $libc "memory")
@@ -321,7 +322,7 @@
       (import "" "context.get" (func $context.get (result i32)))
       (import "" "sync-to-sync" (func $sync-to-sync (param i32)))
       (import "" "sync-to-async" (func $sync-to-async (param i32)))
-      (import "" "async-to-sync" (func $async-to-sync (param i32) (result i32)))
+      (; (import "" "async-to-sync" (func $async-to-sync (param i32) (result i32))) ;)
       (import "" "async-to-async" (func $async-to-async (param i32) (result i32)))
 
       ;; set this tasks's context before calling $run, in calling $run the
@@ -341,17 +342,17 @@
         (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
       )
 
-      (func (export "async-to-sync")
-        (call $context.set (i32.const 400))
-        (if
-          (i32.ne
-            (call $async-to-sync (i32.const 20))
-            (i32.const 2) ;; RETURNED
-          )
-          (then (unreachable))
-        )
-        (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable)))
-      )
+      (; (func (export "async-to-sync") ;)
+      (;   (call $context.set (i32.const 400)) ;)
+      (;   (if ;)
+      (;     (i32.ne ;)
+      (;       (call $async-to-sync (i32.const 20)) ;)
+      (;       (i32.const 2) ;; RETURNED ;)
+      (;     ) ;)
+      (;     (then (unreachable)) ;)
+      (;   ) ;)
+      (;   (if (i32.ne (call $context.get) (i32.const 500)) (then (unreachable))) ;)
+      (; ) ;)
 
       (func (export "async-to-async")
         (call $context.set (i32.const 400))
@@ -370,12 +371,12 @@
       (export "context.get" (func $context.get))
       (export "sync-to-sync" (func $sync-to-sync))
       (export "sync-to-async" (func $sync-to-async))
-      (export "async-to-sync" (func $async-to-sync))
+      (; (export "async-to-sync" (func $async-to-sync)) ;)
       (export "async-to-async" (func $async-to-async))
     ))))
     (func (export "sync-to-sync") async (canon lift (core func $m "sync-to-sync")))
     (func (export "sync-to-async") async (canon lift (core func $m "sync-to-async")))
-    (func (export "async-to-sync") async (canon lift (core func $m "async-to-sync")))
+    (; (func (export "async-to-sync") async (canon lift (core func $m "async-to-sync"))) ;)
     (func (export "async-to-async") async (canon lift (core func $m "async-to-async")))
   )
 
@@ -383,13 +384,13 @@
   (instance $b (instantiate $B (with "a" (instance $a))))
   (export "sync-to-sync" (func $b "sync-to-sync"))
   (export "sync-to-async" (func $b "sync-to-async"))
-  (export "async-to-sync" (func $b "async-to-sync"))
+  (; (export "async-to-sync" (func $b "async-to-sync")) ;)
   (export "async-to-async" (func $b "async-to-async"))
 )
 
 (assert_return (invoke "sync-to-sync"))
 (assert_return (invoke "sync-to-async"))
-(assert_return (invoke "async-to-sync"))
+(; (assert_return (invoke "async-to-sync")) ;)
 (assert_return (invoke "async-to-async"))
 
 ;; Same as above, but when calling the host.
