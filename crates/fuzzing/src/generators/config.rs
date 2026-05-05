@@ -204,6 +204,9 @@ impl Config {
         if let Some(n) = &mut self.wasmtime.memory_config.memory_reservation {
             *n = (*n).max(limits::MEMORY_SIZE as u64);
         }
+        if let Some(n) = &mut self.wasmtime.memory_config.gc_heap_reservation {
+            *n = (*n).max(limits::GC_HEAP_SIZE as u64);
+        }
 
         // FIXME: it might be more ideal to avoid the need for this entirely
         // and to just let the test fail. If a test fails due to a pooling
@@ -238,7 +241,10 @@ impl Config {
                 .max_memories_per_component
                 .max(limits::MEMORIES_PER_MODULE);
             pooling.total_core_instances = pooling.total_core_instances.max(limits::CORE_INSTANCES);
-            pooling.max_memory_size = pooling.max_memory_size.max(limits::MEMORY_SIZE);
+            pooling.max_memory_size = pooling
+                .max_memory_size
+                .max(limits::MEMORY_SIZE)
+                .max(limits::GC_HEAP_SIZE);
             pooling.table_elements = pooling.table_elements.max(limits::TABLE_ELEMENTS);
             pooling.core_instance_size = pooling.core_instance_size.max(limits::CORE_INSTANCE_SIZE);
             pooling.component_instance_size = pooling
@@ -835,9 +841,20 @@ impl WasmtimeConfig {
         // When using the pooling allocator, GC heap tunables must match memory
         // tunables.
         if let InstanceAllocationStrategy::Pooling(_) = &self.strategy {
-            mcfg.gc_heap_reservation = mcfg.memory_reservation;
-            mcfg.gc_heap_guard_size = mcfg.memory_guard_size;
-            mcfg.gc_heap_reservation_for_growth = mcfg.memory_reservation_for_growth;
+            let reservation = mcfg.gc_heap_reservation.max(mcfg.memory_reservation);
+            mcfg.gc_heap_reservation = reservation;
+            mcfg.memory_reservation = reservation;
+
+            let guard_size = mcfg.gc_heap_guard_size.max(mcfg.memory_guard_size);
+            mcfg.gc_heap_guard_size = guard_size;
+            mcfg.memory_guard_size = guard_size;
+
+            let res_for_growth = mcfg
+                .gc_heap_reservation_for_growth
+                .max(mcfg.memory_reservation_for_growth);
+            mcfg.gc_heap_reservation_for_growth = res_for_growth;
+            mcfg.memory_reservation_for_growth = res_for_growth;
+
             // memory_may_move is not in MemoryConfig, but gc_heap_may_move
             // must not conflict. Set it to None so the default matches.
             mcfg.gc_heap_may_move = None;
