@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::runtime::vm::VMGcRef;
+use core::num::NonZeroU32;
 
 impl StoreOpaque {
     /// Perform any growth or GC needed to allocate `bytes_needed` bytes.
@@ -79,7 +80,7 @@ impl StoreOpaque {
         bytes_needed: u64,
         asyncness: Asyncness,
     ) -> Result<()> {
-        log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
+        log::trace!("Attempting to grow the GC heap by at least {bytes_needed:#x} bytes");
 
         if bytes_needed == 0 {
             return Ok(());
@@ -157,6 +158,10 @@ impl StoreOpaque {
             "{} should be greater than or equal to {delta_bytes_for_alloc}",
             heap.delta_bytes_grown,
         );
+        log::trace!(
+            "  -> grew GC heap by {:#x} bytes: new size is {new_size_in_bytes:#x} bytes",
+            heap.delta_bytes_grown
+        );
         return Ok(());
 
         struct TakenGcHeap<'a> {
@@ -192,9 +197,14 @@ impl StoreOpaque {
         }
     }
 
-    fn reset_gc_zeal_alloc_counter(&mut self) {
+    fn replace_gc_zeal_alloc_counter(
+        &mut self,
+        new_value: Option<NonZeroU32>,
+    ) -> Option<NonZeroU32> {
         if let Some(gc_store) = &mut self.gc_store {
-            gc_store.reset_gc_zeal_alloc_counter();
+            gc_store.replace_gc_zeal_alloc_counter(new_value)
+        } else {
+            None
         }
     }
 
@@ -227,11 +237,13 @@ impl StoreOpaque {
                     let (value, oom) = oom.take_inner();
                     let bytes_needed = oom.bytes_needed();
 
-                    let gc_heap_capacity = self
+                    let mut store = WithoutGcZealAllocCounter::new(self);
+
+                    let gc_heap_capacity = store
                         .gc_store
                         .as_ref()
                         .map_or(0, |gc_store| gc_store.gc_heap_capacity());
-                    let last_gc_heap_usage = self.gc_store.as_ref().map_or(0, |gc_store| {
+                    let last_gc_heap_usage = store.gc_store.as_ref().map_or(0, |gc_store| {
                         gc_store.last_post_gc_allocated_bytes.unwrap_or(0)
                     });
 
@@ -240,10 +252,11 @@ impl StoreOpaque {
                             "Collecting first, then retrying; growing GC heap if collecting didn't \
                              free up enough space, then retrying again"
                         );
-                        self.gc(limiter.as_deref_mut(), None, None, asyncness).await;
+                        store
+                            .gc(limiter.as_deref_mut(), None, None, asyncness)
+                            .await;
 
-                        self.reset_gc_zeal_alloc_counter();
-                        match alloc_func(self, value) {
+                        match alloc_func(&mut store, value) {
                             Ok(x) => Ok(x),
                             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                                 Ok(oom2) => {
@@ -254,10 +267,9 @@ impl StoreOpaque {
                                     // `alloc_func` below if growth failed and
                                     // failure to grow was fatal.
                                     let _ =
-                                        self.grow_gc_heap(limiter, bytes_needed, asyncness).await;
+                                        store.grow_gc_heap(limiter, bytes_needed, asyncness).await;
 
-                                    self.reset_gc_zeal_alloc_counter();
-                                    alloc_func(self, value)
+                                    alloc_func(&mut store, value)
                                 }
                                 Err(e) => Err(e),
                             },
@@ -267,21 +279,53 @@ impl StoreOpaque {
                             "Grow GC heap first, collecting if growth failed, then retrying"
                         );
 
-                        if let Err(e) = self
+                        if let Err(e) = store
                             .grow_gc_heap(limiter.as_deref_mut(), bytes_needed.max(1), asyncness)
                             .await
                         {
                             log::trace!("growing GC heap failed: {e}");
-                            self.gc(limiter, None, None, asyncness).await;
+                            store.gc(limiter, None, None, asyncness).await;
                         }
 
-                        self.reset_gc_zeal_alloc_counter();
-                        alloc_func(self, value)
+                        alloc_func(&mut store, value)
                     }
                 }
                 Err(e) => Err(e),
             },
         }
+    }
+}
+
+/// RAII type to temporarily disable the GC zeal allocation counter.
+struct WithoutGcZealAllocCounter<'a> {
+    store: &'a mut StoreOpaque,
+    counter: Option<NonZeroU32>,
+}
+
+impl Deref for WithoutGcZealAllocCounter<'_> {
+    type Target = StoreOpaque;
+
+    fn deref(&self) -> &Self::Target {
+        &self.store
+    }
+}
+
+impl DerefMut for WithoutGcZealAllocCounter<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.store
+    }
+}
+
+impl Drop for WithoutGcZealAllocCounter<'_> {
+    fn drop(&mut self) {
+        self.store.replace_gc_zeal_alloc_counter(self.counter);
+    }
+}
+
+impl<'a> WithoutGcZealAllocCounter<'a> {
+    pub fn new(store: &'a mut StoreOpaque) -> Self {
+        let counter = store.replace_gc_zeal_alloc_counter(None);
+        WithoutGcZealAllocCounter { store, counter }
     }
 }
 

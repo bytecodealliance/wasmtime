@@ -112,7 +112,7 @@ impl GcStore {
         collect_async(collection, asyncness, yield_fn).await;
         self.last_post_gc_allocated_bytes = Some({
             let size = self.gc_heap.allocated_bytes();
-            log::trace!("After collection, GC heap size = {size} bytes");
+            log::trace!("After collection, GC heap's allocated bytes = {size:#x} bytes");
             size
         });
     }
@@ -379,10 +379,17 @@ impl GcStore {
     }
 
     #[cfg(feature = "gc")]
-    pub(crate) fn reset_gc_zeal_alloc_counter(&mut self) {
+    pub(crate) fn replace_gc_zeal_alloc_counter(
+        &mut self,
+        new_value: Option<NonZeroU32>,
+    ) -> Option<NonZeroU32> {
         #[cfg(gc_zeal)]
+        return core::mem::replace(&mut self.gc_zeal_alloc_counter, new_value);
+
+        #[cfg(not(gc_zeal))]
         {
-            self.gc_zeal_alloc_counter = self.gc_zeal_alloc_counter_init;
+            let _ = new_value;
+            return None;
         }
     }
 }
