@@ -1,3 +1,13 @@
+## 36.0.9
+
+Released 2026-04-30.
+
+### Fixed
+
+* Cranelift's timing infrastructure is now more robust in the face of buggy system clocks. #13273
+
+--------------------------------------------------------------------------------
+
 ## 36.0.8
 
 Released 2026-04-30.
