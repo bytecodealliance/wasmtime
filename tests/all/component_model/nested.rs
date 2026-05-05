@@ -3,7 +3,7 @@
 use super::REALLOC_AND_FREE;
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Module, Store, StoreContextMut};
+use wasmtime::{Module, Store};
 
 #[test]
 fn top_level_instance_two_level() -> Result<()> {
