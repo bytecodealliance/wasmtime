@@ -461,3 +461,39 @@ impl ConstExprEvaluator {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ConstExprEvaluator, Val};
+    use wasmtime_environ::{ConstExpr, ConstOp};
+
+    #[test]
+    fn pop_empty_stack() {
+        let mut evaluator = ConstExprEvaluator::default();
+        let err = evaluator.pop().unwrap_err();
+        assert!(
+            format!("{err}").contains("attempted to pop from an empty"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn try_simple_scalar_types() {
+        let mut ev = ConstExprEvaluator::default();
+
+        let expr = ConstExpr::new([ConstOp::I32Const(7)]);
+        assert!(matches!(ev.try_simple(&expr), Some(Val::I32(7))));
+
+        let expr = ConstExpr::new([ConstOp::I64Const(99)]);
+        assert!(matches!(ev.try_simple(&expr), Some(Val::I64(99))));
+
+        let expr = ConstExpr::new([ConstOp::F32Const(0x3f800000)]);
+        assert!(matches!(ev.try_simple(&expr), Some(Val::F32(_))));
+
+        let expr = ConstExpr::new([ConstOp::F64Const(0x3ff0000000000000)]);
+        assert!(matches!(ev.try_simple(&expr), Some(Val::F64(_))));
+
+        let expr = ConstExpr::new([ConstOp::V128Const(0x12345678)]);
+        assert!(matches!(ev.try_simple(&expr), Some(Val::V128(_))));
+    }
+}
