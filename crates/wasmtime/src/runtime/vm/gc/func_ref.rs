@@ -9,6 +9,7 @@
 //! `funcref` we got from inside the GC heap.
 
 use crate::{
+    Result, bail_bug,
     hash_map::HashMap,
     type_registry::TypeRegistry,
     vm::{SendSyncPtr, VMFuncRef},
@@ -67,8 +68,10 @@ impl FuncRefTable {
         types: &TypeRegistry,
         id: FuncRefTableId,
         expected_ty: VMSharedTypeIndex,
-    ) -> Option<SendSyncPtr<VMFuncRef>> {
-        let f = self.slab.get(id.0).copied().expect("bad FuncRefTableId");
+    ) -> Result<Option<SendSyncPtr<VMFuncRef>>> {
+        let Some(f) = self.slab.get(id.0).copied() else {
+            bail_bug!("bad FuncRefTableId")
+        };
 
         if let Some(f) = f {
             // The safety contract for `intern` ensures that deref'ing `f` is safe.
@@ -84,7 +87,7 @@ impl FuncRefTable {
             assert!(types.is_subtype(actual_ty, expected_ty));
         }
 
-        f
+        Ok(f)
     }
 
     /// Get the `VMFuncRef` associated with the given ID, without checking the
@@ -93,7 +96,10 @@ impl FuncRefTable {
     /// Prefer `get_typed`. This method is only suitable for getting a
     /// `VMFuncRef` as an untyped `funcref` function reference, and never as a
     /// typed `(ref $some_func_type)` function reference.
-    pub fn get_untyped(&self, id: FuncRefTableId) -> Option<SendSyncPtr<VMFuncRef>> {
-        self.slab.get(id.0).copied().expect("bad FuncRefTableId")
+    pub fn get_untyped(&self, id: FuncRefTableId) -> Result<Option<SendSyncPtr<VMFuncRef>>> {
+        match self.slab.get(id.0).copied() {
+            Some(f) => Ok(f),
+            None => bail_bug!("bad FuncRefTableId"),
+        }
     }
 }

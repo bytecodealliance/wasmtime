@@ -393,7 +393,7 @@ impl ArrayRef {
             "attempted to use a `ArrayRefPre` with the wrong store"
         );
 
-        let len = u32::try_from(elems.len()).unwrap();
+        let len = u32::try_from(elems.len())?;
 
         // Allocate the array.
         let arrayref = store
@@ -416,7 +416,7 @@ impl ArrayRef {
         match (|| {
             let elem_ty = allocator.ty.element_type();
             for (i, elem) in elems.enumerate() {
-                let i = u32::try_from(i).unwrap();
+                let i = u32::try_from(i)?;
                 debug_assert!(i < len);
                 arrayref.initialize_elem(&mut store, allocator.layout(), &elem_ty, i, *elem)?;
             }
@@ -424,7 +424,9 @@ impl ArrayRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, arrayref.into())),
             Err(e) => {
-                store.require_gc_store_mut()?.dealloc_uninit_array(arrayref);
+                store
+                    .require_gc_store_mut()?
+                    .dealloc_uninit_array(arrayref)?;
                 Err(e)
             }
         }
@@ -613,11 +615,11 @@ impl ArrayRef {
         assert!(self.comes_from_same_store(store));
         let gc_ref = self.inner.try_gc_ref(store)?;
         debug_assert!({
-            let header = store.require_gc_store()?.header(gc_ref);
+            let header = store.require_gc_store()?.header(gc_ref)?;
             header.kind().matches(VMGcKind::ArrayRef)
         });
         let arrayref = gc_ref.as_arrayref_unchecked();
-        Ok(arrayref.len(store))
+        arrayref.len(store)
     }
 
     /// Get the values of this array's elements.
@@ -647,7 +649,7 @@ impl ArrayRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ArrayRef));
 
         let len = self._len(&store)?;
@@ -677,7 +679,7 @@ impl ArrayRef {
                     return None;
                 }
                 self.index += 1;
-                Some(self.arrayref._get(&mut self.store, i).unwrap())
+                self.arrayref._get(&mut self.store, i).ok()
             }
 
             #[inline]
@@ -700,7 +702,7 @@ impl ArrayRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.require_gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
     fn arrayref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMArrayRef> {
@@ -755,12 +757,12 @@ impl ArrayRef {
         let arrayref = self.arrayref(store)?.unchecked_copy();
         let field_ty = self.field_ty(store)?;
         let layout = self.layout(store)?;
-        let len = arrayref.len(store);
+        let len = arrayref.len(store)?;
         ensure!(
             index < len,
             "index out of bounds: the length is {len} but the index is {index}"
         );
-        Ok(arrayref.read_elem(store, &layout, field_ty.element_type(), index))
+        arrayref.read_elem(store, &layout, field_ty.element_type(), index)
     }
 
     /// Set this array's `index`th element.
@@ -811,7 +813,7 @@ impl ArrayRef {
         let layout = self.layout(&store)?;
         let arrayref = self.arrayref(&store)?.unchecked_copy();
 
-        let len = arrayref.len(&store);
+        let len = arrayref.len(&store)?;
         ensure!(
             index < len,
             "index out of bounds: the length is {len} but the index is {index}"
@@ -822,7 +824,7 @@ impl ArrayRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ArrayRef));
         Ok(header.ty().expect("arrayrefs should have concrete types"))
     }

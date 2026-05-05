@@ -1969,18 +1969,23 @@ impl StoreOpaque {
         &mut self,
         dest: &mut MaybeUninit<Option<VMGcRef>>,
         gc_ref: Option<&VMGcRef>,
-    ) {
+    ) -> Result<()> {
         if GcStore::needs_init_barrier(gc_ref) {
             self.unwrap_gc_store_mut().init_gc_ref(dest, gc_ref)
         } else {
             dest.write(gc_ref.map(|r| r.copy_i31()));
+            Ok(())
         }
     }
 
     /// Helper function execute a write barrier when placing `gc_ref` in `dest`.
     ///
     /// This avoids allocating `GcStore` where possible.
-    pub(crate) fn write_gc_ref(&mut self, dest: &mut Option<VMGcRef>, gc_ref: Option<&VMGcRef>) {
+    pub(crate) fn write_gc_ref(
+        &mut self,
+        dest: &mut Option<VMGcRef>,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         GcStore::write_gc_ref_optional_store(self.optional_gc_store_mut(), dest, gc_ref)
     }
 

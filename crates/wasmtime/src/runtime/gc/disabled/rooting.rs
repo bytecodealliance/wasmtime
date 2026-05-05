@@ -118,6 +118,10 @@ impl<T: GcRef> Rooted<T> {
     pub(crate) fn try_gc_ref<'a>(&self, _store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
         match self.inner {}
     }
+
+    pub(crate) fn try_clone_gc_ref(&self, _: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
+        match self.inner {}
+    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
