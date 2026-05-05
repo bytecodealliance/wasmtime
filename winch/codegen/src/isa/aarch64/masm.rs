@@ -1093,8 +1093,7 @@ impl Masm for MacroAssembler {
     fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) -> Result<()> {
         match src2 {
             RegImm::Reg(src2) => {
-                self.asm
-                    .subs_rrr(src2, src1, writable!(regs::zero()), size);
+                self.asm.subs_rrr(src2, src1, writable!(regs::zero()), size);
                 Ok(())
             }
             RegImm::Imm(v) => {
@@ -1104,12 +1103,8 @@ impl Masm for MacroAssembler {
                     None => {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
-                            masm.asm.subs_rrr(
-                                scratch.inner(),
-                                src1,
-                                writable!(regs::zero()),
-                                size,
-                            );
+                            masm.asm
+                                .subs_rrr(scratch.inner(), src1, writable!(regs::zero()), size);
                         });
                     }
                 };
