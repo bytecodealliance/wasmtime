@@ -1093,7 +1093,8 @@ impl Masm for MacroAssembler {
     fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) -> Result<()> {
         match src2 {
             RegImm::Reg(src2) => {
-                self.asm.subs_rrr(src2, src1, size);
+                self.asm
+                    .subs_rrr(src2, src1, writable!(regs::zero()), size);
                 Ok(())
             }
             RegImm::Imm(v) => {
@@ -1103,7 +1104,12 @@ impl Masm for MacroAssembler {
                     None => {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
-                            masm.asm.subs_rrr(scratch.inner(), src1, size);
+                            masm.asm.subs_rrr(
+                                scratch.inner(),
+                                src1,
+                                writable!(regs::zero()),
+                                size,
+                            );
                         });
                     }
                 };
@@ -1211,7 +1217,8 @@ impl Masm for MacroAssembler {
         // `Assembler::jmp_table` (and the underlying Cranelift
         // instruction) will emit spectre mitigation and bounds
         // checks.
-        self.asm.subs_rrr(tmp, index, OperandSize::S32);
+        self.asm
+            .subs_rrr(tmp, index, writable!(regs::zero()), OperandSize::S32);
         let default = targets[default_index];
         let rest = &targets[0..default_index];
         self.with_scratch::<IntScratch, _>(|masm, scratch| {
@@ -1278,8 +1285,7 @@ impl Masm for MacroAssembler {
         rhs_lo: Reg,
         rhs_hi: Reg,
     ) -> Result<()> {
-        self.asm
-            .subs_rrr_dst(rhs_lo, lhs_lo, dst_lo, OperandSize::S64);
+        self.asm.subs_rrr(rhs_lo, lhs_lo, dst_lo, OperandSize::S64);
         self.asm.sbc_rrr(rhs_hi, lhs_hi, dst_hi, OperandSize::S64);
         Ok(())
     }

@@ -441,20 +441,7 @@ impl Assembler {
     }
 
     /// Subtract with three registers, setting flags.
-    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
-        self.alu_rrr_extend(
-            ALUOp::SubS,
-            rm,
-            rn,
-            writable!(regs::zero()),
-            size,
-            ExtendOp::UXTX,
-        );
-    }
-
-    /// Subtract with three registers, writing to a destination and setting
-    /// flags.
-    pub fn subs_rrr_dst(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
         self.alu_rrr_extend(ALUOp::SubS, rm, rn, rd, size, ExtendOp::UXTX);
     }
 
