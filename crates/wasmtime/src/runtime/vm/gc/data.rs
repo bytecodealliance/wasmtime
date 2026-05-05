@@ -1,7 +1,8 @@
 //! Unchecked methods for working with the data inside GC objects.
 
-use crate::V128;
+use crate::{Result, V128, bail_bug};
 use core::mem;
+use core::ops::Range;
 
 /// A plain-old-data type that can be stored in a `ValType` or a `StorageType`.
 pub trait PodValType<const SIZE: usize>: Copy {
@@ -72,9 +73,9 @@ macro_rules! impl_pod_methods {
             #[doc = stringify!($T)]
             /// ` field this object.
             ///
-            /// Panics on out-of-bounds accesses.
+            /// Returns an error on out-of-bounds accesses.
             #[inline]
-            pub fn $read(&self, offset: u32) -> $T
+            pub fn $read(&self, offset: u32) -> Result<$T>
             {
                 self.read_pod::<{ mem::size_of::<$T>() }, $T>(offset)
             }
@@ -83,11 +84,11 @@ macro_rules! impl_pod_methods {
             #[doc = stringify!($T)]
             /// ` into this object.
             ///
-            /// Panics on out-of-bounds accesses.
+            /// Returns an error on out-of-bounds accesses.
             #[inline]
-            pub fn $write(&mut self, offset: u32, val: $T)
+            pub fn $write(&mut self, offset: u32, val: $T) -> Result<()>
             {
-                self.write_pod::<{ mem::size_of::<$T>() }, $T>(offset, val);
+                self.write_pod::<{ mem::size_of::<$T>() }, $T>(offset, val)
             }
         )*
     };
@@ -122,44 +123,46 @@ impl VMGcObjectData {
 
     /// Read a POD field out of this object.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     ///
     /// Don't generally use this method, use `read_u8`, `read_i64`,
     /// etc... instead.
     #[inline]
-    fn read_pod<const N: usize, T>(&self, offset: u32) -> T
+    fn read_pod<const N: usize, T>(&self, offset: u32) -> Result<T>
     where
         T: PodValType<N>,
     {
         assert_eq!(N, mem::size_of::<T>());
-        let offset = usize::try_from(offset).unwrap();
-        let end = offset.checked_add(N).unwrap();
-        let bytes = self.data.get(offset..end).expect("out of bounds field");
-        T::read_le(bytes.as_array().unwrap())
+        let offset = usize::try_from(offset)?;
+        let bytes = match self.data.get(offset..).and_then(|s| s.first_chunk()) {
+            Some(data) => data,
+            None => bail_bug!("out of bounds field"),
+        };
+        Ok(T::read_le(bytes))
     }
 
     /// Read a POD field out of this object.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     ///
     /// Don't generally use this method, use `write_u8`, `write_i64`,
     /// etc... instead.
     #[inline]
-    fn write_pod<const N: usize, T>(&mut self, offset: u32, val: T)
+    fn write_pod<const N: usize, T>(&mut self, offset: u32, val: T) -> Result<()>
     where
         T: PodValType<N>,
     {
         assert_eq!(N, mem::size_of::<T>());
-        let offset = usize::try_from(offset).unwrap();
-        let end = offset.checked_add(N).unwrap();
-        let into = match self.data.get_mut(offset..end) {
+        let offset = usize::try_from(offset)?;
+        let into = match self
+            .data
+            .get_mut(offset..)
+            .and_then(|s| s.first_chunk_mut())
+        {
             Some(into) => into,
-            None => panic!(
-                "out of bounds field! field range = {offset:#x}..{end:#x}; object len = {:#x}",
-                self.data.as_mut().len(),
-            ),
+            None => bail_bug!("out of bounds field"),
         };
-        val.write_le(into.as_mut_array().unwrap());
+        Ok(val.write_le(into))
     }
 
     /// Get a slice of this object's data.
@@ -167,13 +170,15 @@ impl VMGcObjectData {
     /// Note that GC data is always stored in little-endian order, and this
     /// method does not do any conversions to/from host endianness for you.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     #[inline]
-    pub fn slice(&self, offset: u32, len: u32) -> &[u8] {
-        let start = usize::try_from(offset).unwrap();
-        let len = usize::try_from(len).unwrap();
-        let end = start.checked_add(len).unwrap();
-        self.data.get(start..end).expect("out of bounds slice")
+    pub fn slice(&self, offset: u32, len: u32) -> Result<&[u8]> {
+        let start = usize::try_from(offset)?;
+        let len = usize::try_from(len)?;
+        match self.data.get(start..).and_then(|s| s.get(..len)) {
+            Some(slice) => Ok(slice),
+            None => bail_bug!("out of bounds slice"),
+        }
     }
 
     /// Get a mutable slice of this object's data.
@@ -181,13 +186,15 @@ impl VMGcObjectData {
     /// Note that GC data is always stored in little-endian order, and this
     /// method does not do any conversions to/from host endianness for you.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     #[inline]
-    pub fn slice_mut(&mut self, offset: u32, len: u32) -> &mut [u8] {
-        let start = usize::try_from(offset).unwrap();
-        let len = usize::try_from(len).unwrap();
-        let end = start.checked_add(len).unwrap();
-        self.data.get_mut(start..end).expect("out of bounds slice")
+    pub fn slice_mut(&mut self, offset: u32, len: u32) -> Result<&mut [u8]> {
+        let start = usize::try_from(offset)?;
+        let len = usize::try_from(len)?;
+        match self.data.get_mut(start..).and_then(|s| s.get_mut(..len)) {
+            Some(slice) => Ok(slice),
+            None => bail_bug!("out of bounds slice"),
+        }
     }
 
     /// Copy the given slice into this object's data at the given offset.
@@ -195,13 +202,20 @@ impl VMGcObjectData {
     /// Note that GC data is always stored in little-endian order, and this
     /// method does not do any conversions to/from host endianness for you.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     #[inline]
-    pub fn copy_from_slice(&mut self, offset: u32, src: &[u8]) {
-        let offset = usize::try_from(offset).unwrap();
-        let end = offset.checked_add(src.len()).unwrap();
-        let into = self.data.get_mut(offset..end).expect("out of bounds copy");
+    pub fn copy_from_slice(&mut self, offset: u32, src: &[u8]) -> Result<()> {
+        let offset = usize::try_from(offset)?;
+        let into = match self
+            .data
+            .get_mut(offset..)
+            .and_then(|s| s.get_mut(..src.len()))
+        {
+            Some(into) => into,
+            None => bail_bug!("out of bounds copy"),
+        };
         into.copy_from_slice(src);
+        Ok(())
     }
 
     /// Copy within this this object's data.
@@ -209,16 +223,23 @@ impl VMGcObjectData {
     /// Note that GC data is always stored in little-endian order, and this
     /// method does not do any conversions to/from host endianness for you.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     #[inline]
-    pub fn copy_within<R>(&mut self, src: R, dest: u32)
-    where
-        R: core::ops::RangeBounds<u32>,
-    {
-        let start = src.start_bound().map(|s| usize::try_from(*s).unwrap());
-        let end = src.end_bound().map(|e| usize::try_from(*e).unwrap());
-        let dest = usize::try_from(dest).unwrap();
-        self.data.copy_within((start, end), dest);
+    pub fn copy_within(&mut self, src: Range<u32>, dest: u32) -> Result<()> {
+        let start = usize::try_from(src.start)?;
+        let end = usize::try_from(src.end)?;
+        let dest = usize::try_from(dest)?;
+        if self.data.get(start..end).is_none()
+            || self
+                .data
+                .get(dest..)
+                .and_then(|s| s.get(..src.len()))
+                .is_none()
+        {
+            bail_bug!("invalid copy range");
+        }
+        self.data.copy_within(start..end, dest);
+        Ok(())
     }
 
     impl_pod_methods! {

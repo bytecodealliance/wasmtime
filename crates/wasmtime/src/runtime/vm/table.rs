@@ -568,12 +568,12 @@ impl Table {
         dst: u64,
         val: Option<&VMGcRef>,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let range = self.validate_fill(dst, len)?;
 
         // Clone the init GC reference into each table slot.
         for slot in &mut self.gc_refs_mut()[range] {
-            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val);
+            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val)?;
         }
 
         Ok(())
@@ -774,14 +774,14 @@ impl Table {
         store: Option<&mut GcStore>,
         index: u64,
         elem: Option<&VMGcRef>,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let trap = Trap::TableOutOfBounds;
         let index: usize = index.try_into().map_err(|_| trap)?;
         GcStore::write_gc_ref_optional_store(
             store,
             self.gc_refs_mut().get_mut(index).ok_or(trap)?,
             elem,
-        );
+        )?;
         Ok(())
     }
 

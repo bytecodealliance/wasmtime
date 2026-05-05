@@ -1,3 +1,4 @@
+use crate::Result;
 use crate::runtime::vm::{GcHeap, GcStore, VMGcRef};
 use core::fmt;
 use wasmtime_environ::VMGcKind;
@@ -29,14 +30,23 @@ impl From<VMExternRef> for VMGcRef {
 }
 
 impl VMGcRef {
+    /// Is this `VMGcRef` pointing to an `extern`?
+    pub fn is_externref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> bool {
+        if self.is_i31() {
+            return false;
+        }
+
+        match gc_heap.header(&self) {
+            Ok(header) => header.kind() == VMGcKind::ExternRef,
+            Err(_) => false,
+        }
+    }
+
     /// Create a new `VMExternRef` from the given `gc_ref`.
     ///
     /// If this is not GC reference to an `externref`, `Err(self)` is returned.
     pub fn into_externref(self, gc_heap: &impl GcHeap) -> Result<VMExternRef, VMGcRef> {
-        if self.is_i31() {
-            return Err(self);
-        }
-        if gc_heap.header(&self).kind() == VMGcKind::ExternRef {
+        if self.is_externref(gc_heap) {
             Ok(VMExternRef(self))
         } else {
             Err(self)
@@ -59,10 +69,7 @@ impl VMGcRef {
     /// Get this GC reference as an `externref` reference, if it actually is an
     /// `externref` reference.
     pub fn as_externref(&self, gc_heap: &(impl GcHeap + ?Sized)) -> Option<&VMExternRef> {
-        if self.is_i31() {
-            return None;
-        }
-        if gc_heap.header(&self).kind() == VMGcKind::ExternRef {
+        if self.is_externref(gc_heap) {
             let ptr = self as *const VMGcRef;
             let ret = unsafe { &*ptr.cast() };
             assert!(matches!(ret, VMExternRef(VMGcRef { .. })));
