@@ -1,10 +1,12 @@
 ## 36.0.9
 
-Released 2026-04-30.
+Released 2026-05-05.
 
 ### Fixed
 
-* Cranelift's timing infrastructure is now more robust in the face of buggy system clocks. #13273
+* Cranelift's timing infrastructure is now more robust in the face of buggy system clocks. 
+  [#12709](https://github.com/bytecodealliance/wasmtime/pull/12709)
+  [#13253](https://github.com/bytecodealliance/wasmtime/pull/13253)
 
 --------------------------------------------------------------------------------
 
