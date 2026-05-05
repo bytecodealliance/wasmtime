@@ -52,7 +52,10 @@ jobs:
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
       - uses: ./.github/actions/install-rust
-      - uses: ./.github/actions/install-cargo-vet
+      - uses: ./.github/actions/cargo-install
+        with:
+          crate: cargo-vet
+          version: 0.10.2
 
       - name: Bump major version number
         run: |
