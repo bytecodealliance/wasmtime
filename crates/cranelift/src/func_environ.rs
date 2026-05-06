@@ -1904,9 +1904,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// have extra context.
     #[cfg(feature = "component-model")]
     fn can_directly_inline_unsafe_intrinsic(&self, abi: wasmtime_environ::Abi) -> bool {
-        abi == wasmtime_environ::Abi::Wasm
-            && !self.tail
-            && self.env.debug_tags(self.srcloc).is_empty()
+        abi == wasmtime_environ::Abi::Wasm && !self.tail && !self.env.tunables.debug_guest
     }
 
     /// Do a Wasm-level indirect call through the given funcref table.
