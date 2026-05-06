@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = 'compile'
-;;! flags = '-Wcomponent-model-async -Wcomponent-model-threading -Cinlining=intrinsics'
+;;! flags = '-Wcomponent-model-async -Wcomponent-model-threading'
 
 (component
   (core func $context.get0 (canon context.get i32 0))

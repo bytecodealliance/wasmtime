@@ -44,7 +44,7 @@ use wasmtime_environ::{
 use wasmtime_unwinder::ExceptionTableBuilder;
 
 #[cfg(feature = "component-model")]
-mod component;
+pub(crate) mod component;
 
 struct IncrementalCacheContext {
     #[cfg(feature = "incremental-cache")]
@@ -1261,7 +1261,7 @@ impl Compiler {
         self.call_indirect_host(builder, builtin, sig, func_addr, args)
     }
 
-    pub fn isa(&self) -> &dyn TargetIsa {
+    pub fn isa(&self) -> &(dyn TargetIsa + 'static) {
         &*self.isa
     }
 
