@@ -210,6 +210,10 @@ impl DrcHeap {
         host_data_table: &mut ExternRefHostDataTable,
         gc_ref: &VMGcRef,
     ) {
+        if gc_ref.is_i31() {
+            return;
+        }
+
         let mut stack = self.dec_ref_stack.take().unwrap();
         debug_assert!(stack.is_empty());
 
