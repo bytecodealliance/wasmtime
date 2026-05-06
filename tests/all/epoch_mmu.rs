@@ -35,14 +35,7 @@ fn epoch_check_offsets() {
             "{ELF_WASMTIME_EPOCH_CHECKS} section should be present"
         ));
     let data = section.data().unwrap();
-    assert!(data.len() >= 4, "section should at least contain a count");
-    let count = u32::from_le_bytes(data[..4].try_into().unwrap()) as usize;
-    assert_eq!(
-        data.len(),
-        4 + count * 4,
-        "section should be the right size to hold the offsets it claims to contain"
-    );
-    let offsets: Vec<u32> = data[4..]
+    let offsets: Vec<u32> = data
         .chunks_exact(4)
         .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
         .collect();

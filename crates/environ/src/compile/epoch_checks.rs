@@ -61,16 +61,7 @@ impl EpochCheckSection {
             SectionKind::ReadOnlyData,
         );
 
-        // Append length.
-        obj.append_section_data(
-            section,
-            &u32::try_from(self.return_offsets.len())
-                .unwrap()
-                .to_le_bytes(),
-            1,
-        );
-
         // Append offsets.
-        obj.append_section_data(section, object::bytes_of_slice(&self.return_offsets), 1);
+        obj.append_section_data(section, object::bytes_of_slice(&self.return_offsets), 4);
     }
 }
