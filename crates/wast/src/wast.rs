@@ -35,6 +35,7 @@ pub struct WastContext {
 
     modules_by_filename: Arc<HashMap<String, Vec<u8>>>,
     configure_store: Arc<dyn Fn(&mut Store<()>) + Send + Sync>,
+    ignore_error_messages: bool,
 }
 
 enum Outcome<T = Results> {
@@ -145,11 +146,19 @@ impl WastContext {
             precompile_load: None,
             modules_by_filename: Arc::default(),
             configure_store: Arc::new(configure),
+            ignore_error_messages: false,
         }
     }
 
     fn engine(&self) -> &Engine {
         self.core_linker.engine()
+    }
+
+    /// Configures whether or not error messages are ignored in directives like
+    /// `assert_invalid`.
+    pub fn ignore_error_messages(&mut self, ignore: bool) -> &mut Self {
+        self.ignore_error_messages = ignore;
+        self
     }
 
     /// Saves precompiled modules/components into `path` instead of executing
@@ -733,10 +742,7 @@ impl WastContext {
                     Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
-                let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
-                    bail!("assert_invalid: expected \"{text}\", got \"{error_message}\"",)
-                }
+                self.match_error_message(&text, err)?;
             }
             AssertMalformed {
                 file,
@@ -757,10 +763,7 @@ impl WastContext {
                     Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
-                let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
-                    bail!("assert_unlinkable: expected {text}, got {error_message}",)
-                }
+                self.match_error_message(&text, err)?;
             }
             AssertException { line: _, action } => {
                 let result = self.perform_action(&action)?;
@@ -805,6 +808,7 @@ impl WastContext {
                     precompile_load: self.precompile_load.clone(),
                     precompile_save: self.precompile_save.clone(),
                     configure_store: self.configure_store.clone(),
+                    ignore_error_messages: self.ignore_error_messages,
                 };
                 let child = scope.spawn(move || child_cx.run_directives(commands, filename));
                 threads.insert(name.to_string(), child);
@@ -862,25 +866,15 @@ impl WastContext {
         self.generate_dwarf = enable;
         self
     }
-}
 
-fn is_matching_assert_invalid_error_message(test: &str, expected: &str, actual: &str) -> bool {
-    if actual.contains(expected) {
-        return true;
+    fn match_error_message(&self, expected: &str, err: wasmtime::Error) -> Result<()> {
+        if self.ignore_error_messages {
+            return Ok(());
+        }
+        let actual = format!("{err:?}");
+        if actual.contains(expected) {
+            return Ok(());
+        }
+        bail!("assert_invalid: expected \"{expected}\", got \"{actual}\"",)
     }
-
-    // Historically wasmtime/wasm-tools tried to match the upstream error
-    // message. This generally led to a large sequence of matches here which is
-    // not easy to maintain and is particularly difficult when test suites and
-    // proposals conflict with each other (e.g. one asserts one error message
-    // and another asserts a different error message). Overall we didn't benefit
-    // a whole lot from trying to match errors so just assume the error is
-    // roughly the same and otherwise don't try to match it.
-    if test.contains("spec_testsuite") {
-        return true;
-    }
-
-    // we are in control over all non-spec tests so all the error messages
-    // there should exactly match the `assert_invalid` or such
-    false
 }

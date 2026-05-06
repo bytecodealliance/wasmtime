@@ -472,10 +472,6 @@ impl WastTest {
             // changes
             "test/async/same-component-stream-future.wast",
             "test/async/trap-if-block-and-sync.wast",
-            // These tests assert different errors and aren't updated for
-            // memory64.
-            "test/wasm-tools/memory64.wast",
-            "test/wasm-tools/resources.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;

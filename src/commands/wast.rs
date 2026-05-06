@@ -42,6 +42,11 @@ pub struct WastCommand {
     /// to import.
     #[arg(long = "wasmtime-builtins")]
     wasmtime_builtins: bool,
+
+    /// Whether or not to ignore error messages in directives like
+    /// `assert_invalid`.
+    #[arg(long)]
+    ignore_error_messages: bool,
 }
 
 impl WastCommand {
@@ -52,6 +57,13 @@ impl WastCommand {
         let async_ = optional_flag_with_default(self.async_, true);
         let mut config = self.common.config(None)?;
         config.shared_memory(true);
+
+        let generate_dwarf = optional_flag_with_default(self.generate_dwarf, true);
+        // When DWARF is being generated go ahead and enable backtrace details
+        // unconditionally as that's generally what's intended.
+        if generate_dwarf {
+            config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        }
         let engine = Engine::new(&config)?;
         let mut wast_context = WastContext::new(
             &engine,
@@ -71,13 +83,14 @@ impl WastCommand {
             },
         );
 
-        wast_context.generate_dwarf(optional_flag_with_default(self.generate_dwarf, true));
+        wast_context.generate_dwarf(generate_dwarf);
         wast_context
             .register_spectest(&SpectestConfig {
                 use_shared_memory: true,
                 suppress_prints: false,
             })
             .expect("error instantiating \"spectest\"");
+        wast_context.ignore_error_messages(self.ignore_error_messages);
 
         if let Some(path) = &self.precompile_save {
             wast_context.precompile_save(path);

@@ -276,6 +276,12 @@ fn run_wast(test: &WastTest, config: WastConfig) -> wasmtime::Result<()> {
                 use_shared_memory: true,
                 suppress_prints: true,
             })?;
+
+            // Ignore error messages for spec tests because Wasmtime will often
+            // differ in exact wording from the upstream spec interpreter.
+            if test.config.spec_test.unwrap_or(false) {
+                wast_context.ignore_error_messages(true);
+            }
             if test
                 .path
                 .to_str()
