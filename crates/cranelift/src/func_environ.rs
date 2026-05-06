@@ -2776,7 +2776,7 @@ impl FuncEnvironment<'_> {
     pub fn translate_array_copy(
         &mut self,
         builder: &mut FunctionBuilder,
-        _dst_array_type_index: TypeIndex,
+        dst_array_type_index: TypeIndex,
         dst_array: ir::Value,
         dst_index: ir::Value,
         _src_array_type_index: TypeIndex,
@@ -2784,12 +2784,38 @@ impl FuncEnvironment<'_> {
         src_index: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let libcall = gc::builtins::array_copy(self, builder.func)?;
+        let interned_type_index =
+            self.module.types[dst_array_type_index].unwrap_module_type_index();
+        let array_ty = self.types.unwrap_array(interned_type_index)?;
+        let elem_ty = array_ty.0.element_type;
+
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(
-            libcall,
-            &[vmctx, dst_array, dst_index, src_array, src_index, len],
-        );
+
+        if elem_ty.is_vmgcref_type_and_not_i31() {
+            let libcall = gc::builtins::array_copy_gc_ref_elems(self, builder.func)?;
+            builder.ins().call(
+                libcall,
+                &[vmctx, dst_array, dst_index, src_array, src_index, len],
+            );
+        } else {
+            let libcall = gc::builtins::array_copy_non_gc_ref_elems(self, builder.func)?;
+            let interned_type_index = builder
+                .ins()
+                .iconst(I32, i64::from(interned_type_index.as_u32()));
+            builder.ins().call(
+                libcall,
+                &[
+                    vmctx,
+                    interned_type_index,
+                    dst_array,
+                    dst_index,
+                    src_array,
+                    src_index,
+                    len,
+                ],
+            );
+        }
+
         Ok(())
     }
 

@@ -207,7 +207,8 @@ pub mod builtins {
         table_fill_gc_ref,
         array_new_data,
         array_new_elem,
-        array_copy,
+        array_copy_gc_ref_elems,
+        array_copy_non_gc_ref_elems,
         array_init_data,
         array_init_elem,
     }

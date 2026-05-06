@@ -1103,12 +1103,8 @@ fn array_init_elem(
     Ok(())
 }
 
-// TODO: Specialize this libcall for only non-GC array elements, so we never
-// have to do GC barriers and their associated indirect calls through the `dyn
-// GcHeap`. Instead, implement those copies inline in Wasm code. Then, use bulk
-// `memcpy`-style APIs to do the actual copies here.
 #[cfg(feature = "gc")]
-fn array_copy(
+fn array_copy_gc_ref_elems(
     store: &mut dyn VMStore,
     _instance: InstanceId,
     dst_array: u32,
@@ -1133,6 +1129,8 @@ fn array_copy(
     let src_array = VMGcRef::from_raw_u32(src_array).ok_or_else(|| Trap::NullReference)?;
     let src_array = store.unwrap_gc_store_mut().clone_gc_ref(&src_array);
     let src_array = ArrayRef::from_cloned_gc_ref(&mut store, src_array);
+
+    debug_assert!(dst_array.layout(&store).unwrap().elems_are_gc_refs);
 
     // Bounds check the destination array's elements.
     let dst_array_len = dst_array._len(&store)?;
@@ -1165,6 +1163,102 @@ fn array_copy(
             dst_array._set(&mut store, dst_i, src_elem)?;
         }
     }
+    Ok(())
+}
+
+#[cfg(feature = "gc")]
+fn array_copy_non_gc_ref_elems(
+    store: &mut dyn VMStore,
+    instance_id: InstanceId,
+    array_type_index: u32,
+    dst_array: u32,
+    dst: u32,
+    src_array: u32,
+    src: u32,
+    len: u32,
+) -> Result<()> {
+    use wasmtime_environ::ModuleInternedTypeIndex;
+
+    log::trace!(
+        "array.copy non-gc-refs(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
+    );
+
+    let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
+
+    let same_array = dst_array == src_array;
+
+    // Null checks and conversion to `VMArrayRef`.
+    let dst_gc_ref = VMGcRef::from_raw_u32(dst_array).ok_or_else(|| Trap::NullReference)?;
+    let dst_arr = dst_gc_ref
+        .into_arrayref(&*store.unwrap_gc_store().gc_heap)
+        .expect("gc ref should be an array");
+    let src_gc_ref = VMGcRef::from_raw_u32(src_array).ok_or_else(|| Trap::NullReference)?;
+    let src_arr = src_gc_ref
+        .into_arrayref(&*store.unwrap_gc_store().gc_heap)
+        .expect("gc ref should be an array");
+
+    // Bounds check the destination array's elements.
+    let dst_len = dst_arr.len(store.store_opaque());
+    if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > dst_len {
+        return Err(Trap::ArrayOutOfBounds.into());
+    }
+
+    // Bounds check the source array's elements.
+    let src_len = src_arr.len(store.store_opaque());
+    if src.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > src_len {
+        return Err(Trap::ArrayOutOfBounds.into());
+    }
+
+    // Get the array layout to compute byte offsets.
+    let instance = store.instance(instance_id);
+    let shared_ty = instance.engine_type_index(array_type_index);
+    let gc_layout = store
+        .engine()
+        .signatures()
+        .layout(shared_ty)
+        .expect("array types have GC layouts");
+    let array_layout = gc_layout.unwrap_array();
+    debug_assert!(!array_layout.elems_are_gc_refs);
+
+    let byte_len = len
+        .checked_mul(array_layout.elem_size)
+        .expect("copy length was bounds-checked against both arrays whose element data fits in the u32-addressed GC heap");
+    let src_byte_start = array_layout.elem_offset(src).unwrap();
+    let dst_byte_start = array_layout.elem_offset(dst).unwrap();
+
+    // Use `core::ptr::copy` to do a bulk copy of the element data.
+    let gc_store = store.unwrap_gc_store_mut();
+    if same_array {
+        // Same array: potentially overlapping, use `core::ptr::copy` (memmove
+        // semantics).
+        let data = gc_store.gc_object_data(dst_arr.as_gc_ref());
+        // SAFETY: Both pointers are derived from the same `VMGcObjectData`
+        // and are within the bounds we already checked. `core::ptr::copy`
+        // handles the overlapping case correctly, and no GC can occur
+        // because we are only copying non-GC-ref elements.
+        unsafe {
+            let src_ptr = data.slice(src_byte_start, byte_len).as_ptr();
+            let dst_ptr = data.slice_mut(dst_byte_start, byte_len).as_mut_ptr();
+            core::ptr::copy(src_ptr, dst_ptr, usize::try_from(byte_len).unwrap());
+        }
+    } else {
+        // Different arrays: non-overlapping.
+        let (src_data, dst_data) =
+            gc_store.gc_object_data_pair(src_arr.as_gc_ref(), dst_arr.as_gc_ref());
+        let src_slice = src_data.slice(src_byte_start, byte_len);
+        let dst_slice = dst_data.slice_mut(dst_byte_start, byte_len);
+        // SAFETY: The two arrays are distinct GC objects so their element
+        // data cannot overlap. Both slices are within the bounds we already
+        // checked.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                src_slice.as_ptr(),
+                dst_slice.as_mut_ptr(),
+                usize::try_from(byte_len).unwrap(),
+            );
+        }
+    }
+
     Ok(())
 }
 
