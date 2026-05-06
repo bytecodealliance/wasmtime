@@ -201,6 +201,10 @@ impl Config {
             config.max_memories = 1;
         }
 
+        if self.module_config.stack_switching {
+            self.wasmtime.inlining = Some(Inlining::No);
+        }
+
         if let Some(n) = &mut self.wasmtime.memory_config.memory_reservation {
             *n = (*n).max(limits::MEMORY_SIZE as u64);
         }
