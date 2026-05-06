@@ -371,7 +371,7 @@ wasip2 = "1.0"
 # --------------------------
 arbitrary = "1.4.2"
 backtrace = "0.3.76"
-bumpalo = "3.20.0"
+bumpalo = "3.20.2"
 mutatis = {version = "0.4.0", features = ["alloc", "derive", "check"] }
 cc = "1.2.41"
 object = { version = "0.39.0", default-features = false, features = ['read_core', 'elf'] }
@@ -437,8 +437,8 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "tls1
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
-openssl = "0.10.78"
-openssl-sys = "0.9.109"
+openssl = "0.10.79"
+openssl-sys = "0.9.115"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"

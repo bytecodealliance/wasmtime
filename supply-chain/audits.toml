@@ -3452,6 +3452,12 @@ criteria = "safe-to-deploy"
 version = "0.1.12"
 notes = "Small crate wrapping platform primitives for time that uses `unsafe` only for FFI."
 
+[[audits.instant]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.12 -> 0.1.13"
+notes = "Nothing major changed in this update"
+
 [[audits.io-extras]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -3970,6 +3976,12 @@ criteria = "safe-to-deploy"
 delta = "0.50.1 -> 0.50.3"
 notes = "CI changes, Rust changes, nothing out of the ordinary."
 
+[[audits.num-conv]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.0 -> 0.2.1"
+notes = "Minor update, nothing major"
+
 [[audits.num-traits]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -4045,6 +4057,12 @@ who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "1.16.0 -> 1.17.0"
 
+[[audits.openssl]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.78 -> 0.10.79"
+notes = "Fixing known holes and binding minor new APIs."
+
 [[audits.openssl-macros]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -4055,6 +4073,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.1.5"
 notes = "IO is only checking for the existence of paths in the filesystem"
+
+[[audits.openssl-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.114 -> 0.9.115"
+notes = "MSRV updates and other minor changes, all normal."
 
 [[audits.openvino]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
@@ -4331,6 +4355,12 @@ looks to be receiving new assistance for maintainership as well.
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.23 -> 1.0.27"
+
+[[audits.rand]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.2 -> 0.9.4"
+notes = "Minor bugfix release"
 
 [[audits.rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
