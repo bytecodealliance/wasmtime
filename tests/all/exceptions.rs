@@ -242,3 +242,55 @@ fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn thrown_exception_without_throwing(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (import "" "" (func))
+
+            (func (export "run") call 0)
+        )
+        "#,
+    )?;
+
+    let func = Func::wrap(&mut store, || -> Result<()> { Err(ThrownException.into()) });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let err = func.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.is::<ThrownException>());
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (tag $t0)
+
+            (func (export "run") throw $t0)
+        )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let err = func.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.is::<ThrownException>());
+    assert!(err.is::<WasmBacktrace>());
+
+    Ok(())
+}

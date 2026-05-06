@@ -28,6 +28,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+use wasmtime_core::alloc::PanicOnOom;
 use wasmtime_unwinder::Handler;
 
 #[cfg(feature = "debug")]
@@ -357,7 +358,16 @@ pub struct Trap {
 /// for an exception).
 #[derive(Debug)]
 pub enum TrapReason {
-    /// A user-raised trap through `raise_user_trap`.
+    /// A user-defined error has been raised, such as through a host function
+    /// call.
+    ///
+    /// This is constructed naturally through various `From` conversions leading
+    /// into a `TrapReason`. For example host functions returning `Result<()>`
+    /// will have any errors put here.
+    ///
+    /// Note that this variant can also represent an embedder-thrown exception.
+    /// Embedder-thrown exceptions are encoded as `ThrownException.into()` which
+    /// then looks for various handlers on the stack.
     User(Error),
 
     /// A trap raised from Cranelift-generated code.
@@ -385,26 +395,10 @@ pub enum TrapReason {
 
     /// A trap raised from a wasm libcall
     Wasm(wasmtime_environ::Trap),
-
-    /// An exception.
-    ///
-    /// Note that internally, exceptions are rooted on the Store, while
-    /// when crossing the public API, exceptions are held in a
-    /// `wasmtime::Exception` which contains a boxed root and implements
-    /// `Error`. This choice is intentional, to keep the internal
-    /// implementation lightweight and ensure the types represent only
-    /// allowable states.
-    #[cfg(feature = "gc")]
-    Exception,
 }
 
 impl From<Error> for TrapReason {
     fn from(error: Error) -> Self {
-        #[cfg(feature = "gc")]
-        if error.is::<ThrownException>() {
-            return TrapReason::Exception;
-        }
-
         TrapReason::User(error)
     }
 }
@@ -435,12 +429,6 @@ where
 
     match result {
         Ok(x) => Ok(x),
-        #[cfg(feature = "gc")]
-        Err(UnwindState::UnwindToHost {
-            reason: UnwindReason::Trap(TrapReason::Exception),
-            backtrace: _,
-            coredump_stack: _,
-        }) => Err(ThrownException.into()),
         Err(UnwindState::UnwindToHost {
             reason: UnwindReason::Trap(reason),
             backtrace,
@@ -759,37 +747,39 @@ impl CallThreadState {
             #[cfg(all(feature = "std", panic = "unwind"))]
             UnwindReason::Panic(err) => {
                 // Panics don't need backtraces. There is nowhere to attach the
-                // hypothetical backtrace to and it doesn't really make sense to try
-                // in the first place since this is a Rust problem rather than a
-                // Wasm problem.
+                // hypothetical backtrace to and it doesn't really make sense to
+                // try in the first place since this is a Rust problem rather
+                // than a Wasm problem.
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Panic(err),
                     backtrace: None,
                     coredump_stack: None,
                 }
             }
-            // An unwind due to an already-set pending exception
-            // triggers the handler-search stack-walk. We store the
-            // resolved handler if one exists. In either case, the
-            // exception remains rooted in the Store until we actually
-            // perform the unwind, and then gets taken and becomes the
-            // payload at that point.
+
+            // An unwind due to an already-set pending exception triggers the
+            // handler-search stack-walk. We store the resolved handler if one
+            // exists. In either case, the exception remains rooted in the Store
+            // until we actually perform the unwind, and then gets taken and
+            // becomes the payload at that point.
+            //
+            // Note that this search only happens if the store actually has a
+            // pending exception. If the embedder returned `ThrownException`
+            // without actually putting anything in the store then the lookup
+            // doesn't happen as there's nothing for wasm to catch.
             #[cfg(feature = "gc")]
-            UnwindReason::Trap(TrapReason::Exception) => {
-                // SAFETY: we are invoking `compute_handler()` while
-                // Wasm is on the stack and we have re-entered via a
-                // trampoline, as required by its stack-walking logic.
-                let handler = unsafe { compute_handler(store) };
-                match handler {
-                    Some(handler) => UnwindState::UnwindToWasm(handler),
-                    None => UnwindState::UnwindToHost {
-                        reason: UnwindReason::Trap(TrapReason::Exception),
-                        backtrace: None,
-                        coredump_stack: None,
-                    },
-                }
+            UnwindReason::Trap(TrapReason::User(err))
+                if err.is::<ThrownException>()
+                    && store.has_pending_exception()
+                    // SAFETY: we are invoking `compute_handler()` while Wasm is
+                    // on the stack and we have re-entered via a trampoline, as
+                    // required by its stack-walking logic.
+                    && let Some(handler) = unsafe { compute_handler(store) } =>
+            {
+                UnwindState::UnwindToWasm(handler)
             }
-            // And if we are just propagating an existing trap that already has
+
+            // If we are just propagating an existing trap that already has
             // a backtrace attached to it, then there is no need to capture a
             // new backtrace either.
             UnwindReason::Trap(TrapReason::User(err))
@@ -801,6 +791,7 @@ impl CallThreadState {
                     coredump_stack: None,
                 }
             }
+
             UnwindReason::Trap(trap) => {
                 log::trace!("Capturing backtrace and coredump for {trap:?}");
                 UnwindState::UnwindToHost {
@@ -848,23 +839,6 @@ impl CallThreadState {
                         .expect("exception should be set when we are throwing");
                     store.block_on_debug_handler(crate::DebugEvent::CaughtExceptionThrown(exn))
                 }
-                #[cfg(feature = "gc")]
-                UnwindState::UnwindToHost {
-                    reason: UnwindReason::Trap(TrapReason::Exception),
-                    ..
-                } => {
-                    use wasmtime_core::alloc::PanicOnOom;
-
-                    let exn = store
-                        .as_store_opaque()
-                        .pending_exception_owned_rooted()
-                        // TODO(#12069): handle allocation failure here
-                        .panic_on_oom()
-                        .expect("exception should be set when we are throwing");
-                    store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
-                        exn.clone(),
-                    ))
-                }
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
                     ..
@@ -872,7 +846,27 @@ impl CallThreadState {
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::User(err)),
                     ..
-                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
+                } => {
+                    // This is either a hostcall error or an uncaught wasm
+                    // exception, and it depends on the state of the store and
+                    // the error itself. Note that even if `err` is
+                    // `ThrownException` we still need to check the store to see
+                    // if it has a pending exception because it's possible to do
+                    // one without the other. Only when both match is this
+                    // considered an uncaught wasm exception.
+                    let event = if err.is::<ThrownException>()
+                        && let Some(exn) = store
+                            .as_store_opaque()
+                            .pending_exception_owned_rooted()
+                            // TODO(#12069): handle allocation failure here
+                            .panic_on_oom()
+                    {
+                        crate::DebugEvent::UncaughtExceptionThrown(exn.clone())
+                    } else {
+                        crate::DebugEvent::HostcallError(err)
+                    };
+                    store.block_on_debug_handler(event)
+                }
 
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::Jit { .. }),
