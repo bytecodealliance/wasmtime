@@ -868,11 +868,13 @@ pub(crate) fn gc_refs_in_frame<'a>(ft: FrameTable<'a>, pc: u32, fp: *mut usize) 
 pub enum DebugEvent<'a> {
     /// A [`wasmtime::Error`](crate::Error) was raised by a hostcall.
     HostcallError(&'a crate::Error),
-    /// An exception is thrown and caught by Wasm. The current state
-    /// is at the throw-point.
-    CaughtExceptionThrown(OwnedRooted<ExnRef>),
-    /// An exception was not caught and is escaping to the host.
-    UncaughtExceptionThrown(OwnedRooted<ExnRef>),
+    /// An exception is thrown by wasm.
+    ///
+    /// Note that the exception may be caught by wasm if there's an appropriate
+    /// handler on the stack, but the stack hasn't been searched yet. The
+    /// debugger can inject its own exception or overwrite this exception if
+    /// desired.
+    Exception(OwnedRooted<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
     /// A breakpoint was reached.

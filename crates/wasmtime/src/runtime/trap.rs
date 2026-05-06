@@ -114,7 +114,6 @@ pub(crate) fn from_runtime_box(
             }
             (err, Some(pc))
         }
-        crate::runtime::vm::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
 
     if let Some(bt) = backtrace {

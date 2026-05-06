@@ -63,7 +63,7 @@ use crate::runtime::vm::VMGcRef;
 use crate::runtime::vm::table::TableElementType;
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{
-    self, HostResultHasUnwindSentinel, SendSyncPtr, TrapReason, VMStore, f32x4, f64x2, i8x16,
+    self, HostResultHasUnwindSentinel, SendSyncPtr, VMStore, f32x4, f64x2, i8x16,
 };
 use core::convert::Infallible;
 use core::ptr::NonNull;
@@ -1660,14 +1660,8 @@ fn fma_f64x2(
 /// The `Infallible` "ok" type here means that this never returns success, it
 /// only ever returns an error, and this hooks into the machinery to handle
 /// `Result` values to record such trap information.
-fn trap(
-    _store: &mut dyn VMStore,
-    _instance: InstanceId,
-    code: u8,
-) -> Result<Infallible, TrapReason> {
-    Err(TrapReason::Wasm(
-        wasmtime_environ::Trap::from_u8(code).unwrap(),
-    ))
+fn trap(_store: &mut dyn VMStore, _instance: InstanceId, code: u8) -> Result<Infallible> {
+    Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }
 
 fn raise(store: &mut dyn VMStore, _instance: InstanceId) {

@@ -12,13 +12,11 @@ pub struct CoreDumpStack {
     /// The locals for each frame in the backtrace.
     ///
     /// This is not currently implemented.
-    #[expect(dead_code, reason = "not implemented yet")]
     pub locals: Vec<Vec<CoreDumpValue>>,
 
     /// The operands for each stack frame
     ///
     /// This is not currently implemented.
-    #[expect(dead_code, reason = "not implemented yet")]
     pub operand_stack: Vec<Vec<CoreDumpValue>>,
 }
 

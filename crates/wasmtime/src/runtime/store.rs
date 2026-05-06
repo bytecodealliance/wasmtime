@@ -95,7 +95,7 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
-use crate::{BreakpointState, DebugHandler, FrameDataCache, OwnedRooted};
+use crate::{BreakpointState, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
 #[cfg(feature = "gc")]
 use crate::{ExnRef, Rooted, ThrownException};
@@ -2774,26 +2774,19 @@ at https://bytecodealliance.org/security.
 
     /// Get an owned rooted reference to the pending exception,
     /// without taking it off the store.
-    #[cfg(feature = "debug")]
+    #[cfg(all(feature = "debug", feature = "gc"))]
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
-    ) -> Result<Option<OwnedRooted<crate::ExnRef>>, crate::error::OutOfMemory> {
-        #[cfg(feature = "gc")]
-        {
-            let mut nogc = AutoAssertNoGc::new(self);
-            nogc.pending_exception
-                .take()
-                .map(|vmexnref| {
-                    let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
-                    nogc.pending_exception = Some(cloned.into_exnref_unchecked());
-                    OwnedRooted::new(&mut nogc, vmexnref.into())
-                })
-                .transpose()
-        }
-        #[cfg(not(feature = "gc"))]
-        {
-            Ok(None)
-        }
+    ) -> Result<Option<crate::OwnedRooted<crate::ExnRef>>, crate::error::OutOfMemory> {
+        let mut nogc = AutoAssertNoGc::new(self);
+        nogc.pending_exception
+            .take()
+            .map(|vmexnref| {
+                let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+                nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+                crate::OwnedRooted::new(&mut nogc, vmexnref.into())
+            })
+            .transpose()
     }
 
     #[cfg(feature = "gc")]

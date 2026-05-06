@@ -164,10 +164,8 @@ interface debuggee {
     breakpoint,
     /// An interruption due to `debuggee.interrupt` occurred.
     interrupted,
-    /// An exception was thrown and caught by Wasm.
-    caught-exception-thrown(wasm-exception),
-    /// An exception was thrown and not caught by Wasm.
-    uncaught-exception-thrown(wasm-exception),
+    /// An exception was thrown by Wasm.
+    exception(wasm-exception),
     /// An injected call completed with return value(s).
     injected-call-return(list<wasm-value>),
   }

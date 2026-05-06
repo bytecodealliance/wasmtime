@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Store, StoreContextMut,
-    Val, ValType,
+    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
+    StoreContextMut, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -618,7 +618,7 @@ async fn uncaught_exception_events() -> wasmtime::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::UncaughtExceptionThrown(e) => {
+          wasmtime::DebugEvent::Exception(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
               assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
@@ -671,7 +671,7 @@ async fn caught_exception_events() -> wasmtime::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::CaughtExceptionThrown(e) => {
+          wasmtime::DebugEvent::Exception(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
               assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
@@ -1616,4 +1616,51 @@ async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
     assert_eq!(pcs[1], (0, 0x26));
 
     Ok(())
+}
+
+#[tokio::test]
+async fn take_exception_in_debug_handler() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_exceptions(true);
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    store.set_debug_handler(TakeExceptionHandler);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (tag $t)
+              (func (export "run")
+                (block $h (try_table (catch_all $h) (throw $t)))
+              )
+            )
+        "#,
+    )?;
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let err = run.call_async(&mut store, ()).await.unwrap_err();
+    assert!(err.is::<wasmtime::ThrownException>());
+    return Ok(());
+
+    #[derive(Clone)]
+    struct TakeExceptionHandler;
+
+    impl DebugHandler for TakeExceptionHandler {
+        type Data = ();
+
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            let did_take = matches!(event, DebugEvent::Exception(_));
+            // Eat the pending exception that compute_handler put back.
+            if did_take {
+                let _ = store.take_pending_exception();
+            }
+            async move {}
+        }
+    }
 }

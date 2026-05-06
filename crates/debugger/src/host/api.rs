@@ -257,13 +257,9 @@ fn result_to_event(table: &mut ResourceTable, value: DebugRunResult) -> Result<w
         DebugRunResult::Trap(_t) => wit::Event::Trap,
         DebugRunResult::Breakpoint => wit::Event::Breakpoint,
         DebugRunResult::EpochYield => wit::Event::Interrupted,
-        DebugRunResult::CaughtExceptionThrown(e) => {
+        DebugRunResult::Exception(e) => {
             let e = table.push(WasmException(e))?;
-            wit::Event::CaughtExceptionThrown(e)
-        }
-        DebugRunResult::UncaughtExceptionThrown(e) => {
-            let e = table.push(WasmException(e))?;
-            wit::Event::UncaughtExceptionThrown(e)
+            wit::Event::Exception(e)
         }
     })
 }

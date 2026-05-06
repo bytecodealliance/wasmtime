@@ -178,10 +178,7 @@ impl<T: Send + 'static> DebugHandler for Handler<T> {
 
         let result = match event {
             DebugEvent::HostcallError(_) => DebugRunResult::HostcallError,
-            DebugEvent::CaughtExceptionThrown(exn) => DebugRunResult::CaughtExceptionThrown(exn),
-            DebugEvent::UncaughtExceptionThrown(exn) => {
-                DebugRunResult::UncaughtExceptionThrown(exn)
-            }
+            DebugEvent::Exception(exn) => DebugRunResult::Exception(exn),
             DebugEvent::Trap(trap) => DebugRunResult::Trap(trap),
             DebugEvent::Breakpoint => DebugRunResult::Breakpoint,
             DebugEvent::EpochYield => {
@@ -513,11 +510,9 @@ pub enum DebugRunResult {
     HostcallError,
     /// Wasm execution was interrupted by an epoch change.
     EpochYield,
-    /// An exception is thrown and caught by Wasm. The current state
-    /// is at the throw-point.
-    CaughtExceptionThrown(OwnedRooted<ExnRef>),
-    /// An exception was not caught and is escaping to the host.
-    UncaughtExceptionThrown(OwnedRooted<ExnRef>),
+    /// An exception is thrown by Wasm. The current state is at the
+    /// throw-point.
+    Exception(OwnedRooted<ExnRef>),
     /// A Wasm trap occurred.
     Trap(Trap),
     /// A breakpoint was reached.
