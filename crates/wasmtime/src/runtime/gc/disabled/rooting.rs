@@ -183,7 +183,7 @@ impl<T> OwnedRooted<T>
 where
     T: GcRef,
 {
-    pub fn clone(&self, _store: impl AsContextMut) -> Self {
+    pub fn clone(&self) -> Self {
         match self.inner {}
     }
 

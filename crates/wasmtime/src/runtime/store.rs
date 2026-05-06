@@ -76,11 +76,6 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-#[cfg(all(feature = "gc", feature = "debug"))]
-use crate::OwnedRooted;
-use crate::RootSet;
-#[cfg(feature = "gc")]
-use crate::ThrownException;
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
@@ -101,9 +96,10 @@ use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
 use crate::{BreakpointState, DebugHandler, FrameDataCache};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
-#[cfg(feature = "gc")]
-use crate::{ExnRef, Rooted};
+use crate::{ExnRef, OwnedRooted, RootSet};
 use crate::{Global, Instance, Table};
+#[cfg(feature = "gc")]
+use crate::{Rooted, ThrownException};
 use core::convert::Infallible;
 use core::fmt;
 #[cfg(any(feature = "async", feature = "gc"))]
@@ -1274,9 +1270,8 @@ impl<T> Store<T> {
     /// state, but should not be used as part of the ordinary
     /// exception-handling flow. For the most idiomatic handling, see
     /// [`StoreContextMut::throw`].
-    #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
-        self.inner.pending_exception.is_some()
+        self.inner.has_pending_exception()
     }
 
     /// Return all breakpoints.
@@ -1478,9 +1473,8 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Tests whether there is a pending exception.
     ///
     /// See [`Store::has_pending_exception`] for more details.
-    #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
-        self.0.inner.pending_exception.is_some()
+        self.0.inner.has_pending_exception()
     }
 }
 
@@ -2760,9 +2754,15 @@ at https://bytecodealliance.org/security.
     }
 
     /// Tests whether there is a pending exception.
-    #[cfg(feature = "gc")]
     pub fn has_pending_exception(&self) -> bool {
-        self.pending_exception.is_some()
+        #[cfg(feature = "gc")]
+        {
+            self.pending_exception.is_some()
+        }
+        #[cfg(not(feature = "gc"))]
+        {
+            false
+        }
     }
 
     #[cfg(feature = "gc")]
@@ -2774,19 +2774,25 @@ at https://bytecodealliance.org/security.
 
     /// Get an owned rooted reference to the pending exception,
     /// without taking it off the store.
-    #[cfg(all(feature = "gc", feature = "debug"))]
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
     ) -> Result<Option<OwnedRooted<ExnRef>>, crate::error::OutOfMemory> {
-        let mut nogc = AutoAssertNoGc::new(self);
-        nogc.pending_exception
-            .take()
-            .map(|vmexnref| {
-                let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
-                nogc.pending_exception = Some(cloned.into_exnref_unchecked());
-                OwnedRooted::new(&mut nogc, vmexnref.into())
-            })
-            .transpose()
+        #[cfg(all(feature = "gc", feature = "debug"))]
+        {
+            let mut nogc = AutoAssertNoGc::new(self);
+            nogc.pending_exception
+                .take()
+                .map(|vmexnref| {
+                    let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
+                    nogc.pending_exception = Some(cloned.into_exnref_unchecked());
+                    OwnedRooted::new(&mut nogc, vmexnref.into())
+                })
+                .transpose()
+        }
+        #[cfg(not(all(feature = "gc", feature = "debug")))]
+        {
+            Ok(None)
+        }
     }
 
     #[cfg(feature = "gc")]

@@ -41,7 +41,6 @@ pub(crate) mod code;
 pub(crate) mod code_memory;
 #[cfg(feature = "debug")]
 pub(crate) mod debug;
-#[cfg(feature = "gc")]
 pub(crate) mod exception;
 pub(crate) mod externals;
 #[cfg(feature = "async")]
@@ -89,7 +88,6 @@ pub(crate) use bug::bail_bug;
 pub use code_memory::CodeMemory;
 #[cfg(feature = "debug")]
 pub use debug::*;
-#[cfg(feature = "gc")]
 pub use exception::*;
 pub use externals::*;
 pub use func::*;
