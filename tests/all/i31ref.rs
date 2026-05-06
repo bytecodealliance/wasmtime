@@ -1,6 +1,50 @@
 use wasmtime::*;
 
 #[test]
+fn i31_new_u32() {
+    // Values that fit in 31 bits succeed.
+    assert_eq!(I31::new_u32(0).unwrap().get_u32(), 0);
+    assert_eq!(I31::new_u32(5).unwrap().get_u32(), 5);
+    assert_eq!(I31::new_u32(0x7fff_ffff).unwrap().get_u32(), 0x7fff_ffff);
+
+    // Values that do not fit in 31 bits fail.
+    assert!(I31::new_u32(0x8000_0000).is_none());
+    assert!(I31::new_u32(0xffff_ffff).is_none());
+}
+
+#[test]
+fn i31_new_i32() {
+    // In-range signed values succeed.
+    assert_eq!(I31::new_i32(0).unwrap().get_i32(), 0);
+    assert_eq!(I31::new_i32(-1).unwrap().get_i32(), -1);
+    assert_eq!(I31::new_i32(-5).unwrap().get_i32(), -5);
+    // Minimum 31-bit signed value is -(2^30).
+    assert_eq!(I31::new_i32(-0x4000_0000).unwrap().get_i32(), -0x4000_0000);
+
+    // Out-of-range signed values fail.
+    assert!(I31::new_i32(i32::MIN).is_none());
+    assert!(I31::new_i32(-0x4000_0001).is_none());
+}
+
+#[test]
+fn i31_wrapping_i32() {
+    // In-range values are preserved.
+    assert_eq!(I31::wrapping_i32(-5).get_i32(), -5);
+    assert_eq!(I31::wrapping_i32(0).get_i32(), 0);
+
+    // Out-of-range values are wrapped to fit in 31 bits.
+    // -1073741825 (0xbfffffff) wrapped → 0x3fffffff = 1073741823
+    assert_eq!(I31::wrapping_i32(-1073741825).get_i32(), 1073741823);
+}
+
+#[test]
+fn i31_get_i32() {
+    // max 31-bit unsigned (0x7fffffff) interpreted as signed = -1.
+    assert_eq!(I31::new_u32(0x7fff_ffff).unwrap().get_i32(), -1);
+    assert_eq!(I31::new_u32(0).unwrap().get_i32(), 0);
+}
+
+#[test]
 fn always_pop_i31ref_lifo_roots() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);
