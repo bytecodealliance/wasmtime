@@ -66,8 +66,8 @@ block3:
 
 ; check: block2(v2: i32):
 ; check:     v8 = iconst.i32 0
-; check:     v4 = icmp.i32 eq v0, v8  ; v8 = 0
-; check:     return v4
+; check:     v5 = icmp.i32 eq v0, v8  ; v8 = 0
+; check:     return v5
 ; check: block3:
 ; check:     v6 = iconst.i32 0
 ; check:     v7 = icmp.i32 eq v0, v6  ; v6 = 0

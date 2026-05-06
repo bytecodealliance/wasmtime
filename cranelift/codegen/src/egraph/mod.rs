@@ -27,6 +27,209 @@ use smallvec::SmallVec;
 mod cost;
 mod elaborate;
 
+/// An iterator that yields blocks in a depth-first pre-order traversal of the
+/// dominator tree, where each node's children are visited in order of
+/// decreasing CFG post-order number.
+///
+/// This ordering satisfies two properties simultaneously:
+///
+/// 1. **Dominator-tree DFS pre-order**: The `ScopedHashMap` used for GVN
+///    requires that we visit dominator-tree ancestors before their descendants,
+///    and that we can "pop" scopes as we backtrack up the dominator tree. This
+///    is a DFS pre-order traversal of the dominator tree: we process every
+///    dominator before the blocks it dominates, and the scope stack always
+///    mirrors the dominator-tree path from the root to the current block.
+///
+/// 2. **Non-back-edge predecessors before successors**: Branch optimization
+///    (e.g. replacing a `brif` with a constant condition with a `jump`) can
+///    make blocks unreachable. We track reachable blocks in an `EntitySet`,
+///    inserting each successor block as we visit each block's terminator. For
+///    this to work correctly, we must visit all of a block's non-back-edge CFG
+///    predecessors before visiting the block itself, otherwise we might
+///    incorrectly conclude that a block is unreachable because we just haven't
+///    seen some predecessor that would otherwise mark it reachable yet.
+///
+/// Both properties hold when dominator-tree children are visited in order of
+/// decreasing CFG post-order number. The full proof follows.
+///
+/// # Proof
+///
+/// Let `post(v)` be the post-order numbering of a node `v` assigned by the DFS
+/// traversal of the original graph (the same traversal that produces the
+/// spanning tree used for dominator computation).
+///
+/// The *lowest common ancestor* (LCA) of two nodes `x` and `y` in a rooted
+/// tree is the deepest node that is an ancestor of both `x` and `y`.
+///
+/// Given a DFS traversal of the graph from the root, each edge `u -> v` falls
+/// into exactly one of the following categories:
+///
+/// - *Back edge*: `v` is an ancestor of `u` in the DFS spanning tree (the edge
+///   leads back up the current DFS call stack).
+///
+/// - *Tree edge*: `u -> v` is an edge of the DFS spanning tree itself (i.e.
+///   `v` was first discovered via `u`).
+///
+/// - *Forward edge*: `v` is a descendant of `u` in the DFS spanning tree, but
+///   `u -> v` is not a spanning tree edge (it skips over one or more tree
+///   edges).
+///
+/// - *Cross edge*: `v` is neither an ancestor nor a descendant of `u` in the
+///   DFS spanning tree; `v` was fully finished before `u` was even discovered.
+///
+/// ## Lemma 1
+///
+/// Given a spanning tree edge `a -> b`, then `post(a) > post(b)`.
+///
+/// ### Proof
+///
+/// `post(a) > post(b)`: by the definition of post-order numbering, where
+/// successors are numbered before predecessors.
+///
+/// ## Lemma 2
+///
+/// Given that `a` strictly dominates `b`, then `post(a) > post(b)`.
+///
+/// ### Proof
+///
+/// - All spanning tree paths from `root` to `b` pass through `a`: by the
+///   definition of strict dominance.
+/// - `post(a) > post(b)`: by Lemma 1 applied to each successive tree edge on
+///   the path from `a` to `b`, and transitivity.
+///
+/// ## Lemma 3
+///
+/// For any non-back edge `u -> v` (i.e. a tree, forward, or cross edge),
+/// `post(u) > post(v)`.
+///
+/// ### Proof
+///
+/// - *Tree edge* `u -> v`: `v` is discovered from `u` and finishes before `u`
+///   returns, so `post(v) < post(u)`.
+/// - *Forward edge* `u -> v`: `v` is a descendant of `u` in the DFS tree and
+///   is already finished before `u` revisits it, so `post(v) < post(u)`.
+/// - *Cross edge* `u -> v`: `v` was in a subtree explored entirely before `u`
+///   was discovered, so `post(v) < post(u)`.
+///
+/// ## Lemma 4
+///
+/// If `u -> v` is a non-back edge and `u` does not strictly dominate `v`, then
+/// `v` is a direct child of `LCA(u, v)` in the dominator tree.
+///
+/// ### Proof
+///
+/// Let `p = LCA(u, v)`, `c_u` the child of `p` that is an ancestor-or-equal
+/// of `u` in the dominator tree, and `c_v` the child of `p` that is an
+/// ancestor-or-equal of `v`.
+///
+/// - `p != u`: `u` does not dominate `v`, so `u` is not an ancestor of `v` in
+///   the dominator tree.
+/// - `p != v`: if `v` dominated `u` then every graph path from `root` to `u`
+///   would pass through `v`, making `u -> v` a back edge; but `u -> v` is
+///   non-back.
+/// - `c_u != c_v`: since `p != u` and `p != v`, the paths from `p` to `u` and
+///   `v` diverge at distinct children of `p`.
+///
+/// Suppose for contradiction that `c_v != v`, so `c_v` strictly dominates `v`.
+///
+/// - `c_v` does not dominate `c_u`: `c_u` and `c_v` are different children of
+///   `p`, so neither is an ancestor of the other in the dominator tree.
+/// - `c_v` does not dominate `u`: the dominator tree path from `root` to `u`
+///   passes through `p -> c_u -> ... -> u` and not through `c_v`.
+/// - `c_v != u`: if `c_v = u` then `u` is a strict ancestor of `v` in the
+///   dominator tree, meaning `u` strictly dominates `v`; but `u` does not
+///   strictly dominate `v` by the precondition of the lemma.
+/// - There is a graph path `root -> ... -> u` avoiding `c_v`: by the
+///   definition of dominance, since `c_v` does not dominate `u`.
+/// - There is a graph path `root -> ... -> u -> v` avoiding `c_v`: append the
+///   edge `u -> v`; the path avoids `c_v` because `c_v` is not in
+///   `root -> ... -> u` (previous step), `c_v != u` (above), and `c_v != v`
+///   (contradiction assumption).
+/// - Contradiction: `c_v` strictly dominates `v`, so every path from `root` to
+///   `v` must pass through `c_v`.
+///
+/// Therefore `c_v = v`.
+///
+/// ## Theorem 1
+///
+/// A depth-first pre-order traversal of a graph's dominator tree, where each
+/// child `c` of `idom(c)` is visited in order from greatest to least
+/// `post(c)`, visits all of a node's non-back-edge predecessors before visiting
+/// the node itself.
+///
+/// ### Proof
+///
+/// Let `u -> v` be any non-back edge. We show `u` is visited before `v`.
+///
+/// - Case 1: `u` strictly dominates `v`.
+///
+///   `u` is a proper ancestor of `v` in the dominator tree: by the definition
+///   of strict dominance. `u` is visited before `v`: DFS pre-order visits every
+///   ancestor before any of its descendants.
+///
+/// - Case 2: `u` does not strictly dominate `v` (and `u != v`)
+///
+///   Let `p = LCA(u, v)`, `c_u` the child of `p` that is an ancestor-or-equal
+///   of `u`, and `c_v = v` (by Lemma 4).
+///
+///   `post(c_u) > post(c_v)`:
+///   - if `c_u = u`: `post(c_u) = post(u) > post(v) = post(c_v)` by Lemma 3.
+///   - if `c_u != u`: `post(c_u) > post(u) > post(v) = post(c_v)` by Lemma 2
+///     then Lemma 3.
+///
+///   `c_u` is visited before `c_v` in the traversal: children of `p` are visited
+///   in decreasing `post` order and `post(c_u) > post(c_v)`.
+///
+///   `u` is visited before `v`: DFS pre-order visits all of `c_u`'s subtree
+///   before `c_v`, with `u` in `c_u`'s subtree and `v = c_v`.
+///
+/// Both cases establish that `u` is visited before `v` for every non-back edge
+/// `u -> v`, which is exactly what the theorem claims.
+struct EgraphBlockIter<'a> {
+    domtree: &'a DominatorTree,
+    stack: Vec<Block>,
+    children: SmallVec<[Block; 8]>,
+}
+
+impl<'a> EgraphBlockIter<'a> {
+    fn new(domtree: &'a DominatorTree) -> Self {
+        let mut iter = Self {
+            domtree,
+            stack: Vec::new(),
+            children: SmallVec::new(),
+        };
+        if let Some(&root) = domtree.cfg_postorder().last() {
+            iter.stack.push(root);
+        }
+        iter
+    }
+}
+
+impl Iterator for EgraphBlockIter<'_> {
+    type Item = Block;
+
+    fn next(&mut self) -> Option<Block> {
+        let block = self.stack.pop()?;
+
+        // Collect children into `self.children`, reusing the allocation.
+        self.children.clear();
+        self.children.extend(self.domtree.children(block));
+
+        // Assert that `children()` yields in decreasing post-order number.
+        debug_assert!(
+            self.children
+                .windows(2)
+                .all(|w| { self.domtree.post_number(w[0]) > self.domtree.post_number(w[1]) })
+        );
+
+        // Push in reverse so that the highest-post-number child ends up on top
+        // of the stack and is visited first.
+        self.stack.extend(self.children.iter().rev().copied());
+
+        Some(block)
+    }
+}
+
 /// Pass over a Function that does the whole aegraph thing.
 ///
 /// - Removes non-skeleton nodes from the Layout.
@@ -768,41 +971,10 @@ impl<'a> EgraphPass<'a> {
         // this is likely to realloc again later.
         available_block.resize(cursor.func.dfg.num_values());
 
-        // We always iterate over blocks in *reverse-post order*.
-        //
-        // Why? Consider a function with the following CFG:
-        //
-        //        block0
-        //       /      \
-        // block1        block2
-        //       \      /      \
-        //        block3        block4
-        //
-        // And therefore this dominator tree:
-        //
-        // - block0
-        //   - block1
-        //   - block2
-        //     - block4
-        //   - block3
-        //
-        // Furthermore, assume that the edge `block2 -> block3` can be optimized
-        // away.
-        //
-        // We used to iterate over blocks in *dominator-tree order*. One valid
-        // dominator-tree ordering for this example is `[block0, block2, block4,
-        // block3, block1]`. But if we visit in this order, and if we optimize
-        // away the `block2 -> block3` edge, then we will never mark `block2` as
-        // reachable before visiting the block, which will lead us to removing
-        // the block, which is invalid because we still have an edge from
-        // `block1` to `block3`.
-        //
-        // Therefore, we instead visit blocks in *reverse-post order*, which
-        // guarantees that we will always visit predecessors before successors
-        // (and therefore visit `block1` before `block3` and properly mark
-        // `block3` as reachable before it is visited).
+        // See `EgraphBlockIter` for why we use this particular block
+        // ordering.
         let domtree = self.domtree;
-        for &block in domtree.cfg_rpo() {
+        for block in EgraphBlockIter::new(domtree) {
             // Maintain GVN scoping: pop scopes until the top of the
             // stack is the immediate dominator of this block.
             while gvn_map_blocks
@@ -815,6 +987,18 @@ impl<'a> EgraphPass<'a> {
 
             gvn_map.increment_depth();
             gvn_map_blocks.push(block);
+
+            debug_assert_eq!(gvn_map_blocks, {
+                let mut b = Some(block);
+                let mut v = core::iter::from_fn(move || {
+                    let block = b;
+                    b = b.map(|b| domtree.idom(b))?;
+                    block
+                })
+                .collect::<Vec<_>>();
+                v.reverse();
+                v
+            });
 
             if !self.reachable_blocks.contains(block) {
                 cursor.func.layout.remove_block_and_insts(block);

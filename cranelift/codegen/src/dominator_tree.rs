@@ -31,6 +31,8 @@ struct SpanningTreeNode {
     /// Immediate dominator value for the node.
     /// Initialized to node's ancestor in the spanning tree.
     idom: u32,
+    /// Post-order number assigned during the CFG DFS traversal.
+    post_number: u32,
 }
 
 /// DFS preorder number for unvisited nodes and the virtual root in the spanning tree.
@@ -88,6 +90,7 @@ impl SpanningTree {
             label: pre_number,
             semi: pre_number,
             idom: ancestor,
+            post_number: 0,
         });
 
         pre_number
@@ -127,7 +130,8 @@ struct DominatorTreeNode {
     /// First child node in the domtree.
     child: PackedOption<Block>,
 
-    /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO.
+    /// Next sibling node in the domtree. This linked list is ordered according to the CFG RPO
+    /// (i.e. decreasing CFG post-order number).
     sibling: PackedOption<Block>,
 
     /// Sequence number for this node in a pre-order traversal of the dominator tree.
@@ -137,6 +141,9 @@ struct DominatorTreeNode {
     /// Maximum `dom_pre_number` for the sub-tree of the dominator tree that is rooted at this node.
     /// This is always >= `dom_pre_number`.
     dom_pre_max: u32,
+
+    /// Post-order number from the CFG DFS traversal. Zero for unreachable blocks.
+    post_number: u32,
 }
 
 /// The dominator tree for a single function,
@@ -156,6 +163,46 @@ pub struct DominatorTree {
     eval_worklist: Vec<u32>,
 
     valid: bool,
+}
+
+impl core::fmt::Debug for DominatorTree {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if !self.is_valid() {
+            return f.write_str("DominatorTree { <invalid> }");
+        }
+
+        let mut s = f.debug_tuple("DominatorTree");
+
+        if let Some((mut root, _)) = self.nodes.iter().find(|n| n.1.pre_number != NOT_VISITED) {
+            loop {
+                if let Some(b) = self.idom(root)
+                    && b != root
+                {
+                    root = b;
+                } else {
+                    break;
+                }
+            }
+
+            fn fmt_block(domtree: &DominatorTree, block: Block) -> impl core::fmt::Debug {
+                core::fmt::from_fn(move |f| {
+                    let children = domtree
+                        .children(block)
+                        .map(|c| fmt_block(domtree, c))
+                        .collect::<Vec<_>>();
+                    let mut s = f.debug_tuple(&format!("{block}"));
+                    if !children.is_empty() {
+                        s.field(&children);
+                    }
+                    s.finish()
+                })
+            }
+
+            s.field(&fmt_block(self, root));
+        }
+
+        s.finish()
+    }
 }
 
 /// Methods for querying the dominator tree.
@@ -257,10 +304,15 @@ impl DominatorTree {
         na.dom_pre_number <= nb.dom_pre_number && na.dom_pre_max >= nb.dom_pre_max
     }
 
+    /// Returns the CFG post-order number for `block`.
+    pub fn post_number(&self, block: Block) -> u32 {
+        self.nodes[block].post_number
+    }
+
     /// Get an iterator over the direct children of `block` in the dominator tree.
     ///
-    /// These are the blocks whose immediate dominator is `block`, ordered according
-    /// to the CFG reverse post-order.
+    /// These are the blocks whose immediate dominator is `block`, ordered by
+    /// decreasing CFG post-order number.
     pub fn children(&self, block: Block) -> ChildIter<'_> {
         ChildIter {
             domtree: self,
@@ -377,7 +429,11 @@ impl DominatorTree {
                             .map(|successor| TraversalEvent::Enter(pre_number, successor)),
                     );
                 }
-                Some(TraversalEvent::Exit(block)) => self.postorder.push(block),
+                Some(TraversalEvent::Exit(block)) => {
+                    let pre_number = self.nodes[block].pre_number;
+                    self.stree[pre_number].post_number = self.postorder.len() as u32;
+                    self.postorder.push(block);
+                }
                 None => break,
             }
         }
@@ -469,10 +525,16 @@ impl DominatorTree {
     ///
     /// This populates child/sibling links and preorder numbers for fast dominance checks.
     fn compute_domtree_preorder(&mut self) {
+        // Step 0: Assign CFG post-order numbers to each block.
+        for (i, &block) in self.postorder.iter().enumerate() {
+            self.nodes[block].post_number = i as u32;
+        }
+
         // Step 1: Populate the child and sibling links.
         //
         // By following the CFG post-order and pushing to the front of the lists, we make sure that
-        // sibling lists are ordered according to the CFG reverse post-order.
+        // sibling lists are ordered according to the CFG reverse post-order (i.e. decreasing CFG
+        // post-order number).
         for &block in &self.postorder {
             if let Some(idom) = self.idom(block) {
                 let sib = mem::replace(&mut self.nodes[idom].child, block.into());
