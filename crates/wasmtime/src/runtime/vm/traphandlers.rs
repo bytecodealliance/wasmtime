@@ -28,6 +28,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
+#[cfg(feature = "gc")]
 use wasmtime_core::alloc::PanicOnOom;
 use wasmtime_unwinder::Handler;
 
@@ -828,8 +829,6 @@ impl CallThreadState {
             let result = match &unwind {
                 #[cfg(feature = "gc")]
                 UnwindState::UnwindToWasm(_) => {
-                    use wasmtime_core::alloc::PanicOnOom;
-
                     assert!(store.as_store_opaque().has_pending_exception());
                     let exn = store
                         .as_store_opaque()
@@ -843,30 +842,31 @@ impl CallThreadState {
                     reason: UnwindReason::Trap(TrapReason::Wasm(trap)),
                     ..
                 } => store.block_on_debug_handler(crate::DebugEvent::Trap(*trap)),
+
+                // For `ThrownException` errors that indicates that we should
+                // look at the store to see if there's a pending exception
+                // there, and if so then that's a different debug event than the
+                // `HostcallError` below.
+                #[cfg(feature = "gc")]
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::User(err)),
                     ..
-                } => {
-                    // This is either a hostcall error or an uncaught wasm
-                    // exception, and it depends on the state of the store and
-                    // the error itself. Note that even if `err` is
-                    // `ThrownException` we still need to check the store to see
-                    // if it has a pending exception because it's possible to do
-                    // one without the other. Only when both match is this
-                    // considered an uncaught wasm exception.
-                    let event = if err.is::<ThrownException>()
-                        && let Some(exn) = store
-                            .as_store_opaque()
-                            .pending_exception_owned_rooted()
-                            // TODO(#12069): handle allocation failure here
-                            .panic_on_oom()
-                    {
-                        crate::DebugEvent::UncaughtExceptionThrown(exn.clone())
-                    } else {
-                        crate::DebugEvent::HostcallError(err)
-                    };
-                    store.block_on_debug_handler(event)
+                } if err.is::<ThrownException>()
+                    && let Some(exn) = store
+                        .as_store_opaque()
+                        .pending_exception_owned_rooted()
+                        // TODO(#12069): handle allocation failure here
+                        .panic_on_oom() =>
+                {
+                    store.block_on_debug_handler(crate::DebugEvent::UncaughtExceptionThrown(
+                        exn.clone(),
+                    ))
                 }
+
+                UnwindState::UnwindToHost {
+                    reason: UnwindReason::Trap(TrapReason::User(err)),
+                    ..
+                } => store.block_on_debug_handler(crate::DebugEvent::HostcallError(err)),
 
                 UnwindState::UnwindToHost {
                     reason: UnwindReason::Trap(TrapReason::Jit { .. }),
