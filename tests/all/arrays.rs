@@ -880,6 +880,109 @@ fn instantiate_with_array_global() -> Result<()> {
 }
 
 #[test]
+fn arrayref_to_anyref_rooted() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(0), 2)?;
+
+    // Rooted<ArrayRef>::to_anyref upcast
+    let any: Rooted<AnyRef> = a.to_anyref();
+    assert!(any.is_array(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn arrayref_to_eqref_rooted() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(0), 2)?;
+
+    // Rooted<ArrayRef>::to_eqref upcast
+    let eq: Rooted<EqRef> = a.to_eqref();
+    assert!(eq.is_array(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn arrayref_owned_to_anyref() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(5), 1)?;
+    let owned = a.to_owned_rooted(&mut store)?;
+
+    // OwnedRooted<ArrayRef>::to_anyref
+    let any_owned: OwnedRooted<AnyRef> = owned.to_anyref();
+    let any = any_owned.to_rooted(&mut store);
+    assert!(any.is_array(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn arrayref_owned_to_eqref() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(5), 1)?;
+    let owned = a.to_owned_rooted(&mut store)?;
+
+    // OwnedRooted<ArrayRef>::to_eqref
+    let eq_owned: OwnedRooted<EqRef> = owned.to_eqref();
+    let eq = eq_owned.to_rooted(&mut store);
+    assert!(eq.is_array(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn arrayref_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty.clone());
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(0), 3)?;
+
+    let ty = a.ty(&store)?;
+    assert!(matches!(ty.element_type(), StorageType::ValType(_)));
+
+    Ok(())
+}
+
+#[test]
+fn arrayref_matches_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let array_ty = ArrayType::new(
+        store.engine(),
+        FieldType::new(Mutability::Const, ValType::I32.into()),
+    );
+    let pre = ArrayRefPre::new(&mut store, array_ty.clone());
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(0), 2)?;
+
+    assert!(a.matches_ty(&store, &array_ty)?);
+
+    Ok(())
+}
+
+#[test]
 fn issue_13034_array_layout_overflow() -> Result<()> {
     for (storage, len, val) in [
         (StorageType::I8, u32::MAX, Val::I32(0)),
