@@ -2660,6 +2660,7 @@ fn anyref_matches_ty_any_and_eq() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_returns_anyref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2681,6 +2682,7 @@ fn typed_func_returns_anyref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_takes_anyref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2701,6 +2703,7 @@ fn typed_func_takes_anyref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_returns_eqref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2722,6 +2725,7 @@ fn typed_func_returns_eqref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_takes_eqref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2742,6 +2746,7 @@ fn typed_func_takes_eqref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_returns_externref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2761,6 +2766,7 @@ fn typed_func_returns_externref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_takes_externref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2804,6 +2810,7 @@ fn eqref_ty_i31() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_returns_anyref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2823,6 +2830,7 @@ fn typed_func_nonnull_returns_anyref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_takes_anyref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2843,6 +2851,7 @@ fn typed_func_nonnull_takes_anyref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_returns_eqref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2862,6 +2871,7 @@ fn typed_func_nonnull_returns_eqref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_takes_eqref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2882,6 +2892,7 @@ fn typed_func_nonnull_takes_eqref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_returns_externref() -> Result<()> {
     let mut store = gc_store()?;
     // Use a WASM helper: store an externref in a table, return it
@@ -2910,6 +2921,7 @@ fn typed_func_nonnull_returns_externref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_func_nonnull_takes_externref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2930,6 +2942,7 @@ fn typed_func_nonnull_takes_externref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn externref_null_data_is_none() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2949,6 +2962,7 @@ fn externref_null_data_is_none() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_i31ref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -2975,6 +2989,7 @@ fn typed_i31ref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_owned_anyref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3002,6 +3017,7 @@ fn typed_owned_anyref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_owned_eqref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3029,6 +3045,7 @@ fn typed_owned_eqref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_owned_externref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3061,6 +3078,7 @@ fn typed_owned_externref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_owned_structref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3091,6 +3109,7 @@ fn typed_owned_structref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_owned_arrayref_roundtrip() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3124,6 +3143,7 @@ fn typed_owned_arrayref_roundtrip() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_option_noneref() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
@@ -3142,6 +3162,7 @@ fn typed_option_noneref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_option_noextern() -> Result<()> {
     let mut store = gc_store()?;
     let module = Module::new(
