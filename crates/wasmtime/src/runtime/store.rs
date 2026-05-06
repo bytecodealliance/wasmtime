@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::RootSet;
 use crate::error::OutOfMemory;
 #[cfg(feature = "async")]
 use crate::fiber;
@@ -94,12 +95,11 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 #[cfg(feature = "debug")]
-use crate::{BreakpointState, DebugHandler, FrameDataCache};
+use crate::{BreakpointState, DebugHandler, FrameDataCache, OwnedRooted};
 use crate::{Engine, Module, Val, ValRaw, module::ModuleRegistry};
-use crate::{ExnRef, OwnedRooted, RootSet};
-use crate::{Global, Instance, Table};
 #[cfg(feature = "gc")]
-use crate::{Rooted, ThrownException};
+use crate::{ExnRef, Rooted, ThrownException};
+use crate::{Global, Instance, Table};
 use core::convert::Infallible;
 use core::fmt;
 #[cfg(any(feature = "async", feature = "gc"))]
@@ -2774,10 +2774,11 @@ at https://bytecodealliance.org/security.
 
     /// Get an owned rooted reference to the pending exception,
     /// without taking it off the store.
+    #[cfg(feature = "debug")]
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
-    ) -> Result<Option<OwnedRooted<ExnRef>>, crate::error::OutOfMemory> {
-        #[cfg(all(feature = "gc", feature = "debug"))]
+    ) -> Result<Option<OwnedRooted<crate::ExnRef>>, crate::error::OutOfMemory> {
+        #[cfg(feature = "gc")]
         {
             let mut nogc = AutoAssertNoGc::new(self);
             nogc.pending_exception
@@ -2789,7 +2790,7 @@ at https://bytecodealliance.org/security.
                 })
                 .transpose()
         }
-        #[cfg(not(all(feature = "gc", feature = "debug")))]
+        #[cfg(not(feature = "gc"))]
         {
             Ok(None)
         }

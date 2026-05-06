@@ -15,6 +15,7 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
+#[cfg(feature = "gc")]
 use crate::ThrownException;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
@@ -25,7 +26,6 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
-use wasmtime_core::alloc::PanicOnOom;
 use wasmtime_unwinder::Handler;
 
 #[cfg(feature = "debug")]
@@ -823,6 +823,9 @@ impl CallThreadState {
 
         #[cfg(feature = "debug")]
         {
+            use crate::ThrownException;
+            use wasmtime_core::alloc::PanicOnOom;
+
             let result = match &unwind {
                 #[cfg(feature = "gc")]
                 UnwindState::UnwindToWasm(_) => {
