@@ -32,6 +32,9 @@ enum OomState {
     #[default]
     OutsideOomTest,
 
+    /// We are inside an OOM test's dry run, counting total allocations.
+    Counting { count: u32 },
+
     /// We are inside an OOM test and should inject an OOM when the counter
     /// reaches zero.
     OomOnAlloc {
@@ -112,6 +115,11 @@ unsafe impl GlobalAlloc for OomTestAllocator {
 
             match old_state {
                 OomState::OutsideOomTest => unreachable!("handled above"),
+
+                OomState::Counting { count } => {
+                    new_state = OomState::Counting { count: count + 1 };
+                    ptr = unsafe { std::alloc::System.alloc(layout) };
+                }
 
                 OomState::OomOnAlloc {
                     counter: 0,
@@ -259,9 +267,11 @@ impl OomTest {
 
     /// The same as `test` but `async`.
     pub async fn test_async(&self, test_func: impl AsyncFn() -> Result<()>) -> Result<()> {
+        let total_allocs = Self::count_allocations(&test_func).await?;
+
         let start = time::Instant::now();
 
-        for i in 0.. {
+        for i in 0..total_allocs {
             if self.max_iters.is_some_and(|n| i >= n)
                 || self.max_duration.is_some_and(|d| start.elapsed() >= d)
             {
@@ -281,11 +291,12 @@ impl OomTest {
             .await;
 
             match (result, oom_state) {
-                (_, OomState::OutsideOomTest) => unreachable!(),
+                (_, OomState::OutsideOomTest | OomState::Counting { .. }) => unreachable!(),
 
-                // The test function completed successfully before we ran out of
-                // allocation fuel, so we're done.
-                (Ok(()), OomState::OomOnAlloc { .. }) => break,
+                // The test function completed successfully before we reached
+                // this allocation point (allocation count may differ slightly
+                // between the counting run and OOM injection runs).
+                (Ok(()), OomState::OomOnAlloc { .. }) => {}
 
                 // We injected an OOM and the test function handled it
                 // correctly; continue to the next iteration.
@@ -311,6 +322,38 @@ impl OomTest {
         }
 
         Ok(())
+    }
+
+    /// Run the test function without injecting OOMs, counting allocations.
+    ///
+    /// Repeats until the count stabilizes across two consecutive runs,
+    /// since the first run may change internal state (e.g. grow hash map
+    /// capacities) that subsequent runs reuse.
+    async fn count_allocations(test_func: &impl AsyncFn() -> Result<()>) -> Result<u32> {
+        const MAX_DRY_RUN_ITERS: usize = 10;
+
+        let mut total_allocs = u32::MAX;
+        for i in 0..MAX_DRY_RUN_ITERS {
+            log::trace!("=== Counting allocations (dry run {i}) ===");
+            let future = std::pin::pin!(test_func());
+            let (result, oom_state) =
+                OomTestFuture::new(future, OomState::Counting { count: 0 }).await;
+            result?;
+            let count = match oom_state {
+                OomState::Counting { count } => count,
+                _ => unreachable!(),
+            };
+            log::trace!("=== Counted {count} allocations ===");
+            if count == total_allocs {
+                return Ok(total_allocs);
+            }
+            total_allocs = count;
+        }
+
+        bail!(
+            "allocation count did not stabilize after {MAX_DRY_RUN_ITERS} \
+             dry-run iterations (last count: {total_allocs})"
+        )
     }
 }
 

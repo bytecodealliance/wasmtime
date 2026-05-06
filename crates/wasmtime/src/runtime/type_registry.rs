@@ -143,6 +143,18 @@ impl Engine {
             .write()
             .register_module_types(gc_runtime, module_types)?;
 
+        // Wrap rec_groups in an Undo guard so that if any of the
+        // following fallible operations fail before we construct the
+        // TypeCollection, we properly decref the registered types.
+        let rec_groups = Undo::new(rec_groups, |rec_groups| {
+            let mut inner = registry.0.write();
+            for entry in &rec_groups {
+                if entry.decref("register_and_canonicalize_types cleanup") {
+                    inner.unregister_entry(entry.clone());
+                }
+            }
+        });
+
         // Then build our map from each function type's engine index to the
         // module-index of its trampoline. Trampoline functions are queried by
         // module-index in a compiled module, and doing this engine-to-module
@@ -169,6 +181,7 @@ impl Engine {
             module.canonicalize_for_runtime_usage(&mut |idx| types[idx]);
         }
 
+        let rec_groups = Undo::commit(rec_groups);
         Ok(TypeCollection {
             engine,
             rec_groups,
