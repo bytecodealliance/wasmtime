@@ -28,7 +28,7 @@ use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ptr::{self, NonNull};
-#[cfg(feature = "gc")]
+#[cfg(all(feature = "debug", feature = "gc"))]
 use wasmtime_core::alloc::PanicOnOom;
 use wasmtime_unwinder::Handler;
 
