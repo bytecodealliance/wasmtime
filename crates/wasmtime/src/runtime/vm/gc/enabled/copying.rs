@@ -171,6 +171,18 @@ unsafe impl GcHeapObject for VMCopyingExternRef {
     }
 }
 
+/// JIT-accessible bump-allocation state for the copying collector.
+///
+/// NB: Layout is defined by constants in `wasmtime_environ::copying`. Keep in
+/// sync!
+#[repr(C)]
+struct VMCopyingHeapData {
+    /// Current bump pointer (index into the GC heap).
+    bump_ptr: u32,
+    /// End of the active semi-space.
+    active_space_end: u32,
+}
+
 /// Get a typed reference to a copying-collector object from a raw `VMGcRef`.
 fn copying_ref(gc_ref: &VMGcRef) -> &TypedGcRef<VMCopyingHeader> {
     debug_assert!(!gc_ref.is_i31());
@@ -207,16 +219,14 @@ struct CopyingHeap {
     /// memory is taken and updated when the memory is replaced.
     vmmemory: Option<VMMemoryDefinition>,
 
-    /// The bump "pointer" (really an index) for allocating new objects.
+    /// JIT-accessible allocation state: bump pointer and active-space end.
     ///
-    /// This is always within the active semi-space.
-    bump_ptr: u32,
+    /// NB: The bump pointer is written to by compiled Wasm code via the pointer
+    /// returned by `vmctx_gc_heap_data`.
+    vmctx_data: VMCopyingHeapData,
 
     /// The start of the active semi-space.
     active_space_start: u32,
-
-    /// The end of the active semi-space.
-    active_space_end: u32,
 
     /// The start of the idle semi-space.
     idle_space_start: u32,
@@ -254,15 +264,33 @@ impl CopyingHeap {
             no_gc_count: 0,
             memory: None,
             vmmemory: None,
-            bump_ptr: 0,
+            vmctx_data: VMCopyingHeapData {
+                bump_ptr: 0,
+                active_space_end: 0,
+            },
             active_space_start: 0,
-            active_space_end: 0,
             idle_space_start: 0,
             idle_space_end: 0,
             worklist_ptr: 0,
             active_extern_ref_set_head: None,
             idle_extern_ref_set_head: None,
         })
+    }
+
+    fn bump_ptr(&self) -> u32 {
+        self.vmctx_data.bump_ptr
+    }
+
+    fn set_bump_ptr(&mut self, val: u32) {
+        self.vmctx_data.bump_ptr = val;
+    }
+
+    fn active_space_end(&self) -> u32 {
+        self.vmctx_data.active_space_end
+    }
+
+    fn set_active_space_end(&mut self, val: u32) {
+        self.vmctx_data.active_space_end = val;
     }
 
     fn capacity(&self) -> u32 {
@@ -277,10 +305,10 @@ impl CopyingHeap {
     /// Initialize the semi-spaces for a heap of the given capacity.
     fn initialize_semi_spaces(&mut self) {
         debug_assert_eq!(self.active_space_start, 0);
-        debug_assert_eq!(self.active_space_end, 0);
+        debug_assert_eq!(self.active_space_end(), 0);
         debug_assert_eq!(self.idle_space_start, 0);
         debug_assert_eq!(self.idle_space_end, 0);
-        debug_assert_eq!(self.bump_ptr, 0);
+        debug_assert_eq!(self.bump_ptr(), 0);
 
         self.resize_semi_spaces();
         self.reset_bump_ptr();
@@ -288,7 +316,7 @@ impl CopyingHeap {
 
     fn resize_semi_spaces(&mut self) {
         debug_assert_eq!(
-            self.active_space_end - self.active_space_start,
+            self.active_space_end() - self.active_space_start,
             self.idle_space_end - self.idle_space_start,
             "the active and idle spaces should be the same size"
         );
@@ -304,16 +332,16 @@ impl CopyingHeap {
         let capacity = self.capacity();
         let halfway = capacity / 2;
 
-        debug_assert!(self.bump_ptr <= halfway);
+        debug_assert!(self.bump_ptr() <= halfway);
         debug_assert!(self.idle_space_start <= halfway);
-        debug_assert!(self.active_space_end <= halfway);
+        debug_assert!(self.active_space_end() <= halfway);
 
-        self.active_space_end = halfway;
+        self.set_active_space_end(halfway);
         self.idle_space_start = halfway;
         self.idle_space_end = capacity;
 
         debug_assert_eq!(
-            self.active_space_end - self.active_space_start,
+            self.active_space_end() - self.active_space_start,
             self.idle_space_end - self.idle_space_start,
             "the active and idle spaces should be the same size"
         );
@@ -329,11 +357,12 @@ impl CopyingHeap {
         // skip the first `ALIGN` bytes. This ensures that the active and idle
         // spaces are always equally sized, which is required to guarantee that
         // evacuating objects from one to the other will succeed.
-        self.bump_ptr = self.active_space_start;
-        if self.active_space_end - self.active_space_start >= ALIGN {
-            self.bump_ptr += ALIGN;
+        let mut bp = self.active_space_start;
+        if self.active_space_end() - self.active_space_start >= ALIGN {
+            bp += ALIGN;
         }
-        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
+        self.set_bump_ptr(bp);
+        debug_assert!(self.bump_ptr().is_multiple_of(ALIGN));
     }
 
     /// Allocate `size` bytes from the active semi-space bump pointer.
@@ -341,27 +370,27 @@ impl CopyingHeap {
     /// Returns `None` if there isn't enough room.
     fn allocate(&mut self, size: u32) -> Option<u32> {
         debug_assert!(size.is_multiple_of(ALIGN));
-        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
-        debug_assert!(self.bump_ptr >= self.active_space_start);
-        debug_assert!(self.bump_ptr <= self.active_space_end);
+        debug_assert!(self.bump_ptr().is_multiple_of(ALIGN));
+        debug_assert!(self.bump_ptr() >= self.active_space_start);
+        debug_assert!(self.bump_ptr() <= self.active_space_end());
 
-        let result = self.bump_ptr;
+        let result = self.bump_ptr();
         let new_bump_ptr = result.checked_add(size)?;
-        if new_bump_ptr > self.active_space_end {
+        if new_bump_ptr > self.active_space_end() {
             return None;
         }
 
-        self.bump_ptr = new_bump_ptr;
-        debug_assert!(self.bump_ptr.is_multiple_of(ALIGN));
-        debug_assert!(self.bump_ptr >= self.active_space_start);
-        debug_assert!(self.bump_ptr <= self.active_space_end);
+        self.set_bump_ptr(new_bump_ptr);
+        debug_assert!(self.bump_ptr().is_multiple_of(ALIGN));
+        debug_assert!(self.bump_ptr() >= self.active_space_start);
+        debug_assert!(self.bump_ptr() <= self.active_space_end());
 
         Some(result)
     }
 
     /// Check whether an index is within the active semi-space.
     fn is_in_active_space(&self, index: u32) -> bool {
-        index >= self.active_space_start && index < self.active_space_end
+        index >= self.active_space_start && index < self.active_space_end()
     }
 
     /// Check whether an index is within the idle semi-space.
@@ -372,13 +401,15 @@ impl CopyingHeap {
     /// Swap the active and idle semi-spaces.
     fn flip(&mut self) {
         debug_assert_eq!(
-            self.active_space_end - self.active_space_start,
+            self.active_space_end() - self.active_space_start,
             self.idle_space_end - self.idle_space_start,
             "the active and idle spaces should be the same size"
         );
 
         mem::swap(&mut self.active_space_start, &mut self.idle_space_start);
-        mem::swap(&mut self.active_space_end, &mut self.idle_space_end);
+        let new_active_space_end = self.idle_space_end;
+        self.idle_space_end = self.active_space_end();
+        self.set_active_space_end(new_active_space_end);
         self.reset_bump_ptr();
 
         // The active idle list becomes the old active list; the active list is
@@ -388,7 +419,7 @@ impl CopyingHeap {
 
     /// Initialize the worklist at the start of a collection.
     fn initialize_worklist(&mut self) {
-        self.worklist_ptr = self.bump_ptr;
+        self.worklist_ptr = self.bump_ptr();
     }
 
     /// Pop the next item off the worklist, or return `None` if the worklist is
@@ -396,14 +427,14 @@ impl CopyingHeap {
     fn worklist_pop(&mut self) -> Option<VMGcRef> {
         debug_assert!(
             self.is_in_active_space(self.worklist_ptr)
-                || self.worklist_ptr == self.active_space_end
+                || self.worklist_ptr == self.active_space_end()
         );
         debug_assert!(
-            self.is_in_active_space(self.bump_ptr) || self.bump_ptr == self.active_space_end
+            self.is_in_active_space(self.bump_ptr()) || self.bump_ptr() == self.active_space_end()
         );
-        debug_assert!(self.worklist_ptr <= self.bump_ptr);
+        debug_assert!(self.worklist_ptr <= self.bump_ptr());
 
-        if self.worklist_ptr == self.bump_ptr {
+        if self.worklist_ptr == self.bump_ptr() {
             return None;
         }
 
@@ -414,7 +445,7 @@ impl CopyingHeap {
         let obj_size = self.index(copying_ref(&result)).object_size();
 
         self.worklist_ptr += obj_size;
-        debug_assert!(self.worklist_ptr <= self.bump_ptr);
+        debug_assert!(self.worklist_ptr <= self.bump_ptr());
 
         Some(result)
     }
@@ -432,7 +463,7 @@ impl CopyingHeap {
         let index = gc_ref.as_heap_index().unwrap().get();
         debug_assert!(self.is_in_active_space(index));
         let obj_size = self.index(copying_ref(gc_ref)).object_size();
-        debug_assert_eq!(index + obj_size, self.bump_ptr);
+        debug_assert_eq!(index + obj_size, self.bump_ptr());
         debug_assert!(self.worklist_ptr <= index);
     }
 
@@ -580,13 +611,15 @@ unsafe impl GcHeap for CopyingHeap {
     fn detach(&mut self) -> crate::vm::Memory {
         assert!(self.is_attached());
 
+        self.set_bump_ptr(0);
+        self.set_active_space_end(0);
+
         let CopyingHeap {
             no_gc_count,
             memory,
             vmmemory,
-            bump_ptr,
+            vmctx_data: _,
             active_space_start,
-            active_space_end,
             idle_space_start,
             idle_space_end,
             worklist_ptr,
@@ -600,9 +633,7 @@ unsafe impl GcHeap for CopyingHeap {
 
         *no_gc_count = 0;
         *vmmemory = None;
-        *bump_ptr = 0;
         *active_space_start = 0;
-        *active_space_end = 0;
         *idle_space_start = 0;
         *idle_space_end = 0;
         *worklist_ptr = 0;
@@ -720,7 +751,11 @@ unsafe impl GcHeap for CopyingHeap {
         );
 
         debug_assert!(layout.size() >= core::mem::size_of::<VMCopyingHeader>());
-        debug_assert_eq!(self.bump_ptr % ALIGN, 0, "bump_ptr is not aligned to ALIGN");
+        debug_assert_eq!(
+            self.bump_ptr() % ALIGN,
+            0,
+            "bump_ptr is not aligned to ALIGN"
+        );
         debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
@@ -830,7 +865,7 @@ unsafe impl GcHeap for CopyingHeap {
     }
 
     fn allocated_bytes(&self) -> usize {
-        usize::try_from(self.bump_ptr - self.active_space_start).unwrap()
+        usize::try_from(self.bump_ptr() - self.active_space_start).unwrap()
     }
 
     fn gc<'a>(
@@ -848,9 +883,8 @@ unsafe impl GcHeap for CopyingHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        // The copying collector doesn't currently have vmctx GC heap
-        // data. Return a dangling pointer.
-        NonNull::dangling()
+        let ptr: *const VMCopyingHeapData = &self.vmctx_data;
+        NonNull::new(ptr as *mut u8).unwrap()
     }
 
     fn take_memory(&mut self) -> crate::vm::Memory {
@@ -874,7 +908,7 @@ unsafe impl GcHeap for CopyingHeap {
 
         // If the heap was previously empty, reinitialize the semi-spaces from
         // scratch.
-        if self.active_space_end == 0 && self.idle_space_end == 0 {
+        if self.active_space_end() == 0 && self.idle_space_end == 0 {
             self.initialize_semi_spaces();
         } else {
             // Otherwise the memory was grown: try to resize the semi-spaces
@@ -982,11 +1016,11 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
             CopyingCollectionPhase::Collect => {
                 log::trace!("Begin copying collection");
 
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr);
-                assert!(self.heap.bump_ptr <= self.heap.active_space_end);
+                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
                 assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
                 assert!(
-                    self.heap.active_space_end <= self.heap.idle_space_start
+                    self.heap.active_space_end() <= self.heap.idle_space_start
                         || self.heap.idle_space_end <= self.heap.active_space_start
                 );
 
@@ -997,11 +1031,11 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
                 self.process_roots();
                 self.process_worklist();
 
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr);
-                assert!(self.heap.bump_ptr <= self.heap.active_space_end);
+                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
                 assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
                 assert!(
-                    self.heap.active_space_end <= self.heap.idle_space_start
+                    self.heap.active_space_end() <= self.heap.idle_space_start
                         || self.heap.idle_space_end <= self.heap.active_space_start
                 );
 
@@ -1009,7 +1043,7 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
                 self.heap.resize_semi_spaces();
 
                 debug_assert_eq!(
-                    self.heap.active_space_end - self.heap.active_space_start,
+                    self.heap.active_space_end() - self.heap.active_space_start,
                     self.heap.idle_space_end - self.heap.idle_space_start,
                     "the active and idle spaces should be the same size"
                 );
@@ -1081,6 +1115,38 @@ mod tests {
             wasmtime_environ::copying::FORWARDING_REF_OFFSET as usize
                 + core::mem::size_of::<Option<VMGcRef>>()
                 <= wasmtime_environ::copying::MIN_OBJECT_SIZE as usize,
+        );
+    }
+
+    #[test]
+    fn vm_copying_heap_data_bump_ptr_offset() {
+        assert_eq!(
+            wasmtime_environ::copying::HEAP_DATA_BUMP_PTR_OFFSET as usize,
+            core::mem::offset_of!(VMCopyingHeapData, bump_ptr),
+        );
+    }
+
+    #[test]
+    fn vm_copying_heap_data_active_space_end_offset() {
+        assert_eq!(
+            wasmtime_environ::copying::HEAP_DATA_ACTIVE_SPACE_END_OFFSET as usize,
+            core::mem::offset_of!(VMCopyingHeapData, active_space_end),
+        );
+    }
+
+    #[test]
+    fn vm_copying_heap_data_size() {
+        assert_eq!(
+            wasmtime_environ::copying::HEAP_DATA_SIZE as usize,
+            core::mem::size_of::<VMCopyingHeapData>(),
+        );
+    }
+
+    #[test]
+    fn vm_copying_heap_data_align() {
+        assert_eq!(
+            wasmtime_environ::copying::HEAP_DATA_ALIGN as usize,
+            core::mem::align_of::<VMCopyingHeapData>(),
         );
     }
 }
