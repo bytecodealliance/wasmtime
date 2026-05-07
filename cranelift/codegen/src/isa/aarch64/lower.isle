@@ -1365,7 +1365,7 @@
       (orr_not_shift ty (zero_reg) x amt))
 
 ;; Special-cases for fusing a bnot with bxor
-(rule 2 (lower (has_type (fits_in_64 ty) (bnot _ (bxor _ x y))))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bnot _ (bxor _ x y))))
       (alu_rs_imm_logic (ALUOp.EorNot) ty x y))
 (rule 3 (lower (has_type $I128 (bnot _ (bxor _ x y)))) (i128_alu_bitop (ALUOp.EorNot) $I64 x y))
 
