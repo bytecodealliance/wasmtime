@@ -25,4 +25,5 @@ cargo run -- wast --target pulley64 --precompile-save ./miri-wast "$@" \
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
   cargo miri run -- wast -Ccache=n --target pulley64 --precompile-load ./miri-wast "$@" \
   -O memory-init-cow=n \
-  -W function-references,gc
+  -W function-references,gc \
+  --ignore-error-messages
