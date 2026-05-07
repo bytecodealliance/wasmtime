@@ -25,15 +25,22 @@ use core::fmt;
 /// runtime.
 macro_rules! bail_bug {
     ($($arg:tt)*) => {{
+        $crate::bail!($crate::bug!($($arg)*))
+    }}
+}
+pub(crate) use bail_bug;
+
+/// Similar to `bail_bug`, but just returns a `WasmtimeBug`.
+macro_rules! bug {
+    ($($arg:tt)*) => {{
         // Minimize argument passing to the `new` function by placing the
         // file/line in a static which is passed by reference to just pass a
         // single extra pointer argument.
         static POS: (&'static str, u32) = (file!(), line!());
-        $crate::bail!(crate::WasmtimeBug::new(format_args!($($arg)*), &POS))
+        crate::WasmtimeBug::new(format_args!($($arg)*), &POS)
     }}
 }
-
-pub(crate) use bail_bug;
+pub(crate) use bug;
 
 /// Error which indicates a bug in Wasmtime.
 ///

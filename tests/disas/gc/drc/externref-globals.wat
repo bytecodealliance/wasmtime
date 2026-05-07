@@ -39,27 +39,27 @@
 ;; @0034                               v11 = load.i64 notrap aligned readonly can_move v50+32
 ;; @0034                               v10 = uextend.i64 v5
 ;; @0034                               v12 = iadd v11, v10
-;; @0034                               v13 = load.i32 notrap aligned v12
+;; @0034                               v13 = load.i32 user2 v12
 ;; @0034                               v14 = iconst.i32 2
 ;; @0034                               v15 = band v13, v14  ; v14 = 2
 ;; @0034                               brif v15, block4, block3
 ;;
 ;;                                 block3:
-;; @0034                               v17 = load.i64 notrap aligned readonly v0+32
-;; @0034                               v18 = load.i32 notrap aligned v17
+;; @0034                               v17 = load.i64 user2 v0+32
+;; @0034                               v18 = load.i32 user2 v17
 ;; @0034                               v22 = iconst.i64 16
 ;; @0034                               v23 = iadd.i64 v12, v22  ; v22 = 16
-;; @0034                               store notrap aligned v18, v23
+;; @0034                               store user2 v18, v23
 ;;                                     v55 = iconst.i32 2
 ;;                                     v56 = bor.i32 v13, v55  ; v55 = 2
-;; @0034                               store notrap aligned v56, v12
+;; @0034                               store user2 v56, v12
 ;; @0034                               v32 = iconst.i64 8
 ;; @0034                               v33 = iadd.i64 v12, v32  ; v32 = 8
-;; @0034                               v34 = load.i64 notrap aligned v33
+;; @0034                               v34 = load.i64 user2 v33
 ;;                                     v43 = iconst.i64 1
 ;; @0034                               v35 = iadd v34, v43  ; v43 = 1
-;; @0034                               store notrap aligned v35, v33
-;; @0034                               store.i32 notrap aligned v5, v17
+;; @0034                               store user2 v35, v33
+;; @0034                               store.i32 user2 v5, v17
 ;; @0034                               jump block4
 ;;
 ;;                                 block4:
@@ -100,10 +100,10 @@
 ;; @003b                               v12 = iadd v11, v10
 ;; @003b                               v13 = iconst.i64 8
 ;; @003b                               v14 = iadd v12, v13  ; v13 = 8
-;; @003b                               v15 = load.i64 notrap aligned v14
+;; @003b                               v15 = load.i64 user2 v14
 ;;                                     v50 = iconst.i64 1
 ;; @003b                               v16 = iadd v15, v50  ; v50 = 1
-;; @003b                               store notrap aligned v16, v14
+;; @003b                               store user2 v16, v14
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
@@ -124,7 +124,7 @@
 ;; @003b                               v28 = iadd v74, v26
 ;;                                     v75 = iconst.i64 8
 ;; @003b                               v30 = iadd v28, v75  ; v75 = 8
-;; @003b                               v31 = load.i64 notrap aligned v30
+;; @003b                               v31 = load.i64 user2 v30
 ;;                                     v76 = iconst.i64 1
 ;;                                     v66 = icmp eq v31, v76  ; v76 = 1
 ;; @003b                               brif v66, block5, block6
@@ -137,7 +137,7 @@
 ;;                                     v43 = iconst.i64 -1
 ;; @003b                               v32 = iadd.i64 v31, v43  ; v43 = -1
 ;;                                     v77 = iadd.i64 v28, v75  ; v75 = 8
-;; @003b                               store notrap aligned v32, v77
+;; @003b                               store user2 v32, v77
 ;; @003b                               jump block7
 ;;
 ;;                                 block7:

@@ -266,6 +266,13 @@ wasmtime_option_group! {
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub inlining: Option<wasmtime::Inlining>,
 
+        /// Whether or not trap metadata is present for wasm internal assertions
+        /// in compiled code.
+        pub metadata_for_internal_asserts: Option<bool>,
+        /// Whether or not trap metadata is present for detection of gc
+        /// corruption in compiled code.
+        pub metadata_for_gc_heap_corruption: Option<bool>,
+
         #[prefixed = "cranelift"]
         #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -974,6 +981,12 @@ impl CommonOptions {
         }
         if let Some(enable) = self.codegen.inlining {
             config.compiler_inlining(enable);
+        }
+        if let Some(enable) = self.codegen.metadata_for_internal_asserts {
+            config.metadata_for_internal_asserts(enable);
+        }
+        if let Some(enable) = self.codegen.metadata_for_gc_heap_corruption {
+            config.metadata_for_gc_heap_corruption(enable);
         }
 
         // async_stack_size enabled by either async or stack-switching, so

@@ -540,7 +540,10 @@ impl wasmtime_environ::Compiler for Compiler {
                 func.buffer.user_stack_maps(),
             );
 
-            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
+            traps.push(
+                range.clone(),
+                &func.traps(&self.tunables).collect::<Vec<_>>(),
+            );
             clif_to_env_exception_tables(
                 &mut exception_tables,
                 range.clone(),

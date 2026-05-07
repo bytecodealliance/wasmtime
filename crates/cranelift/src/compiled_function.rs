@@ -7,6 +7,7 @@ use cranelift_codegen::{
 };
 use wasmtime_environ::{
     FilePos, FrameStateSlotBuilder, InstructionAddressMap, ModulePC, PrimaryMap, TrapInformation,
+    Tunables,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -144,8 +145,14 @@ impl CompiledFunction {
     }
 
     /// Returns an iterator to the function's trap information.
-    pub fn traps(&self) -> impl Iterator<Item = TrapInformation> + '_ {
-        self.buffer.traps().iter().filter_map(mach_trap_to_trap)
+    pub fn traps<'a>(
+        &'a self,
+        tunables: &'a Tunables,
+    ) -> impl Iterator<Item = TrapInformation> + 'a {
+        self.buffer
+            .traps()
+            .iter()
+            .filter_map(move |t| mach_trap_to_trap(t, tunables))
     }
 
     /// Get the function's address map from the metadata.

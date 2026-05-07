@@ -50,6 +50,7 @@
 ;;       movq    0x20(%rcx), %rcx
 ;;       movl    %eax, %eax
 ;;       movl    $0x2a, 0x18(%rcx, %rax)
+;;       ╰─╼ trap: GcHeapCorrupt
 ;;       movq    %rcx, 0x10(%rsp)
 ;;       movq    0x38(%rbx), %rax
 ;;       movq    0x48(%rbx), %rdi
@@ -65,6 +66,7 @@
 ;;   95: movl    %eax, %eax
 ;;       movq    0x10(%rsp), %rcx
 ;;       movl    0x18(%rcx, %rax), %eax
+;;       ╰─╼ trap: GcHeapCorrupt
 ;;       movq    0x20(%rsp), %rbx
 ;;       movq    0x28(%rsp), %r12
 ;;       movq    0x30(%rsp), %r13
@@ -75,6 +77,6 @@
 ;;       popq    %rbp
 ;;       retq
 ;;   c2: ud2
-;;       ╰─╼ trap: StackOverflow
+;;       ╰─╼ trap: Normal(StackOverflow)
 ;;   c4: ud2
-;;       ╰─╼ trap: NullReference
+;;       ╰─╼ trap: Normal(NullReference)

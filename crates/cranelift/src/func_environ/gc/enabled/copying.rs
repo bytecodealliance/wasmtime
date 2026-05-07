@@ -218,7 +218,7 @@ impl CopyingCompiler {
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
-        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
         match ty {
             WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
@@ -286,9 +286,7 @@ impl GcCompiler for CopyingCompiler {
         );
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
         let len = init.len(&mut builder.cursor());
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), len, len_addr, 0);
+        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
 
         // Initialize elements.
         let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));

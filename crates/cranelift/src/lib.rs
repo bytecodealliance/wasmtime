@@ -25,8 +25,8 @@ use cranelift_entity::PrimaryMap;
 
 use target_lexicon::Architecture;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, FlagValue, FuncKey, Trap, TrapInformation, Tunables, WasmFuncType,
-    WasmHeapTopType, WasmHeapType, WasmValType,
+    BuiltinFunctionIndex, CompiledTrap, FlagValue, FuncKey, Trap, TrapInformation, Tunables,
+    WasmFuncType, WasmHeapTopType, WasmHeapType, WasmValType,
 };
 
 pub use builder::builder;
@@ -48,7 +48,8 @@ mod trap;
 use self::compiler::Compiler;
 
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
-const TRAP_OFFSET: u8 = 2;
+const TRAP_GC_HEAP_CORRUPT: TrapCode = TrapCode::unwrap_user(2);
+const TRAP_OFFSET: u8 = 3;
 pub const TRAP_CANNOT_LEAVE_COMPONENT: TrapCode =
     TrapCode::unwrap_user(Trap::CannotLeaveComponent as u8 + TRAP_OFFSET);
 pub const TRAP_INDIRECT_CALL_TO_NULL: TrapCode =
@@ -254,29 +255,39 @@ fn to_flag_value(v: &settings::Value) -> FlagValue<'static> {
 }
 
 /// Converts machine traps to trap information.
-pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
+pub fn mach_trap_to_trap(trap: &MachTrap, tunables: &Tunables) -> Option<TrapInformation> {
     let &MachTrap { offset, code } = trap;
     Some(TrapInformation {
         code_offset: offset,
-        trap_code: clif_trap_to_env_trap(code)?,
+        trap_code: clif_trap_to_env_trap(code, tunables)?,
     })
 }
 
-fn clif_trap_to_env_trap(trap: ir::TrapCode) -> Option<Trap> {
-    Some(match trap {
+fn clif_trap_to_env_trap(trap: ir::TrapCode, tunables: &Tunables) -> Option<CompiledTrap> {
+    Some(CompiledTrap::Normal(match trap {
         ir::TrapCode::STACK_OVERFLOW => Trap::StackOverflow,
         ir::TrapCode::HEAP_OUT_OF_BOUNDS => Trap::MemoryOutOfBounds,
         ir::TrapCode::INTEGER_OVERFLOW => Trap::IntegerOverflow,
         ir::TrapCode::INTEGER_DIVISION_BY_ZERO => Trap::IntegerDivisionByZero,
         ir::TrapCode::BAD_CONVERSION_TO_INTEGER => Trap::BadConversionToInteger,
 
-        // These do not get converted to wasmtime traps, since they
-        // shouldn't ever be hit in theory. Instead of catching and handling
-        // these, we let the signal crash the process.
-        TRAP_INTERNAL_ASSERT => return None,
+        TRAP_INTERNAL_ASSERT => {
+            return if tunables.metadata_for_internal_asserts {
+                Some(CompiledTrap::InternalAssert)
+            } else {
+                None
+            };
+        }
+        TRAP_GC_HEAP_CORRUPT => {
+            return if tunables.metadata_for_gc_heap_corruption {
+                Some(CompiledTrap::GcHeapCorrupt)
+            } else {
+                None
+            };
+        }
 
         other => Trap::from_u8(other.as_raw().get() - TRAP_OFFSET).unwrap(),
-    })
+    }))
 }
 
 /// Converts machine relocations to relocation information

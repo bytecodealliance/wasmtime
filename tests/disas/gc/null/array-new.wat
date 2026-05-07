@@ -27,21 +27,21 @@
 ;;                                     v56 = ishl v6, v55  ; v55 = 3
 ;;                                     v53 = iconst.i64 32
 ;; @0022                               v8 = ushr v56, v53  ; v53 = 32
-;; @0022                               trapnz v8, user17
+;; @0022                               trapnz v8, user18
 ;; @0022                               v5 = iconst.i32 16
 ;;                                     v62 = iconst.i32 3
 ;;                                     v63 = ishl v3, v62  ; v62 = 3
-;; @0022                               v10 = uadd_overflow_trap v5, v63, user17  ; v5 = 16
+;; @0022                               v10 = uadd_overflow_trap v5, v63, user18  ; v5 = 16
 ;; @0022                               v12 = iconst.i32 -67108864
 ;; @0022                               v13 = band v10, v12  ; v12 = -67108864
-;; @0022                               trapnz v13, user17
-;; @0022                               v15 = load.i64 notrap aligned readonly v0+32
-;; @0022                               v16 = load.i32 notrap aligned v15
+;; @0022                               trapnz v13, user18
+;; @0022                               v15 = load.i64 user2 v0+32
+;; @0022                               v16 = load.i32 user2 v15
 ;;                                     v66 = iconst.i32 7
-;; @0022                               v19 = uadd_overflow_trap v16, v66, user17  ; v66 = 7
+;; @0022                               v19 = uadd_overflow_trap v16, v66, user18  ; v66 = 7
 ;;                                     v72 = iconst.i32 -8
 ;; @0022                               v21 = band v19, v72  ; v72 = -8
-;; @0022                               v22 = uadd_overflow_trap v21, v10, user17
+;; @0022                               v22 = uadd_overflow_trap v21, v10, user18
 ;; @0022                               v51 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0022                               v24 = load.i64 notrap aligned v51+40
 ;; @0022                               v23 = uextend.i64 v22
@@ -55,14 +55,14 @@
 ;;                                     v86 = band.i32 v19, v72  ; v72 = -8
 ;;                                     v87 = uextend.i64 v86
 ;; @0022                               v31 = iadd v29, v87
-;; @0022                               store notrap aligned v73, v31
+;; @0022                               store user2 v73, v31
 ;; @0022                               v35 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0022                               v36 = load.i32 notrap aligned readonly can_move v35
-;; @0022                               store notrap aligned v36, v31+4
-;; @0022                               store.i32 notrap aligned v22, v15
+;; @0022                               store user2 v36, v31+4
+;; @0022                               store.i32 user2 v22, v15
 ;;                                     v54 = iconst.i64 8
 ;; @0022                               v37 = iadd v31, v54  ; v54 = 8
-;; @0022                               store.i32 notrap aligned v3, v37
+;; @0022                               store.i32 user2 v3, v37
 ;;                                     v76 = iconst.i64 16
 ;;                                     v81 = iadd v31, v76  ; v76 = 16
 ;; @0022                               v43 = uextend.i64 v10
@@ -74,7 +74,7 @@
 ;; @0022                               brif v46, block6, block5
 ;;
 ;;                                 block5:
-;; @0022                               store.i64 notrap aligned little v2, v45
+;; @0022                               store.i64 user2 little v2, v45
 ;;                                     v88 = iconst.i64 8
 ;;                                     v89 = iadd.i64 v45, v88  ; v88 = 8
 ;; @0022                               jump block4(v89)

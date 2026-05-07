@@ -336,6 +336,12 @@ impl Metadata<'_> {
 
             // This doesn't affect compilation, it's just a runtime setting.
             gc_heap_reservation_for_growth: _,
+
+            // No need to match whether or not this metadata is emitted, if it
+            // is or isn't then that's fine, the runtime handles it the same
+            // way.
+            metadata_for_internal_asserts: _,
+            metadata_for_gc_heap_corruption: _,
         } = self.tunables;
 
         Self::check_collector(collector, other.collector)?;

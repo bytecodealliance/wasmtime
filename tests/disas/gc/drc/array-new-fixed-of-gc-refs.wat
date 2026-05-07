@@ -44,7 +44,7 @@
 ;; @0025                               v22 = iadd v20, v21
 ;;                                     v130 = iconst.i64 24
 ;; @0025                               v23 = iadd v22, v130  ; v130 = 24
-;; @0025                               store notrap aligned v6, v23  ; v6 = 3
+;; @0025                               store user2 v6, v23  ; v6 = 3
 ;;                                     v93 = load.i32 notrap v137
 ;;                                     v128 = iconst.i32 1
 ;; @0025                               v28 = band v93, v128  ; v128 = 1
@@ -59,17 +59,17 @@
 ;; @0025                               v34 = iadd.i64 v20, v32
 ;; @0025                               v35 = iconst.i64 8
 ;; @0025                               v36 = iadd v34, v35  ; v35 = 8
-;; @0025                               v37 = load.i64 notrap aligned v36
+;; @0025                               v37 = load.i64 user2 v36
 ;;                                     v122 = iconst.i64 1
 ;; @0025                               v38 = iadd v37, v122  ; v122 = 1
-;; @0025                               store notrap aligned v38, v36
+;; @0025                               store user2 v38, v36
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
 ;;                                     v89 = load.i32 notrap v137
 ;;                                     v151 = iconst.i64 28
 ;;                                     v156 = iadd.i64 v22, v151  ; v151 = 28
-;; @0025                               store notrap aligned little v89, v156
+;; @0025                               store user2 little v89, v156
 ;;                                     v88 = load.i32 notrap v136
 ;;                                     v242 = iconst.i32 1
 ;;                                     v243 = band v88, v242  ; v242 = 1
@@ -84,17 +84,17 @@
 ;; @0025                               v51 = iadd.i64 v20, v49
 ;;                                     v246 = iconst.i64 8
 ;; @0025                               v53 = iadd v51, v246  ; v246 = 8
-;; @0025                               v54 = load.i64 notrap aligned v53
+;; @0025                               v54 = load.i64 user2 v53
 ;;                                     v247 = iconst.i64 1
 ;; @0025                               v55 = iadd v54, v247  ; v247 = 1
-;; @0025                               store notrap aligned v55, v53
+;; @0025                               store user2 v55, v53
 ;; @0025                               jump block5
 ;;
 ;;                                 block5:
 ;;                                     v84 = load.i32 notrap v136
 ;;                                     v133 = iconst.i64 32
 ;;                                     v163 = iadd.i64 v22, v133  ; v133 = 32
-;; @0025                               store notrap aligned little v84, v163
+;; @0025                               store user2 little v84, v163
 ;;                                     v83 = load.i32 notrap v135
 ;;                                     v248 = iconst.i32 1
 ;;                                     v249 = band v83, v248  ; v248 = 1
@@ -109,17 +109,17 @@
 ;; @0025                               v68 = iadd.i64 v20, v66
 ;;                                     v252 = iconst.i64 8
 ;; @0025                               v70 = iadd v68, v252  ; v252 = 8
-;; @0025                               v71 = load.i64 notrap aligned v70
+;; @0025                               v71 = load.i64 user2 v70
 ;;                                     v253 = iconst.i64 1
 ;; @0025                               v72 = iadd v71, v253  ; v253 = 1
-;; @0025                               store notrap aligned v72, v70
+;; @0025                               store user2 v72, v70
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
 ;;                                     v79 = load.i32 notrap v135
 ;;                                     v178 = iconst.i64 36
 ;;                                     v183 = iadd.i64 v22, v178  ; v178 = 36
-;; @0025                               store notrap aligned little v79, v183
+;; @0025                               store user2 little v79, v183
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:

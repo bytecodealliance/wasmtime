@@ -3255,6 +3255,26 @@ impl Config {
         self.rr_config = cfg;
         self
     }
+
+    /// Whether or not trap metadata is generated in compiled wasms for internal
+    /// asserts in the compiled code itself.
+    ///
+    /// This is intended as a debugging option and is set to `false` by
+    /// default.
+    pub fn metadata_for_internal_asserts(&mut self, enable: bool) -> &mut Self {
+        self.tunables.metadata_for_internal_asserts = Some(enable);
+        self
+    }
+
+    /// Whether or not trap metadata is generated in compiled wasms for
+    /// detection of corruption in the GC heap.
+    ///
+    /// This is intended as a defense-in-depth option for generated code in the
+    /// face of GC heap corruption and is `true` by default.
+    pub fn metadata_for_gc_heap_corruption(&mut self, enable: bool) -> &mut Self {
+        self.tunables.metadata_for_gc_heap_corruption = Some(enable);
+        self
+    }
 }
 
 impl Default for Config {

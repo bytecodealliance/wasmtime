@@ -40,7 +40,7 @@
 ;; @0020                               v14 = iadd v12, v13
 ;;                                     v22 = iconst.i64 24
 ;; @0020                               v15 = iadd v14, v22  ; v22 = 24
-;; @0020                               store notrap aligned little v18, v15
+;; @0020                               store user2 little v18, v15
 ;;                                     v19 = load.i32 notrap v26
 ;; @0023                               jump block1
 ;;

@@ -118,7 +118,7 @@
 ;; @0081                               v13 = load.i64 notrap aligned readonly can_move v0+104
 ;; @007f                               v11 = iconst.i32 23
 ;; @0081                               call_indirect sig0, v14(v13, v0, v11)  ; v11 = 23
-;; @0083                               trap user11
+;; @0083                               trap user12
 ;;
 ;;                                 block3:
 ;; @0085                               v15 = load.i64 notrap aligned readonly can_move v0+112

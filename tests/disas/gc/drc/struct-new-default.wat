@@ -37,18 +37,18 @@
 ;; @0021                               v16 = iadd v14, v15
 ;;                                     v45 = iconst.i64 24
 ;; @0021                               v17 = iadd v16, v45  ; v45 = 24
-;; @0021                               store notrap aligned little v3, v17  ; v3 = 0.0
+;; @0021                               store user2 little v3, v17  ; v3 = 0.0
 ;; @0021                               v4 = iconst.i32 0
 ;;                                     v44 = iconst.i64 28
 ;; @0021                               v18 = iadd v16, v44  ; v44 = 28
-;; @0021                               istore8 notrap aligned little v4, v18  ; v4 = 0
+;; @0021                               istore8 user2 little v4, v18  ; v4 = 0
 ;;                                     jump block3
 ;;
 ;;                                 block3:
 ;;                                     v64 = iconst.i32 0
 ;;                                     v43 = iconst.i64 32
 ;; @0021                               v19 = iadd.i64 v16, v43  ; v43 = 32
-;; @0021                               store notrap aligned little v64, v19  ; v64 = 0
+;; @0021                               store user2 little v64, v19  ; v64 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

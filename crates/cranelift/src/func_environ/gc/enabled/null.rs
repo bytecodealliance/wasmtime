@@ -73,13 +73,13 @@ impl NullCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted().with_readonly(),
+            GC_MEMFLAGS,
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );
         let next = builder
             .ins()
-            .load(ir::types::I32, ir::MemFlags::trusted(), ptr_to_next, 0);
+            .load(ir::types::I32, GC_MEMFLAGS, ptr_to_next, 0);
 
         // Increment the bump "pointer" to the requested alignment:
         //
@@ -157,20 +157,20 @@ impl NullCompiler {
             ),
         };
         builder.ins().store(
-            ir::MemFlags::trusted(),
+            GC_MEMFLAGS,
             kind_and_size,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
         );
         builder.ins().store(
-            ir::MemFlags::trusted(),
+            GC_MEMFLAGS,
             ty,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
         );
         builder
             .ins()
-            .store(ir::MemFlags::trusted(), end_of_object, ptr_to_next, 0);
+            .store(GC_MEMFLAGS, end_of_object, ptr_to_next, 0);
 
         log::trace!("emit_inline_alloc(..) -> ({aligned}, {ptr_to_object})");
         (aligned, ptr_to_object)
@@ -223,9 +223,7 @@ impl GcCompiler for NullCompiler {
         // any pointers or offsets out from the (untrusted) GC heap.
         let len_addr = builder.ins().iadd_imm(ptr_to_object, i64::from(len_offset));
         let len = init.len(&mut builder.cursor());
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), len, len_addr, 0);
+        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
 
         // Finally, initialize the elements.
         let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));

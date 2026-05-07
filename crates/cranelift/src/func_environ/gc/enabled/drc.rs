@@ -39,9 +39,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder
-            .ins()
-            .load(ir::types::I64, ir::MemFlags::trusted(), pointer, 0)
+        builder.ins().load(ir::types::I64, GC_MEMFLAGS, pointer, 0)
     }
 
     /// Generate code to update the given GC reference's ref count to the new
@@ -64,9 +62,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), new_ref_count, pointer, 0);
+        builder.ins().store(GC_MEMFLAGS, new_ref_count, pointer, 0);
     }
 
     /// Generate code to increment or decrement the given GC reference's ref
@@ -108,9 +104,7 @@ impl DrcCompiler {
 
         // Load the current first list element, which will be our new next list
         // element.
-        let next = builder
-            .ins()
-            .load(ir::types::I32, ir::MemFlags::trusted(), head, 0);
+        let next = builder.ins().load(ir::types::I32, GC_MEMFLAGS, head, 0);
 
         // Update our object's header to point to `next` and consider itself part of the list.
         self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
@@ -120,9 +114,7 @@ impl DrcCompiler {
         self.mutate_ref_count(func_env, builder, gc_ref, 1);
 
         // Commit this object as the new head of the list.
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), gc_ref, head, 0);
+        builder.ins().store(GC_MEMFLAGS, gc_ref, head, 0);
     }
 
     /// Load a pointer to the first element of the DRC heap's
@@ -137,7 +129,7 @@ impl DrcCompiler {
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         builder.ins().load(
             ptr_ty,
-            ir::MemFlags::trusted().with_readonly(),
+            GC_MEMFLAGS,
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         )
@@ -163,7 +155,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder.ins().store(ir::MemFlags::trusted(), next, ptr, 0);
+        builder.ins().store(GC_MEMFLAGS, next, ptr, 0);
     }
 
     /// Set the in-over-approximated-stack-roots list bit in a `VMDrcHeader`'s
@@ -199,9 +191,7 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), new_reserved, ptr, 0);
+        builder.ins().store(GC_MEMFLAGS, new_reserved, ptr, 0);
     }
 
     /// Write to an uninitialized field or element inside a GC object.
@@ -214,7 +204,7 @@ impl DrcCompiler {
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
-        let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
         match ty {
             WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
@@ -396,9 +386,7 @@ impl GcCompiler for DrcCompiler {
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
         let len = init.len(&mut builder.cursor());
-        builder
-            .ins()
-            .store(ir::MemFlags::trusted(), len, len_addr, 0);
+        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
 
         // Finally, initialize the elements.
         let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));
@@ -666,9 +654,7 @@ impl GcCompiler for DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let reserved = builder
-            .ins()
-            .load(ir::types::I32, ir::MemFlags::trusted(), ptr, 0);
+        let reserved = builder.ins().load(ir::types::I32, GC_MEMFLAGS, ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),

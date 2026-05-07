@@ -67,14 +67,14 @@
 ;;                                 block4(v38: i32, v39: i64):
 ;;                                     v47 = iconst.i64 16
 ;; @002a                               v40 = iadd v39, v47  ; v47 = 16
-;; @002a                               store.f32 notrap aligned little v2, v40
+;; @002a                               store.f32 user2 little v2, v40
 ;;                                     v46 = iconst.i64 20
 ;; @002a                               v41 = iadd v39, v46  ; v46 = 20
-;; @002a                               istore8.i32 notrap aligned little v3, v41
+;; @002a                               istore8.i32 user2 little v3, v41
 ;;                                     v43 = load.i32 notrap v52
 ;;                                     v45 = iconst.i64 24
 ;; @002a                               v42 = iadd v39, v45  ; v45 = 24
-;; @002a                               store notrap aligned little v43, v42
+;; @002a                               store user2 little v43, v42
 ;; @002d                               jump block1(v38)
 ;;
 ;;                                 block1(v5: i32):

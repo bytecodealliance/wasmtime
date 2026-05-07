@@ -10,7 +10,46 @@ pub struct TrapInformation {
     pub code_offset: u32,
 
     /// Code of the trap.
-    pub trap_code: Trap,
+    pub trap_code: CompiledTrap,
+}
+
+/// Possible traps that can be compiled into WebAssembly modules.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum CompiledTrap {
+    /// A normal trap, expected to possibly be hit at runtime.
+    Normal(Trap),
+    /// An internal assertion in the compiled code itself.
+    InternalAssert,
+    /// The GC heap was detected as being corrupt.
+    GcHeapCorrupt,
+}
+
+impl CompiledTrap {
+    /// Encodes this as a byte.
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            CompiledTrap::Normal(trap) => *trap as u8,
+            CompiledTrap::InternalAssert => 0xFF,
+            CompiledTrap::GcHeapCorrupt => 0xFE,
+        }
+    }
+
+    /// Decodes a byte as a trap.
+    pub fn from_u8(byte: u8) -> Option<CompiledTrap> {
+        if byte == 0xFF {
+            Some(CompiledTrap::InternalAssert)
+        } else if byte == 0xFE {
+            Some(CompiledTrap::GcHeapCorrupt)
+        } else {
+            Trap::from_u8(byte).map(CompiledTrap::Normal)
+        }
+    }
+}
+
+impl From<Trap> for CompiledTrap {
+    fn from(trap: Trap) -> CompiledTrap {
+        CompiledTrap::Normal(trap)
+    }
 }
 
 macro_rules! generate_trap_type {
@@ -239,7 +278,7 @@ impl core::error::Error for Trap {}
 /// The `section` provided is expected to have been built by
 /// `TrapEncodingBuilder` above. Additionally the `offset` should be a relative
 /// offset within the text section of the compilation image.
-pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
+pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<CompiledTrap> {
     let (offsets, traps) = parse(section)?;
 
     // The `offsets` table is sorted in the trap section so perform a binary
@@ -258,7 +297,7 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
     debug_assert!(index < traps.len());
     let byte = *traps.get(index)?;
 
-    let trap = Trap::from_u8(byte);
+    let trap = CompiledTrap::from_u8(byte);
     debug_assert!(trap.is_some(), "missing mapping for {byte}");
     trap
 }
@@ -275,12 +314,12 @@ fn parse(section: &[u8]) -> Option<(&[U32<LittleEndian>], &[u8])> {
 
 /// Returns an iterator over all of the traps encoded in `section`, which should
 /// have been produced by `TrapEncodingBuilder`.
-pub fn iterate_traps(section: &[u8]) -> Option<impl Iterator<Item = (u32, Trap)> + '_> {
+pub fn iterate_traps(section: &[u8]) -> Option<impl Iterator<Item = (u32, CompiledTrap)> + '_> {
     let (offsets, traps) = parse(section)?;
-    Some(
-        offsets
-            .iter()
-            .zip(traps)
-            .map(|(offset, trap)| (offset.get(LittleEndian), Trap::from_u8(*trap).unwrap())),
-    )
+    Some(offsets.iter().zip(traps).map(|(offset, trap)| {
+        (
+            offset.get(LittleEndian),
+            CompiledTrap::from_u8(*trap).unwrap(),
+        )
+    }))
 }

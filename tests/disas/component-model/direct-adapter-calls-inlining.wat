@@ -94,7 +94,7 @@
 ;;                                     v20 = load.i64 notrap aligned readonly can_move v5+104
 ;;                                     v19 = iconst.i32 23
 ;;                                     call_indirect sig1, v21(v20, v5, v19)  ; v19 = 23
-;;                                     trap user11
+;;                                     trap user12
 ;;
 ;;                                 block5:
 ;;                                     v22 = load.i64 notrap aligned readonly can_move v5+112

@@ -22,17 +22,17 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0023                               trapz v2, user15
+;; @0023                               trapz v2, user16
 ;; @0023                               v20 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0023                               v6 = load.i64 notrap aligned readonly can_move v20+32
 ;; @0023                               v5 = uextend.i64 v2
 ;; @0023                               v7 = iadd v6, v5
 ;; @0023                               v8 = iconst.i64 24
 ;; @0023                               v9 = iadd v7, v8  ; v8 = 24
-;; @0023                               v10 = load.f32 notrap aligned little v9
+;; @0023                               v10 = load.f32 user2 little v9
 ;; @0029                               v14 = iconst.i64 28
 ;; @0029                               v15 = iadd v7, v14  ; v14 = 28
-;; @0029                               v16 = load.i8 notrap aligned little v15
+;; @0029                               v16 = load.i8 user2 little v15
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

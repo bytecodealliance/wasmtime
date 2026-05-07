@@ -391,7 +391,7 @@ pub enum TrapReason {
         faulting_addr: Option<usize>,
 
         /// The trap code associated with this trap.
-        trap: wasmtime_environ::Trap,
+        trap: wasmtime_environ::CompiledTrap,
     },
 }
 
@@ -970,7 +970,7 @@ impl CallThreadState {
         &self,
         TrapRegisters { pc, fp, .. }: TrapRegisters,
         faulting_addr: Option<usize>,
-        trap: wasmtime_environ::Trap,
+        trap: wasmtime_environ::CompiledTrap,
     ) {
         let mut unwind = UnwindReason::from(TrapReason::Jit {
             pc,

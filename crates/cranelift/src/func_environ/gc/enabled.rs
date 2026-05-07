@@ -3,7 +3,7 @@ use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
-use crate::{Reachability, TRAP_INTERNAL_ASSERT};
+use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{BlockArg, ExceptionTableData, ExceptionTableItem};
 use cranelift_codegen::{
@@ -26,6 +26,9 @@ mod null;
 
 #[cfg(feature = "gc-copying")]
 mod copying;
+
+const GC_MEMFLAGS: ir::MemFlags =
+    ir::MemFlags::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
 
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
@@ -161,12 +164,9 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let kind_and_reserved_bits = builder.ins().load(
-        ir::types::I32,
-        ir::MemFlags::trusted().with_readonly(),
-        kind_addr,
-        0,
-    );
+    let kind_and_reserved_bits = builder
+        .ins()
+        .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
     let kind_mask = builder
         .ins()
         .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
@@ -202,7 +202,7 @@ fn read_field_at_addr(
     );
 
     // Data inside GC objects is always little endian.
-    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
     let value = match ty {
         WasmStorageType::I8 => builder.ins().load(ir::types::I8, flags, addr, 0),
@@ -321,7 +321,7 @@ fn write_field_at_addr(
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
-    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
     match field_ty {
         WasmStorageType::I8 => {
@@ -928,12 +928,9 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let result = builder.ins().load(
-        ir::types::I32,
-        ir::MemFlags::trusted().with_readonly(),
-        len_field,
-        0,
-    );
+    let result = builder
+        .ins()
+        .load(ir::types::I32, GC_MEMFLAGS, len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
 }
@@ -973,7 +970,7 @@ fn emit_array_size_info(
     let all_elems_size = builder.ins().imul(one_elem_size, array_len);
 
     let high_bits = builder.ins().ushr_imm(all_elems_size, 32);
-    builder.ins().trapnz(high_bits, TRAP_INTERNAL_ASSERT);
+    builder.ins().trapnz(high_bits, TRAP_GC_HEAP_CORRUPT);
 
     let all_elems_size = builder.ins().ireduce(ir::types::I32, all_elems_size);
     let base_size = builder
@@ -982,7 +979,7 @@ fn emit_array_size_info(
     let obj_size =
         builder
             .ins()
-            .uadd_overflow_trap(all_elems_size, base_size, TRAP_INTERNAL_ASSERT);
+            .uadd_overflow_trap(all_elems_size, base_size, TRAP_GC_HEAP_CORRUPT);
 
     let one_elem_size = builder.ins().ireduce(ir::types::I32, one_elem_size);
 
@@ -1244,12 +1241,9 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let actual_kind = builder.ins().load(
-            ir::types::I32,
-            ir::MemFlags::trusted().with_readonly(),
-            kind_addr,
-            0,
-        );
+        let actual_kind = builder
+            .ins()
+            .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1301,12 +1295,7 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let actual_shared_ty = builder.ins().load(
-                ir::types::I32,
-                ir::MemFlags::trusted().with_readonly(),
-                ty_addr,
-                0,
-            );
+            let actual_shared_ty = builder.ins().load(ir::types::I32, GC_MEMFLAGS, ty_addr, 0);
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
@@ -1319,11 +1308,8 @@ pub fn translate_ref_test(
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
 
-            let actual_shared_ty = func_env.load_funcref_type_index(
-                &mut builder.cursor(),
-                ir::MemFlags::trusted().with_readonly(),
-                val,
-            );
+            let actual_shared_ty =
+                func_env.load_funcref_type_index(&mut builder.cursor(), GC_MEMFLAGS, val);
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
@@ -1594,7 +1580,7 @@ impl FuncEnvironment<'_> {
             &gc_heap,
             gc_ref,
             bounds_check,
-            crate::TRAP_INTERNAL_ASSERT,
+            crate::TRAP_GC_HEAP_CORRUPT,
         ) {
             Reachability::Reachable(v) => v,
             Reachability::Unreachable => {

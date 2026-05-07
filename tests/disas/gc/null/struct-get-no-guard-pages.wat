@@ -34,10 +34,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0033                               trapz v2, user15
+;; @0033                               trapz v2, user16
 ;; @0033                               v4 = uextend.i64 v2
 ;; @0033                               v5 = iconst.i64 24
-;; @0033                               v6 = uadd_overflow_trap v4, v5, user1  ; v5 = 24
+;; @0033                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @0033                               v18 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0033                               v7 = load.i64 notrap aligned v18+40
 ;; @0033                               v9 = load.i64 notrap aligned v18+32
@@ -47,7 +47,7 @@
 ;; @0033                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @0033                               v13 = iconst.i64 8
 ;; @0033                               v14 = iadd v12, v13  ; v13 = 8
-;; @0033                               v15 = load.f32 notrap aligned little v14
+;; @0033                               v15 = load.f32 user2 little v14
 ;; @0037                               jump block1
 ;;
 ;;                                 block1:
@@ -65,10 +65,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @003c                               trapz v2, user15
+;; @003c                               trapz v2, user16
 ;; @003c                               v4 = uextend.i64 v2
 ;; @003c                               v5 = iconst.i64 24
-;; @003c                               v6 = uadd_overflow_trap v4, v5, user1  ; v5 = 24
+;; @003c                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @003c                               v19 = load.i64 notrap aligned readonly can_move v0+8
 ;; @003c                               v7 = load.i64 notrap aligned v19+40
 ;; @003c                               v9 = load.i64 notrap aligned v19+32
@@ -78,7 +78,7 @@
 ;; @003c                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @003c                               v13 = iconst.i64 12
 ;; @003c                               v14 = iadd v12, v13  ; v13 = 12
-;; @003c                               v15 = load.i8 notrap aligned little v14
+;; @003c                               v15 = load.i8 user2 little v14
 ;; @0040                               jump block1
 ;;
 ;;                                 block1:
@@ -97,10 +97,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0045                               trapz v2, user15
+;; @0045                               trapz v2, user16
 ;; @0045                               v4 = uextend.i64 v2
 ;; @0045                               v5 = iconst.i64 24
-;; @0045                               v6 = uadd_overflow_trap v4, v5, user1  ; v5 = 24
+;; @0045                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @0045                               v19 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0045                               v7 = load.i64 notrap aligned v19+40
 ;; @0045                               v9 = load.i64 notrap aligned v19+32
@@ -110,7 +110,7 @@
 ;; @0045                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @0045                               v13 = iconst.i64 12
 ;; @0045                               v14 = iadd v12, v13  ; v13 = 12
-;; @0045                               v15 = load.i8 notrap aligned little v14
+;; @0045                               v15 = load.i8 user2 little v14
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
@@ -129,10 +129,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @004e                               trapz v2, user15
+;; @004e                               trapz v2, user16
 ;; @004e                               v4 = uextend.i64 v2
 ;; @004e                               v5 = iconst.i64 24
-;; @004e                               v6 = uadd_overflow_trap v4, v5, user1  ; v5 = 24
+;; @004e                               v6 = uadd_overflow_trap v4, v5, user2  ; v5 = 24
 ;; @004e                               v18 = load.i64 notrap aligned readonly can_move v0+8
 ;; @004e                               v7 = load.i64 notrap aligned v18+40
 ;; @004e                               v9 = load.i64 notrap aligned v18+32
@@ -142,7 +142,7 @@
 ;; @004e                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @004e                               v13 = iconst.i64 16
 ;; @004e                               v14 = iadd v12, v13  ; v13 = 16
-;; @004e                               v15 = load.i32 notrap aligned little v14
+;; @004e                               v15 = load.i32 user2 little v14
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:

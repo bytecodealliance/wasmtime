@@ -46,7 +46,7 @@ impl TrapEncodingBuilder {
             let pos = func_start + info.code_offset;
             assert!(pos >= self.last_offset);
             self.offsets.push(U32::new(LittleEndian, pos));
-            self.traps.push(info.trap_code as u8);
+            self.traps.push(info.trap_code.as_u8());
             self.last_offset = pos;
         }
 

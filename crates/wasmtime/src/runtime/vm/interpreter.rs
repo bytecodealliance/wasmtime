@@ -471,7 +471,7 @@ impl InterpreterRef<'_> {
                         TrapKind::DisabledOpcode => Trap::DisabledOpcode,
                         TrapKind::StackOverflow => Trap::StackOverflow,
                     };
-                    s.set_jit_trap(regs, None, trap);
+                    s.set_jit_trap(regs, None, trap.into());
                     s.entry_trap_handler()
                 }
                 None => {

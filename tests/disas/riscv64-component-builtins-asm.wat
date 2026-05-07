@@ -30,7 +30,7 @@
 ;;       andi    a1, a1, 1
 ;;       bnez    a1, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ╰─╼ trap: CannotLeaveComponent
+;;       ╰─╼ trap: Normal(CannotLeaveComponent)
 ;;       ld      a1, 8(a0)
 ;;       ld      a5, 0x10(a1)
 ;;       mv      a4, zero

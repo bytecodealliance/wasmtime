@@ -180,6 +180,14 @@ define_tunables! {
         ///
         /// This is the same as `memory_may_move` but for GC heaps.
         pub gc_heap_may_move: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on internal assertions failing.
+        pub metadata_for_internal_asserts: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on gc heap corruption being detected.
+        pub metadata_for_gc_heap_corruption: bool,
     }
 
     pub struct ConfigTunables {
@@ -263,6 +271,8 @@ impl Tunables {
             gc_heap_guard_size: 0,
             gc_heap_reservation_for_growth: 0,
             gc_heap_may_move: true,
+            metadata_for_internal_asserts: false,
+            metadata_for_gc_heap_corruption: true,
         }
     }
 

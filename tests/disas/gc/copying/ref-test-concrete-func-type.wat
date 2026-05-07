@@ -27,7 +27,7 @@
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0020                               v10 = load.i32 notrap aligned readonly v2+16
+;; @0020                               v10 = load.i32 user2 v2+16
 ;; @0020                               v8 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0020                               v9 = load.i32 notrap aligned readonly can_move v8
 ;; @0020                               v11 = icmp eq v10, v9

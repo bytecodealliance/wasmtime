@@ -27,7 +27,7 @@ pub trait TranslateTrap {
     fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
         match (
             self.clif_instruction_traps_enabled(),
-            crate::clif_trap_to_env_trap(trap),
+            crate::clif_trap_to_env_trap(trap, self.compiler().tunables()),
         ) {
             // If libcall traps are disabled or there's no wasmtime-defined trap
             // code for this, then emit a native trap instruction.
@@ -42,7 +42,7 @@ pub trait TranslateTrap {
                 let debug_tags = self.debug_tags(builder.srcloc());
                 let trap_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::trap());
                 let vmctx = self.vmctx_val(&mut builder.cursor());
-                let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
+                let trap_code = builder.ins().iconst(I8, i64::from(trap.as_u8()));
                 builder.ins().call(trap_libcall, &[vmctx, trap_code]);
                 let raise_libcall = self.builtin_funcref(builder, BuiltinFunctionIndex::raise());
                 let inst = builder.ins().call(raise_libcall, &[vmctx]);

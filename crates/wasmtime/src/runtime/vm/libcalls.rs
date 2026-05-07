@@ -56,6 +56,7 @@
 
 #[cfg(feature = "stack-switching")]
 use super::stack_switching::VMContObj;
+use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::store::{Asyncness, InstanceId, StoreInstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
@@ -71,8 +72,8 @@ use core::ptr::NonNull;
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, MemoryIndex,
-    TableIndex, Trap,
+    CompiledTrap, DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex,
+    MemoryIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -1744,7 +1745,11 @@ fn fma_f64x2(
 /// only ever returns an error, and this hooks into the machinery to handle
 /// `Result` values to record such trap information.
 fn trap(_store: &mut dyn VMStore, _instance: InstanceId, code: u8) -> Result<Infallible> {
-    Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
+    match CompiledTrap::from_u8(code).unwrap() {
+        CompiledTrap::Normal(trap) => Err(trap.into()),
+        CompiledTrap::InternalAssert => bail_bug!("internal assert hit in wasm"),
+        CompiledTrap::GcHeapCorrupt => bail_bug!("GC heap corruption detected"),
+    }
 }
 
 fn raise(store: &mut dyn VMStore, _instance: InstanceId) {

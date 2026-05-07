@@ -23,7 +23,7 @@
 ;;     v6 = load.i32 notrap aligned v0+32
 ;;     v17 = iconst.i32 1
 ;;     v7 = band v6, v17  ; v17 = 1
-;;     trapz v7, user25
+;;     trapz v7, user26
 ;;     v10 = load.i64 notrap aligned readonly v0+8
 ;;     v11 = load.i64 notrap aligned readonly v10+16
 ;;     v8 = iconst.i32 0

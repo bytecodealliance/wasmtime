@@ -52,7 +52,7 @@
 ;; @0031                               v7 = ishl v5, v26  ; v26 = 3
 ;; @0031                               v8 = iadd v6, v7
 ;; @0031                               v10 = select_spectre_guard v4, v9, v8  ; v9 = 0
-;; @0031                               v11 = load.i64 user5 aligned table v10
+;; @0031                               v11 = load.i64 user6 aligned table v10
 ;;                                     v25 = iconst.i64 -2
 ;; @0031                               v12 = band v11, v25  ; v25 = -2
 ;; @0031                               brif v11, block3(v12), block2
@@ -63,11 +63,11 @@
 ;; @0031                               jump block3(v17)
 ;;
 ;;                                 block3(v13: i64):
-;; @0031                               v21 = load.i32 user6 aligned readonly v13+16
+;; @0031                               v21 = load.i32 user7 aligned readonly v13+16
 ;; @0031                               v19 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0031                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0031                               v22 = icmp eq v21, v20
-;; @0031                               trapz v22, user7
+;; @0031                               trapz v22, user8
 ;; @0031                               v23 = load.i64 notrap aligned readonly v13+8
 ;; @0031                               v24 = load.i64 notrap aligned readonly v13+24
 ;; @0031                               call_indirect sig0, v23(v24, v0)

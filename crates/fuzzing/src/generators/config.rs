@@ -350,6 +350,10 @@ impl Config {
             cfg.wasm.relaxed_simd = Some(false);
         }
         cfg.codegen.collector = Some(self.wasmtime.collector.to_wasmtime());
+        cfg.codegen.metadata_for_internal_asserts =
+            Some(self.wasmtime.metadata_for_internal_asserts);
+        cfg.codegen.metadata_for_gc_heap_corruption =
+            Some(self.wasmtime.metadata_for_gc_heap_corruption);
 
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = match compiler_strategy {
@@ -599,6 +603,8 @@ pub struct WasmtimeConfig {
     collector: Collector,
     gc_zeal_alloc_counter: Option<NonZeroU32>,
     table_lazy_init: bool,
+    metadata_for_internal_asserts: bool,
+    metadata_for_gc_heap_corruption: bool,
 
     /// Configuration for whether wasm is invoked in an async fashion and how
     /// it's cooperatively time-sliced.

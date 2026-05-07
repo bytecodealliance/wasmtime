@@ -2,10 +2,12 @@
 use super::coredump::WasmCoreDump;
 use crate::prelude::*;
 use crate::store::StoreOpaque;
-use crate::{AsContext, Module};
+use crate::{AsContext, Module, bug};
 use core::fmt;
 use core::num::NonZeroUsize;
-use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_or_index};
+use wasmtime_environ::{
+    CompiledTrap, FilePos, demangle_function_name, demangle_function_name_or_index,
+};
 
 /// Representation of a WebAssembly trap and what caused it to occur.
 ///
@@ -103,7 +105,15 @@ pub(crate) fn from_runtime_box(
             faulting_addr,
             trap,
         } => {
-            let mut err: Error = trap.into();
+            let mut err: Error = match trap {
+                CompiledTrap::Normal(trap) => trap.into(),
+                CompiledTrap::InternalAssert => {
+                    bug!("internal assert triggered in compiled code").into()
+                }
+                CompiledTrap::GcHeapCorrupt => {
+                    bug!("gc heap corruption detected in compiled code").into()
+                }
+            };
 
             // If a fault address was present, for example with segfaults,
             // then simultaneously assert that it's within a known linear memory

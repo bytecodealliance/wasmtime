@@ -38,7 +38,7 @@
 ;; @001d                               v15 = iadd v14, v13
 ;; @001d                               v16 = iconst.i64 4
 ;; @001d                               v17 = iadd v15, v16  ; v16 = 4
-;; @001d                               v18 = load.i32 notrap aligned readonly v17
+;; @001d                               v18 = load.i32 user2 v17
 ;; @001d                               v11 = load.i64 notrap aligned readonly can_move v0+40
 ;; @001d                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @001d                               v19 = icmp eq v18, v12

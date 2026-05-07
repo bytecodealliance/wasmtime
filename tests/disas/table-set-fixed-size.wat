@@ -40,7 +40,7 @@
 ;; @0056                               v9 = iadd v7, v8
 ;; @0056                               v10 = iconst.i64 0
 ;; @0056                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @0056                               v12 = load.i32 user5 aligned table v11
+;; @0056                               v12 = load.i32 user6 aligned table v11
 ;;                                     v61 = iconst.i32 1
 ;; @0056                               v13 = band v2, v61  ; v61 = 1
 ;;                                     v60 = iconst.i32 0
@@ -56,7 +56,7 @@
 ;; @0056                               v19 = iadd v18, v17
 ;; @0056                               v20 = iconst.i64 8
 ;; @0056                               v21 = iadd v19, v20  ; v20 = 8
-;; @0056                               v22 = load.i64 notrap aligned v21
+;; @0056                               v22 = load.i64 user2 v21
 ;;                                     v57 = iconst.i64 1
 ;; @0056                               v23 = iadd v22, v57  ; v57 = 1
 ;; @0056                               v24 = uextend.i64 v2
@@ -65,11 +65,11 @@
 ;; @0056                               v26 = iadd v25, v24
 ;; @0056                               v27 = iconst.i64 8
 ;; @0056                               v28 = iadd v26, v27  ; v27 = 8
-;; @0056                               store notrap aligned v23, v28
+;; @0056                               store user2 v23, v28
 ;; @0056                               jump block3
 ;;
 ;;                                 block3:
-;; @0056                               store.i32 user5 aligned table v2, v11
+;; @0056                               store.i32 user6 aligned table v2, v11
 ;;                                     v54 = iconst.i32 1
 ;; @0056                               v29 = band.i32 v12, v54  ; v54 = 1
 ;;                                     v53 = iconst.i32 0
@@ -85,7 +85,7 @@
 ;; @0056                               v35 = iadd v34, v33
 ;; @0056                               v36 = iconst.i64 8
 ;; @0056                               v37 = iadd v35, v36  ; v36 = 8
-;; @0056                               v38 = load.i64 notrap aligned v37
+;; @0056                               v38 = load.i64 user2 v37
 ;;                                     v50 = iconst.i64 -1
 ;; @0056                               v39 = iadd v38, v50  ; v50 = -1
 ;;                                     v49 = iconst.i64 0
@@ -103,7 +103,7 @@
 ;; @0056                               v44 = iadd v43, v42
 ;; @0056                               v45 = iconst.i64 8
 ;; @0056                               v46 = iadd v44, v45  ; v45 = 8
-;; @0056                               store.i64 notrap aligned v39, v46
+;; @0056                               store.i64 user2 v39, v46
 ;; @0056                               jump block7
 ;;
 ;;                                 block7:
@@ -136,7 +136,7 @@
 ;; @005f                               v9 = iadd v7, v8
 ;; @005f                               v10 = iconst.i64 0
 ;; @005f                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @005f                               v12 = load.i32 user5 aligned table v11
+;; @005f                               v12 = load.i32 user6 aligned table v11
 ;;                                     v61 = iconst.i32 1
 ;; @005f                               v13 = band v3, v61  ; v61 = 1
 ;;                                     v60 = iconst.i32 0
@@ -152,7 +152,7 @@
 ;; @005f                               v19 = iadd v18, v17
 ;; @005f                               v20 = iconst.i64 8
 ;; @005f                               v21 = iadd v19, v20  ; v20 = 8
-;; @005f                               v22 = load.i64 notrap aligned v21
+;; @005f                               v22 = load.i64 user2 v21
 ;;                                     v57 = iconst.i64 1
 ;; @005f                               v23 = iadd v22, v57  ; v57 = 1
 ;; @005f                               v24 = uextend.i64 v3
@@ -161,11 +161,11 @@
 ;; @005f                               v26 = iadd v25, v24
 ;; @005f                               v27 = iconst.i64 8
 ;; @005f                               v28 = iadd v26, v27  ; v27 = 8
-;; @005f                               store notrap aligned v23, v28
+;; @005f                               store user2 v23, v28
 ;; @005f                               jump block3
 ;;
 ;;                                 block3:
-;; @005f                               store.i32 user5 aligned table v3, v11
+;; @005f                               store.i32 user6 aligned table v3, v11
 ;;                                     v54 = iconst.i32 1
 ;; @005f                               v29 = band.i32 v12, v54  ; v54 = 1
 ;;                                     v53 = iconst.i32 0
@@ -181,7 +181,7 @@
 ;; @005f                               v35 = iadd v34, v33
 ;; @005f                               v36 = iconst.i64 8
 ;; @005f                               v37 = iadd v35, v36  ; v36 = 8
-;; @005f                               v38 = load.i64 notrap aligned v37
+;; @005f                               v38 = load.i64 user2 v37
 ;;                                     v50 = iconst.i64 -1
 ;; @005f                               v39 = iadd v38, v50  ; v50 = -1
 ;;                                     v49 = iconst.i64 0
@@ -199,7 +199,7 @@
 ;; @005f                               v44 = iadd v43, v42
 ;; @005f                               v45 = iconst.i64 8
 ;; @005f                               v46 = iadd v44, v45  ; v45 = 8
-;; @005f                               store.i64 notrap aligned v39, v46
+;; @005f                               store.i64 user2 v39, v46
 ;; @005f                               jump block7
 ;;
 ;;                                 block7:

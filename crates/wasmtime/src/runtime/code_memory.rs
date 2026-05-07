@@ -13,7 +13,7 @@ use object::{
     read::elf::{FileHeader as _, SectionHeader as _},
 };
 use wasmtime_environ::StaticModuleIndex;
-use wasmtime_environ::{Trap, lookup_trap_code, obj};
+use wasmtime_environ::{CompiledTrap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -613,7 +613,7 @@ impl CodeMemory {
 
     /// Looks up the given offset within this module's text section and returns
     /// the trap code associated with that instruction, if there is one.
-    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
+    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<CompiledTrap> {
         lookup_trap_code(self.trap_data(), text_offset)
     }
 

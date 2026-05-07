@@ -27,14 +27,14 @@
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v45 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v45
-;; @002a                               v11 = load.i64 notrap aligned readonly v0+32
-;; @002a                               v12 = load.i32 notrap aligned v11
+;; @002a                               v11 = load.i64 user2 v0+32
+;; @002a                               v12 = load.i32 user2 v11
 ;;                                     v52 = iconst.i32 7
-;; @002a                               v15 = uadd_overflow_trap v12, v52, user17  ; v52 = 7
+;; @002a                               v15 = uadd_overflow_trap v12, v52, user18  ; v52 = 7
 ;;                                     v58 = iconst.i32 -8
 ;; @002a                               v17 = band v15, v58  ; v58 = -8
 ;; @002a                               v6 = iconst.i32 24
-;; @002a                               v18 = uadd_overflow_trap v17, v6, user17  ; v6 = 24
+;; @002a                               v18 = uadd_overflow_trap v17, v6, user18  ; v6 = 24
 ;; @002a                               v43 = load.i64 notrap aligned readonly can_move v0+8
 ;; @002a                               v20 = load.i64 notrap aligned v43+40
 ;; @002a                               v19 = uextend.i64 v18
@@ -47,21 +47,21 @@
 ;;                                     v65 = band.i32 v15, v58  ; v58 = -8
 ;;                                     v66 = uextend.i64 v65
 ;; @002a                               v27 = iadd v25, v66
-;; @002a                               store notrap aligned v59, v27  ; v59 = -1342177256
+;; @002a                               store user2 v59, v27  ; v59 = -1342177256
 ;; @002a                               v31 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002a                               v32 = load.i32 notrap aligned readonly can_move v31
-;; @002a                               store notrap aligned v32, v27+4
-;; @002a                               store.i32 notrap aligned v18, v11
+;; @002a                               store user2 v32, v27+4
+;; @002a                               store.i32 user2 v18, v11
 ;;                                     v40 = iconst.i64 8
 ;; @002a                               v33 = iadd v27, v40  ; v40 = 8
-;; @002a                               store.f32 notrap aligned little v2, v33
+;; @002a                               store.f32 user2 little v2, v33
 ;;                                     v39 = iconst.i64 12
 ;; @002a                               v34 = iadd v27, v39  ; v39 = 12
-;; @002a                               istore8.i32 notrap aligned little v3, v34
+;; @002a                               istore8.i32 user2 little v3, v34
 ;;                                     v36 = load.i32 notrap v45
 ;;                                     v38 = iconst.i64 16
 ;; @002a                               v35 = iadd v27, v38  ; v38 = 16
-;; @002a                               store notrap aligned little v36, v35
+;; @002a                               store user2 little v36, v35
 ;; @002d                               jump block1
 ;;
 ;;                                 block3 cold:

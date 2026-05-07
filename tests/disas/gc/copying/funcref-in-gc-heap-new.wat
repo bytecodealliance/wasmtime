@@ -69,7 +69,7 @@
 ;; @0020                               v41 = ireduce.i32 v40
 ;;                                     v44 = iconst.i64 16
 ;; @0020                               v38 = iadd v37, v44  ; v44 = 16
-;; @0020                               store notrap aligned little v41, v38
+;; @0020                               store user2 little v41, v38
 ;;                                     v42 = load.i32 notrap v45
 ;; @0023                               jump block1
 ;;

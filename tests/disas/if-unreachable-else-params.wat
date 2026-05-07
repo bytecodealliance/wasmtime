@@ -63,7 +63,7 @@
 ;; @004b                               v8 = load.i64 notrap aligned readonly can_move v0+56
 ;; @004b                               v9 = iadd v8, v7
 ;; @004b                               v10 = sload16.i64 little heap v9
-;; @004e                               trap user11
+;; @004e                               trap user12
 ;;
 ;;                                 block6:
 ;; @005d                               v11 = popcnt.i32 v3  ; v3 = 35
