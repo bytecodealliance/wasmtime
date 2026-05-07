@@ -853,6 +853,22 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn unsigned_cond_code(&mut self, cc: &IntCC) -> Option<IntCC> {
+            match cc {
+                IntCC::Equal
+                | IntCC::UnsignedGreaterThanOrEqual
+                | IntCC::UnsignedGreaterThan
+                | IntCC::UnsignedLessThanOrEqual
+                | IntCC::UnsignedLessThan
+                | IntCC::NotEqual => Some(*cc),
+                IntCC::SignedGreaterThanOrEqual
+                | IntCC::SignedGreaterThan
+                | IntCC::SignedLessThanOrEqual
+                | IntCC::SignedLessThan => None,
+            }
+        }
+
+        #[inline]
         fn intcc_swap_args(&mut self, cc: &IntCC) -> IntCC {
             cc.swap_args()
         }

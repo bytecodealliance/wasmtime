@@ -52,17 +52,17 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w3, #4369
-;   movk w3, w3, #17, LSL #16
-;   subs wzr, w0, w3
+;   movz w4, #4369
+;   movk w4, w4, #17, LSL #16
+;   subs wzr, w0, w4
 ;   cset x0, hs
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w3, #0x1111
-;   movk w3, #0x11, lsl #16
-;   cmp w0, w3
+;   mov w4, #0x1111
+;   movk w4, #0x11, lsl #16
+;   cmp w0, w4
 ;   cset x0, hs
 ;   ret
 
@@ -75,17 +75,17 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w3, #4368
-;   movk w3, w3, #17, LSL #16
-;   subs wzr, w0, w3
+;   movz w4, #4368
+;   movk w4, w4, #17, LSL #16
+;   subs wzr, w0, w4
 ;   cset x0, hs
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w3, #0x1110
-;   movk w3, #0x11, lsl #16
-;   cmp w0, w3
+;   mov w4, #0x1110
+;   movk w4, #0x11, lsl #16
+;   cmp w0, w4
 ;   cset x0, hs
 ;   ret
 
@@ -136,17 +136,17 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w3, #4369
-;   movk w3, w3, #17, LSL #16
-;   subs wzr, w0, w3
+;   movz w4, #4369
+;   movk w4, w4, #17, LSL #16
+;   subs wzr, w0, w4
 ;   cset x0, ge
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w3, #0x1111
-;   movk w3, #0x11, lsl #16
-;   cmp w0, w3
+;   mov w4, #0x1111
+;   movk w4, #0x11, lsl #16
+;   cmp w0, w4
 ;   cset x0, ge
 ;   ret
 
@@ -159,17 +159,17 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w3, #4368
-;   movk w3, w3, #17, LSL #16
-;   subs wzr, w0, w3
+;   movz w4, #4368
+;   movk w4, w4, #17, LSL #16
+;   subs wzr, w0, w4
 ;   cset x0, ge
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w3, #0x1110
-;   movk w3, #0x11, lsl #16
-;   cmp w0, w3
+;   mov w4, #0x1110
+;   movk w4, #0x11, lsl #16
+;   cmp w0, w4
 ;   cset x0, ge
 ;   ret
 

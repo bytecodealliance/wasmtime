@@ -109,15 +109,13 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   uxtb w2, w2
-;   subs wzr, w2, #0
+;   ands wzr, w2, #255
 ;   cset x2, eq
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   uxtb w2, w2
-;   cmp w2, #0
+;   tst w2, #0xff
 ;   cset x2, eq
 ;   ret
 

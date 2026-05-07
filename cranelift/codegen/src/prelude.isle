@@ -635,6 +635,8 @@
     (require (and (bvuge c #x02) (bvule c #x05))))
 (decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
+(decl pure partial unsigned_cond_code (IntCC) IntCC)
+(extern constructor unsigned_cond_code unsigned_cond_code)
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

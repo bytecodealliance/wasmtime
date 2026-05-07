@@ -104,3 +104,168 @@ block0(v0: i128):
 ;   cbnz x3, #0xc
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapz_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  trapz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   b.ne #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   b.ne #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapnz_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  trapnz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   b.eq #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   b.eq #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapz_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  trapz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   b.ne #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   b.ne #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapnz_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  trapnz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   b.eq #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   b.eq #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapz_uextend_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapz v3, user1
+  return
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   b.ne #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   b.ne #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapnz_uextend_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapnz v3, user1
+  return
+}
+
+; VCode:
+; block0:
+;   subs xzr, x0, x1
+;   b.eq #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cmp x0, x1
+;   b.eq #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapz_uextend_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapz v3, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   b.ne #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   b.ne #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapnz_uextend_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapnz v3, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   b.eq #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   b.eq #0xc
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+

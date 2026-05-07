@@ -306,7 +306,7 @@
       (let ((x1 Reg (cmeq0 x (VectorSize.Size64x2)))
             (x2 Reg (addp x1 x1 (VectorSize.Size64x2))))
        (with_flags (fpu_cmp (ScalarSize.Size64) x2 x2)
-                   (materialize_bool_result (Cond.Eq)))))
+                   (cset (Cond.Eq)))))
 
 (rule (lower (vall_true _ x @ (value_type (multi_lane 32 2))))
       (let ((x1 Reg (mov_from_vec x 0 (ScalarSize.Size64))))
@@ -330,13 +330,13 @@
       (let ((x1 Reg (vec_lanes (VecLanesOp.Uminv) x (vector_size ty)))
             (x2 Reg (mov_from_vec x1 0 (ScalarSize.Size64))))
        (with_flags (cmp_imm (OperandSize.Size64) x2 (u8_into_imm12 0))
-                   (materialize_bool_result (Cond.Ne)))))
+                   (cset (Cond.Ne)))))
 
 ;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (vany_true _ x @ (value_type in_ty)))
       (with_flags (vanytrue x in_ty)
-                  (materialize_bool_result (Cond.Ne))))
+                  (cset (Cond.Ne))))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2160,12 +2160,10 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (float_cmp_zero_swap cond rn vec_size))))
 
-(rule 0 (lower (has_type out_ty
-              (fcmp _ cond x @ (value_type (ty_scalar_float in_ty)) y)))
-      (with_flags (fpu_cmp (scalar_size in_ty) x y)
-                  (materialize_bool_result (fp_cond_code cond))))
+(rule 0 (lower (fcmp _ cond x @ (value_type (ty_scalar_float in_ty)) y))
+  (lower_cond_result_bool (emit_fcmp cond x y)))
 
-(rule -1 (lower (has_type out_ty (fcmp _ cond x @ (value_type in_ty) y)))
+(rule -1 (lower (fcmp _ cond x @ (value_type in_ty) y))
       (if (ty_vector_float in_ty))
       (vec_cmp x y in_ty (fp_cond_code cond)))
 
@@ -2195,8 +2193,23 @@
             (vec_size VectorSize (vector_size ty)))
           (value_reg (int_cmp_zero_swap cond rn vec_size))))
 
-(rule icmp_8_16_32_64 -1 (lower (icmp _ cond x @ (value_type in_ty) y))
-      (lower_icmp_into_reg cond x y in_ty $I8))
+(rule -1 (lower (icmp (multi_lane _ _) cond x y @ (value_type in_ty)))
+  (let ((cond Cond (cond_code cond))
+        (rn Reg (put_in_reg x))
+        (rm Reg (put_in_reg y)))
+   (vec_cmp rn rm in_ty cond)))
+
+(rule -2 (lower (icmp _ cond x @ (value_type (ty_int ty)) y))
+  (lower_cond_result_bool (emit_icmp cond x y)))
+
+;; Helper to put a `CondResult` into a general register.
+(decl lower_cond_result_bool (CondResult) Reg)
+(rule (lower_cond_result_bool (CondResult.Zero reg size))
+  (value_regs_get (with_flags (cmp_imm size reg (u8_into_imm12 0)) (cset (Cond.Eq))) 0))
+(rule (lower_cond_result_bool (CondResult.NotZero reg size))
+  (value_regs_get (with_flags (cmp_imm size reg (u8_into_imm12 0)) (cset (Cond.Ne))) 0))
+(rule (lower_cond_result_bool (CondResult.Cond flags cc))
+  (value_regs_get (with_flags flags (cset cc)) 0))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2206,63 +2219,26 @@
 ;;;;;  Rules for `trapz`;;;;;;;;;
 
 (rule (lower (trapz val trap_code))
-  (trap_if_val (ZeroCond.Zero) val trap_code))
+  (side_effect (trap_if_cond_result (cond_result_invert (is_nonzero_cmp val)) trap_code)))
+
+;; Helper to emit a `TrapIf` instruction for the `CondResult` provided
+(decl trap_if_cond_result (CondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_cond_result (CondResult.Zero reg size) tc)
+  (trap_if_zero reg size tc))
+(rule (trap_if_cond_result (CondResult.NotZero reg size) tc)
+  (trap_if_not_zero reg size tc))
+(rule (trap_if_cond_result (CondResult.Cond flags cc) tc)
+  (with_flags_side_effect flags (trap_if_cond cc tc)))
 
 ;;;;;  Rules for `trapnz`;;;;;;;;;
 
 (rule (lower (trapnz val trap_code))
-  (trap_if_val (ZeroCond.NonZero) val trap_code))
+  (side_effect (trap_if_cond_result (is_nonzero_cmp val) trap_code)))
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty
-                       (select _ (maybe_uextend (icmp _ cc
-                                                    x @ (value_type in_ty)
-                                                    y))
-                               rn
-                               rm)))
-      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty)))
-       (lower_select (flags_and_cc_flags comparison)
-                     (cond_code (flags_and_cc_cc comparison))
-                     ty
-                     rn
-                     rm)))
-
-(rule (lower (has_type ty
-                       (select _ (maybe_uextend (fcmp _ cc x @ (value_type in_ty) y))
-                               rn
-                               rm)))
-      (let ((cond Cond (fp_cond_code cc)))
-       (lower_select
-        (fpu_cmp (scalar_size in_ty) x y)
-        cond ty rn rm)))
-
-(rule -1 (lower (has_type ty (select _ rcond @ (value_type $I8) rn rm)))
-      (let ((rcond Reg rcond))
-       (lower_select
-         (tst_imm $I32 rcond (u64_into_imm_logic $I32 255))
-         (Cond.Ne) ty rn rm)))
-
-(rule -2 (lower (has_type ty (select _ rcond @ (value_type (fits_in_32 _)) rn rm)))
-      (let ((rcond Reg (put_in_reg_zext32 rcond)))
-       (lower_select
-        (cmp (OperandSize.Size32) rcond (zero_reg))
-        (Cond.Ne) ty rn rm)))
-
-(rule -3 (lower (has_type ty (select _ rcond @ (value_type (fits_in_64 _)) rn rm)))
-      (let ((rcond Reg (put_in_reg_zext64 rcond)))
-       (lower_select
-        (cmp (OperandSize.Size64) rcond (zero_reg))
-        (Cond.Ne) ty rn rm)))
-
-(rule -4 (lower (has_type ty (select _ rcond @ (value_type $I128) rn rm)))
-      (let ((c ValueRegs (put_in_regs rcond))
-            (c_lo Reg (value_regs_get c 0))
-            (c_hi Reg (value_regs_get c 1))
-            (rt Reg (orr $I64 c_lo c_hi)))
-        (lower_select
-         (cmp (OperandSize.Size64) rt (zero_reg))
-         (Cond.Ne) ty rn rm)))
+(rule (lower (select ty cond rn rm))
+  (lower_select ty (is_nonzero_cmp cond) rn rm))
 
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2274,33 +2250,8 @@
   (if-let false (use_csdb))
   dst)
 
-(rule (lower (has_type ty
-                       (select_spectre_guard _ (maybe_uextend (icmp _ cc x @ (value_type in_ty) y))
-                                             if_true
-                                             if_false)))
-      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y in_ty))
-            (dst ValueRegs (lower_select
-                            (flags_and_cc_flags comparison)
-                            (cond_code (flags_and_cc_cc comparison))
-                            ty
-                            if_true
-                            if_false)))
-       (maybe_csdb_after_select dst)))
-
-(rule -1 (lower (has_type ty (select_spectre_guard _ rcond @ (value_type (fits_in_64 _)) rn rm)))
-      (let ((rcond Reg (put_in_reg_zext64 rcond)))
-       (lower_select
-        (cmp (OperandSize.Size64) rcond (zero_reg))
-        (Cond.Ne) ty rn rm)))
-
-(rule -2 (lower (has_type ty (select_spectre_guard _ rcond @ (value_type $I128) rn rm)))
-      (let ((c ValueRegs (put_in_regs rcond))
-            (c_lo Reg (value_regs_get c 0))
-            (c_hi Reg (value_regs_get c 1))
-            (rt Reg (orr $I64 c_lo c_hi)))
-        (lower_select
-         (cmp (OperandSize.Size64) rt (zero_reg))
-         (Cond.Ne) ty rn rm)))
+(rule (lower (select_spectre_guard ty cond if_true if_false))
+  (maybe_csdb_after_select (lower_select ty (is_nonzero_cmp cond) if_true if_false)))
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3206,41 +3157,18 @@
 
 ;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `brif` following `icmp`
-(rule (lower_branch (brif (maybe_uextend (icmp _ cc x @ (value_type ty) y)) _ _) (two_targets taken not_taken))
-      (let ((comparison FlagsAndCC (lower_icmp_into_flags cc x y ty))
-            (cond Cond (cond_code (flags_and_cc_cc comparison))))
-        (emit_side_effect
-         (with_flags_side_effect (flags_and_cc_flags comparison)
-                                 (cond_br taken
-                                          not_taken
-                                          (cond_br_cond cond))))))
+;; `brif` base case
+(rule (lower_branch (brif val _ _) (two_targets taken not_taken))
+  (emit_side_effect (br_cond_result (is_nonzero_cmp val) taken not_taken)))
 
-;; `brif` following `fcmp`
-(rule (lower_branch (brif (maybe_uextend (fcmp _ cc x @ (value_type (ty_scalar_float ty)) y)) _ _) (two_targets taken not_taken))
-      (let ((cond Cond (fp_cond_code cc)))
-       (emit_side_effect
-        (with_flags_side_effect (fpu_cmp (scalar_size ty) x y)
-                                (cond_br taken not_taken
-                                 (cond_br_cond cond))))))
-
-;; standard `brif`
-(rule -1 (lower_branch (brif c @ (value_type $I128) _ _) (two_targets taken not_taken))
-      (let ((flags ProducesFlags (flags_to_producesflags c))
-            (c ValueRegs (put_in_regs c))
-            (c_lo Reg (value_regs_get c 0))
-            (c_hi Reg (value_regs_get c 1))
-            (rt Reg (orr $I64 c_lo c_hi)))
-       (emit_side_effect
-        (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
-(rule -2 (lower_branch (brif c @ (value_type ty) _ _) (two_targets taken not_taken))
-      (if (ty_int_ref_scalar_64 ty))
-      (let ((flags ProducesFlags (flags_to_producesflags c))
-            (rt Reg (put_in_reg_zext64 c)))
-       (emit_side_effect
-        (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
+;; Helper to emit a branching instruction based on  a `CondResult`
+(decl br_cond_result (CondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (br_cond_result (CondResult.Zero reg size) taken not_taken)
+  (a64_br_zero reg size taken not_taken))
+(rule (br_cond_result (CondResult.NotZero reg size) taken not_taken)
+  (a64_br_not_zero reg size taken not_taken))
+(rule (br_cond_result (CondResult.Cond flags cc) taken not_taken)
+  (with_flags_side_effect flags (a64_br_cond cc taken not_taken)))
 
 ;; Special lowerings for `tbnz` - "Test bit and Branch if Nonzero"
 (rule 1 (lower_branch (brif (band _ x @ (value_type ty) (u64_from_iconst n)) _ _)
