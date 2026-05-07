@@ -204,6 +204,23 @@ impl VMGcObjectData {
         into.copy_from_slice(src);
     }
 
+    /// Copy within this this object's data.
+    ///
+    /// Note that GC data is always stored in little-endian order, and this
+    /// method does not do any conversions to/from host endianness for you.
+    ///
+    /// Panics on out-of-bounds accesses.
+    #[inline]
+    pub fn copy_within<R>(&mut self, src: R, dest: u32)
+    where
+        R: core::ops::RangeBounds<u32>,
+    {
+        let start = src.start_bound().map(|s| usize::try_from(*s).unwrap());
+        let end = src.end_bound().map(|e| usize::try_from(*e).unwrap());
+        let dest = usize::try_from(dest).unwrap();
+        self.data.copy_within((start, end), dest);
+    }
+
     impl_pod_methods! {
         u8, read_u8, write_u8;
         u16, read_u16, write_u16;

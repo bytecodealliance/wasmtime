@@ -1199,13 +1199,15 @@ fn array_copy_non_gc_ref_elems(
 
     // Bounds check the destination array's elements.
     let dst_len = dst_arr.len(store.store_opaque());
-    if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > dst_len {
+    let dst_end = dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)?;
+    if dst_end > dst_len {
         return Err(Trap::ArrayOutOfBounds.into());
     }
 
     // Bounds check the source array's elements.
     let src_len = src_arr.len(store.store_opaque());
-    if src.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > src_len {
+    let src_end = src.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)?;
+    if src_end > src_len {
         return Err(Trap::ArrayOutOfBounds.into());
     }
 
@@ -1222,41 +1224,28 @@ fn array_copy_non_gc_ref_elems(
 
     let byte_len = len
         .checked_mul(array_layout.elem_size)
-        .expect("copy length was bounds-checked against both arrays whose element data fits in the u32-addressed GC heap");
+        .expect("already checked bounds");
+
     let src_byte_start = array_layout.elem_offset(src).unwrap();
     let dst_byte_start = array_layout.elem_offset(dst).unwrap();
 
     // Use `core::ptr::copy` to do a bulk copy of the element data.
     let gc_store = store.unwrap_gc_store_mut();
     if same_array {
-        // Same array: potentially overlapping, use `core::ptr::copy` (memmove
-        // semantics).
-        let data = gc_store.gc_object_data(dst_arr.as_gc_ref());
-        // SAFETY: Both pointers are derived from the same `VMGcObjectData`
-        // and are within the bounds we already checked. `core::ptr::copy`
-        // handles the overlapping case correctly, and no GC can occur
-        // because we are only copying non-GC-ref elements.
-        unsafe {
-            let src_ptr = data.slice(src_byte_start, byte_len).as_ptr();
-            let dst_ptr = data.slice_mut(dst_byte_start, byte_len).as_mut_ptr();
-            core::ptr::copy(src_ptr, dst_ptr, usize::try_from(byte_len).unwrap());
-        }
+        // Same array: potentially overlapping.
+        let src_byte_end = src_byte_start
+            .checked_add(byte_len)
+            .expect("already checked bounds");
+        gc_store
+            .gc_object_data(dst_arr.as_gc_ref())
+            .copy_within(src_byte_start..src_byte_end, dst_byte_start);
     } else {
         // Different arrays: non-overlapping.
         let (src_data, dst_data) =
             gc_store.gc_object_data_pair(src_arr.as_gc_ref(), dst_arr.as_gc_ref());
         let src_slice = src_data.slice(src_byte_start, byte_len);
         let dst_slice = dst_data.slice_mut(dst_byte_start, byte_len);
-        // SAFETY: The two arrays are distinct GC objects so their element
-        // data cannot overlap. Both slices are within the bounds we already
-        // checked.
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                src_slice.as_ptr(),
-                dst_slice.as_mut_ptr(),
-                usize::try_from(byte_len).unwrap(),
-            );
-        }
+        dst_slice.copy_from_slice(src_slice);
     }
 
     Ok(())
