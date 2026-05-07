@@ -1325,7 +1325,7 @@ pub(crate) mod tls {
         /// we're leaving (e.g. allocated for a fiber).
         pub fn assert_current_state_not_in_range(range: core::ops::Range<usize>) {
             let p = raw::get() as usize;
-            assert!(p < range.start || range.end < p);
+            assert!(!range.contains(&p));
         }
     }
 
