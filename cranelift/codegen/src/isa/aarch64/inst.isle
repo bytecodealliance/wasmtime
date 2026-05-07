@@ -2297,7 +2297,7 @@
          (MInst.AluRRR alu_op (operand_size ty) dst src1 src2)
          dst)))
 
-;; Should only be used for AdcS and SbcS
+;; Helper to create a `sbcs` instruction with no destination register.
 (decl sbcs_side_effect (Type Reg Reg) ProducesFlags)
 (rule (sbcs_side_effect ty src1 src2)
   (ProducesFlags.ProducesFlagsSideEffect
@@ -4627,9 +4627,12 @@
 ;; flags.
 ;;
 ;; This type is intended to be a "narrow waist" for anything producing a
-;; conditional which `icmp` might flow into for example.
+;; conditional which `icmp` might flow into for example. For example this is used
+;; by `trapnz`, `trapz`, `icmp`, `select`, `fcmp`, `brif`, and
+;; `select_spectre_guard` to handle lowering conditionals into a boolean.
 ;;
-;; TODO: words
+;; This is primarily created by the `is_nonzero_cmp` helper which does all
+;; dispatching needed internally to create this shape.
 (type CondResult (enum
   (Zero (reg Reg) (size OperandSize))
   (NotZero (reg Reg) (size OperandSize))
