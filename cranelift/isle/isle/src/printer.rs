@@ -400,6 +400,11 @@ impl ToSExpr for TypeValue {
                 parts.extend(variants.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
+            TypeValue::Struct(fields, _) => {
+                let mut parts = vec![SExpr::atom("struct")];
+                parts.extend(fields.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
         }
     }
 }

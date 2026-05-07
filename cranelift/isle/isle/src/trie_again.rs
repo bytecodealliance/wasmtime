@@ -98,21 +98,22 @@ pub enum Binding {
     MakeVariant {
         /// Which enum type should be constructed?
         ty: sema::TypeId,
-        /// Which variant of that enum should be constructed?
-        variant: sema::VariantId,
+        /// Which variant of that enum should be constructed? If None, this is a struct.
+        variant: Option<sema::VariantId>,
         /// What expressions should be provided for this variant's fields?
         fields: Box<[BindingId]>,
     },
-    /// Pattern-match one of the previous bindings against an enum variant and produce a new binding
-    /// from one of its fields. There must be a corresponding [Constraint::Variant] for each
-    /// `source`/`variant` pair that appears in some `MatchVariant` binding.
+    /// Pattern-match one of the previous bindings against an enum variant or struct and produce
+    /// a new binding from one of its fields. There must be a corresponding [Constraint::Variant]
+    /// for each `source`/`variant` pair that appears in some `MatchVariant` binding.
     MatchVariant {
         /// Which binding is being matched?
         source: BindingId,
-        /// Which enum variant are we pulling binding sites from? This is somewhat redundant with
-        /// information in a corresponding [Constraint]. However, it must be here so that different
-        /// enum variants aren't hash-consed into the same binding site.
-        variant: sema::VariantId,
+        /// Which enum variant are we pulling binding sites from? If None, this is a struct.
+        /// This is somewhat redundant with information in a corresponding [Constraint].
+        /// However, it must be here so that different enum variants aren't hash-consed into
+        /// the same binding site.
+        variant: Option<sema::VariantId>,
         /// Which field of this enum variant are we projecting out? Although ISLE uses named fields,
         /// we track them by index for constant-time comparisons. The [sema::TypeEnv] can be used to
         /// get the field names.
@@ -152,6 +153,15 @@ pub enum Constraint {
         ty: sema::TypeId,
         /// Which enum variant must this binding site match to satisfy the rule?
         variant: sema::VariantId,
+        /// Number of fields in this variant of this enum. This is recorded in the constraint for
+        /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
+        fields: TupleIndex,
+    },
+    /// The value must match this struct variant.
+    Struct {
+        /// Which struct type is being matched? This is implied by the binding where the constraint is
+        /// applied, but recorded here for convenience.
+        ty: sema::TypeId,
         /// Number of fields in this variant of this enum. This is recorded in the constraint for
         /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
         fields: TupleIndex,
@@ -292,7 +302,15 @@ impl Constraint {
                 .map(TupleIndex)
                 .map(|field| Binding::MatchVariant {
                     source,
-                    variant,
+                    variant: Some(variant),
+                    field,
+                })
+                .collect(),
+            Constraint::Struct { fields, .. } => (0..fields.0)
+                .map(TupleIndex)
+                .map(|field| Binding::MatchVariant {
+                    source,
+                    variant: None,
                     field,
                 })
                 .collect(),
@@ -562,15 +580,21 @@ impl sema::PatternVisitor for RuleSetBuilder {
         input: BindingId,
         input_ty: sema::TypeId,
         arg_tys: &[sema::TypeId],
-        variant: sema::VariantId,
+        variant: Option<sema::VariantId>,
     ) -> Vec<BindingId> {
         let fields = TupleIndex(arg_tys.len().try_into().unwrap());
         self.set_constraint(
             input,
-            Constraint::Variant {
-                fields,
-                ty: input_ty,
-                variant,
+            match variant {
+                None => Constraint::Struct {
+                    fields,
+                    ty: input_ty,
+                },
+                Some(variant) => Constraint::Variant {
+                    fields,
+                    ty: input_ty,
+                    variant,
+                },
             },
         )
     }
@@ -632,7 +656,7 @@ impl sema::ExprVisitor for RuleSetBuilder {
         &mut self,
         inputs: Vec<(BindingId, sema::TypeId)>,
         ty: sema::TypeId,
-        variant: sema::VariantId,
+        variant: Option<sema::VariantId>,
     ) -> BindingId {
         self.dedup_binding(Binding::MakeVariant {
             ty,

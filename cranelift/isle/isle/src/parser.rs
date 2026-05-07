@@ -294,6 +294,13 @@ impl<'a> Parser<'a> {
             }
             self.expect_rparen()?;
             Ok(TypeValue::Enum(variants, pos))
+        } else if self.eat_sym_str("struct")? {
+            let mut fields = vec![];
+            while !self.is_rparen() {
+                fields.push(self.parse_type_field()?);
+            }
+            self.expect_rparen()?;
+            Ok(TypeValue::Struct(fields, pos))
         } else {
             Err(self.error(pos, "Unknown type definition".to_string()))
         }

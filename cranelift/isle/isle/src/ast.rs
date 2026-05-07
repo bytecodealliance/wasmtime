@@ -42,12 +42,11 @@ pub struct Type {
 }
 
 /// The actual type-value: a primitive or an enum with variants.
-///
-/// TODO: add structs as well?
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TypeValue {
     Primitive(Ident, Pos),
     Enum(Vec<Variant>, Pos),
+    Struct(Vec<Field>, Pos),
 }
 
 /// One variant of an enum type.

@@ -1,0 +1,8 @@
+(type A (struct (x u32) (y u32)))
+(type B extern (struct (x u32)))
+(type C (enum
+  (Ca (x A))
+  (Cb (x B))))
+(type D extern (struct (x C)))
+
+(type UnitStruct (struct))
