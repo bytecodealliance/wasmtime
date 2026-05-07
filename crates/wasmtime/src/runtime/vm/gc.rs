@@ -291,6 +291,11 @@ impl GcStore {
         self.gc_heap.alloc_raw(header, layout)
     }
 
+    /// Eagerly ensure tracing info is registered for the given type.
+    pub fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
+        self.gc_heap.ensure_trace_info(ty)
+    }
+
     /// Allocate an uninitialized struct with the given type index and layout.
     ///
     /// This does NOT check that the index is currently allocated in the types

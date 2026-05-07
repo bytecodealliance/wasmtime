@@ -2001,11 +2001,16 @@ impl StoreOpaque {
                     .allocator()
                     .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index, mem)?;
 
-            Ok(GcStore::new(
-                index,
-                heap,
-                engine.tunables().gc_zeal_alloc_counter,
-            ))
+            let mut gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
+
+            // Eagerly register trace info for any host-created types (via
+            // StructRefPre/ArrayRefPre) that were created before this GC
+            // store was allocated.
+            for ty in &store.gc_host_alloc_types {
+                gc_store.ensure_trace_info(ty.index());
+            }
+
+            Ok(gc_store)
         }
 
         #[cfg(not(feature = "gc"))]

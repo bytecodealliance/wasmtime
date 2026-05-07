@@ -109,6 +109,18 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// any virtual memory mappings.
     fn detach(&mut self) -> crate::vm::Memory;
 
+    /// Eagerly ensure that tracing information is registered for the given GC
+    /// type.
+    ///
+    /// This is called during module instantiation for every GC type in the
+    /// module's type collection, and during `StructRefPre` and `ArrayRefPre`
+    /// construction for host-allocated types.
+    ///
+    /// The default implementation is a no-op, which is appropriate for
+    /// collectors that do not need per-type tracing info (e.g. the null
+    /// collector).
+    fn ensure_trace_info(&mut self, _ty: VMSharedTypeIndex) {}
+
     ////////////////////////////////////////////////////////////////////////////
     // `Any` methods
 

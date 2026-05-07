@@ -808,6 +808,10 @@ unsafe impl GcHeap for DrcHeap {
         memory.take().unwrap()
     }
 
+    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
+        self.trace_infos.ensure(ty);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as _
     }
@@ -931,11 +935,16 @@ unsafe impl GcHeap for DrcHeap {
         debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
-        // heap. The only kinds of GC objects we allocate that do not have an
-        // associated `VMSharedTypeIndex` are `externref`s, and they don't have
-        // any GC edges.
+        // heap. Trace info is eagerly registered during module instantiation
+        // and `StructRefPre`/`ArrayRefPre` construction. The only kinds of GC
+        // objects we allocate that do not have an associated
+        // `VMSharedTypeIndex` are `externref`s, and they don't have any GC
+        // edges.
         if let Some(ty) = header.ty() {
-            self.trace_infos.ensure(ty);
+            debug_assert!(
+                self.trace_infos.contains(&ty),
+                "trace info for {ty:?} should have been eagerly registered",
+            );
         } else {
             debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
         }

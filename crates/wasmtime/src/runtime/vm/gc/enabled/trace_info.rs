@@ -111,6 +111,11 @@ impl TraceInfos {
         &self.map[ty]
     }
 
+    /// Returns whether we already have tracing information for the given type.
+    pub fn contains(&self, ty: &VMSharedTypeIndex) -> bool {
+        self.map.contains_key(ty)
+    }
+
     /// Ensure that we have tracing information for the given type.
     pub fn ensure(&mut self, ty: VMSharedTypeIndex) {
         if self.map.contains_key(&ty) {
@@ -123,10 +128,10 @@ impl TraceInfos {
         debug_assert!(!self.map.contains_key(&ty));
 
         let engine = self.engine();
-        let gc_layout = engine
-            .signatures()
-            .layout(ty)
-            .unwrap_or_else(|| panic!("should have a GC layout for {ty:?}"));
+        let Some(gc_layout) = engine.signatures().layout(ty) else {
+            // Not a GC type (e.g. a function type); no trace info needed.
+            return;
+        };
 
         let info = match gc_layout {
             GcLayout::Array(l) => {

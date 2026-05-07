@@ -612,6 +612,10 @@ unsafe impl GcHeap for CopyingHeap {
         memory.take().unwrap()
     }
 
+    fn ensure_trace_info(&mut self, ty: VMSharedTypeIndex) {
+        self.trace_infos.ensure(ty);
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as _
     }
@@ -720,9 +724,13 @@ unsafe impl GcHeap for CopyingHeap {
         debug_assert_eq!(header.reserved_u26(), 0);
 
         // We must have trace info for every GC type that we allocate in this
-        // heap.
+        // heap. Trace info is eagerly registered during module instantiation
+        // and `StructRefPre`/`ArrayRefPre` construction.
         if let Some(ty) = header.ty() {
-            self.trace_infos.ensure(ty);
+            debug_assert!(
+                self.trace_infos.contains(&ty),
+                "trace info for {ty:?} should have been eagerly registered",
+            );
         } else {
             debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
         }
