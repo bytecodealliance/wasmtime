@@ -1,5 +1,6 @@
 mod arc;
 mod bforest_map;
+mod fuzz;
 mod bforest_set;
 mod bit_set;
 mod boxed;

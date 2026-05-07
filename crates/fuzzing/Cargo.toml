@@ -21,6 +21,7 @@ arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }
 log = { workspace = true }
 mutatis = { workspace = true }
+rand = { workspace = true }
 rayon = "1.2.1"
 smallvec = { workspace = true }
 target-lexicon = { workspace = true }
