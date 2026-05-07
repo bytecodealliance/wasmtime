@@ -835,6 +835,7 @@ impl CallThreadState {
                         )
                         .expect("GC ref does not fit in usize");
                         payload2 = 0;
+                        drop(unwind);
                         break 'done;
                     }
 

@@ -1619,6 +1619,7 @@ async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn take_exception_in_debug_handler() -> Result<()> {
     let mut config = Config::new();
     config.wasm_exceptions(true);
