@@ -352,16 +352,12 @@ impl OomTest {
                 bail!("OOM test function missed an OOM: returned Ok(())");
             }
             (Err(e), OomState::DidOom { .. }) => {
-                return Err(
-                    e.context("OOM test function missed an OOM: returned non-OOM error")
-                );
+                return Err(e.context("OOM test function missed an OOM: returned non-OOM error"));
             }
 
             // Unexpected error.
             (Err(e), OomState::OomOnAlloc { .. }) => {
-                return Err(
-                    e.context("OOM test function returned an error when there was no OOM")
-                );
+                return Err(e.context("OOM test function returned an error when there was no OOM"));
             }
         }
 

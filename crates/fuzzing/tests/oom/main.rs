@@ -1,6 +1,5 @@
 mod arc;
 mod bforest_map;
-mod fuzz;
 mod bforest_set;
 mod bit_set;
 mod boxed;
@@ -17,6 +16,7 @@ mod entity_set;
 mod error;
 mod func;
 mod func_type;
+mod fuzz;
 mod global;
 mod hash_map;
 mod hash_set;
