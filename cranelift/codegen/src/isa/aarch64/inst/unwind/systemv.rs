@@ -148,7 +148,7 @@ mod tests {
 
         assert_eq!(
             format!("{fde:?}"),
-            "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [] }"
+            "FrameDescriptionEntry { address: Constant(4321), length: 12, lsda: None, instructions: [] }"
         );
     }
 
