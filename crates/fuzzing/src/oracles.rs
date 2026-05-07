@@ -765,6 +765,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
     });
+    wast_context.ignore_error_messages(test.config.spec_test.unwrap_or(false));
     wast_context
         .register_spectest(&wasmtime_wast::SpectestConfig {
             use_shared_memory: true,
