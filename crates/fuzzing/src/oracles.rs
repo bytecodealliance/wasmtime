@@ -1232,6 +1232,10 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
             let func = e.into_extern().into_func()?;
             Some((name, func))
         })
+        // Each function gets up to 2 seconds, so don't let a lot of exports
+        // which all infinitely loop lock up the fuzzer. Limit the number of
+        // exports run.
+        .take(10)
         .collect::<Vec<_>>();
     for (name, func) in funcs {
         let ty = func.ty(&store);
