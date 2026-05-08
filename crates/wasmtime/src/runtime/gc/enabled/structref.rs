@@ -76,14 +76,6 @@ impl StructRefPre {
 
     pub(crate) fn _new(store: &mut StoreOpaque, ty: StructType) -> Self {
         store.insert_gc_host_alloc_type(ty.registered_type().clone());
-
-        // If a GC heap is already allocated, eagerly register trace info
-        // now. Otherwise, trace info will be registered when the GC heap
-        // is allocated in `StoreOpaque::allocate_gc_store`.
-        if let Some(gc_store) = store.optional_gc_store_mut() {
-            gc_store.ensure_trace_info(ty.registered_type().index());
-        }
-
         let store_id = store.id();
         StructRefPre { store_id, ty }
     }

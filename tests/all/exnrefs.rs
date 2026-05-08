@@ -83,3 +83,46 @@ fn exn_objects() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn host_exnref_has_trace_info_for_gc() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        println!("Using GC collector: {collector:?}");
+
+        let mut config = Config::new();
+        config.wasm_exceptions(true).wasm_gc(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        // Create a store and allocate the GC store by instantiating a module
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"(module
+              (global (export "g") (mut exnref) (ref.null exn))
+              (table 1 anyref)
+            )"#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let g = instance.get_global(&mut store, "g").unwrap();
+
+        // Allocate a host exnref object in a nested scope and put it into the
+        // module that was just allocated.
+        let exn_ty = ExnType::new(&engine, [ValType::I32])?;
+        let exnpre = ExnRefPre::new(&mut store, exn_ty.clone());
+        let tag = Tag::new(&mut store, &exn_ty.tag_type())?;
+        {
+            let mut scope = RootScope::new(&mut store);
+            let exn = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::I32(43)])?;
+            g.set(&mut scope, Val::ExnRef(Some(exn)))?;
+        }
+
+        // The exnref should stay alive and be traced properly...
+        store.gc(None)?;
+
+        assert!(matches!(g.get(&mut store), Val::ExnRef(Some(_))));
+    }
+
+    Ok(())
+}

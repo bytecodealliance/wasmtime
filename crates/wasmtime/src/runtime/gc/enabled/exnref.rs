@@ -80,7 +80,6 @@ impl ExnRefPre {
     pub(crate) fn _new(store: &mut StoreOpaque, ty: ExnType) -> Self {
         store.insert_gc_host_alloc_type(ty.registered_type().clone());
         let store_id = store.id();
-
         ExnRefPre { store_id, ty }
     }
 

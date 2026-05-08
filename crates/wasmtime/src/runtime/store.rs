@@ -2363,6 +2363,12 @@ impl StoreOpaque {
     /// store are holding it alive).
     #[cfg(feature = "gc")]
     pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: crate::type_registry::RegisteredType) {
+        // If a GC heap is already allocated, eagerly register trace info
+        // now. Otherwise, trace info will be registered when the GC heap
+        // is allocated in `StoreOpaque::allocate_gc_store`.
+        if let Some(gc_store) = self.optional_gc_store_mut() {
+            gc_store.ensure_trace_info(ty.index());
+        }
         self.gc_host_alloc_types.insert(ty);
     }
 

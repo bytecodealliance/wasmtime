@@ -1000,3 +1000,45 @@ fn issue_13034_array_layout_overflow() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn host_arrayref_has_trace_info_for_gc() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        println!("Using GC collector: {collector:?}");
+
+        let mut config = Config::new();
+        config.wasm_exceptions(true).wasm_gc(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        // Create a store and allocate the GC store by instantiating a module
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"(module
+              (global (export "g") (mut arrayref) (ref.null array))
+              (table 1 anyref)
+            )"#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let g = instance.get_global(&mut store, "g").unwrap();
+
+        // Allocate a host arrayref object in a nested scope and put it into the
+        // module that was just allocated.
+        let array_ty = ArrayType::new(&engine, FieldType::new(Mutability::Const, StorageType::I8));
+        let arraypre = ArrayRefPre::new(&mut store, array_ty.clone());
+        {
+            let mut scope = RootScope::new(&mut store);
+            let array = ArrayRef::new(&mut scope, &arraypre, &Val::I32(29), 1)?;
+            g.set(&mut scope, Val::AnyRef(Some(array.into())))?;
+        }
+
+        // The arrayref should stay alive and be traced properly...
+        store.gc(None)?;
+
+        assert!(matches!(g.get(&mut store), Val::AnyRef(Some(_))));
+    }
+
+    Ok(())
+}
