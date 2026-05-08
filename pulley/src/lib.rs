@@ -746,7 +746,7 @@ macro_rules! for_each_extended_op {
             /// `*addr = src`
             vstore128le_o32 = Vstore128LeO32 { addr: AddrO32, src: VReg };
             /// `dst = *(ptr + offset)`
-            vload128le_z = VLoad128Z { dst: VReg, addr: AddrZ };
+            vload128le_z = VLoad128LeZ { dst: VReg, addr: AddrZ };
             /// `*(ptr + offset) = src`
             vstore128le_z = Vstore128LeZ { addr: AddrZ, src: VReg };
             /// `dst = *(ptr + offset)`
@@ -1380,6 +1380,33 @@ macro_rules! for_each_extended_op {
                 lhs: XReg,
                 rhs: XReg
             };
+
+            /// `low32(dst) = zext_16_32(*addr)`
+            xload16be_u32_z = XLoad16BeU32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = sext_16_32(*addr)`
+            xload16be_s32_z = XLoad16BeS32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = *addr`
+            xload32be_z = XLoad32BeZ { dst: XReg, addr: AddrZ };
+            /// `dst = *addr`
+            xload64be_z = XLoad64BeZ { dst: XReg, addr: AddrZ };
+            /// `*addr = low16(src)`
+            xstore16be_z = XStore16BeZ { addr: AddrZ, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32be_z = XStore32BeZ { addr: AddrZ, src: XReg };
+            /// `*addr = src`
+            xstore64be_z = XStore64BeZ { addr: AddrZ, src: XReg };
+            /// `low32(dst) = zext(*addr)`
+            fload32be_z = Fload32BeZ { dst: FReg, addr: AddrZ };
+            /// `dst = *addr`
+            fload64be_z = Fload64BeZ { dst: FReg, addr: AddrZ };
+            /// `*addr = low32(src)`
+            fstore32be_z = Fstore32BeZ { addr: AddrZ, src: FReg };
+            /// `*addr = src`
+            fstore64be_z = Fstore64BeZ { addr: AddrZ, src: FReg };
+            /// `dst = *(ptr + offset)`
+            vload128be_z = VLoad128BeZ { dst: VReg, addr: AddrZ };
+            /// `*(ptr + offset) = src`
+            vstore128be_z = Vstore128BeZ { addr: AddrZ, src: VReg };
         }
     };
 }

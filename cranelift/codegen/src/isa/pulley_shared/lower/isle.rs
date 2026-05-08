@@ -276,6 +276,10 @@ where
         flags.trap_code().is_none()
     }
 
+    fn memflags_trapping(&mut self, flags: MemFlags) -> Option<TrapCode> {
+        flags.trap_code()
+    }
+
     fn memflags_is_wasm(&mut self, flags: MemFlags) -> bool {
         flags.trap_code() == Some(TrapCode::HEAP_OUT_OF_BOUNDS)
             && self.endianness(flags) == Endianness::Little

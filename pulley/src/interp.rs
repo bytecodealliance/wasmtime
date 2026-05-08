@@ -954,6 +954,7 @@ mod done {
         MemoryOutOfBounds,
         DisabledOpcode,
         StackOverflow,
+        Code(u8),
     }
 
     impl MachineState {
@@ -1231,7 +1232,7 @@ impl AddressingMode for AddrZ {
         // a trap, but all other addresses are allowed.
         let host_addr = i.state[self.addr].get_ptr::<T>();
         if host_addr.is_null() {
-            i.done_trap_kind::<I>(Some(TrapKind::MemoryOutOfBounds))?;
+            i.done_trap_kind::<I>(Some(TrapKind::Code(self.trap_code)))?;
             unreachable!();
         }
         unsafe {
@@ -3111,7 +3112,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
 
     #[interp_disable_if_cfg(pulley_disable_interp_simd)]
     fn vload128le_z(&mut self, dst: VReg, addr: AddrZ) -> ControlFlow<Done> {
-        let val = unsafe { self.load_ne::<u128, crate::VLoad128Z>(addr)? };
+        let val = unsafe { self.load_ne::<u128, crate::VLoad128LeZ>(addr)? };
         self.state[dst].set_u128(u128::from_le(val));
         ControlFlow::Continue(())
     }
@@ -5625,6 +5626,101 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let rhs = self.state[rhs].get_u64();
         let result = u128::from(lhs).wrapping_mul(u128::from(rhs));
         self.set_i128(dst_lo, dst_hi, result as i128);
+        ControlFlow::Continue(())
+    }
+
+    // =========================================================================
+    // z addressing modes (big endian)
+
+    fn xload16be_u32_z(&mut self, dst: XReg, addr: AddrZ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_ne::<u16, crate::XLoad16BeU32Z>(addr)? };
+        self.state[dst].set_u32(u16::from_be(result).into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload16be_s32_z(&mut self, dst: XReg, addr: AddrZ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_ne::<i16, crate::XLoad16BeS32Z>(addr)? };
+        self.state[dst].set_i32(i16::from_be(result).into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload32be_z(&mut self, dst: XReg, addr: AddrZ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_ne::<i32, crate::XLoad32BeZ>(addr)? };
+        self.state[dst].set_i32(i32::from_be(result));
+        ControlFlow::Continue(())
+    }
+
+    fn xload64be_z(&mut self, dst: XReg, addr: AddrZ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_ne::<i64, crate::XLoad64BeZ>(addr)? };
+        self.state[dst].set_i64(i64::from_be(result));
+        ControlFlow::Continue(())
+    }
+
+    fn xstore16be_z(&mut self, addr: AddrZ, val: XReg) -> ControlFlow<Done> {
+        let val = self.state[val].get_u32() as u16;
+        unsafe {
+            self.store_ne::<u16, crate::XStore16BeZ>(addr, val.to_be())?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn xstore32be_z(&mut self, addr: AddrZ, val: XReg) -> ControlFlow<Done> {
+        let val = self.state[val].get_u32();
+        unsafe {
+            self.store_ne::<u32, crate::XStore32BeZ>(addr, val.to_be())?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn xstore64be_z(&mut self, addr: AddrZ, val: XReg) -> ControlFlow<Done> {
+        let val = self.state[val].get_u64();
+        unsafe {
+            self.store_ne::<u64, crate::XStore64BeZ>(addr, val.to_be())?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn fload32be_z(&mut self, dst: FReg, addr: AddrZ) -> ControlFlow<Done> {
+        let val = unsafe { self.load_ne::<u32, crate::Fload32BeZ>(addr)? };
+        self.state[dst].set_f32(f32::from_bits(u32::from_be(val)));
+        ControlFlow::Continue(())
+    }
+
+    fn fload64be_z(&mut self, dst: FReg, addr: AddrZ) -> ControlFlow<Done> {
+        let val = unsafe { self.load_ne::<u64, crate::Fload64BeZ>(addr)? };
+        self.state[dst].set_f64(f64::from_bits(u64::from_be(val)));
+        ControlFlow::Continue(())
+    }
+
+    fn fstore32be_z(&mut self, addr: AddrZ, src: FReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_f32();
+        unsafe {
+            self.store_ne::<u32, crate::Fstore32BeZ>(addr, val.to_bits().to_be())?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn fstore64be_z(&mut self, addr: AddrZ, src: FReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_f64();
+        unsafe {
+            self.store_ne::<u64, crate::Fstore64BeZ>(addr, val.to_bits().to_be())?;
+        }
+        ControlFlow::Continue(())
+    }
+
+    #[interp_disable_if_cfg(pulley_disable_interp_simd)]
+    fn vload128be_z(&mut self, dst: VReg, addr: AddrZ) -> ControlFlow<Done> {
+        let val = unsafe { self.load_ne::<u128, crate::VLoad128BeZ>(addr)? };
+        self.state[dst].set_u128(u128::from_be(val));
+        ControlFlow::Continue(())
+    }
+
+    #[interp_disable_if_cfg(pulley_disable_interp_simd)]
+    fn vstore128be_z(&mut self, addr: AddrZ, src: VReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u128();
+        unsafe {
+            self.store_ne::<u128, crate::Vstore128BeZ>(addr, val.to_be())?;
+        }
         ControlFlow::Continue(())
     }
 }

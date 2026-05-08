@@ -215,14 +215,15 @@ impl Encode for AddrO32 {
 }
 
 impl Encode for AddrZ {
-    const WIDTH: u8 = 5;
+    const WIDTH: u8 = 6;
 
     fn encode<E>(&self, sink: &mut E)
     where
         E: Extend<u8>,
     {
-        self.addr.encode(sink);
-        self.offset.encode(sink);
+        let (a, b) = self.to_parts();
+        a.encode(sink);
+        b.encode(sink);
     }
 }
 

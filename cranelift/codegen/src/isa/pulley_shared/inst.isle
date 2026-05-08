@@ -219,13 +219,14 @@
   (enum
     (Base
       (addr XReg)
+      (trap_code TrapCode)
       (offset i32))))
 
 ;; Constructor for the `AddrZ` type used in `*_z` loads/stores
-(decl addrz (Value Offset32) AddrZ)
-(rule (addrz addr offset)
+(decl addrz (Value TrapCode Offset32) AddrZ)
+(rule (addrz addr code offset)
   (if-let (ValueOffset.Both reg off32) (amode_base addr offset))
-  (AddrZ.Base reg off32))
+  (AddrZ.Base reg code off32))
 
 ;;; ISLE representation of the `AddrG32` ("*_g32") addressing mode in Pulley.
 (type AddrG32
@@ -297,6 +298,9 @@
 
 (decl pure memflags_nontrapping (MemFlags) bool)
 (extern constructor memflags_nontrapping memflags_nontrapping)
+
+(decl pure partial memflags_trapping (MemFlags) TrapCode)
+(extern constructor memflags_trapping memflags_trapping)
 
 (decl pure memflags_is_wasm (MemFlags) bool)
 (extern constructor memflags_is_wasm memflags_is_wasm)

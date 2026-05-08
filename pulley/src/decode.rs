@@ -470,10 +470,9 @@ impl Decode for AddrZ {
     where
         T: BytecodeStream,
     {
-        Ok(AddrZ {
-            addr: XReg::decode(bytecode)?,
-            offset: i32::decode(bytecode)?,
-        })
+        let a = u16::decode(bytecode)?;
+        let b = i32::decode(bytecode)?;
+        Ok(AddrZ::from_parts(a, b))
     }
 }
 
