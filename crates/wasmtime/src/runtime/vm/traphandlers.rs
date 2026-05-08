@@ -827,11 +827,7 @@ impl CallThreadState {
                         // Take the pending exception at this time and use it as
                         // payload.
                         payload1 = usize::try_from(
-                            store
-                                .take_pending_exception()
-                                .unwrap()
-                                .as_gc_ref()
-                                .as_raw_u32(),
+                            store.expose_pending_exception_to_wasm().unwrap().get(),
                         )
                         .expect("GC ref does not fit in usize");
                         payload2 = 0;

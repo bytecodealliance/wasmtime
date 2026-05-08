@@ -17,13 +17,9 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
 
     // Get the tag identity relative to the store.
 
-    // Temporarily take, to avoid borrowing issues.
-    let exnref = nogc
-        .take_pending_exception()
+    let (throwing_tag_instance_id, throwing_tag_defined_tag_index) = nogc
+        .pending_exception_tag_and_instance()
         .expect("Only invoked when an exception is pending");
-    let (throwing_tag_instance_id, throwing_tag_defined_tag_index) =
-        exnref.tag(&mut nogc).expect("cannot read tag");
-    nogc.set_pending_exception(exnref);
     log::trace!(
         "throwing: tag defined in instance {throwing_tag_instance_id:?} defined-tag {throwing_tag_defined_tag_index:?}"
     );

@@ -1,18 +1,20 @@
 //! GC-related methods for stores.
 
 use crate::debug::gc_refs_in_frame;
-use crate::store::{Asyncness, AutoAssertNoGc, StoreOpaque, StoreResourceLimiter, yield_now};
-use crate::vm::{
-    self, Backtrace, GcRootsList, GcStore, SendSyncPtr, VMExnRef, VMGcRef, VMStackState,
+use crate::store::{
+    Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
 };
+use crate::type_registry::RegisteredType;
+use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef, VMStackState};
 use crate::{
-    ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
-    format_err,
+    ExnRef, GcHeapOutOfMemory, OutOfMemory, OwnedRooted, Result, Rooted, Store, StoreContextMut,
+    ThrownException, bail, format_err,
 };
 use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+use wasmtime_environ::DefinedTagIndex;
 
 impl<T> Store<T> {
     /// Perform garbage collection.
@@ -423,23 +425,51 @@ impl StoreOpaque {
         }
     }
 
-    /// Set a pending exception. The `exnref` is taken and held on
-    /// this store to be fetched later by an unwind. This method does
-    /// *not* set up an unwind request on the TLS call state; that
-    /// must be done separately.
-    pub(crate) fn set_pending_exception(&mut self, exnref: VMExnRef) {
-        self.pending_exception = Some(exnref);
+    /// Set a pending exception.
+    ///
+    /// The `exnref` is cloned internally and held on this store to be fetched
+    /// later by an unwind. This method does *not* set up an unwind request on
+    /// the TLS call state; that must be done separately.
+    ///
+    /// GC barriers are not required by the caller of this function.
+    pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) {
+        dbg!(self.pending_exception.is_some());
+        debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        let gc_store = self.gc_store.as_mut().unwrap();
+        gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref))
     }
 
-    /// Take a pending exception, if any.
-    pub(crate) fn take_pending_exception(&mut self) -> Option<VMExnRef> {
-        self.pending_exception.take()
+    /// Takes the pending exception from this store, if any, and exposes it to
+    /// WebAssembly, returning the raw representation.
+    pub(crate) fn expose_pending_exception_to_wasm(&mut self) -> Option<NonZeroU32> {
+        let exnref = self.pending_exception.take()?;
+        let gc_store = self.unwrap_gc_store_mut();
+        debug_assert!(exnref.is_exnref(&*gc_store.gc_heap));
+        Some(gc_store.expose_gc_ref_to_wasm(exnref))
     }
 
+    /// Takes the pending exception of the store, yielding ownership of its
+    /// reference to the `Rooted` that's returned.
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
-        let vmexnref = self.take_pending_exception()?;
+        let vmexnref = self.pending_exception.take()?;
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref.into()))
+    }
+
+    /// Returns the (instance,tag) pair that the pending exception in this
+    /// store, if any, references.
+    pub(crate) fn pending_exception_tag_and_instance(
+        &mut self,
+    ) -> Option<(InstanceId, DefinedTagIndex)> {
+        let pending_exnref = self.pending_exception.as_ref()?.unchecked_copy();
+        debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        let mut store = AutoAssertNoGc::new(self);
+        Some(
+            pending_exnref
+                .into_exnref_unchecked()
+                .tag(&mut store)
+                .expect("cannot read tag"),
+        )
     }
 
     /// Get an owned rooted reference to the pending exception,
@@ -447,25 +477,23 @@ impl StoreOpaque {
     #[cfg(feature = "debug")]
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
-    ) -> Result<Option<crate::OwnedRooted<crate::ExnRef>>, crate::error::OutOfMemory> {
+    ) -> Result<Option<OwnedRooted<ExnRef>>, OutOfMemory> {
+        let pending = match &self.pending_exception {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+        let cloned = self.gc_store.as_mut().unwrap().clone_gc_ref(pending);
         let mut nogc = AutoAssertNoGc::new(self);
-        nogc.pending_exception
-            .take()
-            .map(|vmexnref| {
-                let cloned = nogc.clone_gc_ref(vmexnref.as_gc_ref());
-                nogc.pending_exception = Some(cloned.into_exnref_unchecked());
-                crate::OwnedRooted::new(&mut nogc, vmexnref.into())
-            })
-            .transpose()
+        Ok(Some(OwnedRooted::new(&mut nogc, cloned)?))
     }
 
+    /// Stores `exception` within the store to later get thrown.
+    ///
+    /// Delegates to `self.set_pending_exception` after accessing the internal
+    /// exception pointer.
     fn throw_impl(&mut self, exception: Rooted<ExnRef>) {
-        let mut nogc = AutoAssertNoGc::new(self);
-        let exnref = exception._to_raw(&mut nogc).unwrap();
-        let exnref = VMGcRef::from_raw_u32(exnref)
-            .expect("exception cannot be null")
-            .into_exnref_unchecked();
-        nogc.set_pending_exception(exnref);
+        let exception = exception.get_gc_ref(self).unwrap().unchecked_copy();
+        self.set_pending_exception(&exception)
     }
 
     /// Helper method to require that a `GcStore` was previously allocated for
@@ -578,11 +606,7 @@ impl StoreOpaque {
         log::trace!("End trace GC roots")
     }
 
-    fn trace_wasm_stack_frame(
-        &self,
-        gc_roots_list: &mut GcRootsList,
-        frame: crate::runtime::vm::Frame,
-    ) {
+    fn trace_wasm_stack_frame(&self, gc_roots_list: &mut GcRootsList, frame: Frame) {
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -718,8 +742,7 @@ impl StoreOpaque {
         log::trace!("Begin trace GC roots :: pending exception");
         if let Some(pending_exception) = self.pending_exception.as_mut() {
             unsafe {
-                let root = pending_exception.as_gc_ref_mut();
-                gc_roots_list.add_vmgcref_root(root.into(), "Pending exception");
+                gc_roots_list.add_vmgcref_root(pending_exception.into(), "Pending exception");
             }
         }
         log::trace!("End trace GC roots :: pending exception");
@@ -731,7 +754,7 @@ impl StoreOpaque {
     /// type in this store, and we don't have to worry about the type being
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
-    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: crate::type_registry::RegisteredType) {
+    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
         // If a GC heap is already allocated, eagerly register trace info
         // now. Otherwise, trace info will be registered when the GC heap
         // is allocated in `StoreOpaque::allocate_gc_store`.

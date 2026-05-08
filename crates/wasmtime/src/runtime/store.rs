@@ -128,8 +128,6 @@ mod async_;
 pub use self::async_::CallHookHandler;
 
 #[cfg(feature = "gc")]
-use super::vm::VMExnRef;
-#[cfg(feature = "gc")]
 mod gc;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
@@ -495,7 +493,7 @@ pub struct StoreOpaque {
     /// `peek_pending_exception()`, `has_pending_exception()`, and
     /// `catch()`.
     #[cfg(feature = "gc")]
-    pending_exception: Option<VMExnRef>,
+    pending_exception: Option<VMGcRef>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
