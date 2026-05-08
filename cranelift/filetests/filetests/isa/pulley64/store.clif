@@ -9,7 +9,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32le_z x1, 0 ; trap=heap_oob, x0
+;   xstore32le_z x1, 0, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64le_z x1, 0 ; trap=heap_oob, x0
+;   xstore64le_z x1, 0, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32le_z x1, 4 ; trap=heap_oob, x0
+;   xstore32le_z x1, 4, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64le_z x1, 8 ; trap=heap_oob, x0
+;   xstore64le_z x1, 8, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -69,7 +69,7 @@ block0(v0: i8, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore8_z x1, 0 ; trap=user13, x0
+;   xstore8_z x1, 0, x0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -84,7 +84,7 @@ block0(v0: i16, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore16be_z x1, 0 ; trap=user13, x0
+;   xstore16be_z x1, 0, x0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -99,7 +99,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32be_z x1, 0 ; trap=user13, x0
+;   xstore32be_z x1, 0, x0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -114,7 +114,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64be_z x1, 0 ; trap=user13, x0
+;   xstore64be_z x1, 0, x0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -129,7 +129,7 @@ block0(v0: f32, v1: i64):
 
 ; VCode:
 ; block0:
-;   fstore32be_z x0, 0 ; trap=user13, f0
+;   fstore32be_z x0, 0, f0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -144,7 +144,7 @@ block0(v0: f64, v1: i64):
 
 ; VCode:
 ; block0:
-;   fstore64be_z x0, 0 ; trap=user13, f0
+;   fstore64be_z x0, 0, f0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
@@ -159,7 +159,7 @@ block0(v0: i64x2, v1: i64):
 
 ; VCode:
 ; block0:
-;   vstore128be_z x0, 0 ; trap=user13, v0
+;   vstore128be_z x0, 0, v0 // trap=TrapCode(13)
 ;   ret
 ;
 ; Disassembled:
