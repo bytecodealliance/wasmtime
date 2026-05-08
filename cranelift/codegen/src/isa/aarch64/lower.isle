@@ -2210,6 +2210,12 @@
   (value_regs_get (with_flags (cmp_imm size reg (u8_into_imm12 0)) (cset (Cond.Ne))) 0))
 (rule (lower_cond_result_bool (CondResult.Cond flags cc))
   (value_regs_get (with_flags flags (cset cc)) 0))
+(rule (lower_cond_result_bool (CondResult.Or flags cc1 cc2))
+  (let ((tmp ValueRegs (with_flags flags (consumes_flags_concat (cset cc1) (cset cc2)))))
+    (orr $I32 (value_regs_get tmp 0) (value_regs_get tmp 1))))
+(rule (lower_cond_result_bool (CondResult.And flags cc1 cc2))
+  (let ((tmp ValueRegs (with_flags flags (consumes_flags_concat (cset cc1) (cset cc2)))))
+    (and_reg $I32 (value_regs_get tmp 0) (value_regs_get tmp 1))))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2223,12 +2229,18 @@
 
 ;; Helper to emit a `TrapIf` instruction for the `CondResult` provided
 (decl trap_if_cond_result (CondResult TrapCode) SideEffectNoResult)
-(rule (trap_if_cond_result (CondResult.Zero reg size) tc)
+(rule 1 (trap_if_cond_result (CondResult.Zero reg size) tc)
   (trap_if_zero reg size tc))
-(rule (trap_if_cond_result (CondResult.NotZero reg size) tc)
+(rule 1 (trap_if_cond_result (CondResult.NotZero reg size) tc)
   (trap_if_not_zero reg size tc))
-(rule (trap_if_cond_result (CondResult.Cond flags cc) tc)
+(rule 1 (trap_if_cond_result (CondResult.Cond flags cc) tc)
   (with_flags_side_effect flags (trap_if_cond cc tc)))
+
+;; TODO: see comments in `br_cond_result` below, but basically it'd be best to
+;; thread "And" and "Or" into the trap instruction itself instead of reifying it
+;; as a register here.
+(rule 0 (trap_if_cond_result c tc)
+  (trap_if_not_zero (lower_cond_result_bool c) (OperandSize.Size32) tc))
 
 ;;;;;  Rules for `trapnz`;;;;;;;;;
 
@@ -3163,12 +3175,19 @@
 
 ;; Helper to emit a branching instruction based on  a `CondResult`
 (decl br_cond_result (CondResult MachLabel MachLabel) SideEffectNoResult)
-(rule (br_cond_result (CondResult.Zero reg size) taken not_taken)
+(rule 1 (br_cond_result (CondResult.Zero reg size) taken not_taken)
   (a64_br_zero reg size taken not_taken))
-(rule (br_cond_result (CondResult.NotZero reg size) taken not_taken)
+(rule 1 (br_cond_result (CondResult.NotZero reg size) taken not_taken)
   (a64_br_not_zero reg size taken not_taken))
-(rule (br_cond_result (CondResult.Cond flags cc) taken not_taken)
+(rule 1 (br_cond_result (CondResult.Cond flags cc) taken not_taken)
   (with_flags_side_effect flags (a64_br_cond cc taken not_taken)))
+
+;; TODO: this handles "And" and "Or" cases but it's relatively inefficient. It'd
+;; be better to thread the and/or into the branch itself similar to what x64
+;; does to generate two branches. That'd require more plumbing, however, and is
+;; left for a future optimization.
+(rule 0 (br_cond_result c taken not_taken)
+  (a64_br_not_zero (lower_cond_result_bool c) (OperandSize.Size32) taken not_taken))
 
 ;; Special lowerings for `tbnz` - "Test bit and Branch if Nonzero"
 (rule 1 (lower_branch (brif (band _ x @ (value_type ty) (u64_from_iconst n)) _ _)

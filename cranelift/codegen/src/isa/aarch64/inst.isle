@@ -4130,11 +4130,6 @@
 (rule (splat_const n size)
       (vec_dup (imm $I64 (ImmExtend.Zero) n) size))
 
-;; Lower a FloatCC to a Cond.
-(decl fp_cond_code (FloatCC) Cond)
-;; TODO: Port lower_fp_condcode() to ISLE.
-(extern constructor fp_cond_code fp_cond_code)
-
 ;; Lower an integer cond code.
 (spec (cond_code a) (provide (= a result)))
 (decl cond_code (IntCC) Cond)
@@ -4637,12 +4632,18 @@
   (Zero (reg Reg) (size OperandSize))
   (NotZero (reg Reg) (size OperandSize))
   (Cond (flags ProducesFlags) (cond Cond))
+  (Or (flags ProducesFlags) (cc1 Cond) (cc2 Cond))
+  (And (flags ProducesFlags) (cc1 Cond) (cc2 Cond))
 ))
 
 (decl cond_result_invert (CondResult) CondResult)
 (rule (cond_result_invert (CondResult.Zero reg size)) (CondResult.NotZero reg size))
 (rule (cond_result_invert (CondResult.NotZero reg size)) (CondResult.Zero reg size))
 (rule (cond_result_invert (CondResult.Cond flags cc)) (CondResult.Cond flags (invert_cond cc)))
+(rule (cond_result_invert (CondResult.Or flags cc1 cc2))
+  (CondResult.And flags (invert_cond cc1) (invert_cond cc2)))
+(rule (cond_result_invert (CondResult.And flags cc1 cc2))
+  (CondResult.Or flags (invert_cond cc1) (invert_cond cc2)))
 
 (decl is_nonzero_cmp (Value) CondResult)
 
@@ -4775,6 +4776,52 @@
 (rule (emit_fcmp cc a b @ (value_type ty))
   (CondResult.Cond (fpu_cmp (scalar_size ty) a b) (fp_cond_code cc)))
 
+;; Special case `OrderedNotEqual` and `UnorderedOrEqual` which aren't possible
+;; to select via one condition below.
+;; OrderedNotEqual = LT | GT.
+(rule 1 (emit_fcmp (FloatCC.OrderedNotEqual) a b @ (value_type ty))
+  (CondResult.Or (fpu_cmp (scalar_size ty) a b) (Cond.Mi) (Cond.Gt)))
+;; UnorderedOrEqual = UN | EQ
+(rule 1 (emit_fcmp (FloatCC.UnorderedOrEqual) a b @ (value_type ty))
+  (CondResult.Or (fpu_cmp (scalar_size ty) a b) (Cond.Eq) (Cond.Vs)))
+
+;;(rule 1 (emit_fcmp (FloatCC.UnorderedOrEqual) a b @ (value_type ty))
+;;)
+
+;; Refer to `codegen/shared/src/condcodes.rs` and to the `FCMP` AArch64 docs.
+;; The FCMP instruction sets:
+;;               NZCV
+;; - PCSR.NZCV = 0011 on UN (unordered),
+;;               0110 on EQ,
+;;               1000 on LT,
+;;               0010 on GT.
+(decl fp_cond_code (FloatCC) Cond)
+;; EQ | LT | GT. Vc => V clear.
+(rule (fp_cond_code (FloatCC.Ordered)) (Cond.Vc))
+;; UN. Vs => V set.
+;; FloatCC::Unordered => Cond::Vs,
+(rule (fp_cond_code (FloatCC.Unordered)) (Cond.Vs))
+;; EQ. Eq => Z set.
+(rule (fp_cond_code (FloatCC.Equal)) (Cond.Eq))
+;; UN | LT | GT. Ne => Z clear.
+(rule (fp_cond_code (FloatCC.NotEqual)) (Cond.Ne))
+;; LT. Mi => N set.
+(rule (fp_cond_code (FloatCC.LessThan)) (Cond.Mi))
+;; LT | EQ. Ls => C clear or Z set.
+(rule (fp_cond_code (FloatCC.LessThanOrEqual)) (Cond.Ls))
+;; GT. Gt => Z clear, N = V.
+(rule (fp_cond_code (FloatCC.GreaterThan)) (Cond.Gt))
+;; GT | EQ. Ge => N = V.
+(rule (fp_cond_code (FloatCC.GreaterThanOrEqual)) (Cond.Ge))
+;; UN | LT. Lt => N != V.
+(rule (fp_cond_code (FloatCC.UnorderedOrLessThan)) (Cond.Lt))
+;; UN | LT | EQ. Le => not (Z clear, N = V).
+(rule (fp_cond_code (FloatCC.UnorderedOrLessThanOrEqual)) (Cond.Le))
+;; UN | GT. Hi => C set, Z clear.
+(rule (fp_cond_code (FloatCC.UnorderedOrGreaterThan)) (Cond.Hi))
+;; UN | GT | EQ. Pl => N clear.
+(rule (fp_cond_code (FloatCC.UnorderedOrGreaterThanOrEqual)) (Cond.Pl))
+
 ;; A tuple of `ProducesFlags` and `IntCC`.
 (type FlagsAndCC (enum (FlagsAndCC (flags ProducesFlags)
                                    (cc IntCC))))
@@ -4904,12 +4951,24 @@
 
 ;; Helpers for generating select instruction sequences.
 (decl lower_select (Type CondResult Value Value) ValueRegs)
-(rule (lower_select ty (CondResult.Zero reg size) a b)
+(rule 1 (lower_select ty (CondResult.Zero reg size) a b)
       (lower_select_cond ty (cmp size reg (zero_reg)) (Cond.Eq) a b))
-(rule (lower_select ty (CondResult.NotZero reg size) a b)
+(rule 1 (lower_select ty (CondResult.NotZero reg size) a b)
       (lower_select_cond ty (cmp size reg (zero_reg)) (Cond.Ne) a b))
-(rule (lower_select ty (CondResult.Cond flags cond) a b)
+(rule 1 (lower_select ty (CondResult.Cond flags cond) a b)
       (lower_select_cond ty flags cond a b))
+
+;; TODO: there's probably a more optimal way to do this as this otherwise
+;; requires putting lots of conditions in registers then doing another compare.
+;; Pushing this down lower though for the "Or" and "And" cases would require
+;; fancier handling in `lower_select_cond` below, however.
+(rule 0 (lower_select ty c a b)
+      (lower_select_cond
+        ty
+        (cmp (OperandSize.Size32) (lower_cond_result_bool c) (zero_reg))
+        (Cond.Ne)
+        a
+        b))
 
 (decl lower_select_cond (Type ProducesFlags Cond Value Value) ValueRegs)
 (rule 2 (lower_select_cond (ty_scalar_float (fits_in_64 ty)) flags cond rn rm)

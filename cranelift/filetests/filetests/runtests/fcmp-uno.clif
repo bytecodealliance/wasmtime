@@ -325,3 +325,34 @@ block0(v0: f64, v1: f64):
 ; run: %fcmp_uno_f64(+sNaN:0x800000000001, -sNaN:0x1) == 1
 ; run: %fcmp_uno_f64(-sNaN:0x800000000001, -sNaN:0x1) == 1
 ; run: %fcmp_uno_f64(-sNaN:0x800000000001, +sNaN:0x1) == 1
+
+function %select_fcmp_uno_f32_i32(f32, f32, i32, i32) -> i32 {
+block0(v0: f32, v1: f32, v2: i32, v3: i32):
+    v4 = fcmp uno v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; run: %select_fcmp_uno_f32_i32(0x1.0, 0x1.0, 0, 1) == 1
+; run: %select_fcmp_uno_f32_i32(+NaN, +NaN, 0, 1) == 0
+
+function %select_fcmp_uno_f32_f32(f32, f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32, v3: f32):
+    v4 = fcmp uno v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; run: %select_fcmp_uno_f32_f32(0x1.0, 0x1.0, 0x1.0, 0x2.0) == 0x2.0
+; run: %select_fcmp_uno_f32_f32(+NaN, +NaN, 0x1.0, 0x2.0) == 0x1.0
+
+function %brif_fcmp_uno_f32(f32, f32, i32, i32) -> i32 {
+block0(v0: f32, v1: f32, v2: i32, v3: i32):
+    v4 = fcmp uno v0, v1
+    brif v4, block1(v2), block1(v3)
+block1(v5: i32):
+    return v5
+}
+
+; run: %brif_fcmp_uno_f32(0x1.0, 0x1.0, 0, 1) == 1
+; run: %brif_fcmp_uno_f32(+NaN, +NaN, 0, 1) == 0

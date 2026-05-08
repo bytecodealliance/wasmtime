@@ -9,8 +9,8 @@ use super::{
     ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
     FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel, MemLabel,
     MoveWideConst, MoveWideOp, NZCV, Opcode, OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
-    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, lower_fp_condcode,
-    stack_reg, writable_link_reg, writable_zero_reg, zero_reg,
+    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, stack_reg,
+    writable_link_reg, writable_zero_reg, zero_reg,
 };
 use crate::ir::{ArgumentExtension, condcodes};
 use crate::isa;
@@ -580,10 +580,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             &IntCC::SignedLessThan => VecMisc2::Cmgt0,
             _ => panic!(),
         }
-    }
-
-    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
-        lower_fp_condcode(*cc)
     }
 
     fn cond_code(&mut self, cc: &condcodes::IntCC) -> Cond {

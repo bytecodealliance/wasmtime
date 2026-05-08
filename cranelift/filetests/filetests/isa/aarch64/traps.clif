@@ -269,3 +269,55 @@ block0(v0: f64, v1: f64):
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
+function %trapz_fcmp_one(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp one v0, v1
+  trapz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   cset x4, pl
+;   cset x6, le
+;   and w8, w4, w6
+;   cbnz w8, #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   cset x4, pl
+;   cset x6, le
+;   and w8, w4, w6
+;   cbnz w8, #0x18
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+
+function %trapz_fcmp_ueq(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp ueq v0, v1
+  trapz v2, user1
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp d0, d1
+;   cset x4, ne
+;   cset x6, vc
+;   and w8, w4, w6
+;   cbnz w8, #trap=user1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp d0, d1
+;   cset x4, ne
+;   cset x6, vc
+;   and w8, w4, w6
+;   cbnz w8, #0x18
+;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+

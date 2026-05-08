@@ -66,46 +66,6 @@ pub(crate) fn lower_condcode(cc: IntCC) -> Cond {
     }
 }
 
-pub(crate) fn lower_fp_condcode(cc: FloatCC) -> Cond {
-    // Refer to `codegen/shared/src/condcodes.rs` and to the `FCMP` AArch64 docs.
-    // The FCMP instruction sets:
-    //               NZCV
-    // - PCSR.NZCV = 0011 on UN (unordered),
-    //               0110 on EQ,
-    //               1000 on LT,
-    //               0010 on GT.
-    match cc {
-        // EQ | LT | GT. Vc => V clear.
-        FloatCC::Ordered => Cond::Vc,
-        // UN. Vs => V set.
-        FloatCC::Unordered => Cond::Vs,
-        // EQ. Eq => Z set.
-        FloatCC::Equal => Cond::Eq,
-        // UN | LT | GT. Ne => Z clear.
-        FloatCC::NotEqual => Cond::Ne,
-        // LT | GT.
-        FloatCC::OrderedNotEqual => unimplemented!(),
-        //  UN | EQ
-        FloatCC::UnorderedOrEqual => unimplemented!(),
-        // LT. Mi => N set.
-        FloatCC::LessThan => Cond::Mi,
-        // LT | EQ. Ls => C clear or Z set.
-        FloatCC::LessThanOrEqual => Cond::Ls,
-        // GT. Gt => Z clear, N = V.
-        FloatCC::GreaterThan => Cond::Gt,
-        // GT | EQ. Ge => N = V.
-        FloatCC::GreaterThanOrEqual => Cond::Ge,
-        // UN | LT. Lt => N != V.
-        FloatCC::UnorderedOrLessThan => Cond::Lt,
-        // UN | LT | EQ. Le => not (Z clear, N = V).
-        FloatCC::UnorderedOrLessThanOrEqual => Cond::Le,
-        // UN | GT. Hi => C set, Z clear.
-        FloatCC::UnorderedOrGreaterThan => Cond::Hi,
-        // UN | GT | EQ. Pl => N clear.
-        FloatCC::UnorderedOrGreaterThanOrEqual => Cond::Pl,
-    }
-}
-
 //=============================================================================
 // Lowering-backend trait implementation.
 

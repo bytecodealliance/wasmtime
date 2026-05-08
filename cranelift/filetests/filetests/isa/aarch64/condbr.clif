@@ -806,3 +806,74 @@ block2:
 ; block2: ; offset 0x10
 ;   ret
 
+function %br_fcmp_one(f32, f32) {
+block0(v0: f32, v1: f32):
+  v2 = fcmp one v0, v1
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x4, mi
+;   cset x6, gt
+;   orr w8, w4, w6
+;   cbnz w8, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x4, mi
+;   cset x6, gt
+;   orr w8, w4, w6
+;   cbnz w8, #0x18
+; block1: ; offset 0x14
+;   ret
+; block2: ; offset 0x18
+;   ret
+
+
+function %br_fcmp_ueq(f32, f32) {
+block0(v0: f32, v1: f32):
+  v2 = fcmp ueq v0, v1
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x4, eq
+;   cset x6, vs
+;   orr w8, w4, w6
+;   cbnz w8, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x4, eq
+;   cset x6, vs
+;   orr w8, w4, w6
+;   cbnz w8, #0x18
+; block1: ; offset 0x14
+;   ret
+; block2: ; offset 0x18
+;   ret
+

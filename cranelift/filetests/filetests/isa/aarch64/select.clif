@@ -116,3 +116,229 @@ block0(v0: i8, v1: f128, v2: f128):
 ;   mov v0.16b, v0.16b
 ;   ret
 
+function %select_fcmp_one_f32_i32(f32, f32, i32, i32) -> i32 {
+block0(v0: f32, v1: f32, v2: i32, v3: i32):
+    v4 = fcmp one v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   csel x0, x0, x1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   csel x0, x0, x1, ne
+;   ret
+
+function %select_fcmp_ueq_f32_i32(f32, f32, i32, i32) -> i32 {
+block0(v0: f32, v1: f32, v2: i32, v3: i32):
+    v4 = fcmp ueq v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   csel x0, x0, x1, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   csel x0, x0, x1, ne
+;   ret
+
+function %select_fcmp_one_f32_f32(f32, f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32, v3: f32):
+    v4 = fcmp one v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   fcsel s0, s2, s3, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   fcsel s0, s2, s3, ne
+;   ret
+
+function %select_fcmp_ueq_f32_f32(f32, f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32, v3: f32):
+    v4 = fcmp ueq v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   fcsel s0, s2, s3, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   fcsel s0, s2, s3, ne
+;   ret
+
+function %select_fcmp_one_f32_i128(f32, f32, i128, i128) -> i128 {
+block0(v0: f32, v1: f32, v2: i128, v3: i128):
+    v4 = fcmp one v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x8, mi
+;   cset x10, gt
+;   orr w12, w8, w10
+;   subs wzr, w12, wzr
+;   csel x0, x0, x2, ne
+;   csel x1, x1, x3, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x8, mi
+;   cset x10, gt
+;   orr w12, w8, w10
+;   cmp w12, wzr
+;   csel x0, x0, x2, ne
+;   csel x1, x1, x3, ne
+;   ret
+
+function %select_fcmp_ueq_f32_i128(f32, f32, i128, i128) -> i128 {
+block0(v0: f32, v1: f32, v2: i128, v3: i128):
+    v4 = fcmp ueq v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x8, eq
+;   cset x10, vs
+;   orr w12, w8, w10
+;   subs wzr, w12, wzr
+;   csel x0, x0, x2, ne
+;   csel x1, x1, x3, ne
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x8, eq
+;   cset x10, vs
+;   orr w12, w8, w10
+;   cmp w12, wzr
+;   csel x0, x0, x2, ne
+;   csel x1, x1, x3, ne
+;   ret
+
+function %select_fcmp_one_f32_i64x2(f32, f32, i64x2, i64x2) -> i64x2 {
+block0(v0: f32, v1: f32, v2: i64x2, v3: i64x2):
+    v4 = fcmp one v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   vcsel v0.16b, v2.16b, v3.16b, ne (if-then-else diamond)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, mi
+;   cset x8, gt
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   b.ne #0x20
+;   mov v0.16b, v3.16b
+;   b #0x24
+;   mov v0.16b, v2.16b
+;   ret
+
+function %select_fcmp_ueq_f32_i64x2(f32, f32, i64x2, i64x2) -> i64x2 {
+block0(v0: f32, v1: f32, v2: i64x2, v3: i64x2):
+    v4 = fcmp ueq v0, v1
+    v5 = select v4, v2, v3
+    return v5
+}
+
+; VCode:
+; block0:
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   subs wzr, w10, wzr
+;   vcsel v0.16b, v2.16b, v3.16b, ne (if-then-else diamond)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fcmp s0, s1
+;   cset x6, eq
+;   cset x8, vs
+;   orr w10, w6, w8
+;   cmp w10, wzr
+;   b.ne #0x20
+;   mov v0.16b, v3.16b
+;   b #0x24
+;   mov v0.16b, v2.16b
+;   ret
+
