@@ -622,11 +622,7 @@ impl AddrZ {
     /// Implementation of regalloc for this addressing mode.
     pub fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
-            AddrZ::Base {
-                addr,
-                trap_code: _,
-                offset: _,
-            } => {
+            AddrZ::Base { addr, offset: _ } => {
                 collector.reg_use(addr);
             }
         }
@@ -636,13 +632,8 @@ impl AddrZ {
 impl From<AddrZ> for pulley_interpreter::AddrZ {
     fn from(addr: AddrZ) -> Self {
         match addr {
-            AddrZ::Base {
-                addr,
-                trap_code,
-                offset,
-            } => Self {
+            AddrZ::Base { addr, offset } => Self {
                 addr: addr.into(),
-                trap_code: trap_code.as_raw().get(),
                 offset,
             },
         }
@@ -652,13 +643,9 @@ impl From<AddrZ> for pulley_interpreter::AddrZ {
 impl fmt::Display for AddrZ {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AddrZ::Base {
-                addr,
-                trap_code,
-                offset,
-            } => {
+            AddrZ::Base { addr, offset } => {
                 let addr = reg_name(**addr);
-                write!(f, "{addr}, {offset} ; trap={trap_code}")
+                write!(f, "{addr}, {offset}")
             }
         }
     }

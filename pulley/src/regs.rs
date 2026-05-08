@@ -359,29 +359,8 @@ pub struct AddrO32 {
 pub struct AddrZ {
     /// The base address of memory, or NULL.
     pub addr: XReg,
-    /// The trap code to use when the address being loaded is NULL.
-    pub trap_code: u8,
     /// A byte offset from `addr`.
     pub offset: i32,
-}
-
-impl AddrZ {
-    /// Decodes this immediate from its constituent parts.
-    pub fn from_parts(a: u16, b: i32) -> AddrZ {
-        let addr = XReg::new((a & 0b11111) as u8).unwrap();
-        let trap_code = (a >> 5) as u8;
-        AddrZ {
-            addr,
-            trap_code,
-            offset: b,
-        }
-    }
-
-    /// Encodes this immediate into its constituent parts.
-    pub fn to_parts(&self) -> (u16, i32) {
-        let a = (u16::from(self.trap_code) << 5) | u16::from(self.addr.to_u8());
-        (a, self.offset)
-    }
 }
 
 /// Immediate used for the "g32" addressing mode.

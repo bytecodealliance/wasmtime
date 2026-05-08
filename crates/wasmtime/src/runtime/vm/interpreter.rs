@@ -8,7 +8,7 @@ use core::marker;
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};
-use wasmtime_environ::{BuiltinFunctionIndex, CompiledTrap, HostCall, Trap};
+use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 use wasmtime_unwinder::Handler;
 use wasmtime_unwinder::Unwind;
 
@@ -470,7 +470,6 @@ impl InterpreterRef<'_> {
                         TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds.into(),
                         TrapKind::DisabledOpcode => Trap::DisabledOpcode.into(),
                         TrapKind::StackOverflow => Trap::StackOverflow.into(),
-                        TrapKind::Code(n) => CompiledTrap::from_u8(n).unwrap(),
                     };
                     s.set_jit_trap(regs, None, trap);
                     s.entry_trap_handler()

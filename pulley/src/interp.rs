@@ -954,7 +954,6 @@ mod done {
         MemoryOutOfBounds,
         DisabledOpcode,
         StackOverflow,
-        Code(u8),
     }
 
     impl MachineState {
@@ -1232,7 +1231,7 @@ impl AddressingMode for AddrZ {
         // a trap, but all other addresses are allowed.
         let host_addr = i.state[self.addr].get_ptr::<T>();
         if host_addr.is_null() {
-            i.done_trap_kind::<I>(Some(TrapKind::Code(self.trap_code)))?;
+            i.done_trap_kind::<I>(None)?;
             unreachable!();
         }
         unsafe {
