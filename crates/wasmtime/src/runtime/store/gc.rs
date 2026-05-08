@@ -1,14 +1,13 @@
 //! GC-related methods for stores.
 
-use crate::debug::gc_refs_in_frame;
 use crate::store::{
     Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
 };
 use crate::type_registry::RegisteredType;
-use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef, VMStackState};
+use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef};
 use crate::{
-    ExnRef, GcHeapOutOfMemory, OutOfMemory, OwnedRooted, Result, Rooted, Store, StoreContextMut,
-    ThrownException, bail, format_err,
+    ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
+    format_err,
 };
 use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
@@ -433,7 +432,6 @@ impl StoreOpaque {
     ///
     /// GC barriers are not required by the caller of this function.
     pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) {
-        dbg!(self.pending_exception.is_some());
         debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
         let gc_store = self.gc_store.as_mut().unwrap();
         gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref))
@@ -453,7 +451,7 @@ impl StoreOpaque {
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.pending_exception.take()?;
         let mut nogc = AutoAssertNoGc::new(self);
-        Some(Rooted::new(&mut nogc, vmexnref.into()))
+        Some(Rooted::new(&mut nogc, vmexnref))
     }
 
     /// Returns the (instance,tag) pair that the pending exception in this
@@ -477,14 +475,14 @@ impl StoreOpaque {
     #[cfg(feature = "debug")]
     pub(crate) fn pending_exception_owned_rooted(
         &mut self,
-    ) -> Result<Option<OwnedRooted<ExnRef>>, OutOfMemory> {
+    ) -> Result<Option<crate::OwnedRooted<ExnRef>>, crate::OutOfMemory> {
         let pending = match &self.pending_exception {
             Some(r) => r,
             None => return Ok(None),
         };
         let cloned = self.gc_store.as_mut().unwrap().clone_gc_ref(pending);
         let mut nogc = AutoAssertNoGc::new(self);
-        Ok(Some(OwnedRooted::new(&mut nogc, cloned)?))
+        Ok(Some(crate::OwnedRooted::new(&mut nogc, cloned)?))
     }
 
     /// Stores `exception` within the store to later get thrown.
@@ -640,7 +638,7 @@ impl StoreOpaque {
             let relpc = module_with_code
                 .text_offset(pc)
                 .expect("PC should be within module");
-            for stack_slot in gc_refs_in_frame(frame_table, relpc, fp) {
+            for stack_slot in crate::debug::gc_refs_in_frame(frame_table, relpc, fp) {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }
@@ -674,6 +672,8 @@ impl StoreOpaque {
 
     #[cfg(feature = "stack-switching")]
     fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::vm::VMStackState;
+
         log::trace!("Begin trace GC roots :: continuations");
 
         for continuation in &self.continuations {
