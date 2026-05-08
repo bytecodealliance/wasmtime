@@ -891,93 +891,103 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
         let binding = &ctx.ruleset.bindings[result.index()];
 
-        let mut call =
-            |term: TermId,
-             parameters: &[BindingId],
+        let call = |ctx: &mut BodyContext<W>,
+                    term: TermId,
+                    parameters: &[BindingId],
+                    get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
+            let termdata = &self.termenv.terms[term.index()];
+            let sig = get_sig(termdata, self.typeenv).unwrap();
+            if let &[ret_ty] = &sig.ret_tys[..] {
+                let (is_ref, _) = self.ty(ret_ty);
+                if is_ref {
+                    ctx.set_ref(result, true);
+                    write!(ctx.out, "&")?;
+                }
+            }
+            write!(ctx.out, "{}(ctx", sig.full_name)?;
+            debug_assert_eq!(parameters.len(), sig.param_tys.len());
+            for (&parameter, &arg_ty) in parameters.iter().zip(sig.param_tys.iter()) {
+                let (is_ref, _) = self.ty(arg_ty);
+                write!(ctx.out, ", ")?;
+                let (before, after) = match (is_ref, ctx.is_ref.contains(&parameter)) {
+                    (false, true) => ("", ".clone()"),
+                    (true, false) => ("&", ""),
+                    _ => ("", ""),
+                };
+                write!(ctx.out, "{before}")?;
+                self.emit_expr(ctx, parameter)?;
+                write!(ctx.out, "{after}")?;
+            }
+            if let ReturnKind::Iterator = sig.ret_kind {
+                write!(ctx.out, ", &mut v{}", result.index())?;
+            }
+            write!(ctx.out, ")")
+        };
 
-             get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
-                let termdata = &self.termenv.terms[term.index()];
-                let sig = get_sig(termdata, self.typeenv).unwrap();
-                if let &[ret_ty] = &sig.ret_tys[..] {
-                    let (is_ref, _) = self.ty(ret_ty);
-                    if is_ref {
-                        ctx.set_ref(result, true);
-                        write!(ctx.out, "&")?;
+        let extract_fields = |ctx: &mut BodyContext<W>,
+                              field_bindings: &[BindingId],
+                              type_fields: &[Field]|
+         -> std::fmt::Result {
+            if !field_bindings.is_empty() {
+                ctx.begin_block()?;
+                for (field, value) in type_fields.iter().zip(field_bindings.iter()) {
+                    write!(
+                        ctx.out,
+                        "{}{}: ",
+                        &ctx.indent,
+                        &self.typeenv.syms[field.name.index()],
+                    )?;
+                    self.emit_expr(ctx, *value)?;
+                    if ctx.is_ref.contains(value) {
+                        write!(ctx.out, ".clone()")?;
                     }
+                    writeln!(ctx.out, ",")?;
                 }
-                write!(ctx.out, "{}(ctx", sig.full_name)?;
-                debug_assert_eq!(parameters.len(), sig.param_tys.len());
-                for (&parameter, &arg_ty) in parameters.iter().zip(sig.param_tys.iter()) {
-                    let (is_ref, _) = self.ty(arg_ty);
-                    write!(ctx.out, ", ")?;
-                    let (before, after) = match (is_ref, ctx.is_ref.contains(&parameter)) {
-                        (false, true) => ("", ".clone()"),
-                        (true, false) => ("&", ""),
-                        _ => ("", ""),
-                    };
-                    write!(ctx.out, "{before}")?;
-                    self.emit_expr(ctx, parameter)?;
-                    write!(ctx.out, "{after}")?;
-                }
-                if let ReturnKind::Iterator = sig.ret_kind {
-                    write!(ctx.out, ", &mut v{}", result.index())?;
-                }
-                write!(ctx.out, ")")
-            };
+                ctx.end_block_without_newline()?;
+            }
+            Ok(())
+        };
 
         match binding {
             &Binding::ConstBool { val, .. } => self.emit_bool(ctx, val),
             &Binding::ConstInt { val, ty } => self.emit_int(ctx, val, ty),
             Binding::ConstPrim { val } => write!(ctx.out, "{}", &self.typeenv.syms[val.index()]),
             Binding::Argument { index } => write!(ctx.out, "arg{}", index.index()),
-            Binding::Extractor { term, parameter } => {
-                call(*term, std::slice::from_ref(parameter), Term::extractor_sig)
-            }
+            Binding::Extractor { term, parameter } => call(
+                ctx,
+                *term,
+                std::slice::from_ref(parameter),
+                Term::extractor_sig,
+            ),
             Binding::Constructor {
                 term, parameters, ..
-            } => call(*term, &parameters[..], Term::constructor_sig),
+            } => call(ctx, *term, &parameters[..], Term::constructor_sig),
 
             Binding::MakeVariant {
                 ty,
                 variant,
                 fields,
             } => {
-                let type_fields = match &self.typeenv.types[ty.index()] {
-                    Type::Enum { name, variants, .. } => {
-                        let variant = variant.expect("Type::Enum without variant");
-                        let variant = &variants[variant.index()];
-                        write!(
-                            ctx.out,
-                            "{}::{}",
-                            &self.typeenv.syms[name.index()],
-                            &self.typeenv.syms[variant.name.index()]
-                        )?;
-                        &variant.fields
-                    }
-                    Type::Struct { name, fields, .. } => {
-                        write!(ctx.out, "{}", &self.typeenv.syms[name.index()],)?;
-                        fields
-                    }
-                    _ => unreachable!("MakeVariant with primitive type"),
+                let (name, variants) = match &self.typeenv.types[ty.index()] {
+                    Type::Enum { name, variants, .. } => (name, variants),
+                    _ => unreachable!("MakeVariant with non-enum type"),
                 };
-                if !fields.is_empty() {
-                    ctx.begin_block()?;
-                    for (field, value) in type_fields.iter().zip(fields.iter()) {
-                        write!(
-                            ctx.out,
-                            "{}{}: ",
-                            &ctx.indent,
-                            &self.typeenv.syms[field.name.index()],
-                        )?;
-                        self.emit_expr(ctx, *value)?;
-                        if ctx.is_ref.contains(value) {
-                            write!(ctx.out, ".clone()")?;
-                        }
-                        writeln!(ctx.out, ",")?;
-                    }
-                    ctx.end_block_without_newline()?;
-                }
-                Ok(())
+                let variant = &variants[variant.index()];
+                write!(
+                    ctx.out,
+                    "{}::{}",
+                    &self.typeenv.syms[name.index()],
+                    &self.typeenv.syms[variant.name.index()]
+                )?;
+                extract_fields(ctx, fields, &variant.fields)
+            }
+            Binding::MakeStruct { ty, fields } => {
+                let (name, type_fields) = match &self.typeenv.types[ty.index()] {
+                    Type::Struct { name, fields, .. } => (name, fields),
+                    _ => unreachable!("MakeStruct with non-struct type"),
+                };
+                write!(ctx.out, "{}", &self.typeenv.syms[name.index()],)?;
+                extract_fields(ctx, fields, type_fields)
             }
 
             &Binding::MakeSome { inner } => {
@@ -996,7 +1006,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
             // These are not supposed to happen. If they do, make the generated code fail to compile
             // so this is easier to debug than if we panic during codegen.
-            &Binding::MatchVariant { source, field, .. } => {
+            &Binding::MatchVariant { source, field, .. }
+            | &Binding::ExtractStruct { source, field, .. } => {
                 self.emit_expr(ctx, source)?;
                 write!(ctx.out, ".{} /*FIXME*/", field.index())
             }

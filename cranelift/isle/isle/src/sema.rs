@@ -437,8 +437,10 @@ pub enum TermKind {
     EnumVariant {
         /// Which variant of the enum: e.g. for enum type `A` if a term is
         /// `(A.A1 ...)` then the variant ID corresponds to `A1`.
-        variant: Option<VariantId>,
+        variant: VariantId,
     },
+    /// A struct constructor or extractor.
+    Struct,
     /// A term declared via a `(decl ...)` form.
     Decl {
         /// Flags from the term's declaration.
@@ -535,6 +537,11 @@ impl Term {
         matches!(self.kind, TermKind::EnumVariant { .. })
     }
 
+    /// Is this term a struct?
+    pub fn is_struct(&self) -> bool {
+        matches!(self.kind, TermKind::Struct { .. })
+    }
+
     /// Is this term partial?
     pub fn is_partial(&self) -> bool {
         matches!(
@@ -562,6 +569,7 @@ impl Term {
         matches!(
             self.kind,
             TermKind::EnumVariant { .. }
+                | TermKind::Struct
                 | TermKind::Decl {
                     constructor_kind: Some(_),
                     ..
@@ -574,6 +582,7 @@ impl Term {
         matches!(
             self.kind,
             TermKind::EnumVariant { .. }
+                | TermKind::Struct
                 | TermKind::Decl {
                     extractor_kind: Some(_),
                     ..
@@ -795,15 +804,23 @@ pub trait PatternVisitor {
     /// Match if `input` is the given primitive constant.
     fn add_match_prim(&mut self, input: Self::PatternId, ty: TypeId, val: Sym);
 
-    /// Match if `input` is the given enum variant. If the variant is `None`, this is a struct.
-    /// Returns an identifier for each field within the enum variant or struct. The length of
-    /// the return list must equal the length of `arg_tys`.
+    /// Match if `input` is the given enum variant. Returns an identifier for each field within the
+    /// enum variant. The length of the return list must equal the length of `arg_tys`.
     fn add_match_variant(
         &mut self,
         input: Self::PatternId,
         input_ty: TypeId,
         arg_tys: &[TypeId],
-        variant: Option<VariantId>,
+        variant: VariantId,
+    ) -> Vec<Self::PatternId>;
+
+    /// Extract the `input` struct into its fields. Returns an identifier for each field within the
+    /// struct. The length of the return list must equal the length of `arg_tys`.
+    fn add_extract_struct(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: TypeId,
+        arg_tys: &[TypeId],
     ) -> Vec<Self::PatternId>;
 
     /// Match if the given external extractor succeeds on `input`. Returns an identifier for each
@@ -868,6 +885,7 @@ impl Pattern {
                     TermKind::EnumVariant { variant } => {
                         visitor.add_match_variant(input, ty, &termdata.arg_tys, *variant)
                     }
+                    TermKind::Struct => visitor.add_extract_struct(input, ty, &termdata.arg_tys),
                     TermKind::Decl {
                         extractor_kind: None,
                         ..
@@ -933,7 +951,14 @@ pub trait ExprVisitor {
         &mut self,
         inputs: Vec<(Self::ExprId, TypeId)>,
         ty: TypeId,
-        variant: Option<VariantId>,
+        variant: VariantId,
+    ) -> Self::ExprId;
+
+    /// Construct a struct with the given `inputs` assigned to the struct's fields in order.
+    fn add_create_struct(
+        &mut self,
+        inputs: Vec<(Self::ExprId, TypeId)>,
+        ty: TypeId,
     ) -> Self::ExprId;
 
     /// Call an external constructor with the given `inputs` as arguments.
@@ -998,6 +1023,7 @@ impl Expr {
                     TermKind::EnumVariant { variant } => {
                         visitor.add_create_variant(arg_values_tys, ty, *variant)
                     }
+                    TermKind::Struct => visitor.add_create_struct(arg_values_tys, ty),
                     TermKind::Decl {
                         constructor_kind: Some(_),
                         flags,
@@ -1583,7 +1609,7 @@ impl TermEnv {
                             arg_tys,
                             ret_ty,
                             kind: TermKind::EnumVariant {
-                                variant: Some(variant.id),
+                                variant: variant.id,
                             },
                         });
                         self.term_map.insert(variant.fullname, tid);
@@ -1610,7 +1636,7 @@ impl TermEnv {
                         name,
                         arg_tys,
                         ret_ty,
-                        kind: TermKind::EnumVariant { variant: None },
+                        kind: TermKind::Struct,
                     });
                     self.term_map.insert(name, tid);
                 }
@@ -1675,6 +1701,14 @@ impl TermEnv {
                             );
                             continue;
                         }
+                        TermKind::Struct => {
+                            tyenv.report_error(
+                                pos,
+                                "Rule LHS root term is incorrect kind; cannot be struct"
+                                    .to_string(),
+                            );
+                            continue;
+                        }
                     }
                 }
                 _ => {}
@@ -1724,6 +1758,14 @@ impl TermEnv {
                             ext.pos,
                             "Extractor macro body defined on term of incorrect kind; cannot be an \
                              enum variant",
+                        );
+                        continue;
+                    }
+                    TermKind::Struct { .. } => {
+                        tyenv.report_error(
+                            ext.pos,
+                            "Extractor macro body defined on term of incorrect kind; cannot be a \
+                             struct",
                         );
                         continue;
                     }
@@ -1922,6 +1964,15 @@ impl TermEnv {
                                 ),
                             );
                         }
+                        TermKind::Struct { .. } => {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "External constructor cannot be defined on a struct: {}",
+                                    term.0,
+                                ),
+                            );
+                        }
                     }
                 }
                 &ast::Def::Extern(ast::Extern::Extractor {
@@ -1982,6 +2033,13 @@ impl TermEnv {
                             tyenv.report_error(
                                 pos,
                                 format!("Cannot define extractor for enum variant '{}'", term.0),
+                            );
+                            continue;
+                        }
+                        TermKind::Struct { .. } => {
+                            tyenv.report_error(
+                                pos,
+                                format!("Cannot define extractor for struct '{}'", term.0),
                             );
                             continue;
                         }
@@ -2336,7 +2394,7 @@ impl TermEnv {
                 // TODO: check that multi-extractors are only used in terms declared `multi`
 
                 match &termdata.kind {
-                    TermKind::EnumVariant { .. } => {}
+                    TermKind::EnumVariant { .. } | TermKind::Struct => {}
                     TermKind::Decl {
                         extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
                         ..

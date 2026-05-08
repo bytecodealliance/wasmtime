@@ -98,23 +98,40 @@ pub enum Binding {
     MakeVariant {
         /// Which enum type should be constructed?
         ty: sema::TypeId,
-        /// Which variant of that enum should be constructed? If None, this is a struct.
-        variant: Option<sema::VariantId>,
+        /// Which variant of that enum should be constructed?
+        variant: sema::VariantId,
         /// What expressions should be provided for this variant's fields?
         fields: Box<[BindingId]>,
     },
-    /// Pattern-match one of the previous bindings against an enum variant or struct and produce
-    /// a new binding from one of its fields. There must be a corresponding [Constraint::Variant]
-    /// for each `source`/`variant` pair that appears in some `MatchVariant` binding.
+    /// Pattern-match one of the previous bindings against an enum variant and produce a new binding
+    /// from one of its fields. There must be a corresponding [Constraint::Variant] for each
+    /// `source`/`variant` pair that appears in some `MatchVariant` binding.
     MatchVariant {
         /// Which binding is being matched?
         source: BindingId,
-        /// Which enum variant are we pulling binding sites from? If None, this is a struct.
-        /// This is somewhat redundant with information in a corresponding [Constraint].
-        /// However, it must be here so that different enum variants aren't hash-consed into
-        /// the same binding site.
-        variant: Option<sema::VariantId>,
+        /// Which enum variant are we pulling binding sites from? This is somewhat redundant with
+        /// information in a corresponding [Constraint]. However, it must be here so that different
+        /// enum variants aren't hash-consed into the same binding site.
+        variant: sema::VariantId,
         /// Which field of this enum variant are we projecting out? Although ISLE uses named fields,
+        /// we track them by index for constant-time comparisons. The [sema::TypeEnv] can be used to
+        /// get the field names.
+        field: TupleIndex,
+    },
+    /// The result of constructing a struct.
+    MakeStruct {
+        /// Which struct type should be constructed?
+        ty: sema::TypeId,
+        /// What expressions should be provided for this struct's fields?
+        fields: Box<[BindingId]>,
+    },
+    /// Extract the fields of the struct from one of the previous bindings to produce a new binding
+    /// from one of its fields. There must be a corresponding [Constraint::Struct] for each
+    /// `source`/`variant` pair that appears in some `ExtractStruct` binding.
+    ExtractStruct {
+        /// Which binding is being matched?
+        source: BindingId,
+        /// Which field of this struct are we projecting out? Although ISLE uses named fields,
         /// we track them by index for constant-time comparisons. The [sema::TypeEnv] can be used to
         /// get the field names.
         field: TupleIndex,
@@ -280,6 +297,8 @@ impl Binding {
             Binding::Iterator { source } => std::slice::from_ref(source),
             Binding::MakeVariant { fields, .. } => &fields[..],
             Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MakeStruct { fields, .. } => &fields[..],
+            Binding::ExtractStruct { source, .. } => std::slice::from_ref(source),
             Binding::MakeSome { inner } => std::slice::from_ref(inner),
             Binding::MatchSome { source } => std::slice::from_ref(source),
             Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
@@ -302,17 +321,13 @@ impl Constraint {
                 .map(TupleIndex)
                 .map(|field| Binding::MatchVariant {
                     source,
-                    variant: Some(variant),
+                    variant,
                     field,
                 })
                 .collect(),
             Constraint::Struct { fields, .. } => (0..fields.0)
                 .map(TupleIndex)
-                .map(|field| Binding::MatchVariant {
-                    source,
-                    variant: None,
-                    field,
-                })
+                .map(|field| Binding::ExtractStruct { source, field })
                 .collect(),
         }
     }
@@ -580,21 +595,31 @@ impl sema::PatternVisitor for RuleSetBuilder {
         input: BindingId,
         input_ty: sema::TypeId,
         arg_tys: &[sema::TypeId],
-        variant: Option<sema::VariantId>,
+        variant: sema::VariantId,
     ) -> Vec<BindingId> {
         let fields = TupleIndex(arg_tys.len().try_into().unwrap());
         self.set_constraint(
             input,
-            match variant {
-                None => Constraint::Struct {
-                    fields,
-                    ty: input_ty,
-                },
-                Some(variant) => Constraint::Variant {
-                    fields,
-                    ty: input_ty,
-                    variant,
-                },
+            Constraint::Variant {
+                fields,
+                ty: input_ty,
+                variant,
+            },
+        )
+    }
+
+    fn add_extract_struct(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: sema::TypeId,
+        arg_tys: &[sema::TypeId],
+    ) -> Vec<Self::PatternId> {
+        let fields = TupleIndex(arg_tys.len().try_into().unwrap());
+        self.set_constraint(
+            input,
+            Constraint::Struct {
+                fields,
+                ty: input_ty,
             },
         )
     }
@@ -656,11 +681,22 @@ impl sema::ExprVisitor for RuleSetBuilder {
         &mut self,
         inputs: Vec<(BindingId, sema::TypeId)>,
         ty: sema::TypeId,
-        variant: Option<sema::VariantId>,
+        variant: sema::VariantId,
     ) -> BindingId {
         self.dedup_binding(Binding::MakeVariant {
             ty,
             variant,
+            fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
+        })
+    }
+
+    fn add_create_struct(
+        &mut self,
+        inputs: Vec<(Self::ExprId, sema::TypeId)>,
+        ty: sema::TypeId,
+    ) -> Self::ExprId {
+        self.dedup_binding(Binding::MakeStruct {
+            ty,
             fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
         })
     }
