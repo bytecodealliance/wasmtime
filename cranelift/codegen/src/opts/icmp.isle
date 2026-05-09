@@ -414,3 +414,39 @@
   (iconst_u _ k2)))
   (if-let false (u64_eq k1 k2))
   (ne select_ty inner_cond (iconst_u inner_ty 0)))
+
+;;;;; Boolean-context simplifications for `ctz` and `clz` ;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; When a count-trailing/leading-zeros instruction's result is fed into a
+;; comparison against zero (the consumer cares whether the count is zero,
+;; not its numeric value), rewrite to test the corresponding bit of X
+;; directly:
+;;
+;;   ctz(X) == 0  iff  LSB of X is set     iff  (X & 1) != 0
+;;   clz(X) == 0  iff  MSB of X is set     iff  X is signed-negative
+;;
+;; LZCNT/TZCNT/BSF/BSR each cost ~3 cycles on Intel and write a GPR (creating
+;; a false dependency); the rewritten forms emit a single-cycle `test` whose
+;; result lives only in flags. JIT-less interpreters benefit even more — their
+;; bit-counting paths are typically loops.
+;;
+;; The matching wasm-side fold is in WebAssembly/binaryen#8562 (LSB→ctz under
+;; `-Os`). With these mid-end rules in place, that fold becomes cycle-neutral
+;; on cranelift JITs even when produced unconditionally.
+
+;; ctz(X) == 0  iff  the LSB of X is 1, i.e.  (X & 1) != 0.
+(rule (simplify (eq result_ty (ctz x_ty X) (iconst_u _ 0)))
+      (ne result_ty (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0)))
+
+;; ctz(X) != 0  iff  the LSB of X is 0, i.e.  (X & 1) == 0.
+(rule (simplify (ne result_ty (ctz x_ty X) (iconst_u _ 0)))
+      (eq result_ty (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0)))
+
+;; clz(X) == 0  iff  the MSB of X is 1, i.e.  X is signed-negative.
+;; Lowers to `test X, X; js` on x86_64 — single-instruction sign-bit test.
+(rule (simplify (eq result_ty (clz x_ty X) (iconst_u _ 0)))
+      (slt result_ty X (iconst_u x_ty 0)))
+
+;; clz(X) != 0  iff  the MSB of X is 0, i.e.  X is signed-non-negative.
+(rule (simplify (ne result_ty (clz x_ty X) (iconst_u _ 0)))
+      (sge result_ty X (iconst_u x_ty 0)))
