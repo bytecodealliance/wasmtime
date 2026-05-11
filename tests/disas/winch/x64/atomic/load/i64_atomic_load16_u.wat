@@ -20,8 +20,8 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0, %eax
-;;       andw    $1, %ax
-;;       cmpw    $0, %ax
+;;       andl    $1, %eax
+;;       cmpl    $0, %eax
 ;;       jne     0x5f
 ;;   42: movl    $0, %eax
 ;;       movq    0x38(%r14), %rcx

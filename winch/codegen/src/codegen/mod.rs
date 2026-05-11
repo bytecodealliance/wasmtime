@@ -669,6 +669,7 @@ where
     /// detecting an out of bounds access at compile time.
     pub fn emit_compute_heap_address(
         &mut self,
+        heap: &HeapData,
         memarg: &MemArg,
         access_size: OperandSize,
     ) -> Result<Option<Reg>> {
@@ -678,8 +679,6 @@ where
             (access_size.bytes() as u64) + (offset.as_u32() as u64)
         };
 
-        let memory_index = MemoryIndex::from_u32(memarg.memory);
-        let heap = self.env.resolve_heap(memory_index);
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None)?);
 
         let offset = bounds::ensure_index_and_offset(
@@ -866,10 +865,16 @@ where
         Ok(addr)
     }
 
-    /// Emit checks to ensure that the address at `memarg` is correctly aligned for `size`.
-    fn emit_check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
-        if size.bytes() > 1 {
-            // Peek addr from top of the stack by popping and pushing.
+    /// Emit checks to ensure that the address at `memarg` is
+    /// correctly aligned for the access size.
+    fn emit_check_align(
+        &mut self,
+        heap: &HeapData,
+        memarg: &MemArg,
+        access_size: OperandSize,
+    ) -> Result<()> {
+        if access_size.bytes() > 1 {
+            let heap_ty_size: OperandSize = heap.index_type().try_into()?;
             let addr = *self
                 .context
                 .stack
@@ -883,18 +888,18 @@ where
                     writable!(tmp),
                     tmp,
                     RegImm::Imm(Imm::I64(memarg.offset)),
-                    size,
+                    heap_ty_size,
                 )?;
             }
 
             self.masm.and(
                 writable!(tmp),
                 tmp,
-                RegImm::Imm(Imm::I32(size.bytes() - 1)),
-                size,
+                RegImm::Imm(Imm::I32(access_size.bytes() - 1)),
+                heap_ty_size,
             )?;
 
-            self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
+            self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), heap_ty_size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
             self.context.free_reg(tmp);
         }
@@ -904,11 +909,12 @@ where
 
     pub fn emit_compute_heap_address_align_checked(
         &mut self,
+        heap: &HeapData,
         memarg: &MemArg,
         access_size: OperandSize,
     ) -> Result<Option<Reg>> {
-        self.emit_check_align(memarg, access_size)?;
-        self.emit_compute_heap_address(memarg, access_size)
+        self.emit_check_align(heap, memarg, access_size)?;
+        self.emit_compute_heap_address(heap, memarg, access_size)
     }
 
     /// Emit a WebAssembly load.
@@ -928,6 +934,9 @@ where
             Ok(())
         };
 
+        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let heap = self.env.resolve_heap(memory_index);
+
         // Ensure that the destination register is not allocated if
         // `emit_compute_heap_address` does not return an address.
         match kind {
@@ -936,7 +945,8 @@ where
                 // `emit_compute_heap_address` expects an integer register
                 // containing the address to load to be at the top of the stack.
                 let dst = self.context.pop_to_reg(self.masm, None)?;
-                let addr = self.emit_compute_heap_address(&arg, kind.derive_operand_size())?;
+                let addr =
+                    self.emit_compute_heap_address(&heap, &arg, kind.derive_operand_size())?;
                 if let Some(addr) = addr {
                     emit_load(self, dst.reg, addr, kind)?;
                 } else {
@@ -946,10 +956,11 @@ where
             _ => {
                 let maybe_addr = match kind {
                     LoadKind::Atomic(_, _) => self.emit_compute_heap_address_align_checked(
+                        &heap,
                         &arg,
                         kind.derive_operand_size(),
                     )?,
-                    _ => self.emit_compute_heap_address(&arg, kind.derive_operand_size())?,
+                    _ => self.emit_compute_heap_address(&heap, &arg, kind.derive_operand_size())?,
                 };
 
                 if let Some(addr) = maybe_addr {
@@ -970,12 +981,16 @@ where
 
     /// Emit a WebAssembly store.
     pub fn emit_wasm_store(&mut self, arg: &MemArg, kind: StoreKind) -> Result<()> {
+        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let heap = self.env.resolve_heap(memory_index);
         let src = self.context.pop_to_reg(self.masm, None)?;
 
         let maybe_addr = match kind {
-            StoreKind::Atomic(size) => self.emit_compute_heap_address_align_checked(&arg, size)?,
+            StoreKind::Atomic(size) => {
+                self.emit_compute_heap_address_align_checked(&heap, &arg, size)?
+            }
             StoreKind::Operand(size) | StoreKind::VectorLane(LaneSelector { size, .. }) => {
-                self.emit_compute_heap_address(&arg, size)?
+                self.emit_compute_heap_address(&heap, &arg, size)?
             }
         };
 
@@ -1396,11 +1411,13 @@ where
         size: OperandSize,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
+        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let heap = self.env.resolve_heap(memory_index);
         // We need to pop-push the operand to compute the address before passing control over to
         // masm, because some architectures may have specific requirements for the registers used
         // in some atomic operations.
         let operand = self.context.pop_to_reg(self.masm, None)?;
-        if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
+        if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
             let src = self.masm.address_at_reg(addr, 0)?;
             self.context.stack.push(operand.into());
             self.masm
@@ -1437,7 +1454,9 @@ where
         let replacement = self.context.pop_to_reg(self.masm, None)?;
         let expected = self.context.pop_to_reg(self.masm, None)?;
 
-        if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
+        let memory_index = MemoryIndex::from_u32(arg.memory);
+        let heap = self.env.resolve_heap(memory_index);
+        if let Some(addr) = self.emit_compute_heap_address_align_checked(&heap, arg, size)? {
             self.context.stack.push(expected.into());
             self.context.stack.push(replacement.into());
 

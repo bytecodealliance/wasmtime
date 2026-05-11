@@ -20,8 +20,8 @@
 ;;       movl    $0x539, %eax
 ;;       movl    $0x2a, %ecx
 ;;       movl    $0, %edx
-;;       andw    $1, %dx
-;;       cmpw    $0, %dx
+;;       andl    $1, %edx
+;;       cmpl    $0, %edx
 ;;       jne     0x99
 ;;   4d: movl    $0, %edx
 ;;       movq    0x30(%r14), %r11
