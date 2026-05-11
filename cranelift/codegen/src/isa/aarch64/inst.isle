@@ -4669,6 +4669,24 @@
 (rule 3 (is_nonzero val @ (value_type $I8))
   (CondResult.Cond (tst_imm $I32 val (u64_into_imm_logic $I32 255)) (Cond.Ne)))
 
+;; `ctz(X)` and `clz(X)` flow into a boolean context (`brif`, `select`, ...)
+;; without going through `icmp`, so the egraph rules in `opts/icmp.isle`
+;; don't reach this shape. Specialize here:
+;;
+;; `ctz(X) != 0`  iff  LSB(X) == 0  iff  `(X & 1) == 0` — emit `tst X, #1; Cond.Eq`.
+;; `clz(X) != 0`  iff  MSB(X) == 0  iff  X >=signed 0 — emit `cmp X, #0; Cond.Pl`.
+;;
+;; The `ireduce` variant catches the wasm front-end's `i32.wrap_i64` over a
+;; 64-bit `ctz`/`clz` — a no-op on values in [0, bitwidth].
+(rule 4 (is_nonzero (ctz (ty_32_or_64 ty) val))
+      (CondResult.Cond (tst_imm ty val (u64_into_imm_logic ty 1)) (Cond.Eq)))
+(rule 4 (is_nonzero (ireduce _ (ctz (ty_32_or_64 ty) val)))
+      (CondResult.Cond (tst_imm ty val (u64_into_imm_logic ty 1)) (Cond.Eq)))
+(rule 4 (is_nonzero (clz (ty_32_or_64 ty) val))
+      (CondResult.Cond (cmp_imm (operand_size ty) val (u8_into_imm12 0)) (Cond.Pl)))
+(rule 4 (is_nonzero (ireduce _ (clz (ty_32_or_64 ty) val)))
+      (CondResult.Cond (cmp_imm (operand_size ty) val (u8_into_imm12 0)) (Cond.Pl)))
+
 (decl emit_icmp (IntCC Value Value) CondResult)
 
 ;; 8/16-bit base signed/unsigned cases
