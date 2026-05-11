@@ -1,0 +1,29 @@
+(type A (struct u32 u32))
+(type B (enum
+  (Ba (x u32))
+  (Bb u32 u32 u32)))
+(type D (enum
+  (Da A)
+  (Db B)
+  (Dc)))
+
+(type UnitStruct (struct))
+(type UninhabitedEnum (enum))
+
+(decl lower (D) B)
+
+(rule 0
+  (lower (D.Da (A x _)))
+  (B.Ba x))
+
+(rule 0
+  (lower (D.Db (B.Ba x)))
+  (B.Bb x x x))
+
+(rule 0
+  (lower (D.Db (B.Bb _ _ x)))
+  (B.Ba x))
+
+(rule 0
+  (lower (D.Dc))
+  (B.Ba 42))
