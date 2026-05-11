@@ -68,6 +68,21 @@ extern "C" {
 WASMTIME_CONFIG_PROP(void, async_stack_size, size_t)
 
 /**
+ * \brief Configures whether synchronous calls are permitted on stores that
+ * have async host functions linked.
+ *
+ * When enabled, synchronous function calls will not be rejected even if
+ * the store has async host functions (e.g. WASI async bindings). This is
+ * intended for embedders that manage sync vs async dispatch themselves.
+ *
+ * If a synchronously-called function attempts to suspend, the runtime will
+ * panic.
+ *
+ * By default this option is false.
+ */
+WASMTIME_CONFIG_PROP(void, async_allow_sync, bool)
+
+/**
  * \brief Configures a Store to yield execution of async WebAssembly code
  * periodically.
  *
@@ -182,6 +197,22 @@ typedef struct wasmtime_call_future wasmtime_call_future_t;
  *
  */
 WASM_API_EXTERN bool wasmtime_call_future_poll(wasmtime_call_future_t *future);
+
+/**
+ * \brief Poll a call future with a notification socket.
+ *
+ * Like wasmtime_call_future_poll, but instead of a no-op waker, uses a waker
+ * that writes a byte to \p socket when the future is ready to make progress.
+ * This allows a foreign event loop to sleep on the socket instead of
+ * busy-polling.
+ *
+ * \p socket is the raw handle of the write end of a socket pair. On Unix this
+ * is a file descriptor; on Windows it is a SOCKET handle. The host should
+ * monitor the read end for readability.
+ */
+WASM_API_EXTERN bool
+wasmtime_call_future_poll_with_notify(wasmtime_call_future_t *future,
+                                      int64_t socket);
 
 /**
  * \brief Frees the underlying memory for a future.

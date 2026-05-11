@@ -2818,7 +2818,7 @@ at https://bytecodealliance.org/security.
     #[inline]
     pub(crate) fn validate_sync_call(&self) -> Result<()> {
         #[cfg(feature = "async")]
-        if self.async_state.async_required {
+        if self.async_state.async_required && !self.engine().config().async_allow_sync {
             bail!("store configuration requires that `*_async` functions are used instead");
         }
         Ok(())

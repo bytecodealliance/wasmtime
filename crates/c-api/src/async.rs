@@ -22,6 +22,11 @@ pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, si
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_async_allow_sync_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.async_allow_sync(enable);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
     mut store: WasmtimeStoreContextMut<'_>,
     delta: u64,
@@ -202,6 +207,40 @@ pub extern "C" fn wasmtime_call_future_poll(future: &mut wasmtime_call_future_t)
         .underlying
         .as_mut()
         .poll(&mut Context::from_waker(Waker::noop()))
+    {
+        Poll::Ready(()) => true,
+        Poll::Pending => false,
+    }
+}
+
+/// A [`Waker`] that writes a single byte to a socket when woken.
+struct SocketWaker(i64);
+
+impl std::task::Wake for SocketWaker {
+    fn wake(self: std::sync::Arc<Self>) {
+        #[cfg(unix)]
+        unsafe {
+            libc::write(self.0 as libc::c_int, [1u8].as_ptr() as *const _, 1);
+        }
+        #[cfg(windows)]
+        unsafe {
+            windows_sys::Win32::Networking::WinSock::send(self.0 as usize, [1u8].as_ptr(), 1, 0);
+        }
+    }
+}
+
+/// Like [`wasmtime_call_future_poll`] but registers a [`SocketWaker`] so the
+/// host is notified via `socket` when the future can make progress.
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_call_future_poll_with_notify(
+    future: &mut wasmtime_call_future_t,
+    socket: i64,
+) -> bool {
+    let waker = Waker::from(std::sync::Arc::new(SocketWaker(socket)));
+    match future
+        .underlying
+        .as_mut()
+        .poll(&mut Context::from_waker(&waker))
     {
         Poll::Ready(()) => true,
         Poll::Pending => false,

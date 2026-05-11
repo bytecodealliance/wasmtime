@@ -271,6 +271,17 @@ async fn async_disallows_structref_new() -> Result<()> {
 }
 
 #[test]
+fn async_allow_sync_permits_sync_calls() {
+    let mut config = Config::new();
+    config.async_allow_sync(true);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::new(&engine, ());
+    Func::wrap_async(&mut store, |_, ()| Box::new(async {}));
+    let module = Module::new(&engine, "(module)").unwrap();
+    assert!(Instance::new(&mut store, &module, &[]).is_ok());
+}
+
+#[test]
 fn epoch_yield_disallowed_without_async() -> Result<()> {
     let mut config = Config::new();
     config.epoch_interruption(true);

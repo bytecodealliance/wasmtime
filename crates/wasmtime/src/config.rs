@@ -187,6 +187,8 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_zeroing: bool,
     #[cfg(feature = "async")]
+    pub(crate) async_allow_sync: bool,
+    #[cfg(feature = "async")]
     pub(crate) stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
@@ -293,6 +295,8 @@ impl Config {
             async_stack_size: 2 << 20,
             #[cfg(feature = "async")]
             async_stack_zeroing: false,
+            #[cfg(feature = "async")]
+            async_allow_sync: false,
             #[cfg(feature = "async")]
             stack_creator: None,
             module_version: ModuleVersionStrategy::default(),
@@ -856,6 +860,20 @@ impl Config {
     #[cfg(feature = "async")]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
         self.async_stack_zeroing = enable;
+        self
+    }
+
+    /// Permits synchronous calls on stores that have async host functions.
+    ///
+    /// By default, linking async host functions causes wasmtime to reject
+    /// sync calls. This option lifts that restriction for embedders that
+    /// manage sync/async dispatch themselves. If a sync-called function
+    /// actually suspends, the runtime will panic.
+    ///
+    /// Defaults to `false`.
+    #[cfg(feature = "async")]
+    pub fn async_allow_sync(&mut self, enable: bool) -> &mut Self {
+        self.async_allow_sync = enable;
         self
     }
 

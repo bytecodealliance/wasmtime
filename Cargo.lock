@@ -4804,6 +4804,7 @@ dependencies = [
  "cap-std",
  "env_logger 0.11.5",
  "futures",
+ "libc",
  "log",
  "tokio",
  "tracing",
@@ -4813,6 +4814,7 @@ dependencies = [
  "wasmtime-wasi-http",
  "wasmtime-wasi-io",
  "wat",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

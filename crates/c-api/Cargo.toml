@@ -41,6 +41,12 @@ bytes = { workspace = true, optional = true }
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Networking_WinSock"] }
+
 [features]
 # WASMTIME_FEATURE_LIST
 async = ['wasmtime/async', 'futures']
