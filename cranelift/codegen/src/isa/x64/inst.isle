@@ -3826,6 +3826,27 @@
 (rule 2 (is_nonzero (band _ a @ (value_type (ty_int (fits_in_64 ty))) b))
       (is_nonzero_band ty a b))
 
+;; `ctz(X)` and `clz(X)` flow into a boolean context (`brif`, `select`, `trap`,
+;; ...) more directly than the icmp-mediated form rewritten in the egraph at
+;; `opts/icmp.isle`. The wasm front-end emits `brif (ireduce.i32 (ctz.i64 X))`
+;; for `if (ctz X)`-style tests without ever materialising an `icmp`, so those
+;; egraph rules don't fire on this shape; specializing here closes the gap.
+;;
+;; `ctz(X) != 0`  iff  LSB(X) == 0  iff  `(X & 1) == 0` — emit `test X, 1; CC.Z`.
+;; `clz(X) != 0`  iff  MSB(X) == 0  iff  X >=signed 0 — emit `test X, X; CC.NS`.
+;;
+;; Both the bare and the `ireduce`-wrapped form are recognised: the latter is
+;; the wasm-frontend's `i32.wrap_i64` over a 64-bit `ctz`/`clz`, which is a
+;; no-op on values in [0, bitwidth].
+(rule 3 (is_nonzero (ctz (ty_32_or_64 ty) val))
+      (CondResult.CC (x64_test ty val (RegMemImm.Imm 1)) (CC.Z)))
+(rule 3 (is_nonzero (ireduce _ (ctz (ty_32_or_64 ty) val)))
+      (CondResult.CC (x64_test ty val (RegMemImm.Imm 1)) (CC.Z)))
+(rule 3 (is_nonzero (clz (ty_32_or_64 ty) val))
+      (let ((gpr Gpr val)) (CondResult.CC (x64_test ty gpr gpr) (CC.NS))))
+(rule 3 (is_nonzero (ireduce _ (clz (ty_32_or_64 ty) val)))
+      (let ((gpr Gpr val)) (CondResult.CC (x64_test ty gpr gpr) (CC.NS))))
+
 
 ;; Like `is_nonzero` but with additional specializations for compare
 ;; operators. We break this out from `is_nonzero` because we want to
