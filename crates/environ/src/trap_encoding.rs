@@ -28,7 +28,12 @@ impl CompiledTrap {
     /// Encodes this as a byte.
     pub fn as_u8(&self) -> u8 {
         match self {
-            CompiledTrap::Normal(trap) => *trap as u8,
+            CompiledTrap::Normal(trap) => {
+                let ret = *trap as u8;
+                debug_assert_ne!(ret, CompiledTrap::InternalAssert.as_u8());
+                debug_assert_ne!(ret, CompiledTrap::GcHeapCorrupt.as_u8());
+                ret
+            }
             CompiledTrap::InternalAssert => 0xFF,
             CompiledTrap::GcHeapCorrupt => 0xFE,
         }

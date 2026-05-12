@@ -129,7 +129,7 @@ impl DrcCompiler {
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         builder.ins().load(
             ptr_ty,
-            GC_MEMFLAGS,
+            ir::MemFlags::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         )

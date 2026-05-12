@@ -136,7 +136,7 @@
 ;; @004e                               brif v19, block4, block3
 ;;
 ;;                                 block3:
-;; @004e                               v21 = load.i64 user2 v0+32
+;; @004e                               v21 = load.i64 notrap aligned readonly v0+32
 ;; @004e                               v22 = load.i32 user2 v21
 ;; @004e                               v26 = iconst.i64 16
 ;; @004e                               v27 = iadd.i64 v16, v26  ; v26 = 16

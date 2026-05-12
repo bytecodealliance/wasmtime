@@ -24,7 +24,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0021                               v11 = load.i64 user2 v0+32
+;; @0021                               v11 = load.i64 notrap aligned readonly v0+32
 ;; @0021                               v12 = load.i32 user2 v11
 ;;                                     v48 = iconst.i32 7
 ;; @0021                               v15 = uadd_overflow_trap v12, v48, user18  ; v48 = 7

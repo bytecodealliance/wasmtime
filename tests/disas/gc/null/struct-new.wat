@@ -27,7 +27,7 @@
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v45 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v45
-;; @002a                               v11 = load.i64 user2 v0+32
+;; @002a                               v11 = load.i64 notrap aligned readonly v0+32
 ;; @002a                               v12 = load.i32 user2 v11
 ;;                                     v52 = iconst.i32 7
 ;; @002a                               v15 = uadd_overflow_trap v12, v52, user18  ; v52 = 7

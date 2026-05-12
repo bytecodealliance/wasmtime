@@ -35,7 +35,7 @@
 ;; @0022                               v12 = iconst.i32 -67108864
 ;; @0022                               v13 = band v10, v12  ; v12 = -67108864
 ;; @0022                               trapnz v13, user18
-;; @0022                               v15 = load.i64 user2 v0+32
+;; @0022                               v15 = load.i64 notrap aligned readonly v0+32
 ;; @0022                               v16 = load.i32 user2 v15
 ;;                                     v66 = iconst.i32 7
 ;; @0022                               v19 = uadd_overflow_trap v16, v66, user18  ; v66 = 7

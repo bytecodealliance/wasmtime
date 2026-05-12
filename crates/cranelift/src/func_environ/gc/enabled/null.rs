@@ -73,7 +73,7 @@ impl NullCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = builder.ins().load(
             pointer_type,
-            GC_MEMFLAGS,
+            ir::MemFlags::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );

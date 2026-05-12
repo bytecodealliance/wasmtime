@@ -31,7 +31,7 @@
 ;;                                     store notrap v3, v61
 ;;                                     v60 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v60
-;; @0025                               v17 = load.i64 user2 v0+32
+;; @0025                               v17 = load.i64 notrap aligned readonly v0+32
 ;; @0025                               v18 = load.i32 user2 v17
 ;;                                     v80 = iconst.i32 7
 ;; @0025                               v21 = uadd_overflow_trap v18, v80, user18  ; v80 = 7

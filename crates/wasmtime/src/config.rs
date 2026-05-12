@@ -3259,6 +3259,18 @@ impl Config {
     /// Whether or not trap metadata is generated in compiled wasms for internal
     /// asserts in the compiled code itself.
     ///
+    /// Wasmtime inserts metadata within compiled artifacts which contain a
+    /// table of known trap codes for all instructions. If a trap via a signal
+    /// happens, and it's not listed in these tables, then that's considered a
+    /// fatal bug that crashes the process. This option controls whether trap
+    /// codes are inserted into metadata for internal asserts as part of
+    /// Wasmtime's translation process. These internal asserts should never be
+    /// triggered, but if they are then the process dies with a signal.
+    ///
+    /// Inserting trap metadata into compiled artifacts can take extra space in
+    /// the final artifact. The trap tables for the artifact will be larger as
+    /// they contain more trap codes to contain.
+    ///
     /// This is intended as a debugging option and is set to `false` by
     /// default.
     pub fn metadata_for_internal_asserts(&mut self, enable: bool) -> &mut Self {
@@ -3269,8 +3281,14 @@ impl Config {
     /// Whether or not trap metadata is generated in compiled wasms for
     /// detection of corruption in the GC heap.
     ///
-    /// This is intended as a defense-in-depth option for generated code in the
-    /// face of GC heap corruption and is `true` by default.
+    /// For more information about what metadata is in this scenario, see
+    /// [`Config::metadata_for_internal_asserts`]. Note, though, that this
+    /// option is enabled by default unlike internal asserts. This is intended
+    /// as a defense-in-depth option for generated code in the face of GC heap
+    /// corruption. If the GC heap is corrupted and is detected then the
+    /// trapping instruction will be gracefully handled and delivered to the
+    /// embedder. Otherwise if this option were set to `false` then the process
+    /// would be aborted due to a signal.
     pub fn metadata_for_gc_heap_corruption(&mut self, enable: bool) -> &mut Self {
         self.tunables.metadata_for_gc_heap_corruption = Some(enable);
         self

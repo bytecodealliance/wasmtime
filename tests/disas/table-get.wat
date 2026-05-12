@@ -58,7 +58,7 @@
 ;; @0053                               brif v23, block4, block3
 ;;
 ;;                                 block3:
-;; @0053                               v25 = load.i64 user2 v0+32
+;; @0053                               v25 = load.i64 notrap aligned readonly v0+32
 ;; @0053                               v26 = load.i32 user2 v25
 ;; @0053                               v27 = uextend.i64 v13
 ;; @0053                               v56 = load.i64 notrap aligned readonly can_move v0+8
@@ -143,7 +143,7 @@
 ;; @005a                               brif v23, block4, block3
 ;;
 ;;                                 block3:
-;; @005a                               v25 = load.i64 user2 v0+32
+;; @005a                               v25 = load.i64 notrap aligned readonly v0+32
 ;; @005a                               v26 = load.i32 user2 v25
 ;; @005a                               v27 = uextend.i64 v13
 ;; @005a                               v56 = load.i64 notrap aligned readonly can_move v0+8

@@ -27,6 +27,12 @@ mod null;
 #[cfg(feature = "gc-copying")]
 mod copying;
 
+/// Flags to use for general-purpose GC loads/stores.
+///
+/// This is used for accesses to the GC heap which aren't expected to trap, but
+/// retain internal assertion metadata to report if such a trap happens. This
+/// is here to ensure that in the face of heap corruption that there's no
+/// possible UB within Cranelift and/or the runtime.
 const GC_MEMFLAGS: ir::MemFlags =
     ir::MemFlags::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
 
