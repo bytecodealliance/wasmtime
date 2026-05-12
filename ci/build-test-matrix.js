@@ -13,7 +13,35 @@ const GENERIC_BUCKETS = 3;
 
 // Crates which are their own buckets. These are the very slowest to
 // compile-and-test crates.
-const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
+//
+// An entry may be a string (the crate name, producing one bucket) or an
+// object `{ crate, sub: [{ name, args }, ...] }` to split a single crate's
+// tests across multiple buckets. Sub-bucketing is reserved for crates whose
+// integration tests dominate the wall clock and split cleanly along
+// `--test` boundaries; the build of the crate's dependencies and test
+// binaries is duplicated across the sub-buckets, but the test-execution
+// portion (the longer half on slow targets like QEMU) parallelizes.
+const SINGLE_CRATE_BUCKETS = [
+  "wasmtime",
+  {
+    "crate": "wasmtime-cli",
+    "sub": [
+      // The two largest integration suites; each gets its own bucket.
+      { "name": "all", "args": "--test all" },
+      { "name": "wast", "args": "--test wast" },
+      // Everything else in the crate: library, binaries, and the smaller
+      // integration tests. Cargo doesn't have an "exclude test" flag, so the
+      // remaining `--test` targets are enumerated explicitly.
+      { "name": "other", "args": "--lib --bins --test disable_host_trap_handlers --test disas --test rlimited-memory --test wasi" },
+    ],
+  },
+  "wasmtime-wasi",
+];
+
+// Helper: get just the crate name from a SINGLE_CRATE_BUCKETS entry.
+function singleBucketCrateName(entry) {
+  return typeof entry === "string" ? entry : entry.crate;
+}
 
 const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2025';
@@ -57,22 +85,29 @@ const FAST_MATRIX = [
 // * `sde` - if `true`, indicates this test should use Intel SDE for instruction
 //   emulation. SDE will be set up and configured as the test runner.
 //
+// * `crates` - if a string, this config is not sharded across the workspace
+//   and instead runs against only the named crate. If an array of strings,
+//   the config produces one job per named crate (each job's name suffixed
+//   with the crate name) and skips the generic buckets entirely. Used to
+//   restrict env-var-toggled test variants to only the crates that observe
+//   that env var (e.g. MPK).
+//
 // * `rust` - the Rust version to install, and if unset this'll be set to
 //   `default`
 const FULL_MATRIX = [
   ...FAST_MATRIX,
   {
-    "name": "Test MSRV",
-    "os": ubuntu,
-    "filter": "linux-x64",
-    "isa": "x64",
-    "rust": "msrv",
-  },
-  {
+    // MPK is only observed at test time by code that reads
+    // WASMTIME_TEST_FORCE_MPK (the `wasmtime` runtime crate and the
+    // root-level integration tests under `wasmtime-cli`). Restricting MPK
+    // testing to those two crates eliminates four redundant shards
+    // (3 generic + wasmtime-wasi) that produce identical results to
+    // `Test Linux x86_64`.
     "name": "Test MPK",
     "os": ubuntu,
     "filter": "linux-x64",
-    "isa": "x64"
+    "isa": "x64",
+    "crates": ["wasmtime", "wasmtime-cli"],
   },
   {
     "name": "Test ASAN",
@@ -219,40 +254,72 @@ async function shard(configs) {
 
   // Divide the workspace crates into N disjoint subsets. Crates that are
   // particularly expensive to compile and test form their own singleton subset.
+  // A bucket is either a Set of crate names (used as-is for `cargo test
+  // --workspace --exclude ...`) or an object `{ crate, sub }` describing a
+  // single-crate bucket that should be further split by `--test` filter.
+  const singleBucketCrateNames = new Set(SINGLE_CRATE_BUCKETS.map(singleBucketCrateName));
   const buckets = Array.from({ length: GENERIC_BUCKETS }, _ => new Set());
   let i = 0;
   for (const crate of members) {
-    if (SINGLE_CRATE_BUCKETS.indexOf(crate) != -1) continue;
+    if (singleBucketCrateNames.has(crate)) continue;
     buckets[i].add(crate);
     i = (i + 1) % GENERIC_BUCKETS;
   }
-  for (crate of SINGLE_CRATE_BUCKETS) {
-    buckets.push(new Set([crate]));
+  for (const entry of SINGLE_CRATE_BUCKETS) {
+    if (typeof entry === "string") {
+      buckets.push(new Set([entry]));
+    } else {
+      // A crate with sub-buckets: push one bucket per `sub` entry, retaining
+      // the crate name and extra-args for naming and bucket-arg expansion.
+      for (const sub of entry.sub) {
+        buckets.push({ crate: entry.crate, name: sub.name, args: sub.args });
+      }
+    }
   }
 
   // For each config, expand it into N configs, one for each disjoint set we
   // created above.
   const sharded = [];
   for (const config of configs) {
-    // If crates is specified, don't shard, just use the specified crates
+    // If `crates` is specified, don't shard against the generic buckets.
+    // A string value produces a single job for that crate; an array value
+    // produces one job per crate with the crate name appended to `name`.
     if (config.crates) {
-      sharded.push(Object.assign(
-        {},
-        config,
-        {
-          bucket: members
-            .map(c => c === config.crates ? `--package ${c}` : `--exclude ${c}`)
-            .join(" ")
-        }
-      ));
+      const cratesList = Array.isArray(config.crates) ? config.crates : [config.crates];
+      const useSuffix = Array.isArray(config.crates);
+      for (const crate of cratesList) {
+        sharded.push(Object.assign(
+          {},
+          config,
+          {
+            name: useSuffix ? `${config.name} (${crate})` : config.name,
+            bucket: members
+              .map(c => c === crate ? `--package ${c}` : `--exclude ${c}`)
+              .join(" "),
+          }
+        ));
+      }
       continue;
     }
 
     let nbucket = 1;
     for (const bucket of buckets) {
-      let bucket_name = `${nbucket}/${buckets.length}`;
-      if (bucket.size === 1)
-        bucket_name = Array.from(bucket)[0];
+      let bucket_name;
+      let bucket_args;
+      if (bucket instanceof Set) {
+        bucket_name = bucket.size === 1
+          ? Array.from(bucket)[0]
+          : `${nbucket}/${buckets.length}`;
+        bucket_args = members
+          .map(c => bucket.has(c) ? `--package ${c}` : `--exclude ${c}`)
+          .join(" ");
+      } else {
+        // Sub-bucket of a single crate.
+        bucket_name = `${bucket.crate}-${bucket.name}`;
+        bucket_args = members
+          .map(c => c === bucket.crate ? `--package ${c}` : `--exclude ${c}`)
+          .join(" ") + " " + bucket.args;
+      }
 
       sharded.push(Object.assign(
         {},
@@ -262,9 +329,7 @@ async function shard(configs) {
           // We run tests via `cargo test --workspace`, so exclude crates that
           // aren't in this bucket, rather than naming only the crates that are
           // in this bucket.
-          bucket: members
-            .map(c => bucket.has(c) ? `--package ${c}` : `--exclude ${c}`)
-            .join(" "),
+          bucket: bucket_args,
         }
       ));
       nbucket += 1;

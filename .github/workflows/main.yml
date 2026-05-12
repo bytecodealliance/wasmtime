@@ -493,6 +493,36 @@ jobs:
     - run: rustup component add clippy
     - run: cargo clippy --workspace --all-targets --features p3,component-model-async
 
+  # Verify that the workspace compiles cleanly under the MSRV toolchain. This
+  # job replaces a previous `Test MSRV` matrix entry which ran the full test
+  # suite under MSRV; running tests adds no coverage beyond running them on
+  # current stable on the same target, while `cargo check` catches the
+  # behavior we actually care about: "did we use a Rust feature too new for
+  # our MSRV?".
+  #
+  # The excludes mirror `ci/run-tests.py` so that crates which require
+  # nightly toolchains or external dependencies (OCaml, SMT solvers) are
+  # skipped.
+  msrv_check:
+    name: MSRV check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: msrv
+    - run: |
+        cargo check --workspace --all-targets --all-features --locked \
+          --exclude test-programs \
+          --exclude wasmtime-wasi-nn \
+          --exclude wasmtime-wasi-tls \
+          --exclude wasmtime-fuzzing \
+          --exclude wasm-spec-interpreter \
+          --exclude veri_engine \
+          --exclude calculator
+
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
   # a parallel jobs yet.
@@ -930,14 +960,22 @@ jobs:
     # Since MPK (PKU) is not present on some GitHub runners, we check if it is
     # available before force-enabling it. This occasional testing is better than
     # none at all; ideally we would test in a system-mode QEMU VM.
+    #
+    # We probe via /proc/cpuinfo rather than `cargo run --example
+    # mpk-available` because the latter previously cost ~3.5 minutes by
+    # building wasmtime with a feature set that did not match the subsequent
+    # `cargo test --all-features` step, forcing a rebuild. The conditions
+    # checked here mirror what `wasmtime::vm::mpk::is_supported` does on
+    # Linux x86_64: Intel CPU with the PKU CPUID bit set.
     - name: Force-run with MPK enabled, if available
       if: ${{ contains(matrix.name, 'MPK') }}
       run: |
-        if cargo run --example mpk-available; then
+        if grep -q '^vendor_id.*GenuineIntel' /proc/cpuinfo \
+           && grep -qE '^flags.*\bpku\b' /proc/cpuinfo; then
           echo "::notice::This CI run will force-enable MPK; this ensures tests conditioned with the \`WASMTIME_TEST_FORCE_MPK\` environment variable will run with MPK-protected memory pool stripes."
           echo WASMTIME_TEST_FORCE_MPK=1 >> $GITHUB_ENV
         else
-          echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
+          echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (no Intel CPU with PKU flag in /proc/cpuinfo)."
         fi
 
     # Install VTune, see `cli_tests::profile_with_vtune`.
@@ -1387,6 +1425,7 @@ jobs:
       - special_tests
       - test_wasi_tls
       - clippy
+      - msrv_check
       - monolith_checks
       - platform_checks
       - bench
