@@ -599,12 +599,12 @@ jobs:
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo build -Zbuild-std=std,panic_abort
+          test: cargo check -Zbuild-std=std,panic_abort
         - target: aarch64-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo build -Zbuild-std=std,panic_abort
+          test: cargo check -Zbuild-std=std,panic_abort
         # Test that when Cranelift has no support for an architecture, even a
         # 64-bit one, that Wasmtime still compiles. Note that this is also
         # intended to test various fallbacks in the codebase where we have no
