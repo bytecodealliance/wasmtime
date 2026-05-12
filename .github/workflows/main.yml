@@ -589,6 +589,22 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
+        # watchOS targets are Tier 3 in Rust so there's no prebuilt `std`
+        # available; use a nightly toolchain plus `-Zbuild-std` to compile.
+        # `arm64_32-apple-watchos` covers Apple Watch Series 4-8 and SE 2 (see
+        # bytecodealliance/wasmtime#13255) while `aarch64-apple-watchos` covers
+        # Series 9 and later. Both are compile-only checks to ensure that
+        # Wasmtime continues to build for these platforms.
+        - target: arm64_32-apple-watchos
+          os: macos-latest
+          toolchain: wasmtime-ci-pinned-nightly
+          build_std: true
+          test: cargo build -Zbuild-std=std,panic_abort
+        - target: aarch64-apple-watchos
+          os: macos-latest
+          toolchain: wasmtime-ci-pinned-nightly
+          build_std: true
+          test: cargo build -Zbuild-std=std,panic_abort
         # Test that when Cranelift has no support for an architecture, even a
         # 64-bit one, that Wasmtime still compiles. Note that this is also
         # intended to test various fallbacks in the codebase where we have no
@@ -611,7 +627,12 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: ${{ matrix.toolchain || 'default' }}
+    - run: rustup component add rust-src
+      if: ${{ matrix.build_std }}
     - run: rustup target add ${{ matrix.target }}
+      if: ${{ !matrix.build_std }}
     - name: Install cross
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
