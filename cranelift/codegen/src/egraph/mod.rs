@@ -1026,7 +1026,12 @@ impl<'a> EgraphPass<'a> {
                 cursor.func.dfg.map_inst_values(inst, |arg| {
                     let new_value = value_to_opt_value[arg];
                     trace!("rewriting arg {} of inst {} to {}", arg, inst, new_value);
-                    debug_assert_ne!(new_value, Value::reserved_value());
+                    debug_assert_ne!(
+                        new_value,
+                        Value::reserved_value(),
+                        "rewriting arg {arg} of {inst} to {new_value}, but \
+                         {new_value} == Value::reserved_value()"
+                    );
                     new_value
                 });
 
@@ -1137,10 +1142,7 @@ impl<'a> EgraphPass<'a> {
             forward_val(cursor, old_val, new_val);
         }
 
-        // Back up so that the next iteration of the outer egraph loop will
-        // process the new instruction.
         cursor.goto_inst(new_inst);
-        cursor.prev_inst();
     }
 
     /// Scoped elaboration: compute a final ordering of op computation
