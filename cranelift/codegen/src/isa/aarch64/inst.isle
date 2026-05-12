@@ -4785,9 +4785,6 @@
 (rule 1 (emit_fcmp (FloatCC.UnorderedOrEqual) a b @ (value_type ty))
   (CondResult.Or (fpu_cmp (scalar_size ty) a b) (Cond.Eq) (Cond.Vs)))
 
-;;(rule 1 (emit_fcmp (FloatCC.UnorderedOrEqual) a b @ (value_type ty))
-;;)
-
 ;; Refer to `codegen/shared/src/condcodes.rs` and to the `FCMP` AArch64 docs.
 ;; The FCMP instruction sets:
 ;;               NZCV
