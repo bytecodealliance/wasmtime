@@ -514,6 +514,12 @@ jobs:
       with:
         toolchain: msrv
     - run: |
+        # wasi-preview1-component-adapter has mutually-exclusive features
+        # (command/reactor/proxy) that compile-error under --all-features.
+        # It's a wasm32-only artifact built separately by
+        # ci/build-wasi-preview1-component-adapter.sh against
+        # wasm32-unknown-unknown, not user-facing on the host toolchain,
+        # so MSRV doesn't apply.
         cargo check --workspace --all-targets --all-features --locked \
           --exclude test-programs \
           --exclude wasmtime-wasi-nn \
@@ -521,7 +527,8 @@ jobs:
           --exclude wasmtime-fuzzing \
           --exclude wasm-spec-interpreter \
           --exclude veri_engine \
-          --exclude calculator
+          --exclude calculator \
+          --exclude wasi-preview1-component-adapter
 
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
