@@ -811,6 +811,16 @@ where
                     );
                     (inst, Some(val))
                 }
+                // `ReplaceBranchCond` is unconditionally accepted — the
+                // opcode and successors don't change, so we can't use the
+                // cost-based ranking the other variants do. The first such
+                // candidate wins; ISLE rule ordering picks the form.
+                SkeletonInstSimplification::ReplaceBranchCond { cond } => {
+                    log::trace!(
+                        " -> simplify_skeleton: replace `brif` cond with {cond}"
+                    );
+                    return Some(SkeletonInstSimplification::ReplaceBranchCond { cond });
+                }
             };
 
             if cfg!(debug_assertions) {
@@ -1119,6 +1129,16 @@ impl<'a> EgraphPass<'a> {
             }
             SkeletonInstSimplification::Replace { inst } => (inst, None),
             SkeletonInstSimplification::ReplaceWithVal { inst, val } => (inst, Some(val)),
+            SkeletonInstSimplification::ReplaceBranchCond { cond } => {
+                // Swap the condition operand of the existing `brif` in
+                // place. Successors stay; CFG is preserved.
+                debug_assert_eq!(
+                    cursor.func.dfg.insts[old_inst].opcode(),
+                    crate::ir::Opcode::Brif,
+                );
+                cursor.func.dfg.inst_args_mut(old_inst)[0] = cond;
+                return;
+            }
         };
 
         // Replace the old instruction with the new one.

@@ -450,3 +450,18 @@
 ;; clz(X) != 0  iff  the MSB of X is 0, i.e.  X is signed-non-negative.
 (rule (simplify (ne result_ty (clz x_ty X) (iconst_u _ 0)))
       (sge result_ty X (iconst_u x_ty 0)))
+
+;;;;; Same simplifications applied directly when the count-leading /
+;;;;; trailing-zeros value is consumed as a `brif` condition (the 2-op
+;;;;; wasm pattern `i32.ctz; br_if`, with no `i32.eqz` interposed for the
+;;;;; rules above to hinge on). We rewrite only the condition operand in
+;;;;; place; the brif's successors are unchanged so the CFG is preserved.
+
+;; `brif (ctz X) bt be` branches when `ctz(X) != 0`, i.e. LSB(X) == 0.
+(rule (simplify_skeleton (brif (ctz x_ty X) _ _))
+      (replace_branch_cond
+        (eq $I8 (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0))))
+
+;; `brif (clz X) bt be` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
+(rule (simplify_skeleton (brif (clz x_ty X) _ _))
+      (replace_branch_cond (sge $I8 X (iconst_u x_ty 0))))

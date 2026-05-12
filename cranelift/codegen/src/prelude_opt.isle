@@ -92,7 +92,15 @@
         ;; The old instruction must define a single result value and `val` must
         ;; match its type. The new instruction need not define the same number
         ;; or types of results as the old instruction.
-        (ReplaceWithVal (inst Inst) (val Value))))
+        (ReplaceWithVal (inst Inst) (val Value))
+
+        ;; Narrow rewrite: replace the condition operand of a `brif`
+        ;; (argument 0) with the given value. The opcode and successor
+        ;; blocks stay the same, so the CFG is preserved. Use this to
+        ;; rewrite branch conditions whose producer simplifies in
+        ;; boolean-test context (e.g. `(brif (ctz x))` → branch on the
+        ;; LSB of x).
+        (ReplaceBranchCond (cond Value))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)
 (rule (inst_to_skeleton_inst_simplification inst)
@@ -107,6 +115,10 @@
 
 (decl pure replace_with_val (Inst Value) SkeletonInstSimplification)
 (rule (replace_with_val inst val) (SkeletonInstSimplification.ReplaceWithVal inst val))
+
+(decl pure replace_branch_cond (Value) SkeletonInstSimplification)
+(rule (replace_branch_cond new_cond)
+      (SkeletonInstSimplification.ReplaceBranchCond new_cond))
 
 (convert Inst SkeletonInstSimplification inst_to_skeleton_inst_simplification)
 (convert Value SkeletonInstSimplification value_to_skeleton_inst_simplification)

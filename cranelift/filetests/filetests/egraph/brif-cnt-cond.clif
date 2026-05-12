@@ -1,0 +1,132 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; `brif (ctz X)` / `brif (clz X)` — 2-op forms with no `icmp ne 0`
+;; interposed for the value-level rules in `opts/icmp.isle` to hinge on.
+;; The new `simplify_skeleton` rule rewrites the brif's cond operand
+;; in place via `ReplaceBranchCond`; successors are preserved so the
+;; CFG is unchanged.
+
+;; `brif (ctz X)` branches when `ctz(X) != 0`, i.e. LSB(X) == 0.
+function %brif_ctz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = ctz v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_ctz_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 1
+;     v5 = band v0, v4  ; v4 = 1
+;     v6 = iconst.i32 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     brif v7, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+;; `brif (clz X)` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
+function %brif_clz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = clz v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_clz_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp sge v0, v4  ; v4 = 0
+;     brif v5, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+;; Same for i64.
+function %brif_ctz_i64(i64) -> i32 {
+block0(v0: i64):
+    v1 = ctz v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_ctz_i64(i64) -> i32 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 1
+;     v5 = band v0, v4  ; v4 = 1
+;     v6 = iconst.i64 0
+;     v7 = icmp eq v5, v6  ; v6 = 0
+;     brif v7, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+function %brif_clz_i64(i64) -> i32 {
+block0(v0: i64):
+    v1 = clz v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_clz_i64(i64) -> i32 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 0
+;     v5 = icmp sge v0, v4  ; v4 = 0
+;     brif v5, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
