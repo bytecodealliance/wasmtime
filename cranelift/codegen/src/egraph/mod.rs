@@ -816,9 +816,7 @@ where
                 // cost-based ranking the other variants do. The first such
                 // candidate wins; ISLE rule ordering picks the form.
                 SkeletonInstSimplification::ReplaceBranchCond { cond } => {
-                    log::trace!(
-                        " -> simplify_skeleton: replace `brif` cond with {cond}"
-                    );
+                    log::trace!(" -> simplify_skeleton: replace `brif` cond with {cond}");
                     return Some(SkeletonInstSimplification::ReplaceBranchCond { cond });
                 }
             };
