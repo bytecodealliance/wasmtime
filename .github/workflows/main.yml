@@ -589,20 +589,18 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
-        # watchOS is a Tier 3 Rust target so there's no prebuilt `std`;
-        # use a nightly toolchain plus `-Zbuild-std` to compile.
-        # Covers Apple Watch Series 9+ (aarch64). The older arm64_32 ABI
-        # (Series 4-8) is omitted because Xcode 16 removed its SDK (Apple
-        # dropped those models from watchOS 11), so no macOS-latest runner can
-        # successfully cross-compile for that target regardless of Rust changes.
-        # See bytecodealliance/wasmtime#13255.
+        # watchOS (Apple Watch Series 9+) is a Tier 3 Rust target so there is
+        # no prebuilt `std`; use a nightly toolchain plus `-Zbuild-std`.
+        # Scope to the compile-only path (no `runtime` feature) because
+        # wasmtime#13255 tracks the remaining prerequisites for the runtime to
+        # build on watchOS (mach2 support etc.). Using --no-default-features
+        # also keeps `std` disabled so build.rs skips C-helper compilation,
+        # avoiding SDK cross-compilation issues on the runner.
         - target: aarch64-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo check -Zbuild-std=std,panic_abort
-          env:
-            WATCHOS_DEPLOYMENT_TARGET: "7.0"
+          test: cargo check -p wasmtime --no-default-features --features compile,cranelift,all-arch -Zbuild-std=std,panic_abort
         # Test that when Cranelift has no support for an architecture, even a
         # 64-bit one, that Wasmtime still compiles. Note that this is also
         # intended to test various fallbacks in the codebase where we have no
