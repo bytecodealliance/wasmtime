@@ -100,7 +100,7 @@ impl<T> Store<T> {
 }
 
 impl<'a, T> StoreContextMut<'a, T> {
-    /// Perform garbage collection of `ExternRef`s.
+    /// Perform garbage collection.
     ///
     /// Same as [`Store::gc`].
     pub fn gc(&mut self, why: Option<&GcHeapOutOfMemory<()>>) -> Result<()> {
