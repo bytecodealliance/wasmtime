@@ -114,6 +114,10 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<bool> {
         a.assert_unreachable()
     }
+
+    pub(crate) fn try_gc_ref<'a>(&self, _store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+        match self.inner {}
+    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
