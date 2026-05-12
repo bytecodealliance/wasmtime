@@ -18,7 +18,7 @@ use wasmtime_environ::prelude::*;
 pub mod limits {
     pub const MEMORY_SIZE: usize = 805 << 16;
     pub const MEMORIES: u32 = 450;
-    pub const GC_HEAP_SIZE: usize = 1 << 16;
+    pub const GC_HEAP_SIZE: usize = 10 << 16;
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
     pub const TABLES_PER_MODULE: u32 = 5;
