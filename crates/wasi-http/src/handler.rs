@@ -21,6 +21,7 @@ use tokio::sync::Notify;
 use wasmtime::AsContextMut;
 use wasmtime::component::Accessor;
 use wasmtime::{Result, Store, StoreContextMut, format_err};
+use wasmtime_wasi::I32Exit;
 
 /// Alternative p2 bindings generated with `exports: { default: async | store }`
 /// so we can use `TypedFunc::call_concurrent` with both p2 and p3 instances.
@@ -259,6 +260,12 @@ where
 
     async fn run(mut self, task: Option<TaskFn<S::StoreData>>, req_id: Option<u64>) {
         if let Err(error) = self.run_(task, req_id).await {
+            // A clean exit via `wasi:cli/exit(ok)` is a guest-controlled signal
+            // that the instance is done and should not be reused.  Treat it as a
+            // graceful worker exit rather than an error.
+            if error.downcast_ref::<I32Exit>().map_or(false, |e| e.0 == 0) {
+                return;
+            }
             self.handler.0.state.handle_worker_error(error);
         }
     }
