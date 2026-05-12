@@ -59,7 +59,7 @@ fn run(engine: &Engine, module: &Module, linker: &Linker<()>) -> Result<()> {
         thread::sleep(time::Duration::from_millis(100));
     }
 
-    // Also note that that a `Store` can also move between threads:
+    // Also note that a `Store` can also move between threads:
     println!("> Moving {:?} to a new thread", thread::current().id());
     let child = thread::spawn(move || run.call(&mut store, ()));
 

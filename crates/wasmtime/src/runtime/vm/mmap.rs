@@ -49,7 +49,7 @@ pub struct UnalignedLength {
 /// that is backed purely by memory, and one that is possibly backed by a file.
 ///
 /// Currently, the OS-specific `mmap` implementations in this crate do not make
-/// this this distinction -- alignment is managed at this platform-independent
+/// this distinction -- alignment is managed at this platform-independent
 /// layer. It might make sense to add this distinction to the OS-specific
 /// implementations in the future.
 ///

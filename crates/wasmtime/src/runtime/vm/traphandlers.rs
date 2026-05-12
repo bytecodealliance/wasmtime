@@ -69,7 +69,7 @@ fn lazy_per_thread_init() {
 /// handler created when Wasm was entered. If the state has registered an
 /// exception, this function will perform the unwind action registered: either
 /// resetting PC, FP, and SP to the handler in the middle of the Wasm
-/// activation on the stack, or the entry trampoline back to the the host, if
+/// activation on the stack, or the entry trampoline back to the host, if
 /// the exception is uncaught.
 ///
 /// This is currently only called from the `raise` builtin of
