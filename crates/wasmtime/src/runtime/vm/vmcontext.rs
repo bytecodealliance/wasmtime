@@ -795,6 +795,14 @@ impl VMGlobalDefinition {
         ret
     }
 
+    /// Return a reference to the global value as a borrowed GC reference.
+    pub unsafe fn as_gc_ref_mut(&mut self) -> Option<&mut VMGcRef> {
+        let raw_ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
+        let ret = unsafe { (*raw_ptr).as_mut() };
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
+    }
+
     /// Initialize a global to the given GC reference.
     pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
         let dest = unsafe {
