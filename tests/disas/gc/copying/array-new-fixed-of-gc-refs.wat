@@ -41,8 +41,8 @@
 ;;
 ;;                                 block2:
 ;;                                     v189 = iconst.i32 32
-;;                                     v187 = iadd.i32 v15, v189  ; v189 = 32
-;; @0025                               store notrap aligned vmctx v187, v14
+;;                                     v95 = iadd.i32 v15, v189  ; v189 = 32
+;; @0025                               store notrap aligned vmctx v95, v14
 ;;                                     v190 = iconst.i32 -1476395008
 ;;                                     v191 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v192 = load.i64 notrap aligned readonly can_move v191+32
@@ -56,16 +56,16 @@
 ;; @0025                               jump block4(v15, v39)
 ;;
 ;;                                 block3 cold:
-;; @0025                               v40 = iconst.i32 -1476395008
-;; @0025                               v42 = load.i64 notrap aligned readonly can_move v0+40
-;; @0025                               v43 = load.i32 notrap aligned readonly can_move v42
+;; @0025                               v27 = iconst.i32 -1476395008
+;; @0025                               v29 = load.i64 notrap aligned readonly can_move v0+40
+;; @0025                               v30 = load.i32 notrap aligned readonly can_move v29
 ;;                                     v81 = iconst.i32 32
 ;; @0025                               v31 = iconst.i32 16
-;; @0025                               v32 = call fn0(v0, v40, v43, v81, v31), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v40 = -1476395008, v81 = 32, v31 = 16
-;; @0025                               v63 = load.i64 notrap aligned readonly can_move v0+8
-;; @0025                               v37 = load.i64 notrap aligned readonly can_move v63+32
+;; @0025                               v32 = call fn0(v0, v27, v30, v81, v31), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v27 = -1476395008, v81 = 32, v31 = 16
+;; @0025                               v61 = load.i64 notrap aligned readonly can_move v0+8
+;; @0025                               v33 = load.i64 notrap aligned readonly can_move v61+32
 ;; @0025                               v34 = uextend.i64 v32
-;; @0025                               v35 = iadd v37, v34
+;; @0025                               v35 = iadd v33, v34
 ;; @0025                               jump block4(v32, v35)
 ;;
 ;;                                 block4(v44: i32, v45: i64):
@@ -74,17 +74,17 @@
 ;; @0025                               v46 = iadd v45, v60  ; v60 = 16
 ;; @0025                               store notrap aligned v6, v46  ; v6 = 3
 ;;                                     v56 = load.i32 notrap v69
-;;                                     v94 = iconst.i64 20
-;;                                     v99 = iadd v45, v94  ; v94 = 20
-;; @0025                               store notrap aligned little v56, v99
+;;                                     v98 = iconst.i64 20
+;;                                     v103 = iadd v45, v98  ; v98 = 20
+;; @0025                               store notrap aligned little v56, v103
 ;;                                     v55 = load.i32 notrap v68
-;;                                     v102 = iconst.i64 24
-;;                                     v107 = iadd v45, v102  ; v102 = 24
-;; @0025                               store notrap aligned little v55, v107
+;;                                     v106 = iconst.i64 24
+;;                                     v111 = iadd v45, v106  ; v106 = 24
+;; @0025                               store notrap aligned little v55, v111
 ;;                                     v54 = load.i32 notrap v67
-;;                                     v123 = iconst.i64 28
-;;                                     v128 = iadd v45, v123  ; v123 = 28
-;; @0025                               store notrap aligned little v54, v128
+;;                                     v127 = iconst.i64 28
+;;                                     v132 = iadd v45, v127  ; v127 = 28
+;; @0025                               store notrap aligned little v54, v132
 ;; @0029                               jump block1(v44)
 ;;
 ;;                                 block1(v5: i32):

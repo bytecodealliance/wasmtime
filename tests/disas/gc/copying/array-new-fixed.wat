@@ -32,8 +32,8 @@
 ;;
 ;;                                 block2:
 ;;                                     v154 = iconst.i32 48
-;;                                     v152 = iadd.i32 v15, v154  ; v154 = 48
-;; @0025                               store notrap aligned vmctx v152, v14
+;;                                     v85 = iadd.i32 v15, v154  ; v154 = 48
+;; @0025                               store notrap aligned vmctx v85, v14
 ;;                                     v155 = iconst.i32 -1476395008
 ;;                                     v156 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v157 = load.i64 notrap aligned readonly can_move v156+32
@@ -47,16 +47,16 @@
 ;; @0025                               jump block4(v15, v39)
 ;;
 ;;                                 block3 cold:
-;; @0025                               v40 = iconst.i32 -1476395008
-;; @0025                               v42 = load.i64 notrap aligned readonly can_move v0+40
-;; @0025                               v43 = load.i32 notrap aligned readonly can_move v42
+;; @0025                               v27 = iconst.i32 -1476395008
+;; @0025                               v29 = load.i64 notrap aligned readonly can_move v0+40
+;; @0025                               v30 = load.i32 notrap aligned readonly can_move v29
 ;;                                     v70 = iconst.i32 48
 ;; @0025                               v31 = iconst.i32 16
-;; @0025                               v32 = call fn0(v0, v40, v43, v70, v31)  ; v40 = -1476395008, v70 = 48, v31 = 16
-;; @0025                               v57 = load.i64 notrap aligned readonly can_move v0+8
-;; @0025                               v37 = load.i64 notrap aligned readonly can_move v57+32
+;; @0025                               v32 = call fn0(v0, v27, v30, v70, v31)  ; v27 = -1476395008, v70 = 48, v31 = 16
+;; @0025                               v55 = load.i64 notrap aligned readonly can_move v0+8
+;; @0025                               v33 = load.i64 notrap aligned readonly can_move v55+32
 ;; @0025                               v34 = uextend.i64 v32
-;; @0025                               v35 = iadd v37, v34
+;; @0025                               v35 = iadd v33, v34
 ;; @0025                               jump block4(v32, v35)
 ;;
 ;;                                 block4(v44: i32, v45: i64):
@@ -65,14 +65,14 @@
 ;; @0025                               v46 = iadd v45, v54  ; v54 = 16
 ;; @0025                               store notrap aligned v6, v46  ; v6 = 3
 ;;                                     v62 = iconst.i64 24
-;;                                     v88 = iadd v45, v62  ; v62 = 24
-;; @0025                               store.i64 notrap aligned little v2, v88
+;;                                     v92 = iadd v45, v62  ; v62 = 24
+;; @0025                               store.i64 notrap aligned little v2, v92
 ;;                                     v59 = iconst.i64 32
-;;                                     v95 = iadd v45, v59  ; v59 = 32
-;; @0025                               store.i64 notrap aligned little v3, v95
-;;                                     v110 = iconst.i64 40
-;;                                     v115 = iadd v45, v110  ; v110 = 40
-;; @0025                               store.i64 notrap aligned little v4, v115
+;;                                     v99 = iadd v45, v59  ; v59 = 32
+;; @0025                               store.i64 notrap aligned little v3, v99
+;;                                     v114 = iconst.i64 40
+;;                                     v119 = iadd v45, v114  ; v114 = 40
+;; @0025                               store.i64 notrap aligned little v4, v119
 ;; @0029                               jump block1(v44)
 ;;
 ;;                                 block1(v5: i32):

@@ -52,16 +52,16 @@
 ;; @002a                               jump block4(v9, v33)
 ;;
 ;;                                 block3 cold:
-;; @002a                               v34 = iconst.i32 -1342177280
-;; @002a                               v36 = load.i64 notrap aligned readonly can_move v0+40
-;; @002a                               v37 = load.i32 notrap aligned readonly can_move v36
+;; @002a                               v21 = iconst.i32 -1342177280
+;; @002a                               v23 = load.i64 notrap aligned readonly can_move v0+40
+;; @002a                               v24 = load.i32 notrap aligned readonly can_move v23
 ;; @002a                               v6 = iconst.i32 32
 ;; @002a                               v25 = iconst.i32 16
-;; @002a                               v26 = call fn0(v0, v34, v37, v6, v25), stack_map=[i32 @ ss0+0]  ; v34 = -1342177280, v6 = 32, v25 = 16
-;; @002a                               v50 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v31 = load.i64 notrap aligned readonly can_move v50+32
+;; @002a                               v26 = call fn0(v0, v21, v24, v6, v25), stack_map=[i32 @ ss0+0]  ; v21 = -1342177280, v6 = 32, v25 = 16
+;; @002a                               v48 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v27 = load.i64 notrap aligned readonly can_move v48+32
 ;; @002a                               v28 = uextend.i64 v26
-;; @002a                               v29 = iadd v31, v28
+;; @002a                               v29 = iadd v27, v28
 ;; @002a                               jump block4(v26, v29)
 ;;
 ;;                                 block4(v38: i32, v39: i64):
