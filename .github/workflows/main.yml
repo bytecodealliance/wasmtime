@@ -590,18 +590,22 @@ jobs:
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
         # watchOS targets are Tier 3 in Rust so there is no prebuilt `std`.
-        # Check the cranelift ARM64 backend (no std, no mach2, no C helpers)
-        # which is the core thing needed for executing Wasm on Apple Watch.
+        # Check cranelift-codegen (no std, no mach2, no C helpers) which is
+        # the core thing needed for executing Wasm on Apple Watch.
         # Only core+alloc need to be built for the sysroot, which sidesteps
         # watchOS std/libc compilation gaps that are upstream prerequisites
         # (tracked in bytecodealliance/wasmtime#13255).
         # arm64_32-apple-watchos covers Apple Watch Series 4-8 and SE 1-2
         # (ILP32 ABI); aarch64-apple-watchos covers Series 9+.
+        # arm64_32 uses ILP32 (32-bit pointer width), so we check the
+        # cranelift-codegen core without the arm64 backend feature, which has
+        # pointer-width assumptions that don't hold for ILP32 targets. Series
+        # 4-8 / SE 1-2 devices use the interpreter, not the Cranelift JIT.
         - target: arm64_32-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo check -p cranelift-codegen --no-default-features --features arm64 -Zbuild-std=core,alloc
+          test: cargo check -p cranelift-codegen --no-default-features -Zbuild-std=core,alloc
           env:
             WATCHOS_DEPLOYMENT_TARGET: "11.0"
         - target: aarch64-apple-watchos
