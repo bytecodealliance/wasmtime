@@ -27,7 +27,7 @@
 ;; @001f                               v6 = iadd v5, v4
 ;; @001f                               v7 = iconst.i64 24
 ;; @001f                               v8 = iadd v6, v7  ; v7 = 24
-;; @001f                               v9 = load.i32 user2 v8
+;; @001f                               v9 = load.i32 user2 readonly v8
 ;; @0021                               jump block1
 ;;
 ;;                                 block1:

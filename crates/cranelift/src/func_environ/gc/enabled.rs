@@ -170,9 +170,10 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let kind_and_reserved_bits = builder
-        .ins()
-        .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
+    let kind_and_reserved_bits =
+        builder
+            .ins()
+            .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), kind_addr, 0);
     let kind_mask = builder
         .ins()
         .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
@@ -936,7 +937,7 @@ pub fn translate_array_len(
     );
     let result = builder
         .ins()
-        .load(ir::types::I32, GC_MEMFLAGS, len_field, 0);
+        .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
 }
@@ -1247,9 +1248,10 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let actual_kind = builder
-            .ins()
-            .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
+        let actual_kind =
+            builder
+                .ins()
+                .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1301,7 +1303,10 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let actual_shared_ty = builder.ins().load(ir::types::I32, GC_MEMFLAGS, ty_addr, 0);
+            let actual_shared_ty =
+                builder
+                    .ins()
+                    .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), ty_addr, 0);
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
@@ -1314,8 +1319,11 @@ pub fn translate_ref_test(
             let expected_shared_ty =
                 func_env.module_interned_to_shared_ty(&mut builder.cursor(), expected_interned_ty);
 
-            let actual_shared_ty =
-                func_env.load_funcref_type_index(&mut builder.cursor(), GC_MEMFLAGS, val);
+            let actual_shared_ty = func_env.load_funcref_type_index(
+                &mut builder.cursor(),
+                GC_MEMFLAGS.with_readonly(),
+                val,
+            );
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }

@@ -27,7 +27,7 @@
 ;; @0027                               v8 = iadd v7, v6
 ;; @0027                               v9 = iconst.i64 24
 ;; @0027                               v10 = iadd v8, v9  ; v9 = 24
-;; @0027                               v11 = load.i32 user2 v10
+;; @0027                               v11 = load.i32 user2 readonly v10
 ;; @0027                               v12 = uadd_overflow_trap v3, v5, user17
 ;; @0027                               v13 = icmp ugt v12, v11
 ;; @0027                               trapnz v13, user17

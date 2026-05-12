@@ -27,7 +27,7 @@
 ;; @0022                               v7 = iadd v6, v5
 ;; @0022                               v8 = iconst.i64 8
 ;; @0022                               v9 = iadd v7, v8  ; v8 = 8
-;; @0022                               v10 = load.i32 user2 v9
+;; @0022                               v10 = load.i32 user2 readonly v9
 ;; @0022                               v11 = icmp ult v3, v10
 ;; @0022                               trapz v11, user17
 ;; @0022                               v13 = uextend.i64 v10
