@@ -589,18 +589,30 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
-        # watchOS (Apple Watch Series 9+) is a Tier 3 Rust target so there is
-        # no prebuilt `std`; use a nightly toolchain plus `-Zbuild-std`.
-        # Scope to the compile-only path (no `runtime` feature) because
-        # wasmtime#13255 tracks the remaining prerequisites for the runtime to
-        # build on watchOS (mach2 support etc.). Using --no-default-features
-        # also keeps `std` disabled so build.rs skips C-helper compilation,
-        # avoiding SDK cross-compilation issues on the runner.
+        # watchOS targets are Tier 3 in Rust so there is no prebuilt `std`;
+        # use a nightly toolchain plus `-Zbuild-std`. Scope to the compile-only
+        # path (no `runtime` feature) because wasmtime#13255 tracks the
+        # remaining prerequisites (mach2 watchOS support etc.) for the runtime
+        # to build on watchOS. Using --no-default-features also keeps the `std`
+        # feature disabled so build.rs skips C-helper compilation, which
+        # requires a working watchOS cross-compiler on the runner.
+        # arm64_32-apple-watchos covers Apple Watch Series 4-8 and SE 1-2
+        # (ILP32 ABI on AArch64); aarch64-apple-watchos covers Series 9+.
+        # Both require watchOS 11 as the minimum deployment target.
+        - target: arm64_32-apple-watchos
+          os: macos-latest
+          toolchain: wasmtime-ci-pinned-nightly
+          build_std: true
+          test: cargo check -p wasmtime --no-default-features --features compile,cranelift,all-arch -Zbuild-std=std,panic_abort
+          env:
+            WATCHOS_DEPLOYMENT_TARGET: "11.0"
         - target: aarch64-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
           test: cargo check -p wasmtime --no-default-features --features compile,cranelift,all-arch -Zbuild-std=std,panic_abort
+          env:
+            WATCHOS_DEPLOYMENT_TARGET: "11.0"
         # Test that when Cranelift has no support for an architecture, even a
         # 64-bit one, that Wasmtime still compiles. Note that this is also
         # intended to test various fallbacks in the codebase where we have no
