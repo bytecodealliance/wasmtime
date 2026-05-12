@@ -480,6 +480,31 @@ pub trait PtrSize {
         self.vmctx_epoch_ptr() + self.size()
     }
 
+    /// Return the offset of the `bump_ptr` field within `VMCopyingHeapData`.
+    #[inline]
+    fn vmcopying_heap_data_bump_ptr(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of the `active_space_end` field within
+    /// `VMCopyingHeapData`.
+    #[inline]
+    fn vmcopying_heap_data_active_space_end(&self) -> u8 {
+        4
+    }
+
+    /// Return the size of `VMCopyingHeapData`.
+    #[inline]
+    fn size_of_vmcopying_heap_data(&self) -> u8 {
+        8
+    }
+
+    /// Return the alignment of `VMCopyingHeapData`.
+    #[inline]
+    fn align_of_vmcopying_heap_data(&self) -> u8 {
+        4
+    }
+
     /// The offset of the `type_ids` array pointer.
     #[inline]
     fn vmctx_type_ids_array(&self) -> u8 {

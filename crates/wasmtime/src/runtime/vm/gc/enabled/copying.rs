@@ -1067,6 +1067,7 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasmtime_environ::{HostPtr, PtrSize};
 
     #[test]
     fn vm_copying_header_size_align() {
@@ -1121,7 +1122,7 @@ mod tests {
     #[test]
     fn vm_copying_heap_data_bump_ptr_offset() {
         assert_eq!(
-            wasmtime_environ::copying::HEAP_DATA_BUMP_PTR_OFFSET as usize,
+            HostPtr.vmcopying_heap_data_bump_ptr() as usize,
             core::mem::offset_of!(VMCopyingHeapData, bump_ptr),
         );
     }
@@ -1129,7 +1130,7 @@ mod tests {
     #[test]
     fn vm_copying_heap_data_active_space_end_offset() {
         assert_eq!(
-            wasmtime_environ::copying::HEAP_DATA_ACTIVE_SPACE_END_OFFSET as usize,
+            HostPtr.vmcopying_heap_data_active_space_end() as usize,
             core::mem::offset_of!(VMCopyingHeapData, active_space_end),
         );
     }
@@ -1137,7 +1138,7 @@ mod tests {
     #[test]
     fn vm_copying_heap_data_size() {
         assert_eq!(
-            wasmtime_environ::copying::HEAP_DATA_SIZE as usize,
+            HostPtr.size_of_vmcopying_heap_data() as usize,
             core::mem::size_of::<VMCopyingHeapData>(),
         );
     }
@@ -1145,7 +1146,7 @@ mod tests {
     #[test]
     fn vm_copying_heap_data_align() {
         assert_eq!(
-            wasmtime_environ::copying::HEAP_DATA_ALIGN as usize,
+            HostPtr.align_of_vmcopying_heap_data() as usize,
             core::mem::align_of::<VMCopyingHeapData>(),
         );
     }

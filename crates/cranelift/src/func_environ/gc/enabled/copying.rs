@@ -11,16 +11,14 @@ use crate::TRAP_INTERNAL_ASSERT;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::TargetEnvironment;
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_environ::copying::{
     ALIGN, EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET,
-    HEAP_DATA_ACTIVE_SPACE_END_OFFSET, HEAP_DATA_BUMP_PTR_OFFSET,
 };
 use wasmtime_environ::{
-    GcTypeLayouts, ModuleInternedTypeIndex, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType,
-    WasmRefType, WasmResult, WasmStorageType, WasmValType, copying::CopyingTypeLayouts,
+    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
+    WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+    copying::CopyingTypeLayouts,
 };
 
 #[derive(Default)]
@@ -49,6 +47,7 @@ impl CopyingCompiler {
     ///
     /// Returns `(bump_ptr, active_space_end)` as `i32` values.
     fn load_bump_state(
+        func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
         ptr_to_heap_data: ir::Value,
     ) -> (ir::Value, ir::Value) {
@@ -56,13 +55,13 @@ impl CopyingCompiler {
             ir::types::I32,
             ir::MemFlags::trusted().with_can_move(),
             ptr_to_heap_data,
-            i32::try_from(HEAP_DATA_BUMP_PTR_OFFSET).unwrap(),
+            i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
         );
         let active_space_end = builder.ins().load(
             ir::types::I32,
             ir::MemFlags::trusted().with_readonly().with_can_move(),
             ptr_to_heap_data,
-            i32::try_from(HEAP_DATA_ACTIVE_SPACE_END_OFFSET).unwrap(),
+            i32::from(func_env.offsets.ptr.vmcopying_heap_data_active_space_end()),
         );
         (bump_ptr, active_space_end)
     }
@@ -82,8 +81,6 @@ impl CopyingCompiler {
 
     /// Emit inline bump allocation, falling back to `gc_alloc_raw` on failure.
     ///
-    /// `kind` may be `VMGcKind::ExternRef` iff `ty` is `None`.
-    ///
     /// `size` must be an `i32` value >= `size_of(VMCopyingHeader)`.
     ///
     /// Returns `(gc_ref, raw_ptr_to_object)` where `gc_ref` is the `i32` GC
@@ -93,9 +90,11 @@ impl CopyingCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
         kind: VMGcKind,
-        ty: Option<ModuleInternedTypeIndex>,
+        ty: ModuleInternedTypeIndex,
         size: ir::Value,
     ) -> (ir::Value, ir::Value) {
+        debug_assert_ne!(kind, VMGcKind::ExternRef);
+        debug_assert!(!ty.is_reserved_value());
         assert_eq!(builder.func.dfg.value_type(size), ir::types::I32);
 
         let pointer_type = func_env.pointer_type();
@@ -110,7 +109,8 @@ impl CopyingCompiler {
         builder.insert_block_after(merge_block, slow_block);
 
         let ptr_to_heap_data = Self::load_vmcopying_heap_data_ptr(func_env, builder);
-        let (bump_ptr, active_space_end) = Self::load_bump_state(builder, ptr_to_heap_data);
+        let (bump_ptr, active_space_end) =
+            Self::load_bump_state(func_env, builder, ptr_to_heap_data);
         let aligned_size_64 = Self::aligned_size(builder, size);
 
         // Compute `end_of_object = bump_ptr + aligned_size` (in i64) and check
@@ -132,24 +132,7 @@ impl CopyingCompiler {
             builder.switch_to_block(slow_block);
             builder.seal_block(slow_block);
             builder.set_cold_block(slow_block);
-            let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
-            let vmctx = func_env.vmctx_val(&mut builder.cursor());
-            let kind_val = builder
-                .ins()
-                .iconst(ir::types::I32, i64::from(kind.as_u32()));
-            let shared_ty = match ty {
-                Some(ty) => func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty),
-                None => builder.ins().iconst(
-                    func_env.vmshared_type_index_ty(),
-                    i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
-                ),
-            };
-            let align_val = builder.ins().iconst(ir::types::I32, i64::from(ALIGN));
-            let call_inst = builder.ins().call(
-                gc_alloc_raw_builtin,
-                &[vmctx, kind_val, shared_ty, size, align_val],
-            );
-            let gc_ref = builder.func.dfg.first_result(call_inst);
+            let gc_ref = emit_gc_raw_alloc(func_env, builder, kind, ty, size, ALIGN);
             let base = func_env.get_gc_heap_base(builder);
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
@@ -174,7 +157,7 @@ impl CopyingCompiler {
                 ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
                 end_of_object,
                 ptr_to_heap_data,
-                i32::try_from(HEAP_DATA_BUMP_PTR_OFFSET).unwrap(),
+                i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
             );
 
             // Compute the raw pointer to the new object.
@@ -183,13 +166,7 @@ impl CopyingCompiler {
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
             // Write `VMGcHeader::{kind,type_index}` as a single i64 store.
-            let shared_ty = match ty {
-                Some(ty) => func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty),
-                None => builder.ins().iconst(
-                    func_env.vmshared_type_index_ty(),
-                    i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
-                ),
-            };
+            let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
             let shared_ty_i64 = builder.ins().uextend(ir::types::I64, shared_ty);
             let kind_i64 = i64::from(kind.as_u32());
             let header_i64 = match func_env.isa().endianness() {
@@ -213,14 +190,9 @@ impl CopyingCompiler {
             );
 
             // Write `VMCopyingHeader::object_size`.
-            //
-            // Note: this `ireduce` doesn't truncate bits because we already
-            // checked that the object (and therefore also its size) fits within
-            // the active bump region on this path.
-            let aligned_size_32 = builder.ins().ireduce(ir::types::I32, aligned_size_64);
-            builder.ins().store(
+            builder.ins().istore32(
                 ir::MemFlags::trusted(),
-                aligned_size_32,
+                aligned_size_64,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_SIZE).unwrap(),
             );
@@ -313,7 +285,7 @@ impl GcCompiler for CopyingCompiler {
             func_env,
             builder,
             VMGcKind::ArrayRef,
-            Some(interned_type_index),
+            interned_type_index,
             size,
         );
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
@@ -358,7 +330,7 @@ impl GcCompiler for CopyingCompiler {
             func_env,
             builder,
             VMGcKind::StructRef,
-            Some(interned_type_index),
+            interned_type_index,
             struct_size_val,
         );
 
@@ -399,7 +371,7 @@ impl GcCompiler for CopyingCompiler {
             func_env,
             builder,
             VMGcKind::ExnRef,
-            Some(interned_type_index),
+            interned_type_index,
             exn_size_val,
         );
 

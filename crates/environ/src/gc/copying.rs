@@ -38,18 +38,6 @@ pub const FORWARDING_REF_OFFSET: u32 = HEADER_SIZE;
 /// forwarding reference that the copying collector writes during collection.
 pub const MIN_OBJECT_SIZE: u32 = FORWARDING_REF_OFFSET + mem::size_of::<u32>() as u32;
 
-/// Offset of `bump_ptr` within `VMCopyingHeapData`.
-pub const HEAP_DATA_BUMP_PTR_OFFSET: u32 = 0;
-
-/// Offset of `active_space_end` within `VMCopyingHeapData`.
-pub const HEAP_DATA_ACTIVE_SPACE_END_OFFSET: u32 = 4;
-
-/// Size of `VMCopyingHeapData`.
-pub const HEAP_DATA_SIZE: u32 = 8;
-
-/// Alignment of `VMCopyingHeapData`.
-pub const HEAP_DATA_ALIGN: u32 = 4;
-
 /// The layout of Wasm GC objects in the copying collector.
 #[derive(Default)]
 pub struct CopyingTypeLayouts;
