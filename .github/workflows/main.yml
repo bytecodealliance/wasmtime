@@ -589,28 +589,26 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
-        # watchOS targets are Tier 3 in Rust so there is no prebuilt `std`;
-        # use a nightly toolchain plus `-Zbuild-std`. Scope to the compile-only
-        # path (no `runtime` feature) because wasmtime#13255 tracks the
-        # remaining prerequisites (mach2 watchOS support etc.) for the runtime
-        # to build on watchOS. Using --no-default-features also keeps the `std`
-        # feature disabled so build.rs skips C-helper compilation, which
-        # requires a working watchOS cross-compiler on the runner.
+        # watchOS targets are Tier 3 in Rust so there is no prebuilt `std`.
+        # Check the cranelift ARM64 backend (no std, no mach2, no C helpers)
+        # which is the core thing needed for executing Wasm on Apple Watch.
+        # Only core+alloc need to be built for the sysroot, which sidesteps
+        # watchOS std/libc compilation gaps that are upstream prerequisites
+        # (tracked in bytecodealliance/wasmtime#13255).
         # arm64_32-apple-watchos covers Apple Watch Series 4-8 and SE 1-2
-        # (ILP32 ABI on AArch64); aarch64-apple-watchos covers Series 9+.
-        # Both require watchOS 11 as the minimum deployment target.
+        # (ILP32 ABI); aarch64-apple-watchos covers Series 9+.
         - target: arm64_32-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo check -p wasmtime --no-default-features --features compile,cranelift,all-arch -Zbuild-std=std,panic_abort
+          test: cargo check -p cranelift-codegen --no-default-features --features arm64 -Zbuild-std=core,alloc
           env:
             WATCHOS_DEPLOYMENT_TARGET: "11.0"
         - target: aarch64-apple-watchos
           os: macos-latest
           toolchain: wasmtime-ci-pinned-nightly
           build_std: true
-          test: cargo check -p wasmtime --no-default-features --features compile,cranelift,all-arch -Zbuild-std=std,panic_abort
+          test: cargo check -p cranelift-codegen --no-default-features --features arm64 -Zbuild-std=core,alloc
           env:
             WATCHOS_DEPLOYMENT_TARGET: "11.0"
         # Test that when Cranelift has no support for an architecture, even a
