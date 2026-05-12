@@ -165,28 +165,24 @@ impl CopyingCompiler {
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
-            // Write `VMGcHeader::{kind,type_index}` as a single i64 store.
-            let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
-            let shared_ty_i64 = builder.ins().uextend(ir::types::I64, shared_ty);
-            let kind_i64 = i64::from(kind.as_u32());
-            let header_i64 = match func_env.isa().endianness() {
-                ir::Endianness::Little => {
-                    // Low 32 bits = kind (at offset 0), high 32 bits = type_index (at offset 4).
-                    let ty_shifted = builder.ins().ishl_imm(shared_ty_i64, 32);
-                    let kind_val = builder.ins().iconst(ir::types::I64, kind_i64);
-                    builder.ins().bor(kind_val, ty_shifted)
-                }
-                ir::Endianness::Big => {
-                    // High 32 bits = kind (at offset 0), low 32 bits = type_index (at offset 4).
-                    let kind_shifted = builder.ins().iconst(ir::types::I64, kind_i64 << 32);
-                    builder.ins().bor(kind_shifted, shared_ty_i64)
-                }
-            };
+            // Write `VMGcHeader::kind`.
+            let kind_val = builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(kind.as_u32()));
             builder.ins().store(
-                ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
-                header_i64,
+                ir::MemFlags::trusted(),
+                kind_val,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
+            );
+
+            // Write `VMGcHeader::type_index`.
+            let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
+            builder.ins().store(
+                ir::MemFlags::trusted(),
+                shared_ty,
+                obj_ptr,
+                i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
             );
 
             // Write `VMCopyingHeader::object_size`.
