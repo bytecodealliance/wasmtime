@@ -108,14 +108,11 @@
 ;; wasm[0]::function[2]::if_ctz_bare_i32:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    $0x20, %esi
-;;       bsfl    %edx, %r9d
-;;       cmovel  %esi, %r9d
-;;       testl   %r9d, %r9d
-;;       jne     0xa4
-;;   9a: movl    $0xc8, %eax
-;;       jmp     0xa9
-;;   a4: movl    $0x64, %eax
+;;       testl   $1, %edx
+;;       je      0x9a
+;;   90: movl    $0xc8, %eax
+;;       jmp     0x9f
+;;   9a: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -216,16 +213,11 @@
 ;; wasm[0]::function[11]::if_clz_bare_i32:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    $18446744073709551615, %rsi
-;;       bsrl    %edx, %r9d
-;;       cmovel  %esi, %r9d
-;;       movl    $0x1f, %eax
-;;       subl    %r9d, %eax
-;;       testl   %eax, %eax
-;;       jne     0x24d
-;;  243: movl    $0xc8, %eax
-;;       jmp     0x252
-;;  24d: movl    $0x64, %eax
+;;       testl   %edx, %edx
+;;       jge     0x236
+;;  22c: movl    $0xc8, %eax
+;;       jmp     0x23b
+;;  236: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -244,10 +236,10 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       testq   %rdx, %rdx
-;;       jl      0x297
-;;  28d: movl    $0xc8, %eax
-;;       jmp     0x29c
-;;  297: movl    $0x64, %eax
+;;       jl      0x277
+;;  26d: movl    $0xc8, %eax
+;;       jmp     0x27c
+;;  277: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -256,10 +248,10 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       testq   %rdx, %rdx
-;;       jge     0x2d7
-;;  2cd: movl    $0xc8, %eax
-;;       jmp     0x2dc
-;;  2d7: movl    $0x64, %eax
+;;       jge     0x2b7
+;;  2ad: movl    $0xc8, %eax
+;;       jmp     0x2bc
+;;  2b7: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -271,10 +263,10 @@
 ;;       bsfl    %edx, %r9d
 ;;       cmovel  %esi, %r9d
 ;;       cmpl    $4, %r9d
-;;       je      0x325
-;;  31b: movl    $0xc8, %eax
-;;       jmp     0x32a
-;;  325: movl    $0x64, %eax
+;;       je      0x305
+;;  2fb: movl    $0xc8, %eax
+;;       jmp     0x30a
+;;  305: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
