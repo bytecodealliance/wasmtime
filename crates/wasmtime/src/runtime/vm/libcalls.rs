@@ -1777,8 +1777,7 @@ fn get_instance_id(_store: &mut dyn VMStore, instance: InstanceId) -> u32 {
 #[cfg(feature = "gc")]
 fn throw_ref(store: &mut dyn VMStore, _instance: InstanceId, exnref: u32) -> Result<()> {
     let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
-    store.set_pending_exception(&exnref);
-    Err(crate::ThrownException.into())
+    Err(store.set_pending_exception(&exnref).into())
 }
 
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {

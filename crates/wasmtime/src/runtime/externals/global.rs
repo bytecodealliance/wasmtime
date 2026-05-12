@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
-    Ref, RootedGcRefImpl, Val, ValType,
+    Ref, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };

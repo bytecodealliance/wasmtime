@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::runtime::RootedGcRefImpl;
 use crate::runtime::vm::{
     self, GcStore, SendSyncPtr, TableElementType, VMFuncRef, VMGcRef, VMStore,
 };

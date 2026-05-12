@@ -1,7 +1,7 @@
 use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::type_registry::RegisteredType;
-use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
+use crate::{GlobalType, Mutability, Result, Val};
 use core::ptr;
 use wasmtime_environ::Global;
 

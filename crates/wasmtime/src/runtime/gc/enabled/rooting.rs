@@ -1278,8 +1278,8 @@ impl<T: GcRef> Rooted<T> {
         Some(from_cloned_gc_ref(store, gc_ref))
     }
 
-    pub(crate) fn get_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Option<&'a VMGcRef> {
-        <Self as RootedGcRefImpl<_>>::get_gc_ref(self, store)
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+        <Self as RootedGcRefImpl<_>>::try_gc_ref(self, store)
     }
 }
 

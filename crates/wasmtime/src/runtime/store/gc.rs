@@ -67,14 +67,15 @@ impl<T> Store<T> {
     /// This method is parameterized over `R` for convenience, but
     /// will always return an `Err`.
     ///
-    /// # Panics
+    /// If there is already a pending exception in the store then the previous
+    /// one will be overwritten.
     ///
-    /// - Will panic if `exception` has been unrooted.
-    /// - Will panic if `exception` is a null reference.
-    /// - Will panic if a pending exception has already been set.
-    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R, ThrownException> {
-        self.inner.throw_impl(exception);
-        Err(ThrownException)
+    /// # Errors
+    ///
+    /// This method will return an error if `exception` is unrooted. Otherwise
+    /// this method will always return `ThrownException`.
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        self.inner.throw_impl(exception)
     }
 
     /// Take the currently pending exception, if any, and return it,
@@ -118,9 +119,8 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// See [`Store::throw`] for more details.
     #[cfg(feature = "gc")]
-    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R, ThrownException> {
-        self.0.inner.throw_impl(exception);
-        Err(ThrownException)
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        self.0.inner.throw_impl(exception)
     }
 
     /// Take the currently pending exception, if any, and return it,
@@ -431,10 +431,11 @@ impl StoreOpaque {
     /// the TLS call state; that must be done separately.
     ///
     /// GC barriers are not required by the caller of this function.
-    pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) {
+    pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) -> ThrownException {
         debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
         let gc_store = self.gc_store.as_mut().unwrap();
-        gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref))
+        gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref));
+        ThrownException
     }
 
     /// Takes the pending exception from this store, if any, and exposes it to
@@ -489,9 +490,9 @@ impl StoreOpaque {
     ///
     /// Delegates to `self.set_pending_exception` after accessing the internal
     /// exception pointer.
-    fn throw_impl(&mut self, exception: Rooted<ExnRef>) {
-        let exception = exception.get_gc_ref(self).unwrap().unchecked_copy();
-        self.set_pending_exception(&exception)
+    fn throw_impl<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        let exception = exception.try_gc_ref(self)?.unchecked_copy();
+        Err(self.set_pending_exception(&exception).into())
     }
 
     /// Helper method to require that a `GcStore` was previously allocated for

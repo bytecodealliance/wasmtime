@@ -337,7 +337,7 @@ fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
                 scope.as_context_mut().throw::<()>(exn)
             };
             caller.as_context_mut().gc(None)?;
-            err.map_err(|e| e.into())
+            err
         },
     );
 
@@ -396,7 +396,7 @@ fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> 
                 scope.as_context_mut().throw::<()>(exn)
             };
             caller.as_context_mut().gc(None)?;
-            err.map_err(|e| e.into())
+            err
         },
     );
     let gc = Func::wrap(
