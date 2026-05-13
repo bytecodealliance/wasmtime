@@ -618,6 +618,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
+    fn int_compare_inverse(&mut self, c: IntegerCompare) -> IntegerCompare {
+        c.inverse()
+    }
+
     #[inline]
     fn int_compare_decompose(&mut self, cmp: IntegerCompare) -> (IntCC, XReg, XReg) {
         (cmp.kind, self.xreg_new(cmp.rs1), self.xreg_new(cmp.rs2))

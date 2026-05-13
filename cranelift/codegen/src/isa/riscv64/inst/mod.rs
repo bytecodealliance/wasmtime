@@ -521,9 +521,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        Inst::TrapIf { rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
+        Inst::TrapIf { cmp, .. } => {
+            collector.reg_use(&mut cmp.rs1);
+            collector.reg_use(&mut cmp.rs2);
         }
         Inst::Unwind { .. } => {}
         Inst::DummyUse { reg } => {
@@ -1381,15 +1381,10 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf {
-                rs1,
-                rs2,
-                cc,
-                trap_code,
-            } => {
-                let rs1 = format_reg(rs1);
-                let rs2 = format_reg(rs2);
-                format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
+            &MInst::TrapIf { cmp, trap_code } => {
+                let rs1 = format_reg(cmp.rs1);
+                let rs2 = format_reg(cmp.rs2);
+                format!("trap_if {trap_code}##({rs1} {cc} {rs2})", cc = cmp.kind)
             }
             &MInst::Jal { label } => {
                 format!("j {}", label.to_string())

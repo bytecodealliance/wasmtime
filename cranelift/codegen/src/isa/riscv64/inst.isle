@@ -125,9 +125,7 @@
 
     ;; Emits a trap with the given trap code if the comparison succeeds
     (TrapIf
-      (rs1 Reg)
-      (rs2 Reg)
-      (cc IntCC)
+      (cmp IntegerCompare)
       (trap_code TrapCode))
 
     (Jal
@@ -2883,6 +2881,10 @@
 (decl int_compare (IntCC XReg XReg) IntegerCompare)
 (extern constructor int_compare int_compare)
 
+;; Invert an `IntegerCompare`
+(decl int_compare_inverse (IntegerCompare) IntegerCompare)
+(extern constructor int_compare_inverse int_compare_inverse)
+
 ;; Extract the components of an `IntegerCompare`
 (decl int_compare_decompose (IntCC XReg XReg) IntegerCompare)
 (extern extractor infallible int_compare_decompose int_compare_decompose)
@@ -3094,37 +3096,9 @@
 
 
 ;; Builds an instruction sequence that traps if the comparison succeeds.
-(decl gen_trapif (IntCC XReg XReg TrapCode) InstOutput)
-(rule (gen_trapif cc a b trap_code)
-  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf a b cc trap_code))))
-
-;; Builds an instruction sequence that traps if the input is non-zero.
-(decl gen_trapnz (XReg TrapCode) InstOutput)
-(rule (gen_trapnz test trap_code)
-  (gen_trapif (IntCC.NotEqual) test (zero_reg) trap_code))
-
-;; Builds an instruction sequence that traps if the input is zero.
-(decl gen_trapz (XReg TrapCode) InstOutput)
-(rule (gen_trapz test trap_code)
-  (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
-
-;; Converts bool to the corresponding {in,}equality condition
-(type ZeroCond
-      (enum
-       Zero
-       NonZero))
-
-(decl zero_cond_to_cc (ZeroCond) IntCC)
-(rule (zero_cond_to_cc (ZeroCond.Zero)) (IntCC.Equal))
-(rule (zero_cond_to_cc (ZeroCond.NonZero)) (IntCC.NotEqual))
-
-;; Builds an instruction sequence for wide trapz/nz
-(decl gen_trapif_val_i128 (ZeroCond ValueRegs TrapCode) InstOutput)
-(rule (gen_trapif_val_i128 zero_cond value trap_code)
-  (let ((lo XReg (value_regs_get value 0))
-        (hi XReg (value_regs_get value 1))
-        (test XReg (rv_or hi lo)))
-      (gen_trapif (zero_cond_to_cc zero_cond) test (zero_reg) trap_code)))
+(decl gen_trapif (IntegerCompare TrapCode) InstOutput)
+(rule (gen_trapif cond trap_code)
+  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf cond trap_code))))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -3412,8 +3412,10 @@ block2:
 ;   mv fp,sp
 ;   ld t6,8(a0)
 ;   ld t6,16(t6)
-;   addi t6,t6,16
+;   addi t6,t6,32
 ;   trap_if stk_ovf##(sp ult t6)
+;   addi sp,sp,-16
+;   sd s8,8(sp)
 ; block0:
 ;   li a1,0
 ;   sd zero,0(a1)
@@ -3554,8 +3556,8 @@ block2:
 ;   sd a2,0(a1)
 ;   sd zero,0(a1)
 ;   sw zero,0(a1)
-;   li t0,8
-;   sw t0,0(a1)
+;   li t2,8
+;   sw t2,0(a1)
 ;   sw zero,0(a1)
 ;   sd a4,0(a1)
 ;   sw zero,0(a1)
@@ -3587,7 +3589,7 @@ block2:
 ;   sd zero,0(a1)
 ;   sw zero,0(a1)
 ;   sd zero,0(a1)
-;   sw t0,0(a1)
+;   sw t2,0(a1)
 ;   sw zero,0(a1)
 ;   sd zero,0(a1)
 ;   sw zero,0(a1)
@@ -3655,11 +3657,13 @@ block2:
 ; block1:
 ;   lui a1,435789
 ;   addi a1,a1,3
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label2
 ; block2:
 ;   lui a1,154029
 ;   addi a1,a1,-1574
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label3
 ; block3:
@@ -3668,6 +3672,7 @@ block2:
 ;   j label5
 ; block5:
 ;   li a1,1
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label6
 ; block6:
@@ -3695,6 +3700,7 @@ block2:
 ; block17:
 ;   lui a1,509913
 ;   addi a1,a1,-193
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label18
 ; block18:
@@ -3704,6 +3710,7 @@ block2:
 ; block20:
 ;   lui a1,373234
 ;   addi a1,a1,1763
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label21
 ; block21:
@@ -3719,13 +3726,15 @@ block2:
 ; block26:
 ;   lui a1,456913
 ;   addi a1,a1,-324
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label27
 ; block27:
 ;   j label28
 ; block28:
 ;   lui a1,296162
-;   addi a1,a1,-1144
+;   addi a2,a1,-1144
+;   sext.w a1,a2
 ;   trap_if user11##(a1 ne zero)
 ;   j label29
 ; block29:
@@ -3735,8 +3744,9 @@ block2:
 ; block31:
 ;   j label32
 ; block32:
-;   lui a1,69861
-;   addi a1,a1,-1634
+;   lui a5,69861
+;   addi a1,a5,-1634
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label33
 ; block33:
@@ -3746,6 +3756,7 @@ block2:
 ; block35:
 ;   lui a1,466898
 ;   addi a1,a1,1094
+;   sext.w a1,a1
 ;   trap_if user11##(a1 ne zero)
 ;   j label36
 ; block36:
@@ -3753,9 +3764,10 @@ block2:
 ; block37:
 ;   j label38
 ; block38:
-;   lui a3,-515203
-;   addi a5,a3,1463
-;   trap_if user11##(a5 ne zero)
+;   lui a1,-515203
+;   addi a1,a1,1463
+;   sext.w a1,a1
+;   trap_if user11##(a1 ne zero)
 ;   j label39
 ; block39:
 ;   j label40
@@ -3877,8 +3889,8 @@ block2:
 ;   sw zero,0(a1)
 ;   sd zero,0(a1)
 ;   ld a5,[const(201)]
-;   ld a6,[const(200)]
-;   sd a5,0(a6)
+;   ld s8,[const(200)]
+;   sd a5,0(s8)
 ;   sw zero,0(a1)
 ;   sd zero,0(a1)
 ;   sw zero,0(a1)
@@ -4294,8 +4306,8 @@ block2:
 ;   sw zero,0(a1)
 ;   lui a5,309522
 ;   addi a5,a5,-111
-;   ld t0,[const(90)]
-;   sw a5,0(t0)
+;   ld a6,[const(90)]
+;   sw a5,0(a6)
 ;   sw zero,0(a1)
 ;   ld a5,[const(89)]
 ;   sd a5,0(a1)
@@ -4639,8 +4651,8 @@ block2:
 ;   sw zero,0(a1)
 ;   ld a3,[const(12)]
 ;   sd a3,0(a1)
-;   ld a5,[const(11)]
-;   sd a5,0(a1)
+;   ld a3,[const(11)]
+;   sd a3,0(a1)
 ;   sw zero,0(a1)
 ;   sd zero,0(a1)
 ;   ld a3,[const(10)]
@@ -4715,10 +4727,12 @@ block2:
 ;   c.mv s0, sp
 ;   ld t6, 8(a0)
 ;   ld t6, 0x10(t6)
-;   c.addi t6, 0x10
+;   addi t6, t6, 0x20
 ;   bgeu sp, t6, 6
 ;   c.unimp ; trap: stk_ovf
-; block1: ; offset 0x18
+;   c.addi16sp sp, -0x10
+;   c.sdsp s8, 8(sp)
+; block1: ; offset 0x1e
 ;   c.li a1, 0
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -4858,8 +4872,8 @@ block2:
 ;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
-;   c.li t0, 8
-;   sw t0, 0(a1) ; trap: heap_oob
+;   c.li t2, 8
+;   sw t2, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   c.sd a4, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -4891,7 +4905,7 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
-;   sw t0, 0(a1) ; trap: heap_oob
+;   sw t2, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -4955,70 +4969,74 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   c.sd a2, 0(a1) ; trap: heap_oob
-; block2: ; offset 0x33c
+; block2: ; offset 0x342
 ;   lui a1, 0x6a64d
 ;   c.addi a1, 3
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block3: ; offset 0x348
+; block3: ; offset 0x350
 ;   lui a1, 0x259ad
 ;   addi a1, a1, -0x626
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block4: ; offset 0x356
+; block4: ; offset 0x360
 ;   c.li a1, 1
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block5: ; offset 0x35e
+; block5: ; offset 0x36a
 ;   lui a1, 0x7c7d9
 ;   addi a1, a1, -0xc1
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block6: ; offset 0x36c
+; block6: ; offset 0x37a
 ;   lui a1, 0x5b1f2
 ;   addi a1, a1, 0x6e3
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block7: ; offset 0x37a
+; block7: ; offset 0x38a
 ;   lui a1, 0x6f8d1
 ;   addi a1, a1, -0x144
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block8: ; offset 0x388
+; block8: ; offset 0x39a
 ;   lui a1, 0x484e2
-;   addi a1, a1, -0x478
+;   addi a2, a1, -0x478
+;   sext.w a1, a2
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block9: ; offset 0x396
-;   lui a1, 0x110e5
-;   addi a1, a1, -0x662
+; block9: ; offset 0x3ac
+;   lui a5, 0x110e5
+;   addi a1, a5, -0x662
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block10: ; offset 0x3a4
+; block10: ; offset 0x3bc
 ;   lui a1, 0x71fd2
 ;   addi a1, a1, 0x446
+;   c.addiw a1, 0
 ;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block11: ; offset 0x3b2
-;   lui a3, 0x8237d
-;   addi a5, a3, 0x5b7
-;   beqz a5, 6
+; block11: ; offset 0x3cc
+;   lui a1, 0x8237d
+;   addi a1, a1, 0x5b7
+;   c.addiw a1, 0
+;   beqz a1, 6
 ;   c.unimp ; trap: user11
-; block12: ; offset 0x3c0
+; block12: ; offset 0x3dc
 ;   c.j 4
 ;   c.unimp
 ;   auipc t6, 0
 ;   jalr zero, t6, 8
-; block13: ; offset 0x3cc
-;   auipc a2, 1
-;   ld a2, 0xc4(a2)
-;   c.li a1, 0
-;   c.sd a2, 0(a1) ; trap: heap_oob
+; block13: ; offset 0x3e8
 ;   auipc a2, 1
 ;   ld a2, 0xc0(a2)
-;   c.sd a2, 0(a1) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xbe(a2)
+;   c.li a1, 0
 ;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xbc(a2)
@@ -5031,13 +5049,13 @@ block2:
 ;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xb6(a2)
-;   sd zero, 0(a2) ; trap: heap_oob
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xb4(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xb2(a2)
-;   c.sd a2, 0(a1) ; trap: heap_oob
-;   auipc a2, 1
-;   ld a2, 0xb0(a2)
-;   c.sd a2, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a2) ; trap: heap_oob
 ;   auipc a2, 1
 ;   ld a2, 0xae(a2)
 ;   c.sd a2, 0(a1) ; trap: heap_oob
@@ -5047,16 +5065,16 @@ block2:
 ;   auipc a2, 1
 ;   ld a2, 0xaa(a2)
 ;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xa8(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
+;   auipc a2, 1
+;   ld a2, 0xa6(a2)
+;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   c.li a2, 1
 ;   auipc a3, 1
-;   ld a3, 0xa6(a3)
-;   c.sd a2, 0(a3) ; trap: heap_oob
-;   auipc a3, 1
-;   ld a3, 0xa4(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
-;   auipc a3, 1
 ;   ld a3, 0xa2(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0xa0(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
@@ -5065,13 +5083,13 @@ block2:
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x9c(a3)
-;   sd zero, 0(a3) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x9a(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x98(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
-;   auipc a3, 1
-;   ld a3, 0x96(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x94(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
@@ -5086,34 +5104,34 @@ block2:
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x8c(a3)
-;   sd zero, 0(a3) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x8a(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x88(a3)
 ;   sd zero, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x84(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
-;   auipc a3, 1
-;   ld a3, 0x82(a3)
-;   c.sd a2, 0(a3) ; trap: heap_oob
+;   sd zero, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x80(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x7e(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
+;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x7c(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x7a(a3)
-;   sd zero, 0(a3) ; trap: heap_oob
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x78(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x76(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
-;   auipc a3, 1
-;   ld a3, 0x74(a3)
-;   c.sd a3, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a3) ; trap: heap_oob
 ;   auipc a3, 1
 ;   ld a3, 0x72(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
@@ -5135,54 +5153,60 @@ block2:
 ;   auipc a3, 1
 ;   ld a3, 0x66(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x64(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, 0x62(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   c.li a3, 1
 ;   auipc a4, 1
-;   ld a4, 0x62(a4)
+;   ld a4, 0x5e(a4)
 ;   c.sw a3, 0(a4) ; trap: heap_oob
 ;   auipc a4, 1
-;   ld a4, 0x60(a4)
-;   c.sd a4, 0(a1) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x5e(a4)
-;   c.sd a4, 0(a1) ; trap: heap_oob
-;   auipc a4, 1
 ;   ld a4, 0x5c(a4)
-;   sd zero, 0(a4) ; trap: heap_oob
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x5a(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
 ;   auipc a4, 1
 ;   ld a4, 0x58(a4)
-;   c.sd a4, 0(a1) ; trap: heap_oob
-;   auipc a4, 1
-;   ld a4, 0x56(a4)
-;   c.sd a4, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a4) ; trap: heap_oob
 ;   auipc a4, 1
 ;   ld a4, 0x54(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x52(a4)
+;   c.sd a4, 0(a1) ; trap: heap_oob
+;   auipc a4, 1
+;   ld a4, 0x50(a4)
 ;   c.sd a4, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   c.li a4, 0
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 0x44(a5)
+;   ld a5, 0x40(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 0x3e(a5)
+;   ld a5, 0x3a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 0x38(a5)
+;   ld a5, 0x34(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 0x36(a5)
+;   ld a5, 0x32(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 0x28(a5)
-;   auipc a6, 1
-;   ld a6, 0x28(a6)
-;   sd a5, 0(a6) ; trap: heap_oob
+;   ld a5, 0x24(a5)
+;   auipc s8, 1
+;   ld s8, 0x24(s8)
+;   sd a5, 0(s8) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5191,7 +5215,7 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, 8(a5)
+;   ld a5, 4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -5199,36 +5223,36 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xe(a5)
+;   ld a5, -0x12(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x16(a5)
+;   ld a5, -0x1a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x1c(a5)
+;   ld a5, -0x20(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2e(a5)
+;   ld a5, -0x32(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x30(a5)
+;   ld a5, -0x34(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x36(a5)
-;   sd zero, 0(a5) ; trap: heap_oob
 ;   auipc a5, 1
 ;   ld a5, -0x3a(a5)
+;   sd zero, 0(a5) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x40(a5)
+;   ld a5, -0x44(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5239,194 +5263,194 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x62(a5)
+;   ld a5, -0x66(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6c(a5)
+;   ld a5, -0x70(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6e(a5)
+;   ld a5, -0x72(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x74(a5)
+;   ld a5, -0x78(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x76(a5)
+;   ld a5, -0x7a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x88(a5)
+;   ld a5, -0x8c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x8e(a5)
+;   ld a5, -0x92(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x94(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x96(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
 ;   ld a5, -0x98(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x9a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x9c(a5)
 ;   c.ld a5, 0(a5) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xa2(a5)
+;   ld a5, -0xa6(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xa4(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0xaa(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0xac(a5)
+;   ld a5, -0xa8(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xb2(a5)
+;   ld a5, -0xae(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xb0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0xb6(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xbc(a5)
+;   ld a5, -0xc0(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xc6(a5)
+;   ld a5, -0xca(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xcc(a5)
+;   ld a5, -0xd0(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xe0(a5)
+;   ld a5, -0xe4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xe6(a5)
+;   ld a5, -0xea(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xec(a5)
+;   ld a5, -0xf0(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xf6(a5)
+;   ld a5, -0xfa(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0xfc(a5)
+;   ld a5, -0x100(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x102(a5)
+;   ld a5, -0x106(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x110(a5)
+;   ld a5, -0x114(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x116(a5)
+;   ld a5, -0x11a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x11c(a5)
+;   ld a5, -0x120(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x126(a5)
+;   ld a5, -0x12a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x128(a5)
+;   ld a5, -0x12c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x12e(a5)
+;   ld a5, -0x132(a5)
 ;   c.ld a5, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x134(a5)
+;   ld a5, -0x138(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x136(a5)
+;   ld a5, -0x13a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x13c(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x14a(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x158(a5)
+;   ld a5, -0x140(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x16e(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x174(a5)
+;   ld a5, -0x14e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x182(a5)
+;   ld a5, -0x15c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x172(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x178(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x186(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x18c(a5)
+;   ld a5, -0x190(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x192(a5)
+;   ld a5, -0x196(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x194(a5)
+;   ld a5, -0x198(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x19a(a5)
+;   ld a5, -0x19e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x19c(a5)
+;   ld a5, -0x1a0(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x1a4(a5)
+;   ld a5, -0x1a8(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -5434,194 +5458,194 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x1ba(a5)
+;   ld a5, -0x1be(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x1c0(a5)
+;   ld a5, -0x1c4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x1c2(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x1dc(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x1e2(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x1ec(a5)
+;   ld a5, -0x1c6(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x1fa(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x1fc(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x202(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x204(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x20e(a5)
+;   ld a5, -0x1e0(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1e6(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x1f0(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x21c(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x226(a5)
+;   ld a5, -0x1fe(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x228(a5)
+;   ld a5, -0x200(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x22e(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x240(a5)
+;   ld a5, -0x206(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x242(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x248(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x24a(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x250(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x252(a5)
+;   ld a5, -0x208(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x25c(a5)
+;   ld a5, -0x212(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x220(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x22a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x22c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x262(a5)
+;   ld a5, -0x232(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x244(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x264(a5)
+;   ld a5, -0x246(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x24c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x24e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x254(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x256(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x260(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
 ;   ld a5, -0x266(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
 ;   ld a5, -0x268(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x27a(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x280(a5)
+;   ld a5, -0x26a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x282(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x288(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x28a(a5)
+;   ld a5, -0x26c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2a0(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x2ae(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x2b8(a5)
+;   ld a5, -0x27e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2be(a5)
+;   ld a5, -0x284(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2c0(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x2ce(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x2d0(a5)
+;   ld a5, -0x286(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2d6(a5)
+;   ld a5, -0x28c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x28e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2a4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2f4(a5)
+;   ld a5, -0x2b2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2bc(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x2fa(a5)
+;   ld a5, -0x2c2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2c4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2d2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2d4(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2da(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2f8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x2fe(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x30c(a5)
+;   ld a5, -0x310(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5631,7 +5655,7 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x32c(a5)
+;   ld a5, -0x330(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5639,67 +5663,67 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x342(a5)
+;   ld a5, -0x346(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x350(a5)
+;   ld a5, -0x354(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x360(a5)
+;   ld a5, -0x364(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x362(a5)
+;   ld a5, -0x366(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x36c(a5)
+;   ld a5, -0x370(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x36e(a5)
+;   ld a5, -0x372(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x378(a5)
+;   ld a5, -0x37c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x37e(a5)
+;   ld a5, -0x382(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x380(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x39a(a5)
+;   ld a5, -0x384(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3a8(a5)
+;   ld a5, -0x39e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x3ac(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3aa(a5)
+;   ld a5, -0x3ae(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3bc(a5)
+;   ld a5, -0x3c0(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5707,109 +5731,41 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   lui a5, 0x4b912
 ;   addi a5, a5, -0x6f
-;   auipc t0, 1
-;   ld t0, -0x3d6(t0)
-;   sw a5, 0(t0) ; trap: heap_oob
+;   auipc a6, 1
+;   ld a6, -0x3da(a6)
+;   sw a5, 0(a6) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3de(a5)
+;   ld a5, -0x3e2(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3e0(a5)
+;   ld a5, -0x3e4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x3e6(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x3f4(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x3fe(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x400(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x416(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x44c(a5)
+;   ld a5, -0x3ea(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x45a(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x45c(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x462(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x468(a5)
+;   ld a5, -0x3f8(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x472(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x478(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x482(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x48c(a5)
+;   ld a5, -0x402(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x48e(a5)
+;   ld a5, -0x404(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x498(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x49e(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x4a4(a5)
+;   ld a5, -0x41a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5821,56 +5777,124 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4ce(a5)
+;   ld a5, -0x450(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x45e(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x460(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x466(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4d4(a5)
+;   ld a5, -0x46c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x476(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x47c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x486(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x490(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4d6(a5)
+;   ld a5, -0x492(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x49c(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4a2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4a8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4d2(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4d8(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x4da(a5)
 ;   c.lw a5, 0(a5) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4e0(a5)
+;   ld a5, -0x4e4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4ea(a5)
+;   ld a5, -0x4ee(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x4f4(a5)
+;   ld a5, -0x4f8(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x502(a5)
+;   ld a5, -0x506(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x50c(a5)
+;   ld a5, -0x510(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x512(a5)
+;   ld a5, -0x516(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x514(a5)
+;   ld a5, -0x518(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x51a(a5)
+;   ld a5, -0x51e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x520(a5)
+;   ld a5, -0x524(a5)
 ;   sw zero, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -5878,43 +5902,43 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x538(a5)
+;   ld a5, -0x53c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x53e(a5)
+;   ld a5, -0x542(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x540(a5)
+;   ld a5, -0x544(a5)
 ;   c.sw a3, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x54a(a5)
+;   ld a5, -0x54e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x55c(a5)
+;   ld a5, -0x560(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x56a(a5)
+;   ld a5, -0x56e(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x570(a5)
+;   ld a5, -0x574(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x572(a5)
+;   ld a5, -0x576(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x578(a5)
+;   ld a5, -0x57c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -5926,67 +5950,67 @@ block2:
 ;   sb a4, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x59e(a5)
+;   ld a5, -0x5a2(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5a8(a5)
+;   ld a5, -0x5ac(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5aa(a5)
+;   ld a5, -0x5ae(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5b0(a5)
+;   ld a5, -0x5b4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5b2(a5)
+;   ld a5, -0x5b6(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5d0(a5)
+;   ld a5, -0x5d4(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5d2(a5)
+;   ld a5, -0x5d6(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5d8(a5)
+;   ld a5, -0x5dc(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5de(a5)
+;   ld a5, -0x5e2(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5e8(a5)
+;   ld a5, -0x5ec(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sb a4, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x5fa(a5)
+;   ld a5, -0x5fe(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x600(a5)
+;   ld a5, -0x604(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x60a(a5)
+;   ld a5, -0x60e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x60c(a5)
+;   ld a5, -0x610(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -5994,23 +6018,23 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x620(a5)
+;   ld a5, -0x624(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x62a(a5)
+;   ld a5, -0x62e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x638(a5)
+;   ld a5, -0x63c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x642(a5)
+;   ld a5, -0x646(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -6019,10 +6043,10 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x65c(a5)
+;   ld a5, -0x660(a5)
 ;   c.sd a2, 0(a5) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x65e(a5)
+;   ld a5, -0x662(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -6031,13 +6055,13 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x67a(a5)
+;   ld a5, -0x67e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x688(a5)
+;   ld a5, -0x68c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
@@ -6056,17 +6080,17 @@ block2:
 ;   sb a4, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6ca(a5)
+;   ld a5, -0x6ce(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6d4(a5)
+;   ld a5, -0x6d8(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6de(a5)
+;   ld a5, -0x6e2(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
@@ -6076,89 +6100,89 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x6fc(a5)
+;   ld a5, -0x700(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x702(a5)
+;   ld a5, -0x706(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x708(a5)
+;   ld a5, -0x70c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x71a(a5)
+;   ld a5, -0x71e(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x71c(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
-;   sw zero, 0(a1) ; trap: heap_oob
-;   sd zero, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x726(a5)
+;   ld a5, -0x720(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
+;   auipc a5, 1
+;   ld a5, -0x72a(a5)
+;   c.sd a5, 0(a1) ; trap: heap_oob
+;   sw zero, 0(a1) ; trap: heap_oob
+;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x734(a5)
+;   ld a5, -0x738(a5)
 ;   sd zero, 0(a5) ; trap: heap_oob
 ;   sb a4, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x740(a5)
+;   ld a5, -0x744(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x746(a5)
+;   ld a5, -0x74a(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x748(a5)
+;   ld a5, -0x74c(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a5, 1
-;   ld a5, -0x752(a5)
+;   ld a5, -0x756(a5)
 ;   c.sd a5, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sb a3, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, -0x764(a3)
+;   ld a3, -0x768(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
-;   auipc a5, 1
-;   ld a5, -0x766(a5)
-;   c.sd a5, 0(a1) ; trap: heap_oob
+;   auipc a3, 1
+;   ld a3, -0x76a(a3)
+;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, -0x770(a3)
+;   ld a3, -0x774(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, -0x776(a3)
+;   ld a3, -0x77a(a3)
 ;   c.sd a3, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sb a4, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a3, 1
-;   ld a3, -0x788(a3)
+;   ld a3, -0x78c(a3)
 ;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x78a(a2)
+;   ld a2, -0x78e(a2)
 ;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x790(a2)
+;   ld a2, -0x794(a2)
 ;   c.sd a2, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x792(a2)
+;   ld a2, -0x796(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x720
 ;   c.sd a2, 0(a3) ; trap: heap_oob
@@ -6167,7 +6191,7 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x7aa(a2)
+;   ld a2, -0x7ae(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x6a4
 ;   c.sd a2, 0(a3) ; trap: heap_oob
@@ -6176,7 +6200,7 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x7c2(a2)
+;   ld a2, -0x7c6(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x5f0
 ;   c.sd a2, 0(a3) ; trap: heap_oob
@@ -6184,19 +6208,19 @@ block2:
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x7d6(a2)
+;   ld a2, -0x7da(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x638
 ;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x7de(a2)
+;   ld a2, -0x7e2(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x640
 ;   c.sd a2, 0(a3) ; trap: heap_oob
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   sd zero, 0(a1) ; trap: heap_oob
 ;   auipc a2, 1
-;   ld a2, -0x7ee(a2)
+;   ld a2, -0x7f2(a2)
 ;   c.lui a3, 4
 ;   addi a3, a3, -0x59c
 ;   c.sd a2, 0(a3) ; trap: heap_oob
@@ -6205,9 +6229,7 @@ block2:
 ;   sw zero, 0(a1) ; trap: heap_oob
 ;   c.j 2
 ;   auipc t6, 0
-;   jalr zero, t6, 0x7fc
-;   c.unimp
-;   c.unimp
+;   jalr zero, t6, 0x7f8
 ;   c.fldsp fs5, 0x1e0(sp)
 ;   .byte 0xc3, 0xd1
 ;   c.bnez a0, -4
@@ -7154,7 +7176,7 @@ block2:
 ;   c.addi4spn s0, sp, 0x84
 ;   andi a7, s11, -0x6ab
 ;   c.swsp t5, 0xb4(sp)
-; block14: ; offset 0x1c80
+; block14: ; offset 0x1c98
 ;   c.li a2, 1
 ;   c.li a3, 2
 ;   c.mv a1, a0

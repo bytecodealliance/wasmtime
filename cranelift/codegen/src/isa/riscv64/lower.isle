@@ -312,12 +312,12 @@
         (tmp_y XReg (zext y))
         (sum XReg (rv_add tmp_x tmp_y))
         (test XReg (rv_srli sum (imm12_const (ty_bits ty))))
-        (_ InstOutput (gen_trapnz test tc)))
+        (_ InstOutput (gen_trapif (cmp_nez test) tc)))
     sum))
 
 (rule 1 (lower (has_type $I64 (uadd_overflow_trap _ x y tc)))
   (let ((tmp XReg (rv_add x y))
-        (_ InstOutput (gen_trapif (IntCC.UnsignedLessThan) tmp x tc)))
+        (_ InstOutput (gen_trapif (cmp_ltu tmp x) tc)))
     tmp))
 
 ;;;; Rules for uadd_overflow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -606,7 +606,7 @@
 ;; Traps if the input register is zero, otherwise returns the same register.
 (decl nonzero_divisor (XReg) XReg)
 (rule (nonzero_divisor val)
-  (let ((_ InstOutput (gen_trapif (IntCC.Equal) val (zero_reg) (TrapCode.INTEGER_DIVISION_BY_ZERO))))
+  (let ((_ InstOutput (gen_trapif (cmp_eqz val) (TrapCode.INTEGER_DIVISION_BY_ZERO))))
     val))
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -654,8 +654,7 @@
       (y_is_not_neg_one XReg (rv_not y))
       (no_int_overflow XReg (rv_or x_is_not_min y_is_not_neg_one))
       (_ InstOutput (gen_trapif
-                      (IntCC.Equal)
-                      no_int_overflow (zero_reg)
+                      (cmp_eqz no_int_overflow)
                       (TrapCode.INTEGER_OVERFLOW))))
       y))
 
@@ -2116,36 +2115,12 @@
   (udf code))
 
 ;;;;;  Rules for `trapz`;;;;;;;;;
-(rule
-  (lower (trapz value @ (value_type (fits_in_64 _)) code))
-  (gen_trapz value code))
-
-(rule 1
-  (lower (trapz value @ (value_type $I128) code))
-    (gen_trapif_val_i128 (ZeroCond.Zero) value code))
-
-; fold icmp + trapz
-(rule 2 (lower (trapz (icmp _ cc x @ (value_type (fits_in_64 _)) y) code))
-  (gen_trapif (intcc_complement cc)
-    (put_value_in_reg_for_icmp cc x)
-    (put_value_in_reg_for_icmp cc y)
-    code))
+(rule (lower (trapz value code))
+  (gen_trapif (int_compare_inverse (is_nonzero_cmp value)) code))
 
 ;;;;;  Rules for `trapnz`;;;;;;;;;
-(rule
-  (lower (trapnz value @ (value_type (fits_in_64 _)) code))
-    (gen_trapnz value code))
-
-(rule 1
-  (lower (trapnz value @ (value_type $I128) code))
-    (gen_trapif_val_i128 (ZeroCond.NonZero) value code))
-
-; fold icmp + trapnz
-(rule 2 (lower (trapnz (icmp _ cc x @ (value_type (fits_in_64 _)) y) code))
-  (gen_trapif cc
-    (put_value_in_reg_for_icmp cc x)
-    (put_value_in_reg_for_icmp cc y)
-    code))
+(rule (lower (trapnz value code))
+  (gen_trapif (is_nonzero_cmp value) code))
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 _ (little_or_native_endian flags) addr offset))
@@ -2436,11 +2411,11 @@
 ;; Unsure whether that needs to be preserved across function calls and/or would
 ;; cause other problems. Also unsure whether it's actually more performant.
 (rule (lower (has_type ity (fcvt_to_uint _ v @ (value_type fty))))
-  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
+  (let ((_ InstOutput (gen_trapif (cmp_eqz (rv_feq fty v v)) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_umin_bound fty false)))
-        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.INTEGER_OVERFLOW)))
+        (_ InstOutput (gen_trapif (cmp_nez (rv_fle fty v min)) (TrapCode.INTEGER_OVERFLOW)))
         (max FReg (imm fty (fcvt_umax_bound fty ity false)))
-        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.INTEGER_OVERFLOW))))
+        (_ InstOutput (gen_trapif (cmp_nez (rv_fge fty v max)) (TrapCode.INTEGER_OVERFLOW))))
     (lower_inbounds_fcvt_to_uint ity fty v)))
 
 (decl lower_inbounds_fcvt_to_uint (Type Type FReg) XReg)
@@ -2453,11 +2428,11 @@
 
 ;; NB: see above with `fcvt_to_uint` as this is similar
 (rule (lower (has_type ity (fcvt_to_sint _ v @ (value_type fty))))
-  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
+  (let ((_ InstOutput (gen_trapif (cmp_eqz (rv_feq fty v v)) (TrapCode.BAD_CONVERSION_TO_INTEGER)))
         (min FReg (imm fty (fcvt_smin_bound fty ity false)))
-        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.INTEGER_OVERFLOW)))
+        (_ InstOutput (gen_trapif (cmp_nez (rv_fle fty v min)) (TrapCode.INTEGER_OVERFLOW)))
         (max FReg (imm fty (fcvt_smax_bound fty ity false)))
-        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.INTEGER_OVERFLOW))))
+        (_ InstOutput (gen_trapif (cmp_nez (rv_fge fty v max)) (TrapCode.INTEGER_OVERFLOW))))
     (lower_inbounds_fcvt_to_sint ity fty v)))
 
 (decl lower_inbounds_fcvt_to_sint (Type Type FReg) XReg)

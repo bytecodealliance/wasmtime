@@ -2180,20 +2180,14 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
-            &Inst::TrapIf {
-                rs1,
-                rs2,
-                cc,
-                trap_code,
-            } => {
+            &Inst::TrapIf { cmp, trap_code } => {
                 let label_end = sink.get_label();
-                let cond = IntegerCompare { kind: cc, rs1, rs2 };
 
                 // Jump over the trap if we the condition is false.
                 Inst::CondBr {
                     taken: CondBrTarget::Label(label_end),
                     not_taken: CondBrTarget::Fallthrough,
-                    kind: cond.inverse(),
+                    kind: cmp.inverse(),
                 }
                 .emit(sink, emit_info, state);
                 Inst::Udf { trap_code }.emit(sink, emit_info, state);
