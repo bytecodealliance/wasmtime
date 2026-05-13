@@ -84,7 +84,7 @@ use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlagsData, Value, ValueLabel,
 };
 use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -1161,25 +1161,25 @@ pub fn translate_operator(
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(F32, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(F32, MemFlagsData::new(), val));
         }
         Operator::F64ReinterpretI64 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(F64, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(F64, MemFlagsData::new(), val));
         }
         Operator::I32ReinterpretF32 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(I32, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(I32, MemFlagsData::new(), val));
         }
         Operator::I64ReinterpretF64 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(I64, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(I64, MemFlagsData::new(), val));
         }
         Operator::I32Extend8S => {
             let val = environ.stacks.pop1();
@@ -3483,7 +3483,7 @@ fn prepare_addr(
     access_size: u8,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
-) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
+) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     let index = environ.stacks.pop1();
 
     let memory_index = MemoryIndex::from_u32(memarg.memory);
@@ -3633,7 +3633,7 @@ fn prepare_addr(
     // alignment immediate may says it's aligned, because WebAssembly's
     // immediate field is just a hint, while Cranelift's aligned flag needs a
     // guarantee. WebAssembly memory accesses are always little-endian.
-    let mut flags = MemFlags::new();
+    let mut flags = MemFlagsData::new();
     flags.set_endianness(ir::Endianness::Little);
 
     // The access occurs to the `heap` disjoint category of abstract
@@ -3685,7 +3685,7 @@ fn prepare_atomic_addr(
     loaded_bytes: u8,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
-) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
+) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     align_atomic_addr(memarg, loaded_bytes, builder, environ);
     prepare_addr(memarg, loaded_bytes, builder, environ)
 }
@@ -4238,7 +4238,7 @@ fn optionally_bitcast_vector(
     builder: &mut FunctionBuilder,
 ) -> Value {
     if builder.func.dfg.value_type(value) != needed_type {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         builder.ins().bitcast(needed_type, flags, value)
     } else {
@@ -4267,7 +4267,7 @@ fn canonicalise_v128_values<'a>(
     // Cast, and push the resulting `Value`s into `canonicalised`.
     for v in values {
         let value = if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
-            let mut flags = MemFlags::new();
+            let mut flags = MemFlagsData::new();
             flags.set_endianness(ir::Endianness::Little);
             builder.ins().bitcast(I8X16, flags, *v)
         } else {
@@ -4401,7 +4401,7 @@ pub fn bitcast_wasm_returns(arguments: &mut [Value], builder: &mut FunctionBuild
         builder.func.signature.returns[i].purpose == ir::ArgumentPurpose::Normal
     });
     for (t, arg) in changes {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         *arg = builder.ins().bitcast(t, flags, *arg);
     }
@@ -4419,7 +4419,7 @@ fn bitcast_wasm_params(
         environ.is_wasm_parameter(i)
     });
     for (t, arg) in changes {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         *arg = builder.ins().bitcast(t, flags, *arg);
     }

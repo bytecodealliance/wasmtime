@@ -30,7 +30,7 @@ use crate::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlags, RelSourceLoc, SourceLoc, types},
+    ir::{MemFlagsData, RelSourceLoc, SourceLoc, types},
     isa::aarch64,
     isa::aarch64::inst::{
         self, Cond, ExtendOp, Imm12, ImmLogic, ImmShift, SImm7Scaled, SImm9, VectorSize,
@@ -1327,7 +1327,7 @@ impl Masm for MacroAssembler {
         _addr: Self::Address,
         _size: OperandSize,
         _op: RmwOp,
-        _flags: MemFlags,
+        _flags: MemFlagsData,
         _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(format_err!(CodeGenError::unimplemented_masm_instruction()))
@@ -1358,7 +1358,7 @@ impl Masm for MacroAssembler {
         _context: &mut CodeGenContext<Emission>,
         _addr: Self::Address,
         _size: OperandSize,
-        _flags: MemFlags,
+        _flags: MemFlagsData,
         _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(format_err!(CodeGenError::unimplemented_masm_instruction()))

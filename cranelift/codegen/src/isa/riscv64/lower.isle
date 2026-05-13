@@ -2168,7 +2168,7 @@
 ;; do a SEW/2 extension. This only reads half width elements from the source vector register
 ;; extends it, and writes the back the full register.
 
-(decl gen_load64_extend (Type ExtendOp MemFlags AMode) VReg)
+(decl gen_load64_extend (Type ExtendOp MemFlagsData AMode) VReg)
 
 (rule (gen_load64_extend ty (ExtendOp.Signed) flags amode)
   (let ((eew VecElementWidth (element_width_from_type $I64))

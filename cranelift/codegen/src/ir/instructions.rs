@@ -18,7 +18,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::bitset::ScalarBitSet;
 use crate::entity;
 use crate::ir::{
-    self, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlags, SigRef, StackSlot, Type,
+    self, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlagsData, SigRef, StackSlot, Type,
     Value,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
@@ -557,7 +557,7 @@ impl InstructionData {
     }
 
     /// If this is a load/store instruction, return its memory flags.
-    pub fn memflags(&self) -> Option<MemFlags> {
+    pub fn memflags(&self) -> Option<MemFlagsData> {
         match self {
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }

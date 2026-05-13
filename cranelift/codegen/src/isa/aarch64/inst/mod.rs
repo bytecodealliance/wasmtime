@@ -2,7 +2,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
-use crate::ir::{MemFlags, Type, types};
+use crate::ir::{MemFlagsData, Type, types};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult, settings};
@@ -206,7 +206,7 @@ impl Inst {
     }
 
     /// Generic constructor for a load (zero-extending where appropriate).
-    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
+    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlagsData) -> Inst {
         match ty {
             I8 => Inst::ULoad8 {
                 rd: into_reg,
@@ -248,7 +248,7 @@ impl Inst {
     }
 
     /// Generic constructor for a store.
-    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlagsData) -> Inst {
         match ty {
             I8 => Inst::Store8 {
                 rd: from_reg,

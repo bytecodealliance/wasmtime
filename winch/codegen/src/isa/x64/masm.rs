@@ -36,7 +36,7 @@ use crate::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlags, RelSourceLoc, SourceLoc},
+    ir::{MemFlagsData, RelSourceLoc, SourceLoc},
     isa::{
         unwind::UnwindInst,
         x64::{AtomicRmwSeqOp, args::CC, settings as x64_settings},
@@ -1514,8 +1514,13 @@ impl Masm for MacroAssembler {
                 RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
-                    self.asm
-                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S32, MemFlags::trusted());
+                    self.asm.xmm_vpshuf_mr(
+                        &src,
+                        dst,
+                        mask,
+                        OperandSize::S32,
+                        MemFlagsData::trusted(),
+                    );
                 }
             }
         } else {
@@ -1525,8 +1530,12 @@ impl Masm for MacroAssembler {
                 RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
-                    self.asm
-                        .xmm_vpbroadcast_mr(&src, dst, size.lane_size(), MemFlags::trusted());
+                    self.asm.xmm_vpbroadcast_mr(
+                        &src,
+                        dst,
+                        size.lane_size(),
+                        MemFlagsData::trusted(),
+                    );
                 }
             }
         }
@@ -1590,7 +1599,7 @@ impl Masm for MacroAssembler {
         addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         let res = match op {
@@ -1776,7 +1785,7 @@ impl Masm for MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         // `cmpxchg` expects `expected` to be in the `*a*` register.
@@ -2562,7 +2571,7 @@ impl Masm for MacroAssembler {
                             shift: 0,
                         },
                         tmp_xmm.writable(),
-                        MemFlags::trusted(),
+                        MemFlagsData::trusted(),
                     );
                 });
 
@@ -2591,7 +2600,7 @@ impl Masm for MacroAssembler {
                 let cst = this.asm.add_constant(&SIGN_MASK.to_le_bytes());
 
                 this.asm
-                    .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlags::trusted());
+                    .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlagsData::trusted());
                 this.asm.xmm_vpsrl_rrr(
                     tmp_xmm2,
                     tmp_xmm.inner(),
@@ -3084,7 +3093,7 @@ impl Masm for MacroAssembler {
                         &mask,
                         scratch.writable(),
                         OperandSize::S128,
-                        MemFlags::trusted(),
+                        MemFlagsData::trusted(),
                     );
                     masm.asm.xmm_vpmaddubsw_rrr(scratch.inner(), src, dst);
                 });
@@ -3192,7 +3201,7 @@ impl Masm for MacroAssembler {
                 0x0, 0x1, 0x1, 0x2, 0x1, 0x2, 0x2, 0x3, 0x1, 0x2, 0x2, 0x3, 0x2, 0x3, 0x3, 0x4,
             ]);
             masm.asm
-                .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlags::trusted());
+                .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlagsData::trusted());
             // Use the upper 4 bits as an index into the lookup table.
             masm.asm.xmm_vpshufb_rrr(reg, reg2.to_reg(), reg.to_reg());
             // Use the lower 4 bits as an index into the lookup table.
@@ -3358,7 +3367,7 @@ impl MacroAssembler {
         src: Address,
         dst: WritableReg,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) -> Result<()> {
         if dst.to_reg().is_int() {
             let ext = size.extend_to::<Zero>(OperandSize::S64);
@@ -3376,7 +3385,7 @@ impl MacroAssembler {
         src: RegImm,
         dst: Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) -> Result<()> {
         let _ = match src {
             RegImm::Imm(imm) => match imm {
@@ -3401,7 +3410,7 @@ impl MacroAssembler {
                             &addr,
                             float_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
@@ -3417,7 +3426,7 @@ impl MacroAssembler {
                             &addr,
                             float_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
@@ -3432,7 +3441,7 @@ impl MacroAssembler {
                             &addr,
                             vector_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(vector_scratch.inner(), &dst, size, flags);

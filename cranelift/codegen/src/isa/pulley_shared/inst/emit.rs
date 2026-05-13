@@ -29,7 +29,7 @@ impl EmitInfo {
         }
     }
 
-    fn endianness(&self, flags: MemFlags) -> Endianness {
+    fn endianness(&self, flags: MemFlagsData) -> Endianness {
         flags.endianness(self.isa_flags.endianness())
     }
 }

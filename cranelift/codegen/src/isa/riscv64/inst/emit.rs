@@ -900,7 +900,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -1542,7 +1542,7 @@ impl Inst {
                 amo,
             } => {
                 // TODO: get flags from original CLIF atomic instruction
-                let flags = MemFlags::new();
+                let flags = MemFlagsData::new();
                 if let Some(trap_code) = flags.trap_code() {
                     sink.add_trap(trap_code);
                 }
@@ -2038,7 +2038,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                     from: AMode::RegOffset(rd.to_reg(), 0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
@@ -2067,7 +2067,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -2209,7 +2209,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     from: AMode::RegOffset(p, 0),
                 }
                 .emit(sink, emit_info, state);
@@ -2228,7 +2228,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(p, 0),
                     op: StoreOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     src,
                 }
                 .emit(sink, emit_info, state);
@@ -2576,7 +2576,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(spilltmp_reg2(), 0),
                     op: StoreOP::Sb,
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     src: zero_reg(),
                 }
                 .emit(sink, emit_info, state);
@@ -2839,7 +2839,7 @@ fn return_call_emit_impl<T>(
             reg.map(Reg::from),
             AMode::SPOffset(clobber_offset),
             ty,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
 
@@ -2853,7 +2853,7 @@ fn return_call_emit_impl<T>(
             writable_link_reg(),
             AMode::SPOffset(sp_to_fp_offset + 8),
             I64,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
 
@@ -2861,7 +2861,7 @@ fn return_call_emit_impl<T>(
             writable_fp_reg(),
             AMode::SPOffset(sp_to_fp_offset),
             I64,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
     }

@@ -1264,7 +1264,7 @@
       (let ((_ Unit (sink_inst inst)))
             (aarch64_uload in_ty (amode in_ty address offset) flags)))
 
-(decl aarch64_uload (Type AMode MemFlags) Reg)
+(decl aarch64_uload (Type AMode MemFlagsData) Reg)
 (rule (aarch64_uload $I8 amode flags) (aarch64_uload8 amode flags))
 (rule (aarch64_uload $I16 amode flags) (aarch64_uload16 amode flags))
 (rule (aarch64_uload $I32 amode flags) (aarch64_uload32 amode flags))
@@ -1323,7 +1323,7 @@
       (let ((_ Unit (sink_inst inst)))
             (aarch64_sload in_ty (amode in_ty address offset) flags)))
 
-(decl aarch64_sload (Type AMode MemFlags) Reg)
+(decl aarch64_sload (Type AMode MemFlagsData) Reg)
 (rule (aarch64_sload $I8 amode flags) (aarch64_sload8 amode flags))
 (rule (aarch64_sload $I16 amode flags) (aarch64_sload16 amode flags))
 (rule (aarch64_sload $I32 amode flags) (aarch64_sload32 amode flags))

@@ -572,7 +572,7 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
         .enumerate()
         .map(|(i, param)| {
             // We always store vector types in little-endian byte order as DataValue.
-            let mut flags = ir::MemFlags::trusted();
+            let mut flags = ir::MemFlagsData::trusted();
             if param.value_type.is_vector() {
                 flags.set_endianness(ir::Endianness::Little);
             }
@@ -597,7 +597,7 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
     let results = builder.func.dfg.inst_results(call).to_vec();
     for ((i, value), param) in results.iter().enumerate().zip(&signature.returns) {
         // We always store vector types in little-endian byte order as DataValue.
-        let mut flags = ir::MemFlags::trusted();
+        let mut flags = ir::MemFlagsData::trusted();
         if param.value_type.is_vector() {
             flags.set_endianness(ir::Endianness::Little);
         }

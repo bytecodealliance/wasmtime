@@ -80,81 +80,81 @@
        (ULoad8
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A signed (sign-extending) 8-bit load.
        (SLoad8
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; An unsigned (zero-extending) 16-bit load.
        (ULoad16
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A signed (sign-extending) 16-bit load.
        (SLoad16
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; An unsigned (zero-extending) 32-bit load.
        (ULoad32
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A signed (sign-extending) 32-bit load.
        (SLoad32
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A 64-bit load.
        (ULoad64
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; An 8-bit store.
        (Store8
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A 16-bit store.
        (Store16
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A 32-bit store.
        (Store32
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A 64-bit store.
        (Store64
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A store of a pair of registers.
        (StoreP64
         (rt Reg)
         (rt2 Reg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A load of a pair of registers.
        (LoadP64
         (rt WritableReg)
         (rt2 WritableReg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A MOV instruction. These are encoded as ORR's (AluRRR form).
        ;; The 32-bit version zeroes the top 32 bits of the
@@ -257,7 +257,7 @@
        (AtomicRMWLoop
         (ty Type) ;; I8, I16, I32 or I64
         (op AtomicRMWLoopOp)
-        (flags MemFlags)
+        (flags MemFlagsData)
         (addr Reg)
         (operand Reg)
         (oldval WritableReg)
@@ -275,7 +275,7 @@
        ;; x24   (wr) scratch reg; value afterwards has no meaning
        (AtomicCASLoop
         (ty Type) ;; I8, I16, I32 or I64
-        (flags MemFlags)
+        (flags MemFlagsData)
         (addr Reg)
         (expected Reg)
         (replacement Reg)
@@ -291,7 +291,7 @@
          (rt WritableReg)
          (rn Reg)
          (ty Type)
-         (flags MemFlags))
+         (flags MemFlagsData))
 
        ;; An atomic compare-and-swap operation. These instructions require the
        ;; Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
@@ -304,7 +304,7 @@
          (rt Reg)
          (rn Reg)
          (ty Type)
-         (flags MemFlags))
+         (flags MemFlagsData))
 
        ;; Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
        ;; it in `rn`, optionally zero-extending to fill a word or double word result.
@@ -313,7 +313,7 @@
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt WritableReg)
         (rn Reg)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Write the lowest `ty` bits of `rt` to address `rn`.
        ;; This instruction is sequentially consistent.
@@ -321,7 +321,7 @@
         (access_ty Type) ;; I8, I16, I32 or I64
         (rt Reg)
         (rn Reg)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
        ;; nor stores may move forwards or backwards across the fence.  Currently emitted as "dmb
@@ -411,77 +411,77 @@
        (FpuLoad16
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point store, half-precision (16 bit).
        (FpuStore16
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point load, single-precision (32 bit).
        (FpuLoad32
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point store, single-precision (32 bit).
        (FpuStore32
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point load, double-precision (64 bit).
        (FpuLoad64
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point store, double-precision (64 bit).
        (FpuStore64
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point/vector load, 128 bit.
        (FpuLoad128
         (rd WritableReg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Floating-point/vector store, 128 bit.
        (FpuStore128
         (rd Reg)
         (mem AMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A load of a pair of floating-point registers, double precision (64-bit).
        (FpuLoadP64
         (rt WritableReg)
         (rt2 WritableReg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A store of a pair of floating-point registers, double precision (64-bit).
        (FpuStoreP64
         (rt Reg)
         (rt2 Reg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A load of a pair of floating-point registers, 128-bit.
        (FpuLoadP128
         (rt WritableReg)
         (rt2 WritableReg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; A store of a pair of floating-point registers, 128-bit.
        (FpuStoreP128
         (rt Reg)
         (rt2 Reg)
         (mem PairAMode)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Conversion: FP -> integer.
        (FpuToInt
@@ -784,7 +784,7 @@
         (rd WritableReg)
         (rn Reg)
         (size VectorSize)
-        (flags MemFlags))
+        (flags MemFlagsData))
 
        ;; Vector conditional select, 128 bit.  A synthetic instruction, which generates a 4-insn
        ;; control-flow diamond.
@@ -2638,14 +2638,14 @@
         dst))
 
 ;; Helper for emitting `MInst.LoadAcquire` instructions.
-(decl load_acquire (Type MemFlags Reg) Reg)
+(decl load_acquire (Type MemFlagsData Reg) Reg)
 (rule (load_acquire ty flags addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAcquire ty dst addr flags))))
         dst))
 
 ;; Helper for emitting `MInst.StoreRelease` instructions.
-(decl store_release (Type MemFlags Reg Reg) SideEffectNoResult)
+(decl store_release (Type MemFlagsData Reg Reg) SideEffectNoResult)
 (rule (store_release ty flags src addr)
       (SideEffectNoResult.Inst (MInst.StoreRelease ty src addr flags)))
 
@@ -3425,7 +3425,7 @@
 
 ;; Helpers for generating various load instructions, with varying
 ;; widths and sign/zero-extending properties.
-(decl aarch64_uload8 (AMode MemFlags) Reg)
+(decl aarch64_uload8 (AMode MemFlagsData) Reg)
 (spec (aarch64_uload8 amode flags)
       (provide (= result (zero_ext 32 (load_effect flags 8 amode))))
       (require (= 32 (widthof result))))
@@ -3433,12 +3433,12 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad8 dst amode flags))))
         dst))
-(decl aarch64_sload8 (AMode MemFlags) Reg)
+(decl aarch64_sload8 (AMode MemFlagsData) Reg)
 (rule (aarch64_sload8 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.SLoad8 dst amode flags))))
         dst))
-(decl aarch64_uload16 (AMode MemFlags) Reg)
+(decl aarch64_uload16 (AMode MemFlagsData) Reg)
 (spec (aarch64_uload16 amode flags)
       (provide (= result (zero_ext 32 (load_effect flags 16 amode))))
       (require (= 32 (widthof result))))
@@ -3446,12 +3446,12 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad16 dst amode flags))))
         dst))
-(decl aarch64_sload16 (AMode MemFlags) Reg)
+(decl aarch64_sload16 (AMode MemFlagsData) Reg)
 (rule (aarch64_sload16 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.SLoad16 dst amode flags))))
         dst))
-(decl aarch64_uload32 (AMode MemFlags) Reg)
+(decl aarch64_uload32 (AMode MemFlagsData) Reg)
 (spec (aarch64_uload32 amode flags)
       (provide (= result (load_effect flags 32 amode)))
       (require (= 32 (widthof result))))
@@ -3459,12 +3459,12 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad32 dst amode flags))))
         dst))
-(decl aarch64_sload32 (AMode MemFlags) Reg)
+(decl aarch64_sload32 (AMode MemFlagsData) Reg)
 (rule (aarch64_sload32 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.SLoad32 dst amode flags))))
         dst))
-(decl aarch64_uload64 (AMode MemFlags) Reg)
+(decl aarch64_uload64 (AMode MemFlagsData) Reg)
 (spec (aarch64_uload64 amode flags)
       (provide (= result (load_effect flags 64 amode)))
       (require (= 64 (widthof result))))
@@ -3472,27 +3472,27 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ULoad64 dst amode flags))))
         dst))
-(decl aarch64_fpuload16 (AMode MemFlags) Reg)
+(decl aarch64_fpuload16 (AMode MemFlagsData) Reg)
 (rule (aarch64_fpuload16 amode flags)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuLoad16 dst amode flags))))
         dst))
-(decl aarch64_fpuload32 (AMode MemFlags) Reg)
+(decl aarch64_fpuload32 (AMode MemFlagsData) Reg)
 (rule (aarch64_fpuload32 amode flags)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuLoad32 dst amode flags))))
         dst))
-(decl aarch64_fpuload64 (AMode MemFlags) Reg)
+(decl aarch64_fpuload64 (AMode MemFlagsData) Reg)
 (rule (aarch64_fpuload64 amode flags)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuLoad64 dst amode flags))))
         dst))
-(decl aarch64_fpuload128 (AMode MemFlags) Reg)
+(decl aarch64_fpuload128 (AMode MemFlagsData) Reg)
 (rule (aarch64_fpuload128 amode flags)
       (let ((dst WritableReg (temp_writable_reg $F64X2))
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
         dst))
-(decl aarch64_loadp64 (PairAMode MemFlags) ValueRegs)
+(decl aarch64_loadp64 (PairAMode MemFlagsData) ValueRegs)
 (rule (aarch64_loadp64 amode flags)
       (let ((dst1 WritableReg (temp_writable_reg $I64))
             (dst2 WritableReg (temp_writable_reg $I64))
@@ -3501,39 +3501,39 @@
 
 ;; Helpers for generating various store instructions with varying
 ;; widths.
-(decl aarch64_store8 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_store8 (AMode MemFlagsData Reg) SideEffectNoResult)
 (spec (aarch64_store8 amode flags val)
       (provide (= result (store_effect flags 8 (extract 7 0 val) amode))))
 (rule (aarch64_store8 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store8 val amode flags)))
-(decl aarch64_store16 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_store16 (AMode MemFlagsData Reg) SideEffectNoResult)
 (spec (aarch64_store16 amode flags val)
       (provide (= result (store_effect flags 16 (extract 15 0 val) amode))))
 (rule (aarch64_store16 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store16 val amode flags)))
-(decl aarch64_store32 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_store32 (AMode MemFlagsData Reg) SideEffectNoResult)
 (spec (aarch64_store32 amode flags val)
       (provide (= result (store_effect flags 32 (extract 31 0 val) amode))))
 (rule (aarch64_store32 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store32 val amode flags)))
-(decl aarch64_store64 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_store64 (AMode MemFlagsData Reg) SideEffectNoResult)
 (spec (aarch64_store64 amode flags val)
       (provide (= result (store_effect flags 64 val amode))))
 (rule (aarch64_store64 amode flags val)
       (SideEffectNoResult.Inst (MInst.Store64 val amode flags)))
-(decl aarch64_fpustore16 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_fpustore16 (AMode MemFlagsData Reg) SideEffectNoResult)
 (rule (aarch64_fpustore16 amode flags val)
       (SideEffectNoResult.Inst (MInst.FpuStore16 val amode flags)))
-(decl aarch64_fpustore32 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_fpustore32 (AMode MemFlagsData Reg) SideEffectNoResult)
 (rule (aarch64_fpustore32 amode flags val)
       (SideEffectNoResult.Inst (MInst.FpuStore32 val amode flags)))
-(decl aarch64_fpustore64 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_fpustore64 (AMode MemFlagsData Reg) SideEffectNoResult)
 (rule (aarch64_fpustore64 amode flags val)
       (SideEffectNoResult.Inst (MInst.FpuStore64 val amode flags)))
-(decl aarch64_fpustore128 (AMode MemFlags Reg) SideEffectNoResult)
+(decl aarch64_fpustore128 (AMode MemFlagsData Reg) SideEffectNoResult)
 (rule (aarch64_fpustore128 amode flags val)
       (SideEffectNoResult.Inst (MInst.FpuStore128 val amode flags)))
-(decl aarch64_storep64 (PairAMode MemFlags Reg Reg) SideEffectNoResult)
+(decl aarch64_storep64 (PairAMode MemFlagsData Reg Reg) SideEffectNoResult)
 (rule (aarch64_storep64 amode flags val1 val2)
       (SideEffectNoResult.Inst (MInst.StoreP64 val1 val2 amode flags)))
 
@@ -3804,7 +3804,7 @@
           (alu_rrr op ty x_hi y_hi))))
 
 ;; Helper for emitting `MInst.VecLoadReplicate` instructions.
-(decl ld1r (Reg VectorSize MemFlags) Reg)
+(decl ld1r (Reg VectorSize MemFlagsData) Reg)
 (rule (ld1r src size flags)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecLoadReplicate dst src size flags))))
@@ -4202,7 +4202,7 @@
       (vec_misc (VecMisc2.Cmeq0) rn size))
 
 ;; Helper for emitting `MInst.AtomicRMW` instructions.
-(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type MemFlags) Reg)
+(decl lse_atomic_rmw (AtomicRMWOp Value Reg Type MemFlagsData) Reg)
 (rule (lse_atomic_rmw op p r_arg2 ty flags)
       (let (
           (r_addr Reg p)
@@ -4212,7 +4212,7 @@
         dst))
 
 ;; Helper for emitting `MInst.AtomicCAS` instructions.
-(decl lse_atomic_cas (Reg Reg Reg Type MemFlags) Reg)
+(decl lse_atomic_cas (Reg Reg Reg Type MemFlagsData) Reg)
 (rule (lse_atomic_cas addr expect replace ty flags)
       (let (
             (dst WritableReg (temp_writable_reg ty))
@@ -4226,7 +4226,7 @@
 ;; regs, and that's not guaranteed safe if either is in a real reg.
 ;; - Move the args to the preordained AtomicRMW input regs
 ;; - And finally, copy the preordained AtomicRMW output reg to its destination.
-(decl atomic_rmw_loop (AtomicRMWLoopOp Reg Reg Type MemFlags) Reg)
+(decl atomic_rmw_loop (AtomicRMWLoopOp Reg Reg Type MemFlagsData) Reg)
 (rule (atomic_rmw_loop op addr operand ty flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (scratch1 WritableReg (temp_writable_reg $I64))
@@ -4240,7 +4240,7 @@
 ;; about zero-extending narrow (I8/I16/I32) values here.
 ;; Make sure that all three args are in virtual regs.  See corresponding comment
 ;; for `atomic_rmw_loop` above.
-(decl atomic_cas_loop (Reg Reg Reg Type MemFlags) Reg)
+(decl atomic_cas_loop (Reg Reg Reg Type MemFlagsData) Reg)
 (rule (atomic_cas_loop addr expect replace ty flags)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (scratch WritableReg (temp_writable_reg $I64))
@@ -5122,14 +5122,14 @@
        dst))
 
 ;; Helper for creating a `FpuLoad64` instruction
-(decl fpu_load64 (AMode MemFlags) Reg)
+(decl fpu_load64 (AMode MemFlagsData) Reg)
 (rule (fpu_load64 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuLoad64 dst amode flags))))
        dst))
 
 ;; Helper for creating a `FpuLoad128` instruction
-(decl fpu_load128 (AMode MemFlags) Reg)
+(decl fpu_load128 (AMode MemFlagsData) Reg)
 (rule (fpu_load128 amode flags)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))

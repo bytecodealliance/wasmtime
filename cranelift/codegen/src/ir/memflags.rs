@@ -61,7 +61,7 @@ impl AliasRegion {
 /// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemFlags {
+pub struct MemFlagsData {
     // Initialized to all zeros to have all flags have their default value.
     // This is interpreted through various methods below. Currently the bits of
     // this are defined as:
@@ -113,7 +113,7 @@ const TRAP_CODE_OFFSET: u16 = 7;
 /// control dependencies.
 const BIT_CAN_MOVE: u16 = 1 << 15;
 
-impl MemFlags {
+impl MemFlagsData {
     /// Create a new empty set of flags.
     pub const fn new() -> Self {
         Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
@@ -130,7 +130,7 @@ impl MemFlags {
         self.bits & bit != 0
     }
 
-    /// Return a new `MemFlags` with this flag bit set.
+    /// Return a new `MemFlagsData` with this flag bit set.
     const fn with_bit(mut self, bit: u16) -> Self {
         self.bits |= bit;
         self
@@ -254,7 +254,7 @@ impl MemFlags {
 
     /// Test if this memory operation cannot trap.
     ///
-    /// By default `MemFlags` will assume that any load/store can trap and is
+    /// By default `MemFlagsData` will assume that any load/store can trap and is
     /// associated with a `TrapCode::HeapOutOfBounds` code. If the trap code is
     /// configured to `None` though then this method will return `true` and
     /// indicates that the memory operation will not trap.
@@ -272,12 +272,12 @@ impl MemFlags {
         self.trap_code().is_none()
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`.
+    /// Sets the trap code for this `MemFlagsData` to `None`.
     pub fn set_notrap(&mut self) {
         *self = self.with_notrap();
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`, returning the new
+    /// Sets the trap code for this `MemFlagsData` to `None`, returning the new
     /// flags.
     pub const fn with_notrap(self) -> Self {
         self.with_trap_code(None)
@@ -377,7 +377,7 @@ impl MemFlags {
     }
 }
 
-impl fmt::Display for MemFlags {
+impl fmt::Display for MemFlagsData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.trap_code() {
             None => write!(f, " notrap")?,
@@ -418,33 +418,33 @@ mod tests {
     #[test]
     fn roundtrip_traps() {
         for trap in TrapCode::non_user_traps().iter().copied() {
-            let flags = MemFlags::new().with_trap_code(Some(trap));
+            let flags = MemFlagsData::new().with_trap_code(Some(trap));
             assert_eq!(flags.trap_code(), Some(trap));
         }
-        let flags = MemFlags::new().with_trap_code(None);
+        let flags = MemFlagsData::new().with_trap_code(None);
         assert_eq!(flags.trap_code(), None);
     }
 
     #[test]
     fn cannot_set_big_and_little() {
-        let mut big = MemFlags::new().with_endianness(Endianness::Big);
+        let mut big = MemFlagsData::new().with_endianness(Endianness::Big);
         assert!(big.set_by_name("little").is_err());
 
-        let mut little = MemFlags::new().with_endianness(Endianness::Little);
+        let mut little = MemFlagsData::new().with_endianness(Endianness::Little);
         assert!(little.set_by_name("big").is_err());
     }
 
     #[test]
     fn only_one_region() {
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Heap));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Heap));
         assert!(big.set_by_name("table").is_err());
         assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Table));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Table));
         assert!(big.set_by_name("heap").is_err());
         assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Vmctx));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Vmctx));
         assert!(big.set_by_name("heap").is_err());
         assert!(big.set_by_name("table").is_err());
     }

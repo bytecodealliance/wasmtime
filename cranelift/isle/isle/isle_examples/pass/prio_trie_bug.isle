@@ -6,7 +6,7 @@
 
 (type Unit (primitive Unit))
 (type Reg (primitive Reg))
-(type MemFlags (primitive MemFlags))
+(type MemFlagsData (primitive MemFlagsData))
 (type MachLabel (primitive MachLabel))
 (type Value (primitive Value))
 
@@ -45,14 +45,14 @@
              ;; Immediate sign-extended and a register
              (ImmReg (simm32 u32)
                      (base Reg)
-                     (flags MemFlags))
+                     (flags MemFlagsData))
 
              ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
              (ImmRegRegShift (simm32 u32)
                              (base Reg)
                              (index Reg)
                              (shift u32)
-                             (flags MemFlags))
+                             (flags MemFlagsData))
 
              ;; Sign-extend-32-to-64(immediate) + RIP (instruction
              ;; pointer). The appropriate relocation is emitted so

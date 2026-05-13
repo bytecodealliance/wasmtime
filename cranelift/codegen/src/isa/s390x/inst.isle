@@ -1627,7 +1627,7 @@
 (rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) true)
 
 ;; Return lane order matching memory byte order.
-(decl pure lane_order_from_memflags (MemFlags) LaneOrder)
+(decl pure lane_order_from_memflags (MemFlagsData) LaneOrder)
 (rule 0 (lane_order_from_memflags (littleendian)) (LaneOrder.LittleEndian))
 (rule 1 (lane_order_from_memflags (bigendian)) (LaneOrder.BigEndian))
 
@@ -1875,31 +1875,31 @@
 (decl pure partial memarg_imm_from_offset_plus_bias (Offset32 u8) SImm20)
 (extern constructor memarg_imm_from_offset_plus_bias memarg_imm_from_offset_plus_bias)
 
-;; Accessors for `MemFlags`.
+;; Accessors for `MemFlagsData`.
 
-(decl littleendian () MemFlags)
+(decl littleendian () MemFlagsData)
 (extern extractor littleendian littleendian)
 
-(decl bigendian () MemFlags)
+(decl bigendian () MemFlagsData)
 (extern extractor bigendian bigendian)
 
-(decl memflags_trusted () MemFlags)
+(decl memflags_trusted () MemFlagsData)
 (extern constructor memflags_trusted memflags_trusted)
 
 ;; Accessors for `MemArg`.
 
 (type MemArg extern (enum))
 
-(decl memarg_reg_plus_reg_plus_off (Reg Reg SImm20 MemFlags) MemArg)
+(decl memarg_reg_plus_reg_plus_off (Reg Reg SImm20 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_reg_plus_off memarg_reg_plus_reg_plus_off)
 
-(decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
+(decl memarg_reg_plus_reg (Reg Reg u8 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
-(decl memarg_reg_plus_off (Reg i64 u8 MemFlags) MemArg)
+(decl memarg_reg_plus_off (Reg i64 u8 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_off memarg_reg_plus_off)
 
-(decl memarg_symbol (ExternalName i32 MemFlags) MemArg)
+(decl memarg_symbol (ExternalName i32 MemFlagsData) MemArg)
 (extern constructor memarg_symbol memarg_symbol)
 
 (decl memarg_got () MemArg)
@@ -1928,7 +1928,7 @@
 
 ;; Lower an address into a `MemArg`.
 
-(decl lower_address (MemFlags Value Offset32) MemArg)
+(decl lower_address (MemFlagsData Value Offset32) MemArg)
 
 (rule (lower_address flags addr @ (value_type (ty_addr64 _)) (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
@@ -1972,7 +1972,7 @@
 
 ;; Lower an address plus a small bias into a `MemArg`.
 
-(decl lower_address_bias (MemFlags Value Offset32 u8) MemArg)
+(decl lower_address_bias (MemFlagsData Value Offset32 u8) MemArg)
 
 (rule (lower_address_bias flags addr @ (value_type $I64) (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
@@ -3487,7 +3487,7 @@
 ;; be written if the memory location still holds the old value in %r0.
 ;; The result should be passed to "casloop_result" or (in the case of
 ;; subword loops) to "casloop_rotate_result".
-(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) PReg)
+(decl casloop_emit (VecMInstBuilder Type MemFlagsData Reg Reg) PReg)
 (rule (casloop_emit ib ty flags aligned_addr val)
       (let (
             ;; Construct a memory argument for the aligned word.
@@ -3510,14 +3510,14 @@
 ;; In the big-endian case, the value is already correct, but may need to be
 ;; copied out of the hard register.  In the little-endian case, we need to
 ;; byte-swap since the compare-and-swap instruction is always big-endian.
-(decl casloop_result (Type MemFlags PReg) Reg)
+(decl casloop_result (Type MemFlagsData PReg) Reg)
 (rule 1 (casloop_result (ty_32_or_64 ty) (bigendian) result)
       (mov_preg result))
 (rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
       (bswap_reg ty (preg_to_reg result)))
 
 ;; Emit a fullword compare-and-swap loop, returning the previous memory value.
-(decl casloop (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop ib ty flags aligned_addr val)
       (casloop_result ty flags (casloop_emit ib ty flags aligned_addr val)))
 
@@ -3547,7 +3547,7 @@
 ;; (This is somewhat arbitrary but chosen to allow the most efficient
 ;; sequences to compute the various atomic operations.)
 ;; Note that $I8 accesses always use the big-endian case.
-(decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_in (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_in ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
 (rule 1 (casloop_rotate_in ib $I16 (bigendian) bitshift val)
@@ -3560,7 +3560,7 @@
 ;; optimization, we note that in the $I16 case the shift count can only
 ;; take the values 0 or 16, both of which negate to themselves (mod 32),
 ;; so the explicit negation operation can be omitted here.
-(decl casloop_rotate_out (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_out (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_out ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 (neg_reg $I32 bitshift)))
 (rule 1 (casloop_rotate_out ib $I16 (bigendian) bitshift val)
@@ -3575,7 +3575,7 @@
 ;; endian case, we also need to byte-swap the result.  Since we only have
 ;; a 32-bit byte-swap instruction, we load the value to the high bytes in
 ;; this case before performing the 32-bit byte-swap.
-(decl casloop_rotate_result (Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_result (Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_result $I8 _ bitshift result)
       (rot_imm_reg $I32 result 8 bitshift))
 (rule 1 (casloop_rotate_result $I16 (bigendian) bitshift result)
@@ -3584,7 +3584,7 @@
       (bswap_reg $I32 (rot_reg $I32 result bitshift)))
 
 ;; Emit a subword compare-and-swap loop, returning the previous memory value.
-(decl casloop_subword (VecMInstBuilder Type MemFlags Reg Reg Reg) Reg)
+(decl casloop_subword (VecMInstBuilder Type MemFlagsData Reg Reg Reg) Reg)
 (rule (casloop_subword ib ty flags aligned_addr bitshift val)
       (casloop_rotate_result ty flags bitshift
         (casloop_emit ib ty flags aligned_addr val)))

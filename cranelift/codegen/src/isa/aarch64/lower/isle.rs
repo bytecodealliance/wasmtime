@@ -20,7 +20,7 @@ use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlagsData, TrapCode, Value,
         ValueList, immediates::*, types::*,
     },
     isa::aarch64::abi::AArch64MachineDeps,

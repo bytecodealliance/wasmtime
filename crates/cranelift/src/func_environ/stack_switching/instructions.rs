@@ -4,7 +4,7 @@ use itertools::{Either, Itertools};
 use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, MemFlags};
+use cranelift_codegen::ir::{self, MemFlagsData};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wasm_unsupported};
@@ -159,7 +159,7 @@ pub(crate) mod stack_switching_helpers {
             last_ancestor: ir::Value,
         ) {
             let offset: i32 = env.offsets.ptr.vmcontref_last_ancestor().into();
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder
                 .ins()
                 .store(mem_flags, last_ancestor, self.address, offset);
@@ -171,7 +171,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let offset: i32 = env.offsets.ptr.vmcontref_last_ancestor().into();
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder
                 .ins()
                 .load(env.pointer_type(), mem_flags, self.address, offset)
@@ -184,7 +184,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             let offset: i32 = env.offsets.ptr.vmcontref_revision().into();
             let revision = builder.ins().load(I64, mem_flags, self.address, offset);
             revision
@@ -199,7 +199,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             revision: ir::Value,
         ) -> ir::Value {
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             let offset: i32 = env.offsets.ptr.vmcontref_revision().into();
             let revision_plus1 = builder.ins().iadd_imm(revision, 1);
             builder
@@ -229,7 +229,7 @@ pub(crate) mod stack_switching_helpers {
         }
 
         fn get(&self, builder: &mut FunctionBuilder, ty: ir::Type, offset: i32) -> ir::Value {
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder.ins().load(ty, mem_flags, self.address, offset)
         }
 
@@ -239,7 +239,7 @@ pub(crate) mod stack_switching_helpers {
                 Type::int_with_byte_size(u16::try_from(core::mem::size_of::<U>()).unwrap())
                     .unwrap()
             );
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder.ins().store(mem_flags, value, self.address, offset);
         }
 
@@ -292,7 +292,7 @@ pub(crate) mod stack_switching_helpers {
         ) {
             debug_assert_eq!(builder.func.dfg.value_type(data), env.pointer_type());
             let offset: i32 = env.offsets.ptr.vmhostarray_data().into();
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder.ins().store(mem_flags, data, self.address, offset);
         }
 
@@ -371,7 +371,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             load_types: &[ir::Type],
         ) -> Vec<ir::Value> {
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
 
             let data_start_pointer = self.get_data(env, builder);
             let mut values = vec![];
@@ -409,7 +409,7 @@ pub(crate) mod stack_switching_helpers {
                 size <= entry_size
             }));
 
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
 
             let data_start_pointer = self.get_data(env, builder);
 
@@ -517,7 +517,7 @@ pub(crate) mod stack_switching_helpers {
             initial_offset: i32,
             pointer_type: ir::Type,
         ) -> VMStackChain {
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let mut offset = initial_offset;
             let mut data = vec![];
             for _ in 0..2 {
@@ -536,7 +536,7 @@ pub(crate) mod stack_switching_helpers {
             target_pointer: ir::Value,
             initial_offset: i32,
         ) {
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let mut offset = initial_offset;
             let data = self.to_raw_parts();
 
@@ -605,7 +605,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             let state_ptr = self.get_state_ptr(env, builder);
 
             builder.ins().load(I32, mem_flags, state_ptr, 0)
@@ -618,7 +618,7 @@ pub(crate) mod stack_switching_helpers {
             discriminant: u32,
         ) {
             let discriminant = builder.ins().iconst(I32, i64::from(discriminant));
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             let state_ptr = self.get_state_ptr(env, builder);
 
             builder.ins().store(mem_flags, discriminant, state_ptr, 0);
@@ -690,7 +690,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Field first_switch_handler_index has type u32
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let offset: i32 = env
                 .offsets
                 .ptr
@@ -706,7 +706,7 @@ pub(crate) mod stack_switching_helpers {
             value: ir::Value,
         ) {
             // Field first_switch_handler_index has type u32
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let offset: i32 = env
                 .offsets
                 .ptr
@@ -726,7 +726,7 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
 
             let mut copy_to_vm_runtime_limits = |our_offset, their_offset| {
                 let our_value = builder.ins().load(
@@ -770,7 +770,7 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let pointer_size = u8::try_from(env.pointer_type().bytes()).unwrap();
 
             let mut copy = |runtime_limits_offset, stack_limits_offset| {
@@ -817,7 +817,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let mem_flags = ir::MemFlags::trusted();
+            let mem_flags = ir::MemFlagsData::trusted();
             builder
                 .ins()
                 .load(env.pointer_type(), mem_flags, self.tos_ptr, 0)
@@ -897,7 +897,7 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             let ptr = builder.block_params(store_data_block)[0];
 
             // Store the values.
-            let memflags = ir::MemFlags::trusted();
+            let memflags = ir::MemFlagsData::trusted();
             let mut offset = 0;
             for value in values {
                 builder.ins().store(memflags, *value, ptr, offset);
@@ -922,7 +922,7 @@ pub(crate) fn tag_address<'a>(
         let offset = i32::try_from(env.offsets.vmctx_vmtag_import_from(tag_index)).unwrap();
         builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted().with_readonly(),
+            ir::MemFlagsData::trusted().with_readonly(),
             vmctx,
             ir::immediates::Offset32::new(offset),
         )
@@ -943,7 +943,7 @@ pub fn vmctx_load_stack_chain<'a>(
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
     let vm_store_context = builder.ins().load(
         env.pointer_type(),
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         vmctx,
         vm_store_context_offset,
     );
@@ -971,7 +971,7 @@ pub fn vmctx_store_stack_chain<'a>(
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
     let vm_store_context = builder.ins().load(
         env.pointer_type(),
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         vmctx,
         vm_store_context_offset,
     );
@@ -1001,7 +1001,7 @@ pub fn vmctx_load_vm_runtime_limits_ptr<'a>(
 
     // The *pointer* to the VMRuntimeLimits does not change within the
     // same function, allowing us to set the `read_only` flag.
-    let flags = ir::MemFlags::trusted().with_readonly();
+    let flags = ir::MemFlagsData::trusted().with_readonly();
 
     builder.ins().load(pointer_type, flags, vmctx, offset)
 }
@@ -1142,7 +1142,7 @@ fn search_handler<'a>(
         let offset = builder.ins().uextend(I64, offset);
         let entry_address = builder.ins().iadd(base, offset);
 
-        let memflags = ir::MemFlags::trusted();
+        let memflags = ir::MemFlagsData::trusted();
 
         let handled_tag = builder
             .ins()
@@ -1871,7 +1871,7 @@ pub(crate) fn translate_switch<'a>(
         let slot = builder.create_sized_stack_slot(slot_size);
         let tmp_control_context = builder.ins().stack_addr(env.pointer_type(), slot, 0);
 
-        let flags = MemFlags::trusted();
+        let flags = MemFlagsData::trusted();
         let mut offset: i32 = 0;
         while offset < i32::from(cctx_size) {
             // switchee_last_ancestor_cc -> tmp control context

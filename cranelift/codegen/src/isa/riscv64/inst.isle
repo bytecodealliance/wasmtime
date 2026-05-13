@@ -85,13 +85,13 @@
     (Load
       (rd WritableReg)
       (op LoadOP)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (from AMode))
     ;; An Store
     (Store
       (to AMode)
       (op StoreOP)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (src Reg))
 
     ;; A pseudo-instruction that captures register arguments in vregs.
@@ -344,7 +344,7 @@
       (eew VecElementWidth)
       (to WritableReg)
       (from VecAMode)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -352,7 +352,7 @@
       (eew VecElementWidth)
       (to VecAMode)
       (from Reg)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -2481,7 +2481,7 @@
 (extern extractor sinkable_inst sinkable_inst)
 
 ;; Matches a sinkable load.
-(decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
+(decl sinkable_load (Inst Type MemFlagsData Value Offset32) Value)
 (extractor (sinkable_load inst ty flags addr offset)
            (and
               (load _ (little_or_native_endian flags) addr offset)
@@ -2498,7 +2498,7 @@
 ;;
 ;; Recursion: recursive rule can only match once, since it matches on
 ;; `LoadOP.Flh` and emits `LoadOP.Lh`.
-(decl rec gen_load (AMode LoadOP MemFlags) Reg)
+(decl rec gen_load (AMode LoadOP MemFlagsData) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
@@ -2511,7 +2511,7 @@
 ;;
 ;; This is only useful for load op's that perform some additional computation
 ;; such as extending the loaded value.
-(decl gen_sunk_load (Inst AMode LoadOP MemFlags) Reg)
+(decl gen_sunk_load (Inst AMode LoadOP MemFlagsData) Reg)
 (rule (gen_sunk_load inst amode op flags)
   (let ((_ Unit (sink_inst inst)))
         (gen_load amode op flags)))
@@ -2522,7 +2522,7 @@
 ;; This helper contains a special-case for zero constants stored to memory to
 ;; directly store the `zero` register to memory. See #7162 for some discussion
 ;; on why this doesn't just fall out.
-(decl gen_store (AMode MemFlags Value) InstOutput)
+(decl gen_store (AMode MemFlagsData Value) InstOutput)
 (rule 2 (gen_store amode flags val @ (value_type $F16))
   (if-let false (has_zfhmin))
   (rv_store amode (StoreOP.Sh) flags (gen_bitcast val $F16 $I16)))
@@ -2536,7 +2536,7 @@
 ;;
 ;; Note that the `src` operand must have the correct type for the `op`
 ;; specified.
-(decl rv_store (AMode StoreOP MemFlags Reg) InstOutput)
+(decl rv_store (AMode StoreOP MemFlagsData Reg) InstOutput)
 (rule (rv_store amode op flags src)
   (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
 

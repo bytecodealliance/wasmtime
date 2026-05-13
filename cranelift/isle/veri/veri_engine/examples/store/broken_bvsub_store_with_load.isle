@@ -12,14 +12,14 @@
              ;; Immediate sign-extended and a register
              (ImmReg (simm32 i32)
                      (base Reg)
-                     (flags MemFlags))
+                     (flags MemFlagsData))
 
              ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
              (ImmRegRegShift (simm32 i32)
                              (base Gpr)
                              (index Gpr)
                              (shift u8)
-                             (flags MemFlags))
+                             (flags MemFlagsData))
 
              ;; Sign-extend-32-to-64(immediate) + RIP (instruction
              ;; pointer). The appropriate relocation is emitted so
@@ -76,7 +76,7 @@
       (provide (= result (concat flags (bvadd val (sign_ext 64 offset)))))
       (require
             (= (widthof val) 64)))
-(decl to_amode (MemFlags Value Offset32) Amode)
+(decl to_amode (MemFlagsData Value Offset32) Amode)
 (extern constructor to_amode to_amode)
 
 (decl operand_size_of_type_32_64 (Type) OperandSize)

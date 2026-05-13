@@ -10,7 +10,7 @@ use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
     AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
-    InstructionData, JumpTable, MemFlags, Opcode, StackSlot, TrapCode, Type, Value,
+    InstructionData, JumpTable, MemFlagsData, Opcode, StackSlot, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;

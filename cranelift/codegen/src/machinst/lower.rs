@@ -9,7 +9,7 @@ use crate::entity::SecondaryMap;
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
-    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags,
+    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlagsData,
     RelSourceLoc, SigRef, Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::valueregs::InvalidSentinel;
@@ -1420,7 +1420,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Returns the memory flags of a given memory access.
-    pub fn memflags(&self, ir_inst: Inst) -> Option<MemFlags> {
+    pub fn memflags(&self, ir_inst: Inst) -> Option<MemFlagsData> {
         match &self.f.dfg.insts[ir_inst] {
             &InstructionData::AtomicCas { flags, .. } => Some(flags),
             &InstructionData::AtomicRmw { flags, .. } => Some(flags),

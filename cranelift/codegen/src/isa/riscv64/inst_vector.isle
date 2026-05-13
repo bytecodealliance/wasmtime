@@ -421,14 +421,14 @@
         vd))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
-(decl vec_load (VecElementWidth VecAMode MemFlags VecOpMasking VState) Reg)
+(decl vec_load (VecElementWidth VecAMode MemFlagsData VecOpMasking VState) Reg)
 (rule (vec_load eew from flags mask vstate)
       (let ((vd WritableVReg (temp_writable_vreg))
             (_ Unit (emit (MInst.VecLoad eew vd from flags mask vstate))))
         vd))
 
 ;; Helper for emitting `MInst.VecStore` instructions.
-(decl vec_store (VecElementWidth VecAMode VReg MemFlags VecOpMasking VState) InstOutput)
+(decl vec_store (VecElementWidth VecAMode VReg MemFlagsData VecOpMasking VState) InstOutput)
 (rule (vec_store eew to from flags mask vstate)
       (side_effect
         (SideEffectNoResult.Inst (MInst.VecStore eew to from flags mask vstate))))

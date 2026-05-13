@@ -5,7 +5,7 @@ use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlagsData, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::error::{Result, bail};
@@ -152,7 +152,7 @@ impl<'a> TrampolineCompiler<'a> {
                         params.extend([
                             me.builder.ins().load(
                                 pointer_type,
-                                MemFlags::trusted(),
+                                MemFlagsData::trusted(),
                                 vmctx,
                                 i32::try_from(me.offsets.lowering_data(*index)).unwrap(),
                             ),
@@ -968,7 +968,7 @@ impl<'a> TrampolineCompiler<'a> {
                 // indirect function pointer with the list of arguments.
                 let host_fn = self.builder.ins().load(
                     pointer_type,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                     vmctx,
                     i32::try_from(self.offsets.lowering_callee(index)).unwrap(),
                 );
@@ -1166,7 +1166,7 @@ impl<'a> TrampolineCompiler<'a> {
             &[],
         );
 
-        let trusted = ir::MemFlags::trusted().with_readonly();
+        let trusted = ir::MemFlagsData::trusted().with_readonly();
 
         self.builder.switch_to_block(run_destructor_block);
 
@@ -1190,7 +1190,7 @@ impl<'a> TrampolineCompiler<'a> {
                     );
                     let zero = self.builder.ins().iconst(ir::types::I32, i64::from(0));
                     self.builder.ins().store(
-                        ir::MemFlags::trusted(),
+                        ir::MemFlagsData::trusted(),
                         zero,
                         vmctx,
                         i32::try_from(self.offsets.task_may_block()).unwrap(),
@@ -1282,7 +1282,7 @@ impl<'a> TrampolineCompiler<'a> {
 
             // Restore the old value of `may_block`
             self.builder.ins().store(
-                ir::MemFlags::trusted(),
+                ir::MemFlagsData::trusted(),
                 old_may_block,
                 vmctx,
                 i32::try_from(self.offsets.task_may_block()).unwrap(),
@@ -1311,7 +1311,7 @@ impl<'a> TrampolineCompiler<'a> {
     fn load_memory(&mut self, vmctx: ir::Value, memory: RuntimeMemoryIndex) -> ir::Value {
         self.builder.ins().load(
             self.isa.pointer_type(),
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             vmctx,
             i32::try_from(self.offsets.runtime_memory(memory)).unwrap(),
         )
@@ -1326,7 +1326,7 @@ impl<'a> TrampolineCompiler<'a> {
         match callback {
             Some(idx) => self.builder.ins().load(
                 pointer_type,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
                 vmctx,
                 i32::try_from(self.offsets.runtime_callback(idx)).unwrap(),
             ),
@@ -1343,7 +1343,7 @@ impl<'a> TrampolineCompiler<'a> {
         match post_return {
             Some(idx) => self.builder.ins().load(
                 pointer_type,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
                 vmctx,
                 i32::try_from(self.offsets.runtime_post_return(idx)).unwrap(),
             ),
@@ -1365,14 +1365,14 @@ impl<'a> TrampolineCompiler<'a> {
         // per-process.
         let builtins_array = self.builder.ins().load(
             pointer_type,
-            MemFlags::trusted().with_readonly(),
+            MemFlagsData::trusted().with_readonly(),
             vmctx,
             i32::try_from(self.offsets.builtins()).unwrap(),
         );
         // Next load the function pointer at `offset` and return that.
         self.builder.ins().load(
             pointer_type,
-            MemFlags::trusted().with_readonly(),
+            MemFlagsData::trusted().with_readonly(),
             builtins_array,
             i32::try_from(index.index() * u32::from(self.offsets.ptr.size())).unwrap(),
         )
@@ -1506,7 +1506,7 @@ impl<'a> TrampolineCompiler<'a> {
 
         let flags = self.builder.ins().load(
             ir::types::I32,
-            ir::MemFlags::trusted(),
+            ir::MemFlagsData::trusted(),
             vmctx,
             i32::try_from(self.offsets.instance_flags(instance)).unwrap(),
         );
@@ -1542,7 +1542,7 @@ impl<'a> TrampolineCompiler<'a> {
         let caller_vmctx = self.abi_load_params()[1];
         self.builder.ins().load(
             self.isa.pointer_type(),
-            ir::MemFlags::trusted()
+            ir::MemFlagsData::trusted()
                 .with_readonly()
                 .with_alias_region(Some(ir::AliasRegion::Vmctx))
                 .with_can_move(),
@@ -1841,7 +1841,7 @@ impl TrampolineCompiler<'_> {
         if uses_retptr {
             results.push(self.builder.ins().load(
                 pointer_type,
-                ir::MemFlags::trusted(),
+                ir::MemFlagsData::trusted(),
                 *args.last().unwrap(),
                 0,
             ));
@@ -1928,7 +1928,7 @@ impl TrampolineCompiler<'_> {
         let from_vmmemory_definition = self.load_memory(vmctx, mem);
         self.builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             from_vmmemory_definition,
             i32::from(self.offsets.ptr.vmmemory_definition_base()),
         )
@@ -1989,7 +1989,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
                 // Load the `*mut T` out of the `VMStoreContext`.
                 let data_address = self.cursor.ins().load(
                     pointer_type,
-                    ir::MemFlags::trusted()
+                    ir::MemFlagsData::trusted()
                         .with_readonly()
                         .with_alias_region(Some(ir::AliasRegion::Vmctx))
                         .with_can_move(),
@@ -2044,7 +2044,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         let mut value = self
             .cursor
             .ins()
-            .load(clif_ty, ir::MemFlags::trusted(), pointer, 0);
+            .load(clif_ty, ir::MemFlagsData::trusted(), pointer, 0);
 
         // Extend the value, if necessary. When implementing the
         // `u8-native-load` intrinsic, for example, we will load a Cranelift
@@ -2097,7 +2097,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         // Do the store!
         self.cursor
             .ins()
-            .store(ir::MemFlags::trusted(), value, pointer, 0);
+            .store(ir::MemFlagsData::trusted(), value, pointer, 0);
 
         Ok(())
     }
@@ -2128,7 +2128,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
             UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextGetI32_1 => {
                 let context = self.cursor.ins().load(
                     ty,
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                     vmstore_context,
                     i32::from(offset),
                 );
@@ -2137,7 +2137,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
             UnsafeIntrinsic::ContextSetI32_0 | UnsafeIntrinsic::ContextSetI32_1 => {
                 let new_context = params[2];
                 self.cursor.ins().store(
-                    MemFlags::trusted(),
+                    MemFlagsData::trusted(),
                     new_context,
                     vmstore_context,
                     i32::from(offset),
@@ -2161,7 +2161,7 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
         let caller_vmctx = params[1];
         self.cursor.ins().load(
             self.isa.pointer_type(),
-            ir::MemFlags::trusted()
+            ir::MemFlagsData::trusted()
                 .with_readonly()
                 .with_alias_region(Some(ir::AliasRegion::Vmctx))
                 .with_can_move(),

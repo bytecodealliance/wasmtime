@@ -2297,7 +2297,7 @@
       x)
 
 ;; Bitcast between types residing in VRs with different lane counts is a
-;; no-op if the operation's MemFlags indicate a byte order compatible with
+;; no-op if the operation's MemFlagsData indicate a byte order compatible with
 ;; the current lane order.  Otherwise, lane elements need to be swapped,
 ;; first in the input type, and then again in the output type.  This could
 ;; be optimized further, but we don't bother at the moment since due to our
@@ -2921,7 +2921,7 @@
 
 
 ;; Helper to perform a 128-bit full-vector byte-reversed load.
-(decl vec_load_full_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_full_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Full-vector byte-reversed load via single instruction on z15.
     (rule 1 (vec_load_full_rev (vr128_ty ty) flags addr offset)
@@ -2939,7 +2939,7 @@
 
 
 ;; Helper to perform an element-wise byte-reversed load.
-(decl vec_load_byte_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_byte_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Element-wise byte-reversed 1x128-bit load is a full byte-reversed load.
 (rule -1 (vec_load_byte_rev $I128 flags addr offset)
@@ -2977,7 +2977,7 @@
 
 
 ;; Helper to perform an element-reversed load.
-(decl vec_load_elt_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_elt_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Element-reversed 1x128-bit load is a direct load.
 ;; For 1x128-bit types, this is a direct load.
@@ -3131,7 +3131,7 @@
 
 
 ;; Helper to load a 64-bit half-size vector from memory.
-(decl load_v64 (Type MemFlags Value Offset32) Reg)
+(decl load_v64 (Type MemFlagsData Value Offset32) Reg)
 
 ;; Any big-endian source value, BE lane order.
 (rule -1 (load_v64 _ flags @ (bigendian) addr offset)
@@ -3261,7 +3261,7 @@
 
 
 ;; Helper to perform a 128-bit full-vector byte-reversed store.
-(decl vec_store_full_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_full_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Full-vector byte-reversed store via single instruction on z15.
 (rule 1 (vec_store_full_rev _ val flags addr offset)
@@ -3280,7 +3280,7 @@
 
 
 ;; Helper to perform an element-wise byte-reversed store.
-(decl vec_store_byte_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_byte_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Element-wise byte-reversed 1x128-bit store is a full byte-reversed store.
 (rule -1 (vec_store_byte_rev $I128 val flags addr offset)
@@ -3318,7 +3318,7 @@
 
 
 ;; Helper to perform an element-reversed store.
-(decl vec_store_elt_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_elt_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Element-reversed 1x128-bit store is a direct store.
 (rule -1 (vec_store_elt_rev $I128 val flags addr offset)
@@ -3362,7 +3362,7 @@
       (side_effect (istore8_impl flags val addr offset)))
 
 ;; Helper to store 8-bit integer types.
-(decl istore8_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore8_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 8-bit integer types, register input.
 (rule (istore8_impl flags val addr offset)
@@ -3380,7 +3380,7 @@
       (side_effect (istore16_impl flags val addr offset)))
 
 ;; Helper to store 16-bit integer types.
-(decl istore16_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore16_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 16-bit big-endian integer types, register input.
 (rule 2 (istore16_impl flags @ (bigendian) val addr offset)
@@ -3406,7 +3406,7 @@
       (side_effect (istore32_impl flags val addr offset)))
 
 ;; Helper to store 32-bit integer types.
-(decl istore32_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore32_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 32-bit big-endian integer types, register input.
 (rule 1 (istore32_impl flags @ (bigendian) val addr offset)
@@ -3424,7 +3424,7 @@
 ;;;; Rules for 64-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper to store 64-bit integer types.
-(decl istore64_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore64_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 64-bit big-endian integer types, register input.
 (rule 1 (istore64_impl flags @ (bigendian) val addr offset)
@@ -3516,7 +3516,7 @@
         (casloop_subword ib ty flags aligned_addr bitshift val3)))
 
 ;; Loop bodies for atomic read-modify-write operations.
-(decl atomic_rmw_body (VecMInstBuilder Type MemFlags AtomicRmwOp
+(decl atomic_rmw_body (VecMInstBuilder Type MemFlagsData AtomicRmwOp
                        WritableReg Reg Reg) Reg)
 
 ;; Loop bodies for 32-/64-bit atomic XCHG operations.
@@ -3567,7 +3567,7 @@
         (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.And) tmp val src)))
 
 ;; RxSBG subword operation.
-(decl atomic_rmw_body_rxsbg (VecMInstBuilder Type MemFlags RxSBGOp
+(decl atomic_rmw_body_rxsbg (VecMInstBuilder Type MemFlagsData RxSBGOp
                              WritableReg Reg Reg) Reg)
 ;; 8-bit case: use the low byte of "src" and the high byte of "val".
 (rule (atomic_rmw_body_rxsbg ib $I8 _ op tmp val src)
@@ -3582,7 +3582,7 @@
       (push_rxsbg ib op tmp val (bswap_reg $I32 src) 48 63 -16))
 
 ;; Invert a subword.
-(decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlags WritableReg Reg) Reg)
+(decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlagsData WritableReg Reg) Reg)
 ;; 8-bit case: invert the high byte.
 (rule (atomic_rmw_body_invert ib $I8 _ tmp val)
       (push_xor_uimm32shifted ib $I32 tmp val (uimm32shifted 0xff000000 0)))
@@ -3600,7 +3600,7 @@
       (atomic_rmw_body_addsub ib ty flags (aluop_sub (ty_ext32 ty)) tmp val src))
 
 ;; Addition or subtraction operation.
-(decl atomic_rmw_body_addsub (VecMInstBuilder Type MemFlags ALUOp
+(decl atomic_rmw_body_addsub (VecMInstBuilder Type MemFlagsData ALUOp
                               WritableReg Reg Reg) Reg)
 ;; 32/64-bit big-endian case: just a regular add/sub operation.
 (rule 2 (atomic_rmw_body_addsub ib (ty_32_or_64 ty) (bigendian) op tmp val src)
@@ -3646,7 +3646,7 @@
         (intcc_as_cond (IntCC.UnsignedGreaterThan)) tmp val src))
 
 ;; Minimum or maximum operation.
-(decl atomic_rmw_body_minmax (VecMInstBuilder Type MemFlags CmpOp Cond
+(decl atomic_rmw_body_minmax (VecMInstBuilder Type MemFlagsData CmpOp Cond
                               WritableReg Reg Reg) Reg)
 ;; 32/64-bit big-endian case: just a comparison followed by a conditional
 ;; break out of the loop if the memory value does not need to change.
@@ -3726,7 +3726,7 @@
         (casloop_subword ib ty flags aligned_addr bitshift val3)))
 
 ;; Emit loop body instructions to perform a subword compare-and-swap.
-(decl atomic_cas_body (VecMInstBuilder Type MemFlags
+(decl atomic_cas_body (VecMInstBuilder Type MemFlagsData
                        WritableReg Reg Reg Reg) Reg)
 
 ;; 8-bit case: "val" contains the value loaded from memory in the high byte.

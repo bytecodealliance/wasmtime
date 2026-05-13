@@ -72,7 +72,7 @@ use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension, BlockArg, ExceptionTable};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue, Inst,
-    JumpTable, MemFlags, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList, types,
+    JumpTable, MemFlagsData, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList, types,
 };
 use crate::ir::{ExceptionTableItem, Signature};
 use crate::isa::{CallConv, TargetIsa};
@@ -1091,7 +1091,7 @@ impl<'a> Verifier<'a> {
     fn verify_bitcast(
         &self,
         inst: Inst,
-        flags: MemFlags,
+        flags: MemFlagsData,
         arg: Value,
         errors: &mut VerifierErrors,
     ) -> VerifierStepResult {
@@ -1108,15 +1108,15 @@ impl<'a> Verifier<'a> {
                     typ.bits()
                 ),
             ))
-        } else if flags != MemFlags::new()
-            && flags != MemFlags::new().with_endianness(ir::Endianness::Little)
-            && flags != MemFlags::new().with_endianness(ir::Endianness::Big)
+        } else if flags != MemFlagsData::new()
+            && flags != MemFlagsData::new().with_endianness(ir::Endianness::Little)
+            && flags != MemFlagsData::new().with_endianness(ir::Endianness::Big)
         {
             errors.fatal((
                 inst,
                 "The bitcast instruction only accepts the `big` or `little` memory flags",
             ))
-        } else if flags == MemFlags::new() && typ.lane_count() != value_type.lane_count() {
+        } else if flags == MemFlagsData::new() && typ.lane_count() != value_type.lane_count() {
             errors.fatal((
                 inst,
                 "Byte order specifier required for bitcast instruction changing lane count",

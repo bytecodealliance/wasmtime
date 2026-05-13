@@ -20,7 +20,7 @@ use cranelift_codegen::ir::{DebugTag, types::*};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
-    Function, GlobalValue, GlobalValueData, JumpTableData, MemFlags, Opcode, SigRef, Signature,
+    Function, GlobalValue, GlobalValueData, JumpTableData, MemFlagsData, Opcode, SigRef, Signature,
     StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value, types,
 };
 use cranelift_codegen::isa::{self, CallConv};
@@ -884,8 +884,8 @@ impl<'a> Parser<'a> {
     }
 
     // Match and a consume a possibly empty sequence of memory operation flags.
-    fn optional_memflags(&mut self) -> ParseResult<MemFlags> {
-        let mut flags = MemFlags::new();
+    fn optional_memflags(&mut self) -> ParseResult<MemFlagsData> {
+        let mut flags = MemFlagsData::new();
         while let Some(Token::Identifier(text)) = self.token() {
             match flags.set_by_name(text) {
                 Ok(true) => {

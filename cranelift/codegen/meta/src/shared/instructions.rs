@@ -772,7 +772,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -792,7 +792,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", Mem).with_doc("Value to be stored"),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
@@ -817,7 +817,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -836,7 +836,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -855,7 +855,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", iExt8),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
@@ -880,7 +880,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -899,7 +899,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -918,7 +918,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", iExt16),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
@@ -943,7 +943,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -962,7 +962,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -981,7 +981,7 @@ pub(crate) fn define(
             &formats.store,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", iExt32),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
@@ -1069,7 +1069,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -1087,7 +1087,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -1115,7 +1115,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -1133,7 +1133,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -1161,7 +1161,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -1179,7 +1179,7 @@ pub(crate) fn define(
             &formats.load,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address"),
         ])
@@ -3132,9 +3132,9 @@ pub(crate) fn define(
 
         The input and output types must be storable to memory and of the same
         size. A bitcast is equivalent to storing one type and loading the other
-        type from the same address, both using the specified MemFlags.
+        type from the same address, both using the specified MemFlagsData.
 
-        Note that this operation only supports the `big` or `little` MemFlags.
+        Note that this operation only supports the `big` or `little` MemFlagsData.
         The specified byte order only affects the result in the case where
         input and output types differ in lane count/size.  In this case, the
         operation is only valid if a byte order specifier is provided.
@@ -3142,7 +3142,7 @@ pub(crate) fn define(
             &formats.load_no_offset,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", Mem),
         ])
         .operands_out(vec![
@@ -3773,7 +3773,7 @@ pub(crate) fn define(
             &formats.atomic_rmw,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("AtomicRmwOp", &imm.atomic_rmw_op),
             Operand::new("p", iAddr),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
@@ -3802,7 +3802,7 @@ pub(crate) fn define(
             &formats.atomic_cas,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
             Operand::new("e", AtomicMem).with_doc("Expected value in CAS"),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
@@ -3830,7 +3830,7 @@ pub(crate) fn define(
             &formats.load_no_offset,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("p", iAddr),
         ])
         .operands_out(vec![
@@ -3855,7 +3855,7 @@ pub(crate) fn define(
             &formats.store_no_offset,
         )
         .operands_in(vec![
-            Operand::new("MemFlags", &imm.memflags),
+            Operand::new("MemFlagsData", &imm.memflags),
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
             Operand::new("p", iAddr),
         ])

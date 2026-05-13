@@ -63,7 +63,7 @@ impl TableData {
         env: &mut FuncEnvironment<'_>,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
-    ) -> (ir::Value, ir::MemFlags) {
+    ) -> (ir::Value, ir::MemFlagsData) {
         let index_ty = pos.func.dfg.value_type(index);
         let addr_ty = env.pointer_type();
         let spectre_mitigations_enabled =
@@ -104,7 +104,7 @@ impl TableData {
 
         let element_addr = pos.ins().iadd(base, offset);
 
-        let base_flags = ir::MemFlags::new()
+        let base_flags = ir::MemFlagsData::new()
             .with_aligned()
             .with_alias_region(Some(ir::AliasRegion::Table));
         if spectre_mitigations_enabled {

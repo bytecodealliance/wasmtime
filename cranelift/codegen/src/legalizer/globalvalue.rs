@@ -115,7 +115,7 @@ fn load_addr(
     base: ir::GlobalValue,
     offset: ir::immediates::Offset32,
     global_type: ir::Type,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
     isa: &dyn TargetIsa,
 ) -> WalkCommand {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`

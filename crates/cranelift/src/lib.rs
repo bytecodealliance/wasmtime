@@ -101,7 +101,7 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
 /// convention.
 fn unbarriered_store_type_at_offset(
     pos: &mut FuncCursor,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
     base: ir::Value,
     offset: i32,
     value: ir::Value,
@@ -122,7 +122,7 @@ fn unbarriered_load_type_at_offset(
     isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
     ty: WasmValType,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
     base: ir::Value,
     offset: i32,
 ) -> ir::Value {

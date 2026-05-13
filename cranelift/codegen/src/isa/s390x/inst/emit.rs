@@ -1,6 +1,6 @@
 //! S390x ISA: binary code emission.
 
-use crate::ir::{self, LibCall, MemFlags, TrapCode};
+use crate::ir::{self, LibCall, MemFlagsData, TrapCode};
 use crate::isa::CallConv;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
@@ -2472,7 +2472,7 @@ impl Inst {
                 sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
+                    mem: MemArg::reg(reg, MemFlagsData::trusted()),
                 };
                 inst.emit(sink, emit_info, state);
             }
@@ -3659,7 +3659,7 @@ impl Inst {
                     alu_op: ALUOp::Add64Ext32,
                     rd: rtmp,
                     ri: rtmp.to_reg(),
-                    mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
+                    mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlagsData::trusted()),
                 };
                 inst.emit(sink, emit_info, state);
 
@@ -3702,7 +3702,7 @@ impl Inst {
                 // mvi 0(%r15), 0
                 let inst = Inst::StoreImm8 {
                     imm: 0,
-                    mem: MemArg::reg(stack_reg(), MemFlags::trusted()),
+                    mem: MemArg::reg(stack_reg(), MemFlagsData::trusted()),
                 };
                 inst.emit(sink, emit_info, state);
 

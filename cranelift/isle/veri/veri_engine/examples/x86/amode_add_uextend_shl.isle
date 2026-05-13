@@ -5,7 +5,7 @@
 (type Type (primitive Type))
 (type Inst (primitive Inst))
 (type Unit (primitive Unit))
-(type MemFlags (primitive MemFlags))
+(type MemFlagsData (primitive MemFlagsData))
 (type Gpr (primitive Gpr))
 (type Imm64 (primitive Imm64))
 
@@ -122,14 +122,14 @@
              ;; Immediate sign-extended and a register
              (ImmReg (simm32 u32)
                      (base Reg)
-                     (flags MemFlags))
+                     (flags MemFlagsData))
                      
              ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
              (ImmRegRegShift (simm32 u32)
                              (base Gpr)
                              (index Gpr)
                              (shift u8)
-                             (flags MemFlags))
+                             (flags MemFlagsData))
             )
 )
 

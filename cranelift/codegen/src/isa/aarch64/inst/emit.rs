@@ -3209,7 +3209,7 @@ impl MachInstEmit for Inst {
                         rtmp2.to_reg(),
                         ExtendOp::UXTW,
                     ),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -3263,7 +3263,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
             }
@@ -3312,7 +3312,7 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label {
                         label: MemLabel::PCRel(8),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -3466,7 +3466,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: tmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3530,7 +3530,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: rtmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3607,7 +3607,7 @@ impl MachInstEmit for Inst {
                         rn: regs::stack_reg(),
                         rm: start.to_reg(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
                 Inst::AluRRR {
@@ -3677,7 +3677,7 @@ fn emit_return_call_common_sequence<T>(
                 // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
                 simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
             },
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
         .emit(sink, emit_info, state);
     }

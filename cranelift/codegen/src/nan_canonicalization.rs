@@ -7,7 +7,7 @@ use crate::ir::condcodes::FloatCC;
 use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
 use crate::ir::types::{self};
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
-use crate::opts::MemFlags;
+use crate::opts::MemFlagsData;
 use crate::timing;
 
 /// Perform the NaN canonicalization pass.
@@ -70,7 +70,7 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
         let canon_nan = pos.ins().scalar_to_vector(ty, canon_nan);
         let new_res = pos.ins().scalar_to_vector(ty, new_res);
         let is_nan = pos.ins().fcmp(comparison, new_res, new_res);
-        let is_nan = pos.ins().bitcast(ty, MemFlags::new(), is_nan);
+        let is_nan = pos.ins().bitcast(ty, MemFlagsData::new(), is_nan);
         let simd_result = pos.ins().bitselect(is_nan, canon_nan, new_res);
         pos.ins().with_result(val).extractlane(simd_result, 0);
     };
@@ -83,7 +83,7 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst, has_vector_support: bool)
 
     let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
         let is_nan = pos.ins().fcmp(comparison, new_res, new_res);
-        let is_nan = pos.ins().bitcast(val_type, MemFlags::new(), is_nan);
+        let is_nan = pos.ins().bitcast(val_type, MemFlagsData::new(), is_nan);
         pos.ins()
             .with_result(val)
             .bitselect(is_nan, canon_nan, new_res);

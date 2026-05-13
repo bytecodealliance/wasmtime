@@ -1033,7 +1033,7 @@
 ;; falls back to the pseudo-instruction `XLoad` which has code in `emit.rs` to
 ;; emit lots of forms but it additionally supports more specific pattern-matched
 ;; versions too.
-(decl gen_xload (Value Offset32 MemFlags Type ExtKind) XReg)
+(decl gen_xload (Value Offset32 MemFlagsData Type ExtKind) XReg)
 
 ;; Base case: use `pulley_xload` pseudo-inst for big-endian loads/stores with
 ;; no extension. This should only be used for host-things on wasm and
@@ -1165,7 +1165,7 @@
 (rule (emit_addrg32bne_xload addr $I64 _ext) (pulley_xload64le_g32bne addr))
 
 ;; Analog of `gen_xload`, but for floating-point registers
-(decl gen_fload (Value Offset32 MemFlags Type) FReg)
+(decl gen_fload (Value Offset32 MemFlagsData Type) FReg)
 
 ;; Base case: nontrapping loads/stores use the `fload` helper which bottoms out
 ;; in `emit.rs` using the `*_o32` addressing mode.
@@ -1202,7 +1202,7 @@
 (rule (emit_addrg32_fload addr $F64) (pulley_fload64le_g32 addr))
 
 ;; Analog of `gen_xload`, but for vector registers.
-(decl gen_vload (Value Offset32 MemFlags Type VExtKind) VReg)
+(decl gen_vload (Value Offset32 MemFlagsData Type VExtKind) VReg)
 
 ;; Base case: nontrapping loads/stores use the `*_o32` addressing mode through
 ;; helpers in `emit.rs` and the `pulley_vload` pseudo-inst. Note that this
@@ -1272,7 +1272,7 @@
 
 ;; Helper to handle big/little endian to determine which order the lo/hi
 ;; halves of the i128 are stored.
-(decl emit_store_i128 (MemFlags XReg XReg Amode Amode) SideEffectNoResult)
+(decl emit_store_i128 (MemFlagsData XReg XReg Amode Amode) SideEffectNoResult)
 (rule 0 (emit_store_i128 flags lo hi addrp0 addrp8)
   (if-let (Endianness.Little) (endianness flags))
   (let ((_ InstOutput (side_effect (pulley_xstore addrp0 lo $I64 flags))))
@@ -1285,7 +1285,7 @@
 ;; Helper function to store the first argument into the second argument. This
 ;; only stores up to the width of the `Type` specified, regardless of what the
 ;; type of the first argument is.
-(decl gen_store (Value Value Offset32 MemFlags Type) SideEffectNoResult)
+(decl gen_store (Value Value Offset32 MemFlagsData Type) SideEffectNoResult)
 
 ;; Base cases: normal typed loads/stores
 (rule 0 (gen_store src addr offset flags (ty_int ty))

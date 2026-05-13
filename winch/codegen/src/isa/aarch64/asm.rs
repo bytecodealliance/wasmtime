@@ -20,7 +20,7 @@ use cranelift_codegen::isa::aarch64::inst::{
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
-    ir::{ExternalName, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
+    ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self, ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp,
         FPULeftShiftImm, FPUOp1, FPUOp2,
@@ -163,12 +163,12 @@ impl Assembler {
             rt: xt1.into(),
             rt2: xt2.into(),
             mem,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         });
     }
 
     /// Store a register.
-    pub fn str(&mut self, reg: Reg, mem: AMode, size: OperandSize, flags: MemFlags) {
+    pub fn str(&mut self, reg: Reg, mem: AMode, size: OperandSize, flags: MemFlagsData) {
         use OperandSize::*;
         let inst = match (reg.is_int(), size) {
             (_, S8) => Inst::Store8 {
@@ -212,12 +212,12 @@ impl Assembler {
     }
 
     /// Load a signed register.
-    pub fn sload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlags) {
+    pub fn sload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlagsData) {
         self.ldr(mem, rd, size, true, flags);
     }
 
     /// Load an unsigned register.
-    pub fn uload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlags) {
+    pub fn uload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlagsData) {
         self.ldr(mem, rd, size, false, flags);
     }
 
@@ -228,7 +228,7 @@ impl Assembler {
         rd: WritableReg,
         size: OperandSize,
         signed: bool,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) {
         use OperandSize::*;
         let writable_reg = rd.map(Into::into);
@@ -298,7 +298,7 @@ impl Assembler {
             rt: writable_xt1,
             rt2: writable_xt2,
             mem,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         });
     }
 

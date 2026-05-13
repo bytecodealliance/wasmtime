@@ -2,7 +2,7 @@
 
 use crate::CodegenResult;
 use crate::ir;
-use crate::ir::MemFlags;
+use crate::ir::MemFlagsData;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::{ExternalName, LibCall, Signature, dynamic_to_fixed};
@@ -413,11 +413,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
-        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem.into(), ty, MemFlagsData::trusted())
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Inst {
-        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem.into(), from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -518,7 +518,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             rn: base,
             off: offset as i64,
         };
-        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem, ty, MemFlagsData::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
@@ -526,7 +526,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             rn: base,
             off: offset as i64,
         };
-        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem, from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
@@ -617,7 +617,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPreIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -666,7 +666,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPostIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -760,7 +760,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     mem: AMode::SPOffset {
                         off: i64::from(incoming_args_diff),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 });
 
                 // Store the frame pointer and link register again at the new SP
@@ -771,7 +771,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         reg: regs::stack_reg(),
                         simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 });
 
                 // Keep the frame pointer in sync
@@ -821,7 +821,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPreIndexed {
                     simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -852,7 +852,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPreIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -880,7 +880,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     mem: AMode::SPPreIndexed {
                         simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 insts.push(inst);
                 // N.B.: no unwind info: we don't have a way to
@@ -892,7 +892,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPreIndexed {
                     simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             };
             let iter = clobbered_vec.chunks_exact(2);
 
@@ -924,7 +924,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                             simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64)
                                 .unwrap(),
                         },
-                        flags: MemFlags::trusted(),
+                        flags: MemFlagsData::trusted(),
                     },
                     clobber_offset_change as u32,
                 )
@@ -995,7 +995,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     mem: AMode::SPPostIndexed {
                         simm9: SImm9::maybe_from_i64(16).unwrap(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 insts.push(inst);
                 // N.B.: no unwind info; we don't have a way to
@@ -1007,7 +1007,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPostIndexed {
                     simm9: SImm9::maybe_from_i64(16).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             };
             let load_vec_reg_half_pair = |rt, rt2| Inst::FpuLoadP64 {
                 rt,
@@ -1015,7 +1015,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPostIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             };
 
             let mut iter = clobbered_vec.chunks_exact(2);
@@ -1054,7 +1054,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPostIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(16, I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -1070,7 +1070,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPostIndexed {
                     simm9: SImm9::maybe_from_i64(16).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -1263,7 +1263,7 @@ impl AArch64MachineDeps {
                 AMode::SPOffset { off: 0 },
                 zero_reg(),
                 I32,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
         }
 

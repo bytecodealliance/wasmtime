@@ -33,8 +33,8 @@ mod copying;
 /// retain internal assertion metadata to report if such a trap happens. This
 /// is here to ensure that in the face of heap corruption that there's no
 /// possible UB within Cranelift and/or the runtime.
-const GC_MEMFLAGS: ir::MemFlags =
-    ir::MemFlags::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
+const GC_MEMFLAGS: ir::MemFlagsData =
+    ir::MemFlagsData::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
 
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
@@ -88,7 +88,7 @@ fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
     ptr_to_gc_ref: ir::Value,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
 ) -> WasmResult<ir::Value> {
     debug_assert!(ty.is_vmgcref_type());
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
@@ -107,7 +107,7 @@ fn unbarriered_store_gc_ref(
     ty: WasmHeapType,
     dst: ir::Value,
     gc_ref: ir::Value,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
 ) -> WasmResult<()> {
     debug_assert!(ty.is_vmgcref_type());
     builder.ins().store(flags, gc_ref, dst, 0);
@@ -280,7 +280,7 @@ fn write_func_ref_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     ref_type: WasmRefType,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
     field_addr: ir::Value,
     func_ref: ir::Value,
 ) -> WasmResult<()> {
@@ -1490,7 +1490,7 @@ impl FuncEnvironment<'_> {
         let store_context_ptr = self.get_vmstore_context_ptr_global(func);
         let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
 
-        let mut flags = ir::MemFlags::trusted();
+        let mut flags = ir::MemFlagsData::trusted();
         let memory_tunables =
             wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
         if !self
@@ -1530,7 +1530,7 @@ impl FuncEnvironment<'_> {
             base: store_context_ptr,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlags::trusted(),
+            flags: ir::MemFlagsData::trusted(),
         });
         self.gc_heap_bound = Some(bound);
         bound

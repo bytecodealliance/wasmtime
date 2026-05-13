@@ -10,7 +10,7 @@
 //! One never tracks which piece a concrete address belongs to at
 //! runtime; this is a purely static concept. Instead, all
 //! memory-accessing instructions (loads and stores) are labeled with
-//! one of these four categories in the `MemFlags`. It is forbidden
+//! one of these four categories in the `MemFlagsData`. It is forbidden
 //! for a load or store to access memory under one category and a
 //! later load or store to access the same memory under a different
 //! category. This is ensured to be true by construction during

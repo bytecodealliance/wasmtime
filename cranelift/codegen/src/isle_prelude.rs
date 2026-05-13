@@ -819,12 +819,12 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn mem_flags_trusted(&mut self) -> MemFlags {
-            MemFlags::trusted()
+        fn mem_flags_trusted(&mut self) -> MemFlagsData {
+            MemFlagsData::trusted()
         }
 
         #[inline]
-        fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
+        fn little_or_native_endian(&mut self, flags: MemFlagsData) -> Option<MemFlagsData> {
             match flags.explicit_endianness() {
                 Some(crate::ir::Endianness::Little) | None => Some(flags),
                 Some(crate::ir::Endianness::Big) => None,

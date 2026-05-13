@@ -15,8 +15,8 @@ use crate::machinst::{CallInfo, MachInst, isle::*};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
-        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode,
-        Value, ValueList, immediates::*, types::*,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlagsData, Opcode,
+        TrapCode, Value, ValueList, immediates::*, types::*,
     },
     isa::riscv64::inst::*,
     machinst::{ArgPair, CallArgList, CallRetList, InstOutput},
@@ -286,7 +286,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
                 from: AMode::FPOffset(8),
             });
             tmp.to_reg()
