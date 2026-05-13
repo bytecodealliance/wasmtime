@@ -48,3 +48,35 @@ fn module_deserialize() -> Result<()> {
             Ok(())
         })
 }
+
+#[test]
+fn module_deserialize_multiple_rec_groups() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"
+                (module
+                    (type (func (param i64 i64 i64 i64 i64 i64 i64 i64
+                                       i64 i64 i64 i64 i64 i64 i64 i64
+                                       i64 i64 i64 i64) (result i64)))
+                    (type (func (param i64 i64 i64 i64 i64 i64 i64) (result i32)))
+                    (global (mut i32) i32.const 1000)
+                )
+            "#,
+        )?
+        .serialize()?
+    };
+
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    OomTest::new().allow_alloc_after_oom(true).test(|| unsafe {
+        let _ = Module::deserialize(&engine, &module_bytes)?;
+        Ok(())
+    })
+}

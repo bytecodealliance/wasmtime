@@ -702,18 +702,40 @@ impl TypeRegistryInner {
         log::trace!("Start registering module types");
 
         // The engine's type registry entries for these module types.
-        let mut entries = TryVec::with_capacity(types.rec_groups().len())?;
+        let mut entries = TryVec::new();
 
         // The map from a module type index to an engine type index for these
         // module types.
-        let mut map = TryPrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::with_capacity(
-            types.wasm_types().len(),
-        )?;
+        let mut map = TryPrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::new();
+
+        if let Err(e) = self.register_module_types_impl(gc_runtime, types, &mut entries, &mut map) {
+            for entry in entries {
+                if entry.decref("register_module_types cleanup") {
+                    self.unregister_entry(entry);
+                }
+            }
+            return Err(e);
+        }
+
+        log::trace!("End registering module types");
+
+        Ok((entries, map))
+    }
+
+    fn register_module_types_impl(
+        &mut self,
+        gc_runtime: Option<&dyn GcRuntime>,
+        types: &ModuleTypes,
+        entries: &mut TryVec<RecGroupEntry>,
+        map: &mut TryPrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
+    ) -> Result<(), OutOfMemory> {
+        entries.reserve(types.rec_groups().len())?;
+        map.reserve(types.wasm_types().len())?;
 
         for (_rec_group_index, module_group) in types.rec_groups() {
             let entry = self.register_rec_group(
                 gc_runtime,
-                &map,
+                map,
                 module_group.clone(),
                 iter_entity_range(module_group.clone()).map(|ty| types[ty].try_clone()),
             )?;
@@ -730,9 +752,7 @@ impl TypeRegistryInner {
             entries.push(entry).expect("reserved capacity");
         }
 
-        log::trace!("End registering module types");
-
-        Ok((entries, map))
+        Ok(())
     }
 
     /// Register a rec group in this registry.
