@@ -55,32 +55,6 @@ pub fn write(pkru: u32) {
     }
 }
 
-/// Check the `ECX.PKU` flag (bit 3, zero-based) of the `07h` `CPUID` leaf; see
-/// the Intel Software Development Manual, vol 3a, section 2.7. This flag is
-/// only set on Intel CPUs, so this function also checks the `CPUID` vendor
-/// string.
-pub fn has_cpuid_bit_set() -> bool {
-    #[allow(
-        unused_unsafe,
-        reason = "rust is transitioning to `__cpuid` being a safe function"
-    )]
-    let result = unsafe { core::arch::x86_64::__cpuid(0x07) };
-    is_intel_cpu() && (result.ecx & 0b1000) != 0
-}
-
-/// Check the `CPUID` vendor string for `GenuineIntel`; see the Intel Software
-/// Development Manual, vol 2a, `CPUID` description.
-pub fn is_intel_cpu() -> bool {
-    // To read the CPU vendor string, we pass 0 in EAX and read 12 ASCII bytes
-    // from EBX, EDX, and ECX (in that order).
-    #[allow(unused_unsafe, reason = "see above about __cpuid")]
-    let result = unsafe { core::arch::x86_64::__cpuid(0) };
-    // Then we check if the vendor string matches "GenuineIntel".
-    result.ebx == u32::from_le_bytes(*b"Genu")
-        && result.edx == u32::from_le_bytes(*b"ineI")
-        && result.ecx == u32::from_le_bytes(*b"ntel")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

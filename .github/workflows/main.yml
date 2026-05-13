@@ -493,12 +493,7 @@ jobs:
     - run: rustup component add clippy
     - run: cargo clippy --workspace --all-targets --features p3,component-model-async
 
-  # Verify that the workspace compiles cleanly under the MSRV toolchain. This
-  # job replaces a previous `Test MSRV` matrix entry which ran the full test
-  # suite under MSRV; running tests adds no coverage beyond running them on
-  # current stable on the same target, while `cargo check` catches the
-  # behavior we actually care about: "did we use a Rust feature too new for
-  # our MSRV?".
+  # Verify that the workspace compiles cleanly under the MSRV toolchain.
   #
   # The excludes mirror `ci/run-tests.py` so that crates which require
   # nightly toolchains or external dependencies (OCaml, SMT solvers) are
