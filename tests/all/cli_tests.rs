@@ -2907,6 +2907,61 @@ start a print 1234
         assert!(stdout.contains("please see me"));
         Ok(())
     }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_exit_on_single() -> Result<()> {
+        // Send N sequential requests to a handler that calls `exit(ok)` after
+        // each response.  Each request must be handled by a fresh instance
+        // because the handler raises backpressure permanently, preventing
+        // instance reuse.
+        //
+        // The response body is the instance's random ID (decimal u64).  We
+        // assert that all N IDs are distinct (one per instance) and that no
+        // "worker error" appears in stderr — `exit(ok)` is a clean, guest-
+        // controlled shutdown and must not be treated as an error.
+        const N: usize = 5;
+        let server = WasmtimeServe::new(P3_CLI_SERVE_EXIT_ON_SINGLE_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
+
+        let mut instance_ids = std::collections::HashSet::new();
+        for _ in 0..N {
+            let resp = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await?;
+            assert!(resp.status().is_success());
+            let id: u64 = resp
+                .body()
+                .trim()
+                .parse::<u64>()
+                .context("response body should be a u64 instance ID")?;
+            instance_ids.insert(id);
+        }
+
+        assert_eq!(
+            instance_ids.len(),
+            N,
+            "expected {N} distinct instance IDs but got {}: {:?}",
+            instance_ids.len(),
+            instance_ids
+        );
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(
+            !stderr.contains("worker error"),
+            "unexpected worker error in stderr: {stderr}"
+        );
+        Ok(())
+    }
+}
+
 }
 
 #[test]
