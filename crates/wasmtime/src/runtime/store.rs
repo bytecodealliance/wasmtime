@@ -492,6 +492,10 @@ pub struct StoreOpaque {
     /// `throw()`, `take_pending_exception()`,
     /// `peek_pending_exception()`, `has_pending_exception()`, and
     /// `catch()`.
+    ///
+    /// Also note that the underlying reference here is a `VMExnRef`, a
+    /// refinement of `VMGcRef`, but rooting APIs right now make it difficult to
+    /// work with that directly so this is stored as `VMGcRef` instead.
     #[cfg(feature = "gc")]
     pending_exception: Option<VMGcRef>,
 

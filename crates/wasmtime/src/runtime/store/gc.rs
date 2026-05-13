@@ -451,6 +451,7 @@ impl StoreOpaque {
     /// reference to the `Rooted` that's returned.
     fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
         let vmexnref = self.pending_exception.take()?;
+        debug_assert!(vmexnref.is_exnref(&*self.unwrap_gc_store().gc_heap));
         let mut nogc = AutoAssertNoGc::new(self);
         Some(Rooted::new(&mut nogc, vmexnref))
     }
