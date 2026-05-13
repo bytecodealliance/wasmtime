@@ -2289,6 +2289,8 @@ at https://bytecodealliance.org/security.
         runtime_info: &ModuleRuntimeInfo,
         imports: Imports<'_>,
     ) -> Result<InstanceId> {
+        self.instances.reserve(1)?;
+
         let id = self.instances.next_key();
 
         let allocator = match kind {
@@ -2315,20 +2317,24 @@ at https://bytecodealliance.org/security.
                     "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
                     self.id()
                 );
-                self.instances.push(StoreInstance {
-                    handle,
-                    kind: StoreInstanceKind::Real { module_id },
-                })?
+                self.instances
+                    .push(StoreInstance {
+                        handle,
+                        kind: StoreInstanceKind::Real { module_id },
+                    })
+                    .expect("capacity was reserved above")
             }
             AllocateInstanceKind::Dummy { .. } => {
                 log::trace!(
                     "Adding dummy instance to store: store={:?}, instance={id:?}",
                     self.id()
                 );
-                self.instances.push(StoreInstance {
-                    handle,
-                    kind: StoreInstanceKind::Dummy,
-                })?
+                self.instances
+                    .push(StoreInstance {
+                        handle,
+                        kind: StoreInstanceKind::Dummy,
+                    })
+                    .expect("capacity was reserved above")
             }
         };
 

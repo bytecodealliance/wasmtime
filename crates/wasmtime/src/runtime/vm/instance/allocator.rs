@@ -345,17 +345,18 @@ impl dyn InstanceAllocator + '_ {
             .await?;
         self.allocate_tables(&mut request, &mut guard.tables)
             .await?;
-        guard.run_deallocate = false;
         // SAFETY: memories/tables were just allocated from the store within
         // `request` and this function's own contract requires that the
         // imports are valid.
-        return unsafe {
-            Ok(Instance::new(
+        let handle = unsafe {
+            Instance::new(
                 request,
                 mem::take(&mut guard.memories),
                 mem::take(&mut guard.tables),
-            )?)
+            )?
         };
+        guard.run_deallocate = false;
+        return Ok(handle);
 
         struct DeallocateOnDrop<'a> {
             run_deallocate: bool,
