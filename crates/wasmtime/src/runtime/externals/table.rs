@@ -417,7 +417,7 @@ impl Table {
                  destination table's element type",
             )?;
 
-        // SAFETY: the the two tables have the same type, as type-checked above.
+        // SAFETY: the two tables have the same type, as type-checked above.
         unsafe {
             Self::copy_raw(store, dst_table, dst_index, src_table, src_index, len)?;
         }

@@ -85,7 +85,7 @@ pub use allocator::*;
 /// some fields (but notably not `runtime_info`) is probably going to evolve
 /// over time.
 ///
-/// Note that is is not sound to basically ever pass around `&mut Instance`.
+/// Note that is not sound to basically ever pass around `&mut Instance`.
 /// That should always instead be `Pin<&mut Instance>`. All usage of
 /// `Pin::new_unchecked` should be here in this module in just a few `unsafe`
 /// locations and it's recommended to use existing helpers if you can.
@@ -109,7 +109,7 @@ pub struct Instance {
 
     /// WebAssembly linear memory data.
     ///
-    /// This is where all runtime information about defined linear memories in
+    /// This where all runtime information about defined linear memories in
     /// this module lives.
     ///
     /// The `MemoryAllocationIndex` was given from our `InstanceAllocator` and
@@ -119,7 +119,7 @@ pub struct Instance {
 
     /// WebAssembly table data.
     ///
-    /// Like memories, this is only for defined tables in the module and
+    /// Like memories, this only for defined tables in the module and
     /// contains all of their runtime state.
     ///
     /// The `TableAllocationIndex` was given from our `InstanceAllocator` and
@@ -233,7 +233,7 @@ impl Instance {
 
                     let root: SendSyncPtr<ValRaw> = e.into();
 
-                    // Safety: We know this is a type that needs GC rooting and
+                    // Safety: We know this a type that needs GC rooting and
                     // the lifetime is implied by our safety contract.
                     unsafe {
                         gc_roots.add_val_raw_root(root, "passive element segment");
@@ -256,7 +256,7 @@ impl Instance {
     ///   call this function twice, turn both raw pointers into safe pointers,
     ///   and then use both safe pointers.
     /// * There should be no other active mutable borrow to any other instance
-    ///   within the same store. Note that this is not restricted to just this
+    ///   within the same store. Note that this not restricted to just this
     ///   instance pointer, but to all instances in a store. Instances can
     ///   safely traverse to other instances "laterally" meaning that a mutable
     ///   borrow on one is a mutable borrow on all.
@@ -288,7 +288,7 @@ impl Instance {
     /// Encapsulated entrypoint to the host from WebAssembly, converting a raw
     /// `VMContext` pointer into a `VMStore` plus an `InstanceId`.
     ///
-    /// This is an entrypoint for core wasm entering back into the host. This is
+    /// This an entrypoint for core wasm entering back into the host. This
     /// used for both host functions and libcalls for example. This will execute
     /// the closure `f` with safer Internal types than a raw `VMContext`
     /// pointer.
@@ -301,7 +301,7 @@ impl Instance {
     ///
     /// Callers must ensure that `vmctx` is a valid allocation and is safe to
     /// dereference at this time. That's generally only true when it's a
-    /// wasm-provided value and this is the first function called after entering
+    /// wasm-provided value and this the first function called after entering
     /// the host. Otherwise this could unsafely alias the store with a mutable
     /// pointer, for example.
     #[inline]
@@ -314,7 +314,7 @@ impl Instance {
     {
         // SAFETY: It's a contract of this function that `vmctx` is a valid
         // pointer with neither the store nor other instances actively in use
-        // when this is called, so it should be safe to acquire a mutable
+        // when this called, so it should be safe to acquire a mutable
         // pointer to the store and read the instance pointer.
         let (store, instance) = unsafe {
             let instance = Instance::from_vmctx(vmctx);
@@ -760,7 +760,7 @@ impl Instance {
     ) -> Result<Option<usize>, Error> {
         let memory = &mut self.as_mut().memories_mut()[idx].1;
 
-        // SAFETY: this is the safe wrapper around `Memory::grow` because it
+        // SAFETY: this the safe wrapper around `Memory::grow` because it
         // automatically updates the `VMMemoryDefinition` in this instance after
         // a growth operation below.
         let result = unsafe { memory.grow(delta, limiter).await };
@@ -830,7 +830,7 @@ impl Instance {
         };
 
         // For now, we eagerly initialize an funcref struct in-place whenever
-        // asked for a reference to it. This is mostly fine, because in practice
+        // asked for a reference to it. This mostly fine, because in practice
         // each funcref is unlikely to be requested more than a few times:
         // once-ish for funcref tables used for call_indirect (the usual
         // compilation strategy places each function in the table at most once),
@@ -1058,7 +1058,7 @@ impl Instance {
         unsafe {
             let dst = dst_mem.base.as_ptr().add(dst);
             let src = src_mem.base.as_ptr().add(src);
-            // FIXME audit whether this is safe in the presence of shared memory
+            // FIXME audit whether this safe in the presence of shared memory
             // (https://github.com/bytecodealliance/wasmtime/issues/4203).
             ptr::copy(src, dst, len);
         }
@@ -1100,7 +1100,7 @@ impl Instance {
         // everything is safe.
         unsafe {
             let dst = memory.base.as_ptr().add(dst);
-            // FIXME audit whether this is safe in the presence of shared memory
+            // FIXME audit whether this safe in the presence of shared memory
             // (https://github.com/bytecodealliance/wasmtime/issues/4203).
             ptr::write_bytes(dst, val, len);
         }
@@ -1162,7 +1162,7 @@ impl Instance {
         unsafe {
             let src_start = data.as_ptr().add(src);
             let dst_start = memory.base.as_ptr().add(dst);
-            // FIXME audit whether this is safe in the presence of shared memory
+            // FIXME audit whether this safe in the presence of shared memory
             // (https://github.com/bytecodealliance/wasmtime/issues/4203).
             ptr::copy_nonoverlapping(src_start, dst_start, len);
         }
@@ -1290,7 +1290,7 @@ impl Instance {
     /// `Pin<&mut Self>` with the same original lifetime.
     pub fn module_and_self(self: Pin<&mut Self>) -> (&wasmtime_environ::Module, Pin<&mut Self>) {
         // SAFETY: this function is projecting both `&Module` and the same
-        // pointer both connected to the same lifetime. This is safe because
+        // pointer both connected to the same lifetime. This safe because
         // it's a contract of `Pin<&mut Self>` that the `runtime_info` field is
         // never written, meaning it's effectively unsafe to have `&mut Module`
         // projected from `Pin<&mut Self>`. Consequently it's safe to have a
@@ -1576,7 +1576,7 @@ impl Instance {
     }
 
     fn store_mut(self: Pin<&mut Self>) -> &mut Option<VMStoreRawPtr> {
-        // SAFETY: this is a pin-projection to get a mutable reference to an
+        // SAFETY: this a pin-projection to get a mutable reference to an
         // internal field and is safe so long as the `&mut Self` temporarily
         // created is not overwritten, which it isn't here.
         unsafe { &mut self.get_unchecked_mut().store }
@@ -1638,11 +1638,11 @@ pub type InstanceHandle = OwnedInstance<Instance>;
 /// Note that this lives within a `StoreOpaque` on a list of instances that a
 /// store is keeping alive.
 #[derive(Debug)]
-#[repr(transparent)] // guarantee this is a zero-cost wrapper
+#[repr(transparent)] // guarantee this a zero-cost wrapper
 pub struct OwnedInstance<T: InstanceLayout> {
     /// The raw pointer to the instance that was allocated.
     ///
-    /// Note that this is not equivalent to `Box<Instance>` because the
+    /// Note that this not equivalent to `Box<Instance>` because the
     /// allocation here has a `VMContext` trailing after it. Thus the custom
     /// destructor to invoke the `dealloc` function with the appropriate
     /// layout.
@@ -1681,7 +1681,7 @@ pub struct OwnedVMContext<T> {
     /// never invalidating this pointer throughout MIRI and additionally being
     /// able to still temporarily have `Pin<&mut Instance>` methods and such.
     ///
-    /// It's important to note, though, that this is not here purely for MIRI.
+    /// It's important to note, though, that this not here purely for MIRI.
     /// The careful construction of the `fn vmctx` method has ramifications on
     /// the LLVM IR generated, for example. A historical CVE on Wasmtime,
     /// GHSA-ch89-5g45-qwc7, was caused due to relying on undefined behavior. By
@@ -1769,7 +1769,7 @@ pub unsafe trait InstanceLayout {
     /// VMContext` object.
     ///
     /// Note that this method takes `&self` as an argument but returns
-    /// `NonNull<T>` which is frequently used to mutate said memory. This is an
+    /// `NonNull<T>` which is frequently used to mutate said memory. This an
     /// intentional design decision where the safety of the modification of
     /// memory is placed as a burden onto the caller. The implementation of this
     /// method explicitly does not require `&mut self` to acquire mutable
@@ -1895,7 +1895,7 @@ impl<T: InstanceLayout> OwnedInstance<T> {
 
     /// Gets the raw underlying `&Instance` from this handle.
     pub fn get(&self) -> &T {
-        // SAFETY: this is an owned instance handle that retains exclusive
+        // SAFETY: this an owned instance handle that retains exclusive
         // ownership of the `Instance` inside. With `&self` given we know
         // this pointer is valid valid and the returned lifetime is connected
         // to `self` so that should also be valid.

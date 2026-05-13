@@ -365,7 +365,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     Ok(())
 }
 
-// Test that that the pointer returned from `realloc` is bounds-checked.
+// Test that the pointer returned from `realloc` is bounds-checked.
 #[test]
 fn realloc_oob() -> Result<()> {
     let engine = wasmtime_test_util::component::engine();
@@ -427,7 +427,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
     Ok(())
 }
 
-// Test that that the pointer returned from `realloc` is bounds-checked.
+// Test that the pointer returned from `realloc` is bounds-checked.
 #[test]
 fn raw_string_encodings() -> Result<()> {
     let engine = wasmtime_test_util::component::engine();
