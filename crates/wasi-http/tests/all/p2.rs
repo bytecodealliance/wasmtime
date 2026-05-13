@@ -575,22 +575,48 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
 async fn wasi_http_without_port() -> Result<()> {
     let req = hyper::Request::builder()
         .method(http::Method::GET)
-        .uri("https://httpbin.org/get");
+        .uri("https://some-domain.example/get");
 
-    let _response: hyper::Response<_> = run_wasi_http(
+    // Intercept the outgoing request to verify the authority has no port and
+    // return a synthetic response. This avoids depending on external network.
+    let send_request: RequestSender = Arc::new(
+        |request: hyper::Request<HyperOutgoingBody>,
+         OutgoingRequestConfig {
+             between_bytes_timeout,
+             ..
+         }| {
+            let authority = request.uri().authority().expect("request has authority");
+            assert!(
+                authority.port().is_none(),
+                "expected no port in authority, got: {authority}"
+            );
+            let resp = Ok(Ok(IncomingResponse {
+                resp: hyper::Response::builder()
+                    .status(StatusCode::OK)
+                    .body(
+                        body::full(Bytes::from("ok"))
+                            .map_err(wasmtime_wasi_http::p2::hyper_response_error)
+                            .boxed_unsync(),
+                    )
+                    .unwrap(),
+                worker: None,
+                between_bytes_timeout,
+            }));
+            HostFutureIncomingResponse::ready(resp)
+        },
+    );
+
+    let response = run_wasi_http(
         test_programs_artifacts::P2_API_PROXY_FORWARD_REQUEST_COMPONENT,
         req.body(body::empty())?,
-        None,
+        Some(send_request),
         None,
         false,
         None,
     )
     .await??;
 
-    // NB: don't test the actual return code of `response`. This is testing a
-    // live http request against a live server and things happen. If we got this
-    // far it's already successful that the request was made and the lack of
-    // port in the URI was handled.
+    assert_eq!(StatusCode::OK, response.status());
 
     Ok(())
 }
