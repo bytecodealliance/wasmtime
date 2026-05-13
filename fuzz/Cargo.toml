@@ -49,6 +49,7 @@ wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
 [features]
 default = ['fuzz-spec-interpreter']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
+v8 = ['wasmtime-fuzzing/v8']
 chaos = ["cranelift-control/chaos"]
 
 [[bin]]
