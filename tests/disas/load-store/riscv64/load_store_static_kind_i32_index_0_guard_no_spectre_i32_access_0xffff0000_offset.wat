@@ -27,8 +27,7 @@
 ;;       srli    a4, a1, 0x20
 ;;       lui     a1, 0x10
 ;;       addi    a5, a1, -4
-;;       bgeu    a5, a4, 8
-;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       bltu    a5, a4, 0x2c
 ;;       ld      a5, 0x38(a0)
 ;;       add     a4, a5, a4
 ;;       lui     a2, 0xffff
@@ -39,6 +38,7 @@
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       addi    sp, sp, -0x10
@@ -49,8 +49,7 @@
 ;;       srli    a3, a1, 0x20
 ;;       lui     a1, 0x10
 ;;       addi    a4, a1, -4
-;;       bgeu    a4, a3, 8
-;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       bltu    a4, a3, 0x2c
 ;;       ld      a4, 0x38(a0)
 ;;       add     a3, a4, a3
 ;;       lui     a2, 0xffff
@@ -61,3 +60,4 @@
 ;;       ld      s0, 0(sp)
 ;;       addi    sp, sp, 0x10
 ;;       ret
+;;       .byte   0x00, 0x00, 0x00, 0x00

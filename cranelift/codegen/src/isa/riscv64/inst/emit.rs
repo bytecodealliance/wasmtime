@@ -2181,24 +2181,19 @@ impl Inst {
             }
 
             &Inst::TrapIf {
+                cc,
                 rs1,
                 rs2,
-                cc,
                 trap_code,
             } => {
-                let label_end = sink.get_label();
+                let label = sink.defer_trap(trap_code);
                 let cond = IntegerCompare { kind: cc, rs1, rs2 };
-
-                // Jump over the trap if we the condition is false.
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_end),
+                    taken: CondBrTarget::Label(label),
                     not_taken: CondBrTarget::Fallthrough,
-                    kind: cond.inverse(),
+                    kind: cond,
                 }
                 .emit(sink, emit_info, state);
-                Inst::Udf { trap_code }.emit(sink, emit_info, state);
-
-                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);

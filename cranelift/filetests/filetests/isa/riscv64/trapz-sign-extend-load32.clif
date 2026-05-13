@@ -27,7 +27,7 @@ block0(v0: i64, v1: i64):
 ;   srli a0, a0, 0x20
 ;   slli a1, a1, 0x20
 ;   srli a1, a1, 0x20
-;   bltu a0, a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user15
+;   bgeu a0, a1, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user15
 

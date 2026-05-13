@@ -28,9 +28,7 @@
 ;;       sd      a2, 0x38(a1)
 ;;       lw      a1, 0x20(a0)
 ;;       andi    a1, a1, 1
-;;       bnez    a1, 8
-;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ╰─╼ trap: CannotLeaveComponent
+;;       beqz    a1, 0x6c
 ;;       ld      a1, 8(a0)
 ;;       ld      a5, 0x10(a1)
 ;;       mv      a4, zero
@@ -57,3 +55,5 @@
 ;;       mv      a0, a1
 ;;       jalr    a2
 ;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       .byte   0x00, 0x00, 0x00, 0x00
+;;       ╰─╼ trap: CannotLeaveComponent

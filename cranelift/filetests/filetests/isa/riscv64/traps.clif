@@ -28,9 +28,9 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   bnez a0, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapnz_i128(i128) {
 block0(v0: i128):
@@ -47,9 +47,9 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a1, a0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   bnez a0, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapnz_icmp_fold(i64) {
 block0(v0: i64):
@@ -68,9 +68,9 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a1, zero, 0x2a
-;   bne a0, a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   beq a0, a1, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -85,9 +85,9 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bnez a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   beqz a0, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapz_i128(i128) {
 block0(v0: i128):
@@ -104,9 +104,9 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a1, a0
-;   bnez a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   beqz a0, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %trapz_icmp_fold(i64) {
 block0(v0: i64):
@@ -125,9 +125,9 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a1, zero, 0x2a
-;   beq a0, a1, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
+;   bne a0, a1, 8
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user1
 
 function %h() {
 block0:
