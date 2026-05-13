@@ -662,7 +662,7 @@ fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
 }
 
 /// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EmitState {
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
@@ -673,6 +673,19 @@ pub struct EmitState {
     ctrl_plane: ControlPlane,
 
     frame_layout: FrameLayout,
+
+    mem_flags: crate::ir::MemFlagsSet,
+}
+
+impl Default for EmitState {
+    fn default() -> Self {
+        EmitState {
+            user_stack_map: None,
+            ctrl_plane: ControlPlane::default(),
+            frame_layout: FrameLayout::default(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
+        }
+    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -681,6 +694,7 @@ impl MachInstEmitState<Inst> for EmitState {
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
         }
     }
 
@@ -698,6 +712,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn set_mem_flags(&mut self, mem_flags: crate::ir::MemFlagsSet) {
+        self.mem_flags = mem_flags;
     }
 }
 
@@ -997,7 +1015,7 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1130,7 +1148,7 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1205,7 +1223,7 @@ impl MachInstEmit for Inst {
                 flags,
             } => {
                 let mem = mem.clone();
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1235,7 +1253,7 @@ impl MachInstEmit for Inst {
                 let rt = rt.to_reg();
                 let rt2 = rt2.to_reg();
                 let mem = mem.clone();
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1273,7 +1291,7 @@ impl MachInstEmit for Inst {
                 let rt2 = rt2.to_reg();
                 let mem = mem.clone();
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1315,7 +1333,7 @@ impl MachInstEmit for Inst {
             } => {
                 let mem = mem.clone();
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual store instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1454,7 +1472,7 @@ impl MachInstEmit for Inst {
                 rn,
                 flags,
             } => {
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1494,7 +1512,7 @@ impl MachInstEmit for Inst {
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1618,7 +1636,7 @@ impl MachInstEmit for Inst {
                     }
                 }
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
                 if op == AtomicRMWLoopOp::Xchg {
@@ -1654,7 +1672,7 @@ impl MachInstEmit for Inst {
                     _ => panic!("Unsupported type: {ty}"),
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1688,7 +1706,7 @@ impl MachInstEmit for Inst {
                 // again:
                 sink.bind_label(again_label, &mut state.ctrl_plane);
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1714,7 +1732,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1739,7 +1757,7 @@ impl MachInstEmit for Inst {
                 rn,
                 flags,
             } => {
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -1751,7 +1769,7 @@ impl MachInstEmit for Inst {
                 rn,
                 flags,
             } => {
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
 
@@ -2810,7 +2828,7 @@ impl MachInstEmit for Inst {
             } => {
                 let (q, size) = size.enc_size();
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -3209,7 +3227,7 @@ impl MachInstEmit for Inst {
                         rtmp2.to_reg(),
                         ExtendOp::UXTW,
                     ),
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -3263,7 +3281,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 };
                 inst.emit(sink, emit_info, state);
             }
@@ -3312,7 +3330,7 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label {
                         label: MemLabel::PCRel(8),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -3466,7 +3484,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: tmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 }
                 .emit(sink, emit_info, state);
 
@@ -3530,7 +3548,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: rtmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 }
                 .emit(sink, emit_info, state);
 
@@ -3607,7 +3625,7 @@ impl MachInstEmit for Inst {
                         rn: regs::stack_reg(),
                         rm: start.to_reg(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                 }
                 .emit(sink, emit_info, state);
                 Inst::AluRRR {
@@ -3677,7 +3695,7 @@ fn emit_return_call_common_sequence<T>(
                 // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
                 simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
             },
-            flags: MemFlags::trusted(),
+            flags: crate::ir::MemFlagsSet::TRUSTED,
         }
         .emit(sink, emit_info, state);
     }

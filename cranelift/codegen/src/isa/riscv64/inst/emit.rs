@@ -44,7 +44,7 @@ pub enum EmitVState {
 }
 
 /// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EmitState {
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
@@ -59,6 +59,20 @@ pub struct EmitState {
     vstate: EmitVState,
 
     frame_layout: FrameLayout,
+
+    mem_flags: crate::ir::MemFlagsSet,
+}
+
+impl Default for EmitState {
+    fn default() -> Self {
+        EmitState {
+            user_stack_map: None,
+            ctrl_plane: ControlPlane::default(),
+            vstate: EmitVState::Unknown,
+            frame_layout: FrameLayout::default(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
+        }
+    }
 }
 
 impl EmitState {
@@ -81,6 +95,7 @@ impl MachInstEmitState<Inst> for EmitState {
             ctrl_plane,
             vstate: EmitVState::Unknown,
             frame_layout: abi.frame_layout().clone(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
         }
     }
 
@@ -104,10 +119,13 @@ impl MachInstEmitState<Inst> for EmitState {
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
     }
+
+    fn set_mem_flags(&mut self, mem_flags: crate::ir::MemFlagsSet) {
+        self.mem_flags = mem_flags;
+    }
 }
 
 impl Inst {
-    /// Load int mask.
     /// If ty is int then 0xff in rd.
     pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
@@ -614,7 +632,7 @@ impl Inst {
                     _ => return None,
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -685,7 +703,7 @@ impl Inst {
                     encode_cl_type(op, rd, base, imm5)
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -716,7 +734,7 @@ impl Inst {
                     _ => return None,
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -783,7 +801,7 @@ impl Inst {
                     encode_cs_type(op, src, base, imm5)
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -900,7 +918,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: crate::ir::MemFlagsSet::DEFAULT,
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -1084,7 +1102,7 @@ impl Inst {
                     }
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1130,7 +1148,7 @@ impl Inst {
                     }
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -1542,8 +1560,8 @@ impl Inst {
                 amo,
             } => {
                 // TODO: get flags from original CLIF atomic instruction
-                let flags = MemFlags::new();
-                if let Some(trap_code) = flags.trap_code() {
+                let flags = crate::ir::MemFlagsSet::DEFAULT;
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     sink.add_trap(trap_code);
                 }
                 let x = op.op_code()
@@ -2038,7 +2056,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                     from: AMode::RegOffset(rd.to_reg(), 0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
@@ -2067,7 +2085,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: crate::ir::MemFlagsSet::TRUSTED,
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -2209,7 +2227,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: crate::ir::MemFlagsSet::DEFAULT,
                     from: AMode::RegOffset(p, 0),
                 }
                 .emit(sink, emit_info, state);
@@ -2228,7 +2246,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(p, 0),
                     op: StoreOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: crate::ir::MemFlagsSet::DEFAULT,
                     src,
                 }
                 .emit(sink, emit_info, state);
@@ -2576,7 +2594,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(spilltmp_reg2(), 0),
                     op: StoreOP::Sb,
-                    flags: MemFlags::new(),
+                    flags: crate::ir::MemFlagsSet::DEFAULT,
                     src: zero_reg(),
                 }
                 .emit(sink, emit_info, state);
@@ -2697,7 +2715,7 @@ impl Inst {
                     }
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -2744,7 +2762,7 @@ impl Inst {
                     }
                 };
 
-                if let Some(trap_code) = flags.trap_code() {
+                if let Some(trap_code) = state.mem_flags[flags].trap_code() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(trap_code);
                 }
@@ -2839,7 +2857,7 @@ fn return_call_emit_impl<T>(
             reg.map(Reg::from),
             AMode::SPOffset(clobber_offset),
             ty,
-            MemFlags::trusted(),
+            crate::ir::MemFlagsSet::TRUSTED,
         )
         .emit(sink, emit_info, state);
 
@@ -2853,7 +2871,7 @@ fn return_call_emit_impl<T>(
             writable_link_reg(),
             AMode::SPOffset(sp_to_fp_offset + 8),
             I64,
-            MemFlags::trusted(),
+            crate::ir::MemFlagsSet::TRUSTED,
         )
         .emit(sink, emit_info, state);
 
@@ -2861,7 +2879,7 @@ fn return_call_emit_impl<T>(
             writable_fp_reg(),
             AMode::SPOffset(sp_to_fp_offset),
             I64,
-            MemFlags::trusted(),
+            crate::ir::MemFlagsSet::TRUSTED,
         )
         .emit(sink, emit_info, state);
     }

@@ -15,9 +15,9 @@ use crate::ir::{
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
     ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, CallArgList, CallInfo,
-    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig, SigSet, TryCallInfo, VCode,
-    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
-    writable_value_regs,
+    CallRetList, Callee, InsnIndex, LoweredBlock, MachInstEmitState, MachLabel, Reg, Sig, SigSet,
+    TryCallInfo, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    ValueRegs, Writable, writable_value_regs,
 };
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
@@ -852,7 +852,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                              to vcode\n\n\
                                  {iix:?} `{}`",
                             self.f.dfg.display_inst(inst),
-                            &self.vcode.vcode[iix].pretty_print_inst(&mut Default::default()),
+                            {
+                                let mut state: I::State = Default::default();
+                                state.set_mem_flags(self.f.dfg.mem_flags.clone());
+                                self.vcode.vcode[iix].pretty_print_inst(&mut state)
+                            },
                         );
                         self.vcode
                             .add_user_stack_map(BackwardsInsnIndex::new(iix.index()), entries);
@@ -1208,11 +1212,13 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the
         // VCodeBuilder, let's build the VCode.
+        self.vcode.vcode.set_mem_flags(self.f.dfg.mem_flags.clone());
         trace!(
             "built vcode:\n{:?}Backwards {:?}",
             &self.vregs, &self.vcode.vcode
         );
-        let vcode = self.vcode.build(self.vregs);
+        let mut vcode = self.vcode.build(self.vregs);
+        vcode.set_mem_flags(self.f.dfg.mem_flags.clone());
 
         Ok(vcode)
     }

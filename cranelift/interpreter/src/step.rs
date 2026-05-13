@@ -9,7 +9,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
-    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef, types,
+    InstructionData, MemFlagsData, Opcode, TrapCode, Type, Value as ValueRef, types,
 };
 use log::trace;
 use smallvec::{SmallVec, smallvec};
@@ -77,6 +77,12 @@ where
 
     // The following closures make the `step` implementation much easier to express. Note that they
     // frequently close over the `state` or `inst_context` for brevity.
+
+    // Resolve a MemFlags entity to its MemFlagsData through the DFG.
+    let resolve_memflags = || -> MemFlagsData {
+        let flags = inst.memflags().expect("instruction to have memory flags");
+        state.get_current_function().dfg.mem_flags[flags]
+    };
 
     // Retrieve the current value for an instruction argument.
     let arg = |index: usize| -> DataValue {
@@ -498,7 +504,7 @@ where
             };
 
             let addr_value = calculate_addr(types::I64, imm(), args())?;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             let loaded = assign_or_memtrap(
                 Address::try_from(addr_value)
                     .and_then(|addr| state.checked_load(addr, load_ty, mem_flags)),
@@ -523,7 +529,7 @@ where
             };
 
             let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             let reduced = if let Some(c) = kind {
                 arg(0).convert(c)?
             } else {
@@ -538,7 +544,7 @@ where
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
             let offset = sum_unsigned(imm(), args())? as u64;
-            let mem_flags = MemFlags::new();
+            let mem_flags = MemFlagsData::new();
             assign_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
@@ -549,7 +555,7 @@ where
             let arg = arg(0);
             let slot = inst.stack_slot().unwrap();
             let offset = sum_unsigned(imm(), args_range(1..)?)? as u64;
-            let mem_flags = MemFlags::new();
+            let mem_flags = MemFlagsData::new();
             continue_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
@@ -948,9 +954,7 @@ where
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let lanes = &if input_ty.is_vector() {
                 assert_eq!(
-                    inst.memflags()
-                        .expect("byte order flag to be set")
-                        .endianness(Endianness::Little),
+                    resolve_memflags().endianness(Endianness::Little),
                     Endianness::Little,
                     "Only little endian bitcasts on vectors are supported"
                 );
@@ -1244,7 +1248,7 @@ where
             let op = inst.atomic_rmw_op().unwrap();
             let val = arg(1);
             let addr = arg(0).into_int_unsigned()? as u64;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             let loaded = Address::try_from(addr)
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let prev_val = match loaded {
@@ -1271,7 +1275,7 @@ where
         }
         Opcode::AtomicCas => {
             let addr = arg(0).into_int_unsigned()? as u64;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             let loaded = Address::try_from(addr)
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
             let loaded_val = match loaded {
@@ -1292,7 +1296,7 @@ where
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let addr = arg(0).into_int_unsigned()? as u64;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             // We are doing a regular load here, this isn't actually thread safe.
             assign_or_memtrap(
                 Address::try_from(addr)
@@ -1302,7 +1306,7 @@ where
         Opcode::AtomicStore => {
             let val = arg(0);
             let addr = arg(1).into_int_unsigned()? as u64;
-            let mem_flags = inst.memflags().expect("instruction to have memory flags");
+            let mem_flags = resolve_memflags();
             // We are doing a regular store here, this isn't actually thread safe.
             continue_or_memtrap(
                 Address::try_from(addr).and_then(|addr| state.checked_store(addr, val, mem_flags)),

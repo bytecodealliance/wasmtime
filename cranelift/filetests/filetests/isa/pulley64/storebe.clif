@@ -9,7 +9,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32 x1+0, x0 // flags =  notrap
+;   xstore32 x1+0, x0 // flags = memflags4
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64 x1+0, x0 // flags =  notrap
+;   xstore64 x1+0, x0 // flags = memflags4
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32 x1+4, x0 // flags =  notrap
+;   xstore32 x1+4, x0 // flags = memflags4
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64 x1+8, x0 // flags =  notrap
+;   xstore64 x1+8, x0 // flags = memflags4
 ;   ret
 ;
 ; Disassembled:

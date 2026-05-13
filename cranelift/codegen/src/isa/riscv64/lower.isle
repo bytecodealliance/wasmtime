@@ -2168,7 +2168,7 @@
 ;; do a SEW/2 extension. This only reads half width elements from the source vector register
 ;; extends it, and writes the back the full register.
 
-(decl gen_load64_extend (Type ExtendOp MemFlags AMode) VReg)
+(decl gen_load64_extend (Type ExtendOp MemFlagsData AMode) VReg)
 
 (rule (gen_load64_extend ty (ExtendOp.Signed) flags amode)
   (let ((eew VecElementWidth (element_width_from_type $I64))
@@ -2235,7 +2235,7 @@
 ;; Avoid unnecessary moves to floating point registers for `F16` memory to memory copies when
 ;; `Zfhmin` is unavailable.
 (rule 3 (lower (store (little_or_native_endian store_flags)
-                      (sinkable_load inst $F16 (little_or_native_endian load_flags) load_addr load_offset) store_addr store_offset))
+                      (sinkable_load inst $F16 load_flags load_addr load_offset) store_addr store_offset))
   (if-let false (has_zfhmin))
   (rv_store (amode store_addr store_offset) (StoreOP.Sh) store_flags (gen_sunk_load inst (amode load_addr load_offset) (LoadOP.Lh) load_flags)))
 

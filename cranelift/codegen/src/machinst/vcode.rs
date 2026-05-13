@@ -204,6 +204,13 @@ pub struct VCode<I: VCodeInst> {
     pub(crate) sigs: SigSet,
 
     log2_min_function_alignment: u8,
+
+    /// The set of all [`MemFlagsData`](crate::ir::MemFlagsData) referenced by instructions in
+    /// this function, indexed by [`MemFlags`](crate::ir::MemFlags) entity.
+    ///
+    /// Cloned from the [`DataFlowGraph`](crate::ir::DataFlowGraph) after lowering and threaded
+    /// to the [`EmitState`](crate::machinst::MachInstEmitState) before emission begins.
+    mem_flags: crate::ir::MemFlagsSet,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -651,6 +658,7 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             log2_min_function_alignment,
+            mem_flags: crate::ir::MemFlagsSet::new(),
         }
     }
 
@@ -663,6 +671,14 @@ impl<I: VCodeInst> VCode<I> {
     /// The number of lowered instructions.
     pub fn num_insts(&self) -> usize {
         self.insts.len()
+    }
+
+    /// Set the [`MemFlagsSet`](crate::ir::MemFlagsSet) for this function.
+    ///
+    /// Called after lowering to thread the DFG's mem-flags table into the `VCode` so it can be
+    /// forwarded to the [`EmitState`](crate::machinst::MachInstEmitState) before emission.
+    pub fn set_mem_flags(&mut self, mem_flags: crate::ir::MemFlagsSet) {
+        self.mem_flags = mem_flags;
     }
 
     fn compute_clobbers_and_function_calls(
@@ -790,6 +806,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut last_offset = None;
         let mut inst_offsets = vec![];
         let mut state = I::State::new(&self.abi, core::mem::take(ctrl_plane));
+        state.set_mem_flags(self.mem_flags.clone());
 
         let mut disasm = String::new();
 
@@ -1634,7 +1651,8 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
         writeln!(f, "VCode {{")?;
         writeln!(f, "  Entry block: {}", self.entry.index())?;
 
-        let mut state = Default::default();
+        let mut state: I::State = Default::default();
+        state.set_mem_flags(self.mem_flags.clone());
 
         for block in 0..self.num_blocks() {
             let block = BlockIndex::new(block);

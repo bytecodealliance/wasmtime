@@ -8,7 +8,7 @@ use crate::isa::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
+    ir::{Endianness, MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
@@ -1372,12 +1372,12 @@ pub enum RoundingMode {
 }
 
 /// Memory flags for trusted loads/stores.
-pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
+pub const TRUSTED_FLAGS: MemFlagsData = MemFlagsData::trusted();
 
 /// Flags used for WebAssembly loads / stores.
 /// Untrusted by default so we don't set `no_trap`.
 /// We also ensure that the endianness is the right one for WebAssembly.
-pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
+pub const UNTRUSTED_FLAGS: MemFlagsData = MemFlagsData::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
 ///
@@ -2094,7 +2094,7 @@ pub(crate) trait MacroAssembler {
         addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()>;
 
@@ -2128,7 +2128,7 @@ pub(crate) trait MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()>;
 

@@ -29,13 +29,13 @@ impl EmitInfo {
         }
     }
 
-    fn endianness(&self, flags: MemFlags) -> Endianness {
+    fn endianness(&self, flags: MemFlagsData) -> Endianness {
         flags.endianness(self.isa_flags.endianness())
     }
 }
 
 /// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EmitState<P>
 where
     P: PulleyTargetKind,
@@ -44,6 +44,22 @@ where
     ctrl_plane: ControlPlane,
     user_stack_map: Option<ir::UserStackMap>,
     frame_layout: FrameLayout,
+    mem_flags: crate::ir::MemFlagsSet,
+}
+
+impl<P> Default for EmitState<P>
+where
+    P: PulleyTargetKind,
+{
+    fn default() -> Self {
+        EmitState {
+            _phantom: PhantomData,
+            ctrl_plane: ControlPlane::default(),
+            user_stack_map: None,
+            frame_layout: FrameLayout::default(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
+        }
+    }
 }
 
 impl<P> EmitState<P>
@@ -65,6 +81,7 @@ where
             ctrl_plane,
             user_stack_map: None,
             frame_layout: abi.frame_layout().clone(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
         }
     }
 
@@ -82,6 +99,10 @@ where
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn set_mem_flags(&mut self, mem_flags: crate::ir::MemFlagsSet) {
+        self.mem_flags = mem_flags;
     }
 }
 
@@ -404,12 +425,12 @@ fn pulley_emit<P>(
             flags,
         } => {
             use Endianness as E;
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             match *ty {
                 I8 => enc::xload8_u32_o32(sink, dst, addr),
                 I16 => match endian {
@@ -435,12 +456,12 @@ fn pulley_emit<P>(
             flags,
         } => {
             use Endianness as E;
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             match *ty {
                 F32 => match endian {
                     E::Little => enc::fload32le_o32(sink, dst, addr),
@@ -460,12 +481,12 @@ fn pulley_emit<P>(
             ty,
             flags,
         } => {
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             assert_eq!(endian, Endianness::Little);
             assert_eq!(ty.bytes(), 16);
             enc::vload128le_o32(sink, dst, addr);
@@ -478,12 +499,12 @@ fn pulley_emit<P>(
             flags,
         } => {
             use Endianness as E;
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             match *ty {
                 I8 => enc::xstore8_o32(sink, addr, src),
                 I16 => match endian {
@@ -509,12 +530,12 @@ fn pulley_emit<P>(
             flags,
         } => {
             use Endianness as E;
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             match *ty {
                 F32 => match endian {
                     E::Little => enc::fstore32le_o32(sink, addr, src),
@@ -534,12 +555,12 @@ fn pulley_emit<P>(
             ty,
             flags,
         } => {
-            assert!(flags.trap_code().is_none());
+            assert!(state.mem_flags[*flags].trap_code().is_none());
             let addr = AddrO32::Base {
                 addr: mem.get_base_register().unwrap(),
                 offset: mem.get_offset_with_state(state),
             };
-            let endian = emit_info.endianness(*flags);
+            let endian = emit_info.endianness(state.mem_flags[*flags]);
             assert_eq!(endian, Endianness::Little);
             assert_eq!(ty.bytes(), 16);
             enc::vstore128le_o32(sink, addr, src);

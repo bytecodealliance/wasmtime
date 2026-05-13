@@ -8,13 +8,14 @@ use crate::translate::{
     TableSize, TargetEnvironment,
 };
 use crate::trap::TranslateTrap;
+use crate::{HEAP_ALIAS_REGION_DATA, TABLE_ALIAS_REGION_DATA, VMCTX_ALIAS_REGION_DATA};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::{
     self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
 };
-use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlagsData};
 use cranelift_codegen::ir::{Block, types::*};
 use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::packed_option::{PackedOption, ReservedValue};
@@ -229,6 +230,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// nonlinear control flow). This is useful in cases where we need
     /// to e.g. record the return-address of a callsite for debuginfo.
     pub(crate) next_srcloc: ir::SourceLoc,
+
+    /// Cached alias regions for alias analysis.
+    heap_alias_region: Option<ir::AliasRegion>,
+    table_alias_region: Option<ir::AliasRegion>,
+    #[allow(dead_code)]
+    vmctx_alias_region: Option<ir::AliasRegion>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -291,6 +298,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
             wasm_module_offset: translation.wasm_module_offset,
+            heap_alias_region: None,
+            table_alias_region: None,
+            vmctx_alias_region: None,
         }
     }
 
@@ -304,6 +314,25 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             self.vmctx = Some(vmctx);
             vmctx
         })
+    }
+
+    pub(crate) fn get_heap_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self
+            .heap_alias_region
+            .get_or_insert_with(|| func.dfg.alias_regions.insert(HEAP_ALIAS_REGION_DATA))
+    }
+
+    pub(crate) fn get_table_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self
+            .table_alias_region
+            .get_or_insert_with(|| func.dfg.alias_regions.insert(TABLE_ALIAS_REGION_DATA))
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_vmctx_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self
+            .vmctx_alias_region
+            .get_or_insert_with(|| func.dfg.alias_regions.insert(VMCTX_ALIAS_REGION_DATA))
     }
 
     fn get_table_copy_func(
@@ -341,11 +370,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (vmctx, offset)
         } else {
             let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
+            let flags = func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly().with_can_move());
             let global = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                flags: MemFlags::trusted().with_readonly().with_can_move(),
+                flags,
             });
             (global, 0)
         }
@@ -360,11 +393,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let offset = self.offsets.ptr.vmctx_store_context();
         let base = self.vmctx(func);
+        let flags = func
+            .dfg
+            .mem_flags
+            .insert(ir::MemFlagsData::trusted().with_readonly().with_can_move());
         let ptr = func.create_global_value(ir::GlobalValueData::Load {
             base,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlags::trusted().with_readonly().with_can_move(),
+            flags,
         });
         self.vm_store_context = Some(ptr);
         ptr
@@ -514,7 +551,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel = builder
             .ins()
-            .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
+            .load(ir::types::I64, ir::MemFlagsData::trusted(), addr, offset);
         builder.def_var(self.fuel_var, fuel);
     }
 
@@ -525,7 +562,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let fuel_consumed = builder.use_var(self.fuel_var);
         builder
             .ins()
-            .store(ir::MemFlags::trusted(), fuel_consumed, addr, offset);
+            .store(ir::MemFlagsData::trusted(), fuel_consumed, addr, offset);
     }
 
     /// Returns the `(address, offset)` of the fuel consumption within
@@ -663,7 +700,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let offset = i32::from(self.offsets.ptr.vmctx_epoch_ptr());
         let epoch_ptr = builder
             .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+            .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
         epoch_ptr
     }
 
@@ -671,7 +708,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let addr = builder.use_var(self.epoch_ptr_var);
         builder.ins().load(
             ir::types::I64,
-            ir::MemFlags::trusted(),
+            ir::MemFlagsData::trusted(),
             addr,
             ir::immediates::Offset32::new(0),
         )
@@ -726,7 +763,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let deadline = builder.ins().load(
             ir::types::I64,
-            ir::MemFlags::trusted(),
+            ir::MemFlagsData::trusted(),
             vmstore_ctx,
             ir::immediates::Offset32::new(self.offsets.ptr.vmstore_context_epoch_deadline() as i32),
         );
@@ -935,8 +972,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut ir::Function,
         ptr: ir::GlobalValue,
         offset: u32,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> ir::GlobalValue {
+        let flags = func.dfg.mem_flags.insert(flags);
         func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
@@ -951,7 +989,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         &mut self,
         func: &mut ir::Function,
         offset: u32,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> ir::GlobalValue {
         let vmctx = self.vmctx(func);
         self.global_load(func, vmctx, offset, flags)
@@ -1041,7 +1079,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(pos);
         let pointer_type = self.pointer_type();
-        let mem_flags = ir::MemFlags::trusted().with_readonly().with_can_move();
+        let mem_flags = ir::MemFlagsData::trusted().with_readonly().with_can_move();
 
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
         let shared_indices = pos.ins().load(
@@ -1067,7 +1105,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub(crate) fn load_funcref_type_index(
         &mut self,
         pos: &mut FuncCursor,
-        mem_flags: ir::MemFlags,
+        mem_flags: ir::MemFlagsData,
         funcref: ir::Value,
     ) -> ir::Value {
         let ty = self.vmshared_type_index_ty();
@@ -1120,20 +1158,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn memflags_for_debug_slot_value_wasm_ty(&self, ty: WasmValType) -> MemFlags {
+    fn memflags_for_debug_slot_value_wasm_ty(&self, ty: WasmValType) -> MemFlagsData {
         // Store vectors in little-endian format: this is
         // universally supported, while native or
         // big-endian formats may not be in all cases
         // (e.g. Pulley on s390x).
-        let mut flags = MemFlags::trusted();
+        let mut flags = MemFlagsData::trusted();
         if ty == WasmValType::V128 {
             flags.set_endianness(Endianness::Little);
         }
         flags
     }
 
-    fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlags {
-        let mut flags = MemFlags::trusted();
+    fn memflags_for_debug_slot_value_clif_ty(&self, ty: ir::Type) -> MemFlagsData {
+        let mut flags = MemFlagsData::trusted();
         if ty.is_vector() {
             flags.set_endianness(Endianness::Little);
         }
@@ -1523,7 +1561,7 @@ impl FuncEnvironment<'_> {
                     let memory = self.global_load_from_vmctx(
                         func,
                         from_offset,
-                        ir::MemFlags::trusted().with_readonly().with_can_move(),
+                        ir::MemFlagsData::trusted().with_readonly().with_can_move(),
                     );
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
@@ -1545,7 +1583,7 @@ impl FuncEnvironment<'_> {
                 let memory = self.global_load_from_vmctx(
                     func,
                     from_offset,
-                    ir::MemFlags::trusted().with_readonly().with_can_move(),
+                    ir::MemFlagsData::trusted().with_readonly().with_can_move(),
                 );
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
@@ -1554,11 +1592,12 @@ impl FuncEnvironment<'_> {
             }
         };
 
+        let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted());
         let bound = func.create_global_value(ir::GlobalValueData::Load {
             base: base_ptr,
             offset: Offset32::new(current_length_offset),
             global_type: pointer_type,
-            flags: MemFlags::trusted(),
+            flags: bound_flags,
         });
 
         let base = self.make_heap_base(func, memory, base_ptr, base_offset);
@@ -1581,10 +1620,11 @@ impl FuncEnvironment<'_> {
         let pointer_type = self.pointer_type();
         let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
 
-        let mut flags = ir::MemFlags::trusted().with_can_move();
+        let mut flags_data = ir::MemFlagsData::trusted().with_can_move();
         if !memory.memory_may_move(&memory_tunables) {
-            flags.set_readonly();
+            flags_data.set_readonly();
         }
+        let flags = func.dfg.mem_flags.insert(flags_data);
 
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
@@ -1611,11 +1651,15 @@ impl FuncEnvironment<'_> {
                 (vmctx, base_offset, current_elements_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmtable_from(index);
+                let flags = func
+                    .dfg
+                    .mem_flags
+                    .insert(MemFlagsData::trusted().with_readonly().with_can_move());
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly().with_can_move(),
+                    flags,
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -1632,17 +1676,21 @@ impl FuncEnvironment<'_> {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
 
+        let base_flags = func
+            .dfg
+            .mem_flags
+            .insert(if Some(table.limits.min) == table.limits.max {
+                // A fixed-size table can't be resized so its base address won't
+                // change.
+                MemFlagsData::trusted().with_readonly().with_can_move()
+            } else {
+                MemFlagsData::trusted()
+            });
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: if Some(table.limits.min) == table.limits.max {
-                // A fixed-size table can't be resized so its base address won't
-                // change.
-                MemFlags::trusted().with_readonly().with_can_move()
-            } else {
-                MemFlags::trusted()
-            },
+            flags: base_flags,
         });
 
         let bound = if Some(table.limits.min) == table.limits.max {
@@ -1651,15 +1699,19 @@ impl FuncEnvironment<'_> {
             }
         } else {
             TableSize::Dynamic {
-                bound_gv: func.create_global_value(ir::GlobalValueData::Load {
-                    base: ptr,
-                    offset: Offset32::new(current_elements_offset),
-                    global_type: ir::Type::int(
-                        u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
-                    )
-                    .unwrap(),
-                    flags: MemFlags::trusted(),
-                }),
+                bound_gv: {
+                    let flags = func.dfg.mem_flags.insert(MemFlagsData::trusted());
+                    func.create_global_value(ir::GlobalValueData::Load {
+                        base: ptr,
+                        offset: Offset32::new(current_elements_offset),
+                        global_type: ir::Type::int(
+                            u16::from(self.offsets.size_of_vmtable_definition_current_elements())
+                                * 8,
+                        )
+                        .unwrap(),
+                        flags,
+                    })
+                },
             }
         };
 
@@ -1712,13 +1764,13 @@ impl FuncEnvironment<'_> {
             let pointer_type = self.pointer_type();
             let from_vmctx = builder.ins().load(
                 pointer_type,
-                MemFlags::trusted().with_readonly(),
+                MemFlagsData::trusted().with_readonly(),
                 vmctx,
                 i32::try_from(vmctx_tag_vmctx_offset).unwrap(),
             );
             let index = builder.ins().load(
                 I32,
-                MemFlags::trusted().with_readonly(),
+                MemFlagsData::trusted().with_readonly(),
                 vmctx,
                 i32::try_from(vmctx_tag_index_offset).unwrap(),
             );
@@ -1817,7 +1869,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let vmctx = self.env.vmctx(self.builder.func);
         let base = self.builder.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted().with_readonly().with_can_move();
+        let mem_flags = ir::MemFlagsData::trusted().with_readonly().with_can_move();
 
         // Load the callee address.
         let body_offset = i32::try_from(
@@ -2034,7 +2086,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                         if self.env.clif_memory_traps_enabled() {
                             self.builder.ins().load(
                                 sig_id_type,
-                                ir::MemFlags::trusted()
+                                ir::MemFlagsData::trusted()
                                     .with_readonly()
                                     .with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
                                 funcref_ptr,
@@ -2097,7 +2149,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         //
         // Note that the callee may be null in which case this load may
         // trap. If so use the `TRAP_INDIRECT_CALL_TO_NULL` trap code.
-        let mut mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mut mem_flags = ir::MemFlagsData::trusted().with_readonly();
         if self.env.clif_memory_traps_enabled() {
             mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
         } else {
@@ -2178,7 +2230,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // optional trap code provided by the caller of `unchecked_call` which
         // will handle the case where this is either already known to be
         // non-null or may trap.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mem_flags = ir::MemFlagsData::trusted().with_readonly();
         let mut callee_flags = mem_flags;
         if self.env.clif_memory_traps_enabled() {
             callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
@@ -3042,7 +3094,7 @@ impl FuncEnvironment<'_> {
             },
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
-                let mut flags = ir::MemFlags::trusted();
+                let mut flags = ir::MemFlagsData::trusted();
                 // Store vector globals in little-endian format to avoid
                 // byte swaps on big-endian platforms since at-rest vectors
                 // should already be in little-endian format anyway.
@@ -3050,7 +3102,8 @@ impl FuncEnvironment<'_> {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 Ok(builder.ins().load(ty, flags, addr, offset))
             }
             GlobalVariable::Custom => {
@@ -3074,9 +3127,9 @@ impl FuncEnvironment<'_> {
                     ref_ty,
                     src,
                     if global_ty.mutability {
-                        ir::MemFlags::trusted()
+                        ir::MemFlagsData::trusted()
                     } else {
-                        ir::MemFlags::trusted().with_readonly().with_can_move()
+                        ir::MemFlagsData::trusted().with_readonly().with_can_move()
                     },
                 )
             }
@@ -3095,13 +3148,14 @@ impl FuncEnvironment<'_> {
             }
             GlobalVariable::Memory { gv, offset, ty } => {
                 let addr = builder.ins().global_value(self.pointer_type(), gv);
-                let mut flags = ir::MemFlags::trusted();
+                let mut flags = ir::MemFlagsData::trusted();
                 // Like `global.get`, store globals in little-endian format.
                 if ty.is_vector() {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                 builder.ins().store(flags, val, addr, offset);
                 self.update_global(builder, global_index, val);
@@ -3126,7 +3180,7 @@ impl FuncEnvironment<'_> {
                     ty,
                     src,
                     val,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlagsData::trusted(),
                 )?
             }
         }
@@ -3244,14 +3298,14 @@ impl FuncEnvironment<'_> {
 
                 let vmctx = pos.ins().load(
                     self.isa.pointer_type(),
-                    ir::MemFlags::trusted(),
+                    ir::MemFlagsData::trusted(),
                     cur_vmctx,
                     i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_vmctx()))
                         .unwrap(),
                 );
                 let index = pos.ins().load(
                     ir::types::I32,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlagsData::trusted(),
                     cur_vmctx,
                     i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_index()))
                         .unwrap(),
@@ -3280,14 +3334,14 @@ impl FuncEnvironment<'_> {
 
                 let vmctx = pos.ins().load(
                     self.isa.pointer_type(),
-                    ir::MemFlags::trusted(),
+                    ir::MemFlagsData::trusted(),
                     cur_vmctx,
                     i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_vmctx()))
                         .unwrap(),
                 );
                 let index = pos.ins().load(
                     ir::types::I32,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlagsData::trusted(),
                     cur_vmctx,
                     i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_index()))
                         .unwrap(),
@@ -3344,7 +3398,7 @@ impl FuncEnvironment<'_> {
                         i32::try_from(self.offsets.vmctx_vmmemory_pointer(def_index)).unwrap();
                     let vmmemory_ptr =
                         pos.ins()
-                            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+                            .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr =
@@ -3357,7 +3411,7 @@ impl FuncEnvironment<'_> {
                     // bounds-checked version of this is implemented.
                     pos.ins().atomic_load(
                         pointer_type,
-                        ir::MemFlags::trusted(),
+                        ir::MemFlagsData::trusted(),
                         vmmemory_definition_ptr,
                     )
                 } else {
@@ -3368,14 +3422,14 @@ impl FuncEnvironment<'_> {
                     )
                     .unwrap();
                     pos.ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), base, offset)
+                        .load(pointer_type, ir::MemFlagsData::trusted(), base, offset)
                 }
             }
             None => {
                 let offset = i32::try_from(self.offsets.vmctx_vmmemory_import_from(index)).unwrap();
                 let vmmemory_ptr =
                     pos.ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+                        .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
                 if is_shared {
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());
@@ -3383,13 +3437,13 @@ impl FuncEnvironment<'_> {
                         pos.ins().iadd_imm(vmmemory_ptr, vmmemory_definition_offset);
                     pos.ins().atomic_load(
                         pointer_type,
-                        ir::MemFlags::trusted(),
+                        ir::MemFlagsData::trusted(),
                         vmmemory_definition_ptr,
                     )
                 } else {
                     pos.ins().load(
                         pointer_type,
-                        ir::MemFlags::trusted(),
+                        ir::MemFlagsData::trusted(),
                         vmmemory_ptr,
                         i32::from(self.offsets.ptr.vmmemory_definition_current_length()),
                     )

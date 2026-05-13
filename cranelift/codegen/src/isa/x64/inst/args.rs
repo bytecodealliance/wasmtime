@@ -1,7 +1,7 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self};
-use crate::ir::MemFlags;
+use crate::ir::MemFlagsData;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
@@ -410,7 +410,7 @@ impl Amode {
         Self::ImmReg {
             simm32,
             base,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
     }
 
@@ -424,7 +424,7 @@ impl Amode {
             base,
             index,
             shift,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
     }
 
@@ -432,8 +432,8 @@ impl Amode {
         Self::RipRelative { target }
     }
 
-    /// Set the specified [MemFlags] to the [Amode].
-    pub fn with_flags(&self, flags: MemFlags) -> Self {
+    /// Set the specified [MemFlagsData] to the [Amode].
+    pub fn with_flags(&self, flags: MemFlagsData) -> Self {
         match self {
             &Self::ImmReg { simm32, base, .. } => Self::ImmReg {
                 simm32,
@@ -495,10 +495,10 @@ impl Amode {
         }
     }
 
-    pub(crate) fn get_flags(&self) -> MemFlags {
+    pub(crate) fn get_flags(&self) -> MemFlagsData {
         match self {
             Amode::ImmReg { flags, .. } | Amode::ImmRegRegShift { flags, .. } => *flags,
-            Amode::RipRelative { .. } => MemFlags::trusted(),
+            Amode::RipRelative { .. } => MemFlagsData::trusted(),
         }
     }
 

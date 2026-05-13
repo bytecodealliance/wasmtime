@@ -55,6 +55,7 @@
 )
 
 ;; function u1:0(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -81,7 +82,7 @@
 ;;                                 block2:
 ;; @00ee                               v5 = load.i64 notrap aligned readonly can_move v0+72
 ;;                                     v12 = load.i64 notrap aligned readonly can_move v5+136
-;;                                     v13 = load.i32 notrap aligned table v12
+;;                                     v13 = load.i32 notrap aligned region0 v12
 ;;                                     v14 = iconst.i32 1
 ;;                                     v15 = band v13, v14  ; v14 = 1
 ;;                                     v11 = iconst.i32 0
@@ -98,13 +99,13 @@
 ;;
 ;;                                 block5:
 ;;                                     v22 = load.i64 notrap aligned readonly can_move v5+112
-;;                                     v23 = load.i32 notrap aligned table v22
+;;                                     v23 = load.i32 notrap aligned region0 v22
 ;;                                     v24 = iconst.i32 -2
 ;;                                     v25 = band v23, v24  ; v24 = -2
-;;                                     store notrap aligned table v25, v22
+;;                                     store notrap aligned region0 v25, v22
 ;;                                     v55 = iconst.i32 1
 ;;                                     v56 = bor v23, v55  ; v55 = 1
-;;                                     store notrap aligned table v56, v22
+;;                                     store notrap aligned region0 v56, v22
 ;;                                     jump block6
 ;;
 ;;                                 block6:
@@ -114,13 +115,13 @@
 ;;                                     jump block8
 ;;
 ;;                                 block8:
-;;                                     v36 = load.i32 notrap aligned table v12
+;;                                     v36 = load.i32 notrap aligned region0 v12
 ;;                                     v57 = iconst.i32 -2
 ;;                                     v58 = band v36, v57  ; v57 = -2
-;;                                     store notrap aligned table v58, v12
+;;                                     store notrap aligned region0 v58, v12
 ;;                                     v59 = iconst.i32 1
 ;;                                     v60 = bor v36, v59  ; v59 = 1
-;;                                     store notrap aligned table v60, v12
+;;                                     store notrap aligned region0 v60, v12
 ;;                                     jump block3
 ;;
 ;;                                 block3:

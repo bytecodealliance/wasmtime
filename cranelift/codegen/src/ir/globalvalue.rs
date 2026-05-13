@@ -1,7 +1,7 @@
 //! Global values.
 
 use crate::ir::immediates::{Imm64, Offset32};
-use crate::ir::{ExternalName, GlobalValue, MemFlags, Type};
+use crate::ir::{ExternalName, GlobalValue, MemFlags, MemFlagsSet, Type};
 use crate::isa::TargetIsa;
 use core::fmt;
 
@@ -102,22 +102,41 @@ impl GlobalValueData {
     }
 }
 
-impl fmt::Display for GlobalValueData {
+impl GlobalValueData {
+    /// Return a display wrapper that can resolve `MemFlags` entities.
+    pub fn display<'a>(&'a self, mem_flags: &'a MemFlagsSet) -> DisplayGlobalValueData<'a> {
+        DisplayGlobalValueData {
+            data: self,
+            mem_flags,
+        }
+    }
+}
+
+/// Wrapper for displaying a `GlobalValueData` with resolved `MemFlags`.
+pub struct DisplayGlobalValueData<'a> {
+    data: &'a GlobalValueData,
+    mem_flags: &'a MemFlagsSet,
+}
+
+impl fmt::Display for DisplayGlobalValueData<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Self::VMContext => write!(f, "vmctx"),
-            Self::Load {
+        match *self.data {
+            GlobalValueData::VMContext => write!(f, "vmctx"),
+            GlobalValueData::Load {
                 base,
                 offset,
                 global_type,
                 flags,
-            } => write!(f, "load.{global_type}{flags} {base}{offset}"),
-            Self::IAddImm {
+            } => {
+                let flags_data = self.mem_flags[flags];
+                write!(f, "load.{global_type}{flags_data} {base}{offset}")
+            }
+            GlobalValueData::IAddImm {
                 global_type,
                 base,
                 offset,
             } => write!(f, "iadd_imm.{global_type} {base}, {offset}"),
-            Self::Symbol {
+            GlobalValueData::Symbol {
                 ref name,
                 offset,
                 colocated,
@@ -139,7 +158,7 @@ impl fmt::Display for GlobalValueData {
                 }
                 Ok(())
             }
-            Self::DynScaleTargetConst { vector_type } => {
+            GlobalValueData::DynScaleTargetConst { vector_type } => {
                 write!(f, "dyn_scale_target_const.{vector_type}")
             }
         }

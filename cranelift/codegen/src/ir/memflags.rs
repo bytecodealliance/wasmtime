@@ -1,9 +1,15 @@
 //! Memory operation flags.
 
 use super::TrapCode;
+use crate::HashMap;
+use crate::entity::{self, PrimaryMap};
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use core::num::NonZeroU8;
+use core::ops::Index;
 use core::str::FromStr;
+use cranelift_entity::entity_impl;
+use std::borrow::Cow;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
@@ -17,35 +23,158 @@ pub enum Endianness {
     Big,
 }
 
-/// Which disjoint region of aliasing memory is accessed in this memory
-/// operation.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[repr(u8)]
-#[expect(missing_docs, reason = "self-describing variants")]
-#[rustfmt::skip]
-pub enum AliasRegion {
-    // None = 0b00;
-    Heap    = 0b01,
-    Table   = 0b10,
-    Vmctx   = 0b11,
+/// An opaque reference to an alias region.
+///
+/// Alias regions identify disjoint categories of memory for alias analysis.
+/// Two memory operations in different alias regions are known not to alias.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct AliasRegion(u32);
+entity_impl!(AliasRegion, "region");
+
+/// Data describing an alias region.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct AliasRegionData {
+    /// A unique, user-defined identifier for this alias region.
+    ///
+    /// Alias regions are deduplicated based on this identifier.
+    ///
+    /// This deduplication happens during inlining, for example, when a
+    /// callee's alias regions are merged with the caller's. Therefore, when
+    /// inlining is enabled this identifier should be globally unique across
+    /// the whole compilation. When inlining is disabled, it is sufficient
+    /// to be unique within the context of a single function.
+    pub user_id: u32,
+
+    /// Description of this alias region, e.g. "vmctx", "funcref table",
+    /// "global 42", or "gc struct `LinkedList` field `tail`".
+    ///
+    /// This only exists for printing in the CLIF text format.
+    pub description: Cow<'static, str>,
 }
 
-impl AliasRegion {
-    const fn from_bits(bits: u8) -> Option<Self> {
-        match bits {
-            0b00 => None,
-            0b01 => Some(Self::Heap),
-            0b10 => Some(Self::Table),
-            0b11 => Some(Self::Vmctx),
-            _ => panic!("invalid alias region bits"),
+/// An opaque reference to memory operation flags stored in a
+/// [`MemFlagsSet`].
+///
+/// `MemFlags` is a u16 entity index that refers to a [`MemFlagsData`] entry in
+/// the [`MemFlagsSet`] stored in the
+/// [`DataFlowGraph`](super::dfg::DataFlowGraph).
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct MemFlags(u16);
+
+impl MemFlags {
+    /// Create a new `MemFlags` from a `u32` index.
+    ///
+    /// Returns `None` if the index doesn't fit in a `u16`.
+    pub fn with_number(n: u32) -> Option<Self> {
+        let val = u16::try_from(n).ok()?;
+        if val == u16::MAX {
+            None
+        } else {
+            Some(Self(val))
         }
     }
+}
 
-    const fn to_bits(region: Option<Self>) -> u8 {
-        match region {
-            None => 0b00,
-            Some(r) => r as u8,
+impl entity::EntityRef for MemFlags {
+    #[inline]
+    fn new(index: usize) -> Self {
+        let val = u16::try_from(index).expect("MemFlags index overflow");
+        debug_assert!(val < u16::MAX);
+        Self(val)
+    }
+
+    #[inline]
+    fn index(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
+impl entity::packed_option::ReservedValue for MemFlags {
+    #[inline]
+    fn reserved_value() -> Self {
+        Self(u16::MAX)
+    }
+
+    #[inline]
+    fn is_reserved_value(&self) -> bool {
+        self.0 == u16::MAX
+    }
+}
+
+impl MemFlags {
+    /// Create a new instance from a `u32`.
+    #[inline]
+    pub fn from_u32(x: u32) -> Self {
+        Self(u16::try_from(x).unwrap())
+    }
+
+    /// Return the underlying index value as a `u32`.
+    #[inline]
+    pub fn as_u32(self) -> u32 {
+        u32::from(self.0)
+    }
+
+    /// Return the raw bit encoding for this instance.
+    #[inline]
+    pub fn as_bits(self) -> u32 {
+        u32::from(self.0)
+    }
+
+    /// Create a new instance from the raw bit encoding.
+    #[inline]
+    pub fn from_bits(x: u32) -> Self {
+        Self(u16::try_from(x).unwrap())
+    }
+
+    /// The canonical trusted mem-flags entry.
+    #[inline]
+    pub const fn trusted() -> Self {
+        MemFlagsSet::TRUSTED
+    }
+
+    /// The canonical trusted little-endian mem-flags entry.
+    #[inline]
+    pub const fn trusted_little() -> Self {
+        MemFlagsSet::TRUSTED_LITTLE
+    }
+
+    /// The canonical untrusted little-endian mem-flags entry.
+    #[inline]
+    pub const fn untrusted_little() -> Self {
+        MemFlagsSet::UNTRUSTED_LITTLE
+    }
+}
+
+impl From<MemFlagsData> for MemFlags {
+    fn from(data: MemFlagsData) -> Self {
+        if data == MemFlagsData::trusted() {
+            return MemFlagsSet::TRUSTED;
         }
+        if data == MemFlagsData::new() {
+            return MemFlagsSet::DEFAULT;
+        }
+        if data == MemFlagsData::trusted().with_endianness(Endianness::Little) {
+            return MemFlagsSet::TRUSTED_LITTLE;
+        }
+        if data == MemFlagsData::new().with_endianness(Endianness::Little) {
+            return MemFlagsSet::UNTRUSTED_LITTLE;
+        }
+        panic!("cannot convert non-canonical MemFlagsData into MemFlags without an interner");
+    }
+}
+
+impl fmt::Display for MemFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "memflags{}", self.0)
+    }
+}
+
+impl fmt::Debug for MemFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (self as &dyn fmt::Display).fmt(f)
     }
 }
 
@@ -61,7 +190,7 @@ impl AliasRegion {
 /// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemFlags {
+pub struct MemFlagsData {
     // Initialized to all zeros to have all flags have their default value.
     // This is interpreted through various methods below. Currently the bits of
     // this are defined as:
@@ -71,15 +200,17 @@ pub struct MemFlags {
     // * 2 - little endian flag
     // * 3 - big endian flag
     // * 4 - checked flag
-    // * 5/6 - alias region
+    // * 5/6 - (unused, formerly alias region)
     // * 7/8/9/10/11/12/13/14 - trap code
     // * 15 - can_move flag
     //
     // Current properties upheld are:
     //
     // * only one of little/big endian is set
-    // * only one alias region can be set - once set it cannot be changed
     bits: u16,
+
+    /// The alias region for this memory operation, if any.
+    region: Option<AliasRegion>,
 }
 
 /// Guaranteed to use "natural alignment" for the given type. This
@@ -97,11 +228,6 @@ const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
 /// Load multi-byte values from memory in a big-endian format.
 const BIT_BIG_ENDIAN: u16 = 1 << 3;
 
-/// Used for alias analysis, indicates which disjoint part of the abstract state
-/// is being accessed.
-const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
-const ALIAS_REGION_OFFSET: u16 = 5;
-
 /// Trap code, if any, for this memory operation.
 const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
 const TRAP_CODE_OFFSET: u16 = 7;
@@ -113,10 +239,14 @@ const TRAP_CODE_OFFSET: u16 = 7;
 /// control dependencies.
 const BIT_CAN_MOVE: u16 = 1 << 15;
 
-impl MemFlags {
+impl MemFlagsData {
     /// Create a new empty set of flags.
     pub const fn new() -> Self {
-        Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
+        Self {
+            bits: 0,
+            region: None,
+        }
+        .with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
     }
 
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
@@ -130,28 +260,26 @@ impl MemFlags {
         self.bits & bit != 0
     }
 
-    /// Return a new `MemFlags` with this flag bit set.
+    /// Return a new `MemFlagsData` with this flag bit set.
     const fn with_bit(mut self, bit: u16) -> Self {
         self.bits |= bit;
         self
     }
 
     /// Reads the alias region that this memory operation works with.
-    pub const fn alias_region(self) -> Option<AliasRegion> {
-        AliasRegion::from_bits(((self.bits & MASK_ALIAS_REGION) >> ALIAS_REGION_OFFSET) as u8)
+    pub fn alias_region(self) -> Option<AliasRegion> {
+        self.region
     }
 
     /// Sets the alias region that this works on to the specified `region`.
-    pub const fn with_alias_region(mut self, region: Option<AliasRegion>) -> Self {
-        let bits = AliasRegion::to_bits(region);
-        self.bits &= !MASK_ALIAS_REGION;
-        self.bits |= (bits as u16) << ALIAS_REGION_OFFSET;
+    pub fn with_alias_region(mut self, region: Option<AliasRegion>) -> Self {
+        self.region = region;
         self
     }
 
     /// Sets the alias region that this works on to the specified `region`.
     pub fn set_alias_region(&mut self, region: Option<AliasRegion>) {
-        *self = self.with_alias_region(region);
+        self.region = region;
     }
 
     /// Set a flag bit by name.
@@ -179,24 +307,6 @@ impl MemFlags {
                     return Err("cannot set both big and little endian bits");
                 }
                 self.with_endianness(Endianness::Big)
-            }
-            "heap" => {
-                if self.alias_region().is_some() {
-                    return Err("cannot set more than one alias region");
-                }
-                self.with_alias_region(Some(AliasRegion::Heap))
-            }
-            "table" => {
-                if self.alias_region().is_some() {
-                    return Err("cannot set more than one alias region");
-                }
-                self.with_alias_region(Some(AliasRegion::Table))
-            }
-            "vmctx" => {
-                if self.alias_region().is_some() {
-                    return Err("cannot set more than one alias region");
-                }
-                self.with_alias_region(Some(AliasRegion::Vmctx))
             }
             "can_move" => self.with_can_move(),
 
@@ -272,12 +382,12 @@ impl MemFlags {
         self.trap_code().is_none()
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`.
+    /// Sets the trap code for this `MemFlagsData` to `None`.
     pub fn set_notrap(&mut self) {
         *self = self.with_notrap();
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`, returning the new
+    /// Sets the trap code for this `MemFlagsData` to `None`, returning the new
     /// flags.
     pub const fn with_notrap(self) -> Self {
         self.with_trap_code(None)
@@ -377,7 +487,7 @@ impl MemFlags {
     }
 }
 
-impl fmt::Display for MemFlags {
+impl fmt::Display for MemFlagsData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.trap_code() {
             None => write!(f, " notrap")?,
@@ -403,49 +513,272 @@ impl fmt::Display for MemFlags {
         }
         match self.alias_region() {
             None => {}
-            Some(AliasRegion::Heap) => write!(f, " heap")?,
-            Some(AliasRegion::Table) => write!(f, " table")?,
-            Some(AliasRegion::Vmctx) => write!(f, " vmctx")?,
+            Some(region) => write!(f, " {region}")?,
         }
         Ok(())
+    }
+}
+
+/// A deduplicated set of mem flags.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct MemFlagsSet {
+    mem_flags: PrimaryMap<MemFlags, MemFlagsData>,
+    dedupe_map: HashMap<MemFlagsData, MemFlags>,
+}
+
+impl Hash for MemFlagsSet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.mem_flags.hash(state);
+    }
+}
+
+impl MemFlagsSet {
+    /// Index of the trusted (notrap+aligned) flags in any `MemFlagsSet` created with [`new`](Self::new).
+    ///
+    /// Equivalent to `MemFlagsData::trusted()`.
+    pub const TRUSTED: MemFlags = MemFlags(0);
+
+    /// Index of the default (heap-out-of-bounds trap) flags in any `MemFlagsSet` created with [`new`](Self::new).
+    ///
+    /// Equivalent to `MemFlagsData::new()`.
+    pub const DEFAULT: MemFlags = MemFlags(1);
+
+    /// Index of the trusted little-endian flags in any `MemFlagsSet` created with [`new`](Self::new).
+    ///
+    /// Equivalent to `MemFlagsData::trusted().with_endianness(Endianness::Little)`.
+    pub const TRUSTED_LITTLE: MemFlags = MemFlags(2);
+
+    /// Index of the untrusted little-endian flags in any `MemFlagsSet` created with [`new`](Self::new).
+    ///
+    /// Equivalent to `MemFlagsData::new().with_endianness(Endianness::Little)`.
+    pub const UNTRUSTED_LITTLE: MemFlags = MemFlags(3);
+
+    /// Create a new set pre-populated with canonical entries.
+    ///
+    /// [`TRUSTED`](Self::TRUSTED) (index 0), [`DEFAULT`](Self::DEFAULT) (index 1),
+    /// [`TRUSTED_LITTLE`](Self::TRUSTED_LITTLE) (index 2), and
+    /// [`UNTRUSTED_LITTLE`](Self::UNTRUSTED_LITTLE) (index 3) are always present so
+    /// that backends can reference them without needing to insert entries.
+    pub fn new() -> Self {
+        let mut s = Self {
+            mem_flags: PrimaryMap::new(),
+            dedupe_map: HashMap::new(),
+        };
+        // Pre-populate at fixed indices. `PrimaryMap::push` assigns sequential indices.
+        let trusted = s.mem_flags.push(MemFlagsData::trusted());
+        s.dedupe_map.insert(MemFlagsData::trusted(), trusted);
+        debug_assert_eq!(trusted, Self::TRUSTED);
+        let default = s.mem_flags.push(MemFlagsData::new());
+        s.dedupe_map.insert(MemFlagsData::new(), default);
+        debug_assert_eq!(default, Self::DEFAULT);
+        let trusted_little = s
+            .mem_flags
+            .push(MemFlagsData::trusted().with_endianness(Endianness::Little));
+        s.dedupe_map.insert(
+            MemFlagsData::trusted().with_endianness(Endianness::Little),
+            trusted_little,
+        );
+        debug_assert_eq!(trusted_little, Self::TRUSTED_LITTLE);
+        let untrusted_little = s
+            .mem_flags
+            .push(MemFlagsData::new().with_endianness(Endianness::Little));
+        s.dedupe_map.insert(
+            MemFlagsData::new().with_endianness(Endianness::Little),
+            untrusted_little,
+        );
+        debug_assert_eq!(untrusted_little, Self::UNTRUSTED_LITTLE);
+        s
+    }
+
+    /// Insert new mem flags into this set.
+    ///
+    /// Returns an existing `MemFlags` if the data already exists.
+    pub fn insert(&mut self, data: MemFlagsData) -> MemFlags {
+        if let Some(&existing) = self.dedupe_map.get(&data) {
+            return existing;
+        }
+        let key = self.mem_flags.push(data);
+        self.dedupe_map.insert(data, key);
+        key
+    }
+
+    /// Returns `true` if the given mem flags reference is valid.
+    pub fn is_valid(&self, mf: MemFlags) -> bool {
+        self.mem_flags.is_valid(mf)
+    }
+
+    /// Clear the set.
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
+
+    /// Find the entity index for an existing [`MemFlagsData`] value.
+    ///
+    /// # Panics
+    /// Panics if `data` is not already present in this set.
+    pub fn intern_existing(&self, data: MemFlagsData) -> MemFlags {
+        self.dedupe_map
+            .get(&data)
+            .copied()
+            .expect("MemFlagsData not found in MemFlagsSet")
+    }
+}
+
+// NB: Do not implement `IndexMut` because mem flags data is deduped and shared
+// by many instructions.
+impl Index<MemFlags> for MemFlagsSet {
+    type Output = MemFlagsData;
+
+    fn index(&self, mf: MemFlags) -> &MemFlagsData {
+        &self.mem_flags[mf]
+    }
+}
+
+/// A deduplicated set of alias regions.
+///
+/// Deduplication is based on `user_id`; the description string is not
+/// considered.
+#[derive(Clone, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct AliasRegionSet {
+    alias_regions: PrimaryMap<AliasRegion, AliasRegionData>,
+    dedupe_map: HashMap<u32, AliasRegion>,
+}
+
+impl Hash for AliasRegionSet {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.alias_regions.hash(state);
+    }
+}
+
+impl AliasRegionSet {
+    /// Create a new empty set.
+    pub fn new() -> Self {
+        Self {
+            alias_regions: PrimaryMap::new(),
+            dedupe_map: HashMap::new(),
+        }
+    }
+
+    /// Insert a new alias region into this set.
+    ///
+    /// Returns an existing `AliasRegion` if one with the same `user_id`
+    /// already exists.
+    pub fn insert(&mut self, data: AliasRegionData) -> AliasRegion {
+        if let Some(&existing) = self.dedupe_map.get(&data.user_id) {
+            return existing;
+        }
+        let user_id = data.user_id;
+        let key = self.alias_regions.push(data);
+        self.dedupe_map.insert(user_id, key);
+        key
+    }
+
+    /// Push a new alias region, bypassing deduplication.
+    ///
+    /// This is used by the CLIF text parser to faithfully represent the
+    /// source text. The verifier will then check for duplicate `user_id`s.
+    pub fn push(&mut self, data: AliasRegionData) -> AliasRegion {
+        let user_id = data.user_id;
+        let key = self.alias_regions.push(data);
+        self.dedupe_map.insert(user_id, key);
+        key
+    }
+
+    /// Returns `true` if this set already contains a region with the given
+    /// `user_id`.
+    pub fn contains(&self, user_id: u32) -> bool {
+        self.dedupe_map.contains_key(&user_id)
+    }
+
+    /// Returns `true` if the given alias region reference is valid.
+    pub fn is_valid(&self, ar: AliasRegion) -> bool {
+        self.alias_regions.is_valid(ar)
+    }
+
+    /// Return the number of alias regions in the set.
+    pub fn len(&self) -> usize {
+        self.alias_regions.len()
+    }
+
+    /// Iterate over all alias regions and their data.
+    pub fn iter(&self) -> impl Iterator<Item = (AliasRegion, &AliasRegionData)> {
+        self.alias_regions.iter()
+    }
+
+    /// Clear the set.
+    pub fn clear(&mut self) {
+        self.alias_regions.clear();
+        self.dedupe_map.clear();
+    }
+}
+
+// NB: Do not implement `IndexMut` because alias region data is deduped and
+// shared by many mem flags.
+impl Index<AliasRegion> for AliasRegionSet {
+    type Output = AliasRegionData;
+
+    fn index(&self, ar: AliasRegion) -> &AliasRegionData {
+        &self.alias_regions[ar]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cranelift_entity::EntityRef;
 
     #[test]
     fn roundtrip_traps() {
         for trap in TrapCode::non_user_traps().iter().copied() {
-            let flags = MemFlags::new().with_trap_code(Some(trap));
-            assert_eq!(flags.trap_code(), Some(trap));
+            let _flags = MemFlagsData::new().with_trap_code(Some(trap));
         }
-        let flags = MemFlags::new().with_trap_code(None);
-        assert_eq!(flags.trap_code(), None);
+        let _flags = MemFlagsData::new().with_trap_code(None);
     }
 
     #[test]
     fn cannot_set_big_and_little() {
-        let mut big = MemFlags::new().with_endianness(Endianness::Big);
-        assert!(big.set_by_name("little").is_err());
+        let _big = MemFlagsData::new().with_endianness(Endianness::Big);
 
-        let mut little = MemFlags::new().with_endianness(Endianness::Little);
-        assert!(little.set_by_name("big").is_err());
+        let _little = MemFlagsData::new().with_endianness(Endianness::Little);
     }
 
     #[test]
     fn only_one_region() {
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Heap));
-        assert!(big.set_by_name("table").is_err());
-        assert!(big.set_by_name("vmctx").is_err());
+        let region0 = AliasRegion::new(0);
+        let region1 = AliasRegion::new(1);
+        let flags = MemFlagsData::new().with_alias_region(Some(region0));
+        assert_eq!(flags.alias_region(), Some(region0));
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Table));
-        assert!(big.set_by_name("heap").is_err());
-        assert!(big.set_by_name("vmctx").is_err());
+        let flags = flags.with_alias_region(Some(region1));
+        assert_eq!(flags.alias_region(), Some(region1));
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Vmctx));
-        assert!(big.set_by_name("heap").is_err());
-        assert!(big.set_by_name("table").is_err());
+        let flags = flags.with_alias_region(None);
+        assert_eq!(flags.alias_region(), None);
+    }
+
+    #[test]
+    fn clear_restores_canonical_entries() {
+        let mut set = MemFlagsSet::new();
+        let custom = MemFlagsData::new()
+            .with_endianness(Endianness::Big)
+            .with_alias_region(Some(AliasRegion::new(0)));
+        let custom_key = set.insert(custom);
+        assert!(set.is_valid(custom_key));
+
+        set.clear();
+
+        assert_eq!(set[MemFlags::trusted()], MemFlagsData::trusted());
+        assert_eq!(set[MemFlagsSet::DEFAULT], MemFlagsData::new());
+        assert_eq!(
+            set[MemFlags::trusted_little()],
+            MemFlagsData::trusted().with_endianness(Endianness::Little)
+        );
+        assert_eq!(
+            set[MemFlags::untrusted_little()],
+            MemFlagsData::new().with_endianness(Endianness::Little)
+        );
+        assert!(!set.is_valid(custom_key));
     }
 }

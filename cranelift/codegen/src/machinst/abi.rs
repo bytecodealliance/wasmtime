@@ -1450,7 +1450,7 @@ fn generate_gv<M: ABIMachineSpec>(
             ));
             return into_reg.to_reg();
         }
-        ref other => panic!("global value for stack limit not supported: {other}"),
+        ref other => panic!("global value for stack limit not supported: {other:?}"),
     }
 }
 

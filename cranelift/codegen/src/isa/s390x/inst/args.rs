@@ -105,14 +105,14 @@ impl MemArg {
             MemArg::BXD12 { flags, .. } => *flags,
             MemArg::BXD20 { flags, .. } => *flags,
             MemArg::RegOffset { flags, .. } => *flags,
-            MemArg::Label { .. } => MemFlags::trusted(),
-            MemArg::Constant { .. } => MemFlags::trusted(),
+            MemArg::Label { .. } => crate::ir::MemFlagsSet::TRUSTED,
+            MemArg::Constant { .. } => crate::ir::MemFlagsSet::TRUSTED,
             MemArg::Symbol { flags, .. } => *flags,
-            MemArg::InitialSPOffset { .. } => MemFlags::trusted(),
-            MemArg::IncomingArgOffset { .. } => MemFlags::trusted(),
-            MemArg::OutgoingArgOffset { .. } => MemFlags::trusted(),
-            MemArg::SlotOffset { .. } => MemFlags::trusted(),
-            MemArg::SpillOffset { .. } => MemFlags::trusted(),
+            MemArg::InitialSPOffset { .. } => crate::ir::MemFlagsSet::TRUSTED,
+            MemArg::IncomingArgOffset { .. } => crate::ir::MemFlagsSet::TRUSTED,
+            MemArg::OutgoingArgOffset { .. } => crate::ir::MemFlagsSet::TRUSTED,
+            MemArg::SlotOffset { .. } => crate::ir::MemFlagsSet::TRUSTED,
+            MemArg::SpillOffset { .. } => crate::ir::MemFlagsSet::TRUSTED,
         }
     }
 }

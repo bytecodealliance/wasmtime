@@ -383,6 +383,11 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
 
     /// The [`FrameLayout`] for the function currently being compiled.
     fn frame_layout(&self) -> &FrameLayout;
+
+    /// Provide the complete [`MemFlagsSet`](crate::ir::MemFlagsSet) for the function being
+    /// compiled so that backends can resolve [`MemFlags`](crate::ir::MemFlags) entity indices
+    /// to [`MemFlagsData`](crate::ir::MemFlagsData) during instruction emission.
+    fn set_mem_flags(&mut self, _mem_flags: crate::ir::MemFlagsSet) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

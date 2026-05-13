@@ -10,9 +10,9 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
     ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder,
-    InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, RelSourceLoc,
-    SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments,
-    ValueLabelStart, types,
+    InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlagsData,
+    RelSourceLoc, SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel,
+    ValueLabelAssignments, ValueLabelStart, types,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -868,7 +868,7 @@ impl<'a> FunctionBuilder<'a> {
         dest_align: u8,
         src_align: u8,
         non_overlapping: bool,
-        mut flags: MemFlags,
+        mut flags: MemFlagsData,
     ) {
         // Currently the result of guess work, not actual profiling.
         const THRESHOLD: u64 = 4;
@@ -964,7 +964,7 @@ impl<'a> FunctionBuilder<'a> {
         ch: u8,
         size: u64,
         buffer_align: u8,
-        mut flags: MemFlags,
+        mut flags: MemFlagsData,
     ) {
         // Currently the result of guess work, not actual profiling.
         const THRESHOLD: u64 = 4;
@@ -1096,7 +1096,7 @@ impl<'a> FunctionBuilder<'a> {
     /// `left` and `right` pointers respectively.  These are used to know whether
     /// to mark `load`s as aligned.  It's always fine to pass `1` for these, but
     /// passing something higher than the true alignment may trap or otherwise
-    /// misbehave as described in [`MemFlags::aligned`].
+    /// misbehave as described in [`MemFlagsData::aligned`].
     ///
     /// Note that `memcmp` is a *big-endian* and *unsigned* comparison.
     /// As such, this panics when called with `IntCC::Signed*`.
@@ -1109,7 +1109,7 @@ impl<'a> FunctionBuilder<'a> {
         size: u64,
         left_align: std::num::NonZeroU8,
         right_align: std::num::NonZeroU8,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) -> Value {
         use IntCC::*;
         let (zero_cc, empty_imm) = match int_cc {
@@ -1209,7 +1209,7 @@ mod tests {
     use cranelift_codegen::ir::condcodes::IntCC;
     use cranelift_codegen::ir::{
         AbiParam, BlockCall, ExceptionTableData, ExtFuncData, ExternalName, Function, InstBuilder,
-        MemFlags, Signature, UserExternalName, UserFuncName, Value, types::*,
+        MemFlagsData, Signature, UserExternalName, UserFuncName, Value, types::*,
     };
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;
@@ -1419,7 +1419,7 @@ block0:
                 8,
                 8,
                 true,
-                MemFlags::new(),
+                MemFlagsData::new(),
             );
             builder.ins().return_(&[dest]);
 
@@ -1471,7 +1471,7 @@ block0:
                 8,
                 8,
                 true,
-                MemFlags::new(),
+                MemFlagsData::new(),
             );
             builder.ins().return_(&[dest]);
 
@@ -1516,7 +1516,7 @@ block0:
 
             let dest = builder.use_var(y);
             let size = 8;
-            builder.emit_small_memset(frontend_config, dest, 1, size, 8, MemFlags::new());
+            builder.emit_small_memset(frontend_config, dest, 1, size, 8, MemFlagsData::new());
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
@@ -1555,7 +1555,7 @@ block0:
 
             let dest = builder.use_var(y);
             let size = 8192;
-            builder.emit_small_memset(frontend_config, dest, 1, size, 8, MemFlags::new());
+            builder.emit_small_memset(frontend_config, dest, 1, size, 8, MemFlagsData::new());
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
@@ -1664,7 +1664,7 @@ block0:
                     0,
                     align_eight,
                     align_eight,
-                    MemFlags::new(),
+                    MemFlagsData::new(),
                 )
             },
         );
@@ -1693,7 +1693,7 @@ block0:
                     1,
                     align_one,
                     align_one,
-                    MemFlags::new(),
+                    MemFlagsData::new(),
                 )
             },
         );
@@ -1722,7 +1722,7 @@ block0:
                     4,
                     align_four,
                     align_four,
-                    MemFlags::new(),
+                    MemFlagsData::new(),
                 )
             },
         );
@@ -1751,7 +1751,7 @@ block0:
                     16,
                     align_two,
                     align_two,
-                    MemFlags::new(),
+                    MemFlagsData::new(),
                 )
             },
         );
@@ -1783,7 +1783,7 @@ block0:
                     3,
                     one,
                     one,
-                    MemFlags::new(),
+                    MemFlagsData::new(),
                 )
             },
         );

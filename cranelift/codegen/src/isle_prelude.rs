@@ -820,13 +820,29 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn mem_flags_trusted(&mut self) -> MemFlags {
-            MemFlags::trusted()
+            crate::ir::MemFlagsSet::TRUSTED
         }
 
         #[inline]
-        fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
-            match flags.explicit_endianness() {
-                Some(crate::ir::Endianness::Little) | None => Some(flags),
+        fn mem_flags_data(&mut self, flags: MemFlags) -> Option<MemFlagsData> {
+            Some(self.dfg().mem_flags[flags])
+        }
+
+        #[inline]
+        fn mem_flags_intern(&mut self, data: MemFlagsData) -> MemFlags {
+            self.dfg().mem_flags.intern_existing(data)
+        }
+
+        #[inline]
+        fn mem_flags_trusted_data(&mut self) -> MemFlagsData {
+            MemFlagsData::trusted()
+        }
+
+        #[inline]
+        fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlagsData> {
+            let data = self.dfg().mem_flags[flags];
+            match data.explicit_endianness() {
+                Some(crate::ir::Endianness::Little) | None => Some(data),
                 Some(crate::ir::Endianness::Big) => None,
             }
         }

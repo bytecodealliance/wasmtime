@@ -132,13 +132,13 @@ block0:
 ;   push_frame_save 64, {}
 ; block0:
 ;   xzero x14
-;   xstore64 OutgoingArg(0), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(8), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(16), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(24), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(32), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(40), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(48), x14 // flags =  notrap aligned
+;   xstore64 OutgoingArg(0), x14 // flags = memflags0
+;   xstore64 OutgoingArg(8), x14 // flags = memflags0
+;   xstore64 OutgoingArg(16), x14 // flags = memflags0
+;   xstore64 OutgoingArg(24), x14 // flags = memflags0
+;   xstore64 OutgoingArg(32), x14 // flags = memflags0
+;   xstore64 OutgoingArg(40), x14 // flags = memflags0
+;   xstore64 OutgoingArg(48), x14 // flags = memflags0
 ;   xmov x4, x14
 ;   xmov x5, x14
 ;   xmov x6, x14
@@ -322,15 +322,15 @@ block0:
 ;   push_frame_save 80, {}
 ; block0:
 ;   xzero x14
-;   xstore64 OutgoingArg(0), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(8), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(16), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(24), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(32), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(40), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(48), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(56), x14 // flags =  notrap aligned
-;   xstore64 OutgoingArg(64), x14 // flags =  notrap aligned
+;   xstore64 OutgoingArg(0), x14 // flags = memflags0
+;   xstore64 OutgoingArg(8), x14 // flags = memflags0
+;   xstore64 OutgoingArg(16), x14 // flags = memflags0
+;   xstore64 OutgoingArg(24), x14 // flags = memflags0
+;   xstore64 OutgoingArg(32), x14 // flags = memflags0
+;   xstore64 OutgoingArg(40), x14 // flags = memflags0
+;   xstore64 OutgoingArg(48), x14 // flags = memflags0
+;   xstore64 OutgoingArg(56), x14 // flags = memflags0
+;   xstore64 OutgoingArg(64), x14 // flags = memflags0
 ;   xmov x4, x14
 ;   xmov x5, x14
 ;   xmov x6, x14
@@ -384,13 +384,13 @@ block0(v0: i32):
 ; VCode:
 ;   push_frame
 ;   stack_alloc32 1000016
-;   xstore64 sp+1000008, x16 // flags =  notrap aligned
+;   xstore64 sp+1000008, x16 // flags = memflags0
 ; block0:
 ;   xmov x16, x0
 ;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }], clobbers: PRegSet { bits: [65534, 4294967295, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   xmov x5, x16
 ;   xadd32 x0, x5, x0
-;   x16 = xload64 sp+1000008 // flags = notrap aligned
+;   x16 = xload64 sp+1000008 // flags =memflags0
 ;   stack_free32 1000016
 ;   pop_frame
 ;   ret

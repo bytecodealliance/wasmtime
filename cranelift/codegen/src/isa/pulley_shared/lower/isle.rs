@@ -260,7 +260,7 @@ where
         U6::new(imm)
     }
 
-    fn endianness(&mut self, flags: MemFlags) -> Endianness {
+    fn endianness(&mut self, flags: MemFlagsData) -> Endianness {
         flags.endianness(self.backend.isa_flags.endianness())
     }
 
@@ -272,15 +272,15 @@ where
         P::pointer_width()
     }
 
-    fn memflags_nontrapping(&mut self, flags: MemFlags) -> bool {
+    fn memflags_nontrapping(&mut self, flags: MemFlagsData) -> bool {
         flags.trap_code().is_none()
     }
 
-    fn memflags_trapping(&mut self, flags: MemFlags) -> Option<TrapCode> {
+    fn memflags_trapping(&mut self, flags: MemFlagsData) -> Option<TrapCode> {
         flags.trap_code()
     }
 
-    fn memflags_is_wasm(&mut self, flags: MemFlags) -> bool {
+    fn memflags_is_wasm(&mut self, flags: MemFlagsData) -> bool {
         flags.trap_code() == Some(TrapCode::HEAP_OUT_OF_BOUNDS)
             && self.endianness(flags) == Endianness::Little
     }

@@ -126,7 +126,7 @@ pub trait GcCompiler {
         builder: &mut FunctionBuilder,
         ty: WasmRefType,
         src: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<ir::Value>;
 
     /// Emit a write barrier for when we are writing a GC reference over another
@@ -168,7 +168,7 @@ pub trait GcCompiler {
         ty: WasmRefType,
         dst: ir::Value,
         new_val: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<()>;
 }
 

@@ -51,6 +51,10 @@ function u1:0() tail {
     fn15 = %FmaF32 sig15
     fn16 = %FmaF64 sig16
 
+    region0 = 0 "heap"
+    region1 = 1 "table"
+    region2 = 2 "vmctx"
+
 block0:
     v0 = iconst.i64 0xef31_de2a_2352_79ff
     v161 -> v0
@@ -82,87 +86,87 @@ block0:
     v22 = iconst.i64 0
     v23 = uextend.i128 v22  ; v22 = 0
     v24 = stack_addr.i64 ss2
-    store notrap table v23, v24
+    store notrap region1 v23, v24
     v25 = stack_addr.i64 ss2+16
-    store notrap table v23, v25
+    store notrap region1 v23, v25
     v26 = stack_addr.i64 ss2+32
-    store notrap table v20, v26  ; v20 = 0
+    store notrap region1 v20, v26  ; v20 = 0
     v27 = stack_addr.i64 ss1
-    store notrap table v23, v27
+    store notrap region1 v23, v27
     v28 = stack_addr.i64 ss1+16
-    store notrap table v23, v28
+    store notrap region1 v23, v28
     v29 = stack_addr.i64 ss1+32
-    store notrap table v22, v29  ; v22 = 0
+    store notrap region1 v22, v29  ; v22 = 0
     v30 = stack_addr.i64 ss1+40
-    store notrap table v21, v30  ; v21 = 0
+    store notrap region1 v21, v30  ; v21 = 0
     v31 = stack_addr.i64 ss1+44
-    store notrap table v20, v31  ; v20 = 0
+    store notrap region1 v20, v31  ; v20 = 0
     v32 = stack_addr.i64 ss1+46
-    store notrap table v19, v32  ; v19 = 0
+    store notrap region1 v19, v32  ; v19 = 0
     v33 = stack_addr.i64 ss0
-    store notrap table v23, v33
+    store notrap region1 v23, v33
     v34 = stack_addr.i64 ss0+16
-    store notrap table v23, v34
+    store notrap region1 v23, v34
     v35 = stack_addr.i64 ss0+32
-    store notrap table v23, v35
+    store notrap region1 v23, v35
     v36 = stack_addr.i64 ss0+48
-    store notrap table v20, v36  ; v20 = 0
+    store notrap region1 v20, v36  ; v20 = 0
     v37 = stack_addr.i64 ss3
-    store notrap vmctx v23, v37
+    store notrap region2 v23, v37
     v38 = stack_addr.i64 ss3+16
-    store notrap vmctx v23, v38
+    store notrap region2 v23, v38
     v39 = stack_addr.i64 ss3+32
-    store notrap vmctx v23, v39
+    store notrap region2 v23, v39
     v40 = stack_addr.i64 ss3+48
-    store notrap vmctx v23, v40
+    store notrap region2 v23, v40
     v41 = stack_addr.i64 ss3+64
-    store notrap vmctx v23, v41
+    store notrap region2 v23, v41
     v42 = stack_addr.i64 ss3+80
-    store notrap vmctx v23, v42
+    store notrap region2 v23, v42
     v43 = stack_addr.i64 ss3+96
-    store notrap vmctx v21, v43  ; v21 = 0
+    store notrap region2 v21, v43  ; v21 = 0
     v44 = stack_addr.i64 ss3+100
-    store notrap vmctx v20, v44  ; v20 = 0
+    store notrap region2 v20, v44  ; v20 = 0
     v45 = stack_addr.i64 ss3+102
-    store notrap vmctx v19, v45  ; v19 = 0
+    store notrap region2 v19, v45  ; v19 = 0
     v46 = stack_addr.i64 ss4
-    store notrap heap v23, v46
+    store notrap region0 v23, v46
     v47 = stack_addr.i64 ss4+16
-    store notrap heap v23, v47
+    store notrap region0 v23, v47
     v48 = stack_addr.i64 ss4+32
-    store notrap heap v23, v48
+    store notrap region0 v23, v48
     v49 = stack_addr.i64 ss4+48
-    store notrap heap v23, v49
+    store notrap region0 v23, v49
     v50 = stack_addr.i64 ss4+64
-    store notrap heap v23, v50
+    store notrap region0 v23, v50
     v51 = stack_addr.i64 ss4+80
-    store notrap heap v23, v51
+    store notrap region0 v23, v51
     v52 = stack_addr.i64 ss4+96
-    store notrap heap v22, v52  ; v22 = 0
+    store notrap region0 v22, v52  ; v22 = 0
     v53 = stack_addr.i64 ss4+104
-    store notrap heap v21, v53  ; v21 = 0
+    store notrap region0 v21, v53  ; v21 = 0
     v54 = stack_addr.i64 ss4+108
-    store notrap heap v20, v54  ; v20 = 0
+    store notrap region0 v20, v54  ; v20 = 0
     v55 = stack_addr.i64 ss5
-    store notrap vmctx v23, v55
+    store notrap region2 v23, v55
     v56 = stack_addr.i64 ss5+16
-    store notrap vmctx v23, v56
+    store notrap region2 v23, v56
     v57 = stack_addr.i64 ss5+32
-    store notrap vmctx v23, v57
+    store notrap region2 v23, v57
     v58 = stack_addr.i64 ss5+48
-    store notrap vmctx v23, v58
+    store notrap region2 v23, v58
     v59 = stack_addr.i64 ss5+64
-    store notrap vmctx v23, v59
+    store notrap region2 v23, v59
     v60 = stack_addr.i64 ss5+80
-    store notrap vmctx v23, v60
+    store notrap region2 v23, v60
     v61 = stack_addr.i64 ss5+96
-    store notrap vmctx v23, v61
+    store notrap region2 v23, v61
     v62 = stack_addr.i64 ss5+112
-    store notrap vmctx v22, v62  ; v22 = 0
+    store notrap region2 v22, v62  ; v22 = 0
     v63 = stack_addr.i64 ss5+120
-    store notrap vmctx v21, v63  ; v21 = 0
+    store notrap region2 v21, v63  ; v21 = 0
     v64 = stack_addr.i64 ss5+124
-    store notrap vmctx v20, v64  ; v20 = 0
+    store notrap region2 v20, v64  ; v20 = 0
     v65 = icmp_imm uge v3, 0x504d  ; v3 = 0xffef
     brif v65, block3, block2
 

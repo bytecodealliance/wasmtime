@@ -9,15 +9,16 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
-    types::*,
+    AliasRegionData, AliasRegionSet, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness,
+    ExternalName, FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot,
+    UserExternalName, UserFuncName, Value, types::*,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::isa::OwnedTargetIsa;
 use cranelift::prelude::{
-    ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData, StackSlotKind,
+    ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlagsData, StackSlotData,
+    StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -133,7 +134,7 @@ fn insert_stack_load(
     let type_size = typevar.bytes();
     let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
 
-    // `stack_load` doesn't support setting MemFlags, and it does not set any
+    // `stack_load` doesn't support setting MemFlagsData, and it does not set any
     // alias analysis bits, so we can only emit it for `Other` slots.
     if category != AACategory::Other {
         return Err(arbitrary::Error::IncorrectFormat.into());
@@ -160,7 +161,7 @@ fn insert_stack_store(
 
     let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
 
-    // `stack_store` doesn't support setting MemFlags, and it does not set any
+    // `stack_store` doesn't support setting MemFlagsData, and it does not set any
     // alias analysis bits, so we can only emit it for `Other` slots.
     if category != AACategory::Other {
         return Err(arbitrary::Error::IncorrectFormat.into());
@@ -256,7 +257,7 @@ fn insert_bitcast(
     let to_var = fgen.get_variable_of_type(rets[0])?;
 
     // TODO: We can generate little/big endian flags here.
-    let mut memflags = MemFlags::new();
+    let mut memflags = MemFlagsData::new();
 
     // When bitcasting between vectors of different lane counts, we need to
     // specify the endianness.
@@ -284,11 +285,14 @@ fn insert_load_store(
     let type_size = ctrl_type.bytes();
 
     let is_atomic = [Opcode::AtomicLoad, Opcode::AtomicStore].contains(&opcode);
-    let (address, flags, offset) =
+    let (address, flags_data, offset) =
         fgen.generate_address_and_memflags(builder, type_size, is_atomic)?;
 
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
+
+    // Insert MemFlagsData into DFG to get a MemFlags entity for format constructors.
+    let flags = builder.func.dfg.mem_flags.insert(flags_data);
 
     match opcode.format() {
         InstructionFormat::LoadNoOffset => {
@@ -1184,12 +1188,21 @@ impl AACategory {
         ]
     }
 
-    pub fn update_memflags(&self, flags: &mut MemFlags) {
+    pub fn update_memflags(&self, flags: &mut MemFlagsData, alias_regions: &mut AliasRegionSet) {
         flags.set_alias_region(match self {
             AACategory::Other => None,
-            AACategory::Heap => Some(AliasRegion::Heap),
-            AACategory::Table => Some(AliasRegion::Table),
-            AACategory::VmCtx => Some(AliasRegion::Vmctx),
+            AACategory::Heap => Some(alias_regions.insert(AliasRegionData {
+                user_id: 0,
+                description: "heap".into(),
+            })),
+            AACategory::Table => Some(alias_regions.insert(AliasRegionData {
+                user_id: 1,
+                description: "table".into(),
+            })),
+            AACategory::VmCtx => Some(alias_regions.insert(AliasRegionData {
+                user_id: 2,
+                description: "vmctx".into(),
+            })),
         })
     }
 }
@@ -1350,7 +1363,7 @@ where
         builder: &mut FunctionBuilder,
         min_size: u32,
         is_atomic: bool,
-    ) -> Result<(Value, MemFlags, Offset32)> {
+    ) -> Result<(Value, MemFlagsData, Offset32)> {
         // Should we generate an aligned address
         // Some backends have issues with unaligned atomics.
         // AArch64: https://github.com/bytecodealliance/wasmtime/issues/5483
@@ -1371,7 +1384,7 @@ where
             bool::arbitrary(self.u)?
         };
 
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         // Even if we picked an aligned address, we can always generate unaligned memflags
         if aligned && bool::arbitrary(self.u)? {
             flags.set_aligned();
@@ -1385,7 +1398,7 @@ where
             self.generate_load_store_address(builder, min_size, aligned)?;
 
         // Set the Alias Analysis bits on the memflags
-        category.update_memflags(&mut flags);
+        category.update_memflags(&mut flags, &mut builder.func.dfg.alias_regions);
 
         // Pick an offset to pass into the load/store.
         let offset = if aligned {
@@ -1680,9 +1693,9 @@ where
 
                 // Each stack slot has an associated category, that means we have to set the
                 // correct memflags for it. So we can't use `stack_store` directly.
-                let mut flags = MemFlags::new();
+                let mut flags = MemFlagsData::new();
                 flags.set_notrap();
-                category.update_memflags(&mut flags);
+                category.update_memflags(&mut flags, &mut builder.func.dfg.alias_regions);
 
                 builder.ins().store(flags, val, addr, 0);
 

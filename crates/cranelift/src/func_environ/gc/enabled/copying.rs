@@ -7,9 +7,9 @@
 //! collector can find and update roots when it relocates objects.
 
 use super::*;
-use crate::TRAP_INTERNAL_ASSERT;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::TargetEnvironment;
+use crate::{TRAP_INTERNAL_ASSERT, VMCTX_ALIAS_REGION_DATA};
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::copying::{
@@ -36,7 +36,7 @@ impl CopyingCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         )
@@ -53,13 +53,13 @@ impl CopyingCompiler {
     ) -> (ir::Value, ir::Value) {
         let bump_ptr = builder.ins().load(
             ir::types::I32,
-            ir::MemFlags::trusted().with_can_move(),
+            ir::MemFlagsData::trusted().with_can_move(),
             ptr_to_heap_data,
             i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
         );
         let active_space_end = builder.ins().load(
             ir::types::I32,
-            ir::MemFlags::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             ptr_to_heap_data,
             i32::from(func_env.offsets.ptr.vmcopying_heap_data_active_space_end()),
         );
@@ -153,8 +153,13 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
+            let vmctx_region = builder
+                .func
+                .dfg
+                .alias_regions
+                .insert(VMCTX_ALIAS_REGION_DATA);
             builder.ins().store(
-                ir::MemFlags::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
+                ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                 end_of_object,
                 ptr_to_heap_data,
                 i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
@@ -170,7 +175,7 @@ impl CopyingCompiler {
                 .ins()
                 .iconst(ir::types::I32, i64::from(kind.as_u32()));
             builder.ins().store(
-                ir::MemFlags::trusted(),
+                ir::MemFlagsData::trusted(),
                 kind_val,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
@@ -179,7 +184,7 @@ impl CopyingCompiler {
             // Write `VMGcHeader::type_index`.
             let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
             builder.ins().store(
-                ir::MemFlags::trusted(),
+                ir::MemFlagsData::trusted(),
                 shared_ty,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
@@ -187,7 +192,7 @@ impl CopyingCompiler {
 
             // Write `VMCopyingHeader::object_size`.
             builder.ins().istore32(
-                ir::MemFlags::trusted(),
+                ir::MemFlagsData::trusted(),
                 aligned_size_64,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_SIZE).unwrap(),
@@ -412,7 +417,7 @@ impl GcCompiler for CopyingCompiler {
         builder: &mut FunctionBuilder,
         ty: WasmRefType,
         src: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<ir::Value> {
         assert!(ty.is_vmgcref_type());
 
@@ -448,7 +453,7 @@ impl GcCompiler for CopyingCompiler {
         ty: WasmRefType,
         dst: ir::Value,
         new_val: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<()> {
         // No write barrier needed for the copying collector.
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)

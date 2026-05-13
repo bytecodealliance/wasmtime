@@ -19,6 +19,7 @@
     i32.load8_u offset=0))
 
 ;; function u0:0(i64 vmctx, i64, i64, i32) tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -34,7 +35,7 @@
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 0
 ;; @0040                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
-;; @0040                               istore8 little heap v3, v9
+;; @0040                               istore8 little region0 v3, v9
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -42,6 +43,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i64) -> i32 tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -57,7 +59,7 @@
 ;; @0048                               v7 = iadd v6, v2
 ;; @0048                               v8 = iconst.i64 0
 ;; @0048                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
-;; @0048                               v10 = uload8.i32 little heap v9
+;; @0048                               v10 = uload8.i32 little region0 v9
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:

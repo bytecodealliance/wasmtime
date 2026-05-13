@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{self, F32, F64, I8, I8X16, I16, I32, I64, I128};
-use crate::ir::{self, MemFlags, Type};
+use crate::ir::{self, MemFlags, MemFlagsData, Type};
 use crate::isa::FunctionAlignment;
 use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::{CodegenError, CodegenResult, settings};

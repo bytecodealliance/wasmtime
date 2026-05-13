@@ -2297,13 +2297,13 @@
       x)
 
 ;; Bitcast between types residing in VRs with different lane counts is a
-;; no-op if the operation's MemFlags indicate a byte order compatible with
+;; no-op if the operation's MemFlagsData indicate a byte order compatible with
 ;; the current lane order.  Otherwise, lane elements need to be swapped,
 ;; first in the input type, and then again in the output type.  This could
 ;; be optimized further, but we don't bother at the moment since due to our
 ;; choice of lane order depending on the current function ABI, this case will
 ;; currently never arise in practice.
-(rule 4 (lower (bitcast (vr128_ty out_ty) flags x @ (value_type (vr128_ty in_ty))))
+(rule 4 (lower (bitcast (vr128_ty out_ty) (mem_flags_data flags) x @ (value_type (vr128_ty in_ty))))
       (abi_vec_elt_rev (lane_order_from_memflags flags) out_ty
         (abi_vec_elt_rev (lane_order_from_memflags flags) in_ty x)))
 
@@ -2443,14 +2443,14 @@
       (vec_replicate_lane ty x (be_lane_idx ty idx)))
 
 ;; Extract vector lane and store to big-endian memory.
-(rule 6 (lower (store flags @ (bigendian)
+(rule 6 (lower (store (mem_flags_data flags @ (bigendian))
                     (extractlane _ x @ (value_type ty) (u8_from_uimm8 idx))
                     addr offset))
       (side_effect (vec_store_lane ty x
                      (lower_address flags addr offset) (be_lane_idx ty idx))))
 
 ;; Extract vector lane and store to little-endian memory.
-(rule 5 (lower (store flags @ (littleendian)
+(rule 5 (lower (store (mem_flags_data flags @ (littleendian))
                     (extractlane _ x @ (value_type ty) (u8_from_uimm8 idx))
                     addr offset))
       (side_effect (vec_store_lane_little ty x
@@ -2848,80 +2848,80 @@
 ;;;; Rules for `load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Load 8-bit integers.
-(rule (lower (load $I8 flags addr offset))
+(rule (lower (load $I8 (mem_flags_data flags) addr offset))
       (zext32_mem $I8 (lower_address flags addr offset)))
 
 ;; Load 16-bit big-endian integers.
-(rule (lower (load $I16 flags @ (bigendian) addr offset))
+(rule (lower (load $I16 (mem_flags_data flags @ (bigendian)) addr offset))
       (zext32_mem $I16 (lower_address flags addr offset)))
 
 ;; Load 16-bit little-endian integers.
-(rule -1 (lower (load $I16 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $I16 (mem_flags_data flags @ (littleendian)) addr offset))
       (loadrev16 (lower_address flags addr offset)))
 
 ;; Load 32-bit big-endian integers.
-(rule (lower (load $I32 flags @ (bigendian) addr offset))
+(rule (lower (load $I32 (mem_flags_data flags @ (bigendian)) addr offset))
       (load32 (lower_address flags addr offset)))
 
 ;; Load 32-bit little-endian integers.
-(rule -1 (lower (load $I32 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $I32 (mem_flags_data flags @ (littleendian)) addr offset))
       (loadrev32 (lower_address flags addr offset)))
 
 ;; Load 64-bit big-endian integers.
-(rule (lower (load $I64 flags @ (bigendian) addr offset))
+(rule (lower (load $I64 (mem_flags_data flags @ (bigendian)) addr offset))
       (load64 (lower_address flags addr offset)))
 
 ;; Load 64-bit little-endian integers.
-(rule -1 (lower (load $I64 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $I64 (mem_flags_data flags @ (littleendian)) addr offset))
       (loadrev64 (lower_address flags addr offset)))
 
 ;; Load 16-bit big-endian floating-point values (as vector lane).
-(rule (lower (load $F16 flags @ (bigendian) addr offset))
+(rule (lower (load $F16 (mem_flags_data flags @ (bigendian)) addr offset))
       (vec_load_lane_undef $F16X8 (lower_address flags addr offset) 0))
 
 ;; Load 16-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (load $F16 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $F16 (mem_flags_data flags @ (littleendian)) addr offset))
       (vec_load_lane_little_undef $F16X8 (lower_address flags addr offset) 0))
 
 ;; Load 32-bit big-endian floating-point values (as vector lane).
-(rule (lower (load $F32 flags @ (bigendian) addr offset))
+(rule (lower (load $F32 (mem_flags_data flags @ (bigendian)) addr offset))
       (vec_load_lane_undef $F32X4 (lower_address flags addr offset) 0))
 
 ;; Load 32-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (load $F32 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $F32 (mem_flags_data flags @ (littleendian)) addr offset))
       (vec_load_lane_little_undef $F32X4 (lower_address flags addr offset) 0))
 
 ;; Load 64-bit big-endian floating-point values (as vector lane).
-(rule (lower (load $F64 flags @ (bigendian) addr offset))
+(rule (lower (load $F64 (mem_flags_data flags @ (bigendian)) addr offset))
       (vec_load_lane_undef $F64X2 (lower_address flags addr offset) 0))
 
 ;; Load 64-bit little-endian floating-point values (as vector lane).
-(rule -1 (lower (load $F64 flags @ (littleendian) addr offset))
+(rule -1 (lower (load $F64 (mem_flags_data flags @ (littleendian)) addr offset))
       (vec_load_lane_little_undef $F64X2 (lower_address flags addr offset) 0))
 
 ;; Load 128-bit big-endian vector values, BE lane order - direct load.
-(rule 4 (lower (load (vr128_ty ty) flags @ (bigendian) addr offset))
+(rule 4 (lower (load (vr128_ty ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_load ty (lower_address flags addr offset)))
 
 ;; Load 128-bit little-endian vector values, BE lane order - byte-reversed load.
-(rule 3 (lower (load (vr128_ty ty) flags @ (littleendian) addr offset))
+(rule 3 (lower (load (vr128_ty ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (vec_load_byte_rev ty flags addr offset))
 
 ;; Load 128-bit big-endian vector values, LE lane order - element-reversed load.
-(rule 2 (lower (load (vr128_ty ty) flags @ (bigendian) addr offset))
+(rule 2 (lower (load (vr128_ty ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_load_elt_rev ty flags addr offset))
 
 ;; Load 128-bit little-endian vector values, LE lane order - fully-reversed load.
-(rule 1 (lower (load (vr128_ty ty) flags @ (littleendian) addr offset))
+(rule 1 (lower (load (vr128_ty ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (vec_load_full_rev ty flags addr offset))
 
 
 ;; Helper to perform a 128-bit full-vector byte-reversed load.
-(decl vec_load_full_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_full_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Full-vector byte-reversed load via single instruction on z15.
     (rule 1 (vec_load_full_rev (vr128_ty ty) flags addr offset)
@@ -2939,7 +2939,7 @@
 
 
 ;; Helper to perform an element-wise byte-reversed load.
-(decl vec_load_byte_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_byte_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Element-wise byte-reversed 1x128-bit load is a full byte-reversed load.
 (rule -1 (vec_load_byte_rev $I128 flags addr offset)
@@ -2977,7 +2977,7 @@
 
 
 ;; Helper to perform an element-reversed load.
-(decl vec_load_elt_rev (Type MemFlags Value Offset32) Reg)
+(decl vec_load_elt_rev (Type MemFlagsData Value Offset32) Reg)
 
 ;; Element-reversed 1x128-bit load is a direct load.
 ;; For 1x128-bit types, this is a direct load.
@@ -3018,42 +3018,42 @@
 ;;;; Rules for `uload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule (lower (uload8 (gpr32_ty _ty) flags addr offset))
+(rule (lower (uload8 (gpr32_ty _ty) (mem_flags_data flags) addr offset))
       (zext32_mem $I8 (lower_address flags addr offset)))
 
 ;; 64-bit target types.
-(rule 1 (lower (uload8 (gpr64_ty _ty) flags addr offset))
+(rule 1 (lower (uload8 (gpr64_ty _ty) (mem_flags_data flags) addr offset))
       (zext64_mem $I8 (lower_address flags addr offset)))
 
 
 ;;;; Rules for `sload8` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 16- or 32-bit target types.
-(rule (lower (sload8 (gpr32_ty _ty) flags addr offset))
+(rule (lower (sload8 (gpr32_ty _ty) (mem_flags_data flags) addr offset))
       (sext32_mem $I8 (lower_address flags addr offset)))
 
 ;; 64-bit target types.
-(rule 1 (lower (sload8 (gpr64_ty _ty) flags addr offset))
+(rule 1 (lower (sload8 (gpr64_ty _ty) (mem_flags_data flags) addr offset))
       (sext64_mem $I8 (lower_address flags addr offset)))
 
 
 ;;;; Rules for `uload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32-bit target type, big-endian source value.
-(rule 3 (lower (uload16 (gpr32_ty _ty) flags @ (bigendian) addr offset))
+(rule 3 (lower (uload16 (gpr32_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (zext32_mem $I16 (lower_address flags addr offset)))
 
 ;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (uload16 (gpr32_ty _ty) flags @ (littleendian) addr offset))
+(rule 1 (lower (uload16 (gpr32_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (zext32_reg $I16 reg16)))
 
 ;; 64-bit target type, big-endian source value.
-(rule 4 (lower (uload16 (gpr64_ty _ty) flags @ (bigendian) addr offset))
+(rule 4 (lower (uload16 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (zext64_mem $I16 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 2 (lower (uload16 (gpr64_ty _ty) flags @ (littleendian) addr offset))
+(rule 2 (lower (uload16 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (zext64_reg $I16 reg16)))
 
@@ -3061,20 +3061,20 @@
 ;;;; Rules for `sload16` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32-bit target type, big-endian source value.
-(rule 2 (lower (sload16 (gpr32_ty _ty) flags @ (bigendian) addr offset))
+(rule 2 (lower (sload16 (gpr32_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (sext32_mem $I16 (lower_address flags addr offset)))
 
 ;; 32-bit target type, little-endian source value (via explicit extension).
-(rule 0 (lower (sload16 (gpr32_ty _ty) flags @ (littleendian) addr offset))
+(rule 0 (lower (sload16 (gpr32_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (sext32_reg $I16 reg16)))
 
 ;; 64-bit target type, big-endian source value.
-(rule 3 (lower (sload16 (gpr64_ty _ty) flags @ (bigendian) addr offset))
+(rule 3 (lower (sload16 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (sext64_mem $I16 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule 1 (lower (sload16 (gpr64_ty _ty) flags @ (littleendian) addr offset))
+(rule 1 (lower (sload16 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg16 Reg (loadrev16 (lower_address flags addr offset))))
         (sext64_reg $I16 reg16)))
 
@@ -3082,11 +3082,11 @@
 ;;;; Rules for `uload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 64-bit target type, big-endian source value.
-(rule 1 (lower (uload32 (gpr64_ty _ty) flags @ (bigendian) addr offset))
+(rule 1 (lower (uload32 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (zext64_mem $I32 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (uload32 (gpr64_ty _ty) flags @ (littleendian) addr offset))
+(rule (lower (uload32 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
         (zext64_reg $I32 reg32)))
 
@@ -3094,11 +3094,11 @@
 ;;;; Rules for `sload32` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 64-bit target type, big-endian source value.
-(rule 1 (lower (sload32 (gpr64_ty _ty) flags @ (bigendian) addr offset))
+(rule 1 (lower (sload32 (gpr64_ty _ty) (mem_flags_data flags @ (bigendian)) addr offset))
       (sext64_mem $I32 (lower_address flags addr offset)))
 
 ;; 64-bit target type, little-endian source value (via explicit extension).
-(rule (lower (sload32 (gpr64_ty _ty) flags @ (littleendian) addr offset))
+(rule (lower (sload32 (gpr64_ty _ty) (mem_flags_data flags @ (littleendian)) addr offset))
       (let ((reg32 Reg (loadrev32 (lower_address flags addr offset))))
         (sext64_reg $I32 reg32)))
 
@@ -3106,32 +3106,32 @@
 ;;;; Rules for `uloadNxM` and `sloadNxM` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Unsigned 8->16 bit extension.
-(rule (lower (uload8x8 $I16X8 flags addr offset))
+(rule (lower (uload8x8 $I16X8 (mem_flags_data flags) addr offset))
       (vec_unpacku_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
 ;; Signed 8->16 bit extension.
-(rule (lower (sload8x8 $I16X8 flags addr offset))
+(rule (lower (sload8x8 $I16X8 (mem_flags_data flags) addr offset))
       (vec_unpacks_high $I8X16 (load_v64 $I8X16 flags addr offset)))
 
 ;; Unsigned 16->32 bit extension.
-(rule (lower (uload16x4 $I32X4 flags addr offset))
+(rule (lower (uload16x4 $I32X4 (mem_flags_data flags) addr offset))
       (vec_unpacku_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
 ;; Signed 16->32 bit extension.
-(rule (lower (sload16x4 $I32X4 flags addr offset))
+(rule (lower (sload16x4 $I32X4 (mem_flags_data flags) addr offset))
       (vec_unpacks_high $I16X8 (load_v64 $I16X8 flags addr offset)))
 
 ;; Unsigned 32->64 bit extension.
-(rule (lower (uload32x2 $I64X2 flags addr offset))
+(rule (lower (uload32x2 $I64X2 (mem_flags_data flags) addr offset))
       (vec_unpacku_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
 ;; Signed 32->64 bit extension.
-(rule (lower (sload32x2 $I64X2 flags addr offset))
+(rule (lower (sload32x2 $I64X2 (mem_flags_data flags) addr offset))
       (vec_unpacks_high $I32X4 (load_v64 $I32X4 flags addr offset)))
 
 
 ;; Helper to load a 64-bit half-size vector from memory.
-(decl load_v64 (Type MemFlags Value Offset32) Reg)
+(decl load_v64 (Type MemFlagsData Value Offset32) Reg)
 
 ;; Any big-endian source value, BE lane order.
 (rule -1 (load_v64 _ flags @ (bigendian) addr offset)
@@ -3184,84 +3184,84 @@
 ;; `istoreNN`, and `atomic_store` instructions, so we share common helpers.
 
 ;; Store 8-bit integer type, main lowering entry point.
-(rule (lower (store flags val @ (value_type $I8) addr offset))
+(rule (lower (store (mem_flags_data flags) val @ (value_type $I8) addr offset))
       (side_effect (istore8_impl flags val addr offset)))
 
 ;; Store 16-bit integer type, main lowering entry point.
-(rule (lower (store flags val @ (value_type $I16) addr offset))
+(rule (lower (store (mem_flags_data flags) val @ (value_type $I16) addr offset))
       (side_effect (istore16_impl flags val addr offset)))
 
 ;; Store 32-bit integer type, main lowering entry point.
-(rule (lower (store flags val @ (value_type $I32) addr offset))
+(rule (lower (store (mem_flags_data flags) val @ (value_type $I32) addr offset))
       (side_effect (istore32_impl flags val addr offset)))
 
 ;; Store 64-bit integer type, main lowering entry point.
-(rule (lower (store flags val @ (value_type $I64) addr offset))
+(rule (lower (store (mem_flags_data flags) val @ (value_type $I64) addr offset))
       (side_effect (istore64_impl flags val addr offset)))
 
 ;; Store 16-bit big-endian floating-point type (as vector lane).
-(rule -1 (lower (store flags @ (bigendian)
+(rule -1 (lower (store (mem_flags_data flags @ (bigendian))
                     val @ (value_type $F16) addr offset))
       (side_effect (vec_store_lane $F16X8 val
                                    (lower_address flags addr offset) 0)))
 
 ;; Store 16-bit little-endian floating-point type (as vector lane).
-(rule (lower (store flags @ (littleendian)
+(rule (lower (store (mem_flags_data flags @ (littleendian))
                     val @ (value_type $F16) addr offset))
       (side_effect (vec_store_lane_little $F16X8 val
                                           (lower_address flags addr offset) 0)))
 
 ;; Store 32-bit big-endian floating-point type (as vector lane).
-(rule -1 (lower (store flags @ (bigendian)
+(rule -1 (lower (store (mem_flags_data flags @ (bigendian))
                     val @ (value_type $F32) addr offset))
       (side_effect (vec_store_lane $F32X4 val
                                    (lower_address flags addr offset) 0)))
 
 ;; Store 32-bit little-endian floating-point type (as vector lane).
-(rule (lower (store flags @ (littleendian)
+(rule (lower (store (mem_flags_data flags @ (littleendian))
                     val @ (value_type $F32) addr offset))
       (side_effect (vec_store_lane_little $F32X4 val
                                           (lower_address flags addr offset) 0)))
 
 ;; Store 64-bit big-endian floating-point type (as vector lane).
-(rule -1 (lower (store flags @ (bigendian)
+(rule -1 (lower (store (mem_flags_data flags @ (bigendian))
                     val @ (value_type $F64) addr offset))
       (side_effect (vec_store_lane $F64X2 val
                                    (lower_address flags addr offset) 0)))
 
 ;; Store 64-bit little-endian floating-point type (as vector lane).
-(rule (lower (store flags @ (littleendian)
+(rule (lower (store (mem_flags_data flags @ (littleendian))
                     val @ (value_type $F64) addr offset))
       (side_effect (vec_store_lane_little $F64X2 val
                                           (lower_address flags addr offset) 0)))
 
 ;; Store 128-bit big-endian vector type, BE lane order - direct store.
-(rule 4 (lower (store flags @ (bigendian)
+(rule 4 (lower (store (mem_flags_data flags @ (bigendian))
                     val @ (value_type (vr128_ty ty)) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (side_effect (vec_store val (lower_address flags addr offset))))
 
 ;; Store 128-bit little-endian vector type, BE lane order - byte-reversed store.
-(rule 3 (lower (store flags @ (littleendian)
+(rule 3 (lower (store (mem_flags_data flags @ (littleendian))
                     val @ (value_type (vr128_ty ty)) addr offset))
       (if-let (LaneOrder.BigEndian) (lane_order))
       (side_effect (vec_store_byte_rev ty val flags addr offset)))
 
 ;; Store 128-bit big-endian vector type, LE lane order - element-reversed store.
-(rule 2 (lower (store flags @ (bigendian)
+(rule 2 (lower (store (mem_flags_data flags @ (bigendian))
                     val @ (value_type (vr128_ty ty)) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (side_effect (vec_store_elt_rev ty val flags addr offset)))
 
 ;; Store 128-bit little-endian vector type, LE lane order - fully-reversed store.
-(rule 1 (lower (store flags @ (littleendian)
+(rule 1 (lower (store (mem_flags_data flags @ (littleendian))
                     val @ (value_type (vr128_ty ty)) addr offset))
       (if-let (LaneOrder.LittleEndian) (lane_order))
       (side_effect (vec_store_full_rev ty val flags addr offset)))
 
 
 ;; Helper to perform a 128-bit full-vector byte-reversed store.
-(decl vec_store_full_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_full_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Full-vector byte-reversed store via single instruction on z15.
 (rule 1 (vec_store_full_rev _ val flags addr offset)
@@ -3280,7 +3280,7 @@
 
 
 ;; Helper to perform an element-wise byte-reversed store.
-(decl vec_store_byte_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_byte_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Element-wise byte-reversed 1x128-bit store is a full byte-reversed store.
 (rule -1 (vec_store_byte_rev $I128 val flags addr offset)
@@ -3318,7 +3318,7 @@
 
 
 ;; Helper to perform an element-reversed store.
-(decl vec_store_elt_rev (Type Reg MemFlags Value Offset32) SideEffectNoResult)
+(decl vec_store_elt_rev (Type Reg MemFlagsData Value Offset32) SideEffectNoResult)
 
 ;; Element-reversed 1x128-bit store is a direct store.
 (rule -1 (vec_store_elt_rev $I128 val flags addr offset)
@@ -3358,11 +3358,11 @@
 ;;;; Rules for 8-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Main `istore8` lowering entry point, dispatching to the helper.
-(rule (lower (istore8 flags val addr offset))
+(rule (lower (istore8 (mem_flags_data flags) val addr offset))
       (side_effect (istore8_impl flags val addr offset)))
 
 ;; Helper to store 8-bit integer types.
-(decl istore8_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore8_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 8-bit integer types, register input.
 (rule (istore8_impl flags val addr offset)
@@ -3376,11 +3376,11 @@
 ;;;; Rules for 16-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Main `istore16` lowering entry point, dispatching to the helper.
-(rule (lower (istore16 flags val addr offset))
+(rule (lower (istore16 (mem_flags_data flags) val addr offset))
       (side_effect (istore16_impl flags val addr offset)))
 
 ;; Helper to store 16-bit integer types.
-(decl istore16_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore16_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 16-bit big-endian integer types, register input.
 (rule 2 (istore16_impl flags @ (bigendian) val addr offset)
@@ -3402,11 +3402,11 @@
 ;;;; Rules for 32-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Main `istore32` lowering entry point, dispatching to the helper.
-(rule (lower (istore32 flags val addr offset))
+(rule (lower (istore32 (mem_flags_data flags) val addr offset))
       (side_effect (istore32_impl flags val addr offset)))
 
 ;; Helper to store 32-bit integer types.
-(decl istore32_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore32_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 32-bit big-endian integer types, register input.
 (rule 1 (istore32_impl flags @ (bigendian) val addr offset)
@@ -3424,7 +3424,7 @@
 ;;;; Rules for 64-bit integer stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper to store 64-bit integer types.
-(decl istore64_impl (MemFlags Value Value Offset32) SideEffectNoResult)
+(decl istore64_impl (MemFlagsData Value Value Offset32) SideEffectNoResult)
 
 ;; Store 64-bit big-endian integer types, register input.
 (rule 1 (istore64_impl flags @ (bigendian) val addr offset)
@@ -3444,42 +3444,42 @@
 ;; Atomic operations that do not require a compare-and-swap loop.
 
 ;; Atomic AND for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.And) addr src))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) (AtomicRmwOp.And) addr src))
       (atomic_rmw_and ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic AND for 32/64-bit big-endian types, using byte-swapped input/output.
-(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.And) addr src))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (littleendian)) (AtomicRmwOp.And) addr src))
       (bswap_reg ty (atomic_rmw_and ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic OR for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Or) addr src))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) (AtomicRmwOp.Or) addr src))
       (atomic_rmw_or ty (put_in_reg src)
                      (lower_address flags addr (zero_offset))))
 
 ;; Atomic OR for 32/64-bit little-endian types, using byte-swapped input/output.
-(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.Or) addr src))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (littleendian)) (AtomicRmwOp.Or) addr src))
       (bswap_reg ty (atomic_rmw_or ty (bswap_reg ty (put_in_reg src))
                                    (lower_address flags addr (zero_offset)))))
 
 ;; Atomic XOR for 32/64-bit big-endian types, using a single instruction.
-(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Xor) addr src))
+(rule 1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) (AtomicRmwOp.Xor) addr src))
       (atomic_rmw_xor ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic XOR for 32/64-bit little-endian types, using byte-swapped input/output.
-(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (littleendian) (AtomicRmwOp.Xor) addr src))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (littleendian)) (AtomicRmwOp.Xor) addr src))
       (bswap_reg ty (atomic_rmw_xor ty (bswap_reg ty (put_in_reg src))
                                     (lower_address flags addr (zero_offset)))))
 
 ;; Atomic ADD for 32/64-bit big-endian types, using a single instruction.
-(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Add) addr src))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) (AtomicRmwOp.Add) addr src))
       (atomic_rmw_add ty (put_in_reg src)
                       (lower_address flags addr (zero_offset))))
 
 ;; Atomic SUB for 32/64-bit big-endian types, using atomic ADD with negated input.
-(rule (lower (atomic_rmw (ty_32_or_64 ty) flags @ (bigendian) (AtomicRmwOp.Sub) addr src))
+(rule (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) (AtomicRmwOp.Sub) addr src))
       (atomic_rmw_add ty (neg_reg ty (put_in_reg src))
                       (lower_address flags addr (zero_offset))))
 
@@ -3487,7 +3487,7 @@
 ;; Atomic operations that require a compare-and-swap loop.
 
 ;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
-(rule -1 (lower (atomic_rmw (ty_32_or_64 ty) flags op addr src))
+(rule -1 (lower (atomic_rmw (ty_32_or_64 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Create body of compare-and-swap loop.
@@ -3499,7 +3499,7 @@
         (casloop ib ty flags addr_reg val1)))
 
 ;; Operations for 8/16-bit types must operate on the surrounding aligned word.
-(rule -2 (lower (atomic_rmw (ty_8_or_16 ty) flags op addr src))
+(rule -2 (lower (atomic_rmw (ty_8_or_16 ty) (mem_flags_data flags) op addr src))
       (let ((src_reg Reg (put_in_reg src))
             (addr_reg Reg (put_in_reg addr))
             ;; Prepare access to surrounding aligned word.
@@ -3516,7 +3516,7 @@
         (casloop_subword ib ty flags aligned_addr bitshift val3)))
 
 ;; Loop bodies for atomic read-modify-write operations.
-(decl atomic_rmw_body (VecMInstBuilder Type MemFlags AtomicRmwOp
+(decl atomic_rmw_body (VecMInstBuilder Type MemFlagsData AtomicRmwOp
                        WritableReg Reg Reg) Reg)
 
 ;; Loop bodies for 32-/64-bit atomic XCHG operations.
@@ -3567,7 +3567,7 @@
         (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.And) tmp val src)))
 
 ;; RxSBG subword operation.
-(decl atomic_rmw_body_rxsbg (VecMInstBuilder Type MemFlags RxSBGOp
+(decl atomic_rmw_body_rxsbg (VecMInstBuilder Type MemFlagsData RxSBGOp
                              WritableReg Reg Reg) Reg)
 ;; 8-bit case: use the low byte of "src" and the high byte of "val".
 (rule (atomic_rmw_body_rxsbg ib $I8 _ op tmp val src)
@@ -3582,7 +3582,7 @@
       (push_rxsbg ib op tmp val (bswap_reg $I32 src) 48 63 -16))
 
 ;; Invert a subword.
-(decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlags WritableReg Reg) Reg)
+(decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlagsData WritableReg Reg) Reg)
 ;; 8-bit case: invert the high byte.
 (rule (atomic_rmw_body_invert ib $I8 _ tmp val)
       (push_xor_uimm32shifted ib $I32 tmp val (uimm32shifted 0xff000000 0)))
@@ -3600,7 +3600,7 @@
       (atomic_rmw_body_addsub ib ty flags (aluop_sub (ty_ext32 ty)) tmp val src))
 
 ;; Addition or subtraction operation.
-(decl atomic_rmw_body_addsub (VecMInstBuilder Type MemFlags ALUOp
+(decl atomic_rmw_body_addsub (VecMInstBuilder Type MemFlagsData ALUOp
                               WritableReg Reg Reg) Reg)
 ;; 32/64-bit big-endian case: just a regular add/sub operation.
 (rule 2 (atomic_rmw_body_addsub ib (ty_32_or_64 ty) (bigendian) op tmp val src)
@@ -3646,7 +3646,7 @@
         (intcc_as_cond (IntCC.UnsignedGreaterThan)) tmp val src))
 
 ;; Minimum or maximum operation.
-(decl atomic_rmw_body_minmax (VecMInstBuilder Type MemFlags CmpOp Cond
+(decl atomic_rmw_body_minmax (VecMInstBuilder Type MemFlagsData CmpOp Cond
                               WritableReg Reg Reg) Reg)
 ;; 32/64-bit big-endian case: just a comparison followed by a conditional
 ;; break out of the loop if the memory value does not need to change.
@@ -3696,19 +3696,19 @@
 ;;;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 32/64-bit big-endian atomic compare-and-swap instruction.
-(rule 2 (lower (atomic_cas (ty_32_or_64 ty) flags @ (bigendian) addr src1 src2))
+(rule 2 (lower (atomic_cas (ty_32_or_64 ty) (mem_flags_data flags @ (bigendian)) addr src1 src2))
       (atomic_cas_impl ty (put_in_reg src1) (put_in_reg src2)
                        (lower_address flags addr (zero_offset))))
 
 ;; 32/64-bit little-endian atomic compare-and-swap instruction.
 ;; Implemented by byte-swapping old/new inputs and the output.
-(rule 1 (lower (atomic_cas (ty_32_or_64 ty) flags @ (littleendian) addr src1 src2))
+(rule 1 (lower (atomic_cas (ty_32_or_64 ty) (mem_flags_data flags @ (littleendian)) addr src1 src2))
       (bswap_reg ty (atomic_cas_impl ty (bswap_reg ty (put_in_reg src1))
                                      (bswap_reg ty (put_in_reg src2))
                                      (lower_address flags addr (zero_offset)))))
 
 ;; 8/16-bit atomic compare-and-swap implemented via loop.
-(rule (lower (atomic_cas (ty_8_or_16 ty) flags addr src1 src2))
+(rule (lower (atomic_cas (ty_8_or_16 ty) (mem_flags_data flags) addr src1 src2))
       (let ((src1_reg Reg (put_in_reg src1))
             (src2_reg Reg (put_in_reg src2))
             (addr_reg Reg (put_in_reg addr))
@@ -3726,7 +3726,7 @@
         (casloop_subword ib ty flags aligned_addr bitshift val3)))
 
 ;; Emit loop body instructions to perform a subword compare-and-swap.
-(decl atomic_cas_body (VecMInstBuilder Type MemFlags
+(decl atomic_cas_body (VecMInstBuilder Type MemFlagsData
                        WritableReg Reg Reg Reg) Reg)
 
 ;; 8-bit case: "val" contains the value loaded from memory in the high byte.
@@ -3765,31 +3765,31 @@
 ;; Atomic loads can be implemented via regular loads on this platform.
 
 ;; 8-bit atomic load.
-(rule (lower (atomic_load $I8 flags addr))
+(rule (lower (atomic_load $I8 (mem_flags_data flags) addr))
       (zext32_mem $I8 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit big-endian atomic load.
-(rule 1 (lower (atomic_load $I16 flags @ (bigendian) addr))
+(rule 1 (lower (atomic_load $I16 (mem_flags_data flags @ (bigendian)) addr))
       (zext32_mem $I16 (lower_address flags addr (zero_offset))))
 
 ;; 16-bit little-endian atomic load.
-(rule (lower (atomic_load $I16 flags @ (littleendian) addr))
+(rule (lower (atomic_load $I16 (mem_flags_data flags @ (littleendian)) addr))
       (loadrev16 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit big-endian atomic load.
-(rule 1 (lower (atomic_load $I32 flags @ (bigendian) addr))
+(rule 1 (lower (atomic_load $I32 (mem_flags_data flags @ (bigendian)) addr))
       (load32 (lower_address flags addr (zero_offset))))
 
 ;; 32-bit little-endian atomic load.
-(rule (lower (atomic_load $I32 flags @ (littleendian) addr))
+(rule (lower (atomic_load $I32 (mem_flags_data flags @ (littleendian)) addr))
       (loadrev32 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit big-endian atomic load.
-(rule 1 (lower (atomic_load $I64 flags @ (bigendian) addr))
+(rule 1 (lower (atomic_load $I64 (mem_flags_data flags @ (bigendian)) addr))
       (load64 (lower_address flags addr (zero_offset))))
 
 ;; 64-bit little-endian atomic load.
-(rule (lower (atomic_load $I64 flags @ (littleendian) addr))
+(rule (lower (atomic_load $I64 (mem_flags_data flags @ (littleendian)) addr))
       (loadrev64 (lower_address flags addr (zero_offset))))
 
 
@@ -3802,19 +3802,19 @@
          (side_effect (fence_impl))))
 
 ;; 8-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I8) addr))
+(rule (lower (atomic_store (mem_flags_data flags) val @ (value_type $I8) addr))
       (atomic_store_impl (istore8_impl flags val addr (zero_offset))))
 
 ;; 16-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I16) addr))
+(rule (lower (atomic_store (mem_flags_data flags) val @ (value_type $I16) addr))
       (atomic_store_impl (istore16_impl flags val addr (zero_offset))))
 
 ;; 32-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I32) addr))
+(rule (lower (atomic_store (mem_flags_data flags) val @ (value_type $I32) addr))
       (atomic_store_impl (istore32_impl flags val addr (zero_offset))))
 
 ;; 64-bit atomic store.
-(rule (lower (atomic_store flags val @ (value_type $I64) addr))
+(rule (lower (atomic_store (mem_flags_data flags) val @ (value_type $I64) addr))
       (atomic_store_impl (istore64_impl flags val addr (zero_offset))))
 
 

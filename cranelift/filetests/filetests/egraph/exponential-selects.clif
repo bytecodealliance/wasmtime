@@ -46,6 +46,8 @@ target s390x
         fn9 = colocated %FmaF32 sig9
         fn10 = %FmaF64 sig10
     
+    region0 = 0 "heap"
+
     block0(v0: i64x2, v1: i128, v2: i16x8, v3: f64, v4: i64, v5: i16, v6: i32x4, v7: f32, v8: f32x4, v9: i8x16, v10: f64x2, v11: i32, v12: i8):
         v62 = iconst.i16 -11823
         v63 = iconst.i16 -11823
@@ -58,27 +60,27 @@ target s390x
         v70 = iconst.i64 0
         v71 = uextend.i128 v70  ; v70 = 0
         v72 = stack_addr.i64 ss1
-        store notrap heap v71, v72
+        store notrap region0 v71, v72
         v73 = stack_addr.i64 ss1+16
-        store notrap heap v71, v73
+        store notrap region0 v71, v73
         v74 = stack_addr.i64 ss1+32
-        store notrap heap v71, v74
+        store notrap region0 v71, v74
         v75 = stack_addr.i64 ss1+48
-        store notrap heap v71, v75
+        store notrap region0 v71, v75
         v76 = stack_addr.i64 ss1+64
-        store notrap heap v71, v76
+        store notrap region0 v71, v76
         v77 = stack_addr.i64 ss0
-        store notrap heap v71, v77
+        store notrap region0 v71, v77
         v78 = stack_addr.i64 ss0+16
-        store notrap heap v71, v78
+        store notrap region0 v71, v78
         v79 = stack_addr.i64 ss0+32
-        store notrap heap v71, v79
+        store notrap region0 v71, v79
         v80 = stack_addr.i64 ss0+48
-        store notrap heap v71, v80
+        store notrap region0 v71, v80
         v81 = stack_addr.i64 ss0+64
-        store notrap heap v71, v81
+        store notrap region0 v71, v81
         v82 = stack_addr.i64 ss0+80
-        store notrap heap v67, v82  ; v67 = 0
+        store notrap region0 v67, v82  ; v67 = 0
         v83 = select_spectre_guard v4, v2, v2
         v84 = vhigh_bits.i64 v8
         v85 = select v11, v7, v7

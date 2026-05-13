@@ -39,168 +39,168 @@ block0(v0: i64):
 
 ; VCode:
 ;   push_frame_save 896, {}
-;   xstore64 sp+888, x0 // flags =  notrap aligned
-;   xstore64 sp+880, x1 // flags =  notrap aligned
-;   xstore64 sp+872, x2 // flags =  notrap aligned
-;   xstore64 sp+864, x3 // flags =  notrap aligned
-;   xstore64 sp+856, x4 // flags =  notrap aligned
-;   xstore64 sp+848, x5 // flags =  notrap aligned
-;   xstore64 sp+840, x6 // flags =  notrap aligned
-;   xstore64 sp+832, x7 // flags =  notrap aligned
-;   xstore64 sp+824, x8 // flags =  notrap aligned
-;   xstore64 sp+816, x9 // flags =  notrap aligned
-;   xstore64 sp+808, x10 // flags =  notrap aligned
-;   xstore64 sp+800, x11 // flags =  notrap aligned
-;   xstore64 sp+792, x12 // flags =  notrap aligned
-;   xstore64 sp+784, x13 // flags =  notrap aligned
-;   xstore64 sp+776, x14 // flags =  notrap aligned
-;   xstore64 sp+768, x15 // flags =  notrap aligned
-;   fstore64 sp+760, f0 // flags =  notrap aligned
-;   fstore64 sp+752, f1 // flags =  notrap aligned
-;   fstore64 sp+744, f2 // flags =  notrap aligned
-;   fstore64 sp+736, f3 // flags =  notrap aligned
-;   fstore64 sp+728, f4 // flags =  notrap aligned
-;   fstore64 sp+720, f5 // flags =  notrap aligned
-;   fstore64 sp+712, f6 // flags =  notrap aligned
-;   fstore64 sp+704, f7 // flags =  notrap aligned
-;   fstore64 sp+696, f8 // flags =  notrap aligned
-;   fstore64 sp+688, f9 // flags =  notrap aligned
-;   fstore64 sp+680, f10 // flags =  notrap aligned
-;   fstore64 sp+672, f11 // flags =  notrap aligned
-;   fstore64 sp+664, f12 // flags =  notrap aligned
-;   fstore64 sp+656, f13 // flags =  notrap aligned
-;   fstore64 sp+648, f14 // flags =  notrap aligned
-;   fstore64 sp+640, f15 // flags =  notrap aligned
-;   fstore64 sp+632, f16 // flags =  notrap aligned
-;   fstore64 sp+624, f17 // flags =  notrap aligned
-;   fstore64 sp+616, f18 // flags =  notrap aligned
-;   fstore64 sp+608, f19 // flags =  notrap aligned
-;   fstore64 sp+600, f20 // flags =  notrap aligned
-;   fstore64 sp+592, f21 // flags =  notrap aligned
-;   fstore64 sp+584, f22 // flags =  notrap aligned
-;   fstore64 sp+576, f23 // flags =  notrap aligned
-;   fstore64 sp+568, f24 // flags =  notrap aligned
-;   fstore64 sp+560, f25 // flags =  notrap aligned
-;   fstore64 sp+552, f26 // flags =  notrap aligned
-;   fstore64 sp+544, f27 // flags =  notrap aligned
-;   fstore64 sp+536, f28 // flags =  notrap aligned
-;   fstore64 sp+528, f29 // flags =  notrap aligned
-;   fstore64 sp+520, f30 // flags =  notrap aligned
-;   fstore64 sp+512, f31 // flags =  notrap aligned
-;   vstore128 sp+504, v0 // flags =  notrap aligned little
-;   vstore128 sp+496, v1 // flags =  notrap aligned little
-;   vstore128 sp+488, v2 // flags =  notrap aligned little
-;   vstore128 sp+480, v3 // flags =  notrap aligned little
-;   vstore128 sp+472, v4 // flags =  notrap aligned little
-;   vstore128 sp+464, v5 // flags =  notrap aligned little
-;   vstore128 sp+456, v6 // flags =  notrap aligned little
-;   vstore128 sp+448, v7 // flags =  notrap aligned little
-;   vstore128 sp+440, v8 // flags =  notrap aligned little
-;   vstore128 sp+432, v9 // flags =  notrap aligned little
-;   vstore128 sp+424, v10 // flags =  notrap aligned little
-;   vstore128 sp+416, v11 // flags =  notrap aligned little
-;   vstore128 sp+408, v12 // flags =  notrap aligned little
-;   vstore128 sp+400, v13 // flags =  notrap aligned little
-;   vstore128 sp+392, v14 // flags =  notrap aligned little
-;   vstore128 sp+384, v15 // flags =  notrap aligned little
-;   vstore128 sp+376, v16 // flags =  notrap aligned little
-;   vstore128 sp+368, v17 // flags =  notrap aligned little
-;   vstore128 sp+360, v18 // flags =  notrap aligned little
-;   vstore128 sp+352, v19 // flags =  notrap aligned little
-;   vstore128 sp+344, v20 // flags =  notrap aligned little
-;   vstore128 sp+336, v21 // flags =  notrap aligned little
-;   vstore128 sp+328, v22 // flags =  notrap aligned little
-;   vstore128 sp+320, v23 // flags =  notrap aligned little
-;   vstore128 sp+312, v24 // flags =  notrap aligned little
-;   vstore128 sp+304, v25 // flags =  notrap aligned little
-;   vstore128 sp+296, v26 // flags =  notrap aligned little
-;   vstore128 sp+288, v27 // flags =  notrap aligned little
-;   vstore128 sp+280, v28 // flags =  notrap aligned little
-;   vstore128 sp+272, v29 // flags =  notrap aligned little
-;   vstore128 sp+264, v30 // flags =  notrap aligned little
-;   vstore128 sp+256, v31 // flags =  notrap aligned little
+;   xstore64 sp+888, x0 // flags = memflags0
+;   xstore64 sp+880, x1 // flags = memflags0
+;   xstore64 sp+872, x2 // flags = memflags0
+;   xstore64 sp+864, x3 // flags = memflags0
+;   xstore64 sp+856, x4 // flags = memflags0
+;   xstore64 sp+848, x5 // flags = memflags0
+;   xstore64 sp+840, x6 // flags = memflags0
+;   xstore64 sp+832, x7 // flags = memflags0
+;   xstore64 sp+824, x8 // flags = memflags0
+;   xstore64 sp+816, x9 // flags = memflags0
+;   xstore64 sp+808, x10 // flags = memflags0
+;   xstore64 sp+800, x11 // flags = memflags0
+;   xstore64 sp+792, x12 // flags = memflags0
+;   xstore64 sp+784, x13 // flags = memflags0
+;   xstore64 sp+776, x14 // flags = memflags0
+;   xstore64 sp+768, x15 // flags = memflags0
+;   fstore64 sp+760, f0 // flags = memflags0
+;   fstore64 sp+752, f1 // flags = memflags0
+;   fstore64 sp+744, f2 // flags = memflags0
+;   fstore64 sp+736, f3 // flags = memflags0
+;   fstore64 sp+728, f4 // flags = memflags0
+;   fstore64 sp+720, f5 // flags = memflags0
+;   fstore64 sp+712, f6 // flags = memflags0
+;   fstore64 sp+704, f7 // flags = memflags0
+;   fstore64 sp+696, f8 // flags = memflags0
+;   fstore64 sp+688, f9 // flags = memflags0
+;   fstore64 sp+680, f10 // flags = memflags0
+;   fstore64 sp+672, f11 // flags = memflags0
+;   fstore64 sp+664, f12 // flags = memflags0
+;   fstore64 sp+656, f13 // flags = memflags0
+;   fstore64 sp+648, f14 // flags = memflags0
+;   fstore64 sp+640, f15 // flags = memflags0
+;   fstore64 sp+632, f16 // flags = memflags0
+;   fstore64 sp+624, f17 // flags = memflags0
+;   fstore64 sp+616, f18 // flags = memflags0
+;   fstore64 sp+608, f19 // flags = memflags0
+;   fstore64 sp+600, f20 // flags = memflags0
+;   fstore64 sp+592, f21 // flags = memflags0
+;   fstore64 sp+584, f22 // flags = memflags0
+;   fstore64 sp+576, f23 // flags = memflags0
+;   fstore64 sp+568, f24 // flags = memflags0
+;   fstore64 sp+560, f25 // flags = memflags0
+;   fstore64 sp+552, f26 // flags = memflags0
+;   fstore64 sp+544, f27 // flags = memflags0
+;   fstore64 sp+536, f28 // flags = memflags0
+;   fstore64 sp+528, f29 // flags = memflags0
+;   fstore64 sp+520, f30 // flags = memflags0
+;   fstore64 sp+512, f31 // flags = memflags0
+;   vstore128 sp+504, v0 // flags = memflags2
+;   vstore128 sp+496, v1 // flags = memflags2
+;   vstore128 sp+488, v2 // flags = memflags2
+;   vstore128 sp+480, v3 // flags = memflags2
+;   vstore128 sp+472, v4 // flags = memflags2
+;   vstore128 sp+464, v5 // flags = memflags2
+;   vstore128 sp+456, v6 // flags = memflags2
+;   vstore128 sp+448, v7 // flags = memflags2
+;   vstore128 sp+440, v8 // flags = memflags2
+;   vstore128 sp+432, v9 // flags = memflags2
+;   vstore128 sp+424, v10 // flags = memflags2
+;   vstore128 sp+416, v11 // flags = memflags2
+;   vstore128 sp+408, v12 // flags = memflags2
+;   vstore128 sp+400, v13 // flags = memflags2
+;   vstore128 sp+392, v14 // flags = memflags2
+;   vstore128 sp+384, v15 // flags = memflags2
+;   vstore128 sp+376, v16 // flags = memflags2
+;   vstore128 sp+368, v17 // flags = memflags2
+;   vstore128 sp+360, v18 // flags = memflags2
+;   vstore128 sp+352, v19 // flags = memflags2
+;   vstore128 sp+344, v20 // flags = memflags2
+;   vstore128 sp+336, v21 // flags = memflags2
+;   vstore128 sp+328, v22 // flags = memflags2
+;   vstore128 sp+320, v23 // flags = memflags2
+;   vstore128 sp+312, v24 // flags = memflags2
+;   vstore128 sp+304, v25 // flags = memflags2
+;   vstore128 sp+296, v26 // flags = memflags2
+;   vstore128 sp+288, v27 // flags = memflags2
+;   vstore128 sp+280, v28 // flags = memflags2
+;   vstore128 sp+272, v29 // flags = memflags2
+;   vstore128 sp+264, v30 // flags = memflags2
+;   vstore128 sp+256, v31 // flags = memflags2
 ; block0:
 ;   indirect_call_host CallInfo { dest: TestCase(%libcall), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 4294967295, 4294967295, 0] }, callee_conv: SystemV, caller_conv: PreserveAll, callee_pop_size: 0, try_call_info: None, patchable: false }
-;   x0 = xload64 sp+888 // flags = notrap aligned
-;   x1 = xload64 sp+880 // flags = notrap aligned
-;   x2 = xload64 sp+872 // flags = notrap aligned
-;   x3 = xload64 sp+864 // flags = notrap aligned
-;   x4 = xload64 sp+856 // flags = notrap aligned
-;   x5 = xload64 sp+848 // flags = notrap aligned
-;   x6 = xload64 sp+840 // flags = notrap aligned
-;   x7 = xload64 sp+832 // flags = notrap aligned
-;   x8 = xload64 sp+824 // flags = notrap aligned
-;   x9 = xload64 sp+816 // flags = notrap aligned
-;   x10 = xload64 sp+808 // flags = notrap aligned
-;   x11 = xload64 sp+800 // flags = notrap aligned
-;   x12 = xload64 sp+792 // flags = notrap aligned
-;   x13 = xload64 sp+784 // flags = notrap aligned
-;   x14 = xload64 sp+776 // flags = notrap aligned
-;   x15 = xload64 sp+768 // flags = notrap aligned
-;   f0 = fload64 sp+760 // flags = notrap aligned
-;   f1 = fload64 sp+752 // flags = notrap aligned
-;   f2 = fload64 sp+744 // flags = notrap aligned
-;   f3 = fload64 sp+736 // flags = notrap aligned
-;   f4 = fload64 sp+728 // flags = notrap aligned
-;   f5 = fload64 sp+720 // flags = notrap aligned
-;   f6 = fload64 sp+712 // flags = notrap aligned
-;   f7 = fload64 sp+704 // flags = notrap aligned
-;   f8 = fload64 sp+696 // flags = notrap aligned
-;   f9 = fload64 sp+688 // flags = notrap aligned
-;   f10 = fload64 sp+680 // flags = notrap aligned
-;   f11 = fload64 sp+672 // flags = notrap aligned
-;   f12 = fload64 sp+664 // flags = notrap aligned
-;   f13 = fload64 sp+656 // flags = notrap aligned
-;   f14 = fload64 sp+648 // flags = notrap aligned
-;   f15 = fload64 sp+640 // flags = notrap aligned
-;   f16 = fload64 sp+632 // flags = notrap aligned
-;   f17 = fload64 sp+624 // flags = notrap aligned
-;   f18 = fload64 sp+616 // flags = notrap aligned
-;   f19 = fload64 sp+608 // flags = notrap aligned
-;   f20 = fload64 sp+600 // flags = notrap aligned
-;   f21 = fload64 sp+592 // flags = notrap aligned
-;   f22 = fload64 sp+584 // flags = notrap aligned
-;   f23 = fload64 sp+576 // flags = notrap aligned
-;   f24 = fload64 sp+568 // flags = notrap aligned
-;   f25 = fload64 sp+560 // flags = notrap aligned
-;   f26 = fload64 sp+552 // flags = notrap aligned
-;   f27 = fload64 sp+544 // flags = notrap aligned
-;   f28 = fload64 sp+536 // flags = notrap aligned
-;   f29 = fload64 sp+528 // flags = notrap aligned
-;   f30 = fload64 sp+520 // flags = notrap aligned
-;   f31 = fload64 sp+512 // flags = notrap aligned
-;   v0 = vload128 sp+504 // flags = notrap aligned little
-;   v1 = vload128 sp+496 // flags = notrap aligned little
-;   v2 = vload128 sp+488 // flags = notrap aligned little
-;   v3 = vload128 sp+480 // flags = notrap aligned little
-;   v4 = vload128 sp+472 // flags = notrap aligned little
-;   v5 = vload128 sp+464 // flags = notrap aligned little
-;   v6 = vload128 sp+456 // flags = notrap aligned little
-;   v7 = vload128 sp+448 // flags = notrap aligned little
-;   v8 = vload128 sp+440 // flags = notrap aligned little
-;   v9 = vload128 sp+432 // flags = notrap aligned little
-;   v10 = vload128 sp+424 // flags = notrap aligned little
-;   v11 = vload128 sp+416 // flags = notrap aligned little
-;   v12 = vload128 sp+408 // flags = notrap aligned little
-;   v13 = vload128 sp+400 // flags = notrap aligned little
-;   v14 = vload128 sp+392 // flags = notrap aligned little
-;   v15 = vload128 sp+384 // flags = notrap aligned little
-;   v16 = vload128 sp+376 // flags = notrap aligned little
-;   v17 = vload128 sp+368 // flags = notrap aligned little
-;   v18 = vload128 sp+360 // flags = notrap aligned little
-;   v19 = vload128 sp+352 // flags = notrap aligned little
-;   v20 = vload128 sp+344 // flags = notrap aligned little
-;   v21 = vload128 sp+336 // flags = notrap aligned little
-;   v22 = vload128 sp+328 // flags = notrap aligned little
-;   v23 = vload128 sp+320 // flags = notrap aligned little
-;   v24 = vload128 sp+312 // flags = notrap aligned little
-;   v25 = vload128 sp+304 // flags = notrap aligned little
-;   v26 = vload128 sp+296 // flags = notrap aligned little
-;   v27 = vload128 sp+288 // flags = notrap aligned little
-;   v28 = vload128 sp+280 // flags = notrap aligned little
-;   v29 = vload128 sp+272 // flags = notrap aligned little
-;   v30 = vload128 sp+264 // flags = notrap aligned little
-;   v31 = vload128 sp+256 // flags = notrap aligned little
+;   x0 = xload64 sp+888 // flags =memflags0
+;   x1 = xload64 sp+880 // flags =memflags0
+;   x2 = xload64 sp+872 // flags =memflags0
+;   x3 = xload64 sp+864 // flags =memflags0
+;   x4 = xload64 sp+856 // flags =memflags0
+;   x5 = xload64 sp+848 // flags =memflags0
+;   x6 = xload64 sp+840 // flags =memflags0
+;   x7 = xload64 sp+832 // flags =memflags0
+;   x8 = xload64 sp+824 // flags =memflags0
+;   x9 = xload64 sp+816 // flags =memflags0
+;   x10 = xload64 sp+808 // flags =memflags0
+;   x11 = xload64 sp+800 // flags =memflags0
+;   x12 = xload64 sp+792 // flags =memflags0
+;   x13 = xload64 sp+784 // flags =memflags0
+;   x14 = xload64 sp+776 // flags =memflags0
+;   x15 = xload64 sp+768 // flags =memflags0
+;   f0 = fload64 sp+760 // flags =memflags0
+;   f1 = fload64 sp+752 // flags =memflags0
+;   f2 = fload64 sp+744 // flags =memflags0
+;   f3 = fload64 sp+736 // flags =memflags0
+;   f4 = fload64 sp+728 // flags =memflags0
+;   f5 = fload64 sp+720 // flags =memflags0
+;   f6 = fload64 sp+712 // flags =memflags0
+;   f7 = fload64 sp+704 // flags =memflags0
+;   f8 = fload64 sp+696 // flags =memflags0
+;   f9 = fload64 sp+688 // flags =memflags0
+;   f10 = fload64 sp+680 // flags =memflags0
+;   f11 = fload64 sp+672 // flags =memflags0
+;   f12 = fload64 sp+664 // flags =memflags0
+;   f13 = fload64 sp+656 // flags =memflags0
+;   f14 = fload64 sp+648 // flags =memflags0
+;   f15 = fload64 sp+640 // flags =memflags0
+;   f16 = fload64 sp+632 // flags =memflags0
+;   f17 = fload64 sp+624 // flags =memflags0
+;   f18 = fload64 sp+616 // flags =memflags0
+;   f19 = fload64 sp+608 // flags =memflags0
+;   f20 = fload64 sp+600 // flags =memflags0
+;   f21 = fload64 sp+592 // flags =memflags0
+;   f22 = fload64 sp+584 // flags =memflags0
+;   f23 = fload64 sp+576 // flags =memflags0
+;   f24 = fload64 sp+568 // flags =memflags0
+;   f25 = fload64 sp+560 // flags =memflags0
+;   f26 = fload64 sp+552 // flags =memflags0
+;   f27 = fload64 sp+544 // flags =memflags0
+;   f28 = fload64 sp+536 // flags =memflags0
+;   f29 = fload64 sp+528 // flags =memflags0
+;   f30 = fload64 sp+520 // flags =memflags0
+;   f31 = fload64 sp+512 // flags =memflags0
+;   v0 = vload128 sp+504 // flags =memflags2
+;   v1 = vload128 sp+496 // flags =memflags2
+;   v2 = vload128 sp+488 // flags =memflags2
+;   v3 = vload128 sp+480 // flags =memflags2
+;   v4 = vload128 sp+472 // flags =memflags2
+;   v5 = vload128 sp+464 // flags =memflags2
+;   v6 = vload128 sp+456 // flags =memflags2
+;   v7 = vload128 sp+448 // flags =memflags2
+;   v8 = vload128 sp+440 // flags =memflags2
+;   v9 = vload128 sp+432 // flags =memflags2
+;   v10 = vload128 sp+424 // flags =memflags2
+;   v11 = vload128 sp+416 // flags =memflags2
+;   v12 = vload128 sp+408 // flags =memflags2
+;   v13 = vload128 sp+400 // flags =memflags2
+;   v14 = vload128 sp+392 // flags =memflags2
+;   v15 = vload128 sp+384 // flags =memflags2
+;   v16 = vload128 sp+376 // flags =memflags2
+;   v17 = vload128 sp+368 // flags =memflags2
+;   v18 = vload128 sp+360 // flags =memflags2
+;   v19 = vload128 sp+352 // flags =memflags2
+;   v20 = vload128 sp+344 // flags =memflags2
+;   v21 = vload128 sp+336 // flags =memflags2
+;   v22 = vload128 sp+328 // flags =memflags2
+;   v23 = vload128 sp+320 // flags =memflags2
+;   v24 = vload128 sp+312 // flags =memflags2
+;   v25 = vload128 sp+304 // flags =memflags2
+;   v26 = vload128 sp+296 // flags =memflags2
+;   v27 = vload128 sp+288 // flags =memflags2
+;   v28 = vload128 sp+280 // flags =memflags2
+;   v29 = vload128 sp+272 // flags =memflags2
+;   v30 = vload128 sp+264 // flags =memflags2
+;   v31 = vload128 sp+256 // flags =memflags2
 ;   pop_frame_restore 896, {}
 ;   ret
 ;

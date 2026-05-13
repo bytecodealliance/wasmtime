@@ -24,15 +24,15 @@ function %f0(i32) -> i32, f32, f64 {
 ;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
 ;   fconst64 f1, 4607182418800017408
-;   fstore64 Slot(0), f1 // flags =  notrap aligned
+;   fstore64 Slot(0), f1 // flags = memflags0
 ;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p0i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I64) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: false }; jump MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   xone x0
-;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f1 = fload64 Slot(0) // flags =memflags0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ; block2:
-;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f1 = fload64 Slot(0) // flags =memflags0
 ;   xadd32_u8 x0, x0, 1
 ;   fconst32 f0, 0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
@@ -76,15 +76,15 @@ function %f2(i32, i64) -> i32, f32, f64 {
 ;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
 ;   fconst64 f1, 4607182418800017408
-;   fstore64 Slot(0), f1 // flags =  notrap aligned
+;   fstore64 Slot(0), f1 // flags = memflags0
 ;   indirect_call x1, CallInfo { dest: XReg(p1i), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I64) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: false }; jump MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   xone x0
-;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f1 = fload64 Slot(0) // flags =memflags0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ; block2:
-;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f1 = fload64 Slot(0) // flags =memflags0
 ;   xadd32_u8 x0, x0, 1
 ;   fconst32 f0, 0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
@@ -130,28 +130,28 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ; VCode:
 ;   push_frame_save 160, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
-;   xstore64 Slot(8), x0 // flags =  notrap aligned
+;   xstore64 Slot(8), x0 // flags = memflags0
 ;   fconst64 f1, 4607182418800017408
 ;   xmov x0, x1
-;   xstore64 Slot(0), x1 // flags =  notrap aligned
-;   fstore64 Slot(16), f1 // flags =  notrap aligned
+;   xstore64 Slot(0), x1 // flags = memflags0
+;   fstore64 Slot(16), f1 // flags = memflags0
 ;   indirect_call_host CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I64) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(3), exception_handlers: [Context(stack1), Tag(tag0, MachLabel(1)), Tag(tag1, MachLabel(2)), Context(stack0), Tag(tag0, MachLabel(4))] }), patchable: false }; jump MachLabel(3); catch [context stack1, tag0: MachLabel(1), tag1: MachLabel(2), context stack0, tag0: MachLabel(4)]
 ; block1:
 ;   xmov x2, x0
-;   f1 = fload64 Slot(16) // flags = notrap aligned
+;   f1 = fload64 Slot(16) // flags =memflags0
 ;   jump label5
 ; block2:
 ;   xmov x2, x0
-;   f1 = fload64 Slot(16) // flags = notrap aligned
+;   f1 = fload64 Slot(16) // flags =memflags0
 ;   jump label5
 ; block3:
 ;   xone x0
-;   f1 = fload64 Slot(16) // flags = notrap aligned
+;   f1 = fload64 Slot(16) // flags =memflags0
 ;   pop_frame_restore 160, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ; block4:
-;   f1 = fload64 Slot(16) // flags = notrap aligned
-;   x2 = xload64 Slot(8) // flags = notrap aligned
+;   f1 = fload64 Slot(16) // flags =memflags0
+;   x2 = xload64 Slot(8) // flags =memflags0
 ;   jump label5
 ; block5:
 ;   xadd32_u8 x0, x2, 1
@@ -206,16 +206,16 @@ function %f5() -> i64 {
 ;   push_frame_save 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ; block0:
 ;   label_address x0, MachLabel(3)
-;   xstore64 Slot(0), x0 // flags =  notrap aligned
+;   xstore64 Slot(0), x0 // flags = memflags0
 ;   jump label1
 ; block1:
 ;   indirect_call_host CallInfo { dest: TestCase(%g), uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I64) }], clobbers: PRegSet { bits: [4294967292, 4294967295, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(2), exception_handlers: [Default(MachLabel(3))] }), patchable: false }; jump MachLabel(2); catch [default: MachLabel(3)]
 ; block2:
-;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   x0 = xload64 Slot(0) // flags =memflags0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ; block3:
-;   x0 = xload64 Slot(0) // flags = notrap aligned
+;   x0 = xload64 Slot(0) // flags =memflags0
 ;   pop_frame_restore 144, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
 ;   ret
 ;

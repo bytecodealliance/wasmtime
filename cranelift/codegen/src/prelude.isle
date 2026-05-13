@@ -364,14 +364,28 @@
 ;; Provide model for the MemFlags type (declared in generated clif_lower.isle).
 (model MemFlags (type (bv 16)))
 
-;; `MemFlags::trusted`
+;; `MemFlagsData::trusted` — returns `MemFlagsSet::TRUSTED` (entity index 0).
 (spec (mem_flags_trusted)
-      (provide (= result #x0003)))
+      (provide (= result #x0000)))
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+;; Resolve a MemFlags entity to its MemFlagsData.
+(decl mem_flags_data (MemFlagsData) MemFlags)
+(extern extractor mem_flags_data mem_flags_data)
+
+;; Convert MemFlagsData back to the MemFlags entity index.
+;; The data must already exist in the DFG's MemFlagsSet.
+(decl pure mem_flags_intern (MemFlagsData) MemFlags)
+(extern constructor mem_flags_intern mem_flags_intern)
+
+;; Returns the trusted MemFlagsData value directly (for helpers that still take MemFlagsData).
+(decl pure mem_flags_trusted_data () MemFlagsData)
+(extern constructor mem_flags_trusted_data mem_flags_trusted_data)
+
 ;; Determine if flags specify little- or native-endian.
-(decl little_or_native_endian (MemFlags) MemFlags)
+;; Takes a MemFlags entity and returns the resolved MemFlagsData.
+(decl little_or_native_endian (MemFlagsData) MemFlags)
 (extern extractor little_or_native_endian little_or_native_endian)
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

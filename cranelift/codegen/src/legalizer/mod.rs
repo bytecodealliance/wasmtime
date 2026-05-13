@@ -16,7 +16,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::immediates::Imm64;
 use crate::ir::types::{self, I64, I128};
-use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
+use crate::ir::{self, InstBuilder, InstructionData, MemFlagsData, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
 use cranelift_entity::EntitySet;
@@ -311,7 +311,7 @@ fn expand_dynamic_stack_store(
     let addr_ty = isa.pointer_type();
     let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
 
-    let mut mflags = MemFlags::new();
+    let mut mflags = MemFlagsData::new();
     // Stack slots are required to be accessible and aligned.
     mflags.set_notrap();
     mflags.set_aligned();
@@ -337,7 +337,7 @@ fn expand_dynamic_stack_load(
     let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
 
     // Stack slots are required to be accessible and aligned.
-    let mflags = MemFlags::trusted();
+    let mflags = MemFlagsData::trusted();
 
     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
 
@@ -360,7 +360,7 @@ fn expand_stack_store(
 
     // Stack slots are required to be accessible.
     // We can't currently ensure that they are aligned.
-    let mut mflags = MemFlags::new();
+    let mut mflags = MemFlagsData::new();
     mflags.set_notrap();
 
     pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
@@ -385,7 +385,7 @@ fn expand_stack_load(
 
     // Stack slots are required to be accessible.
     // We can't currently ensure that they are aligned.
-    let mut mflags = MemFlags::new();
+    let mut mflags = MemFlagsData::new();
     mflags.set_notrap();
 
     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);

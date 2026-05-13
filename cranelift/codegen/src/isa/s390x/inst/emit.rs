@@ -1,6 +1,6 @@
 //! S390x ISA: binary code emission.
 
-use crate::ir::{self, LibCall, MemFlags, TrapCode};
+use crate::ir::{self, LibCall, TrapCode};
 use crate::isa::CallConv;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
@@ -184,7 +184,11 @@ pub fn mem_finalize(
     let need_load_address = match &mem {
         &MemArg::Label { .. } | &MemArg::Constant { .. } if !mi.have_pcrel => true,
         &MemArg::Symbol { .. } if !mi.have_pcrel => true,
-        &MemArg::Symbol { flags, .. } if !mi.have_unaligned_pcrel && !flags.aligned() => true,
+        &MemArg::Symbol { flags, .. }
+            if !mi.have_unaligned_pcrel && !state.mem_flags[flags].aligned() =>
+        {
+            true
+        }
         &MemArg::BXD20 { .. } if !mi.have_d20 => true,
         &MemArg::BXD12 { index, .. } | &MemArg::BXD20 { index, .. } if !mi.have_index => {
             index != zero_reg()
@@ -249,7 +253,7 @@ pub fn mem_emit(
     }
 
     if add_trap {
-        if let Some(trap_code) = mem.get_flags().trap_code() {
+        if let Some(trap_code) = state.mem_flags[mem.get_flags()].trap_code() {
             sink.add_trap(trap_code);
         }
     }
@@ -323,7 +327,7 @@ pub fn mem_rs_emit(
     }
 
     if add_trap {
-        if let Some(trap_code) = mem.get_flags().trap_code() {
+        if let Some(trap_code) = state.mem_flags[mem.get_flags()].trap_code() {
             sink.add_trap(trap_code);
         }
     }
@@ -374,7 +378,7 @@ pub fn mem_imm8_emit(
     }
 
     if add_trap {
-        if let Some(trap_code) = mem.get_flags().trap_code() {
+        if let Some(trap_code) = state.mem_flags[mem.get_flags()].trap_code() {
             sink.add_trap(trap_code);
         }
     }
@@ -421,7 +425,7 @@ pub fn mem_imm16_emit(
     }
 
     if add_trap {
-        if let Some(trap_code) = mem.get_flags().trap_code() {
+        if let Some(trap_code) = state.mem_flags[mem.get_flags()].trap_code() {
             sink.add_trap(trap_code);
         }
     }
@@ -463,7 +467,7 @@ pub fn mem_vrx_emit(
     }
 
     if add_trap {
-        if let Some(trap_code) = mem.get_flags().trap_code() {
+        if let Some(trap_code) = state.mem_flags[mem.get_flags()].trap_code() {
             sink.add_trap(trap_code);
         }
     }
@@ -1379,7 +1383,7 @@ fn put_with_trap(sink: &mut MachBuffer<Inst>, enc: &[u8], trap_code: TrapCode) {
 }
 
 /// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EmitState {
     /// Offset from the actual SP to the "nominal SP".  The latter is defined
     /// as the value the stack pointer has after the prolog.  This offset is
@@ -1405,6 +1409,22 @@ pub struct EmitState {
     ctrl_plane: ControlPlane,
 
     frame_layout: FrameLayout,
+
+    mem_flags: crate::ir::MemFlagsSet,
+}
+
+impl Default for EmitState {
+    fn default() -> Self {
+        EmitState {
+            nominal_sp_offset: 0,
+            outgoing_sp_offset: 0,
+            incoming_args_size: 0,
+            user_stack_map: None,
+            ctrl_plane: ControlPlane::default(),
+            frame_layout: FrameLayout::default(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
+        }
+    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -1421,6 +1441,7 @@ impl MachInstEmitState<Inst> for EmitState {
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
+            mem_flags: crate::ir::MemFlagsSet::new(),
         }
     }
 
@@ -1438,6 +1459,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn frame_layout(&self) -> &FrameLayout {
         &self.frame_layout
+    }
+
+    fn set_mem_flags(&mut self, mem_flags: crate::ir::MemFlagsSet) {
+        self.mem_flags = mem_flags;
     }
 }
 
@@ -2472,7 +2497,7 @@ impl Inst {
                 sink.put8(0);
                 let inst = Inst::Load64 {
                     rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
+                    mem: MemArg::reg(reg, crate::ir::MemFlagsSet::TRUSTED),
                 };
                 inst.emit(sink, emit_info, state);
             }
@@ -3659,7 +3684,7 @@ impl Inst {
                     alu_op: ALUOp::Add64Ext32,
                     rd: rtmp,
                     ri: rtmp.to_reg(),
-                    mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
+                    mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, crate::ir::MemFlagsSet::TRUSTED),
                 };
                 inst.emit(sink, emit_info, state);
 
@@ -3702,7 +3727,7 @@ impl Inst {
                 // mvi 0(%r15), 0
                 let inst = Inst::StoreImm8 {
                     imm: 0,
-                    mem: MemArg::reg(stack_reg(), MemFlags::trusted()),
+                    mem: MemArg::reg(stack_reg(), crate::ir::MemFlagsSet::TRUSTED),
                 };
                 inst.emit(sink, emit_info, state);
 

@@ -129,7 +129,7 @@ impl DrcCompiler {
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         builder.ins().load(
             ptr_ty,
-            ir::MemFlags::trusted().with_readonly(),
+            ir::MemFlagsData::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         )
@@ -250,7 +250,7 @@ impl DrcCompiler {
         ty: WasmRefType,
         dst: ir::Value,
         new_val: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<()> {
         let (ref_ty, _) = func_env.reference_type(ty.heap_type);
 
@@ -537,7 +537,7 @@ impl GcCompiler for DrcCompiler {
         builder: &mut FunctionBuilder,
         ty: WasmRefType,
         src: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<ir::Value> {
         log::trace!("translate_read_gc_reference({ty:?}, {src:?}, {flags:?})");
 
@@ -688,7 +688,7 @@ impl GcCompiler for DrcCompiler {
         ty: WasmRefType,
         dst: ir::Value,
         new_val: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<()> {
         assert!(ty.is_vmgcref_type());
 

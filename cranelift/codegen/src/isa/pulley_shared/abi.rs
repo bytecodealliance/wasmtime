@@ -4,7 +4,7 @@ use super::{PulleyFlags, PulleyTargetKind, inst::*};
 use crate::isa::pulley_shared::PointerWidth;
 use crate::{
     CodegenResult,
-    ir::{self, MemFlags, Signature, types::*},
+    ir::{self, Signature, types::*},
     isa,
     machinst::*,
     settings,
@@ -164,22 +164,20 @@ where
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianness to avoid
-        // implementing a byte-swap of vectors on big-endian platforms.
-        if ty.is_vector() {
-            flags.set_endianness(ir::Endianness::Little);
-        }
+        let flags = if ty.is_vector() {
+            ir::MemFlags::trusted_little()
+        } else {
+            ir::MemFlags::trusted()
+        };
         Inst::gen_load(into_reg, mem.into(), ty, flags).into()
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        let mut flags = MemFlags::trusted();
-        // Stack loads/stores of vectors always use little-endianness to avoid
-        // implementing a byte-swap of vectors on big-endian platforms.
-        if ty.is_vector() {
-            flags.set_endianness(ir::Endianness::Little);
-        }
+        let flags = if ty.is_vector() {
+            ir::MemFlags::trusted_little()
+        } else {
+            ir::MemFlags::trusted()
+        };
         Inst::gen_store(mem.into(), from_reg, ty, flags).into()
     }
 
@@ -261,13 +259,13 @@ where
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
         let base = XReg::try_from(base).unwrap();
         let mem = Amode::RegOffset { base, offset };
-        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted()).into()
+        Inst::gen_load(into_reg, mem, ty, ir::MemFlags::trusted()).into()
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
         let base = XReg::try_from(base).unwrap();
         let mem = Amode::RegOffset { base, offset };
-        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted()).into()
+        Inst::gen_store(mem, from_reg, ty, ir::MemFlags::trusted()).into()
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
@@ -344,10 +342,11 @@ where
         }
 
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
-            let mut flags = MemFlags::trusted();
-            if ty.is_vector() {
-                flags.set_endianness(ir::Endianness::Little);
-            }
+            let flags = if ty.is_vector() {
+                ir::MemFlags::trusted_little()
+            } else {
+                ir::MemFlags::trusted()
+            };
             insts.push(Inst::gen_store(Amode::SpOffset { offset }, reg, ty, flags).into());
         }
 
@@ -367,10 +366,11 @@ where
 
         // Restore clobbered registers that are manually managed in Cranelift.
         for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
-            let mut flags = MemFlags::trusted();
-            if ty.is_vector() {
-                flags.set_endianness(ir::Endianness::Little);
-            }
+            let flags = if ty.is_vector() {
+                ir::MemFlags::trusted_little()
+            } else {
+                ir::MemFlags::trusted()
+            };
             insts.push(
                 Inst::gen_load(
                     Writable::from_reg(reg),

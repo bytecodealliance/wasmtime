@@ -73,7 +73,7 @@ impl NullCompiler {
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted().with_readonly(),
+            ir::MemFlagsData::trusted().with_readonly(),
             vmctx,
             i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
         );
@@ -374,7 +374,7 @@ impl GcCompiler for NullCompiler {
         builder: &mut FunctionBuilder,
         _ty: WasmRefType,
         src: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<ir::Value> {
         // NB: Don't use `unbarriered_load_gc_ref` here because we don't need to
         // mark the value as requiring inclusion in stack maps.
@@ -388,7 +388,7 @@ impl GcCompiler for NullCompiler {
         ty: WasmRefType,
         dst: ir::Value,
         new_val: ir::Value,
-        flags: ir::MemFlags,
+        flags: ir::MemFlagsData,
     ) -> WasmResult<()> {
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
     }
