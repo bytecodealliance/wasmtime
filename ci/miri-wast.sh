@@ -13,9 +13,14 @@
 
 set -ex
 
-rm -rf ./miri-wast
-mkdir ./miri-wast
-cargo run -- wast --target pulley64 --precompile-save ./miri-wast "$@" \
+REPO="$(dirname $0)/.."
+CARGO_TOML="$REPO/Cargo.toml"
+MIRI_WAST="$REPO/target/miri-wast"
+
+rm -rf "$MIRI_WAST"
+mkdir -p "$MIRI_WAST"
+
+cargo run --manifest-path "$CARGO_TOML" -- wast --target pulley64 --precompile-save "$MIRI_WAST" "$@" \
   -O memory-reservation=$((1 << 20)) \
   -O memory-guard-size=0 \
   -O signals-based-traps=n \
@@ -23,7 +28,8 @@ cargo run -- wast --target pulley64 --precompile-save ./miri-wast "$@" \
   -W function-references,gc
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
-  cargo miri run -- wast -Ccache=n --target pulley64 --precompile-load ./miri-wast "$@" \
+cargo miri run --manifest-path "$CARGO_TOML" -- \
+  wast -Ccache=n --target pulley64 --precompile-load "$MIRI_WAST" "$@" \
   -O memory-init-cow=n \
   -W function-references,gc \
   --ignore-error-messages
