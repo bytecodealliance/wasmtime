@@ -30,6 +30,7 @@ pulley-interpreter-fuzz = { workspace = true }
 smallvec = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = ["winch"] }
+wasmtime-core = { workspace = true }
 wasmtime-fuzzing = { workspace = true }
 wasmtime-test-util = { workspace = true }
 log = { workspace = true }
@@ -126,3 +127,9 @@ path = "fuzz_targets/gc_ops.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "oom"
+path = "fuzz_targets/oom.rs"
+test = false
+doc = false
