@@ -2981,11 +2981,10 @@ start a print 1234
         const CHUNK_COUNT: usize = 64;
         const EXPECTED_LEN: usize = CHUNK_SIZE * CHUNK_COUNT;
 
-        let server =
-            WasmtimeServe::new(P3_CLI_SERVE_TXRESULT_BODY_INTEGRITY_COMPONENT, |cmd| {
-                cmd.arg("-Wcomponent-model-async");
-                cmd.arg("-Sp3,cli");
-            })?;
+        let server = WasmtimeServe::new(P3_CLI_SERVE_TXRESULT_BODY_INTEGRITY_COMPONENT, |cmd| {
+            cmd.arg("-Wcomponent-model-async");
+            cmd.arg("-Sp3,cli");
+        })?;
 
         let resp = server
             .send_request(

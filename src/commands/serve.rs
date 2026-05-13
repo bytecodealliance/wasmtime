@@ -1211,20 +1211,22 @@ async fn handle_request(
                             let Sender::P3(tx) = tx else { unreachable!() };
                             let (req, body) = req.into_parts();
                             let body = body.map_err(ErrorCode::from_hyper_request_error);
-                            let req = http::Request::from_parts(req, body);
-                            let (request, request_io_result) = Request::from_http(req);
-                            let res = proxy.handle(store, request).await??;
-                            let res = store
-                                .with(|mut store| res.into_http(&mut store, request_io_result))?;
+                            let http_req = http::Request::from_parts(req, body);
+                            let (p3_req, _fut) = Request::from_http(http_req);
+                            let res = proxy.handle(store, p3_req).await??;
 
-                            // With the guest response now transformed into a
-                            // host-compatible response layer one more wrapper
-                            // around the body. This layer is solely responsible
-                            // for dropping a channel half on destruction, and
-                            // this enables waiting here until the body is
-                            // consumed by waiting for this destruction to
-                            // happen.
-                            let (resp_body_tx, resp_body_rx) = oneshot::channel();
+                            // Resolve the guest's `tx_result` future (returned by `response.new`)
+                            // when hyper has finished reading the response body, not at
+                            // request-resource cleanup time. Previously `request_io_result` was
+                            // passed here, which resolved `tx_result` before the body had been
+                            // handed off to hyper. A guest that calls `exit(ok)` after awaiting
+                            // `tx_result` would therefore tear down the store while the body was
+                            // still in flight.
+                            let (resp_body_tx, resp_body_rx) = oneshot::channel::<()>();
+                            let res = store.with(|mut store| {
+                                res.into_http(&mut store, resp_body_rx.map(|_| Ok(())))
+                            })?;
+
                             let res = res.map(|body| {
                                 let body = body.map_err(|e| e.into());
                                 P3BodyWrapper {
@@ -1234,13 +1236,7 @@ async fn handle_request(
                                 .boxed_unsync()
                             });
 
-                            // If `wasmtime serve` is waiting on this response
-                            // and actually got it then wait for the body to
-                            // finish, otherwise it's thrown away so skip that
-                            // step.
-                            if tx.send(res).is_ok() {
-                                _ = resp_body_rx.await;
-                            }
+                            let _ = tx.send(res);
 
                             Ok(())
                         }
