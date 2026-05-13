@@ -226,7 +226,7 @@ impl Instance {
     ) {
         for segment in self.passive_elements_mut().iter_mut() {
             if segment.needs_gc_rooting {
-                for e in segment.elements() {
+                for e in segment.elements_mut() {
                     if e.get_vmgcref().is_none() {
                         continue;
                     }
@@ -1987,5 +1987,11 @@ impl PassiveElementSegment {
     /// The elements of this segment.
     pub(crate) fn elements(&self) -> &[ValRaw] {
         &self.elements
+    }
+
+    /// The elements of this segment.
+    #[cfg(feature = "gc")]
+    pub(crate) fn elements_mut(&mut self) -> &mut [ValRaw] {
+        &mut self.elements
     }
 }
