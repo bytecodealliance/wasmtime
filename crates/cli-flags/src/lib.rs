@@ -460,6 +460,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
+        /// Component model support for `(implements ...)`, corresponds to the
+        /// 🏷️ emoji in the upstream spec.
+        pub component_model_implements: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -1223,6 +1226,7 @@ impl CommonOptions {
             ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
+            ("component-model", component_model_implements, wasm_component_model_implements)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)

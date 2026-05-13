@@ -135,7 +135,7 @@ fn linker_substituting_types_issue_8003() -> Result<()> {
     let component_ty = linker.substituted_component_type(&component)?;
     let exports = component_ty.exports(&engine);
     for (_name, item) in exports {
-        match item {
+        match item.ty {
             ComponentItem::ComponentInstance(instance) => {
                 for _ in instance.exports(&engine) {
                     // ..

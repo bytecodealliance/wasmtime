@@ -294,14 +294,16 @@ impl Component {
     ///     (component (import "x" (type (sub resource))))
     /// "#)?;
     ///
-    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    /// let aty = a.component_type();
+    /// let bty = b.component_type();
+    /// let (_, a_ty) = aty.imports(&engine).next().unwrap();
+    /// let (_, b_ty) = bty.imports(&engine).next().unwrap();
     ///
-    /// let a_ty = match a_ty {
+    /// let a_ty = match a_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let b_ty = match b_ty {
+    /// let b_ty = match b_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -329,14 +331,15 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    /// let ty = a.component_type();
+    /// let (_, import) = ty.imports(&engine).next().unwrap();
+    /// let (_, export) = ty.exports(&engine).next().unwrap();
     ///
-    /// let import = match import {
+    /// let import = match import.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let export = match export {
+    /// let export = match export.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -890,7 +893,7 @@ impl Component {
             }
             None => &info.exports,
         };
-        exports.get(name, &NameMapNoIntern).copied()
+        exports.get(name, &NameMapNoIntern).map(|pair| pair.0)
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {

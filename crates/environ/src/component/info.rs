@@ -76,7 +76,7 @@ pub struct Component {
     ///
     /// Note that each name is given an `ImportIndex` here for the next map to
     /// refer back to.
-    pub import_types: PrimaryMap<ImportIndex, (String, TypeDef)>,
+    pub import_types: PrimaryMap<ImportIndex, (String, ComponentExtern)>,
 
     /// A list of "flattened" imports that are used by this instance.
     ///
@@ -107,7 +107,7 @@ pub struct Component {
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
     /// This component's own root exports from the component itself.
-    pub exports: NameMap<TryString, ExportIndex>,
+    pub exports: NameMap<TryString, (ExportIndex, ComponentExternData)>,
 
     /// All exports of this component and exported instances of this component.
     ///
@@ -491,7 +491,7 @@ pub enum Export {
         /// Instance type index, if such is assigned
         ty: TypeComponentInstanceIndex,
         /// Instance export map
-        exports: NameMap<TryString, ExportIndex>,
+        exports: NameMap<TryString, (ExportIndex, ComponentExternData)>,
     },
     /// An exported type from a component or instance, currently only
     /// informational.

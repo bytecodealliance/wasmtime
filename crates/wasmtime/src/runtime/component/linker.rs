@@ -178,8 +178,13 @@ impl<T: 'static> Linker<T> {
         let env_component = component.env_component();
         for (_idx, (name, ty)) in env_component.import_types.iter() {
             let import = self.map.get(name, &self.strings);
-            cx.definition(ty, import)
-                .with_context(|| format!("component imports {desc} `{name}`, but a matching implementation was not found in the linker", desc = ty.desc()))?;
+            cx.definition(&ty.ty, import).with_context(|| {
+                format!(
+                    "component imports {desc} `{name}`, but \
+                     a matching implementation was not found in the linker",
+                    desc = ty.ty.desc()
+                )
+            })?;
         }
         Ok(cx)
     }
@@ -386,7 +391,7 @@ impl<T: 'static> Linker<T> {
                         stub_item(
                             &mut linker_instance,
                             export_name,
-                            export,
+                            &export.ty,
                             Some(item_name),
                             types,
                         )?;
@@ -408,7 +413,7 @@ impl<T: 'static> Linker<T> {
             stub_item(
                 &mut self.root(),
                 import_name,
-                import_type,
+                &import_type.ty,
                 None,
                 component.types(),
             )?;

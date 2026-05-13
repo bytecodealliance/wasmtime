@@ -1314,6 +1314,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 🏷️ emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_implements(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_IMPLEMENTS, enable);
+        self
+    }
+
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
@@ -2326,7 +2336,8 @@ impl Config {
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
             | WasmFeatures::CM_MAP
-            | WasmFeatures::CM_FIXED_LENGTH_LISTS;
+            | WasmFeatures::CM_FIXED_LENGTH_LISTS
+            | WasmFeatures::CM_IMPLEMENTS;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
