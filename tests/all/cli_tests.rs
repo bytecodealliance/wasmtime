@@ -2960,8 +2960,58 @@ start a print 1234
         );
         Ok(())
     }
-}
 
+    #[tokio::test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    async fn p3_cli_serve_txresult_body_integrity() -> Result<()> {
+        // Verify that `tx_result` (the future returned by `response.new`)
+        // resolves only after the response body has been fully handed to the
+        // HTTP layer, not prematurely at request-resource cleanup time.
+        //
+        // The guest writes a 64 KiB body as 64 separate 1 KiB chunks and
+        // calls `exit(ok)` after `tx_result` resolves.  Each chunk requires
+        // the host-side mpsc channel (capacity 1) to be drained by hyper
+        // before the next can be queued, creating a scheduler yield between
+        // every chunk.  With incorrect tx_result semantics the exit fires at
+        // the first such yield — after at most one chunk has been queued —
+        // consistently truncating the body.  With correct semantics the exit
+        // fires only after all chunks have been consumed, so the full body
+        // reaches the client.
+        const CHUNK_SIZE: usize = 1024;
+        const CHUNK_COUNT: usize = 64;
+        const EXPECTED_LEN: usize = CHUNK_SIZE * CHUNK_COUNT;
+
+        let server =
+            WasmtimeServe::new(P3_CLI_SERVE_TXRESULT_BODY_INTEGRITY_COMPONENT, |cmd| {
+                cmd.arg("-Wcomponent-model-async");
+                cmd.arg("-Sp3,cli");
+            })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(
+            resp.body().len(),
+            EXPECTED_LEN,
+            "response body truncated: expected {EXPECTED_LEN} bytes but got {} \
+             (tx_result fired before body handoff to hyper was complete)",
+            resp.body().len()
+        );
+
+        let (_stdout, stderr) = server.finish()?;
+        assert!(
+            !stderr.contains("worker error"),
+            "unexpected worker error in stderr: {stderr}"
+        );
+        Ok(())
+    }
 }
 
 #[test]
