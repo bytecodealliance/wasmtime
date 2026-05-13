@@ -3180,3 +3180,137 @@ fn typed_option_noextern() -> Result<()> {
     assert!(f.call(&mut store, None)?.is_none());
     Ok(())
 }
+
+/// A test that performs a GC without actually compiling or running any Wasm
+/// functions so we can run this test under MIRI.
+#[test]
+fn miri_gc_smoke_test() -> Result<()> {
+    for collector in [
+        Collector::Copying,
+        Collector::Null,
+        Collector::DeferredReferenceCounting,
+    ] {
+        eprintln!("===== Collector: {collector:?} =====");
+
+        let mut config = Config::new();
+        config.wasm_gc(true);
+        config.wasm_function_references(true);
+        config.wasm_exceptions(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        let struct_ty = StructType::new(
+            &engine,
+            [FieldType::new(Mutability::Const, StorageType::I8)],
+        )?;
+        let table_ty = TableType::new(RefType::ANYREF, 1, None);
+        let global_ty = GlobalType::new(RefType::ANYREF.into(), Mutability::Var);
+        let exn_ty = ExnType::new(&engine, [ValType::I32])?;
+        let func_ty = FuncType::new(&engine, Some(ValType::I32), None);
+        let tag_ty = TagType::new(func_ty);
+
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (type $s (struct (field i8)))
+
+                    (global (export "g") (ref null $s) (struct.new $s (i32.const 1)))
+
+                    (table $t (export "t") 1 (ref null $s))
+                    (elem (table $t) (i32.const 0) (ref null $s) (struct.new $s (i32.const 2)))
+
+                    ;; Can't actually do anything with this without running Wasm,
+                    ;; but have it here anyways in case it trips anything in MIRI.
+                    (elem anyref (struct.new $s (i32.const 0xff)))
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+
+        let pre = StructRefPre::new(&mut store, struct_ty);
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Host table root.
+        let table = {
+            let mut store = RootScope::new(&mut store);
+            let table = Table::new(&mut store, table_ty, Ref::Any(None))?;
+            let s = StructRef::new(&mut store, &pre, &[Val::I32(3)])?;
+            table.set(&mut store, 0, s.into())?;
+            table
+        };
+
+        // Host global root.
+        let global = {
+            let mut store = RootScope::new(&mut store);
+            let s = StructRef::new(&mut store, &pre, &[Val::I32(4)])?;
+            Global::new(&mut store, global_ty, s.into())?
+        };
+
+        // Rooted<T> root.
+        let rooted = StructRef::new(&mut store, &pre, &[Val::I32(5)])?;
+
+        // OwnedRooted<T> root.
+        let owned_rooted = {
+            let mut store = RootScope::new(&mut store);
+            StructRef::new(&mut store, &pre, &[Val::I32(6)])?.to_owned_rooted(&mut store)?
+        };
+
+        // Pending exception root.
+        {
+            let mut store = RootScope::new(&mut store);
+            let pre = ExnRefPre::new(&mut store, exn_ty);
+            let tag = Tag::new(&mut store, &tag_ty)?;
+            let e = ExnRef::new(&mut store, &pre, &tag, &[Val::I32(7)])?;
+            let _ = store.as_context_mut().throw::<()>(e);
+        }
+
+        // Do a GC!
+        store.gc(None)?;
+
+        let assert_field_value = |store: &mut Store<_>, val: Val, field: i32| -> Result<()> {
+            let s = val.anyref().unwrap().unwrap().unwrap_struct(&store)?;
+            let f = s.field(store, 0)?;
+            assert_eq!(f.unwrap_i32(), field);
+            Ok(())
+        };
+
+        // Instance global.
+        {
+            let global = instance.get_global(&mut store, "g").unwrap();
+            let global_val = global.get(&mut store);
+            assert_field_value(&mut store, global_val, 1)?;
+        }
+
+        // Instance table.
+        {
+            let table = instance.get_table(&mut store, "t").unwrap();
+            let table_val = table.get(&mut store, 0).unwrap();
+            assert_field_value(&mut store, table_val.into(), 2)?;
+        }
+
+        // Host table.
+        let table_val = table.get(&mut store, 0).unwrap();
+        assert_field_value(&mut store, table_val.into(), 3)?;
+
+        // Host global.
+        let global_val = global.get(&mut store);
+        assert_field_value(&mut store, global_val, 4)?;
+
+        // Rooted<T>.
+        assert_field_value(&mut store, rooted.into(), 5)?;
+
+        // OwnedRooted<T>.
+        let owned_rooted = owned_rooted.to_rooted(&mut store);
+        assert_field_value(&mut store, owned_rooted.into(), 6)?;
+
+        // Pending exception.
+        let e = store.take_pending_exception().unwrap();
+        let e_val = e.field(&mut store, 0)?;
+        assert_eq!(e_val.unwrap_i32(), 7);
+    }
+
+    Ok(())
+}
