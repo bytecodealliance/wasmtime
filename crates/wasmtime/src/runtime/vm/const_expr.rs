@@ -17,14 +17,14 @@ use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeT
 /// This can be reused across many const expression evaluations to reuse
 /// allocated resources, if any.
 pub struct ConstExprEvaluator {
-    stack: Vec<Val>,
+    stack: TryVec<Val>,
     simple: Val,
 }
 
 impl Default for ConstExprEvaluator {
     fn default() -> ConstExprEvaluator {
         ConstExprEvaluator {
-            stack: Vec::new(),
+            stack: TryVec::new(),
             simple: Val::I32(0),
         }
     }
@@ -232,52 +232,52 @@ impl ConstExprEvaluator {
         for op in expr.ops() {
             log::trace!("const-evaluating op: {op:?}");
             match op {
-                ConstOp::I32Const(i) => self.stack.push(Val::I32(*i)),
-                ConstOp::I64Const(i) => self.stack.push(Val::I64(*i)),
-                ConstOp::F32Const(f) => self.stack.push(Val::F32(*f)),
-                ConstOp::F64Const(f) => self.stack.push(Val::F64(*f)),
-                ConstOp::V128Const(v) => self.stack.push(Val::V128((*v).into())),
-                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(store, *g)?),
-                ConstOp::RefNull(ty) => self.stack.push(Val::null_top(*ty)),
-                ConstOp::RefFunc(f) => self.stack.push(context.ref_func(store, *f)?),
+                ConstOp::I32Const(i) => self.stack.push(Val::I32(*i))?,
+                ConstOp::I64Const(i) => self.stack.push(Val::I64(*i))?,
+                ConstOp::F32Const(f) => self.stack.push(Val::F32(*f))?,
+                ConstOp::F64Const(f) => self.stack.push(Val::F64(*f))?,
+                ConstOp::V128Const(v) => self.stack.push(Val::V128((*v).into()))?,
+                ConstOp::GlobalGet(g) => self.stack.push(context.global_get(store, *g)?)?,
+                ConstOp::RefNull(ty) => self.stack.push(Val::null_top(*ty))?,
+                ConstOp::RefFunc(f) => self.stack.push(context.ref_func(store, *f)?)?,
                 #[cfg(feature = "gc")]
                 ConstOp::RefI31 => {
                     let i = self.pop()?.unwrap_i32();
                     let i31 = I31::wrapping_i32(i);
                     let r = AnyRef::_from_i31(&mut AutoAssertNoGc::new(store), i31);
-                    self.stack.push(Val::AnyRef(Some(r)));
+                    self.stack.push(Val::AnyRef(Some(r)))?;
                 }
                 #[cfg(not(feature = "gc"))]
                 ConstOp::RefI31 => panic!("should not have validated"),
                 ConstOp::I32Add => {
                     let b = self.pop()?.unwrap_i32();
                     let a = self.pop()?.unwrap_i32();
-                    self.stack.push(Val::I32(a.wrapping_add(b)));
+                    self.stack.push(Val::I32(a.wrapping_add(b)))?;
                 }
                 ConstOp::I32Sub => {
                     let b = self.pop()?.unwrap_i32();
                     let a = self.pop()?.unwrap_i32();
-                    self.stack.push(Val::I32(a.wrapping_sub(b)));
+                    self.stack.push(Val::I32(a.wrapping_sub(b)))?;
                 }
                 ConstOp::I32Mul => {
                     let b = self.pop()?.unwrap_i32();
                     let a = self.pop()?.unwrap_i32();
-                    self.stack.push(Val::I32(a.wrapping_mul(b)));
+                    self.stack.push(Val::I32(a.wrapping_mul(b)))?;
                 }
                 ConstOp::I64Add => {
                     let b = self.pop()?.unwrap_i64();
                     let a = self.pop()?.unwrap_i64();
-                    self.stack.push(Val::I64(a.wrapping_add(b)));
+                    self.stack.push(Val::I64(a.wrapping_add(b)))?;
                 }
                 ConstOp::I64Sub => {
                     let b = self.pop()?.unwrap_i64();
                     let a = self.pop()?.unwrap_i64();
-                    self.stack.push(Val::I64(a.wrapping_sub(b)));
+                    self.stack.push(Val::I64(a.wrapping_sub(b)))?;
                 }
                 ConstOp::I64Mul => {
                     let b = self.pop()?.unwrap_i64();
                     let a = self.pop()?.unwrap_i64();
-                    self.stack.push(Val::I64(a.wrapping_mul(b)));
+                    self.stack.push(Val::I64(a.wrapping_mul(b)))?;
                 }
 
                 #[cfg(not(feature = "gc"))]
@@ -318,7 +318,7 @@ impl ConstExprEvaluator {
                         )
                         .await?;
                     self.stack.truncate(start);
-                    self.stack.push(s);
+                    self.stack.push(s)?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -330,7 +330,7 @@ impl ConstExprEvaluator {
                         context
                             .struct_new_default(store, limiter.as_deref_mut(), ty)
                             .await?,
-                    );
+                    )?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -354,7 +354,7 @@ impl ConstExprEvaluator {
                     )
                     .await?;
 
-                    self.stack.push(Val::AnyRef(Some(array.into())));
+                    self.stack.push(Val::AnyRef(Some(array.into())))?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -379,7 +379,7 @@ impl ConstExprEvaluator {
                     )
                     .await?;
 
-                    self.stack.push(Val::AnyRef(Some(array.into())));
+                    self.stack.push(Val::AnyRef(Some(array.into())))?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -416,7 +416,7 @@ impl ConstExprEvaluator {
                     )
                     .await?;
 
-                    self.stack.push(Val::AnyRef(Some(array.into())));
+                    self.stack.push(Val::AnyRef(Some(array.into())))?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -426,7 +426,7 @@ impl ConstExprEvaluator {
                         Some(anyref) => Some(ExternRef::_convert_any(&mut store, *anyref)?),
                         None => None,
                     };
-                    self.stack.push(Val::ExternRef(result));
+                    self.stack.push(Val::ExternRef(result))?;
                 }
 
                 #[cfg(feature = "gc")]
@@ -436,7 +436,7 @@ impl ConstExprEvaluator {
                         Some(externref) => Some(AnyRef::_convert_extern(&mut store, *externref)?),
                         None => None,
                     };
-                    self.stack.push(result.into());
+                    self.stack.push(result.into())?;
                 }
             }
         }

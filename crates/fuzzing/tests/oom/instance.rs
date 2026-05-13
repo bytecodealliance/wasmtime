@@ -1,6 +1,9 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Func, Instance, Linker, Module, Result, Store};
+use wasmtime::{
+    Config, Engine, Func, Global, GlobalType, Instance, Linker, Module, Mutability, Result, Store,
+    Val, ValType,
+};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -280,6 +283,45 @@ fn instance_get_global() -> Result<()> {
         let instance = instance_pre.instantiate(&mut store)?;
         let g = instance.get_global(&mut store, "g");
         assert!(g.is_some());
+        Ok(())
+    })
+}
+
+#[test]
+fn instance_global_init_with_imported_global() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"
+                (module
+                    (import "" "g" (global i32))
+                    (global (export "g2") (mut i32) (global.get 0))
+                )
+            "#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+
+    OomTest::new().allow_alloc_after_oom(true).test(|| unsafe {
+        let module = Module::deserialize(&engine, &module_bytes)?;
+        let mut store = Store::try_new(&engine, ())?;
+        let g = Global::new(
+            &mut store,
+            GlobalType::new(ValType::I32, Mutability::Const),
+            Val::I32(1000),
+        )?;
+        let mut linker = Linker::<()>::new(&engine);
+        linker.define(&store, "", "g", g)?;
+        let instance = linker.instantiate(&mut store, &module)?;
+        let g2 = instance.get_global(&mut store, "g2").unwrap();
+        assert_eq!(g2.get(&mut store).unwrap_i32(), 1000);
         Ok(())
     })
 }
