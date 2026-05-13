@@ -1335,7 +1335,9 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       with:
-        submodules: true
+        # Release builds don't run tests and don't need the test submodules
+        # (spec-testsuite, wasi-testsuite, component-model, etc.).
+        submodules: false
 
     # Build the docker image here, before it's built below, to have
     # finer-grained control over caching. The way this is set up is that the
@@ -1357,9 +1359,11 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
+        wasm-targets: 'false'
     - run: |
-        rustup component add rust-src
         rustup target add ${{ matrix.target }}
+    - run: rustup component add rust-src
+      if: contains(matrix.build, '-min')
 
     # On one builder produce the source tarball since there's no need to produce
     # it everywhere
