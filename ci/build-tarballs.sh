@@ -6,6 +6,10 @@
 #
 # * The first argument is the name of the "build", used to name the release.
 # * The second argument is the Rust target that the build was performed for.
+# * An optional third argument selects which component to package:
+#   "cli"  — only the CLI binary tarball (+ MSI on Windows)
+#   "capi" — only the C API tarball
+#   ""     — both (default, for backwards compatibility)
 #
 # This expects the build to already be done and will assemble release artifacts
 # in `dist/`
@@ -14,6 +18,7 @@ set -ex
 
 build=$1
 target=$2
+component=${3:-}
 
 rm -rf tmp
 mkdir tmp
@@ -34,56 +39,20 @@ fi
 bin_pkgname=wasmtime-$tag-$build_pkgname
 api_pkgname=wasmtime-$tag-$build_pkgname-c-api
 
-api_install=target/c-api-install
-mkdir tmp/$api_pkgname
-mkdir tmp/$bin_pkgname
-cp LICENSE README.md tmp/$api_pkgname
-cp LICENSE README.md tmp/$bin_pkgname
+fmt=tar
+case $build in
+  *-mingw* | *-windows*)
+    fmt=zip
+    ;;
+esac
 
 # For *-min builds rename artifacts with a `-min` suffix to avoid eventual
 # clashes with the normal builds when the tarballs are unioned together.
 if [[ $build == *-min ]]; then
   min="-min"
-  mkdir tmp/$api_pkgname/min
-  cp -r $api_install/include tmp/$api_pkgname/min
-  cp -r $api_install/lib tmp/$api_pkgname/min
 else
-  cp -r $api_install/include tmp/$api_pkgname
-  cp -r $api_install/lib tmp/$api_pkgname
+  min=""
 fi
-
-
-fmt=tar
-
-case $build in
-  x86_64-windows*)
-    cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
-    fmt=zip
-
-    if [ "$min" = "" ]; then
-      # Generate a `*.msi` installer for Windows as well
-      export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
-      "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
-      "$WIX/bin/light" -out dist/$bin_pkgname.msi target/wasmtime.wixobj -ext WixUtilExtension
-      rm dist/$bin_pkgname.wixpdb
-    fi
-    ;;
-
-  # Skip the MSI for non-x86_64 builds of Windows
-  x86_64-mingw* | *-windows*)
-    cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
-    fmt=zip
-    ;;
-
-  *-macos*)
-    cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
-    ;;
-
-  *)
-    cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
-    ;;
-esac
-
 
 mktarball() {
   dir=$1
@@ -96,5 +65,55 @@ mktarball() {
   fi
 }
 
-mktarball $api_pkgname
-mktarball $bin_pkgname
+# --- CLI binary tarball ---
+if [[ "$component" != "capi" ]]; then
+  mkdir tmp/$bin_pkgname
+  cp LICENSE README.md tmp/$bin_pkgname
+
+  case $build in
+    x86_64-windows*)
+      cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
+
+      if [ "$min" = "" ]; then
+        # Generate a `*.msi` installer for Windows as well
+        export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
+        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
+        "$WIX/bin/light" -out dist/$bin_pkgname.msi target/wasmtime.wixobj -ext WixUtilExtension
+        rm dist/$bin_pkgname.wixpdb
+      fi
+      ;;
+
+    # Skip the MSI for non-x86_64 builds of Windows
+    x86_64-mingw* | *-windows*)
+      cp target/$target/release/wasmtime.exe tmp/$bin_pkgname/wasmtime$min.exe
+      ;;
+
+    *-macos*)
+      cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
+      ;;
+
+    *)
+      cp target/$target/release/wasmtime tmp/$bin_pkgname/wasmtime$min
+      ;;
+  esac
+
+  mktarball $bin_pkgname
+fi
+
+# --- C API tarball ---
+if [[ "$component" != "cli" ]]; then
+  api_install=target/c-api-install
+  mkdir tmp/$api_pkgname
+  cp LICENSE README.md tmp/$api_pkgname
+
+  if [[ $build == *-min ]]; then
+    mkdir tmp/$api_pkgname/min
+    cp -r $api_install/include tmp/$api_pkgname/min
+    cp -r $api_install/lib tmp/$api_pkgname/min
+  else
+    cp -r $api_install/include tmp/$api_pkgname
+    cp -r $api_install/lib tmp/$api_pkgname
+  fi
+
+  mktarball $api_pkgname
+fi

@@ -8,11 +8,17 @@
 # This script takes a Rust target as its first input and optionally a parameter
 # afterwards which can be "-min" to indicate that a minimal build should be
 # produced with as many features as possible stripped out.
+#
+# An optional third parameter selects which component to build:
+#   "cli"  — only the wasmtime CLI binary
+#   "capi" — only the C API (via cmake)
+#   ""     — both (default, for backwards compatibility)
 
 set -ex
 
 build=$1
 target=$2
+component=${3:-}
 wrapper=""
 
 # If `$DOCKER_IMAGE` is set then run the build inside of that docker container
@@ -68,37 +74,41 @@ if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
   export CXX=clang++
 fi
 
-cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
+if [[ "$component" != "capi" ]]; then
+  cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
+fi
 
-# For the C API force unwind tables to be emitted to make the generated objects
-# more flexible. Embedders can always build without this but this enables
-# libunwind to produce better backtraces by default when Wasmtime is linked into
-# a different project that wants to unwind.
-export RUSTFLAGS="$RUSTFLAGS -C force-unwind-tables"
+if [[ "$component" != "cli" ]]; then
+  # For the C API force unwind tables to be emitted to make the generated objects
+  # more flexible. Embedders can always build without this but this enables
+  # libunwind to produce better backtraces by default when Wasmtime is linked into
+  # a different project that wants to unwind.
+  export RUSTFLAGS="$RUSTFLAGS -C force-unwind-tables"
 
-# Shrink the size of `*.a` artifacts without spending too much extra time in CI.
-# See #11476 for some more context. Here Windows builds achieve this with 1 CGU
-# which results in modest size gains, and other platforms use LTO to achieve
-# much more significant size gains. The reason the platforms are different is
-# that CI is extremely slow on Windows, almost 2x slower, so this is an attempt
-# to keep CI cycle time under control.
-case $build in
-  *-mingw* | *-windows*)
-    export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-    ;;
-  *)
-    export CARGO_PROFILE_RELEASE_LTO=true
-    ;;
-esac
+  # Shrink the size of `*.a` artifacts without spending too much extra time in CI.
+  # See #11476 for some more context. Here Windows builds achieve this with 1 CGU
+  # which results in modest size gains, and other platforms use LTO to achieve
+  # much more significant size gains. The reason the platforms are different is
+  # that CI is extremely slow on Windows, almost 2x slower, so this is an attempt
+  # to keep CI cycle time under control.
+  case $build in
+    *-mingw* | *-windows*)
+      export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+      ;;
+    *)
+      export CARGO_PROFILE_RELEASE_LTO=true
+      ;;
+  esac
 
-mkdir -p target/c-api-build
-cd target/c-api-build
-cmake \
-  -G Ninja \
-  ../../crates/c-api \
-  $cmake_flags \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DWASMTIME_TARGET=$target \
-  -DCMAKE_INSTALL_PREFIX=../c-api-install \
-  -DCMAKE_INSTALL_LIBDIR=../c-api-install/lib
-cmake --build . --target install
+  mkdir -p target/c-api-build
+  cd target/c-api-build
+  cmake \
+    -G Ninja \
+    ../../crates/c-api \
+    $cmake_flags \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DWASMTIME_TARGET=$target \
+    -DCMAKE_INSTALL_PREFIX=../c-api-install \
+    -DCMAKE_INSTALL_LIBDIR=../c-api-install/lib
+  cmake --build . --target install
+fi
