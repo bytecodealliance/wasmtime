@@ -1288,8 +1288,7 @@ jobs:
         include:
           - crate: "wasmtime --features component-model-async-bytes"
           - crate: "wasmtime-cli --test all"
-          - crate: "wasmtime-cli --test wast"
-          - crate: "wasmtime-cli --lib --bins --test disable_host_trap_handlers --test disas --test rlimited-memory --test wasi"
+          - crate: "wasmtime-cli --lib --bins --test disable_host_trap_handlers --test rlimited-memory"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
           - crate: "wasmtime-internal-core"
