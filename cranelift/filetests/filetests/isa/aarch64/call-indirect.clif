@@ -10,19 +10,17 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   blr x1
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
 ;   blr x1
-;   ldp x29, x30, [sp], #0x10
+;   ldr x30, [sp], #0x10
 ;   ret
 

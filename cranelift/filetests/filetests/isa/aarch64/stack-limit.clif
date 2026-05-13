@@ -44,8 +44,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
 ;   add x16, x16, #16
@@ -54,25 +53,24 @@ block0(v0: i64):
 ; block0:
 ;   load_ext_name_far x0, TestCase(%foo)+0
 ;   blr x0
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
+;   str x30, [sp, #-0x10]!
 ;   ldur x16, [x0]
 ;   ldur x16, [x16, #4]
 ;   add x16, x16, #0x10
 ;   cmp sp, x16
-;   b.lo #0x38
-; block1: ; offset 0x1c
-;   ldr x0, #0x24
-;   b #0x2c
+;   b.lo #0x34
+; block1: ; offset 0x18
+;   ldr x0, #0x20
+;   b #0x28
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x0
-;   ldp x29, x30, [sp], #0x10
+;   ldr x30, [sp], #0x10
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 

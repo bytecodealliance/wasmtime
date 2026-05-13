@@ -13,22 +13,20 @@ block1:
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   bl 0; b MachLabel(1); catch []
 ; block1:
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
-;   bl #8 ; reloc_external Call u0:1 0
-; block2: ; offset 0xc
-;   ldp x29, x30, [sp], #0x10
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
+;   bl #4 ; reloc_external Call u0:1 0
+; block2: ; offset 0x8
+;   ldr x30, [sp], #0x10
 ;   ret
 
 function u0:1() system_v {
@@ -46,25 +44,23 @@ block2(v0: i64):
 }
 
 ; VCode:
-;   stp fp, lr, [sp, #-16]!
-;   mov fp, sp
+;   str lr, [sp, #-16]!
 ; block0:
 ;   bl 0; b MachLabel(1); catch [tag0: MachLabel(2)]
 ; block1:
-;   ldp fp, lr, [sp], #16
+;   ldr lr, [sp], #16
 ;   ret
 ; block2:
 ;   udf #0xc11f
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stp x29, x30, [sp, #-0x10]!
-;   mov x29, sp
-; block1: ; offset 0x8
-;   bl #8 ; reloc_external Call u0:1 0
-; block2: ; offset 0xc
-;   ldp x29, x30, [sp], #0x10
+;   str x30, [sp, #-0x10]!
+; block1: ; offset 0x4
+;   bl #4 ; reloc_external Call u0:1 0
+; block2: ; offset 0x8
+;   ldr x30, [sp], #0x10
 ;   ret
-; block3: ; offset 0x14
+; block3: ; offset 0x10
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
 
