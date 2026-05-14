@@ -203,7 +203,7 @@ impl UnsafeBytecodeStream {
     /// `UnsafeBytecodeStream` is only used to access the valid bytecode. For
     /// example, if the current bytecode instruction unconditionally jumps to a
     /// new PC, this stream must not be used to read just after the
-    /// unconditional jump instruction because there is no guarantee that that
+    /// unconditional jump instruction because there is no guarantee that
     /// memory is part of the bytecode stream or not.
     pub unsafe fn new(pc: NonNull<u8>) -> Self {
         UnsafeBytecodeStream(pc)
