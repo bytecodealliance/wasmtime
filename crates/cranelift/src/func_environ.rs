@@ -3529,7 +3529,7 @@ impl FuncEnvironment<'_> {
         let heap = self.heaps()[heap].clone();
         let dst_ptr = self.unchecked_cast_wasm_addr_to_native_addr(&mut pos, dst, idx_type);
         let raw_heap_addr =
-            crate::bounds_checks::compute_addr(&mut pos & heap, pointer_type, dst_ptr, 0);
+            crate::bounds_checks::compute_addr(&mut pos, &heap, pointer_type, dst_ptr, 0);
 
         // Fit the `len` value to `pointer_type`. Note that at this point it's
         // guaranteed inbounds so there's no loss in precision.
