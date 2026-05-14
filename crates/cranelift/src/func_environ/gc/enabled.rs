@@ -1765,6 +1765,7 @@ impl FuncEnvironment<'_> {
                 .unwrap()
                 .layouts()
                 .gc_layout(ty)
+                .expect("gc_layout should not OOM at compile time")
                 .expect("should only call `FuncEnvironment::gc_layout` for GC types");
             self.ty_to_gc_layout.insert(type_index, layout);
         }
