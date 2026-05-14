@@ -10,6 +10,10 @@ inputs:
     description: 'Versions later-than-latest-Rust the MSRV supports'
     required: false
     default: '2'
+  wasm-targets:
+    description: 'Install wasm32 compilation targets (wasip2, wasip1, unknown-unknown)'
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -78,5 +82,6 @@ runs:
       run: echo WIT_REQUIRE_SEMICOLONS=1 >> "$GITHUB_ENV"
 
     - name: Install the WASI target
+      if: inputs.wasm-targets == 'true'
       shell: bash
       run: rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown

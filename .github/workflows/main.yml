@@ -1287,7 +1287,8 @@ jobs:
       matrix:
         include:
           - crate: "wasmtime --features component-model-async-bytes"
-          - crate: "wasmtime-cli"
+          - crate: "wasmtime-cli --test all"
+          - crate: "wasmtime-cli --lib --bins --test disable_host_trap_handlers --test rlimited-memory"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
           - crate: "wasmtime-internal-core"
@@ -1318,7 +1319,7 @@ jobs:
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 
-  # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
+  # Perform release builds of `wasmtime` (the CLI binary). Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
   # this workflow run's list of artifacts.
   #
@@ -1326,24 +1327,20 @@ jobs:
   build:
     needs: determine
     if: needs.determine.outputs.run-full
-    name: Release build for ${{ matrix.build }}
+    name: Release ${{ matrix.component }} for ${{ matrix.build }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
-      matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
+      matrix:
+        include: ${{ fromJson(needs.determine.outputs.build-matrix) }}
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v6
       with:
-        submodules: true
+        # Release builds don't run tests and don't need the test submodules
+        # (spec-testsuite, wasi-testsuite, component-model, etc.).
+        submodules: false
 
-    # Build the docker image here, before it's built below, to have
-    # finer-grained control over caching. The way this is set up is that the
-    # build in this step is picked up by the later step automatically, and if
-    # this one's buggy the next one will just take a bit longer.
-    #
-    # The goal here is to hit the network less because apt-get servers tend
-    # to be relatively flaky...
     - uses: ./.github/actions/docker-build-cached
       if: ${{ matrix.env.DOCKER_IMAGE }}
       with:
@@ -1352,34 +1349,33 @@ jobs:
         cache_key_prefix: docker-${{ matrix.target }}
 
     - uses: ./.github/actions/install-ninja
-      if: '${{ !matrix.env.DOCKER_IMAGE }}'
+      if: matrix.component == 'capi' && !matrix.env.DOCKER_IMAGE
 
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
+        wasm-targets: 'false'
     - run: |
-        rustup component add rust-src
         rustup target add ${{ matrix.target }}
+    - run: rustup component add rust-src
+      if: contains(matrix.build, '-min')
 
     # On one builder produce the source tarball since there's no need to produce
     # it everywhere
     - run: ./ci/build-src-tarball.sh
-      if: matrix.build == 'x86_64-linux'
+      if: matrix.component == 'cli' && matrix.build == 'x86_64-linux'
 
     - uses: ./.github/actions/android-ndk
       if: contains(matrix.target, 'android')
       with:
         target: ${{ matrix.target }}
 
-    - run: ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}"
-
-    # Assemble release artifacts appropriate for this platform, then upload them
-    # unconditionally to this workflow's files so we have a copy of them.
-    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - run: ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}" "${{ matrix.component }}"
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}" "${{ matrix.component }}"
 
     - uses: actions/upload-artifact@v6
       with:
-        name: bins-${{ matrix.build }}
+        name: bins-${{ matrix.component }}-${{ matrix.build }}
         path: dist
 
   # This is a "join node" which depends on all prior workflows. The merge queue,

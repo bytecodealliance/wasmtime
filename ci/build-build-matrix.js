@@ -137,4 +137,13 @@ for (let build of array) {
   builds.push(build);
 }
 
-console.log(JSON.stringify(builds));
+// Expand each platform entry into two jobs: one for the CLI binary and one for
+// the C API. This lets them build in parallel on separate runners.
+const expanded = [];
+for (const entry of builds) {
+  for (const component of ["cli", "capi"]) {
+    expanded.push(Object.assign({}, entry, { component }));
+  }
+}
+
+console.log(JSON.stringify(expanded));
