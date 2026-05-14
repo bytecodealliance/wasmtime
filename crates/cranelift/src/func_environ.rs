@@ -3439,6 +3439,70 @@ impl FuncEnvironment<'_> {
         ))
     }
 
+    /// Performs a bounds check and raises a trap if `ptr+len` is out-of-bounds
+    /// for `len`.
+    ///
+    /// Returns the raw host-native heap address of `ptr`.
+    fn bounds_check_for_memory_intrinsic(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        memory_index: MemoryIndex,
+        ptr: ir::Value,
+        len: ir::Value,
+    ) -> ir::Value {
+        let pointer_type = self.pointer_type();
+        let idx_type = self.memory(memory_index).idx_type;
+
+        let idx_clif_type = match idx_type {
+            IndexType::I32 => I32,
+            IndexType::I64 => I64,
+        };
+        debug_assert_eq!(builder.func.dfg.value_type(ptr), idx_clif_type);
+        debug_assert_eq!(builder.func.dfg.value_type(len), idx_clif_type);
+
+        // Load the memory size, as `pointer_type`, which is the size of this
+        // memory currently in
+        // bytes.
+        let size_in_bytes = self.memory_size_in_bytes(&mut builder.cursor(), memory_index);
+
+        // Compute the end address of this operation, casted to the `I64` type.
+        //
+        // Note that addition can't overflow after extending 32-bits to
+        // 64-bits, so no need to check for overflow in the 32-bit index case.
+        let end64 = match idx_type {
+            IndexType::I32 => {
+                let ptr64 = builder.ins().uextend(I64, ptr);
+                let len64 = builder.ins().uextend(I64, len);
+                builder.ins().iadd(ptr64, len64)
+            }
+            IndexType::I64 => {
+                self.uadd_overflow_trap(builder, ptr, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
+            }
+        };
+
+        // Cast the host-pointer width to a 64-bit bit width.
+        let size_in_bytes64 = match pointer_type {
+            I32 => builder.ins().uextend(I64, size_in_bytes),
+            I64 => size_in_bytes,
+            _ => unreachable!(),
+        };
+
+        // This is the actual bounds check that verifies that this operation is
+        // in-bounds. Once control flow gets past here we know that nothing can
+        // overflow and everything is in-bounds.
+        let inbounds = builder
+            .ins()
+            .icmp(IntCC::UnsignedLessThanOrEqual, end64, size_in_bytes64);
+        self.trapz(builder, inbounds, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+
+        // Compute the actual raw heap address to return
+        let mut pos = builder.cursor();
+        let heap = self.get_or_create_heap(pos.func, memory_index);
+        let heap = self.heaps()[heap].clone();
+        let ptr = self.unchecked_cast_wasm_addr_to_native_addr(&mut pos, ptr, idx_type);
+        crate::bounds_checks::compute_addr(&mut pos, &heap, pointer_type, ptr, 0)
+    }
+
     pub fn translate_memory_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -3448,28 +3512,46 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let src_idx_ty = self.memory(src_index).idx_type;
+        let dst_idx_ty = self.memory(dst_index).idx_type;
+
+        // The length is 32-bit if either memory is 32-bit, but if they're both
+        // 64-bit then it's 64-bit.
+        let len_idx_ty = match (src_idx_ty, dst_idx_ty) {
+            (IndexType::I32, _) | (_, IndexType::I32) => IndexType::I32,
+            (IndexType::I64, IndexType::I64) => IndexType::I64,
+        };
+
         let mut pos = builder.cursor();
         let vmctx = self.vmctx_val(&mut pos);
-
         let memory_copy = self.builtin_functions.memory_copy(&mut pos.func);
-        let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(dst_index).idx_type);
-        let src = self.cast_index_to_i64(&mut pos, src, self.memory(src_index).idx_type);
-        // The length is 32-bit if either memory is 32-bit, but if they're both
-        // 64-bit then it's 64-bit. Our intrinsic takes a 64-bit length for
-        // compatibility across all memories, so make sure that it's cast
-        // correctly here (this is a bit special so no generic helper unlike for
-        // `dst`/`src` above)
-        let len = if index_type_to_ir_type(self.memory(dst_index).idx_type) == I64
-            && index_type_to_ir_type(self.memory(src_index).idx_type) == I64
-        {
+
+        let src_len = if src_idx_ty == len_idx_ty {
             len
         } else {
-            pos.ins().uextend(I64, len)
+            assert_eq!(src_idx_ty, IndexType::I64);
+            builder.ins().uextend(I64, len)
         };
-        let src_index = pos.ins().iconst(I32, i64::from(src_index.as_u32()));
-        let dst_index = pos.ins().iconst(I32, i64::from(dst_index.as_u32()));
-        pos.ins()
-            .call(memory_copy, &[vmctx, dst_index, dst, src_index, src, len]);
+        let dst_len = if dst_idx_ty == len_idx_ty {
+            len
+        } else {
+            assert_eq!(dst_idx_ty, IndexType::I64);
+            builder.ins().uextend(I64, len)
+        };
+
+        // Perform a bounds check for the src/dst memories and compute the raw
+        // heap addresses at the same time.
+        let dst_raw_addr = self.bounds_check_for_memory_intrinsic(builder, dst_index, dst, dst_len);
+        let src_raw_addr = self.bounds_check_for_memory_intrinsic(builder, src_index, src, src_len);
+
+        // Fit the `len` value to `pointer_type`. Note that at this point it's
+        // guaranteed inbounds so there's no loss in precision.
+        let len_ptr =
+            self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, len_idx_ty);
+
+        builder
+            .ins()
+            .call(memory_copy, &[vmctx, dst_raw_addr, src_raw_addr, len_ptr]);
 
         Ok(())
     }
@@ -3482,54 +3564,13 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) {
-        let pointer_type = self.pointer_type();
         let idx_type = self.memory(memory_index).idx_type;
-
-        // Load the memory size, as `pointer_type`, which is the size of this
-        // memory currently in
-        // bytes.
-        let size_in_bytes = self.memory_size_in_bytes(&mut builder.cursor(), memory_index);
-
-        // Compute the end address of this fill, casted to the `I64` type.
-        //
-        // Note that addition can't overflow after extending 32-bits to
-        // 64-bits, so no need to check for overflow in the 32-bit index case.
-        let end64 = match idx_type {
-            IndexType::I32 => {
-                let dst64 = builder.ins().uextend(I64, dst);
-                let len64 = builder.ins().uextend(I64, len);
-                builder.ins().iadd(dst64, len64)
-            }
-            IndexType::I64 => {
-                self.uadd_overflow_trap(builder, dst, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
-            }
-        };
-
-        // Cast the host-pointer width to a 64-bit bit width.
-        let size_in_bytes64 = match pointer_type {
-            I32 => builder.ins().uextend(I64, size_in_bytes),
-            I64 => size_in_bytes,
-            _ => unreachable!(),
-        };
-
-        // This is the actual bounds check that verifies that this `fill`
-        // operation is in-bounds. Once control flow gets past here we know
-        // that nothing can overflow and everything is in-bounds.
-        let inbounds = builder
-            .ins()
-            .icmp(IntCC::UnsignedLessThanOrEqual, end64, size_in_bytes64);
-        self.trapz(builder, inbounds, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-
         let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
         let mut pos = builder.cursor();
         let vmctx = self.vmctx_val(&mut pos);
 
-        // Compute the actual raw heap address that the `memset` is writing to.
-        let heap = self.get_or_create_heap(pos.func, memory_index);
-        let heap = self.heaps()[heap].clone();
-        let dst_ptr = self.unchecked_cast_wasm_addr_to_native_addr(&mut pos, dst, idx_type);
-        let raw_heap_addr =
-            crate::bounds_checks::compute_addr(&mut pos, &heap, pointer_type, dst_ptr, 0);
+        // Bounds check `dst+len` and convert it to a raw heap address.
+        let raw_heap_addr = self.bounds_check_for_memory_intrinsic(builder, memory_index, dst, len);
 
         // Fit the `len` value to `pointer_type`. Note that at this point it's
         // guaranteed inbounds so there's no loss in precision.

@@ -1030,42 +1030,6 @@ impl Instance {
         }
     }
 
-    /// Do a `memory.copy`
-    ///
-    /// # Errors
-    ///
-    /// Returns a `Trap` error when the source or destination ranges are out of
-    /// bounds.
-    pub(crate) fn memory_copy(
-        self: Pin<&mut Self>,
-        dst_index: MemoryIndex,
-        dst: u64,
-        src_index: MemoryIndex,
-        src: u64,
-        len: u64,
-    ) -> Result<(), Trap> {
-        // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
-
-        let src_mem = self.get_memory(src_index);
-        let dst_mem = self.get_memory(dst_index);
-
-        let src = self.validate_inbounds(src_mem.current_length(), src, len)?;
-        let dst = self.validate_inbounds(dst_mem.current_length(), dst, len)?;
-        let len = usize::try_from(len).unwrap();
-
-        // Bounds and casts are checked above, by this point we know that
-        // everything is safe.
-        unsafe {
-            let dst = dst_mem.base.as_ptr().add(dst);
-            let src = src_mem.base.as_ptr().add(src);
-            // FIXME audit whether this is safe in the presence of shared memory
-            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-            ptr::copy(src, dst, len);
-        }
-
-        Ok(())
-    }
-
     fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
         let oob = || Trap::MemoryOutOfBounds;
         let end = ptr

@@ -13,7 +13,7 @@ macro_rules! foreach_builtin_function {
             // Returns an index for wasm's `elem.drop`.
             elem_drop(vmctx: vmctx, elem: u32) -> bool;
             // Returns an index for wasm's `memory.copy`
-            memory_copy(vmctx: vmctx, dst_index: u32, dst: u64, src_index: u32, src: u64, len: u64) -> bool;
+            memory_copy(vmctx: vmctx, dst: pointer, src: pointer, len: size);
             // Returns an index for wasm's `memory.fill` instruction.
             memory_fill(vmctx: vmctx, dst: pointer, val: u32, len: size);
             // Returns an index for wasm's `memory.init` instruction.

@@ -1130,6 +1130,120 @@ where
         Ok(())
     }
 
+    /// Emit a bounds check for `ptr+len` and put the native address for this
+    /// wasm address into `dst`.
+    fn emit_bounds_check_and_compute_addr(
+        &mut self,
+        heap: &HeapData,
+        dst: Reg,
+        ptr: Reg,
+        len: Reg,
+    ) -> Result<()> {
+        let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
+        let idx_size: OperandSize = heap.index_type().try_into()?;
+        // Compute `dst = ptr + len` trapping on overflow. For an `i32` index
+        // type the operands are zero-extended to 64-bit so overflow is
+        // impossible.
+        match idx_size {
+            OperandSize::S32 => {
+                self.masm
+                    .extend(writable!(dst), ptr, Extend::<Zero>::I64Extend32.into())?;
+                self.masm.add_uextend(
+                    writable!(dst),
+                    dst,
+                    len,
+                    OperandSize::S32,
+                    OperandSize::S64,
+                )?;
+            }
+            OperandSize::S64 => {
+                self.masm
+                    .mov(writable!(dst), ptr.into(), OperandSize::S64)?;
+                self.masm.checked_uadd(
+                    writable!(dst),
+                    dst,
+                    len.into(),
+                    OperandSize::S64,
+                    TrapCode::HEAP_OUT_OF_BOUNDS,
+                )?;
+            }
+            _ => unreachable!(),
+        }
+
+        // Load the current size in bytes of the memory, and trap if
+        // `dst > size_in_bytes`.
+        let size_in_bytes = self.context.any_gpr(self.masm)?;
+        self.load_memory_length(&heap, size_in_bytes)?;
+        assert!(ptr_size == OperandSize::S64);
+        self.masm.cmp(dst, size_in_bytes.into(), ptr_size)?;
+        self.masm
+            .trapif(IntCmpKind::GtU, TrapCode::HEAP_OUT_OF_BOUNDS)?;
+        self.context.free_reg(size_in_bytes);
+
+        // Compute `dst = memory_base + ptr`.
+        bounds::load_heap_addr_unchecked(
+            self.masm,
+            &heap,
+            Index::from_typed_reg(TypedReg::new(heap.index_type(), ptr)),
+            ImmOffset::from_u32(0),
+            dst,
+            ptr_size,
+        )?;
+        Ok(())
+    }
+
+    /// Emit the `memory.copy` operation.
+    pub fn emit_memory_copy(&mut self, dst_mem: MemoryIndex, src_mem: MemoryIndex) -> Result<()> {
+        let dst_heap = self.env.resolve_heap(dst_mem);
+        let src_heap = self.env.resolve_heap(src_mem);
+        let dst_idx_size: OperandSize = dst_heap.index_type().try_into()?;
+        let src_idx_size: OperandSize = src_heap.index_type().try_into()?;
+
+        let len = self.context.pop_to_reg(self.masm, None)?;
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.pop_to_reg(self.masm, None)?;
+
+        // For 32-bit linear memories go ahead and make sure `len` is zero
+        // extended within its register ensuring that the full 64-bits of the
+        // register are defined. This assists in situations like cross-memory
+        // copies where one memory is 32-bit and one is 64-bit and the same
+        // register can be used for the length in both bounds checks below.
+        if dst_idx_size == OperandSize::S32 || src_idx_size == OperandSize::S32 {
+            self.masm.extend(
+                writable!(len.reg),
+                len.reg,
+                Extend::<Zero>::I64Extend32.into(),
+            )?;
+        }
+
+        let dst_raw_addr = self.context.any_gpr(self.masm)?;
+        self.emit_bounds_check_and_compute_addr(&dst_heap, dst_raw_addr, dst.reg, len.reg)?;
+        self.context.free_reg(dst);
+
+        let src_raw_addr = self.context.any_gpr(self.masm)?;
+        self.emit_bounds_check_and_compute_addr(&src_heap, src_raw_addr, src.reg, len.reg)?;
+        self.context.free_reg(src);
+
+        self.context
+            .stack
+            .push(TypedReg::new(self.env.ptr_type(), dst_raw_addr).into());
+        self.context
+            .stack
+            .push(TypedReg::new(self.env.ptr_type(), src_raw_addr).into());
+        self.context
+            .stack
+            .push(TypedReg::new(self.env.ptr_type(), len.reg).into());
+
+        let builtin = self.env.builtins.memory_copy::<M::ABI>()?;
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )?;
+        Ok(())
+    }
+
     /// Emit the `memory.fill` operation.
     pub fn emit_memory_fill(&mut self, mem: MemoryIndex) -> Result<()> {
         let heap = self.env.resolve_heap(mem);
@@ -1141,59 +1255,9 @@ where
         let val = self.context.pop_to_reg(self.masm, None)?;
         let dst = self.context.pop_to_reg(self.masm, None)?;
 
-        // Compute `end = dst + len` trapping on overflow. For an `i32` index
-        // type the operands are zero-extended to 64-bit so overflow is
-        // impossible.
-        let end = self.context.any_gpr(self.masm)?;
-        match idx_size {
-            OperandSize::S32 => {
-                self.masm
-                    .extend(writable!(end), dst.reg, Extend::<Zero>::I64Extend32.into())?;
-                self.masm.add_uextend(
-                    writable!(end),
-                    end,
-                    len.reg,
-                    OperandSize::S32,
-                    OperandSize::S64,
-                )?;
-            }
-            OperandSize::S64 => {
-                self.masm
-                    .mov(writable!(end), dst.reg.into(), OperandSize::S64)?;
-                self.masm.checked_uadd(
-                    writable!(end),
-                    end,
-                    len.reg.into(),
-                    OperandSize::S64,
-                    TrapCode::HEAP_OUT_OF_BOUNDS,
-                )?;
-            }
-            _ => unreachable!(),
-        }
-
-        // Load the current size in bytes of the memory.
-        let size_in_bytes = self.context.any_gpr(self.masm)?;
-        self.load_memory_length(&heap, size_in_bytes)?;
-
-        // Trap if `end > size_in_bytes`.
-        assert!(ptr_size == OperandSize::S64);
-        self.masm.cmp(end, size_in_bytes.into(), ptr_size)?;
-        self.masm
-            .trapif(IntCmpKind::GtU, TrapCode::HEAP_OUT_OF_BOUNDS)?;
-        self.context.free_reg(end);
-        self.context.free_reg(size_in_bytes);
-
-        // Compute `dst_ptr = memory_base + dst`.
-        let dst_ptr = self.context.any_gpr(self.masm)?;
-        bounds::load_heap_addr_unchecked(
-            self.masm,
-            &heap,
-            Index::from_typed_reg(dst),
-            ImmOffset::from_u32(0),
-            dst_ptr,
-            ptr_size,
-        )?;
-        self.context.free_reg(dst.reg);
+        let raw_addr = self.context.any_gpr(self.masm)?;
+        self.emit_bounds_check_and_compute_addr(&heap, raw_addr, dst.reg, len.reg)?;
+        self.context.free_reg(dst);
 
         // The libcall takes the length as a host-pointer-sized integer, so
         // zero-extend if the wasm index type is smaller.
@@ -1209,7 +1273,7 @@ where
         // Set up the call arguments: `[dst_ptr, val, len]`.
         self.context
             .stack
-            .push(TypedReg::new(self.env.ptr_type(), dst_ptr).into());
+            .push(TypedReg::new(self.env.ptr_type(), raw_addr).into());
         self.context.stack.push(val.into());
         self.context
             .stack

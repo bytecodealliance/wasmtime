@@ -1891,28 +1891,10 @@ where
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) -> Self::Output {
-        // At this point, the stack is expected to contain:
-        //     [ dst_offset, src_offset, len ]
-        // The following code inserts the missing params, so that stack contains:
-        //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
-        // Which is the order expected by the builtin function.
-        let _ = self.context.stack.ensure_index_at(3)?;
-        let at = self.context.stack.ensure_index_at(2)?;
-        self.context.stack.insert_many(at, &[src_mem.try_into()?]);
-
-        // One element was inserted above, so instead of 3, we use 4.
-        let at = self.context.stack.ensure_index_at(4)?;
-        self.context.stack.insert_many(at, &[dst_mem.try_into()?]);
-
-        let builtin = self.env.builtins.memory_copy::<M::ABI>()?;
-
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_copy(
+            MemoryIndex::from_u32(dst_mem),
+            MemoryIndex::from_u32(src_mem),
+        )
     }
 
     fn visit_memory_fill(&mut self, mem: u32) -> Self::Output {

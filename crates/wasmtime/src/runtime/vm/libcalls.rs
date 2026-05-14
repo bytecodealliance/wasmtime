@@ -535,20 +535,17 @@ fn elem_drop(store: &mut dyn VMStore, instance: InstanceId, elem_index: u32) -> 
 }
 
 // Implementation of `memory.copy`.
-fn memory_copy(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    dst_index: u32,
-    dst: u64,
-    src_index: u32,
-    src: u64,
-    len: u64,
-) -> Result<(), Trap> {
-    let src_index = MemoryIndex::from_u32(src_index);
-    let dst_index = MemoryIndex::from_u32(dst_index);
-    store
-        .instance_mut(instance)
-        .memory_copy(dst_index, dst, src_index, src, len)
+unsafe fn memory_copy(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    dst: *mut u8,
+    src: *mut u8,
+    len: usize,
+) {
+    let src = src.cast_const();
+    // FIXME(#4203): this is known to not be sound in the presence of shared
+    // memories.
+    unsafe { src.copy_to(dst, len) }
 }
 
 unsafe fn memory_fill(
