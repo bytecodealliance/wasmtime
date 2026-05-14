@@ -776,7 +776,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ///
     /// Does not perform any in-bounds checks, so `val` must already be
     /// validated to be in-bounds.
-    fn unchecked_cast_index_to_pointer(
+    fn unchecked_cast_wasm_addr_to_native_addr(
         &self,
         pos: &mut FuncCursor<'_>,
         val: ir::Value,
@@ -3521,23 +3521,20 @@ impl FuncEnvironment<'_> {
         self.trapz(builder, inbounds, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
 
         let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
-        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let mut pos = builder.cursor();
+        let vmctx = self.vmctx_val(&mut pos);
 
         // Compute the actual raw heap address that the `memset` is writing to.
-        let heap = self.get_or_create_heap(builder.func, memory_index);
+        let heap = self.get_or_create_heap(pos.func, memory_index);
         let heap = self.heaps()[heap].clone();
-        let dst_ptr = self.unchecked_cast_index_to_pointer(&mut builder.cursor(), dst, idx_type);
-        let raw_heap_addr = crate::bounds_checks::compute_addr(
-            &mut builder.cursor(),
-            &heap,
-            pointer_type,
-            dst_ptr,
-            0,
-        );
+        let dst_ptr = self.unchecked_cast_wasm_addr_to_native_addr(&mut pos, dst, idx_type);
+        let raw_heap_addr =
+            crate::bounds_checks::compute_addr(&mut pos & heap, pointer_type, dst_ptr, 0);
 
         // Fit the `len` value to `pointer_type`. Note that at this point it's
         // guaranteed inbounds so there's no loss in precision.
-        let len_ptr = self.unchecked_cast_index_to_pointer(&mut builder.cursor(), len, idx_type);
+        let len_ptr =
+            self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type);
 
         builder
             .ins()
