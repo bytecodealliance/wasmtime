@@ -5,6 +5,7 @@ use crate::store::StoreOpaque;
 use crate::{AsContext, Module, bug};
 use core::fmt;
 use core::num::NonZeroUsize;
+use wasmtime_core::alloc::TryVec;
 use wasmtime_environ::{
     CompiledTrap, FilePos, demangle_function_name, demangle_function_name_or_index,
 };
@@ -313,7 +314,16 @@ impl WasmBacktrace {
                 _runtime_trace: crate::runtime::vm::Backtrace::empty(),
             };
         };
-        let mut wasm_trace = Vec::<FrameInfo>::with_capacity(max_frames.get());
+        let mut wasm_trace = match TryVec::with_capacity(max_frames.get()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Self {
+                    wasm_trace: Vec::new(),
+                    hint_wasm_backtrace_details_env: false,
+                    _runtime_trace: crate::runtime::vm::Backtrace::empty(),
+                };
+            }
+        };
         let mut hint_wasm_backtrace_details_env = false;
         let wasm_backtrace_details_env_used =
             store.engine().config().wasm_backtrace_details_env_used;
@@ -366,7 +376,10 @@ impl WasmBacktrace {
             // and we ignore frames from modules that were not registered in
             // this store's module registry.
             if let Some((info, module)) = store.modules().lookup_frame_info(pc_to_lookup) {
-                wasm_trace.push(info);
+                if wasm_trace.push(info).is_err() {
+                    // Better to return a partial backtrace than none.
+                    break;
+                }
 
                 // If this frame has unparsed debug information and the
                 // store's configuration indicates that we were
@@ -386,7 +399,7 @@ impl WasmBacktrace {
         }
 
         Self {
-            wasm_trace,
+            wasm_trace: wasm_trace.into(),
             _runtime_trace: runtime_trace,
             hint_wasm_backtrace_details_env,
         }
