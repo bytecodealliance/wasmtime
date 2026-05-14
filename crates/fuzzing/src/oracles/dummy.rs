@@ -15,9 +15,7 @@ pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T
                 import.ty(),
             )
         })?;
-        linker
-            .define(&store, import.module(), import.name(), extern_)
-            .unwrap();
+        linker.define(&store, import.module(), import.name(), extern_)?;
     }
     Ok(linker)
 }
