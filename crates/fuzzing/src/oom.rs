@@ -207,6 +207,7 @@ pub struct OomTest {
     max_iters: Option<u32>,
     max_duration: Option<time::Duration>,
     allow_alloc_after_oom: bool,
+    seed: u64,
 }
 
 impl OomTest {
@@ -226,6 +227,7 @@ impl OomTest {
             max_iters: None,
             max_duration: None,
             allow_alloc_after_oom: false,
+            seed: 0,
         }
     }
 
@@ -247,6 +249,14 @@ impl OomTest {
     /// The default is `false`.
     pub fn allow_alloc_after_oom(&mut self, allow: bool) -> &mut Self {
         self.allow_alloc_after_oom = allow;
+        self
+    }
+
+    /// Configure the seed for the RNG used in `fuzz` mode.
+    ///
+    /// The default is `0`.
+    pub fn seed(&mut self, seed: u64) -> &mut Self {
+        self.seed = seed;
         self
     }
 
@@ -308,7 +318,7 @@ impl OomTest {
             return Ok(());
         }
 
-        let mut rng = SmallRng::seed_from_u64(0);
+        let mut rng = SmallRng::seed_from_u64(self.seed);
 
         for _ in 0..max_iters {
             let i = rng.random_range(0..total_allocs);
