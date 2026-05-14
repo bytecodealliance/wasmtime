@@ -985,6 +985,11 @@ forward_type_impls! {
     (T: ComponentType) Vec<T> => [T],
 }
 
+#[cfg(feature = "component-model-bytes")]
+forward_type_impls! {
+    () bytes::Bytes => [u8],
+}
+
 macro_rules! forward_lowers {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> Lower for $a {
@@ -1015,6 +1020,11 @@ forward_lowers! {
     (T: Lower + ?Sized) alloc::sync::Arc<T> => T,
     () String => str,
     (T: Lower) Vec<T> => [T],
+}
+
+#[cfg(feature = "component-model-bytes")]
+forward_lowers! {
+    () bytes::Bytes => [u8],
 }
 
 macro_rules! forward_string_lifts {

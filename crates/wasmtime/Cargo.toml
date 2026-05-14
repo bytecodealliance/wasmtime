@@ -430,6 +430,11 @@ component-model-async = [
   "futures/std",
 ]
 
+# Enables support for lowering `list`s using the `bytes` crate.
+component-model-bytes = [
+  "dep:bytes",
+]
+
 # Enables support for `stream` interop with the `bytes` crate.
 component-model-async-bytes = [
   "component-model-async",
