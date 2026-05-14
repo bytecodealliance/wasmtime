@@ -2474,7 +2474,7 @@ impl HostFunc {
             Self::vmctx_sync(engine, ty.clone(), move |mut caller, values| {
                 // SAFETY: Wasmtime in general provides the guarantee that
                 // `values` matches `ty`, so this should be safe.
-                let mut vec = unsafe { Self::load_untyped_params(caller.store.0, &ty, values) };
+                let mut vec = unsafe { Self::load_untyped_params(caller.store.0, &ty, values)? };
                 let (params, results) = vec.split_at_mut(ty.params().len());
                 func(caller.sub_caller(), params, results)?;
                 Self::store_untyped_results(caller.store, &ty, vec, values)
@@ -2515,7 +2515,7 @@ impl HostFunc {
                         // SAFETY: Wasmtime in general provides the guarantee that
                         // `values` matches `ty`, so this should be safe.
                         let mut vec =
-                            unsafe { Self::load_untyped_params(caller.store.0, &ty, values) };
+                            unsafe { Self::load_untyped_params(caller.store.0, &ty, values)? };
                         let (params, results) = vec.split_at_mut(ty.params().len());
                         core::pin::Pin::from(func(caller.sub_caller(), params, results)).await?;
                         Self::store_untyped_results(caller.store, &ty, vec, values)
@@ -2538,18 +2538,22 @@ impl HostFunc {
         store: &mut StoreOpaque,
         ty: &FuncType,
         params: &mut [MaybeUninit<ValRaw>],
-    ) -> Vec<Val> {
-        let mut val_vec = store.take_hostcall_val_storage();
+    ) -> Result<Vec<Val>> {
+        let val_vec = store.take_hostcall_val_storage();
         debug_assert!(val_vec.is_empty());
+
+        let mut val_vec = TryVec::from(val_vec);
         let nparams = ty.params().len();
-        val_vec.reserve(nparams + ty.results().len());
+        let total = nparams + ty.results().len();
+        val_vec.reserve(total)?;
+
         let mut store = AutoAssertNoGc::new(store);
         for (i, ty) in ty.params().enumerate() {
-            val_vec.push(unsafe { Val::_from_raw(&mut store, params[i].assume_init(), &ty) })
+            val_vec.push(unsafe { Val::_from_raw(&mut store, params[i].assume_init(), &ty) })?;
         }
 
-        val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
-        val_vec
+        val_vec.try_extend((0..ty.results().len()).map(|_| Val::null_func_ref()))?;
+        Ok(val_vec.into())
     }
 
     /// Stores the results, at the end of `args_then_results` according to `ty`,
