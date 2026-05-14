@@ -1288,7 +1288,8 @@ jobs:
         include:
           - crate: "wasmtime --features component-model-async-bytes"
           - crate: "wasmtime-cli --test all"
-          - crate: "wasmtime-cli --lib --bins --test disable_host_trap_handlers --test rlimited-memory"
+          - crate: "wasmtime-cli"
+            miri_remaining: true
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"
           - crate: "wasmtime-internal-core"
@@ -1315,7 +1316,31 @@ jobs:
         version: 0.9.133
     - run: |
         cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
-      if: ${{ matrix.crate }}
+      if: matrix.crate && !matrix.miri_remaining
+    - name: Miri (remaining wasmtime-cli tests)
+      if: matrix.miri_remaining
+      run: |
+        # Dynamically compute --test targets for wasmtime-cli that are:
+        #  - standard harness (custom-harness tests can't run under nextest)
+        #  - not "all" (has its own dedicated Miri bucket)
+        # This uses cargo metadata for the full target list and Cargo.toml for
+        # the harness flag, so new [[test]] entries are picked up automatically.
+        tests=$(python3 -c "
+        import tomllib, json, subprocess
+        # Get all test targets from cargo metadata
+        meta = json.loads(subprocess.check_output(['cargo', 'metadata', '--format-version=1', '--no-deps']))
+        pkg = next(p for p in meta['packages'] if p['name'] == 'wasmtime-cli')
+        all_tests = {t['name'] for t in pkg['targets'] if 'test' in t['kind']}
+        # Find custom-harness tests from Cargo.toml
+        with open('Cargo.toml', 'rb') as f:
+            manifest = tomllib.load(f)
+        custom_harness = {t['name'] for t in manifest.get('test', []) if not t.get('harness', True)}
+        # Exclude custom-harness tests and 'all' (has its own bucket)
+        excluded = custom_harness | {'all'}
+        for t in sorted(all_tests - excluded):
+            print(f'--test {t}')
+        ")
+        cargo miri nextest run -j4 --no-fail-fast -p wasmtime-cli --lib --bins $tests
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
 

@@ -29,10 +29,10 @@ const SINGLE_CRATE_BUCKETS = [
       // The two largest integration suites; each gets its own bucket.
       { "name": "all", "args": "--test all" },
       { "name": "wast", "args": "--test wast" },
-      // Everything else in the crate: library, binaries, and the smaller
-      // integration tests. Cargo doesn't have an "exclude test" flag, so the
-      // remaining `--test` targets are enumerated explicitly.
-      { "name": "other", "args": "--lib --bins --test disable_host_trap_handlers --test disas --test rlimited-memory --test wasi" },
+      // Everything else in the crate: library, binaries, and the remaining
+      // integration tests. The test list is computed dynamically from cargo
+      // metadata so that new [[test]] targets are picked up automatically.
+      { "name": "other", "args": "--lib --bins", "remaining": true },
     ],
   },
   "wasmtime-wasi",
@@ -195,8 +195,9 @@ const FULL_MATRIX = [
   },
 ];
 
-/// Get the workspace's full list of member crates.
-async function getWorkspaceMembers() {
+/// Get workspace metadata: the list of member crate names and, for each
+/// member, the names of its `[[test]]` targets.
+async function getWorkspaceMetadata() {
   // Spawn a `cargo metadata` subprocess, accumulate its JSON output from
   // `stdout`, and wait for it to exit.
   const child = spawn("cargo", ["metadata"], { encoding: "utf8" });
@@ -207,15 +208,28 @@ async function getWorkspaceMembers() {
     child.on("error", reject);
   });
 
-  // Get the names of the crates in the workspace from the JSON metadata by
-  // building a package-id to name map and then translating the package-ids
-  // listed as workspace members.
+  // Get the names and test targets of the crates in the workspace from the 
+  // JSON metadata by building a package-id to package map and then translating
+  // the package-ids listed as workspace members.
   const metadata = JSON.parse(data);
-  const id_to_name = {};
+  const id_to_pkg = {};
   for (const pkg of metadata.packages) {
-    id_to_name[pkg.id] = pkg.name;
+    id_to_pkg[pkg.id] = pkg;
   }
-  return metadata.workspace_members.map(m => id_to_name[m]);
+
+  const members = [];
+  const testTargets = {};
+  for (const id of metadata.workspace_members) {
+    const pkg = id_to_pkg[id];
+    members.push(pkg.name);
+    const tests = pkg.targets
+      .filter(t => t.kind.includes("test"))
+      .map(t => t.name);
+    if (tests.length > 0) {
+      testTargets[pkg.name] = tests;
+    }
+  }
+  return { members, testTargets };
 }
 
 /// For each given target configuration, shard the workspace's crates into
@@ -250,7 +264,7 @@ async function getWorkspaceMembers() {
 /// `bucket` key, which contains the CLI flags we must pass to `cargo` to run
 /// tests for just this config's subset of crates.
 async function shard(configs) {
-  const members = await getWorkspaceMembers();
+  const { members, testTargets } = await getWorkspaceMetadata();
 
   // Divide the workspace crates into N disjoint subsets. Crates that are
   // particularly expensive to compile and test form their own singleton subset.
@@ -271,8 +285,26 @@ async function shard(configs) {
     } else {
       // A crate with sub-buckets: push one bucket per `sub` entry, retaining
       // the crate name and extra-args for naming and bucket-arg expansion.
+      // Collect test names claimed by non-remaining sub-buckets so that
+      // `remaining: true` entries can include everything else.
+      const claimed = new Set();
       for (const sub of entry.sub) {
-        buckets.push({ crate: entry.crate, name: sub.name, args: sub.args });
+        if (!sub.remaining) {
+          const m = sub.args.match(/--test\s+(\S+)/g);
+          if (m) {
+            m.forEach(s => claimed.add(s.replace(/^--test\s+/, "")));
+          }
+        }
+      }
+      const allTests = testTargets[entry.crate] || [];
+      const remainingTests = allTests.filter(t => !claimed.has(t));
+
+      for (const sub of entry.sub) {
+        let args = sub.args;
+        if (sub.remaining && remainingTests.length > 0) {
+          args += " " + remainingTests.map(t => `--test ${t}`).join(" ");
+        }
+        buckets.push({ crate: entry.crate, name: sub.name, args });
       }
     }
   }
