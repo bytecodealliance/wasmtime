@@ -256,6 +256,10 @@ impl GcCompiler for CopyingCompiler {
         &self.layouts
     }
 
+    fn is_moving_collector(&self) -> bool {
+        true
+    }
+
     fn alloc_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,

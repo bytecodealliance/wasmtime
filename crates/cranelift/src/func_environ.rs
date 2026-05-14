@@ -3087,17 +3087,14 @@ impl FuncEnvironment<'_> {
                 let gv = builder.ins().global_value(self.pointer_type(), gv);
                 let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-                gc::gc_compiler(self)?.translate_read_gc_reference(
-                    self,
-                    builder,
-                    ref_ty,
-                    src,
-                    if global_ty.mutability {
-                        ir::MemFlagsData::trusted()
-                    } else {
-                        ir::MemFlagsData::trusted().with_readonly().with_can_move()
-                    },
-                )
+                let flags = if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector()
+                {
+                    ir::MemFlagsData::trusted()
+                } else {
+                    ir::MemFlagsData::trusted().with_readonly().with_can_move()
+                };
+                gc::gc_compiler(self)?
+                    .translate_read_gc_reference(self, builder, ref_ty, src, flags)
             }
         }
     }

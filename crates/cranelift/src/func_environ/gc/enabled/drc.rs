@@ -343,6 +343,10 @@ impl GcCompiler for DrcCompiler {
         &self.layouts
     }
 
+    fn is_moving_collector(&self) -> bool {
+        false
+    }
+
     fn alloc_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,

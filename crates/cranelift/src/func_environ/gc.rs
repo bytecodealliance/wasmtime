@@ -44,6 +44,9 @@ pub trait GcCompiler {
     #[cfg_attr(not(feature = "gc"), allow(dead_code))]
     fn layouts(&self) -> &dyn GcTypeLayouts;
 
+    /// Whether or not this `GcCompiler`'s collector can move objects.
+    fn is_moving_collector(&self) -> bool;
+
     /// Emit code to allocate a new array.
     ///
     /// The array should be of the given type and its elements initialized as
