@@ -771,6 +771,25 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    /// Cast the wasm pointer `val`, with type `index_type`, to a host pointer
+    /// type.
+    ///
+    /// Does not perform any in-bounds checks, so `val` must already be
+    /// validated to be in-bounds.
+    fn unchecked_cast_index_to_pointer(
+        &self,
+        pos: &mut FuncCursor<'_>,
+        val: ir::Value,
+        index_type: IndexType,
+    ) -> ir::Value {
+        match (self.pointer_type(), index_type) {
+            (I32, IndexType::I32) | (I64, IndexType::I64) => val,
+            (I32, IndexType::I64) => pos.ins().ireduce(I32, val),
+            (I64, IndexType::I32) => pos.ins().uextend(I64, val),
+            _ => unreachable!(),
+        }
+    }
+
     /// Convert the target pointer-sized integer `val` into the memory/table's index type.
     ///
     /// For memory, `val` is holding a memory length (or the `-1` `memory.grow`-failed sentinel).
@@ -3328,16 +3347,16 @@ impl FuncEnvironment<'_> {
         ))
     }
 
-    pub fn translate_memory_size(
-        &mut self,
-        mut pos: FuncCursor<'_>,
-        index: MemoryIndex,
-    ) -> WasmResult<ir::Value> {
+    /// Loads the size, in bytes, of the memory `index` specified.
+    ///
+    /// Returns the `ir::Value`, typed as a pointer-width integer, that is the
+    /// size in bytes.
+    fn memory_size_in_bytes(&mut self, pos: &mut FuncCursor<'_>, index: MemoryIndex) -> ir::Value {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
         let is_shared = self.module.memories[index].shared;
         let base = pos.ins().global_value(pointer_type, vmctx);
-        let current_length_in_bytes = match self.module.defined_memory_index(index) {
+        match self.module.defined_memory_index(index) {
             Some(def_index) => {
                 if is_shared {
                     let offset =
@@ -3395,7 +3414,15 @@ impl FuncEnvironment<'_> {
                     )
                 }
             }
-        };
+        }
+    }
+
+    pub fn translate_memory_size(
+        &mut self,
+        mut pos: FuncCursor<'_>,
+        index: MemoryIndex,
+    ) -> WasmResult<ir::Value> {
+        let current_length_in_bytes = self.memory_size_in_bytes(&mut pos, index);
 
         let page_size_log2 = i64::from(self.module.memories[index].page_size_log2);
         let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
@@ -3454,20 +3481,67 @@ impl FuncEnvironment<'_> {
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
-    ) -> WasmResult<()> {
-        let mut pos = builder.cursor();
-        let memory_fill = self.builtin_functions.memory_fill(&mut pos.func);
-        let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(memory_index).idx_type);
-        let len = self.cast_index_to_i64(&mut pos, len, self.memory(memory_index).idx_type);
-        let (memory_vmctx, defined_memory_index) =
-            self.memory_vmctx_and_defined_index(&mut pos, memory_index);
+    ) {
+        let pointer_type = self.pointer_type();
+        let idx_type = self.memory(memory_index).idx_type;
 
-        pos.ins().call(
-            memory_fill,
-            &[memory_vmctx, defined_memory_index, dst, val, len],
+        // Load the memory size, as `pointer_type`, which is the size of this
+        // memory currently in
+        // bytes.
+        let size_in_bytes = self.memory_size_in_bytes(&mut builder.cursor(), memory_index);
+
+        // Compute the end address of this fill, casted to the `I64` type.
+        //
+        // Note that addition can't overflow after extending 32-bits to
+        // 64-bits, so no need to check for overflow in the 32-bit index case.
+        let end64 = match idx_type {
+            IndexType::I32 => {
+                let dst64 = builder.ins().uextend(I64, dst);
+                let len64 = builder.ins().uextend(I64, len);
+                builder.ins().iadd(dst64, len64)
+            }
+            IndexType::I64 => {
+                self.uadd_overflow_trap(builder, dst, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
+            }
+        };
+
+        // Cast the host-pointer width to a 64-bit bit width.
+        let size_in_bytes64 = match pointer_type {
+            I32 => builder.ins().uextend(I64, size_in_bytes),
+            I64 => size_in_bytes,
+            _ => unreachable!(),
+        };
+
+        // This is the actual bounds check that verifies that this `fill`
+        // operation is in-bounds. Once control flow gets past here we know
+        // that nothing can overflow and everything is in-bounds.
+        let inbounds = builder
+            .ins()
+            .icmp(IntCC::UnsignedLessThanOrEqual, end64, size_in_bytes64);
+        self.trapz(builder, inbounds, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+
+        let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+
+        // Compute the actual raw heap address that the `memset` is writing to.
+        let heap = self.get_or_create_heap(builder.func, memory_index);
+        let heap = self.heaps()[heap].clone();
+        let dst_ptr = self.unchecked_cast_index_to_pointer(&mut builder.cursor(), dst, idx_type);
+        let raw_heap_addr = crate::bounds_checks::compute_addr(
+            &mut builder.cursor(),
+            &heap,
+            pointer_type,
+            dst_ptr,
+            0,
         );
 
-        Ok(())
+        // Fit the `len` value to `pointer_type`. Note that at this point it's
+        // guaranteed inbounds so there's no loss in precision.
+        let len_ptr = self.unchecked_cast_index_to_pointer(&mut builder.cursor(), len, idx_type);
+
+        builder
+            .ins()
+            .call(memory_fill, &[vmctx, raw_heap_addr, val, len_ptr]);
     }
 
     pub fn translate_memory_init(

@@ -551,20 +551,18 @@ fn memory_copy(
         .memory_copy(dst_index, dst, src_index, src, len)
 }
 
-// Implementation of `memory.fill` for locally defined memories.
-fn memory_fill(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    memory_index: u32,
-    dst: u64,
+unsafe fn memory_fill(
+    _store: &mut dyn VMStore,
+    _instance: InstanceId,
+    dst: *mut u8,
     val: u32,
-    len: u64,
-) -> Result<(), Trap> {
-    let memory_index = DefinedMemoryIndex::from_u32(memory_index);
-    #[expect(clippy::cast_possible_truncation, reason = "known to truncate here")]
-    store
-        .instance_mut(instance)
-        .memory_fill(memory_index, dst, val as u8, len)
+    len: usize,
+) {
+    // FIXME(#4203): this is known to not be sound in the presence of shared
+    // memories.
+    unsafe {
+        dst.write_bytes(val as u8, len);
+    }
 }
 
 // Implementation of `memory.init`.

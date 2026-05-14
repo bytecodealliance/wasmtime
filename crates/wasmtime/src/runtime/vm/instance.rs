@@ -1079,35 +1079,6 @@ impl Instance {
         }
     }
 
-    /// Perform the `memory.fill` operation on a locally defined memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `Trap` error if the memory range is out of bounds.
-    pub(crate) fn memory_fill(
-        self: Pin<&mut Self>,
-        memory_index: DefinedMemoryIndex,
-        dst: u64,
-        val: u8,
-        len: u64,
-    ) -> Result<(), Trap> {
-        let memory_index = self.env_module().memory_index(memory_index);
-        let memory = self.get_memory(memory_index);
-        let dst = self.validate_inbounds(memory.current_length(), dst, len)?;
-        let len = usize::try_from(len).unwrap();
-
-        // Bounds and casts are checked above, by this point we know that
-        // everything is safe.
-        unsafe {
-            let dst = memory.base.as_ptr().add(dst);
-            // FIXME audit whether this is safe in the presence of shared memory
-            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-            ptr::write_bytes(dst, val, len);
-        }
-
-        Ok(())
-    }
-
     /// Get the internal storage range of a particular Wasm data segment.
     pub(crate) fn wasm_data_range(&self, index: DataIndex) -> Range<u32> {
         match self.env_module().passive_data_map.get(&index) {

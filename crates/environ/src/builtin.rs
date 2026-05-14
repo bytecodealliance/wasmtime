@@ -15,7 +15,7 @@ macro_rules! foreach_builtin_function {
             // Returns an index for wasm's `memory.copy`
             memory_copy(vmctx: vmctx, dst_index: u32, dst: u64, src_index: u32, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `memory.fill` instruction.
-            memory_fill(vmctx: vmctx, memory: u32, dst: u64, val: u32, len: u64) -> bool;
+            memory_fill(vmctx: vmctx, dst: pointer, val: u32, len: size);
             // Returns an index for wasm's `memory.init` instruction.
             memory_init(vmctx: vmctx, memory: u32, data: u32, dst: u64, src: u32, len: u32) -> bool;
             // Returns a value for wasm's `ref.func` instruction.

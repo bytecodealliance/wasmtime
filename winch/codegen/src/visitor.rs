@@ -1916,14 +1916,7 @@ where
     }
 
     fn visit_memory_fill(&mut self, mem: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-        let mem = MemoryIndex::from_u32(mem);
-
-        let builtin = self.env.builtins.memory_fill::<M::ABI>()?;
-        let builtin = self.prepare_builtin_defined_memory_arg(mem, at, builtin)?;
-
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_fill(MemoryIndex::from_u32(mem))
     }
 
     fn visit_memory_size(&mut self, mem: u32) -> Self::Output {
