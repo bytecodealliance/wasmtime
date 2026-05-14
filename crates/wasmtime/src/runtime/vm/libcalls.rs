@@ -561,6 +561,11 @@ unsafe fn memory_fill(
     // FIXME(#4203): this is known to not be sound in the presence of shared
     // memories.
     unsafe {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the libcall intentionally takes the raw 32-bit value, \
+                      and semantically that's intentionally truncated"
+        )]
         dst.write_bytes(val as u8, len);
     }
 }
