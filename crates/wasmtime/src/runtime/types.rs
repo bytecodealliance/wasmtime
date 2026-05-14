@@ -1,5 +1,6 @@
 use crate::error::OutOfMemory;
 use crate::prelude::*;
+use wasmtime_core::alloc::TryVec;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
 use crate::runtime::externals::Tag as RuntimeTag;
@@ -2724,17 +2725,19 @@ impl FuncType {
     }
     /// Construct a func which returns results of default value, if each result type has a default value.
     pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Func> {
-        let dummy_results = self
-            .results()
-            .map(|ty| ty.default_value())
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| format_err!("function results do not have a default value"))?;
-        Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
+        let mut dummy_results = TryVec::new();
+        for ty in self.results() {
+            let val = ty
+                .default_value()
+                .ok_or_else(|| format_err!("function results do not have a default value"))?;
+            dummy_results.push(val)?;
+        }
+        Func::try_new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
             }
             Ok(())
-        }))
+        })
     }
 }
 
