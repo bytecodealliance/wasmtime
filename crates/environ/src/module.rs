@@ -272,12 +272,15 @@ pub struct TableSegment {
 pub enum TableSegmentElements {
     /// A sequential list of functions where `FuncIndex::reserved_value()`
     /// indicates a null function.
-    Functions(Box<[FuncIndex]>),
+    Functions(
+        #[serde(deserialize_with = "crate::types::deserialize_boxed_slice")] Box<[FuncIndex]>,
+    ),
     /// Arbitrary expressions, aka either functions, null or a load of a global.
     Expressions {
         /// The type of each element in `exprs`.
         ty: WasmRefType,
         /// The const expressions for this segment's elements.
+        #[serde(deserialize_with = "crate::types::deserialize_boxed_slice")]
         exprs: Box<[ConstExpr]>,
     },
 }

@@ -7,6 +7,19 @@ use core::{fmt, ops::Range};
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
+#[doc(hidden)]
+pub fn deserialize_boxed_slice<'de, T, D>(deserializer: D) -> Result<Box<[T]>, D::Error>
+where
+    T: serde::de::Deserialize<'de>,
+    D: serde::de::Deserializer<'de>,
+{
+    let tys: crate::collections::TryVec<T> = serde::Deserialize::deserialize(deserializer)?;
+    let tys = tys
+        .into_boxed_slice()
+        .map_err(|oom| serde::de::Error::custom(oom))?;
+    Ok(tys)
+}
+
 /// A trait for things that can trace all type-to-type edges, aka all type
 /// indices within this thing.
 pub trait TypeTrace {
@@ -686,7 +699,7 @@ pub enum WasmHeapBottomType {
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
-    #[serde(deserialize_with = "WasmFuncType::deserialize_params_results")]
+    #[serde(deserialize_with = "deserialize_boxed_slice")]
     params_results: Box<[WasmValType]>,
     params_len: u32,
     non_i31_gc_ref_params_count: u32,
@@ -748,18 +761,6 @@ impl TypeTrace for WasmFuncType {
 }
 
 impl WasmFuncType {
-    fn deserialize_params_results<'de, D>(deserializer: D) -> Result<Box<[WasmValType]>, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let tys: crate::collections::TryVec<WasmValType> =
-            serde::Deserialize::deserialize(deserializer)?;
-        let tys = tys
-            .into_boxed_slice()
-            .map_err(|oom| serde::de::Error::custom(oom))?;
-        Ok(tys)
-    }
-
     /// Creates a new function type from the provided `params` and `returns`.
     #[inline]
     pub fn new(
@@ -941,6 +942,7 @@ pub struct WasmExnType {
     /// we also need to be able to derive a GC object layout from this
     /// type descriptor without referencing other type descriptors; so
     /// we directly inline the information here.
+    #[serde(deserialize_with = "deserialize_boxed_slice")]
     pub fields: Box<[WasmFieldType]>,
 }
 
@@ -1116,6 +1118,7 @@ impl TypeTrace for WasmArrayType {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmStructType {
     /// The fields that make up this struct type.
+    #[serde(deserialize_with = "deserialize_boxed_slice")]
     pub fields: Box<[WasmFieldType]>,
 }
 
@@ -1529,6 +1532,7 @@ impl TypeTrace for WasmSubType {
 #[derive(Debug, Default, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmRecGroup {
     /// The types inside of this recgroup.
+    #[serde(deserialize_with = "deserialize_boxed_slice")]
     pub types: Box<[WasmSubType]>,
 }
 
