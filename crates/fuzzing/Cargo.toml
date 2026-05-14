@@ -81,5 +81,6 @@ tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, features = ['build-libinterpret'] }
 
 [features]
+default = ['v8']
 fuzz-spec-interpreter = ['dep:wasm-spec-interpreter']
 v8 = ['dep:v8']
