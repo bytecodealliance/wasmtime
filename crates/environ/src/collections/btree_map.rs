@@ -15,6 +15,16 @@ where
     map: cranelift_bforest::Map<K, Id>,
 }
 
+impl<K, V> core::fmt::Debug for TryBTreeMap<K, V>
+where
+    K: Copy + Ord + core::fmt::Debug,
+    V: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
+}
+
 impl<K, V> Default for TryBTreeMap<K, V>
 where
     K: Copy,
@@ -648,6 +658,65 @@ where
                 Err(oom)
             }
         }
+    }
+}
+
+impl<K, V> serde::ser::Serialize for TryBTreeMap<K, V>
+where
+    K: Copy + Ord + serde::ser::Serialize,
+    V: serde::ser::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.len()))?;
+        for (k, v) in self.iter() {
+            map.serialize_entry(&k, v)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de, K, V> serde::de::Deserialize<'de> for TryBTreeMap<K, V>
+where
+    K: Copy + Ord + serde::de::Deserialize<'de>,
+    V: serde::de::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use core::marker::PhantomData;
+
+        struct Visitor<K: Copy, V>(PhantomData<fn() -> TryBTreeMap<K, V>>);
+
+        impl<'de, K, V> serde::de::Visitor<'de> for Visitor<K, V>
+        where
+            K: Copy + Ord + serde::de::Deserialize<'de>,
+            V: serde::de::Deserialize<'de>,
+        {
+            type Value = TryBTreeMap<K, V>;
+
+            fn expecting(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                f.write_str("a map")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                use serde::de::Error as _;
+                let mut result = TryBTreeMap::new();
+                while let Some((k, v)) = map.next_entry()? {
+                    result.insert(k, v).map_err(|oom| A::Error::custom(oom))?;
+                }
+                Ok(result)
+            }
+        }
+
+        deserializer.deserialize_map(Visitor(PhantomData))
     }
 }
 

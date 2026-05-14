@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use crate::*;
-use alloc::collections::BTreeMap;
 use core::ops::Range;
 use cranelift_entity::{EntityRef, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
@@ -325,10 +324,10 @@ pub struct Module {
 
     /// The map from passive element index (element segment index space) to
     /// index in `passive_elements`.
-    pub passive_elements_map: BTreeMap<ElemIndex, PassiveElemIndex>,
+    pub passive_elements_map: TryBTreeMap<ElemIndex, PassiveElemIndex>,
 
     /// The map from passive data index (data segment index space) to index in `passive_data`.
-    pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
+    pub passive_data_map: TryBTreeMap<DataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
     pub types: TryPrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,

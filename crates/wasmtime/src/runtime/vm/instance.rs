@@ -907,7 +907,7 @@ impl Instance {
         let Some(passive) = self
             .env_module()
             .passive_elements_map
-            .get(&elem_index)
+            .get(elem_index)
             .copied()
         else {
             return &[];
@@ -1001,7 +1001,7 @@ impl Instance {
         let Some(passive_index) = self
             .env_module()
             .passive_elements_map
-            .get(&elem_index)
+            .get(elem_index)
             .copied()
         else {
             // Note: dropping a non-passive segment is a no-op (not a trap).
@@ -1045,7 +1045,7 @@ impl Instance {
 
     /// Get the internal storage range of a particular Wasm data segment.
     pub(crate) fn wasm_data_range(&self, index: DataIndex) -> Range<u32> {
-        match self.env_module().passive_data_map.get(&index) {
+        match self.env_module().passive_data_map.get(index) {
             Some(range) if !self.dropped_data.contains(index) => range.clone(),
             _ => 0..0,
         }

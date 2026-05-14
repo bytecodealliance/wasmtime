@@ -574,7 +574,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result
                                 .module
                                 .passive_elements_map
-                                .insert(elem_index, passive_index);
+                                .insert(elem_index, passive_index)?;
                         }
 
                         ElementKind::Declared => {}
@@ -689,7 +689,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result
                                 .module
                                 .passive_data_map
-                                .insert(data_index, range);
+                                .insert(data_index, range)?;
                         }
                     }
                 }
