@@ -39,7 +39,7 @@
 ;;       popq    %rbp
 ;;       retq
 ;;   5e: movq    0x10(%rbx), %rax
-;;   62: movq    0x1a0(%rax), %rax
+;;   62: movq    0x190(%rax), %rax
 ;;   69: movq    %rbx, %rdi
 ;;   6c: callq   *%rax
 ;;   6e: ud2

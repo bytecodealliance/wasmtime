@@ -163,3 +163,17 @@ pub fn translate_ref_test(
 ) -> WasmResult<ir::Value> {
     disabled()
 }
+
+pub fn translate_array_copy(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _dst_array_type_index: TypeIndex,
+    _dst_array: ir::Value,
+    _dst_index: ir::Value,
+    _src_array_type_index: TypeIndex,
+    _src_array: ir::Value,
+    _src_index: ir::Value,
+    _len: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}

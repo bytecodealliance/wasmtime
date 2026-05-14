@@ -35,7 +35,7 @@ use wasmtime_environ::{
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Extension {
     Sign,
     Zero,
@@ -581,6 +581,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(continuation_block);
+    }
+
+    /// Manually insert a fuel check, as opposed to what already happens around
+    /// normal loops headers and function entries.
+    ///
+    /// This can be used for expensive opcodes, such as `array.copy`, where the
+    /// operation's runtime is a function of the runtime state.
+    fn manual_fuel_check(&mut self, builder: &mut FunctionBuilder<'_>, fuel_to_consume: ir::Value) {
+        if !self.tunables.consume_fuel {
+            return;
+        }
+        self.fuel_increment_var(builder);
+
+        let fuel = builder.use_var(self.fuel_var);
+        let fuel = builder.ins().iadd(fuel, fuel_to_consume);
+        builder.def_var(self.fuel_var, fuel);
+
+        self.fuel_check(builder);
     }
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -2824,44 +2842,22 @@ impl FuncEnvironment<'_> {
         dst_array_type_index: TypeIndex,
         dst_array: ir::Value,
         dst_index: ir::Value,
-        _src_array_type_index: TypeIndex,
+        src_array_type_index: TypeIndex,
         src_array: ir::Value,
         src_index: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let interned_type_index =
-            self.module.types[dst_array_type_index].unwrap_module_type_index();
-        let array_ty = self.types.unwrap_array(interned_type_index)?;
-        let elem_ty = array_ty.0.element_type;
-
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-
-        if elem_ty.is_vmgcref_type_and_not_i31() {
-            let libcall = gc::builtins::array_copy_gc_ref_elems(self, builder.func)?;
-            builder.ins().call(
-                libcall,
-                &[vmctx, dst_array, dst_index, src_array, src_index, len],
-            );
-        } else {
-            let libcall = gc::builtins::array_copy_non_gc_ref_elems(self, builder.func)?;
-            let interned_type_index = builder
-                .ins()
-                .iconst(I32, i64::from(interned_type_index.as_u32()));
-            builder.ins().call(
-                libcall,
-                &[
-                    vmctx,
-                    interned_type_index,
-                    dst_array,
-                    dst_index,
-                    src_array,
-                    src_index,
-                    len,
-                ],
-            );
-        }
-
-        Ok(())
+        gc::translate_array_copy(
+            self,
+            builder,
+            dst_array_type_index,
+            dst_array,
+            dst_index,
+            src_array_type_index,
+            src_array,
+            src_index,
+            len,
+        )
     }
 
     pub fn translate_array_fill(

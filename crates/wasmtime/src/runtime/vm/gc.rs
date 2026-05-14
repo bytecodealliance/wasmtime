@@ -324,18 +324,6 @@ impl GcStore {
         self.gc_heap.gc_object_data_mut(gc_ref)
     }
 
-    /// Get the object datas for the given pair of object references.
-    ///
-    /// Panics if `a` and `b` are the same reference or either is out of bounds.
-    pub fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
-        assert_ne!(a, b);
-        self.gc_heap.gc_object_data_pair(a, b)
-    }
-
     /// Allocate an uninitialized array with the given type index.
     ///
     /// This does NOT check that the index is currently allocated in the types

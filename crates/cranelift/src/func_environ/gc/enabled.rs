@@ -748,10 +748,12 @@ impl ArrayInit<'_> {
                 emit_array_fill_impl(
                     func_env,
                     builder,
+                    elem_ty,
                     elems_addr,
                     elem_size,
                     elems_end,
-                    |func_env, builder, elem_addr| {
+                    elem,
+                    |func_env, builder, elem_addr, elem| {
                         init_field(func_env, builder, elem_ty, elem_addr, elem)
                     },
                 )?;
@@ -765,12 +767,15 @@ impl ArrayInit<'_> {
 fn emit_array_fill_impl(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
+    elem_ty: WasmStorageType,
     elem_addr: ir::Value,
     elem_size: ir::Value,
     fill_end: ir::Value,
+    value: ir::Value,
     mut emit_elem_write: impl FnMut(
         &mut FuncEnvironment<'_>,
         &mut FunctionBuilder<'_>,
+        ir::Value,
         ir::Value,
     ) -> WasmResult<()>,
 ) -> WasmResult<()> {
@@ -783,6 +788,37 @@ fn emit_array_fill_impl(
     assert_eq!(builder.func.dfg.value_type(elem_addr), pointer_ty);
     assert_eq!(builder.func.dfg.value_type(elem_size), pointer_ty);
     assert_eq!(builder.func.dfg.value_type(fill_end), pointer_ty);
+
+    // If this is a byte array then specialize its fill to use the same libcall
+    // as `memory.fill`. This gets us to `memset` on the host which for larger
+    // arrays can be a big boost due to the vectorized implementation. Note
+    // though that this explicitly checks to make sure that the final address
+    // being written is in-bounds in the GC heap to detect corruption and traps
+    // here in-wasm. Once we're in the host GC heap corruption can't be caught,
+    // so it needs to be an up-front check here.
+    if let WasmStorageType::I8 = elem_ty {
+        let base = func_env.get_gc_heap_base(builder);
+        let bound = func_env.get_gc_heap_bound(builder);
+        let heap_end = builder.ins().iadd(base, bound);
+        let corrupt = builder
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThan, fill_end, heap_end);
+        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
+
+        let memory_fill = func_env.builtin_functions.memory_fill(&mut builder.func);
+        let mut pos = builder.cursor();
+        let vmctx = func_env.vmctx_val(&mut pos);
+        let len = builder.ins().isub(fill_end, elem_addr);
+
+        // Manually consume fuel for this operation because arrays can be large.
+        // This is a noop if fuel is disabled.
+        func_env.manual_fuel_check(builder, len);
+
+        builder
+            .ins()
+            .call(memory_fill, &[vmctx, elem_addr, value, len]);
+        return Ok(());
+    }
 
     // Loop to fill the elements, emitting the equivalent of the following
     // pseudo-CLIF:
@@ -833,7 +869,7 @@ fn emit_array_fill_impl(
     // element's address, and then jump back to the loop header block.
     builder.switch_to_block(loop_body_block);
     log::trace!("emit_array_fill_impl: loop body");
-    emit_elem_write(func_env, builder, elem_addr)?;
+    emit_elem_write(func_env, builder, elem_addr, value)?;
     let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
     builder
         .ins()
@@ -845,6 +881,226 @@ fn emit_array_fill_impl(
     builder.seal_block(loop_header_block);
     builder.seal_block(loop_body_block);
     builder.seal_block(continue_block);
+    Ok(())
+}
+
+pub fn translate_array_copy(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    dst_array_type_index: TypeIndex,
+    dst_array: ir::Value,
+    dst_index: ir::Value,
+    _src_array_type_index: TypeIndex,
+    src_array: ir::Value,
+    src_index: ir::Value,
+    copy_len: ir::Value,
+) -> WasmResult<()> {
+    let interned_type_index =
+        func_env.module.types[dst_array_type_index].unwrap_module_type_index();
+    let array_ty = func_env.types[interned_type_index]
+        .composite_type
+        .inner
+        .unwrap_array();
+    let elem_ty = array_ty.0.element_type;
+    let array_layout = func_env.array_layout(interned_type_index).clone();
+
+    // The byte size of this copy. Note that this can overflow, but the value
+    // won't actually be used below until overflow is ruled out.
+    let one_elem_size = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(array_layout.elem_size));
+    let copy_size = builder.ins().imul(copy_len, one_elem_size);
+    let copy_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_size);
+
+    // Helper closure to return `(start,end)` as the native-memory-address
+    // bounds of the copy that is being done.
+    let mut array_bounds = |array: ir::Value, index: ir::Value| -> WasmResult<_> {
+        let array_len = translate_array_len(func_env, builder, array)?;
+
+        // Check that the full range of elements we want to write is in bounds.
+        let end_index =
+            func_env.uadd_overflow_trap(builder, index, copy_len, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+        let out_of_bounds = builder
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThan, end_index, array_len);
+        func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+
+        // Calculate the address of the first element in the array.
+        let ArraySizeInfo {
+            obj_size,
+            one_elem_size: _,
+            base_size,
+        } = emit_array_size_info(func_env, builder, interned_type_index, array_len);
+        let offset_in_elems = builder.ins().imul(index, one_elem_size);
+        let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
+        let elem_addr = func_env.prepare_gc_ref_access(
+            builder,
+            array,
+            BoundsCheck::DynamicObjectField {
+                offset: obj_offset,
+                object_size: obj_size,
+            },
+        );
+
+        // Calculate the size of this copy, as well as the final address one byte
+        // beyond the final elements.
+        let end_addr = builder.ins().iadd(elem_addr, copy_size);
+        Ok((elem_addr, end_addr))
+    };
+
+    let (src_elem_addr, src_end_addr) = array_bounds(src_array, src_index)?;
+    let (dst_elem_addr, dst_end_addr) = array_bounds(dst_array, dst_index)?;
+
+    // If the element of this array isn't a GC reference, or if it's an i31ref,
+    // then there's no need for the barrier-using loops below. Instead use the
+    // `memory.copy` intrinsic to do a raw `memcpy` from one array to another.
+    //
+    // Note that like `memory.fill` this is preceded with a defensive check
+    // against heap corruption to ensure that, even in the face of heap
+    // corruption, the `memory.copy` call on the host should not ever fault.
+    if !elem_ty.is_vmgcref_type_and_not_i31() {
+        let base = func_env.get_gc_heap_base(builder);
+        let bound = func_env.get_gc_heap_bound(builder);
+        let heap_end = builder.ins().iadd(base, bound);
+        let corrupt = builder
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThan, src_end_addr, heap_end);
+        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
+        let corrupt = builder
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThan, dst_end_addr, heap_end);
+        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
+
+        let memory_copy = func_env.builtin_functions.memory_copy(&mut builder.func);
+        let mut pos = builder.cursor();
+        let vmctx = func_env.vmctx_val(&mut pos);
+
+        // Manually consume fuel for this operation because arrays can be large.
+        // This is a noop if fuel is disabled.
+        func_env.manual_fuel_check(builder, copy_size);
+
+        builder.ins().call(
+            memory_copy,
+            &[vmctx, dst_elem_addr, src_elem_addr, copy_size],
+        );
+        return Ok(());
+    }
+
+    // For GC references, inline the copy loop here with barriers. This is
+    // either a forwards copy or a backwards copy depending on the src/dst
+    // pointers. The loop here looks like:
+    //
+    //  current_block:
+    //      ...
+    //      brif len, nonempty_block, done_block
+    //
+    //  nonempty_block:
+    //      forward = icmp ult dst_elem_addr, src_elem_addr
+    //      brif forward,
+    //          forward_block(dst_elem_addr, src_elem_addr),
+    //          backwards_block(dst_end_addr, src_end_addr)
+    //
+    //  forward_block(dst, src):
+    //      *dst = *src
+    //      dst += elem_size
+    //      src += elem_size
+    //      done = icmp eq src, src_end_addr
+    //      brif done, done_block, forward_block(dst, src)
+    //
+    //  backwards_block(dst, src):
+    //      dst -= elem_size
+    //      src -= elem_size
+    //      *dst = *src
+    //      done = icmp eq src, src_elem_addr
+    //      brif done, done_block, backwards_block(dst, src)
+    //
+    //  done_block:
+    //      ...
+    let current_block = builder.current_block().unwrap();
+    let nonempty_block = builder.create_block();
+    let forward_block = builder.create_block();
+    let backwards_block = builder.create_block();
+    let done_block = builder.create_block();
+
+    builder.ensure_inserted_block();
+    builder.insert_block_after(nonempty_block, current_block);
+    builder.insert_block_after(forward_block, nonempty_block);
+    builder.insert_block_after(backwards_block, forward_block);
+    builder.insert_block_after(done_block, backwards_block);
+
+    let ext = match elem_ty {
+        WasmStorageType::I8 => Some(Extension::Zero),
+        WasmStorageType::I16 => Some(Extension::Zero),
+        _ => None,
+    };
+
+    // Terminate `current_block` by testing to see if we're copying any
+    // elements at all.
+    builder
+        .ins()
+        .brif(copy_len, nonempty_block, &[], done_block, &[]);
+
+    // In the nonempty_block test to see if this is a forward or backwards
+    // copy.
+    builder.switch_to_block(nonempty_block);
+    let one_elem_size =
+        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
+    let dst_first = builder
+        .ins()
+        .icmp(IntCC::UnsignedLessThan, dst_elem_addr, src_elem_addr);
+    builder.ins().brif(
+        dst_first,
+        forward_block,
+        &[dst_elem_addr.into(), src_elem_addr.into()],
+        backwards_block,
+        &[dst_end_addr.into(), src_end_addr.into()],
+    );
+
+    // Forward copy -- copy one field, then mutate the current pointers, then
+    // check to see if we're done.
+    builder.switch_to_block(forward_block);
+    func_env.translate_loop_header(builder)?;
+    let dst_cur = builder.append_block_param(forward_block, func_env.pointer_type());
+    let src_cur = builder.append_block_param(forward_block, func_env.pointer_type());
+    let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
+    write_field_at_addr(func_env, builder, elem_ty, dst_cur, value)?;
+    let dst_next = builder.ins().iadd(dst_cur, one_elem_size);
+    let src_next = builder.ins().iadd(src_cur, one_elem_size);
+    let done = builder.ins().icmp(IntCC::Equal, src_next, src_end_addr);
+    builder.ins().brif(
+        done,
+        done_block,
+        &[],
+        forward_block,
+        &[dst_next.into(), src_next.into()],
+    );
+
+    // Backwards copy -- update the pointers, then perform a copy, then check
+    // to see if we're done.
+    builder.switch_to_block(backwards_block);
+    func_env.translate_loop_header(builder)?;
+    let dst_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
+    let src_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
+    let dst_cur = builder.ins().isub(dst_cur, one_elem_size);
+    let src_cur = builder.ins().isub(src_cur, one_elem_size);
+    let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
+    write_field_at_addr(func_env, builder, elem_ty, dst_cur, value)?;
+    let done = builder.ins().icmp(IntCC::Equal, src_cur, src_elem_addr);
+    builder.ins().brif(
+        done,
+        done_block,
+        &[],
+        backwards_block,
+        &[dst_cur.into(), src_cur.into()],
+    );
+
+    builder.switch_to_block(done_block);
+
+    builder.seal_block(nonempty_block);
+    builder.seal_block(forward_block);
+    builder.seal_block(backwards_block);
+    builder.seal_block(done_block);
+
     Ok(())
 }
 
@@ -872,6 +1128,8 @@ pub fn translate_array_fill(
 
     // Get the address of the first element we want to fill.
     let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
+    let array_ty = func_env.types.unwrap_array(interned_type_index)?;
+    let elem_ty = array_ty.0.element_type;
     let ArraySizeInfo {
         obj_size,
         one_elem_size,
@@ -899,15 +1157,12 @@ pub fn translate_array_fill(
     let result = emit_array_fill_impl(
         func_env,
         builder,
+        elem_ty,
         elem_addr,
         one_elem_size,
         fill_end,
-        |func_env, builder, elem_addr| {
-            let elem_ty = func_env
-                .types
-                .unwrap_array(interned_type_index)?
-                .0
-                .element_type;
+        value,
+        |func_env, builder, elem_addr, value| {
             write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
         },
     );
@@ -1514,7 +1769,6 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's base.
-    #[cfg(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying"))]
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_gc_heap_base_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)
@@ -1537,7 +1791,6 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's bound.
-    #[cfg(feature = "gc-null")]
     fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_gc_heap_bound_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)

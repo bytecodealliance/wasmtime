@@ -145,31 +145,6 @@ macro_rules! foreach_builtin_function {
                 len: u32
             ) -> u32;
 
-            // Builtin implementation of `array.copy` for arrays whose
-            // elements are GC references.
-            #[cfg(feature = "gc")]
-            array_copy_gc_ref_elems(
-                vmctx: vmctx,
-                dst_array: u32,
-                dst_index: u32,
-                src_array: u32,
-                src_index: u32,
-                len: u32
-            ) -> bool;
-
-            // Builtin implementation of `array.copy` for arrays whose
-            // elements are not GC references.
-            #[cfg(feature = "gc")]
-            array_copy_non_gc_ref_elems(
-                vmctx: vmctx,
-                array_interned_type_index: u32,
-                dst_array: u32,
-                dst_index: u32,
-                src_array: u32,
-                src_index: u32,
-                len: u32
-            ) -> bool;
-
             // Builtin implementation of the `array.init_data` instruction.
             #[cfg(feature = "gc")]
             array_init_data(

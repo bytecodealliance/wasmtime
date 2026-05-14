@@ -531,40 +531,6 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         let data = &mut self.heap_slice_mut()[range];
         data.into()
     }
-
-    /// Get a pair of mutable borrows of the given objects' data.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `a == b` or on out-of-bounds accesses or if either GC ref is
-    /// an `i31ref`.
-    fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
-        assert_ne!(a, b);
-
-        let a_range = self.object_range(a);
-        let b_range = self.object_range(b);
-
-        // Assert that the two objects do not overlap.
-        assert!(a_range.start <= a_range.end);
-        assert!(b_range.start <= b_range.end);
-        assert!(a_range.end <= b_range.start || b_range.end <= a_range.start);
-
-        let (a_data, b_data) = if a_range.start < b_range.start {
-            let (a_half, b_half) = self.heap_slice_mut().split_at_mut(b_range.start);
-            let b_len = b_range.end - b_range.start;
-            (&mut a_half[a_range], &mut b_half[..b_len])
-        } else {
-            let (b_half, a_half) = self.heap_slice_mut().split_at_mut(a_range.start);
-            let a_len = a_range.end - a_range.start;
-            (&mut a_half[..a_len], &mut b_half[b_range])
-        };
-
-        (a_data.into(), b_data.into())
-    }
 }
 
 /// A list of GC roots.
