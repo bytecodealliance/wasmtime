@@ -35,10 +35,10 @@ use core::{mem, ptr};
 use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
-    DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
-    ElemIndex, EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PtrSize,
-    TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex,
-    WasmRefType, packed_option::ReservedValue,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, ElemIndex,
+    EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PassiveDataIndex,
+    PtrSize, TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC, VMOffsets,
+    VMSharedTypeIndex, WasmRefType, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -135,10 +135,6 @@ pub struct Instance {
     // but that type is currently footgun-y / isn't actually OOM-safe yet.
     passive_elements: TryVec<PassiveElementSegment>,
 
-    /// Stores the dropped passive data segments in this instantiation by index.
-    /// If the index is present in the set, the segment has been dropped.
-    dropped_data: TryEntitySet<DataIndex>,
-
     // TODO: add support for multiple memories; `wmemcheck_state` corresponds to
     // memory 0.
     #[cfg(feature = "wmemcheck")]
@@ -175,7 +171,6 @@ impl Instance {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
         let passive_elements = TryVec::with_capacity(module.passive_elements.len())?;
-        let dropped_data = TryEntitySet::with_capacity(module.passive_data_map.len())?;
 
         #[cfg(feature = "wmemcheck")]
         let wmemcheck_state = if req.store.engine().config().wmemcheck {
@@ -199,7 +194,6 @@ impl Instance {
             memories,
             tables,
             passive_elements,
-            dropped_data,
             #[cfg(feature = "wmemcheck")]
             wmemcheck_state,
             store: None,
@@ -1030,27 +1024,6 @@ impl Instance {
         }
     }
 
-    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
-        let oob = || Trap::MemoryOutOfBounds;
-        let end = ptr
-            .checked_add(len)
-            .and_then(|i| usize::try_from(i).ok())
-            .ok_or_else(oob)?;
-        if end > max {
-            Err(oob())
-        } else {
-            Ok(ptr.try_into().unwrap())
-        }
-    }
-
-    /// Get the internal storage range of a particular Wasm data segment.
-    pub(crate) fn wasm_data_range(&self, index: DataIndex) -> Range<u32> {
-        match self.env_module().passive_data_map.get(index) {
-            Some(range) if !self.dropped_data.contains(index) => range.clone(),
-            _ => 0..0,
-        }
-    }
-
     /// Given an internal storage range of a Wasm data segment (or subset of a
     /// Wasm data segment), get the data's raw bytes.
     pub(crate) fn wasm_data(&self, range: Range<u32>) -> &[u8] {
@@ -1059,63 +1032,17 @@ impl Instance {
         &self.runtime_info.wasm_data()[start..end]
     }
 
-    /// Performs the `memory.init` operation.
+    /// Returns the data for the passive segment identified by `index`
     ///
-    /// # Errors
+    /// Does not take into account the dynamic size of the data pointed to by
+    /// `index`, always returns the raw data from the module itself.
     ///
-    /// Returns a `Trap` error if the destination range is out of this module's
-    /// memory's bounds or if the source range is outside the data segment's
-    /// bounds.
-    pub(crate) fn memory_init(
-        self: Pin<&mut Self>,
-        memory_index: MemoryIndex,
-        data_index: DataIndex,
-        dst: u64,
-        src: u32,
-        len: u32,
-    ) -> Result<(), Trap> {
-        let range = self.wasm_data_range(data_index);
-        self.memory_init_segment(memory_index, range, dst, src, len)
-    }
-
-    pub(crate) fn memory_init_segment(
-        self: Pin<&mut Self>,
-        memory_index: MemoryIndex,
-        range: Range<u32>,
-        dst: u64,
-        src: u32,
-        len: u32,
-    ) -> Result<(), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
-
-        let memory = self.get_memory(memory_index);
-        let data = self.wasm_data(range);
-        let dst = self.validate_inbounds(memory.current_length(), dst, len.into())?;
-        let src = self.validate_inbounds(data.len(), src.into(), len.into())?;
-        let len = len as usize;
-
-        unsafe {
-            let src_start = data.as_ptr().add(src);
-            let dst_start = memory.base.as_ptr().add(dst);
-            // FIXME audit whether this is safe in the presence of shared memory
-            // (https://github.com/bytecodealliance/wasmtime/issues/4203).
-            ptr::copy_nonoverlapping(src_start, dst_start, len);
-        }
-
-        Ok(())
-    }
-
-    /// Drop the given data segment, truncating its length to zero.
-    pub(crate) fn data_drop(
-        self: Pin<&mut Self>,
-        data_index: DataIndex,
-    ) -> Result<(), OutOfMemory> {
-        self.dropped_data_mut().insert(data_index)?;
-
-        // Note that we don't check that we actually removed a segment because
-        // dropping a non-passive segment is a no-op (not a trap).
-
-        Ok(())
+    /// # Panics
+    ///
+    /// Panics if `index` is out-of-bounds.
+    fn passive_data(&self, index: PassiveDataIndex) -> &[u8] {
+        let range = self.env_module().passive_data[index].clone();
+        self.wasm_data(range)
     }
 
     /// Get a table by index regardless of whether it is locally-defined
@@ -1419,6 +1346,26 @@ impl Instance {
                 ptr = ptr.add(1);
             }
         }
+
+        // Initialize the lengths of passive data segments.
+        //
+        // SAFETY: it's safe to initialize these lengths during initialization
+        // here and the various types of pointers and such here should all be
+        // valid.
+        unsafe {
+            let offsets = instance.runtime_info.offsets();
+            let mut lengths =
+                instance.vmctx_plus_offset_raw(offsets.vmctx_passive_data_lengths_begin());
+            let mut bases =
+                instance.vmctx_plus_offset_raw(offsets.vmctx_passive_data_bases_begin());
+            for i in module.passive_data.keys() {
+                let data = instance.passive_data(i);
+                lengths.write(u32::try_from(data.len()).unwrap());
+                lengths = lengths.add(1);
+                bases.write(VmPtr::from(NonNull::from(data).cast::<u8>()));
+                bases = bases.add(1);
+            }
+        }
     }
 
     /// Attempts to convert from the host `addr` specified to a WebAssembly
@@ -1515,11 +1462,6 @@ impl Instance {
         // internal field and is safe so long as the `&mut Self` temporarily
         // created is not overwritten, which it isn't here.
         unsafe { &mut self.get_unchecked_mut().store }
-    }
-
-    fn dropped_data_mut(self: Pin<&mut Self>) -> &mut TryEntitySet<DataIndex> {
-        // SAFETY: see `store_mut` above.
-        unsafe { &mut self.get_unchecked_mut().dropped_data }
     }
 
     fn memories_mut(

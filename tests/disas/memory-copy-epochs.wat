@@ -18,7 +18,7 @@
 ;;     gv6 = load.i64 notrap aligned readonly can_move gv3+56
 ;;     sig0 = (i64 vmctx) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64, i64) tail
-;;     fn0 = colocated u805306368:16 sig0
+;;     fn0 = colocated u805306368:14 sig0
 ;;     fn1 = colocated u805306368:4 sig1
 ;;     stack_limit = gv2
 ;;

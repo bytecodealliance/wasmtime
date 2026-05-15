@@ -1,4 +1,5 @@
 use super::{ArrayInit, GcCompiler};
+use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{BulkOp, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
@@ -14,9 +15,10 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
-    Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
-    PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType,
-    WasmRefType, WasmResult, WasmStorageType, WasmValType, wasm_unsupported,
+    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT,
+    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
+    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+    wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -687,7 +689,7 @@ impl ArrayInit<'_> {
     )]
     fn len(self, pos: &mut FuncCursor) -> ir::Value {
         match self {
-            ArrayInit::Fill { len, .. } => len,
+            ArrayInit::Fill { len, .. } | ArrayInit::Uninit { len } => len,
             ArrayInit::Elems(e) => {
                 let len = u32::try_from(e.len()).unwrap();
                 pos.ins().iconst(ir::types::I32, i64::from(len))
@@ -757,6 +759,8 @@ impl ArrayInit<'_> {
                     },
                 )?;
             }
+
+            ArrayInit::Uninit { .. } => {}
         }
         log::trace!("initialize_array: finished");
         Ok(())
@@ -1167,11 +1171,11 @@ pub fn translate_array_fill(
     let len = translate_array_len(func_env, builder, array_ref)?;
 
     // Check that the full range of elements we want to fill is within bounds.
-    let end_index = func_env.uadd_overflow_trap(builder, index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    let end_index = func_env.uadd_overflow_trap(builder, index, n, TRAP_ARRAY_OUT_OF_BOUNDS);
     let out_of_bounds = builder
         .ins()
         .icmp(IntCC::UnsignedGreaterThan, end_index, len);
-    func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapnz(builder, out_of_bounds, TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Get the address of the first element we want to fill.
     let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
@@ -1327,7 +1331,7 @@ fn array_elem_addr(
     let len = translate_array_len(func_env, builder, array_ref).unwrap();
 
     let in_bounds = builder.ins().icmp(IntCC::UnsignedLessThan, index, len);
-    func_env.trapz(builder, in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapz(builder, in_bounds, TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Compute the size (in bytes) of the whole array object.
     let ArraySizeInfo {
@@ -2045,4 +2049,162 @@ fn stack_switching_unsupported<T>() -> WasmResult<T> {
     Err(wasmtime_environ::WasmError::Unsupported(
         "Stack switching feature not compatible with GC, yet".to_string(),
     ))
+}
+
+pub fn translate_array_new_data(
+    env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    array_type_index: TypeIndex,
+    data_index: DataIndex,
+    data_offset: ir::Value,
+    len: ir::Value,
+) -> WasmResult<ir::Value> {
+    // Before actually allocating this array first do a bounds-check on the
+    // passive data segment itself. This is done by multiplying the length of
+    // the size of the array in the 64-bit integer space to avoid overflow. If
+    // upper bits are set this is definitely out-of-bounds, and otherwise the
+    // low 32-bits are the byte length.
+    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
+    let array_layout = env.array_layout(interned_type_index);
+    let len64 = builder.ins().uextend(ir::types::I64, len);
+    let init_byte_length = builder
+        .ins()
+        .imul_imm(len64, i64::from(array_layout.elem_size));
+    let init_byte_length_upper_bits = builder.ins().ushr_imm(init_byte_length, 32);
+    env.trapnz(
+        builder,
+        init_byte_length_upper_bits,
+        ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+    );
+    let init_byte_length = builder.ins().ireduce(ir::types::I32, init_byte_length);
+
+    let src_addr = match env.translation.passive_data_map[data_index] {
+        Some(idx) => {
+            Some(env.get_passive_data_pointer(builder, idx, data_offset, init_byte_length))
+        }
+        None => {
+            env.trapnz(builder, data_offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            env.trapnz(builder, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            None
+        }
+    };
+    let array =
+        gc_compiler(env)?.alloc_array(env, builder, array_type_index, ArrayInit::Uninit { len })?;
+    if let Some(src_addr) = src_addr {
+        let dst = builder.ins().iconst(ir::types::I32, 0);
+        emit_array_init_data(
+            env,
+            builder,
+            array_type_index,
+            array,
+            len,
+            dst,
+            src_addr,
+            init_byte_length,
+        );
+    }
+    Ok(array)
+}
+
+pub fn translate_array_init_data(
+    env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    array_type_index: TypeIndex,
+    array: ir::Value,
+    dst_index: ir::Value,
+    data_index: DataIndex,
+    data_offset: ir::Value,
+    len: ir::Value,
+) -> WasmResult<()> {
+    // Perform a bounds check and double-check that `dst_index` is in-bounds for
+    // this array. Do this in the 64-bit index space to avoid overflows.
+    let array_len = translate_array_len(env, builder, array)?;
+    let array_len64 = builder.ins().uextend(ir::types::I64, array_len);
+    let dst_index64 = builder.ins().uextend(ir::types::I64, dst_index);
+    let len64 = builder.ins().uextend(ir::types::I64, len);
+    let end_index64 = builder.ins().iadd(dst_index64, len64);
+    let oob = builder
+        .ins()
+        .icmp(IntCC::UnsignedGreaterThan, end_index64, array_len64);
+    env.trapnz(builder, oob, TRAP_ARRAY_OUT_OF_BOUNDS);
+
+    // Note that because `dst_index + len` is in-bounds we know that this won't
+    // overflow, so no need to check for overflow here.
+    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
+    let array_layout = env.array_layout(interned_type_index);
+    let len_in_bytes = builder
+        .ins()
+        .imul_imm(len, i64::from(array_layout.elem_size));
+
+    let src_addr = match env.translation.passive_data_map[data_index] {
+        Some(idx) => env.get_passive_data_pointer(builder, idx, data_offset, len_in_bytes),
+        // If this is an active data segments it's by-definition zero-length so
+        // test the size and then return as we've indeed successfully copied
+        // zero bytes.
+        None => {
+            env.trapnz(builder, data_offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            env.trapnz(builder, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+            return Ok(());
+        }
+    };
+
+    emit_array_init_data(
+        env,
+        builder,
+        array_type_index,
+        array,
+        array_len,
+        dst_index,
+        src_addr,
+        len_in_bytes,
+    );
+
+    Ok(())
+}
+
+/// Shared functionality between `array.new_data` and `array.init_data`.
+///
+/// Assumes the data segment has already been validated and `src_addr` is the
+/// raw host address we're copying from.
+fn emit_array_init_data(
+    env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    array_type_index: TypeIndex,
+    array: ir::Value,
+    array_len: ir::Value,
+    dst_index: ir::Value,
+    src_addr: ir::Value,
+    len_in_bytes: ir::Value,
+) {
+    // Load the destination address for where we're going to write.
+    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
+    let ArraySizeInfo {
+        obj_size,
+        one_elem_size,
+        base_size,
+    } = emit_array_size_info(env, builder, interned_type_index, array_len);
+    let offset_in_elems = builder.ins().imul(dst_index, one_elem_size);
+    let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
+    let dst_elem_addr = env.prepare_gc_ref_access(
+        builder,
+        array,
+        BoundsCheck::DynamicObjectField {
+            offset: obj_offset,
+            object_size: obj_size,
+        },
+    );
+
+    // At this point bounds checks have all passed, so it's time to perform
+    // the actual copy by calling the `memory.copy` libcall.
+    let vmctx = env.vmctx_val(&mut builder.cursor());
+    let memory_copy = env.builtin_functions.memory_copy(&mut builder.func);
+    let len_in_bytes_native = match env.pointer_type() {
+        ir::types::I32 => len_in_bytes,
+        ir::types::I64 => builder.ins().uextend(ir::types::I64, len_in_bytes),
+        _ => unreachable!(),
+    };
+    builder.ins().call(
+        memory_copy,
+        &[vmctx, dst_elem_addr, src_addr, len_in_bytes_native],
+    );
 }

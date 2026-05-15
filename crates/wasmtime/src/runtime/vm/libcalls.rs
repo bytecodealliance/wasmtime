@@ -72,8 +72,7 @@ use core::ptr::NonNull;
 use core::time::Duration;
 use wasmtime_core::math::WasmFloat;
 use wasmtime_environ::{
-    CompiledTrap, DataIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex,
-    MemoryIndex, TableIndex, Trap,
+    CompiledTrap, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, FuncIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -567,23 +566,6 @@ unsafe fn memory_fill(
     }
 }
 
-// Implementation of `memory.init`.
-fn memory_init(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    memory_index: u32,
-    data_index: u32,
-    dst: u64,
-    src: u32,
-    len: u32,
-) -> Result<(), Trap> {
-    let memory_index = MemoryIndex::from_u32(memory_index);
-    let data_index = DataIndex::from_u32(data_index);
-    store
-        .instance_mut(instance)
-        .memory_init(memory_index, data_index, dst, src, len)
-}
-
 // Implementation of `ref.func`.
 fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> NonNull<u8> {
     let (instance, registry) = store.instance_and_module_registry_mut(instance);
@@ -591,13 +573,6 @@ fn ref_func(store: &mut dyn VMStore, instance: InstanceId, func_index: u32) -> N
         .get_func_ref(registry, FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
         .cast()
-}
-
-// Implementation of `data.drop`.
-fn data_drop(store: &mut dyn VMStore, instance: InstanceId, data_index: u32) -> Result<()> {
-    let data_index = DataIndex::from_u32(data_index);
-    store.instance_mut(instance).data_drop(data_index)?;
-    Ok(())
 }
 
 // Returns a table entry after lazily initializing it.
@@ -792,163 +767,6 @@ fn get_interned_func_ref(
     };
 
     func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast())
-}
-
-/// Implementation of the `array.new_data` instruction.
-#[cfg(feature = "gc")]
-fn array_new_data(
-    store: &mut dyn VMStore,
-    instance_id: InstanceId,
-    array_type_index: u32,
-    data_index: u32,
-    src: u32,
-    len: u32,
-) -> Result<core::num::NonZeroU32> {
-    use crate::ArrayType;
-    use wasmtime_environ::ModuleInternedTypeIndex;
-
-    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    block_on!(store, async |store, asyncness| {
-        let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
-        let data_index = DataIndex::from_u32(data_index);
-        let instance = store.instance(instance_id);
-
-        // Calculate the byte-length of the data (as opposed to the element-length
-        // of the array).
-        let data_range = instance.wasm_data_range(data_index);
-        let shared_ty = instance.engine_type_index(array_type_index);
-        let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
-        let one_elem_size = array_ty
-            .element_type()
-            .data_byte_size()
-            .expect("Wasm validation ensures that this type have a defined byte size");
-        let byte_len = len
-            .checked_mul(one_elem_size)
-            .and_then(|x| usize::try_from(x).ok())
-            .ok_or_else(|| Trap::MemoryOutOfBounds)?;
-
-        // Get the data from the segment, checking bounds.
-        let src = usize::try_from(src).map_err(|_| Trap::MemoryOutOfBounds)?;
-        instance
-            .wasm_data(data_range.clone())
-            .get(src..)
-            .and_then(|d| d.get(..byte_len))
-            .ok_or_else(|| Trap::MemoryOutOfBounds)?;
-
-        // Allocate the (uninitialized) array.
-        let gc_layout = store
-            .engine()
-            .signatures()
-            .layout(shared_ty)
-            .expect("array types have GC layouts");
-        let array_layout = gc_layout.unwrap_array();
-        let array_ref = store
-            .retry_after_gc_async(limiter.as_mut(), (), asyncness, |store, ()| {
-                store
-                    .unwrap_gc_store_mut()
-                    .alloc_uninit_array(shared_ty, len, &array_layout)?
-                    .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
-            })
-            .await?;
-
-        let (gc_store, instance) = store.optional_gc_store_and_instance_mut(instance_id);
-        let gc_store = gc_store.unwrap();
-        let data = &instance.wasm_data(data_range)[src..][..byte_len];
-
-        // Copy the data into the array, initializing it.
-        gc_store
-            .gc_object_data(array_ref.as_gc_ref())
-            .copy_from_slice(array_layout.base_size, data);
-
-        // Return the array to Wasm!
-        let raw = gc_store.expose_gc_ref_to_wasm(array_ref.into());
-        Ok(raw)
-    })?
-}
-
-/// Implementation of the `array.init_data` instruction.
-#[cfg(feature = "gc")]
-fn array_init_data(
-    store: &mut dyn VMStore,
-    instance_id: InstanceId,
-    array_type_index: u32,
-    array: u32,
-    dst: u32,
-    data_index: u32,
-    src: u32,
-    len: u32,
-) -> Result<()> {
-    use crate::ArrayType;
-    use wasmtime_environ::ModuleInternedTypeIndex;
-
-    let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
-    let data_index = DataIndex::from_u32(data_index);
-    let instance = store.instance(instance_id);
-
-    log::trace!(
-        "array.init_data(array={array:#x}, dst={dst}, data_index={data_index:?}, src={src}, len={len})",
-    );
-
-    // Null check the array.
-    let gc_ref = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
-    let array = gc_ref
-        .into_arrayref(&*store.unwrap_gc_store().gc_heap)
-        .expect("gc ref should be an array");
-
-    let dst = usize::try_from(dst).map_err(|_| Trap::MemoryOutOfBounds)?;
-    let src = usize::try_from(src).map_err(|_| Trap::MemoryOutOfBounds)?;
-    let len = usize::try_from(len).map_err(|_| Trap::MemoryOutOfBounds)?;
-
-    // Bounds check the array.
-    let array_len = array.len(store.store_opaque());
-    let array_len = usize::try_from(array_len).map_err(|_| Trap::ArrayOutOfBounds)?;
-    if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
-        return Err(Trap::ArrayOutOfBounds.into());
-    }
-
-    // Calculate the byte length from the array length.
-    let shared_ty = instance.engine_type_index(array_type_index);
-    let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
-    let one_elem_size = array_ty
-        .element_type()
-        .data_byte_size()
-        .expect("Wasm validation ensures that this type have a defined byte size");
-    let data_len = len
-        .checked_mul(usize::try_from(one_elem_size).unwrap())
-        .ok_or_else(|| Trap::MemoryOutOfBounds)?;
-
-    // Get the data from the segment, checking its bounds.
-    let data_range = instance.wasm_data_range(data_index);
-    instance
-        .wasm_data(data_range.clone())
-        .get(src..)
-        .and_then(|d| d.get(..data_len))
-        .ok_or_else(|| Trap::MemoryOutOfBounds)?;
-
-    // Copy the data into the array.
-
-    let dst_offset = u32::try_from(dst)
-        .unwrap()
-        .checked_mul(one_elem_size)
-        .unwrap();
-
-    let array_layout = store
-        .engine()
-        .signatures()
-        .layout(shared_ty)
-        .expect("array types have GC layouts");
-    let array_layout = array_layout.unwrap_array();
-
-    let obj_offset = array_layout.base_size.checked_add(dst_offset).unwrap();
-
-    let (gc_store, instance) = store.optional_gc_store_and_instance_mut(instance_id);
-    let gc_store = gc_store.unwrap();
-    let data = &instance.wasm_data(data_range)[src..][..data_len];
-    gc_store
-        .gc_object_data(array.as_gc_ref())
-        .copy_from_slice(obj_offset, data);
-
-    Ok(())
 }
 
 #[cfg(feature = "gc")]

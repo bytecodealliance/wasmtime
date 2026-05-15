@@ -16,12 +16,8 @@ macro_rules! foreach_builtin_function {
             memory_copy(vmctx: vmctx, dst: pointer, src: pointer, len: size);
             // Returns an index for wasm's `memory.fill` instruction.
             memory_fill(vmctx: vmctx, dst: pointer, val: u32, len: size);
-            // Returns an index for wasm's `memory.init` instruction.
-            memory_init(vmctx: vmctx, memory: u32, data: u32, dst: u64, src: u32, len: u32) -> bool;
             // Returns a value for wasm's `ref.func` instruction.
             ref_func(vmctx: vmctx, func: u32) -> pointer;
-            // Returns an index for wasm's `data.drop` instruction.
-            data_drop(vmctx: vmctx, data: u32) -> bool;
             // Returns a table entry after lazily initializing it.
             table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
             // Returns an index for Wasm's `table.grow` instruction for `funcref`s.
@@ -125,16 +121,6 @@ macro_rules! foreach_builtin_function {
                 module_interned_type_index: u32
             ) -> pointer;
 
-            // Builtin implementation of the `array.new_data` instruction.
-            #[cfg(feature = "gc")]
-            array_new_data(
-                vmctx: vmctx,
-                array_interned_type_index: u32,
-                data_index: u32,
-                data_offset: u32,
-                len: u32
-            ) -> u32;
-
             // Builtin implementation of the `array.new_elem` instruction.
             #[cfg(feature = "gc")]
             array_new_elem(
@@ -144,18 +130,6 @@ macro_rules! foreach_builtin_function {
                 elem_offset: u32,
                 len: u32
             ) -> u32;
-
-            // Builtin implementation of the `array.init_data` instruction.
-            #[cfg(feature = "gc")]
-            array_init_data(
-                vmctx: vmctx,
-                array_interned_type_index: u32,
-                array: u32,
-                dst_index: u32,
-                data_index: u32,
-                data_offset: u32,
-                len: u32
-            ) -> bool;
 
             // Builtin implementation of the `array.init_elem` instruction.
             #[cfg(feature = "gc")]
@@ -460,6 +434,7 @@ impl BuiltinFunctionIndex {
             (@get i8x16_shuffle i8x16) => (return None);
             (@get fma_f32x4 f32x4) => (return None);
             (@get fma_f64x2 f64x2) => (return None);
+            (@get passive_data_segment_base pointer) => (return None);
 
             (@get cont_new pointer) => (TrapSentinel::Negative);
 

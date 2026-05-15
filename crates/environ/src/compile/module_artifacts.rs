@@ -199,7 +199,7 @@ impl<'a> ObjectBuilder<'a> {
         // of this object, after active data in `translation.data`. Update the
         // offsets to account prior modules added in addition to active data.
         let data_offset = data_offset + u32::try_from(total_data_len).unwrap();
-        for (_, range) in module.passive_data_map.iter_mut() {
+        for (_, range) in module.passive_data.iter_mut() {
             range.start = range.start.checked_add(data_offset).unwrap();
             range.end = range.end.checked_add(data_offset).unwrap();
         }

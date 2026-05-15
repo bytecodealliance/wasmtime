@@ -36,6 +36,9 @@ pub enum ArrayInit<'a> {
 
     /// Initialize the array's elements with `elem` repeated `len` times.
     Fill { elem: ir::Value, len: ir::Value },
+
+    /// Don't initialize the elements, just allocate the array.
+    Uninit { len: ir::Value },
 }
 
 /// A trait for different collectors to emit any GC barriers they might require.
@@ -208,9 +211,7 @@ pub mod builtins {
     define_builtin_accessors! {
         table_grow_gc_ref,
         table_fill_gc_ref,
-        array_new_data,
         array_new_elem,
-        array_init_data,
         array_init_elem,
     }
 }
