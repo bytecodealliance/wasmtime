@@ -176,8 +176,14 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         assert_eq!(accepted_client.keep_alive_interval().unwrap(), 42 * SECOND);
         assert_eq!(accepted_client.keep_alive_count().unwrap(), 42);
         assert_eq!(accepted_client.hop_limit().unwrap(), 42);
-        assert_eq!(accepted_client.receive_buffer_size().unwrap(), accepted_recv_buf);
-        assert_eq!(accepted_client.send_buffer_size().unwrap(), accepted_send_buf);
+        assert_eq!(
+            accepted_client.receive_buffer_size().unwrap(),
+            accepted_recv_buf
+        );
+        assert_eq!(
+            accepted_client.send_buffer_size().unwrap(),
+            accepted_send_buf
+        );
     }
 }
 
