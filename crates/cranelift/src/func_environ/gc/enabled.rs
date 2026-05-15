@@ -811,8 +811,14 @@ fn emit_array_fill_impl(
         let len = builder.ins().isub(fill_end, elem_addr);
 
         // Manually consume fuel for this operation because arrays can be large.
-        // This is a noop if fuel is disabled.
-        func_env.manual_fuel_check(builder, len);
+        // This is a noop if fuel is disabled. Note that fuel is always a 64-bit
+        // counter.
+        let fuel_consumed = match func_env.pointer_type() {
+            ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
+            ir::types::I64 => len,
+            _ => unreachable!(),
+        };
+        func_env.manual_fuel_check(builder, fuel_consumed);
 
         builder
             .ins()
