@@ -5,6 +5,7 @@
 #![deny(missing_docs)]
 
 mod backend;
+mod unwind;
 
 pub use crate::backend::{ObjectBuilder, ObjectModule, ObjectProduct};
 

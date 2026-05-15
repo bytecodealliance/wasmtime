@@ -34,6 +34,7 @@ pub struct ObjectBuilder {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     per_function_section: bool,
     per_data_object_section: bool,
+    unwind_info: bool,
 }
 
 impl ObjectBuilder {
@@ -121,6 +122,7 @@ impl ObjectBuilder {
             libcall_names,
             per_function_section: false,
             per_data_object_section: false,
+            unwind_info: false,
         })
     }
 
@@ -133,6 +135,36 @@ impl ObjectBuilder {
     /// Set if every data object should end up in their own section.
     pub fn per_data_object_section(&mut self, per_data_object_section: bool) -> &mut Self {
         self.per_data_object_section = per_data_object_section;
+        self
+    }
+
+    /// Emit a DWARF `.eh_frame` section describing the unwind information for
+    /// each compiled function.
+    ///
+    /// When enabled, ELF and COFF object files gain a `.eh_frame` section
+    /// containing one Common Information Entry and one Frame Description
+    /// Entry per function, suitable for unwinding by libgcc / libunwind.
+    ///
+    /// On Windows targets cranelift emits `.pdata`/`.xdata`-style info rather
+    /// than System V FDEs, so enabling this option is a silent no-op there.
+    /// Mach-O `__TEXT,__eh_frame` emission is not yet implemented; calling
+    /// `finish` on a Mach-O target with this enabled will panic with a
+    /// descriptive error.
+    ///
+    /// Only functions defined through [`Module::define_function`] are
+    /// captured. Functions provided as pre-compiled bytes through
+    /// [`Module::define_function_bytes`] are skipped, since their unwind
+    /// information is not available to the backend.
+    ///
+    /// Requires the `unwind` feature (enabled by default). Without it this
+    /// method does not exist, mirroring `cranelift-codegen`'s gating of
+    /// `CompiledCode::create_unwind_info`.
+    ///
+    /// [`Module::define_function`]: cranelift_module::Module::define_function
+    /// [`Module::define_function_bytes`]: cranelift_module::Module::define_function_bytes
+    #[cfg(feature = "unwind")]
+    pub fn unwind_info(&mut self, unwind_info: bool) -> &mut Self {
+        self.unwind_info = unwind_info;
         self
     }
 }
@@ -215,6 +247,7 @@ pub struct ObjectModule {
     known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
     per_data_object_section: bool,
+    unwind: Option<crate::unwind::UnwindBuilder>,
 }
 
 impl ObjectModule {
@@ -231,6 +264,9 @@ impl ObjectModule {
             // https://github.com/bytecodealliance/wasmtime/issues/8730
             object.set_macho_build_version(info);
         }
+        let unwind = builder
+            .unwind_info
+            .then(|| crate::unwind::UnwindBuilder::new(builder.endian));
         Self {
             isa: builder.isa,
             object,
@@ -244,6 +280,7 @@ impl ObjectModule {
             known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
             per_data_object_section: builder.per_data_object_section,
+            unwind,
         }
     }
 }
@@ -410,7 +447,13 @@ impl Module for ObjectModule {
         let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.buffer.alignment as u64;
 
-        let buffer = &ctx.compiled_code().unwrap().buffer;
+        let compiled = ctx.compiled_code().unwrap();
+        let unwind_info = if self.unwind.is_some() {
+            compiled.create_unwind_info(self.isa())?
+        } else {
+            None
+        };
+        let buffer = &compiled.buffer;
         let relocs = buffer
             .relocs()
             .iter()
@@ -418,7 +461,12 @@ impl Module for ObjectModule {
                 self.process_reloc(&ModuleReloc::from_mach_reloc(&reloc, &ctx.func, func_id))
             })
             .collect::<Vec<_>>();
-        self.define_function_inner(func_id, alignment, buffer.data(), relocs)
+        self.define_function_inner(func_id, alignment, buffer.data(), relocs)?;
+        if let (Some(builder), Some(info)) = (self.unwind.as_mut(), unwind_info) {
+            let symbol = self.functions[func_id].unwrap().0;
+            builder.add_function(&*self.isa, symbol, info);
+        }
+        Ok(())
     }
 
     fn define_function_bytes(
@@ -682,6 +730,12 @@ impl ObjectModule {
                 ".note.GNU-stack".as_bytes().to_vec(),
                 SectionKind::Linker,
             );
+        }
+
+        if let Some(unwind) = self.unwind.take() {
+            unwind
+                .finish(&mut self.object, &*self.isa)
+                .expect("failed to emit .eh_frame section");
         }
 
         ObjectProduct {
