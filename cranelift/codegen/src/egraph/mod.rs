@@ -281,6 +281,11 @@ const MATCHES_LIMIT: usize = 5;
 /// The maximum number of enodes in any given eclass.
 const ECLASS_ENODE_LIMIT: usize = 5;
 
+/// The amount of "fuel" available for each top-level rewrite invocation.
+///
+/// Each yield from a multi-extractor iterator consumes one unit.
+pub(crate) const REWRITE_FUEL: u32 = 500;
+
 /// Context passed through node insertion and optimization.
 pub(crate) struct OptimizeCtx<'opt, 'analysis>
 where
@@ -301,6 +306,7 @@ where
     ctrl_plane: &'opt mut ControlPlane,
     // Held locally during optimization of one node (recursively):
     pub(crate) rewrite_depth: usize,
+    pub(crate) fuel: u32,
     pub(crate) subsume_values: FxHashSet<Value>,
     optimized_values: SmallVec<[Value; MATCHES_LIMIT]>,
     optimized_insts: SmallVec<[SkeletonInstSimplification; MATCHES_LIMIT]>,
@@ -1056,6 +1062,7 @@ impl<'a> EgraphPass<'a> {
                     available_block: &mut available_block,
                     eclass_size: &mut eclass_size,
                     rewrite_depth: 0,
+                    fuel: REWRITE_FUEL,
                     subsume_values: FxHashSet::default(),
                     remat_values: &mut self.remat_values,
                     stats: &mut self.stats,
@@ -1274,6 +1281,7 @@ pub(crate) struct Stats {
     pub(crate) rewrite_rule_invoked: u64,
     pub(crate) rewrite_rule_results: u64,
     pub(crate) rewrite_depth_limit: u64,
+    pub(crate) rewrite_fuel_exhausted: u64,
     pub(crate) elaborate_visit_node: u64,
     pub(crate) elaborate_memoize_hit: u64,
     pub(crate) elaborate_memoize_miss: u64,
