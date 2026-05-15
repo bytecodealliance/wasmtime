@@ -183,7 +183,8 @@ impl Context {
         self.func.dfg.resolve_all_aliases();
 
         if opt_level != OptLevel::None {
-            self.egraph_pass(isa, ctrl_plane)?;
+            self.egraph_pass(ctrl_plane)?;
+            self.eliminate_unreachable_code(isa)?;
         }
 
         Ok(())
@@ -359,21 +360,13 @@ impl Context {
     }
 
     /// Run optimizations via the egraph infrastructure.
-    pub fn egraph_pass<'a, FOI>(
-        &mut self,
-        fisa: FOI,
-        ctrl_plane: &mut ControlPlane,
-    ) -> CodegenResult<()>
-    where
-        FOI: Into<FlagsOrIsa<'a>>,
-    {
+    pub fn egraph_pass(&mut self, ctrl_plane: &mut ControlPlane) -> CodegenResult<()> {
         let _tt = timing::egraph();
 
         trace!(
             "About to optimize with egraph phase:\n{}",
             self.func.display()
         );
-        let fisa = fisa.into();
         self.compute_loop_analysis();
         let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
         let mut pass = EgraphPass::new(
@@ -390,8 +383,6 @@ impl Context {
         // Branch optimizations can invalidate these; recompute them.
         self.compute_cfg();
         self.compute_domtree();
-
-        self.verify_if(fisa)?;
 
         Ok(())
     }
