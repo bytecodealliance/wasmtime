@@ -26,11 +26,11 @@
 ;;                                     v52 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v52
 ;; @002a                               v8 = load.i64 notrap aligned readonly can_move v0+32
-;; @002a                               v9 = load.i32 notrap aligned can_move v8
+;; @002a                               v9 = load.i32 notrap aligned v8
+;; @002a                               v10 = load.i32 notrap aligned v8+4
 ;; @002a                               v16 = uextend.i64 v9
 ;;                                     v53 = iconst.i64 32
 ;; @002a                               v17 = iadd v16, v53  ; v53 = 32
-;; @002a                               v10 = load.i32 notrap aligned readonly can_move v8+4
 ;; @002a                               v18 = uextend.i64 v10
 ;; @002a                               v19 = icmp ule v17, v18
 ;; @002a                               brif v19, block2, block3

@@ -23,11 +23,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0021                               v8 = load.i64 notrap aligned readonly can_move v0+32
-;; @0021                               v9 = load.i32 notrap aligned can_move v8
+;; @0021                               v9 = load.i32 notrap aligned v8
+;; @0021                               v10 = load.i32 notrap aligned v8+4
 ;; @0021                               v16 = uextend.i64 v9
 ;;                                     v50 = iconst.i64 32
 ;; @0021                               v17 = iadd v16, v50  ; v50 = 32
-;; @0021                               v10 = load.i32 notrap aligned readonly can_move v8+4
 ;; @0021                               v18 = uextend.i64 v10
 ;; @0021                               v19 = icmp ule v17, v18
 ;; @0021                               brif v19, block2, block3

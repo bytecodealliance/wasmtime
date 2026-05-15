@@ -31,7 +31,8 @@
 ;;                                     v70 = ishl v3, v69  ; v69 = 3
 ;; @0022                               v10 = uadd_overflow_trap v5, v70, user18  ; v5 = 24
 ;; @0022                               v12 = load.i64 notrap aligned readonly can_move v0+32
-;; @0022                               v13 = load.i32 notrap aligned can_move v12
+;; @0022                               v13 = load.i32 notrap aligned v12
+;; @0022                               v14 = load.i32 notrap aligned v12+4
 ;; @0022                               v20 = uextend.i64 v13
 ;; @0022                               v15 = uextend.i64 v10
 ;; @0022                               v16 = iconst.i64 15
@@ -39,7 +40,6 @@
 ;; @0022                               v17 = iconst.i64 -16
 ;; @0022                               v19 = band v18, v17  ; v17 = -16
 ;; @0022                               v21 = iadd v20, v19
-;; @0022                               v14 = load.i32 notrap aligned readonly can_move v12+4
 ;; @0022                               v22 = uextend.i64 v14
 ;; @0022                               v23 = icmp ule v21, v22
 ;; @0022                               brif v23, block2, block3
