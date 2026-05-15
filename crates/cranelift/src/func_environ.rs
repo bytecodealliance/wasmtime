@@ -588,11 +588,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ///
     /// This can be used for expensive opcodes, such as `array.copy`, where the
     /// operation's runtime is a function of the runtime state.
-    #[cfg(feature = "gc")]
     fn manual_fuel_check(&mut self, builder: &mut FunctionBuilder<'_>, fuel_to_consume: ir::Value) {
-        if !self.tunables.consume_fuel {
-            return;
-        }
         self.fuel_increment_var(builder);
 
         let fuel = builder.use_var(self.fuel_var);
@@ -3597,7 +3593,6 @@ impl FuncEnvironment<'_> {
                                 _ => unreachable!(),
                             };
                             env.manual_fuel_check(builder, fuel_consumed);
-                            env.manual_fuel_check(builder, len);
                         }
                         let memory_fill = env.builtin_functions.memory_fill(&mut builder.func);
                         builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
