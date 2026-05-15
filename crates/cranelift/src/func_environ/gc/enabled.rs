@@ -796,7 +796,7 @@ fn emit_array_fill_impl(
     // being written is in-bounds in the GC heap to detect corruption and traps
     // here in-wasm. Once we're in the host GC heap corruption can't be caught,
     // so it needs to be an up-front check here.
-    if let WasmStorageType::I8 = elem_ty {
+    if let Some(value) = array_fill_value_as_memset(builder, elem_ty, value) {
         let base = func_env.get_gc_heap_base(builder);
         let bound = func_env.get_gc_heap_bound(builder);
         let heap_end = builder.ins().iadd(base, bound);
@@ -882,6 +882,62 @@ fn emit_array_fill_impl(
     builder.seal_block(loop_body_block);
     builder.seal_block(continue_block);
     Ok(())
+}
+
+/// Tests to seew hether `value`, stored as `ty`, can be extracted to a single
+/// byte which can be passed to `memset`, or the host's `memory.fill`, to
+/// satisfy this array initialization request.
+fn array_fill_value_as_memset(
+    builder: &mut FunctionBuilder<'_>,
+    ty: WasmStorageType,
+    value: ir::Value,
+) -> Option<ir::Value> {
+    // If the storage type is `i8`, then no matter the value we can always use
+    // `memset` regardless of the upper bits.
+    let value_ty = builder.func.dfg.value_type(value);
+    if let WasmStorageType::I8 = ty {
+        assert_eq!(value_ty, ir::types::I32);
+        return Some(value);
+    }
+
+    // Otherwise check to see if `value` is a constant whose value we can
+    // inspect here.
+    let inst = builder.func.dfg.value_def(value).inst()?;
+    let bits = match builder.func.dfg.insts[inst] {
+        ir::InstructionData::UnaryImm {
+            opcode: ir::Opcode::Iconst,
+            imm,
+        } => imm.bits(),
+        ir::InstructionData::UnaryIeee32 {
+            opcode: ir::Opcode::F32const,
+            imm,
+        } => i64::from(imm.bits()),
+        ir::InstructionData::UnaryIeee64 {
+            opcode: ir::Opcode::F64const,
+            imm,
+        } => imm.bits().cast_signed(),
+
+        // For other initialization we don't know what the value is, so we
+        // can't check if a byte-set is valid, so bail out which will fall back
+        // to an element-by-element loop.
+        _ => return None,
+    };
+
+    let width = match ty {
+        // Handled above
+        WasmStorageType::I8 => unreachable!(),
+        // These are initialized with CLIF-level `i32` values, but we only want
+        // to check the lower 2 bytes.
+        WasmStorageType::I16 => 2,
+        // For everything else the natural CLIF value is what's written so
+        // that's the byte width to check.
+        WasmStorageType::Val(_) => value_ty.bytes() as usize,
+    };
+    let bytes = bits.to_le_bytes();
+    if bytes[1..width].iter().any(|b| *b != bytes[0]) {
+        return None;
+    }
+    Some(builder.ins().iconst(ir::types::I32, bits & 0xff))
 }
 
 pub fn translate_array_copy(
