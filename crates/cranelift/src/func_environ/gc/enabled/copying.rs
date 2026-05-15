@@ -59,7 +59,7 @@ impl CopyingCompiler {
         );
         let active_space_end = builder.ins().load(
             ir::types::I32,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted(),
             ptr_to_heap_data,
             i32::from(func_env.offsets.ptr.vmcopying_heap_data_active_space_end()),
         );
