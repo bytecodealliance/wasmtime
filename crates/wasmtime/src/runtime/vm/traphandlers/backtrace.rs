@@ -31,7 +31,6 @@ use crate::runtime::vm::{
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
-use wasmtime_core::alloc::TryVec;
 use wasmtime_unwinder::Frame;
 #[cfg(feature = "debug")]
 use wasmtime_unwinder::FrameCursor;
