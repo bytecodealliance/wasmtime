@@ -33,7 +33,7 @@
     ))
 
     (func (export "turn-on-backpressure") (canon lift (core func $i "turn-on-backpressure")))
-    (func (export "f")
+    (func (export "f") async
       (canon lift (core func $i "f") async (callback (func $i "callback"))))
   )
   (instance $A (instantiate $A))

@@ -17,7 +17,7 @@
   (func (export "set-backpressure")
     (canon lift (core func $i "set-backpressure")))
 
-  (func (export "target")
+  (func (export "target") async
     (canon lift (core func $i "target") async (callback (func $i "callback"))))
 )
 

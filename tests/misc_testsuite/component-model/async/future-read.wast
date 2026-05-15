@@ -220,7 +220,7 @@
         (export "return" (func $return))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run") async (callback (func $i "cb"))))
   )
   (instance $child (instantiate $child))
@@ -257,4 +257,3 @@
 )
 
 (assert_return (invoke "run"))
-
