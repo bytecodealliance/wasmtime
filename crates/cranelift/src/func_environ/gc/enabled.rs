@@ -902,15 +902,6 @@ pub fn translate_array_copy(
         .inner
         .unwrap_array();
     let elem_ty = array_ty.0.element_type;
-    let array_layout = func_env.array_layout(interned_type_index).clone();
-
-    // The byte size of this copy. Note that this can overflow, but the value
-    // won't actually be used below until overflow is ruled out.
-    let one_elem_size = builder
-        .ins()
-        .iconst(ir::types::I32, i64::from(array_layout.elem_size));
-    let copy_size = builder.ins().imul(copy_len, one_elem_size);
-    let copy_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_size);
 
     // Helper closure to return `(start,end)` as the native-memory-address
     // bounds of the copy that is being done.
@@ -928,7 +919,7 @@ pub fn translate_array_copy(
         // Calculate the address of the first element in the array.
         let ArraySizeInfo {
             obj_size,
-            one_elem_size: _,
+            one_elem_size,
             base_size,
         } = emit_array_size_info(func_env, builder, interned_type_index, array_len);
         let offset_in_elems = builder.ins().imul(index, one_elem_size);
@@ -942,14 +933,21 @@ pub fn translate_array_copy(
             },
         );
 
-        // Calculate the size of this copy, as well as the final address one byte
-        // beyond the final elements.
-        let end_addr = builder.ins().iadd(elem_addr, copy_size);
-        Ok((elem_addr, end_addr))
+        Ok((elem_addr, one_elem_size))
     };
 
-    let (src_elem_addr, src_end_addr) = array_bounds(src_array, src_index)?;
-    let (dst_elem_addr, dst_end_addr) = array_bounds(dst_array, dst_index)?;
+    // Calculate the heap-start address of both copies. This'll ensure
+    // everything is in-bounds as well.
+    let (src_elem_addr, one_elem_size) = array_bounds(src_array, src_index)?;
+    let (dst_elem_addr, _one_elem_size) = array_bounds(dst_array, dst_index)?;
+
+    // Also calculate the heap-end address of both copies. Note that with
+    // everything being in-bounds this multiplication won't overflow.
+    let copy_byte_size = builder.ins().imul(copy_len, one_elem_size);
+    let copy_byte_size =
+        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_byte_size);
+    let src_end_addr = builder.ins().iadd(src_elem_addr, copy_byte_size);
+    let dst_end_addr = builder.ins().iadd(dst_elem_addr, copy_byte_size);
 
     // If the element of this array isn't a GC reference, or if it's an i31ref,
     // then there's no need for the barrier-using loops below. Instead use the
@@ -977,11 +975,11 @@ pub fn translate_array_copy(
 
         // Manually consume fuel for this operation because arrays can be large.
         // This is a noop if fuel is disabled.
-        func_env.manual_fuel_check(builder, copy_size);
+        func_env.manual_fuel_check(builder, copy_byte_size);
 
         builder.ins().call(
             memory_copy,
-            &[vmctx, dst_elem_addr, src_elem_addr, copy_size],
+            &[vmctx, dst_elem_addr, src_elem_addr, copy_byte_size],
         );
         return Ok(());
     }
