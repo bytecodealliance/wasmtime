@@ -38,10 +38,9 @@
 //!
 //! - To solve this problem, we emit "islands" full of "veneers". An island is
 //!   simply a chunk of code inserted in the middle of the code actually produced
-//!   by the emitter (e.g., vcode iterating over instruction structs). The emitter
-//!   has some awareness of this: it either asks for an island between blocks, so
-//!   it is not accidentally executed, or else it emits a branch around the island
-//!   when all other options fail (see `Inst::EmitIsland` meta-instruction).
+//!   by the emitter (e.g., VCode iterating over instruction structs). Islands
+//!   are emitted at "safe" points (no fall-through into the island contents):
+//!   between basic blocks during emission, or via a jump around the island.
 //!
 //! - A "veneer" is an instruction (or sequence of instructions) in an "island"
 //!   that implements a longer-range reference to a label. The idea is that, for
@@ -139,6 +138,35 @@
 //!
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
+//!
+//! # Deadline-correctness for islands
+//!
+//! Every label-use (and indirectly every pending constant/trap, since
+//! each is referred to by a fixup) imposes a *deadline*: the maximum
+//! offset at which the use's target may be bound while still
+//! remaining in range. Each item that may be emitted into an island
+//! (a veneer, a pending constant, or a pending trap) also contributes
+//! a bounded number of bytes to a worst-case island size. The
+//! buffer's central invariant is:
+//!
+//! > `worst_case_end_of_island(0) <= soonest_deadline`
+//!
+//! Equivalently, "if we emitted an island right now, its end offset
+//! would land before the closest expiring deadline." Given this
+//! invariant, an island is always *feasible*: items can be laid out
+//! in any order and each one lands at an offset no later than the
+//! soonest deadline, which is no later than each individual item's
+//! deadline.
+//!
+//! To maintain the invariant, the buffer's user is expected to treat
+//! *one `MachInst` emission* as the atomic commit unit. After each
+//! instruction, the worst-case end-of-island and the soonest deadline
+//! can shift by no more than `worst_case_size() +
+//! worst_case_island_growth()` and one "smallest label-use range"
+//! worth of new deadline, respectively. The user (in VCode emission)
+//! consults [`MachBuffer::island_needed`] after each instruction and
+//! if one is needed, emits a jump-around branch followed by
+//! [`MachBuffer::emit_island`].
 //!
 //! # Avoiding Quadratic Behavior
 //!
@@ -1306,9 +1334,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         // the worst-case size for each platform. This is an over-generalization
         // to avoid iterating over the `fixup_records` list or maintaining
         // information about it as we go along.
-        let island_worst_case_size = ((self.fixup_records.len() + self.pending_fixup_records.len())
-            as u32)
-            * (I::LabelUse::worst_case_veneer_size())
+        let max_veneer_count =
+            u32::try_from(self.fixup_records.len() + self.pending_fixup_records.len()).unwrap();
+        let island_worst_case_size = max_veneer_count
+            .saturating_mul(I::LabelUse::worst_case_veneer_size())
             + self.pending_constants_size
             + (self.pending_traps.len() * I::TRAP_OPCODE.len()) as u32;
         self.cur_offset()
@@ -1321,6 +1350,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Should only be called if `island_needed()` returns true, i.e., if we
     /// actually reach a deadline. It's not necessarily a problem to do so
     /// otherwise but it may result in unnecessary work during emission.
+    ///
+    /// The current code-emission position must be a "safe" location for an
+    /// island: i.e., no fallthrough into the island contents from the
+    /// previous instruction is possible. Callers emitting inside a basic
+    /// block should emit a jump-around branch.
     pub fn emit_island(&mut self, distance: CodeOffset, ctrl_plane: &mut ControlPlane) {
         self.emit_island_maybe_forced(ForceVeneers::No, distance, ctrl_plane);
     }
@@ -2521,7 +2555,7 @@ mod test {
     use crate::isa::aarch64;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::isa::aarch64::inst::{OperandSize, xreg};
-    use crate::machinst::{MachInstEmit, MachInstEmitState};
+    use crate::machinst::{MachInst, MachInstEmit, MachInstEmitState};
     use crate::settings;
 
     fn label(n: u32) -> MachLabel {
@@ -2970,5 +3004,146 @@ mod test {
                 .collect::<Vec<_>>(),
             vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]
         );
+    }
+
+    /// Drive the buffer in the same idiom that VCode emission uses:
+    /// emit instruction bytes via the given closure, then run the
+    /// per-instruction island check.
+    fn emit_with_island_check(
+        buf: &mut MachBuffer<Inst>,
+        state: &mut <Inst as MachInstEmit>::State,
+        f: impl FnOnce(&mut MachBuffer<Inst>, &mut <Inst as MachInstEmit>::State),
+    ) {
+        f(buf, state);
+        let lookahead = Inst::worst_case_size() + Inst::worst_case_island_growth();
+        if buf.island_needed(lookahead) {
+            let jump_around = buf.get_label();
+            Inst::gen_jump(jump_around).emit(buf, &emit_info(), state);
+            buf.emit_island(0, state.ctrl_plane_mut());
+            buf.bind_label(jump_around, state.ctrl_plane_mut());
+        }
+    }
+
+    /// Many constant loads in a single basic block: each emits an
+    /// `Ldr19` reference (+/- 1 MiB range, no veneer support) and
+    /// adds a 16-byte constant to the pool. Without the
+    /// per-instruction island check, the pool would grow past the
+    /// reach of earlier `ldr`s and the buffer would panic during the
+    /// final fixup pass (see issue #12968).
+    #[test]
+    fn test_many_constants_in_one_block() {
+        use crate::ir::constant::ConstantData;
+
+        let mut buf = MachBuffer::<Inst>::new();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let mut constants = VCodeConstants::default();
+
+        let n = 200_000;
+        let mut handles = Vec::with_capacity(n);
+        for i in 0..n {
+            let bytes: Vec<u8> = (0..16).map(|b| ((i + b) & 0xff) as u8).collect();
+            let data = VCodeConstantData::Generated(ConstantData::from(&bytes[..]));
+            handles.push(constants.insert(data));
+        }
+        buf.register_constants(&constants);
+
+        buf.reserve_labels_for_blocks(1);
+        buf.bind_label(label(0), state.ctrl_plane_mut());
+
+        for &handle in &handles {
+            emit_with_island_check(&mut buf, &mut state, |buf, _state| {
+                let off = buf.cur_offset();
+                let const_label = buf.get_label_for_constant(handle);
+                buf.use_label_at_offset(off, const_label, aarch64::inst::LabelUse::Ldr19);
+                // Placeholder ldr literal instruction.
+                buf.put4(0);
+            });
+        }
+
+        let _ = buf.finish(&constants, state.ctrl_plane_mut());
+    }
+
+    /// Mix conditional branches with short ranges (`Branch19`, +/- 1
+    /// MiB) and many constant loads. The branches' veneers must
+    /// remain in range as the constant pool grows.
+    #[test]
+    fn test_short_branch_amid_constants() {
+        use crate::ir::constant::ConstantData;
+
+        let mut buf = MachBuffer::<Inst>::new();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let mut constants = VCodeConstants::default();
+
+        let n = 100_000;
+        let mut handles = Vec::with_capacity(n);
+        for i in 0..n {
+            let bytes: Vec<u8> = (0..16).map(|b| ((i ^ b) & 0xff) as u8).collect();
+            handles.push(
+                constants.insert(VCodeConstantData::Generated(ConstantData::from(&bytes[..]))),
+            );
+        }
+        buf.register_constants(&constants);
+
+        buf.reserve_labels_for_blocks(2);
+        buf.bind_label(label(0), state.ctrl_plane_mut());
+
+        emit_with_island_check(&mut buf, &mut state, |buf, state| {
+            let inst = Inst::CondBr {
+                kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
+                taken: target(1),
+                not_taken: target(0),
+            };
+            inst.emit(buf, &emit_info(), state);
+        });
+
+        for &handle in &handles {
+            emit_with_island_check(&mut buf, &mut state, |buf, _state| {
+                let off = buf.cur_offset();
+                let const_label = buf.get_label_for_constant(handle);
+                buf.use_label_at_offset(off, const_label, aarch64::inst::LabelUse::Ldr19);
+                buf.put4(0);
+            });
+        }
+
+        buf.bind_label(label(1), state.ctrl_plane_mut());
+        let _ = buf.finish(&constants, state.ctrl_plane_mut());
+    }
+
+    /// Driving an island in the middle of a block via the
+    /// jump-around-plus-`emit_island` idiom must emit a branch followed
+    /// by the island contents, such that fall-through reaches the
+    /// post-island code.
+    #[test]
+    fn test_mid_block_island_via_gen_jump() {
+        let mut buf = MachBuffer::<Inst>::new();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = VCodeConstants::default();
+
+        buf.reserve_labels_for_blocks(1);
+        buf.bind_label(label(0), state.ctrl_plane_mut());
+
+        // Place a trap which will need to be emitted in the next island.
+        let trap_label = buf.defer_trap(TrapCode::HEAP_OUT_OF_BOUNDS);
+        let off = buf.cur_offset();
+        buf.use_label_at_offset(off, trap_label, aarch64::inst::LabelUse::Branch19);
+        buf.put4(0); // placeholder for cbnz-like reference
+
+        let before = buf.cur_offset();
+        let jump_around = buf.get_label();
+        Inst::gen_jump(jump_around).emit(&mut buf, &emit_info(), &mut state);
+        buf.emit_island(0, state.ctrl_plane_mut());
+        buf.bind_label(jump_around, state.ctrl_plane_mut());
+        let after = buf.cur_offset();
+
+        // The jump-around branch (4 bytes on AArch64) plus at least the
+        // deferred trap (4 bytes) gives a minimum island growth of 8 bytes.
+        assert!(
+            after - before >= 8,
+            "island grew too little: {}",
+            after - before
+        );
+
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
+        let _ = buf.total_size();
     }
 }

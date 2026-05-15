@@ -1166,6 +1166,19 @@ impl MachInst for Inst {
         44
     }
 
+    fn worst_case_island_growth() -> CodeOffset {
+        // A single `Inst` may add to the buffer's pending-island state:
+        //
+        // - Up to three 8-byte constants (the saturating int-to-float sequence
+        //   noted above); count alignment padding into each.
+        // - Up to one deferred trap (TrapIf and similar), 4 bytes.
+        // - Up to one fixup per emitted instruction word, each contributing at
+        //   most `worst_case_veneer_size()` (= 20) bytes of veneer.
+        //
+        // We pick a conservative bound that comfortably covers these.
+        128
+    }
+
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::Int
     }

@@ -189,6 +189,19 @@ pub trait MachInst: Clone + Debug {
     /// What is the worst-case instruction size emitted by this instruction type?
     fn worst_case_size() -> CodeOffset;
 
+    /// Worst-case growth, in bytes, that emitting a single `MachInst`
+    /// instruction may add to the `MachBuffer`'s pending-island state
+    /// (constants, deferred traps, and worst-case veneers for new
+    /// fixups).
+    ///
+    /// `MachBuffer` treats one instruction emission as the atomic
+    /// "commit unit" and uses `worst_case_size() +
+    /// worst_case_island_growth()` as the per-instruction lookahead
+    /// bound when deciding whether to flush an island. Backends whose
+    /// label-use kinds always have wide enough range that islands are
+    /// never required may leave this at zero.
+    fn worst_case_island_growth() -> CodeOffset;
+
     /// What is the register class used for reference types (GC-observable pointers)? Can
     /// be dependent on compilation flags.
     fn ref_type_regclass(_flags: &Flags) -> RegClass;
