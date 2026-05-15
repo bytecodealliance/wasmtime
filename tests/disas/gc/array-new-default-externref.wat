@@ -58,8 +58,8 @@
 ;;                                     v62 = iconst.i64 28
 ;;                                     v67 = iadd v20, v62  ; v62 = 28
 ;; @001f                               v4 = iconst.i32 0
-;; @001f                               v35 = isub v28, v67
-;; @001f                               call fn1(v0, v67, v4, v35), stack_map=[i32 @ ss0+0]  ; v4 = 0
+;; @001f                               v34 = isub v28, v67
+;; @001f                               call fn1(v0, v67, v4, v34), stack_map=[i32 @ ss0+0]  ; v4 = 0
 ;;                                     v36 = load.i32 notrap v47
 ;; @0022                               jump block1
 ;;
