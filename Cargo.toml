@@ -322,7 +322,7 @@ winch-codegen = { path = "winch/codegen", version = "=46.0.0" }
 
 # Internal crates not published to crates.io used in testing, builds, etc
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
-wasmtime-fuzzing = { path = "crates/fuzzing" }
+wasmtime-fuzzing = { path = "crates/fuzzing", default-features = false }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 wasmtime-test-util = { path = "crates/test-util" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }

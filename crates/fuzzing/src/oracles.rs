@@ -17,6 +17,7 @@ pub mod diff_wasmi;
 pub mod diff_wasmtime;
 pub mod dummy;
 pub mod engine;
+mod gc_access;
 pub mod memory;
 mod stacks;
 
@@ -28,6 +29,7 @@ use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use crate::{YieldN, block_on};
 use arbitrary::Arbitrary;
+pub use gc_access::gc_access;
 pub use stacks::check_stacks;
 use std::future::Future;
 use std::pin::Pin;
