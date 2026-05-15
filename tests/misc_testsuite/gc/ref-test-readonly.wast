@@ -26,9 +26,7 @@
   )
 
   (func (export "run_kind")
-    (local $i i32)
-
-    (loop $outer
+    (loop $loop
       ;; Before GC: the struct should pass ref.test for structref.
       (call $assert_eq
         (ref.test (ref struct) (global.get $gs))
@@ -36,10 +34,9 @@
 
       (call $gc)
 
-      (if (i32.eq (local.get $i) (i32.const -1))
-        (then
-          (if (i32.lt_u (local.get $i) (i32.const 10))
-            (then (br $outer)))))
+      ;; Make sure that the CFG has a loop, but don't actually take it.
+      (if (i32.const 0)
+        (then (br $loop)))
 
       ;; After GC: must still pass.
       (call $assert_eq
@@ -67,9 +64,7 @@
   )
 
   (func (export "run_concrete")
-    (local $i i32)
-
-    (loop $outer
+    (loop $loop
       ;; Before GC: should be a $s.
       (call $assert_eq
         (ref.test (ref $s) (global.get $gs))
@@ -82,10 +77,9 @@
 
       (call $gc)
 
-      (if (i32.eq (local.get $i) (i32.const -1))
-        (then
-          (if (i32.lt_u (local.get $i) (i32.const 10))
-            (then (br $outer)))))
+      ;; Make sure that the CFG has a loop, but don't actually take it.
+      (if (i32.const 0)
+        (then (br $loop)))
 
       ;; After GC: same results.
       (call $assert_eq

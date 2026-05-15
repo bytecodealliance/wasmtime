@@ -19,26 +19,30 @@
   )
 
   (func (export "run")
-    (local $i i32)
-
-    (loop $outer
+    (loop $loop
+      ;; Initial `global.get` should have the correct value.
       global.get $g
       struct.get $s 0
       i32.const 42
       call $assert_eq
 
+      ;; GC which can relocate the global's object.
       (call $gc)
 
-      (if (i32.eq (local.get $i) (i32.const -1))
-        (then
-          (if (i32.lt_u (local.get $i) (i32.const 10))
-            (then (br $outer)))
-        ))
+      ;; Make sure that the safepoint spiller sees the loop as a loop, but don't
+      ;; actually take the back edge.
+      (if (i32.const 0)
+        (then (br $loop)))
 
+      ;; Get the global again and assert it still has the right value. We should
+      ;; not incorrectly GVN/LICM the `global.get` across the call to `$gc` when
+      ;; we are using a moving collector, which would result in a stale GC
+      ;; reference here.
       global.get $g
       struct.get $s 0
       i32.const 42
       call $assert_eq
+
       return
     )
   )
