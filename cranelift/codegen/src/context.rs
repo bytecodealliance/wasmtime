@@ -378,6 +378,7 @@ impl Context {
         let mut alias_analysis = AliasAnalysis::new(&self.func, &self.domtree);
         let mut pass = EgraphPass::new(
             &mut self.func,
+            &self.cfg,
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,

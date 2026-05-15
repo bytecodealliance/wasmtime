@@ -6,6 +6,7 @@ use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::elaborate::Elaborator;
+use crate::flowgraph::ControlFlowGraph;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
 use crate::ir::{
     Block, DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
@@ -251,6 +252,8 @@ impl Iterator for EgraphBlockIter<'_> {
 pub struct EgraphPass<'a> {
     /// The function we're operating on.
     func: &'a mut Function,
+    /// Control-flow graph for the function.
+    cfg: &'a ControlFlowGraph,
     /// Dominator tree for the CFG, used to visit blocks in pre-order
     /// so we see value definitions before their uses, and also used for
     /// O(1) dominance checks.
@@ -865,6 +868,7 @@ impl<'a> EgraphPass<'a> {
     /// Create a new EgraphPass.
     pub fn new(
         func: &'a mut Function,
+        cfg: &'a ControlFlowGraph,
         domtree: &'a DominatorTree,
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
@@ -874,6 +878,7 @@ impl<'a> EgraphPass<'a> {
         reachable_blocks.insert(func.layout.entry_block().unwrap());
         Self {
             func,
+            cfg,
             domtree,
             loop_analysis,
             alias_analysis,
@@ -962,6 +967,7 @@ impl<'a> EgraphPass<'a> {
         // above join.)
         let mut available_block: SecondaryMap<Value, Block> =
             SecondaryMap::with_default(Block::reserved_value());
+        let mut visited_blocks = EntitySet::with_capacity(cursor.func.dfg.num_blocks());
 
         // To avoid blowing up eclasses too much, we track the size of
         // each eclass reachable by a tree of union nodes from a given
@@ -996,6 +1002,8 @@ impl<'a> EgraphPass<'a> {
             gvn_map.increment_depth();
             gvn_map_blocks.push(block);
 
+            // Check that `gvn_map_blocks` is the path from this block up to the
+            // root in the dominator tree.
             debug_assert_eq!(gvn_map_blocks, {
                 let mut b = Some(block);
                 let mut v = core::iter::from_fn(move || {
@@ -1008,8 +1016,21 @@ impl<'a> EgraphPass<'a> {
                 v
             });
 
-            if !self.reachable_blocks.contains(block) {
+            // If the block is not marked reachable and all of its predecessors
+            // have been visited, then we can simply remove it.
+            //
+            // Note that the predecessors check is only required for irreducible
+            // control flow: irreducible CFGs can have blocks that are *only*
+            // reachable through back-edges, and so the `EgraphBlockIter`
+            // proof's property is not sufficient.
+            if !self.reachable_blocks.contains(block)
+                && self
+                    .cfg
+                    .pred_iter(block)
+                    .all(|pred| visited_blocks.contains(pred.block))
+            {
                 cursor.func.layout.remove_block_and_insts(block);
+                visited_blocks.insert(block);
                 continue;
             }
 
@@ -1097,6 +1118,7 @@ impl<'a> EgraphPass<'a> {
                 self.reachable_blocks
                     .insert(dest.block(&cursor.func.dfg.value_lists));
             }
+            visited_blocks.insert(block);
         }
     }
 
