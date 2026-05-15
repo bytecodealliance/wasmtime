@@ -108,12 +108,12 @@ where
                     // returning no matches is always semantically valid
                     // (we just skip would-be rewrites) and bounds work
                     // per top-level ISLE invocation.
-                    if ctx.ctx.fuel == 0 {
+                    if ctx.ctx.extractor_fuel == 0 {
                         ctx.ctx.stats.rewrite_fuel_exhausted += 1;
                         trace!(" -> rewrite fuel exhausted");
                         return None;
                     }
-                    ctx.ctx.fuel -= 1;
+                    ctx.ctx.extractor_fuel -= 1;
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
                     return Some((ty, ctx.ctx.func.dfg.insts[inst]));
