@@ -1,6 +1,5 @@
 use crate::error::OutOfMemory;
 use crate::prelude::*;
-use wasmtime_core::alloc::TryVec;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
 use crate::runtime::externals::Tag as RuntimeTag;
