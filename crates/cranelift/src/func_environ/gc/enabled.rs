@@ -170,10 +170,9 @@ fn emit_gc_kind_assert(
             object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
         },
     );
-    let kind_and_reserved_bits =
-        builder
-            .ins()
-            .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), kind_addr, 0);
+    let kind_and_reserved_bits = builder
+        .ins()
+        .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
     let kind_mask = builder
         .ins()
         .iconst(ir::types::I32, i64::from(VMGcKind::MASK));

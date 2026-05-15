@@ -53,7 +53,7 @@ impl CopyingCompiler {
     ) -> (ir::Value, ir::Value) {
         let bump_ptr = builder.ins().load(
             ir::types::I32,
-            ir::MemFlagsData::trusted().with_can_move(),
+            ir::MemFlagsData::trusted(),
             ptr_to_heap_data,
             i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
         );
