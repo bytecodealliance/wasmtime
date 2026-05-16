@@ -1100,18 +1100,23 @@ impl<I: VCodeInst> VCode<I> {
             // test case generating a GB+ memory footprint in Cranelift for
             // example.
             if !bb_padding.is_empty() {
+                // The padding bytes go directly into the buffer without
+                // passing through `do_emit`, so check the deadline invariant
+                // *before* writing them: if the padding would push the
+                // worst-case end of an island past any pending deadline,
+                // drain pending fixups via an island now. We're between
+                // blocks, so no jump-around is needed.
+                let padding_len = bb_padding.len() as u32 + I::LabelUse::ALIGN - 1;
+                let lookahead = I::worst_case_size() + I::worst_case_island_growth();
+                if buffer.island_needed(padding_len + lookahead) {
+                    buffer.emit_island(padding_len + lookahead, ctrl_plane);
+                }
+
                 buffer.put_data(&bb_padding);
                 buffer.align_to(I::LabelUse::ALIGN);
                 total_bb_padding += bb_padding.len();
                 if total_bb_padding > (150 << 20) {
                     bb_padding = Vec::new();
-                }
-                // The padding consumes raw buffer bytes without going through
-                // `do_emit`, so re-check the deadline invariant here. We're
-                // between blocks, so no jump-around is needed.
-                let lookahead = I::worst_case_size() + I::worst_case_island_growth();
-                if buffer.island_needed(lookahead) {
-                    buffer.emit_island(lookahead, ctrl_plane);
                 }
             }
         }
