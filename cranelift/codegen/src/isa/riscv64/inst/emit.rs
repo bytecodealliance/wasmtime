@@ -1824,7 +1824,9 @@ impl Inst {
                     amo: AMO::SeqCst,
                 }
                 .emit(sink, emit_info, state);
-                //
+                // For sub-word ops the merge step needs the original full word.
+                // Stash it in spilltmp2 before `extract` clobbers `dst`; reusing
+                // the value avoids a second LR that would cancel the reservation.
 
                 let store_value: Reg = match op {
                     crate::ir::AtomicRmwOp::Add
@@ -1832,6 +1834,8 @@ impl Inst {
                     | crate::ir::AtomicRmwOp::And
                     | crate::ir::AtomicRmwOp::Or
                     | crate::ir::AtomicRmwOp::Xor => {
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(sink, emit_info, state));
@@ -1849,14 +1853,6 @@ impl Inst {
                             rs2: x,
                         }
                         .emit(sink, emit_info, state);
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1870,6 +1866,8 @@ impl Inst {
                     }
                     crate::ir::AtomicRmwOp::Nand => {
                         if ty.bits() < 32 {
+                            Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                                .emit(sink, emit_info, state);
                             AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                                 .iter()
                                 .for_each(|i| i.emit(sink, emit_info, state));
@@ -1883,14 +1881,6 @@ impl Inst {
                         .emit(sink, emit_info, state);
                         Inst::construct_bit_not(t0, t0.to_reg()).emit(sink, emit_info, state);
                         if ty.bits() < 32 {
-                            Inst::Atomic {
-                                op: AtomicOP::load_op(ty),
-                                rd: writable_spilltmp_reg2(),
-                                addr: p,
-                                src: zero_reg(),
-                                amo: AMO::SeqCst,
-                            }
-                            .emit(sink, emit_info, state);
                             AtomicOP::merge(
                                 writable_spilltmp_reg2(),
                                 writable_spilltmp_reg(),
@@ -1912,6 +1902,8 @@ impl Inst {
                     | crate::ir::AtomicRmwOp::Smax => {
                         let label_select_dst = sink.get_label();
                         let label_select_done = sink.get_label();
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         if op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax
                         {
                             AtomicOP::extract(dst, offset, dst.to_reg(), ty)
@@ -1943,14 +1935,6 @@ impl Inst {
                         sink.bind_label(label_select_dst, &mut state.ctrl_plane);
                         Inst::gen_move(t0, dst.to_reg(), I64).emit(sink, emit_info, state);
                         sink.bind_label(label_select_done, &mut state.ctrl_plane);
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1963,17 +1947,11 @@ impl Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Xchg => {
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(sink, emit_info, state));
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
