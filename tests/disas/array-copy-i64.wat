@@ -18,7 +18,7 @@
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i64, i64, i64) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:3 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
@@ -59,7 +59,7 @@
 ;;                                     v109 = ishl v37, v91  ; v91 = 3
 ;; @002b                               v46 = uadd_overflow_trap v109, v20, user2  ; v20 = 32
 ;; @002b                               v50 = uadd_overflow_trap v2, v46, user2
-;; @002b                               v62 = load.i64 notrap aligned v79+40
+;; @002b                               v60 = load.i64 notrap aligned v79+40
 ;; @002b                               v26 = uextend.i64 v25
 ;; @002b                               v28 = iadd v8, v26
 ;;                                     v98 = ishl v5, v91  ; v91 = 3
@@ -69,9 +69,9 @@
 ;; @002b                               v31 = isub v28, v30
 ;;                                     v119 = ishl v6, v91  ; v91 = 3
 ;; @002b                               v58 = uextend.i64 v119
-;; @002b                               v59 = iadd v31, v58
-;; @002b                               v63 = iadd v8, v62
-;; @002b                               v64 = icmp ugt v59, v63
+;; @002b                               v62 = iadd v31, v58
+;; @002b                               v61 = iadd v8, v60
+;; @002b                               v64 = icmp ugt v62, v61
 ;; @002b                               trapnz v64, user2
 ;; @002b                               v51 = uextend.i64 v50
 ;; @002b                               v53 = iadd v8, v51
@@ -80,8 +80,8 @@
 ;; @002b                               v54 = isub v46, v117
 ;; @002b                               v55 = uextend.i64 v54
 ;; @002b                               v56 = isub v53, v55
-;; @002b                               v60 = iadd v56, v58
-;; @002b                               v65 = icmp ugt v60, v63
+;; @002b                               v63 = iadd v56, v58
+;; @002b                               v65 = icmp ugt v63, v61
 ;; @002b                               trapnz v65, user2
 ;; @002b                               call fn0(v0, v56, v31, v58)
 ;; @002f                               jump block1
