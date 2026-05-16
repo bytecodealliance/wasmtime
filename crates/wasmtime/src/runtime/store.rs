@@ -2412,6 +2412,11 @@ at https://bytecodealliance.org/security.
         // otherwise fall back to the runtime-agnostic code.
         yield_now().await
     }
+
+    #[cfg(not(feature = "gc"))]
+    pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
+        bail!("GC is disabled")
+    }
 }
 
 #[cfg(any(feature = "async", feature = "gc"))]
