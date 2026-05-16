@@ -166,8 +166,8 @@
 
   (component $B
     (import "a" (instance $a
-      (export "big-future" (func (result $f)))
-      (export "big-stream" (func (result $s)))
+      (export "big-future" (func async (result $f)))
+      (export "big-stream" (func async (result $s)))
     ))
 
     (core module $libc

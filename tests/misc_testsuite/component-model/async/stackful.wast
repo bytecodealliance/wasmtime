@@ -82,7 +82,7 @@
   )
 
   (component $lowerer
-    (import "a" (func $foo (param "p1" u32) (result u32)))
+    (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core func $foo (canon lower (func $foo)))
     (core module $m
       (import "" "foo" (func $foo (param i32) (result i32)))
@@ -105,7 +105,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-(assert_return (invoke "run"))
+(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
 
 ;; waitable-set.wait
 (component

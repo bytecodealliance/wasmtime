@@ -296,14 +296,14 @@
       )
     )
     (core func $async-to-sync
-      (canon lower (func $a "run-sync")
+      (canon lower (func $a "run-async")
         async
         (memory $libc "memory")
         (realloc (func $libc "realloc"))
       )
     )
     (core func $sync-to-async
-      (canon lower (func $a "run-async")
+      (canon lower (func $a "run-sync")
         (memory $libc "memory")
         (realloc (func $libc "realloc"))
       )

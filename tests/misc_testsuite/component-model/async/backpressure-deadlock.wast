@@ -40,7 +40,7 @@
 
   (component $B
     (import "A" (instance $A
-      (export "f" (func))
+      (export "f" (func async))
       (export "turn-on-backpressure" (func))
     ))
     
