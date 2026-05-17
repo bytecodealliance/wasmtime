@@ -1118,9 +1118,9 @@ pub fn translate_array_copy(
     // Forward copy -- copy one field, then mutate the current pointers, then
     // check to see if we're done.
     builder.switch_to_block(forward_block);
-    func_env.translate_loop_header(builder)?;
     let dst_cur = builder.append_block_param(forward_block, func_env.pointer_type());
     let src_cur = builder.append_block_param(forward_block, func_env.pointer_type());
+    func_env.translate_loop_header(builder)?;
     let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
     write_field_at_addr(func_env, builder, elem_ty, dst_cur, value)?;
     let dst_next = builder.ins().iadd(dst_cur, one_elem_size);
@@ -1137,9 +1137,9 @@ pub fn translate_array_copy(
     // Backwards copy -- update the pointers, then perform a copy, then check
     // to see if we're done.
     builder.switch_to_block(backwards_block);
-    func_env.translate_loop_header(builder)?;
     let dst_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
     let src_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
+    func_env.translate_loop_header(builder)?;
     let dst_cur = builder.ins().isub(dst_cur, one_elem_size);
     let src_cur = builder.ins().isub(src_cur, one_elem_size);
     let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
