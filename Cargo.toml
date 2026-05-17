@@ -300,7 +300,7 @@ pulley-macros = { path = 'pulley/macros', version = "=46.0.0" }
 
 # Cranelift crates in this workspace
 cranelift-assembler-x64 = { path = "cranelift/assembler-x64", version = "0.133.0" }
-cranelift-codegen = { path = "cranelift/codegen", version = "0.133.0", default-features = false, features = ["std", "unwind"] }
+cranelift-codegen = { path = "cranelift/codegen", version = "0.133.0", default-features = false, features = ["unwind"] }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.133.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.133.0" }
 cranelift-native = { path = "cranelift/native", version = "0.133.0" }
