@@ -31,7 +31,5 @@ pub(crate) mod builtins {
 
     define_builtin_accessors! {
         cont_new,
-        table_grow_cont_obj,
-        table_fill_cont_obj,
     }
 }

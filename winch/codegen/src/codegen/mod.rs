@@ -24,7 +24,7 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    DataIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind,
+    DataIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, IndexType, MemoryIndex, MemoryKind,
     MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
 };
 
@@ -689,6 +689,173 @@ where
         self.context.free_reg(value);
         self.context.free_reg(index);
         self.context.free_reg(base);
+        Ok(())
+    }
+
+    /// Emit the `table.grow` operation.
+    pub fn emit_table_grow(&mut self, table_index: TableIndex) -> Result<()> {
+        let ptr_type = self.env.ptr_type();
+        let idx_type = self.env.table(table_index).idx_type;
+
+        // Duplicate the `delta` argument on the stack since we'll need it at
+        // the end if growth succeeds.
+        let delta = self.context.pop_to_reg(self.masm, None)?;
+        let tmp = self.context.any_gpr(self.masm)?;
+        self.masm
+            .mov(writable!(tmp), delta.reg.into(), delta.ty.try_into()?)?;
+        self.context.stack.push(TypedReg::new(delta.ty, tmp).into());
+        self.context.stack.push(delta.into());
+
+        // Invoke the `table.grow` builtin on the host which will return whether
+        // the growth succeeded, and if so where it's located.
+        let at = self.context.stack.ensure_index_at(1)?;
+        let builtin = self.env.builtins.table_grow::<M::ABI>()?;
+        let builtin = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
+
+        // Pop everything that's on the stack now. The builtin took `delta` and
+        // pushed a result, and then peel off our duplicate of `delta` plus the
+        // initialization element of `table.grow` itself.
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        let len = self.context.pop_to_reg(self.masm, None)?;
+        let init = self.context.pop_to_reg(self.masm, None)?;
+
+        // Save a copy of `result` on the stack since we'll need it after
+        // `table.fill` is done.
+        let tmp_result = self.context.any_gpr(self.masm)?;
+        self.masm.mov(
+            writable!(tmp_result),
+            result.reg.into(),
+            result.ty.try_into()?,
+        )?;
+        self.context
+            .stack
+            .push(TypedReg::new(result.ty, tmp_result).into());
+
+        // Test if the result of growth is -1. If it is, then we're done.
+        // Otherwise fall through to `table.fill`.
+        let done = self.masm.get_label()?;
+        self.masm.branch(
+            IntCmpKind::Eq,
+            result.reg,
+            RegImm::i64(-1),
+            done,
+            OperandSize::S64,
+        )?;
+
+        // Prepare the arguments for `table.fill` in the order the wasm
+        // instruction expects.
+        self.context.stack.push(result.into());
+        self.context.stack.push(init.into());
+        self.context.stack.push(len.into());
+        self.emit_table_fill(table_index)?;
+
+        self.masm.bind(done)?;
+
+        // Similar to the memory.grow builtin, `table.grow` returns a
+        // pointer, however, we need to ensure that the returned index
+        // is representative of the address space for tables.
+        match (ptr_type, idx_type) {
+            (WasmValType::I64, IndexType::I64) => Ok(()),
+            (WasmValType::I64, IndexType::I32) => {
+                let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
+                self.masm.wrap(writable!(top), top)?;
+                self.context.stack.push(TypedReg::i32(top).into());
+                Ok(())
+            }
+
+            _ => Err(format_err!(CodeGenError::unsupported_32_bit_platform())),
+        }
+    }
+
+    /// Emit the `table.fill` operation.
+    pub fn emit_table_fill(&mut self, table_index: TableIndex) -> Result<()> {
+        // Put all of this opcode's arguments into registers.
+        let len = self.context.pop_to_reg(self.masm, None)?;
+        let init = self.context.pop_to_reg(self.masm, None)?;
+        let offset = self.context.pop_to_reg(self.masm, None)?;
+
+        // Perform a bounds check to see if `offset+len` is inbounds.
+        let table_data = self.env.resolve_table_data(table_index);
+        self.emit_compute_table_size(&table_data)?;
+        let table_size = self.context.pop_to_reg(self.masm, None)?;
+        let tmp = self.context.any_gpr(self.masm)?;
+        let idx_size = table_data.index_type().try_into()?;
+        self.masm.mov(writable!(tmp), offset.reg.into(), idx_size)?;
+        self.masm.checked_uadd(
+            writable!(tmp),
+            tmp,
+            len.reg.into(),
+            idx_size,
+            TRAP_TABLE_OUT_OF_BOUNDS,
+        )?;
+        self.masm.cmp(tmp, table_size.reg.into(), idx_size)?;
+        self.masm
+            .trapif(IntCmpKind::GtU, TRAP_TABLE_OUT_OF_BOUNDS)?;
+        self.context.free_reg(tmp);
+        self.context.free_reg(table_size);
+
+        let header = self.masm.get_label()?;
+        let exit = self.masm.get_label()?;
+
+        self.masm.bind(header)?;
+
+        // Exit the loop once there are no more elements to copy.
+        self.masm.branch(
+            IntCmpKind::Eq,
+            len.reg,
+            RegImm::i64(0),
+            exit,
+            OperandSize::S64,
+        )?;
+
+        // Duplicate `offset`, where we're writing, and `init` what we're
+        // writing, into temporary registers. These are used by `emit_table_set`
+        // below.
+        let tmp_index = self.context.any_gpr(self.masm)?;
+        let tmp_init = self.context.any_gpr(self.masm)?;
+        self.masm
+            .mov(writable!(tmp_index), offset.reg.into(), OperandSize::S64)?;
+        self.masm
+            .mov(writable!(tmp_init), init.reg.into(), OperandSize::S64)?;
+
+        // Spill all this loop's variables onto the stack.
+        self.context.stack.push(TypedReg::i64(len.reg).into());
+        self.context.stack.push(TypedReg::i64(init.reg).into());
+        self.context.stack.push(TypedReg::i64(offset.reg).into());
+
+        // Emit `table.set`, consuming our temporary registers.
+        self.context.stack.push(TypedReg::i64(tmp_index).into());
+        self.context.stack.push(TypedReg::i64(tmp_init).into());
+        self.emit_table_set(table_index)?;
+
+        // Reload this loop's variables into the same registers as the start of
+        // the loop.
+        self.context.pop_to_reg(self.masm, Some(offset.reg))?;
+        self.context.pop_to_reg(self.masm, Some(init.reg))?;
+        self.context.pop_to_reg(self.masm, Some(len.reg))?;
+
+        // Advance the destination we're writing to, and decrement the number of
+        // elements left to write.
+        self.masm.add(
+            writable!(offset.reg),
+            offset.reg,
+            RegImm::i64(1),
+            OperandSize::S64,
+        )?;
+        self.masm.sub(
+            writable!(len.reg),
+            len.reg,
+            RegImm::i64(1),
+            OperandSize::S64,
+        )?;
+        self.masm.jmp(header)?;
+
+        self.masm.bind(exit)?;
+
+        self.context.free_reg(offset);
+        self.context.free_reg(init);
+        self.context.free_reg(len);
         Ok(())
     }
 

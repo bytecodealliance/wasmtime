@@ -54,7 +54,7 @@
 ;;       ret
 ;;       mv      a1, s5
 ;;       ld      a0, 0x10(a1)
-;;       ld      a2, 0x168(a0)
+;;       ld      a2, 0x150(a0)
 ;;       mv      a0, a1
 ;;       jalr    a2
 ;;       .byte   0x00, 0x00, 0x00, 0x00

@@ -209,8 +209,6 @@ pub mod builtins {
     }
 
     define_builtin_accessors! {
-        table_grow_gc_ref,
-        table_fill_gc_ref,
         array_new_elem,
         array_init_elem,
     }
