@@ -187,7 +187,7 @@ impl RuntimeLinearMemory for MmapMemory {
                 dst.copy_from_slice(src);
             }
 
-            self.mmap = Arc::new(new_mmap);
+            self.mmap = try_new::<Arc<_>>(new_mmap)?;
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
