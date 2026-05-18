@@ -8,7 +8,9 @@
 use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{GcTypeLayouts, TagIndex, TypeIndex, WasmRefType, WasmResult};
+use wasmtime_environ::{
+    GcTypeLayouts, TagIndex, TypeIndex, WasmRefType, WasmResult, WasmStorageType,
+};
 
 #[cfg(feature = "gc")]
 mod enabled;
@@ -24,23 +26,6 @@ use disabled as imp;
 // based on the compile-time features enabled.
 pub use imp::*;
 
-/// How to initialize a newly-allocated array's elements.
-#[derive(Clone, Copy)]
-#[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
-    allow(dead_code, reason = "easier to define")
-)]
-pub enum ArrayInit<'a> {
-    /// Initialize the array's elements with the given values.
-    Elems(&'a [ir::Value]),
-
-    /// Initialize the array's elements with `elem` repeated `len` times.
-    Fill { elem: ir::Value, len: ir::Value },
-
-    /// Don't initialize the elements, just allocate the array.
-    Uninit { len: ir::Value },
-}
-
 /// A trait for different collectors to emit any GC barriers they might require.
 pub trait GcCompiler {
     /// Get the GC type layouts for this GC compiler.
@@ -55,12 +40,12 @@ pub trait GcCompiler {
     /// The array should be of the given type and its elements initialized as
     /// described by the given `ArrayInit`.
     #[cfg_attr(not(feature = "gc"), allow(dead_code))]
-    fn alloc_array(
+    fn alloc_uninit_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
-        init: ArrayInit<'_>,
+        len: ir::Value,
     ) -> WasmResult<ir::Value>;
 
     /// Emit code to allocate a new struct.
@@ -175,6 +160,20 @@ pub trait GcCompiler {
         dst: ir::Value,
         new_val: ir::Value,
         flags: ir::MemFlagsData,
+    ) -> WasmResult<()>;
+
+    /// Stores `val` into `addr` with the `ty` specified.
+    ///
+    /// This initializes a previously-uninitialized field, so barriers on the
+    /// value previously stored at `addr`, if necessary, should not be executed.
+    #[cfg_attr(not(feature = "gc"), allow(dead_code))]
+    fn init_field(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmStorageType,
+        addr: ir::Value,
+        val: ir::Value,
     ) -> WasmResult<()>;
 }
 

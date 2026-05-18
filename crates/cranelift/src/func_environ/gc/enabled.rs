@@ -1,7 +1,7 @@
-use super::{ArrayInit, GcCompiler};
+use super::GcCompiler;
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{BulkOp, CheckedEntity, Extension, FuncEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
@@ -15,7 +15,7 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
-    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, IndexType,
+    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT,
     ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
     wasm_unsupported,
@@ -319,6 +319,16 @@ fn write_func_ref_at_addr(
     builder.ins().store(flags, func_ref_id, field_addr, 0);
 
     Ok(())
+}
+
+pub fn init_field_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    field_ty: WasmStorageType,
+    field_addr: ir::Value,
+    new_val: ir::Value,
+) -> WasmResult<()> {
+    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, new_val)
 }
 
 pub fn write_field_at_addr(
@@ -633,11 +643,20 @@ pub fn translate_array_new(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
+    let zero = builder.ins().iconst(ir::types::I32, 0);
+    let ty = func_env.module.types[array_type_index].unwrap_module_type_index();
+    func_env.translate_entity_fill(
         builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
+        CheckedEntity::Array {
+            array: result,
+            ty,
+            initialized: false,
+        },
+        zero,
+        elem,
+        len,
     )?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
@@ -653,14 +672,22 @@ pub fn translate_array_new_default(
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
-    let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
-    )?;
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     log::trace!("translate_array_new_default(..) -> {result:?}");
+    let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
+    let zero = builder.ins().iconst(ir::types::I32, 0);
+    func_env.translate_entity_fill(
+        builder,
+        CheckedEntity::Array {
+            array: result,
+            ty: interned_ty,
+            initialized: false,
+        },
+        zero,
+        elem,
+        len,
+    )?;
     Ok(result)
 }
 
@@ -671,450 +698,29 @@ pub fn translate_array_new_fixed(
     elems: &[ir::Value],
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_fixed({array_type_index:?}, {elems:?})");
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Elems(elems),
-    )?;
+    let len = builder
+        .ins()
+        .iconst(ir::types::I32, i64::try_from(elems.len()).unwrap());
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     log::trace!("translate_array_new_fixed(..) -> {result:?}");
+    let ty = func_env.module.types[array_type_index].unwrap_module_type_index();
+    let array_ty = func_env.types.unwrap_array(ty)?;
+
+    for (i, elem) in elems.iter().enumerate() {
+        let index = builder
+            .ins()
+            .iconst(ir::types::I32, i64::try_from(i).unwrap());
+        let addr = array_elem_addr(func_env, builder, ty, result, index)?;
+        gc_compiler(func_env)?.init_field(
+            func_env,
+            builder,
+            array_ty.0.element_type,
+            addr,
+            *elem,
+        )?;
+    }
     Ok(result)
-}
-
-impl ArrayInit<'_> {
-    /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
-    #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
-        expect(dead_code, reason = "easier to define")
-    )]
-    fn len(self, pos: &mut FuncCursor) -> ir::Value {
-        match self {
-            ArrayInit::Fill { len, .. } | ArrayInit::Uninit { len } => len,
-            ArrayInit::Elems(e) => {
-                let len = u32::try_from(e.len()).unwrap();
-                pos.ins().iconst(ir::types::I32, i64::from(len))
-            }
-        }
-    }
-
-    /// Initialize a newly-allocated array's elements.
-    #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
-        expect(dead_code, reason = "easier to define")
-    )]
-    fn initialize(
-        self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder<'_>,
-        interned_type_index: ModuleInternedTypeIndex,
-        base_size: u32,
-        size: ir::Value,
-        elems_addr: ir::Value,
-        mut init_field: impl FnMut(
-            &mut FuncEnvironment<'_>,
-            &mut FunctionBuilder<'_>,
-            WasmStorageType,
-            ir::Value,
-            ir::Value,
-        ) -> WasmResult<()>,
-    ) -> WasmResult<()> {
-        log::trace!(
-            "initialize_array({interned_type_index:?}, {base_size:?}, {size:?}, {elems_addr:?})"
-        );
-
-        assert!(!func_env.types[interned_type_index].composite_type.shared);
-        let array_ty = func_env.types[interned_type_index]
-            .composite_type
-            .inner
-            .unwrap_array();
-        let elem_ty = array_ty.0.element_type;
-        let elem_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&elem_ty);
-        let pointer_type = func_env.pointer_type();
-        let elem_size = builder.ins().iconst(pointer_type, i64::from(elem_size));
-        match self {
-            ArrayInit::Elems(elems) => {
-                let mut elem_addr = elems_addr;
-                for val in elems {
-                    init_field(func_env, builder, elem_ty, elem_addr, *val)?;
-                    elem_addr = builder.ins().iadd(elem_addr, elem_size);
-                }
-            }
-            ArrayInit::Fill { elem, len: _ } => {
-                // Compute the end address of the elements.
-                let base_size = builder.ins().iconst(pointer_type, i64::from(base_size));
-                let array_addr = builder.ins().isub(elems_addr, base_size);
-                let size = uextend_i32_to_pointer_type(builder, pointer_type, size);
-                let elems_end = builder.ins().iadd(array_addr, size);
-
-                emit_array_fill_impl(
-                    func_env,
-                    builder,
-                    elem_ty,
-                    elems_addr,
-                    elem_size,
-                    elems_end,
-                    elem,
-                    |func_env, builder, elem_addr, elem| {
-                        init_field(func_env, builder, elem_ty, elem_addr, elem)
-                    },
-                )?;
-            }
-
-            ArrayInit::Uninit { .. } => {}
-        }
-        log::trace!("initialize_array: finished");
-        Ok(())
-    }
-}
-
-fn emit_array_fill_impl(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    elem_ty: WasmStorageType,
-    elem_addr: ir::Value,
-    elem_size: ir::Value,
-    fill_end: ir::Value,
-    value: ir::Value,
-    mut emit_elem_write: impl FnMut(
-        &mut FuncEnvironment<'_>,
-        &mut FunctionBuilder<'_>,
-        ir::Value,
-        ir::Value,
-    ) -> WasmResult<()>,
-) -> WasmResult<()> {
-    log::trace!(
-        "emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})"
-    );
-
-    let pointer_ty = func_env.pointer_type();
-
-    assert_eq!(builder.func.dfg.value_type(elem_addr), pointer_ty);
-    assert_eq!(builder.func.dfg.value_type(elem_size), pointer_ty);
-    assert_eq!(builder.func.dfg.value_type(fill_end), pointer_ty);
-
-    // If this is a byte array then specialize its fill to use the same libcall
-    // as `memory.fill`. This gets us to `memset` on the host which for larger
-    // arrays can be a big boost due to the vectorized implementation. Note
-    // though that this explicitly checks to make sure that the final address
-    // being written is in-bounds in the GC heap to detect corruption and traps
-    // here in-wasm. Once we're in the host GC heap corruption can't be caught,
-    // so it needs to be an up-front check here.
-    if let Some(value) = array_fill_value_as_memset(builder, elem_ty, value) {
-        let base = func_env.get_gc_heap_base(builder);
-        let bound = func_env.get_gc_heap_bound(builder);
-        let heap_end = builder.ins().iadd(base, bound);
-        let corrupt = builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, fill_end, heap_end);
-        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
-
-        let len = builder.ins().isub(fill_end, elem_addr);
-        func_env.raw_bulk_memory_operation(
-            builder,
-            BulkOp::MemoryFill {
-                dst: elem_addr,
-                val: value,
-                len,
-            },
-        );
-
-        return Ok(());
-    }
-
-    // Loop to fill the elements, emitting the equivalent of the following
-    // pseudo-CLIF:
-    //
-    // current_block:
-    //     ...
-    //     jump loop_header_block(elem_addr)
-    //
-    // loop_header_block(elem_addr: i32):
-    //     done = icmp eq elem_addr, fill_end
-    //     brif done, continue_block, loop_body_block
-    //
-    // loop_body_block:
-    //     emit_elem_write()
-    //     next_elem_addr = iadd elem_addr, elem_size
-    //     jump loop_header_block(next_elem_addr)
-    //
-    // continue_block:
-    //     ...
-
-    let current_block = builder.current_block().unwrap();
-    let loop_header_block = builder.create_block();
-    let loop_body_block = builder.create_block();
-    let continue_block = builder.create_block();
-
-    builder.ensure_inserted_block();
-    builder.insert_block_after(loop_header_block, current_block);
-    builder.insert_block_after(loop_body_block, loop_header_block);
-    builder.insert_block_after(continue_block, loop_body_block);
-
-    // Current block: jump to the loop header block with the first element's
-    // address.
-    builder.ins().jump(loop_header_block, &[elem_addr.into()]);
-
-    // Loop header block: check if we're done, then jump to either the continue
-    // block or the loop body block.
-    builder.switch_to_block(loop_header_block);
-    builder.append_block_param(loop_header_block, pointer_ty);
-    log::trace!("emit_array_fill_impl: loop header");
-    func_env.translate_loop_header(builder)?;
-    let elem_addr = builder.block_params(loop_header_block)[0];
-    let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
-    builder
-        .ins()
-        .brif(done, continue_block, &[], loop_body_block, &[]);
-
-    // Loop body block: write the value to the current element, compute the next
-    // element's address, and then jump back to the loop header block.
-    builder.switch_to_block(loop_body_block);
-    log::trace!("emit_array_fill_impl: loop body");
-    emit_elem_write(func_env, builder, elem_addr, value)?;
-    let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
-    builder
-        .ins()
-        .jump(loop_header_block, &[next_elem_addr.into()]);
-
-    // Continue...
-    builder.switch_to_block(continue_block);
-    log::trace!("emit_array_fill_impl: finished");
-    builder.seal_block(loop_header_block);
-    builder.seal_block(loop_body_block);
-    builder.seal_block(continue_block);
-    Ok(())
-}
-
-/// Tests to seew hether `value`, stored as `ty`, can be extracted to a single
-/// byte which can be passed to `memset`, or the host's `memory.fill`, to
-/// satisfy this array initialization request.
-fn array_fill_value_as_memset(
-    builder: &mut FunctionBuilder<'_>,
-    ty: WasmStorageType,
-    value: ir::Value,
-) -> Option<ir::Value> {
-    // If the storage type is `i8`, then no matter the value we can always use
-    // `memset` regardless of the upper bits.
-    let value_ty = builder.func.dfg.value_type(value);
-    if let WasmStorageType::I8 = ty {
-        assert_eq!(value_ty, ir::types::I32);
-        return Some(value);
-    }
-
-    // Otherwise check to see if `value` is a constant whose value we can
-    // inspect here.
-    let inst = builder.func.dfg.value_def(value).inst()?;
-    let bits = match builder.func.dfg.insts[inst] {
-        ir::InstructionData::UnaryImm {
-            opcode: ir::Opcode::Iconst,
-            imm,
-        } => imm.bits(),
-        ir::InstructionData::UnaryIeee32 {
-            opcode: ir::Opcode::F32const,
-            imm,
-        } => i64::from(imm.bits()),
-        ir::InstructionData::UnaryIeee64 {
-            opcode: ir::Opcode::F64const,
-            imm,
-        } => imm.bits().cast_signed(),
-
-        // For other initialization we don't know what the value is, so we
-        // can't check if a byte-set is valid, so bail out which will fall back
-        // to an element-by-element loop.
-        _ => return None,
-    };
-
-    let width = match ty {
-        // Handled above
-        WasmStorageType::I8 => unreachable!(),
-        // These are initialized with CLIF-level `i32` values, but we only want
-        // to check the lower 2 bytes.
-        WasmStorageType::I16 => 2,
-        // For everything else the natural CLIF value is what's written so
-        // that's the byte width to check.
-        WasmStorageType::Val(_) => value_ty.bytes() as usize,
-    };
-    let bytes = bits.to_le_bytes();
-    if bytes[1..width].iter().any(|b| *b != bytes[0]) {
-        return None;
-    }
-    Some(builder.ins().iconst(ir::types::I32, bits & 0xff))
-}
-
-pub fn translate_array_copy(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    dst_array_type_index: TypeIndex,
-    dst_array: ir::Value,
-    dst_index: ir::Value,
-    src_array_type_index: TypeIndex,
-    src_array: ir::Value,
-    src_index: ir::Value,
-    copy_len: ir::Value,
-) -> WasmResult<()> {
-    let dst_array_type_index =
-        func_env.module.types[dst_array_type_index].unwrap_module_type_index();
-    let src_array_type_index =
-        func_env.module.types[src_array_type_index].unwrap_module_type_index();
-    let array_ty = func_env.types[dst_array_type_index]
-        .composite_type
-        .inner
-        .unwrap_array();
-    let elem_ty = array_ty.0.element_type;
-
-    // Helper closure to return `(start,end)` as the native-memory-address
-    // bounds of the copy that is being done.
-    let mut array_bounds = |array: ir::Value, index: ir::Value| -> WasmResult<_> {
-        let array_len = translate_array_len(func_env, builder, array)?;
-
-        // Check that the full range of elements we want to write is in bounds.
-        let end_index =
-            func_env.uadd_overflow_trap(builder, index, copy_len, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
-        let out_of_bounds = builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, end_index, array_len);
-        func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
-
-        // Calculate the address of the first element in the array.
-        let ArraySizeInfo {
-            obj_size,
-            one_elem_size,
-            base_size,
-        } = emit_array_size_info(func_env, builder, dst_array_type_index, array_len);
-        let offset_in_elems = builder.ins().imul(index, one_elem_size);
-        let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
-        let elem_addr = func_env.prepare_gc_ref_access(
-            builder,
-            array,
-            BoundsCheck::DynamicObjectField {
-                offset: obj_offset,
-                object_size: obj_size,
-            },
-        );
-
-        Ok((elem_addr, one_elem_size))
-    };
-
-    // Calculate the heap-start address of both copies. This'll ensure
-    // everything is in-bounds as well.
-    let (src_elem_addr, one_elem_size) = array_bounds(src_array, src_index)?;
-    let (dst_elem_addr, _one_elem_size) = array_bounds(dst_array, dst_index)?;
-
-    // Also calculate the heap-end address of both copies. Note that with
-    // everything being in-bounds this multiplication won't overflow.
-    let copy_byte_size = builder.ins().imul(copy_len, one_elem_size);
-    let copy_byte_size =
-        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_byte_size);
-
-    // Note that like `memory.fill` this is preceded with a defensive check
-    // against heap corruption to ensure that, even in the face of heap
-    // corruption, the `memory.copy` call on the host should not ever fault.
-    if !elem_ty.is_vmgcref_type_and_not_i31() {
-        let base = func_env.get_gc_heap_base(builder);
-        let bound = func_env.get_gc_heap_bound(builder);
-        let heap_end = builder.ins().iadd(base, bound);
-        let src_end = builder.ins().iadd(src_elem_addr, copy_byte_size);
-        let dst_end = builder.ins().iadd(dst_elem_addr, copy_byte_size);
-        let corrupt = builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, src_end, heap_end);
-        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
-        let corrupt = builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, dst_end, heap_end);
-        func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
-
-        func_env.raw_bulk_memory_operation(
-            builder,
-            BulkOp::MemoryCopy {
-                dst: dst_elem_addr,
-                src: src_elem_addr,
-                len: copy_byte_size,
-            },
-        );
-        return Ok(());
-    }
-    let one_elem_size =
-        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
-    let copy_len = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_len);
-    func_env.emit_raw_array_or_table_copy(
-        builder,
-        CheckedEntity::Array(dst_array_type_index),
-        CheckedEntity::Array(src_array_type_index),
-        dst_elem_addr,
-        src_elem_addr,
-        one_elem_size,
-        copy_len,
-        src_index,
-    )?;
-
-    Ok(())
-}
-
-pub fn translate_array_fill(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    array_type_index: TypeIndex,
-    array_ref: ir::Value,
-    index: ir::Value,
-    value: ir::Value,
-    n: ir::Value,
-) -> WasmResult<()> {
-    log::trace!(
-        "translate_array_fill({array_type_index:?}, {array_ref:?}, {index:?}, {value:?}, {n:?})"
-    );
-
-    let len = translate_array_len(func_env, builder, array_ref)?;
-
-    // Check that the full range of elements we want to fill is within bounds.
-    let end_index = func_env.uadd_overflow_trap(builder, index, n, TRAP_ARRAY_OUT_OF_BOUNDS);
-    let out_of_bounds = builder
-        .ins()
-        .icmp(IntCC::UnsignedGreaterThan, end_index, len);
-    func_env.trapnz(builder, out_of_bounds, TRAP_ARRAY_OUT_OF_BOUNDS);
-
-    // Get the address of the first element we want to fill.
-    let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let array_ty = func_env.types.unwrap_array(interned_type_index)?;
-    let elem_ty = array_ty.0.element_type;
-    let ArraySizeInfo {
-        obj_size,
-        one_elem_size,
-        base_size,
-    } = emit_array_size_info(func_env, builder, interned_type_index, len);
-    let offset_in_elems = builder.ins().imul(index, one_elem_size);
-    let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
-    let elem_addr = func_env.prepare_gc_ref_access(
-        builder,
-        array_ref,
-        BoundsCheck::DynamicObjectField {
-            offset: obj_offset,
-            object_size: obj_size,
-        },
-    );
-
-    // Calculate the end address, just after the filled region.
-    let fill_size = builder.ins().imul(n, one_elem_size);
-    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), fill_size);
-    let fill_end = builder.ins().iadd(elem_addr, fill_size);
-
-    let one_elem_size =
-        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
-
-    let result = emit_array_fill_impl(
-        func_env,
-        builder,
-        elem_ty,
-        elem_addr,
-        one_elem_size,
-        fill_end,
-        value,
-        |func_env, builder, elem_addr, value| {
-            write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
-        },
-    );
-    log::trace!("translate_array_fill(..) -> {result:?}");
-    result
 }
 
 pub fn translate_array_len(
@@ -1164,8 +770,8 @@ fn emit_array_size_info(
     array_type_index: ModuleInternedTypeIndex,
     // `i32` value containing the array's length.
     array_len: ir::Value,
-) -> ArraySizeInfo {
-    let array_layout = func_env.array_layout(array_type_index);
+) -> WasmResult<ArraySizeInfo> {
+    let array_layout = func_env.array_layout(array_type_index)?;
 
     // Note that we check for overflow below because we can't trust the array's
     // length: it came from inside the GC heap.
@@ -1192,11 +798,11 @@ fn emit_array_size_info(
 
     let one_elem_size = builder.ins().ireduce(ir::types::I32, one_elem_size);
 
-    ArraySizeInfo {
+    Ok(ArraySizeInfo {
         obj_size,
         one_elem_size,
         base_size,
-    }
+    })
 }
 
 /// Get the bounds-checked address of an element in an array.
@@ -1213,7 +819,7 @@ fn array_elem_addr(
     array_type_index: ModuleInternedTypeIndex,
     array_ref: ir::Value,
     index: ir::Value,
-) -> ir::Value {
+) -> WasmResult<ir::Value> {
     // First, assert that `index < array.length`.
     //
     // This check is visible at the Wasm-semantics level.
@@ -1234,7 +840,7 @@ fn array_elem_addr(
         obj_size,
         one_elem_size,
         base_size,
-    } = emit_array_size_info(func_env, builder, array_type_index, len);
+    } = emit_array_size_info(func_env, builder, array_type_index, len)?;
 
     // Compute the offset of the `index`th element within the array object.
     //
@@ -1260,14 +866,14 @@ fn array_elem_addr(
     // redundant bounds checks. But we should figure out how to do this in a way
     // that doesn't defeat the object-size bounds checking's deduplication
     // mentioned above.
-    func_env.prepare_gc_ref_access(
+    Ok(func_env.prepare_gc_ref_access(
         builder,
         array_ref,
         BoundsCheck::DynamicObjectField {
             offset: offset_in_array,
             object_size: obj_size,
         },
-    )
+    ))
 }
 
 pub fn translate_array_get(
@@ -1283,7 +889,7 @@ pub fn translate_array_get(
     emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index)?;
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
@@ -1306,7 +912,7 @@ pub fn translate_array_set(
     emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
 
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index)?;
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
@@ -1548,6 +1154,7 @@ pub fn translate_ref_test(
     Ok(result)
 }
 
+#[cfg(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying"))]
 fn uextend_i32_to_pointer_type(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
@@ -1623,13 +1230,6 @@ fn initialize_struct_fields(
     struct_ty: ModuleInternedTypeIndex,
     raw_ptr_to_struct: ir::Value,
     field_values: &[ir::Value],
-    mut init_field: impl FnMut(
-        &mut FuncEnvironment<'_>,
-        &mut FunctionBuilder<'_>,
-        WasmStorageType,
-        ir::Value,
-        ir::Value,
-    ) -> WasmResult<()>,
 ) -> WasmResult<()> {
     let struct_layout = func_env.struct_or_exn_layout(struct_ty);
     let struct_size = struct_layout.size;
@@ -1650,7 +1250,7 @@ fn initialize_struct_fields(
         let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
         assert!(offset + size_of_access <= struct_size);
         let field_addr = builder.ins().iadd_imm(raw_ptr_to_struct, i64::from(offset));
-        init_field(func_env, builder, ty.element_type, field_addr, *val)?;
+        gc_compiler(func_env)?.init_field(func_env, builder, ty.element_type, field_addr, *val)?;
     }
 
     Ok(())
@@ -1674,8 +1274,11 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the `GcArrayLayout` for the array type at the given `type_index`.
-    pub(crate) fn array_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcArrayLayout {
-        self.gc_layout(type_index).unwrap_array()
+    pub(crate) fn array_layout(
+        &mut self,
+        type_index: ModuleInternedTypeIndex,
+    ) -> WasmResult<&GcArrayLayout> {
+        Ok(self.gc_layout(type_index).unwrap_array())
     }
 
     /// Get the `GcStructLayout` for the struct or exception type at the given `type_index`.
@@ -1717,9 +1320,12 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's base.
-    fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+    pub(crate) fn get_gc_heap_base(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<ir::Value> {
         let global = self.get_gc_heap_base_global(&mut builder.func);
-        builder.ins().global_value(self.pointer_type(), global)
+        Ok(builder.ins().global_value(self.pointer_type(), global))
     }
 
     fn get_gc_heap_bound_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
@@ -1739,9 +1345,12 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's bound.
-    fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+    pub(crate) fn get_gc_heap_bound(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<ir::Value> {
         let global = self.get_gc_heap_bound_global(&mut builder.func);
-        builder.ins().global_value(self.pointer_type(), global)
+        Ok(builder.ins().global_value(self.pointer_type(), global))
     }
 
     /// Get or create the `Heap` for our GC heap.
@@ -1962,128 +1571,27 @@ pub fn translate_array_new_data(
     // upper bits are set this is definitely out-of-bounds, and otherwise the
     // low 32-bits are the byte length.
     let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
-    let array_layout = env.array_layout(interned_type_index);
-    let len64 = builder.ins().uextend(ir::types::I64, len);
-    let init_byte_length = builder
-        .ins()
-        .imul_imm(len64, i64::from(array_layout.elem_size));
-    let init_byte_length_upper_bits = builder.ins().ushr_imm(init_byte_length, 32);
-    env.trapnz(
-        builder,
-        init_byte_length_upper_bits,
-        ir::TrapCode::HEAP_OUT_OF_BOUNDS,
-    );
-    let init_byte_length = builder.ins().ireduce(ir::types::I32, init_byte_length);
-    let src_addr =
-        env.translate_entity_bounds_check(builder, data_index, data_offset, init_byte_length);
+    let array_layout = env.array_layout(interned_type_index)?.clone();
+    let data_entity = CheckedEntity::Data {
+        segment: data_index,
+        element_size: array_layout.elem_size,
+    };
+    env.translate_entity_bounds_check(builder, data_entity, data_offset, len)?;
 
-    let array =
-        gc_compiler(env)?.alloc_array(env, builder, array_type_index, ArrayInit::Uninit { len })?;
+    let array = gc_compiler(env)?.alloc_uninit_array(env, builder, array_type_index, len)?;
     let dst = builder.ins().iconst(ir::types::I32, 0);
-    emit_array_init_data(
-        env,
+    env.translate_entity_copy(
         builder,
-        array_type_index,
-        array,
-        len,
+        CheckedEntity::Array {
+            array,
+            ty: interned_type_index,
+            initialized: false,
+        },
+        data_entity,
         dst,
-        src_addr,
-        init_byte_length,
-    );
+        data_offset,
+        len,
+    )?;
+
     Ok(array)
-}
-
-pub fn translate_array_init_data(
-    env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder,
-    array_type_index: TypeIndex,
-    array: ir::Value,
-    dst_index: ir::Value,
-    data_index: DataIndex,
-    data_offset: ir::Value,
-    len: ir::Value,
-) -> WasmResult<()> {
-    // Perform a bounds check and double-check that `dst_index` is in-bounds for
-    // this array. Do this in the 64-bit index space to avoid overflows.
-    let array_len = translate_array_len(env, builder, array)?;
-    let array_len64 = builder.ins().uextend(ir::types::I64, array_len);
-    let dst_index64 = builder.ins().uextend(ir::types::I64, dst_index);
-    let len64 = builder.ins().uextend(ir::types::I64, len);
-    let end_index64 = builder.ins().iadd(dst_index64, len64);
-    let oob = builder
-        .ins()
-        .icmp(IntCC::UnsignedGreaterThan, end_index64, array_len64);
-    env.trapnz(builder, oob, TRAP_ARRAY_OUT_OF_BOUNDS);
-
-    // Note that because `dst_index + len` is in-bounds we know that this won't
-    // overflow, so no need to check for overflow here.
-    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
-    let array_layout = env.array_layout(interned_type_index);
-    let len_in_bytes = builder
-        .ins()
-        .imul_imm(len, i64::from(array_layout.elem_size));
-    let src_addr =
-        env.translate_entity_bounds_check(builder, data_index, data_offset, len_in_bytes);
-
-    emit_array_init_data(
-        env,
-        builder,
-        array_type_index,
-        array,
-        array_len,
-        dst_index,
-        src_addr,
-        len_in_bytes,
-    );
-
-    Ok(())
-}
-
-/// Shared functionality between `array.new_data` and `array.init_data`.
-///
-/// Assumes the data segment has already been validated and `src_addr` is the
-/// raw host address we're copying from.
-fn emit_array_init_data(
-    env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder,
-    array_type_index: TypeIndex,
-    array: ir::Value,
-    array_len: ir::Value,
-    dst_index: ir::Value,
-    src_addr: ir::Value,
-    len_in_bytes: ir::Value,
-) {
-    // Load the destination address for where we're going to write.
-    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
-    let ArraySizeInfo {
-        obj_size,
-        one_elem_size,
-        base_size,
-    } = emit_array_size_info(env, builder, interned_type_index, array_len);
-    let offset_in_elems = builder.ins().imul(dst_index, one_elem_size);
-    let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
-    let dst_elem_addr = env.prepare_gc_ref_access(
-        builder,
-        array,
-        BoundsCheck::DynamicObjectField {
-            offset: obj_offset,
-            object_size: obj_size,
-        },
-    );
-
-    // At this point bounds checks have all passed, so it's time to perform
-    // the actual copy by calling the `memory.copy` libcall.
-    let len_in_bytes = env.unchecked_cast_wasm_addr_to_native_addr(
-        &mut builder.cursor(),
-        len_in_bytes,
-        IndexType::I32,
-    );
-    env.raw_bulk_memory_operation(
-        builder,
-        BulkOp::MemoryCopy {
-            dst: dst_elem_addr,
-            src: src_addr,
-            len: len_in_bytes,
-        },
-    );
 }
