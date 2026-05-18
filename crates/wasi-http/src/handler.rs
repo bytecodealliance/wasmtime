@@ -377,9 +377,9 @@ impl<T> Queue<T> {
     }
 }
 
-/// Represents the state of a `ProxyHandler` worker task.
+/// Represents the status of a `ProxyHandler` worker task.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum WorkerState {
+pub enum WorkerStatus {
     /// The worker is not handling any requests, nor is it doing any post-return
     /// work.  It _might_ be doing background work which the guest has indicated
     /// can be interrupted and/or abandoned at any time, i.e. does not prevent
@@ -394,14 +394,13 @@ pub enum WorkerState {
     PostReturn,
 }
 
-/// Trait for polling the expiration of a `ProxyHandler` worker.
+/// Represents the application-specific state of a `ProxyHandler` worker.
 ///
 /// [`HandlerState::instantiate`] returns an implementation of this trait for
-/// each component instance (and thus each worker) created.  That worker uses it
-/// to determine when to exit based on its current state and how long it has
-/// been in that state.
-pub trait InstanceExpiration: 'static + Send + Sync {
-    /// Poll whether the associated worker has expired.
+/// each component instance (and thus each worker) created.  The worker uses it
+/// to determine when to exit.
+pub trait WorkerExpiration: 'static + Send + Sync {
+    /// Poll whether the worker has expired.
     ///
     /// This will return `Poll::Ready(())` if the worker has expired, meaning
     /// the component instance should be dropped.  Otherwise, it will return
@@ -415,58 +414,27 @@ pub trait InstanceExpiration: 'static + Send + Sync {
     fn poll(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        state: WorkerState,
+        state: WorkerStatus,
         start: Instant,
     ) -> Poll<()>;
 }
 
-/// Represents the combination of a store and instance with which to handle
-/// requests.
-pub struct Instance<T: 'static, E: InstanceExpiration> {
-    /// The store to use to handle requests.
-    pub store: Store<T>,
-    /// The instance to use to handle requests.
-    pub proxy: Proxy,
-    /// `WasiHttpCtxView` getter function.
-    pub view: ViewFn<T>,
-    /// See [`InstanceExpiration`].
-    pub expiration: E,
-}
-
-/// Indicates whether a worker should accept new requests.
-pub enum ShouldAccept {
-    /// Yes, it should.
-    Yes,
-    /// No, it shouldn't (but ask again later).
-    No,
-    /// No, it shouldn't (and don't ask again).
-    Never,
-}
-
-/// Represents the application-specific state of a web server.
-pub trait HandlerState: 'static + Sync + Send + Sized {
-    /// The type of the associated data for [`Store`]s created using
-    /// [`Self::instantiate`].
+/// Represents the application-specific state of a `ProxyHandler` worker.
+///
+/// [`HandlerState::instantiate`] returns an implementation of this trait for
+/// each component instance (and thus each worker) created.  The worker uses it
+/// to determine how many requests to accept, how long to wait for the guest to
+/// produce responses, etc.
+pub trait WorkerState: 'static + Send + Sync {
+    /// The type of the associated data for [`Store`] belonging to this worker.
     type StoreData: Send;
-    /// The type of the `InstanceExpiration` implementation to be returned from
-    /// [`Self::instantiate`].
-    type Expiration: InstanceExpiration;
 
-    /// Create a new store and instance for handling one or more requests.
-    ///
-    /// Note that the implementer is responsible for applying a timeout to the
-    /// guest instantiation if appopriate (e.g. as part of an overall request
-    /// timeout).
-    fn instantiate(
-        &self,
-    ) -> impl Future<Output = Result<Instance<Self::StoreData, Self::Expiration>>> + Send;
-
-    /// Indicate whether a worker should accept another request given the
+    /// Indicate whether the worker should accept another request given the
     /// current number it is already handling concurrently and the total it has
     /// handled so far.
     fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept;
 
-    /// Notification that a request has been accepted by a worker.
+    /// Notification that a request has been accepted by the worker.
     ///
     /// If the future returned by this function resolves before the guest has
     /// produced a response, the request will be considered "expired" and the
@@ -496,7 +464,7 @@ pub trait HandlerState: 'static + Sync + Send + Sized {
     /// defence" will no longer be necessary.
     fn on_request_start(&self) -> impl Future<Output = ()> + 'static + Send + Sync;
 
-    /// Dispose of the store to which a now-exited worker belongs.
+    /// Dispose of the store belonging to the now-exited worker.
     ///
     /// This may be used to e.g. collect metrics from the store or its
     /// associated data before the store is dropped, as well as e.g. retry
@@ -507,6 +475,55 @@ pub trait HandlerState: 'static + Sync + Send + Sized {
     fn drop(&self, store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>);
 }
 
+/// Represents the combination of a store and instance with which to handle
+/// requests.
+pub struct Instance<T: 'static, E: WorkerExpiration, S: WorkerState> {
+    /// The store to use to handle requests.
+    pub store: Store<T>,
+    /// The instance to use to handle requests.
+    pub proxy: Proxy,
+    /// `WasiHttpCtxView` getter function.
+    pub view: ViewFn<T>,
+    /// See [`WorkerExpiration`].
+    pub expiration: E,
+    /// See [`WorkerState`].
+    pub state: S,
+}
+
+/// Indicates whether a worker should accept new requests.
+pub enum ShouldAccept {
+    /// Yes, it should.
+    Yes,
+    /// No, it shouldn't (but ask again later).
+    No,
+    /// No, it shouldn't (and don't ask again).
+    Never,
+}
+
+/// Represents the application-specific state of a web server.
+pub trait HandlerState: 'static + Sync + Send + Sized {
+    /// The type of the associated data for [`Store`]s created using
+    /// [`Self::instantiate`].
+    type StoreData: Send;
+    /// The type of the `WorkerExpiration` implementation to be returned from
+    /// [`Self::instantiate`].
+    type WorkerExpiration: WorkerExpiration;
+    /// The type of the `WorkerState` implementation to be returned from
+    /// [`Self::instantiate`].
+    type WorkerState: WorkerState<StoreData = Self::StoreData>;
+
+    /// Create a new store and instance for handling one or more requests.
+    ///
+    /// Note that the implementer is responsible for applying a timeout to the
+    /// guest instantiation if appropriate (e.g. as part of an overall request
+    /// timeout).
+    fn instantiate(
+        &self,
+    ) -> impl Future<
+        Output = Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>>,
+    > + Send;
+}
+
 struct ProxyHandlerInner<S: HandlerState> {
     state: S,
     request_queue: Queue<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
@@ -515,8 +532,8 @@ struct ProxyHandlerInner<S: HandlerState> {
 
 /// Tracks request start times.
 ///
-/// This is useful for keeping a [`InstanceExpiration`] appraised of the most
-/// recently accepted outstanding request.
+/// This is useful for keeping a [`WorkerState`] appraised of the most recently
+/// accepted outstanding request.
 #[derive(Default)]
 struct StartTimes(BTreeMap<Instant, usize>);
 
@@ -592,7 +609,11 @@ where
                 proxy,
                 view,
                 expiration,
-            }) => self.run_(store, proxy, view, expiration, request).await,
+                state,
+            }) => {
+                self.run_(store, proxy, view, expiration, state, request)
+                    .await
+            }
 
             Err(error) => {
                 let error = Arc::new(error);
@@ -631,7 +652,8 @@ where
         store: Store<S::StoreData>,
         proxy: Proxy,
         view: ViewFn<S::StoreData>,
-        expiration: S::Expiration,
+        expiration: S::WorkerExpiration,
+        state: S::WorkerState,
         request: Option<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
     ) {
         // NB: The code the follows is rather subtle in that it is structured
@@ -656,7 +678,7 @@ where
         // `StoreContextMut::run_concurrent` event loop from making progress.
         // That, in turn, prevents any concurrent tasks from executing, and also
         // prevents the `AsyncFnOnce` passed to `run_concurrent` from being
-        // polled.  Consequently, we must poll `S::Expiration` from _outside_
+        // polled.  Consequently, we must poll `S::WorkerState` from _outside_
         // the `run_concurrent` future to ensure expirations are enforced.  Once
         // the aforementioned issues have been addressed, we'll be able to
         // simplify the code and eliminate the need for communication between
@@ -665,33 +687,30 @@ where
         // Wrap `store` in an object which, prior to leaving this scope, will
         // pass the `store` to `HandlerState::drop`.
         struct Dropper<S: HandlerState> {
-            handler: ProxyHandler<S>,
+            state: S::WorkerState,
             store: Option<Store<S::StoreData>>,
         }
 
         impl<S: HandlerState> Drop for Dropper<S> {
             fn drop(&mut self) {
                 if let Some(store) = self.store.take() {
-                    self.handler
-                        .0
-                        .state
+                    self.state
                         .drop(store, Err(wasmtime::format_err!("worker panicked")));
                 }
             }
         }
 
-        let mut dropper = Dropper {
-            handler: self.handler.clone(),
+        let mut dropper = Dropper::<S> {
+            state,
             store: Some(store),
         };
 
         let proxy = &proxy;
 
         let accept_concurrent = AtomicBool::new(true);
-        let state = Mutex::new((WorkerState::Idle, Instant::now()));
+        let status = Mutex::new((WorkerStatus::Idle, Instant::now()));
         let mut expiration = pin!(expiration);
 
-        let handler = self.handler.0.clone();
         let function = async |accessor: &Accessor<_>| {
             let mut reuse_count = 0;
             let mut may_accept = true;
@@ -721,11 +740,11 @@ where
                 //
                 // If it fails to produce a response by the deadline, we'll stop
                 // accepting new requests and eventually exit the worker.
-                let expiration = handler.state.on_request_start();
+                let expiration = dropper.state.on_request_start();
 
                 let start_time = Instant::now();
                 start_times.add(start_time);
-                *state.try_lock().unwrap() = (WorkerState::Requests, start_time);
+                *status.try_lock().unwrap() = (WorkerStatus::Requests, start_time);
 
                 futures.push(async move {
                     Ok::<_, wasmtime::Error>((
@@ -776,11 +795,11 @@ where
                             // Remove its start time from the map and update the
                             // state.
                             start_times.remove(start_time);
-                            *state.try_lock().unwrap() =
+                            *status.try_lock().unwrap() =
                                 if let Some(start_time) = start_times.most_recent() {
-                                    (WorkerState::Requests, start_time)
+                                    (WorkerStatus::Requests, start_time)
                                 } else {
-                                    (WorkerState::PostReturn, Instant::now())
+                                    (WorkerStatus::PostReturn, Instant::now())
                                 };
 
                             if responded {
@@ -815,8 +834,7 @@ where
                     // at all or all our tasks really are blocked on I/O.
                     self.set_available(
                         may_accept
-                            && match handler
-                                .0
+                            && match dropper
                                 .state
                                 .should_accept_request(futures.len(), reuse_count)
                             {
@@ -886,9 +904,9 @@ where
                     // accept new work, so update the state if appropriate and
                     // then return pending while we wait for new work.
                     {
-                        let mut state = state.try_lock().unwrap();
-                        if state.0 != WorkerState::Idle {
-                            *state = (WorkerState::Idle, Instant::now());
+                        let mut status = status.try_lock().unwrap();
+                        if status.0 != WorkerStatus::Idle {
+                            *status = (WorkerStatus::Idle, Instant::now());
                         }
                     }
                     break Poll::Pending;
@@ -927,14 +945,14 @@ where
                     // expiration here, outside the event loop, based on the most
                     // recently recorded state of the worker.
 
-                    let (state, start) = *state.try_lock().unwrap();
+                    let (status, start) = *status.try_lock().unwrap();
 
-                    if let Poll::Ready(()) = expiration.as_mut().poll(cx, state, start) {
-                        return Poll::Ready(match state {
-                            WorkerState::Requests | WorkerState::PostReturn => {
+                    if let Poll::Ready(()) = expiration.as_mut().poll(cx, status, start) {
+                        return Poll::Ready(match status {
+                            WorkerStatus::Requests | WorkerStatus::PostReturn => {
                                 Err(format_err!("guest timed out"))
                             }
-                            WorkerState::Idle => Ok(()),
+                            WorkerStatus::Idle => Ok(()),
                         });
                     }
 
@@ -952,7 +970,7 @@ where
             .await
         };
 
-        handler.state.drop(dropper.store.take().unwrap(), result);
+        dropper.state.drop(dropper.store.take().unwrap(), result);
     }
 }
 

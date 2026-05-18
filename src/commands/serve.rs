@@ -32,8 +32,8 @@ use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 #[cfg(feature = "component-model-async")]
 use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{
-    self, HandlerState, Instance, InstanceExpiration, ProxyHandler, ProxyPre, ShouldAccept, ViewFn,
-    WorkerState,
+    self, HandlerState, Instance, ProxyHandler, ProxyPre, ShouldAccept, ViewFn, WorkerExpiration,
+    WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{WasiHttpCtx, p2::WasiHttpView};
@@ -771,7 +771,7 @@ impl ServeCommand {
 }
 
 pin_project! {
-    struct HostInstanceExpiration {
+    struct HostWorkerExpiration {
         idle_timeout: Duration,
         request_timeout: Duration,
         #[pin]
@@ -779,21 +779,21 @@ pin_project! {
     }
 }
 
-impl InstanceExpiration for HostInstanceExpiration {
+impl WorkerExpiration for HostWorkerExpiration {
     fn poll(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        state: WorkerState,
+        status: WorkerStatus,
         start: Instant,
     ) -> Poll<()> {
         let mut me = self.project();
 
-        let timeout = match state {
-            WorkerState::Idle => *me.idle_timeout,
+        let timeout = match status {
+            WorkerStatus::Idle => *me.idle_timeout,
             // TODO: add a dedicated `post_return_timeout` config setting
             // instead of reusing `request_timeout` for
-            // `WorkerState::PostReturn` here
-            WorkerState::Requests | WorkerState::PostReturn => *me.request_timeout,
+            // `WorkerStatus::PostReturn` here
+            WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
         };
 
         if let Some(deadline) = start.checked_add(timeout) {
@@ -805,6 +805,42 @@ impl InstanceExpiration for HostInstanceExpiration {
         } else {
             Poll::Pending
         }
+    }
+}
+
+struct HostWorkerState {
+    max_instance_reuse_count: usize,
+    max_instance_concurrent_reuse_count: usize,
+    request_timeout: Duration,
+}
+
+impl WorkerState for HostWorkerState {
+    type StoreData = Host;
+
+    fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
+        if total_count >= self.max_instance_reuse_count {
+            ShouldAccept::Never
+        } else if concurrent_count >= self.max_instance_concurrent_reuse_count {
+            ShouldAccept::No
+        } else {
+            ShouldAccept::Yes
+        }
+    }
+
+    fn on_request_start(&self) -> impl Future<Output = ()> + 'static {
+        tokio::time::sleep(self.request_timeout)
+    }
+
+    fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
+        if let Err(error) = result {
+            eprintln!("worker failed: {error:?}");
+        }
+
+        if let Some(write_profile) = store.data_mut().write_profile.take() {
+            write_profile(store.as_context_mut());
+        }
+
+        drop(store);
     }
 }
 
@@ -820,9 +856,12 @@ struct HostHandlerState {
 
 impl HandlerState for HostHandlerState {
     type StoreData = Host;
-    type Expiration = HostInstanceExpiration;
+    type WorkerExpiration = HostWorkerExpiration;
+    type WorkerState = HostWorkerState;
 
-    async fn instantiate(&self) -> Result<Instance<Self::StoreData, Self::Expiration>> {
+    async fn instantiate(
+        &self,
+    ) -> Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>> {
         let mut store = self.cmd.new_store(&self.engine, None)?;
         let write_profile = setup_epoch_handler(&self.cmd, &mut store, self.component.clone())?;
         store.data_mut().write_profile = Some(write_profile);
@@ -838,38 +877,17 @@ impl HandlerState for HostHandlerState {
             store,
             proxy,
             view,
-            expiration: HostInstanceExpiration {
+            expiration: HostWorkerExpiration {
                 idle_timeout: self.cmd.idle_instance_timeout,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
                 sleep: tokio::time::sleep(Duration::MAX),
             },
+            state: HostWorkerState {
+                max_instance_reuse_count: self.max_instance_reuse_count,
+                max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
+                request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
+            },
         })
-    }
-
-    fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
-        if total_count >= self.max_instance_reuse_count {
-            ShouldAccept::Never
-        } else if concurrent_count >= self.max_instance_concurrent_reuse_count {
-            ShouldAccept::No
-        } else {
-            ShouldAccept::Yes
-        }
-    }
-
-    fn on_request_start(&self) -> impl Future<Output = ()> + 'static {
-        tokio::time::sleep(self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX))
-    }
-
-    fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
-        if let Err(error) = result {
-            eprintln!("worker failed: {error:?}");
-        }
-
-        if let Some(write_profile) = store.data_mut().write_profile.take() {
-            write_profile(store.as_context_mut());
-        }
-
-        drop(store);
     }
 }
 
