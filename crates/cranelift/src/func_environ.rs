@@ -588,11 +588,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ///
     /// This can be used for expensive opcodes, such as `array.copy`, where the
     /// operation's runtime is a function of the runtime state.
-    #[cfg(feature = "gc")]
     fn manual_fuel_check(&mut self, builder: &mut FunctionBuilder<'_>, fuel_to_consume: ir::Value) {
-        if !self.tunables.consume_fuel {
-            return;
-        }
         self.fuel_increment_var(builder);
 
         let fuel = builder.use_var(self.fuel_var);
@@ -3516,10 +3512,6 @@ impl FuncEnvironment<'_> {
             (IndexType::I64, IndexType::I64) => IndexType::I64,
         };
 
-        let mut pos = builder.cursor();
-        let vmctx = self.vmctx_val(&mut pos);
-        let memory_copy = self.builtin_functions.memory_copy(&mut pos.func);
-
         let src_len = if src_idx_ty == len_idx_ty {
             len
         } else {
@@ -3543,11 +3535,174 @@ impl FuncEnvironment<'_> {
         let len_ptr =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, len_idx_ty);
 
-        builder
-            .ins()
-            .call(memory_copy, &[vmctx, dst_raw_addr, src_raw_addr, len_ptr]);
+        self.raw_bulk_memory_operation(
+            builder,
+            BulkOp::MemoryCopy {
+                dst: dst_raw_addr,
+                src: src_raw_addr,
+                len: len_ptr,
+            },
+        );
 
         Ok(())
+    }
+
+    /// Perform a raw bulk-memory-like libcall.
+    ///
+    /// The main purpose of this helper is to handle situations when fuel and
+    /// epochs are enabled to break up the copy into a loop of chunks with
+    /// preemption checks between them.
+    fn raw_bulk_memory_operation(&mut self, builder: &mut FunctionBuilder<'_>, mut op: BulkOp) {
+        // Very scientifically chosen. Or, more seriously, this is just an
+        // arbitrary number for now. 100k copies of this size locally takes half
+        // a second, so seems like a reasonably large chunk size to not hit perf
+        // too much by chunking but also enable time slicing.
+        const UNINTERRUPTABLE_CHUNK_SIZE: i64 = 128 << 20;
+
+        let mut pos = builder.cursor();
+        let vmctx = self.vmctx_val(&mut pos);
+        let pointer_type = self.pointer_type();
+
+        // Performs a raw call to the actual libcall, as dictated by the
+        // provided `op`. This unconditionally inserts epoch/fuel checks for all
+        // calls.
+        let raw_call =
+            |env: &mut FuncEnvironment<'_>, builder: &mut FunctionBuilder<'_>, op: &_| {
+                if env.tunables.epoch_interruption {
+                    env.epoch_check(builder);
+                }
+                match *op {
+                    BulkOp::MemoryCopy { dst, src, len } => {
+                        if env.tunables.consume_fuel {
+                            // Note that fuel is always a 64-bit counter.
+                            let fuel_consumed = match env.pointer_type() {
+                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
+                                ir::types::I64 => len,
+                                _ => unreachable!(),
+                            };
+                            env.manual_fuel_check(builder, fuel_consumed);
+                        }
+                        let memory_copy = env.builtin_functions.memory_copy(&mut builder.func);
+                        builder.ins().call(memory_copy, &[vmctx, dst, src, len]);
+                    }
+                    BulkOp::MemoryFill { dst, val, len } => {
+                        if env.tunables.consume_fuel {
+                            let fuel_consumed = match env.pointer_type() {
+                                ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
+                                ir::types::I64 => len,
+                                _ => unreachable!(),
+                            };
+                            env.manual_fuel_check(builder, fuel_consumed);
+                        }
+                        let memory_fill = env.builtin_functions.memory_fill(&mut builder.func);
+                        builder.ins().call(memory_fill, &[vmctx, dst, val, len]);
+                    }
+                }
+            };
+
+        // If epochs and fuel are disabled, then just call the libcall and
+        // return. No need for the loops below.
+        if !self.tunables.epoch_interruption && !self.tunables.consume_fuel {
+            raw_call(self, builder, &op);
+            return;
+        }
+
+        // If fuel is enabled, first take all the pending fuel and flush it to
+        // our internal variable. This is necessary to avoid picking up all
+        // pending fuel on each turn of the loop below.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
+        let current_block = builder.current_block().unwrap();
+        let chunk_block = builder.create_block();
+        let last_chunk_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(chunk_block, current_block);
+        builder.insert_block_after(last_chunk_block, chunk_block);
+
+        let chunk = builder
+            .ins()
+            .iconst(pointer_type, UNINTERRUPTABLE_CHUNK_SIZE);
+
+        // Helper closure to test if the length in `op` is larger than `chunk`,
+        // and if so do a single chunk. Else this goes to the final block with
+        // the final operation.
+        let has_chunk_branch = |builder: &mut FunctionBuilder<'_>, op: &_| {
+            let len = match *op {
+                BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
+            };
+            let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
+            match *op {
+                BulkOp::MemoryCopy { dst, src, len } => {
+                    builder.ins().brif(
+                        has_chunk,
+                        chunk_block,
+                        &[dst.into(), src.into(), len.into()],
+                        last_chunk_block,
+                        &[dst.into(), src.into(), len.into()],
+                    );
+                }
+                BulkOp::MemoryFill { dst, len, .. } => {
+                    builder.ins().brif(
+                        has_chunk,
+                        chunk_block,
+                        &[dst.into(), len.into()],
+                        last_chunk_block,
+                        &[dst.into(), len.into()],
+                    );
+                }
+            }
+        };
+        has_chunk_branch(builder, &op);
+
+        let append_block_params = |builder: &mut FunctionBuilder<'_>, block, op: &mut _| match op {
+            BulkOp::MemoryCopy { dst, src, len } => {
+                *dst = builder.append_block_param(block, pointer_type);
+                *src = builder.append_block_param(block, pointer_type);
+                *len = builder.append_block_param(block, pointer_type);
+            }
+            BulkOp::MemoryFill { dst, len, .. } => {
+                *dst = builder.append_block_param(block, pointer_type);
+                *len = builder.append_block_param(block, pointer_type);
+            }
+        };
+
+        // In the block with per-chunk copies, each operation performs `chunk`
+        // length of bytes and then decrements the current length by `chunk`.
+        // Afterwards a condition tests if we do another chunk or break out for
+        // the final chunk.
+        builder.switch_to_block(chunk_block);
+        append_block_params(builder, chunk_block, &mut op);
+        let op_len = match &mut op {
+            BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
+        };
+        let remaining_len = *op_len;
+        *op_len = chunk;
+        raw_call(self, builder, &op);
+        match &mut op {
+            BulkOp::MemoryCopy { dst, src, len } => {
+                *dst = builder.ins().iadd(*dst, chunk);
+                *src = builder.ins().iadd(*src, chunk);
+                *len = builder.ins().isub(remaining_len, chunk);
+            }
+            BulkOp::MemoryFill { len, dst, .. } => {
+                *dst = builder.ins().iadd(*dst, chunk);
+                *len = builder.ins().isub(remaining_len, chunk);
+            }
+        };
+        has_chunk_branch(builder, &op);
+
+        // In the final block we know that the length of the operation is less
+        // than `chunk`. This could still be sizable, though, so a final
+        // fuel/epoch check is inserted.
+        builder.switch_to_block(last_chunk_block);
+        append_block_params(builder, last_chunk_block, &mut op);
+        raw_call(self, builder, &op);
+
+        builder.seal_block(chunk_block);
+        builder.seal_block(last_chunk_block);
     }
 
     pub fn translate_memory_fill(
@@ -3559,9 +3714,6 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) {
         let idx_type = self.memory(memory_index).idx_type;
-        let memory_fill = self.builtin_functions.memory_fill(&mut builder.func);
-        let mut pos = builder.cursor();
-        let vmctx = self.vmctx_val(&mut pos);
 
         // Bounds check `dst+len` and convert it to a raw heap address.
         let raw_heap_addr = self.bounds_check_for_memory_intrinsic(builder, memory_index, dst, len);
@@ -3571,9 +3723,14 @@ impl FuncEnvironment<'_> {
         let len_ptr =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type);
 
-        builder
-            .ins()
-            .call(memory_fill, &[vmctx, raw_heap_addr, val, len_ptr]);
+        self.raw_bulk_memory_operation(
+            builder,
+            BulkOp::MemoryFill {
+                dst: raw_heap_addr,
+                val,
+                len: len_ptr,
+            },
+        );
     }
 
     pub fn translate_memory_init(
@@ -4489,4 +4646,29 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
+}
+
+/// Operations to [`FuncEnvironment::raw_bulk_memory_operation`].
+enum BulkOp {
+    /// A `memory.copy` operation, copying memory from `src` to `dst`.
+    ///
+    /// All of `dst`, `src`, and `len` must be pre-validated and inbounds. All
+    /// must have type `env.pointer_type()`.
+    MemoryCopy {
+        dst: ir::Value,
+        src: ir::Value,
+        len: ir::Value,
+    },
+
+    /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
+    ///
+    /// Both of `dst` and `len` must be pre-validated and inbounds. Both must
+    /// have type `env.pointer_type()`.
+    ///
+    /// The `val` field must have type `I32`.
+    MemoryFill {
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
+    },
 }

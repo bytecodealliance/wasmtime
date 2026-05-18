@@ -54,8 +54,8 @@
 ;;                                     v52 = iconst.i64 28
 ;;                                     v57 = iadd v20, v52  ; v52 = 28
 ;; @001f                               v4 = iconst.i32 0
-;; @001f                               v34 = isub v28, v57
-;; @001f                               call fn1(v0, v57, v4, v34), stack_map=[i32 @ ss0+0]  ; v4 = 0
+;; @001f                               v33 = isub v28, v57
+;; @001f                               call fn1(v0, v57, v4, v33), stack_map=[i32 @ ss0+0]  ; v4 = 0
 ;;                                     v35 = load.i32 notrap v46
 ;; @0022                               jump block1
 ;;

@@ -57,8 +57,8 @@
 ;; @001f                               trapnz v33, user2
 ;;                                     v66 = iadd v20, v48  ; v48 = 32
 ;; @001f                               v29 = iconst.i32 0
-;; @001f                               v35 = isub v28, v66
-;; @001f                               call fn1(v0, v66, v29, v35), stack_map=[i32 @ ss0+0]  ; v29 = 0
+;; @001f                               v34 = isub v28, v66
+;; @001f                               call fn1(v0, v66, v29, v34), stack_map=[i32 @ ss0+0]  ; v29 = 0
 ;;                                     v36 = load.i32 notrap v47
 ;; @0022                               jump block1
 ;;

@@ -1,6 +1,6 @@
 use super::{ArrayInit, GcCompiler};
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{Extension, FuncEnvironment};
+use crate::func_environ::{BulkOp, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
@@ -804,24 +804,16 @@ fn emit_array_fill_impl(
             .icmp(IntCC::UnsignedGreaterThan, fill_end, heap_end);
         func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
 
-        let memory_fill = func_env.builtin_functions.memory_fill(&mut builder.func);
-        let mut pos = builder.cursor();
-        let vmctx = func_env.vmctx_val(&mut pos);
         let len = builder.ins().isub(fill_end, elem_addr);
+        func_env.raw_bulk_memory_operation(
+            builder,
+            BulkOp::MemoryFill {
+                dst: elem_addr,
+                val: value,
+                len,
+            },
+        );
 
-        // Manually consume fuel for this operation because arrays can be large.
-        // This is a noop if fuel is disabled. Note that fuel is always a 64-bit
-        // counter.
-        let fuel_consumed = match func_env.pointer_type() {
-            ir::types::I32 => builder.ins().uextend(ir::types::I64, len),
-            ir::types::I64 => len,
-            _ => unreachable!(),
-        };
-        func_env.manual_fuel_check(builder, fuel_consumed);
-
-        builder
-            .ins()
-            .call(memory_fill, &[vmctx, elem_addr, value, len]);
         return Ok(());
     }
 
@@ -1030,17 +1022,13 @@ pub fn translate_array_copy(
             .icmp(IntCC::UnsignedGreaterThan, dst_end_addr, heap_end);
         func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
 
-        let memory_copy = func_env.builtin_functions.memory_copy(&mut builder.func);
-        let mut pos = builder.cursor();
-        let vmctx = func_env.vmctx_val(&mut pos);
-
-        // Manually consume fuel for this operation because arrays can be large.
-        // This is a noop if fuel is disabled.
-        func_env.manual_fuel_check(builder, copy_byte_size);
-
-        builder.ins().call(
-            memory_copy,
-            &[vmctx, dst_elem_addr, src_elem_addr, copy_byte_size],
+        func_env.raw_bulk_memory_operation(
+            builder,
+            BulkOp::MemoryCopy {
+                dst: dst_elem_addr,
+                src: src_elem_addr,
+                len: copy_byte_size,
+            },
         );
         return Ok(());
     }
