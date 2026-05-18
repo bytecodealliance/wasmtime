@@ -184,7 +184,6 @@ impl Context {
 
         if opt_level != OptLevel::None {
             self.egraph_pass(ctrl_plane)?;
-            self.eliminate_unreachable_code(isa)?;
         }
 
         Ok(())
@@ -334,7 +333,10 @@ impl Context {
     where
         FOI: Into<FlagsOrIsa<'a>>,
     {
-        eliminate_unreachable_code(&mut self.func, &mut self.cfg, &self.domtree);
+        let domtree = &self.domtree;
+        eliminate_unreachable_code(&mut self.func, &mut self.cfg, |block| {
+            domtree.is_reachable(block)
+        });
         self.verify_if(fisa)
     }
 
@@ -375,6 +377,7 @@ impl Context {
             &self.loop_analysis,
             &mut alias_analysis,
             ctrl_plane,
+            &mut self.cfg,
         );
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);

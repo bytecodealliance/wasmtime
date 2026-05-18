@@ -6,6 +6,7 @@ use crate::ctxhash::{CtxEq, CtxHash, NullCtx};
 use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::egraph::elaborate::Elaborator;
+use crate::flowgraph::ControlFlowGraph;
 use crate::inst_predicates::{is_mergeable_for_egraph, is_pure_for_egraph};
 use crate::ir::{
     Block, DataFlowGraph, Function, Inst, InstructionData, Type, Value, ValueDef, ValueListPool,
@@ -20,8 +21,8 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::hash::Hasher;
 use cranelift_control::ControlPlane;
-use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::{EntitySet, SecondaryMap};
 use smallvec::SmallVec;
 
 mod cost;
@@ -108,6 +109,9 @@ pub struct EgraphPass<'a> {
     /// Chaos-mode control-plane so we can test that we still get
     /// correct results when our heuristics make bad decisions.
     ctrl_plane: &'a mut ControlPlane,
+    /// The control flow graph, used when eliminating unreachable code
+    /// after branch simplification.
+    cfg: &'a mut ControlFlowGraph,
     /// Which Values do we want to rematerialize in each block where
     /// they're used?
     remat_values: FxHashSet<Value>,
@@ -708,6 +712,7 @@ impl<'a> EgraphPass<'a> {
         loop_analysis: &'a LoopAnalysis,
         alias_analysis: &'a mut AliasAnalysis<'a>,
         ctrl_plane: &'a mut ControlPlane,
+        cfg: &'a mut ControlFlowGraph,
     ) -> Self {
         Self {
             func,
@@ -715,6 +720,7 @@ impl<'a> EgraphPass<'a> {
             loop_analysis,
             alias_analysis,
             ctrl_plane,
+            cfg,
             stats: Stats::default(),
             remat_values: FxHashSet::default(),
         }
@@ -722,7 +728,7 @@ impl<'a> EgraphPass<'a> {
 
     /// Run the process.
     pub fn run(&mut self) {
-        self.remove_pure_and_optimize();
+        let reachable_blocks = self.remove_pure_and_optimize();
 
         trace!("egraph built:\n{}\n", self.func.display());
         if cfg!(feature = "trace-log") {
@@ -736,6 +742,10 @@ impl<'a> EgraphPass<'a> {
                 }
             }
         }
+
+        crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
+            reachable_blocks.contains(block)
+        });
 
         self.elaborate();
 
@@ -761,8 +771,10 @@ impl<'a> EgraphPass<'a> {
     /// because the eclass can continue to be updated and we need to
     /// only refer to its subset that exists at this stage, to
     /// maintain acyclicity.)
-    fn remove_pure_and_optimize(&mut self) {
+    fn remove_pure_and_optimize(&mut self) -> EntitySet<Block> {
         let mut cursor = FuncCursor::new(self.func);
+        let mut reachable_blocks = EntitySet::<Block>::with_capacity(cursor.func.dfg.num_blocks());
+        reachable_blocks.insert(cursor.func.layout.entry_block().unwrap());
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
 
@@ -921,7 +933,19 @@ impl<'a> EgraphPass<'a> {
                     }
                 }
             }
+
+            if reachable_blocks.contains(block) {
+                let terminator_inst = cursor.func.layout.last_inst(block).unwrap();
+                for dest in cursor.func.dfg.insts[terminator_inst].branch_destination(
+                    &cursor.func.dfg.jump_tables,
+                    &cursor.func.dfg.exception_tables,
+                ) {
+                    reachable_blocks.insert(dest.block(&cursor.func.dfg.value_lists));
+                }
+            }
         }
+
+        reachable_blocks
     }
 
     /// Execute a simplification of an instruction in the side-effectful
@@ -1028,18 +1052,8 @@ impl<'a> EgraphPass<'a> {
     fn check_post_egraph(&self) {
         // Verify that no union nodes are reachable from inst args,
         // and that all inst args' defining instructions are in the
-        // layout. Skip blocks that are unreachable via the CFG since
-        // branch simplification may have made them unreachable; they
-        // haven't been fully elaborated and will be cleaned up by
-        // the eliminate_unreachable_code pass that runs after the
-        // egraph pass.
-        let reachable: FxHashSet<Block> = crate::traversals::Dfs::new()
-            .pre_order_iter(self.func)
-            .collect();
+        // layout.
         for block in self.func.layout.blocks() {
-            if !reachable.contains(&block) {
-                continue;
-            }
             for inst in self.func.layout.block_insts(block) {
                 self.func
                     .dfg

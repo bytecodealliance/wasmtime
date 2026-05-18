@@ -318,17 +318,13 @@ impl<'a> Elaborator<'a> {
                 // tuple; `cost` comes first so the natural comparison works
                 // based on cost, and breaks ties based on value number.
                 ValueDef::Union(x, y) => {
-                    let bx = best[x];
-                    let by = best[y];
-                    if use_worst {
-                        if bx.1.is_reserved_value() || by.1.is_reserved_value() {
-                            best[value] = core::cmp::min(bx, by);
-                        } else {
-                            best[value] = core::cmp::max(bx, by);
-                        }
+                    debug_assert!(!best[x].1.is_reserved_value());
+                    debug_assert!(!best[y].1.is_reserved_value());
+                    best[value] = if use_worst {
+                        core::cmp::max(best[x], best[y])
                     } else {
-                        best[value] = core::cmp::min(bx, by);
-                    }
+                        core::cmp::min(best[x], best[y])
+                    };
                     trace!(
                         " -> best of union({:?}, {:?}) = {:?}",
                         best[x], best[y], best[value]
@@ -353,7 +349,10 @@ impl<'a> Elaborator<'a> {
                         // satisfied.
                         let cost = Cost::of_pure_op(
                             inst_data.opcode(),
-                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                            self.func.dfg.inst_values(inst).map(|value| {
+                                debug_assert!(!best[value].1.is_reserved_value());
+                                best[value].0
+                            }),
                         );
                         best[value] = BestEntry(cost, value);
                         trace!(" -> cost of value {} = {:?}", value, cost);
@@ -395,7 +394,7 @@ impl<'a> Elaborator<'a> {
     /// instructions before the given inst `before`. Should only be
     /// given values corresponding to results of instructions or
     /// blockparams.
-    fn elaborate_eclass_use(&mut self, value: Value, before: Inst) -> Option<ElaboratedValue> {
+    fn elaborate_eclass_use(&mut self, value: Value, before: Inst) -> ElaboratedValue {
         debug_assert_ne!(value, Value::reserved_value());
 
         // Kick off the process by requesting this result
@@ -406,14 +405,8 @@ impl<'a> Elaborator<'a> {
         // Now run the explicit-stack recursion until we reach
         // the root.
         self.process_elab_stack();
-
-        // A `None` result means we hit a value from an unreachable
-        // block; the caller should stop elaborating this block.
-        if self.elab_result_stack.is_empty() {
-            return None;
-        }
         debug_assert_eq!(self.elab_result_stack.len(), 1);
-        self.elab_result_stack.pop()
+        self.elab_result_stack.pop().unwrap()
     }
 
     /// Possibly rematerialize the instruction producing the value in
@@ -469,18 +462,7 @@ impl<'a> Elaborator<'a> {
                     trace!("looking up best value for {}", value);
                     let BestEntry(_, best_value) = self.value_to_best_value[value];
                     trace!("elaborate: value {} -> best {}", value, best_value);
-
-                    // A missing best value means this value was defined
-                    // in a block that is unreachable after branch
-                    // simplification. The current block is dominated by
-                    // that unreachable block and is therefore also
-                    // unreachable. Stop elaborating; a later
-                    // `eliminate_unreachable_code` pass will remove it.
-                    if best_value.is_reserved_value() {
-                        self.elab_stack.clear();
-                        self.elab_result_stack.clear();
-                        return;
-                    }
+                    debug_assert_ne!(best_value, Value::reserved_value());
 
                     if let Some(elab_val) =
                         self.value_to_elaborated_value.get(&NullCtx, &best_value)
@@ -798,13 +780,7 @@ impl<'a> Elaborator<'a> {
                 // Elaborate the arg, placing any newly-inserted insts
                 // before `before`. Get the updated value, which may
                 // be different than the original.
-                let Some(mut new_arg) = self.elaborate_eclass_use(*arg, before) else {
-                    // This value is defined in an unreachable block, which
-                    // means the current block is also unreachable. Stop
-                    // elaborating this block.
-                    elab_values.clear();
-                    return;
-                };
+                let mut new_arg = self.elaborate_eclass_use(*arg, before);
                 Self::maybe_remat_arg(
                     &self.remat_values,
                     &mut self.func,
