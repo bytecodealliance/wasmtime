@@ -325,10 +325,6 @@ pub struct Module {
     /// WebAssembly passive elements.
     pub passive_elements: TryPrimaryMap<PassiveElemIndex, TableSegmentElements>,
 
-    /// The map from passive element index (element segment index space) to
-    /// index in `passive_elements`.
-    pub passive_elements_map: TryBTreeMap<ElemIndex, PassiveElemIndex>,
-
     /// Where passive data segments are located in the module's image.
     pub passive_data: PrimaryMap<PassiveDataIndex, Range<u32>>,
 
@@ -408,7 +404,6 @@ impl Module {
             table_initialization: Default::default(),
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
-            passive_elements_map: Default::default(),
             passive_data: Default::default(),
             types: Default::default(),
             num_imported_funcs: Default::default(),
@@ -699,7 +694,6 @@ impl TypeTrace for Module {
             table_initialization: _,
             memory_initialization: _,
             passive_elements: _,
-            passive_elements_map: _,
             passive_data: _,
             types,
             num_imported_funcs: _,
@@ -751,7 +745,6 @@ impl TypeTrace for Module {
             table_initialization: _,
             memory_initialization: _,
             passive_elements: _,
-            passive_elements_map: _,
             passive_data: _,
             types,
             num_imported_funcs: _,

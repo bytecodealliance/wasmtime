@@ -54,7 +54,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+44
 ;;     gv2 = load.i32 notrap aligned can_move gv0+40
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32):
 ;; @0042                               v6 = load.i32 notrap aligned v0+44
@@ -85,7 +85,7 @@
 ;;     gv3 = load.i32 notrap aligned gv0+52
 ;;     gv4 = load.i32 notrap aligned can_move gv0+48
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32):
 ;; @004f                               v6 = load.i32 notrap aligned v0+52
@@ -119,7 +119,7 @@
 ;;     gv3 = load.i32 notrap aligned gv0+60
 ;;     gv4 = load.i32 notrap aligned can_move gv0+56
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64, v3: i32, v4: i32):
 ;; @005c                               v7 = load.i32 notrap aligned v0+60
@@ -151,7 +151,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+60
 ;;     gv2 = load.i32 notrap aligned can_move gv0+56
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64, v3: i64, v4: i64):
 ;; @0069                               v6 = load.i32 notrap aligned v0+60
@@ -182,7 +182,7 @@
 ;;     gv3 = load.i32 notrap aligned gv0+68
 ;;     gv4 = load.i32 notrap aligned can_move gv0+64
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64, v3: i64, v4: i64):
 ;; @0076                               v6 = load.i32 notrap aligned v0+68
@@ -216,7 +216,7 @@
 ;;     gv3 = load.i32 notrap aligned gv0+44
 ;;     gv4 = load.i32 notrap aligned can_move gv0+40
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:3 sig0
+;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i64, v4: i32):
 ;; @0083                               v7 = load.i32 notrap aligned v0+44

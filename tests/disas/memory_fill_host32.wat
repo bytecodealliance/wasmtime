@@ -51,7 +51,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+48
 ;;     gv2 = load.i32 notrap aligned can_move gv0+44
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:2 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32):
 ;; @003c                               v6 = load.i32 notrap aligned v0+48
@@ -76,7 +76,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+56
 ;;     gv2 = load.i32 notrap aligned can_move gv0+52
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:2 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64, v3: i64):
 ;; @0048                               v6 = load.i32 notrap aligned v0+56
@@ -101,7 +101,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+64
 ;;     gv2 = load.i32 notrap aligned can_move gv0+60
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:2 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32):
 ;; @0054                               v6 = load.i32 notrap aligned v0+64
@@ -126,7 +126,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+72
 ;;     gv2 = load.i32 notrap aligned can_move gv0+68
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:2 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i64, v3: i64):
 ;; @0060                               v6 = load.i32 notrap aligned v0+72
@@ -151,7 +151,7 @@
 ;;     gv1 = load.i32 notrap aligned gv0+80
 ;;     gv2 = load.i32 notrap aligned readonly can_move gv0+76
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
-;;     fn0 = colocated u805306368:4 sig0
+;;     fn0 = colocated u805306368:2 sig0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32):
 ;; @006c                               v6 = load.i32 notrap aligned v0+80

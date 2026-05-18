@@ -28,7 +28,7 @@ use wasmparser::{
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
     WasmValType,
 };
 
@@ -1716,20 +1716,7 @@ where
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-
-        self.context
-            .stack
-            .insert_many(at, &[table.try_into()?, elem.try_into()?]);
-
-        let builtin = self.env.builtins.table_init::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_table_init(ElemIndex::from_u32(elem), TableIndex::from_u32(table))
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) -> Self::Output {
@@ -1763,15 +1750,8 @@ where
     }
 
     fn visit_elem_drop(&mut self, index: u32) -> Self::Output {
-        let elem_drop = self.env.builtins.elem_drop::<M::ABI>()?;
-        self.context.stack.extend([index.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(elem_drop),
-        )?;
-        self.context.pop_and_free(self.masm)
+        let index = ElemIndex::from_u32(index);
+        self.emit_elem_drop(index)
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) -> Self::Output {

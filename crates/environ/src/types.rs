@@ -206,6 +206,9 @@ impl TypeTrace for WasmValType {
 }
 
 impl WasmValType {
+    /// Alias for the `funcref` type.
+    pub const FUNCREF: WasmValType = WasmValType::Ref(WasmRefType::FUNCREF);
+
     /// Is this a type that is represented as a `VMGcRef`?
     #[inline]
     pub fn is_vmgcref_type(&self) -> bool {
