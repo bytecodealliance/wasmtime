@@ -767,7 +767,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for import in s {
                     let import = import?;
                     let types = self.validator.types(0).unwrap();
-                    let ty = types.component_item_for_import(import.name.name).unwrap().ty;
+                    let ty = types
+                        .component_item_for_import(import.name.name)
+                        .unwrap()
+                        .ty;
 
                     if self.is_unsafe_intrinsics_import(import.name.name) {
                         self.check_unsafe_intrinsics_import(import.name.name, ty)?;
@@ -1485,7 +1488,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let ty = types.component_any_type_at(index);
                 ComponentItem::Type(ty)
             }
-
         })
     }
 

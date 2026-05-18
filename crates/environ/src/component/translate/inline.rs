@@ -114,7 +114,10 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
-        let index = inliner.result.import_types.push((name.name.to_string(), ty));
+        let index = inliner
+            .result
+            .import_types
+            .push((name.name.to_string(), ty));
         let path = ImportPath::root(index);
         args.insert(name.name, ComponentItemDef::from_import(path, ty)?);
     }
