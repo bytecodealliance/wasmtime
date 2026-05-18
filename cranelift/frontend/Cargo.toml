@@ -18,7 +18,7 @@ workspace = true
 cranelift-codegen = { workspace = true }
 target-lexicon = { workspace = true }
 log = { workspace = true }
-hashbrown = { workspace = true, optional = true }
+hashbrown = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
@@ -29,4 +29,4 @@ cranelift-codegen = { workspace = true, features = ['x86'] }
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["hashbrown", "cranelift-codegen/core"]
+core = ["cranelift-codegen/core"]
