@@ -121,6 +121,7 @@ enable-serde = [
     "cranelift-entity/enable-serde",
     "cranelift-bitset/enable-serde",
     "regalloc2/enable-serde",
+    "hashbrown/serde",
     "smallvec/serde",
 ]
 
