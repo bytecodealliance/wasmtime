@@ -908,7 +908,6 @@ version = "0.133.0"
 dependencies = [
  "codespan-reporting",
  "log",
- "tempfile",
 ]
 
 [[package]]

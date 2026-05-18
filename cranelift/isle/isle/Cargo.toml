@@ -16,9 +16,6 @@ workspace = true
 codespan-reporting = { version = "0.11.1", optional = true }
 log = { workspace = true, optional = true }
 
-[dev-dependencies]
-tempfile = "3"
-
 [features]
 default = []
 

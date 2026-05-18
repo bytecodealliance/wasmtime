@@ -1491,6 +1491,7 @@ The grammar accepted by the parser is as follows:
 
 <type-body> ::= "(" "primitive" <ident> ")"
               | "(" "enum" <enum-variant>* ")"
+              | "(" "struct" <variant-field>* ")"
 
 <enum-variant> ::= <ident>
                  | "(" <ident> <variant-field>* ")"

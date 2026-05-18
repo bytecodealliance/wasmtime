@@ -118,6 +118,24 @@ pub enum Binding {
         /// get the field names.
         field: TupleIndex,
     },
+    /// The result of constructing a struct.
+    MakeStruct {
+        /// Which struct type should be constructed?
+        ty: sema::TypeId,
+        /// What expressions should be provided for this struct's fields?
+        fields: Box<[BindingId]>,
+    },
+    /// Extract the fields of the struct from one of the previous bindings to produce a new binding
+    /// from one of its fields. There must be a corresponding [Constraint::Struct] for each
+    /// `source`/`variant` pair that appears in some `ExtractStruct` binding.
+    ExtractStruct {
+        /// Which binding is being matched?
+        source: BindingId,
+        /// Which field of this struct are we projecting out? Although ISLE uses named fields,
+        /// we track them by index for constant-time comparisons. The [sema::TypeEnv] can be used to
+        /// get the field names.
+        field: TupleIndex,
+    },
     /// The result of constructing an Option::Some variant.
     MakeSome {
         /// Contained expression.
@@ -152,6 +170,15 @@ pub enum Constraint {
         ty: sema::TypeId,
         /// Which enum variant must this binding site match to satisfy the rule?
         variant: sema::VariantId,
+        /// Number of fields in this variant of this enum. This is recorded in the constraint for
+        /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
+        fields: TupleIndex,
+    },
+    /// The value must match this struct variant.
+    Struct {
+        /// Which struct type is being matched? This is implied by the binding where the constraint is
+        /// applied, but recorded here for convenience.
+        ty: sema::TypeId,
         /// Number of fields in this variant of this enum. This is recorded in the constraint for
         /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
         fields: TupleIndex,
@@ -270,6 +297,8 @@ impl Binding {
             Binding::Iterator { source } => std::slice::from_ref(source),
             Binding::MakeVariant { fields, .. } => &fields[..],
             Binding::MatchVariant { source, .. } => std::slice::from_ref(source),
+            Binding::MakeStruct { fields, .. } => &fields[..],
+            Binding::ExtractStruct { source, .. } => std::slice::from_ref(source),
             Binding::MakeSome { inner } => std::slice::from_ref(inner),
             Binding::MatchSome { source } => std::slice::from_ref(source),
             Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
@@ -295,6 +324,10 @@ impl Constraint {
                     variant,
                     field,
                 })
+                .collect(),
+            Constraint::Struct { fields, .. } => (0..fields.0)
+                .map(TupleIndex)
+                .map(|field| Binding::ExtractStruct { source, field })
                 .collect(),
         }
     }
@@ -575,6 +608,22 @@ impl sema::PatternVisitor for RuleSetBuilder {
         )
     }
 
+    fn add_extract_struct(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: sema::TypeId,
+        arg_tys: &[sema::TypeId],
+    ) -> Vec<Self::PatternId> {
+        let fields = TupleIndex(arg_tys.len().try_into().unwrap());
+        self.set_constraint(
+            input,
+            Constraint::Struct {
+                fields,
+                ty: input_ty,
+            },
+        )
+    }
+
     fn add_extract(
         &mut self,
         input: BindingId,
@@ -637,6 +686,17 @@ impl sema::ExprVisitor for RuleSetBuilder {
         self.dedup_binding(Binding::MakeVariant {
             ty,
             variant,
+            fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
+        })
+    }
+
+    fn add_create_struct(
+        &mut self,
+        inputs: Vec<(Self::ExprId, sema::TypeId)>,
+        ty: sema::TypeId,
+    ) -> Self::ExprId {
+        self.dedup_binding(Binding::MakeStruct {
+            ty,
             fields: inputs.into_iter().map(|(expr, _)| expr).collect(),
         })
     }
