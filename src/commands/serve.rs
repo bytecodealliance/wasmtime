@@ -797,15 +797,11 @@ impl InstanceExpiration for HostInstanceExpiration {
         };
 
         if let Some(deadline) = start.checked_add(timeout) {
-            if Instant::now() >= deadline {
-                Poll::Ready(())
-            } else {
-                let deadline = deadline.into();
-                if deadline != me.sleep.deadline() {
-                    me.sleep.as_mut().reset(deadline);
-                }
-                me.sleep.poll(cx)
+            let deadline = deadline.into();
+            if deadline != me.sleep.deadline() {
+                me.sleep.as_mut().reset(deadline);
             }
+            me.sleep.poll(cx)
         } else {
             Poll::Pending
         }

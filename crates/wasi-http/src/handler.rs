@@ -28,6 +28,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
 use wasmtime::component::Accessor;
+use wasmtime::error::Context as _;
 use wasmtime::{AsContextMut, Result, Store, format_err};
 
 /// Represents either a `wasi:http/types@0.2.x` or `wasi:http/types@0.3.x` `error-code`.
@@ -929,7 +930,12 @@ where
                     let (state, start) = *state.try_lock().unwrap();
 
                     if let Poll::Ready(()) = expiration.as_mut().poll(cx, state, start) {
-                        return Poll::Ready(Ok(()));
+                        return Poll::Ready(match state {
+                            WorkerState::Requests | WorkerState::PostReturn => {
+                                Err(format_err!("guest timed out"))
+                            }
+                            WorkerState::Idle => Ok(()),
+                        });
                     }
 
                     // Otherwise, if the instance has not yet expired, we set
@@ -1017,7 +1023,7 @@ impl fmt::Display for ExpirationError {
 
 impl fmt::Debug for ExpirationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "request timed out")
+        write!(f, "guest timed out")
     }
 }
 
@@ -1235,19 +1241,29 @@ async fn handle<T: Send>(
                     .call_handle(accessor, request, out)
             );
 
+            const MESSAGE: &str = "guest never invoked `response-outparam::set` method";
+
+            struct Dropper(Arc<Mutex<Option<oneshot::Sender<Result<Response, wasmtime::Error>>>>>);
+
+            impl Drop for Dropper {
+                fn drop(&mut self) {
+                    if let Some(tx) = self.0.lock().unwrap().take() {
+                        _ = tx.send(Err(format_err!("{MESSAGE}")));
+                    }
+                }
+            }
+
+            let tx = Dropper(tx);
+
             // See corresponding TODO comment for the p3 case above.
             let (result, sent) = match futures::future::select(handle, expiration).await {
-                Either::Left((result, _)) => (Ok(result?), true),
+                Either::Left((result, _)) => (result.context(MESSAGE), true),
                 // See corresponding TODO comment for the p3 case above.
                 Either::Right(((), _)) => (Err(ExpirationError.into()), false),
             };
 
-            if let Some(tx) = tx.lock().unwrap().take() {
-                _ = tx.send(result.and_then(|()| {
-                    Err(format_err!(
-                        "guest never invoked `response-outparam::set` method"
-                    ))
-                }));
+            if let Some(tx) = tx.0.lock().unwrap().take() {
+                _ = tx.send(result.and_then(|()| Err(format_err!("{MESSAGE}"))));
             }
 
             Ok(sent)

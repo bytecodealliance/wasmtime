@@ -1923,25 +1923,25 @@ mod test_programs {
         assert_eq!(
             out,
             "\
-stdout [0] :: this is half a print to stdout
-stdout [0] :: \n\
-stdout [0] :: after empty
-stdout [1] :: this is half a print to stdout
-stdout [1] :: \n\
-stdout [1] :: after empty
+this is half a print to stdout
+\n\
+after empty
+this is half a print to stdout
+\n\
+after empty
 "
         );
         assert!(
             err.contains(
                 "\
-stderr [0] :: this is half a print to stderr
-stderr [0] :: \n\
-stderr [0] :: after empty
-stderr [0] :: start a print 1234
-stderr [1] :: this is half a print to stderr
-stderr [1] :: \n\
-stderr [1] :: after empty
-stderr [1] :: start a print 1234
+this is half a print to stderr
+\n\
+after empty
+start a print 1234
+this is half a print to stderr
+\n\
+after empty
+start a print 1234
 "
             ),
             "bad stderr: {err}"
