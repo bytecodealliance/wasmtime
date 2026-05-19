@@ -34,7 +34,7 @@
 ;; @003d                               v11 = uextend.i64 v2
 ;; @003d                               v12 = load.i64 notrap aligned readonly can_move v0+56
 ;; @003d                               v13 = iadd v12, v11
-;; @003d                               v15 = uload32 notrap aligned v0+148
+;; @003d                               v15 = uload32 notrap aligned v0+152
 ;; @003d                               v16 = uextend.i64 v3
 ;; @003d                               v17 = uextend.i64 v4
 ;; @003d                               v18 = iadd v16, v17
@@ -60,7 +60,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0044                               v3 = iconst.i32 0
-;; @0044                               store notrap aligned v3, v0+148  ; v3 = 0
+;; @0044                               store notrap aligned v3, v0+152  ; v3 = 0
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:

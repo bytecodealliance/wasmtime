@@ -40,7 +40,7 @@
 ;; @002a                               v12 = uextend.i64 v11
 ;; @002a                               v16 = icmp ugt v15, v12
 ;; @002a                               trapnz v16, user17
-;; @002a                               v19 = uload32 notrap aligned v0+52
+;; @002a                               v19 = uload32 notrap aligned v0+56
 ;; @002a                               v20 = uextend.i64 v4
 ;; @002a                               v22 = iadd v20, v14
 ;; @002a                               v23 = icmp ugt v22, v19

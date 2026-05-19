@@ -95,7 +95,7 @@
 ;;                                     v73 = iconst.i64 32
 ;; @0025                               v7 = ushr v5, v73  ; v73 = 32
 ;; @0025                               trapnz v7, heap_oob
-;; @0025                               v10 = uload32 notrap aligned v0+52
+;; @0025                               v10 = uload32 notrap aligned v0+56
 ;; @0025                               v11 = uextend.i64 v2
 ;; @0025                               v13 = iadd v11, v5
 ;; @0025                               v14 = icmp ugt v13, v10
