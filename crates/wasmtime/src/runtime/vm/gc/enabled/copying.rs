@@ -1147,7 +1147,7 @@ mod tests {
     fn vm_copying_heap_data_bump_ptr_offset() {
         assert_eq!(
             HostPtr.vmcopying_heap_data_bump_ptr() as usize,
-            core::mem::offset_of!(VMCopyingHeapData, bump_ptr),
+            core::mem::offset_of!(VMCopyingHeapDataInner, bump_ptr),
         );
     }
 
@@ -1155,7 +1155,7 @@ mod tests {
     fn vm_copying_heap_data_active_space_end_offset() {
         assert_eq!(
             HostPtr.vmcopying_heap_data_active_space_end() as usize,
-            core::mem::offset_of!(VMCopyingHeapData, active_space_end),
+            core::mem::offset_of!(VMCopyingHeapDataInner, active_space_end),
         );
     }
 
@@ -1165,6 +1165,10 @@ mod tests {
             HostPtr.size_of_vmcopying_heap_data() as usize,
             core::mem::size_of::<VMCopyingHeapData>(),
         );
+        assert_eq!(
+            HostPtr.size_of_vmcopying_heap_data() as usize,
+            core::mem::size_of::<VMCopyingHeapDataInner>(),
+        );
     }
 
     #[test]
@@ -1172,6 +1176,10 @@ mod tests {
         assert_eq!(
             HostPtr.align_of_vmcopying_heap_data() as usize,
             core::mem::align_of::<VMCopyingHeapData>(),
+        );
+        assert_eq!(
+            HostPtr.align_of_vmcopying_heap_data() as usize,
+            core::mem::align_of::<VMCopyingHeapDataInner>(),
         );
     }
 }
