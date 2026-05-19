@@ -479,7 +479,7 @@ fn table_copy(
     dst: u64,
     src: u64,
     len: u64,
-) -> Result<(), Trap> {
+) -> Result<()> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
     let store = store.store_opaque_mut();
@@ -708,7 +708,7 @@ fn gc_alloc_raw(
     let opaque = store.store_opaque_mut();
     if let Some(gc_store) = opaque.try_gc_store_mut() {
         if let Ok(gc_ref) = gc_store.alloc_raw(header, layout)? {
-            let raw = gc_store.expose_gc_ref_to_wasm(gc_ref);
+            let raw = gc_store.expose_gc_ref_to_wasm(gc_ref)?;
             return Ok(raw);
         }
     }
@@ -724,8 +724,7 @@ fn gc_alloc_raw(
             })
             .await?;
 
-        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
+        store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref)
     })?
 }
 
@@ -765,7 +764,7 @@ fn get_interned_func_ref(
     instance: InstanceId,
     func_ref_id: u32,
     module_interned_type_index: u32,
-) -> *mut u8 {
+) -> Result<*mut u8> {
     use super::FuncRefTableId;
     use crate::store::AutoAssertNoGc;
     use wasmtime_environ::{ModuleInternedTypeIndex, packed_option::ReservedValue};
@@ -779,7 +778,7 @@ fn get_interned_func_ref(
         store
             .unwrap_gc_store()
             .func_ref_table
-            .get_untyped(func_ref_id)
+            .get_untyped(func_ref_id)?
     } else {
         let types = store.engine().signatures();
         let engine_ty = store
@@ -788,10 +787,10 @@ fn get_interned_func_ref(
         store
             .unwrap_gc_store()
             .func_ref_table
-            .get_typed(types, func_ref_id, engine_ty)
+            .get_typed(types, func_ref_id, engine_ty)?
     };
 
-    func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast())
+    Ok(func_ref.map_or(core::ptr::null_mut(), |f| f.as_ptr().cast()))
 }
 
 /// Implementation of the `array.new_data` instruction.
@@ -857,12 +856,11 @@ fn array_new_data(
 
         // Copy the data into the array, initializing it.
         gc_store
-            .gc_object_data(array_ref.as_gc_ref())
-            .copy_from_slice(array_layout.base_size, data);
+            .gc_object_data(array_ref.as_gc_ref())?
+            .copy_from_slice(array_layout.base_size, data)?;
 
         // Return the array to Wasm!
-        let raw = gc_store.expose_gc_ref_to_wasm(array_ref.into());
-        Ok(raw)
+        gc_store.expose_gc_ref_to_wasm(array_ref.into())
     })?
 }
 
@@ -891,16 +889,17 @@ fn array_init_data(
 
     // Null check the array.
     let gc_ref = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
-    let array = gc_ref
-        .into_arrayref(&*store.unwrap_gc_store().gc_heap)
-        .expect("gc ref should be an array");
+    let array = match gc_ref.into_arrayref(&*store.unwrap_gc_store().gc_heap) {
+        Ok(r) => r,
+        Err(_) => bail_bug!("expected arrayref"),
+    };
 
     let dst = usize::try_from(dst).map_err(|_| Trap::MemoryOutOfBounds)?;
     let src = usize::try_from(src).map_err(|_| Trap::MemoryOutOfBounds)?;
     let len = usize::try_from(len).map_err(|_| Trap::MemoryOutOfBounds)?;
 
     // Bounds check the array.
-    let array_len = array.len(store.store_opaque());
+    let array_len = array.len(store.store_opaque())?;
     let array_len = usize::try_from(array_len).map_err(|_| Trap::ArrayOutOfBounds)?;
     if dst.checked_add(len).ok_or_else(|| Trap::ArrayOutOfBounds)? > array_len {
         return Err(Trap::ArrayOutOfBounds.into());
@@ -945,8 +944,8 @@ fn array_init_data(
     let gc_store = gc_store.unwrap();
     let data = &instance.wasm_data(data_range)[src..][..data_len];
     gc_store
-        .gc_object_data(array.as_gc_ref())
-        .copy_from_slice(obj_offset, data);
+        .gc_object_data(array.as_gc_ref())?
+        .copy_from_slice(obj_offset, data)?;
 
     Ok(())
 }
@@ -960,10 +959,7 @@ fn array_new_elem(
     src: u32,
     len: u32,
 ) -> Result<core::num::NonZeroU32> {
-    use crate::{
-        ArrayRef, ArrayRefPre, ArrayType, OpaqueRootScope, RootedGcRefImpl, Val,
-        store::AutoAssertNoGc,
-    };
+    use crate::{ArrayRef, ArrayRefPre, ArrayType, OpaqueRootScope, Val, store::AutoAssertNoGc};
     use wasmtime_environ::ModuleInternedTypeIndex;
 
     // Convert indices to their typed forms.
@@ -1015,8 +1011,7 @@ fn array_new_elem(
 
         let mut store = AutoAssertNoGc::new(&mut store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
-        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
+        store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref)
     })?
 }
 
@@ -1634,7 +1629,7 @@ fn get_instance_id(_store: &mut dyn VMStore, instance: InstanceId) -> u32 {
 #[cfg(feature = "gc")]
 fn throw_ref(store: &mut dyn VMStore, _instance: InstanceId, exnref: u32) -> Result<()> {
     let exnref = VMGcRef::from_raw_u32(exnref).ok_or_else(|| Trap::NullReference)?;
-    Err(store.set_pending_exception(&exnref).into())
+    Err(store.set_pending_exception(&exnref))
 }
 
 fn breakpoint(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {

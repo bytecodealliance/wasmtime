@@ -6,7 +6,7 @@ use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLi
 use crate::trampoline::generate_table_export;
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, HeapType, Ref, RefType,
-    StoreContextMut, TableType, Trap,
+    StoreContextMut, TableType,
 };
 use core::iter;
 use core::ptr::NonNull;
@@ -440,7 +440,7 @@ impl Table {
         src_table: &Table,
         src_index: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         // Handle lazy initialization of the source table first before doing
         // anything else.
         let src_range = src_index..(src_index.checked_add(len).unwrap_or(u64::MAX));
@@ -478,7 +478,7 @@ impl Table {
                     dst_index,
                     src_index,
                     len,
-                )
+                )?;
             }
 
             // 2. Intra-instance, distinct-tables copy: split the mutable
@@ -490,7 +490,7 @@ impl Table {
                     .tables_mut()
                     .get_disjoint_mut([src_table.index, dst_table.index])
                     .unwrap();
-                src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)
+                src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)?;
             }
 
             // 3. Intra-table copy: get the table and copy within it!
@@ -498,9 +498,10 @@ impl Table {
                 let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
                 instance
                     .get_defined_table(src_table.index)
-                    .copy_within(gc_store, dst_index, src_index, len)
+                    .copy_within(gc_store, dst_index, src_index, len)?;
             }
         }
+        Ok(())
     }
 
     /// Fill `table[dst..(dst + len)]` with the given value.

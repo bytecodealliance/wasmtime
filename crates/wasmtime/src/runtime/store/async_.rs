@@ -97,7 +97,7 @@ impl<T> Store<T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
@@ -140,7 +140,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send + 'static,
     {
@@ -152,7 +152,8 @@ impl<'a, T> StoreContextMut<'a, T> {
                 why.map(|e| e.bytes_needed()),
                 crate::store::Asyncness::Yes,
             )
-            .await;
+            .await?;
+        Ok(())
     }
 
     /// Configures epoch-deadline expiration to yield to the async

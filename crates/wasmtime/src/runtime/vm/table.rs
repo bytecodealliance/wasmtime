@@ -568,12 +568,12 @@ impl Table {
         dst: u64,
         val: Option<&VMGcRef>,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let range = self.validate_fill(dst, len)?;
 
         // Clone the init GC reference into each table slot.
         for slot in &mut self.gc_refs_mut()[range] {
-            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val);
+            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val)?;
         }
 
         Ok(())
@@ -625,7 +625,8 @@ impl Table {
         init_value: Option<SendSyncPtr<VMFuncRef>>,
     ) -> Result<Option<usize>, Error> {
         self._grow(delta, limiter, |me, base, len| {
-            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)
+            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)?;
+            Ok(())
         })
         .await
     }
@@ -652,7 +653,8 @@ impl Table {
         init_value: Option<VMContObj>,
     ) -> Result<Option<usize>, Error> {
         self._grow(delta, limiter, |me, base, len| {
-            me.fill_cont(base, init_value, len)
+            me.fill_cont(base, init_value, len)?;
+            Ok(())
         })
         .await
     }
@@ -661,7 +663,7 @@ impl Table {
         &mut self,
         delta: u64,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-        fill: impl FnOnce(&mut Self, u64, u64) -> Result<(), Trap>,
+        fill: impl FnOnce(&mut Self, u64, u64) -> Result<()>,
     ) -> Result<Option<usize>, Error> {
         let old_size = self.size();
 
@@ -747,8 +749,7 @@ impl Table {
             self,
             u64::try_from(old_size).unwrap(),
             u64::try_from(delta).unwrap(),
-        )
-        .expect("table should not be out of bounds");
+        )?;
 
         Ok(Some(old_size))
     }
@@ -819,14 +820,14 @@ impl Table {
         store: Option<&mut GcStore>,
         index: u64,
         elem: Option<&VMGcRef>,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let trap = Trap::TableOutOfBounds;
         let index: usize = index.try_into().map_err(|_| trap)?;
         GcStore::write_gc_ref_optional_store(
             store,
             self.gc_refs_mut().get_mut(index).ok_or(trap)?,
             elem,
-        );
+        )?;
         Ok(())
     }
 
@@ -844,9 +845,9 @@ impl Table {
         dst_index: u64,
         src_index: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let (src_range, dst_range) = Table::validate_copy(self, dst, dst_index, src_index, len)?;
-        Self::copy_elements(gc_store, dst, self, dst_range, src_range);
+        Self::copy_elements(gc_store, dst, self, dst_range, src_range)?;
         Ok(())
     }
 
@@ -863,9 +864,9 @@ impl Table {
         dst_index: u64,
         src_index: u64,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let (src_range, dst_range) = Table::validate_copy(self, self, dst_index, src_index, len)?;
-        self.copy_elements_within(gc_store, dst_range, src_range);
+        self.copy_elements_within(gc_store, dst_range, src_range)?;
         Ok(())
     }
 
@@ -1048,7 +1049,7 @@ impl Table {
         src_table: &Self,
         dst_range: Range<usize>,
         src_range: Range<usize>,
-    ) {
+    ) -> Result<()> {
         // This can only be used when copying between different tables
         debug_assert!(!ptr::eq(dst_table, src_table));
 
@@ -1074,7 +1075,7 @@ impl Table {
                         gc_store.as_deref_mut(),
                         &mut dst_table.gc_refs_mut()[dst],
                         src_table.gc_refs()[src].as_ref(),
-                    );
+                    )?;
                 }
             }
             TableElementType::Cont => {
@@ -1083,6 +1084,7 @@ impl Table {
                     .copy_from_slice(&src_table.contrefs()[src_range]);
             }
         }
+        Ok(())
     }
 
     fn copy_elements_within(
@@ -1090,7 +1092,7 @@ impl Table {
         mut gc_store: Option<&mut GcStore>,
         dst_range: Range<usize>,
         src_range: Range<usize>,
-    ) {
+    ) -> Result<()> {
         assert_eq!(
             dst_range.end - dst_range.start,
             src_range.end - src_range.start
@@ -1098,7 +1100,7 @@ impl Table {
 
         // This is a no-op.
         if src_range.start == dst_range.start {
-            return;
+            return Ok(());
         }
 
         let ty = self.element_type();
@@ -1117,14 +1119,14 @@ impl Table {
                         let (ds, ss) = elements.split_at_mut(s);
                         let dst = &mut ds[d];
                         let src = ss[0].as_ref();
-                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
+                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src)?;
                     }
                 } else {
                     for (s, d) in src_range.rev().zip(dst_range.rev()) {
                         let (ss, ds) = elements.split_at_mut(d);
                         let dst = &mut ds[0];
                         let src = ss[s].as_ref();
-                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
+                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src)?;
                     }
                 }
             }
@@ -1133,6 +1135,7 @@ impl Table {
                 self.contrefs_mut().copy_within(src_range, dst_range.start);
             }
         }
+        Ok(())
     }
 
     /// Manually resets all table elements to a null bit pattern.
