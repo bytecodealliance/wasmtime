@@ -325,3 +325,34 @@ fn instance_global_init_with_imported_global() -> Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn table_element_segment_init() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"(module
+                (table (export "table") 10 funcref)
+                (func $f (result i32) (i32.const 42))
+                (elem (i32.const 0) func $f)
+            )"#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let linker = Linker::<()>::new(&engine);
+    let instance_pre = linker.instantiate_pre(&module)?;
+
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut store = Store::try_new(&engine, ())?;
+        let _instance = instance_pre.instantiate(&mut store)?;
+        Ok(())
+    })
+}
