@@ -276,7 +276,7 @@ impl StoreOpaque {
                 .await?
                 .ok_or_else(|| format_err!("failed to grow GC heap"))?;
         }
-        heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
+        *heap.store.vm_store_context.gc_heap.get_mut() = heap.memory.vmmemory();
 
         let new_size_in_bytes = u64::try_from(heap.memory.byte_size()).unwrap();
         assert!(new_size_in_bytes > current_size_in_bytes);
