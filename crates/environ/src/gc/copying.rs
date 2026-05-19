@@ -63,8 +63,8 @@ impl GcTypeLayouts for CopyingTypeLayouts {
         layout
     }
 
-    fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout {
-        let mut layout = common_struct_layout(ty, HEADER_SIZE, ALIGN);
+    fn struct_layout(&self, ty: &WasmStructType) -> Result<GcStructLayout, OutOfMemory> {
+        let mut layout = common_struct_layout(ty, HEADER_SIZE, ALIGN)?;
         // Ensure there is always space for the forwarding reference, even if
         // the struct has no fields.
         if layout.size < MIN_OBJECT_SIZE {
@@ -74,15 +74,15 @@ impl GcTypeLayouts for CopyingTypeLayouts {
         debug_assert!(layout.align <= ALIGN);
         layout.align = ALIGN;
         debug_assert!(layout.size >= MIN_OBJECT_SIZE);
-        layout
+        Ok(layout)
     }
 
-    fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout {
-        let mut layout = common_exn_layout(ty, HEADER_SIZE, ALIGN);
+    fn exn_layout(&self, ty: &WasmExnType) -> Result<GcStructLayout, OutOfMemory> {
+        let mut layout = common_exn_layout(ty, HEADER_SIZE, ALIGN)?;
         layout.size = layout.size.next_multiple_of(ALIGN);
         debug_assert!(layout.align <= ALIGN);
         layout.align = ALIGN;
         debug_assert!(layout.size >= MIN_OBJECT_SIZE);
-        layout
+        Ok(layout)
     }
 }

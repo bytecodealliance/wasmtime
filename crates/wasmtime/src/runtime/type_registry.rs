@@ -1152,10 +1152,10 @@ impl TypeRegistryInner {
                     gc_runtime.layouts().array_layout(a).into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Struct(s) => {
-                    try_new::<Arc<_>>(gc_runtime.layouts().struct_layout(s))?.into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().struct_layout(s)?)?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Exn(e) => {
-                    try_new::<Arc<_>>(gc_runtime.layouts().exn_layout(e))?.into()
+                    try_new::<Arc<_>>(gc_runtime.layouts().exn_layout(e)?)?.into()
                 }
                 wasmtime_environ::WasmCompositeInnerType::Cont(_) => continue, // FIXME: #10248 stack switching support.
             };

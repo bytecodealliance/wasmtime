@@ -38,11 +38,11 @@ impl GcTypeLayouts for NullTypeLayouts {
         common_array_layout(ty, HEADER_SIZE, HEADER_ALIGN, ARRAY_LENGTH_OFFSET)
     }
 
-    fn struct_layout(&self, ty: &WasmStructType) -> GcStructLayout {
+    fn struct_layout(&self, ty: &WasmStructType) -> Result<GcStructLayout, OutOfMemory> {
         common_struct_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 
-    fn exn_layout(&self, ty: &WasmExnType) -> GcStructLayout {
+    fn exn_layout(&self, ty: &WasmExnType) -> Result<GcStructLayout, OutOfMemory> {
         common_exn_layout(ty, HEADER_SIZE, HEADER_ALIGN)
     }
 }
