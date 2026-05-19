@@ -29,9 +29,10 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
     EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
     GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
-    TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PassiveDataIndex, PtrSize,
+    Table, TableIndex, TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -2793,20 +2794,14 @@ impl FuncEnvironment<'_> {
         data_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let libcall = gc::builtins::array_new_data(self, builder.func)?;
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
-        let interned_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(interned_type_index.as_u32()));
-        let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
-        let call_inst = builder.ins().call(
-            libcall,
-            &[vmctx, interned_type_index, data_index, data_offset, len],
-        );
-        let array_ref = builder.func.dfg.first_result(call_inst);
-        builder.declare_value_needs_stack_map(array_ref);
-        Ok(array_ref)
+        gc::translate_array_new_data(
+            self,
+            builder,
+            array_type_index,
+            data_index,
+            data_offset,
+            len,
+        )
     }
 
     pub fn translate_array_new_elem(
@@ -2879,26 +2874,16 @@ impl FuncEnvironment<'_> {
         data_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let libcall = gc::builtins::array_init_data(self, builder.func)?;
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
-        let interned_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(interned_type_index.as_u32()));
-        let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
-        builder.ins().call(
-            libcall,
-            &[
-                vmctx,
-                interned_type_index,
-                array,
-                dst_index,
-                data_index,
-                data_offset,
-                len,
-            ],
-        );
-        Ok(())
+        gc::translate_array_init_data(
+            self,
+            builder,
+            array_type_index,
+            array,
+            dst_index,
+            data_index,
+            data_offset,
+            len,
+        )
     }
 
     pub fn translate_array_init_elem(
@@ -3733,6 +3718,59 @@ impl FuncEnvironment<'_> {
         );
     }
 
+    /// Returns a native pointer to the passive data `segment` provided at
+    /// offset `src`.
+    ///
+    /// This will generate a trap if `src + len` is larger than the current
+    /// length of the passive data segment.
+    fn get_passive_data_pointer(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        segment: PassiveDataIndex,
+        src: ir::Value,
+        len: ir::Value,
+    ) -> ir::Value {
+        assert_eq!(builder.func.dfg.value_type(src), I32);
+        assert_eq!(builder.func.dfg.value_type(len), I32);
+
+        // Test if `src + len` is inbounds for this passive data segment. To do
+        // that the size of the passive data segment is loaded from the
+        // `VMContext`. This is dynamically filled in at instantiation time and
+        // dynamically reset during `data.drop`.
+        //
+        // Note that `src` and `len` here are unconditionally 32-bit and the
+        // bounds check is done in the 64-bit space to ensure there is no
+        // overflow.
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let passive_segment_len = builder.ins().uload32(
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            i32::try_from(self.offsets.vmctx_passive_data_length(segment)).unwrap(),
+        );
+        let src64 = builder.ins().uextend(I64, src);
+        let len64 = builder.ins().uextend(I64, len);
+        let segment_end = builder.ins().iadd(src64, len64);
+        let segment_oob =
+            builder
+                .ins()
+                .icmp(IntCC::UnsignedGreaterThan, segment_end, passive_segment_len);
+        self.trapnz(builder, segment_oob, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+
+        // Load the base pointer and offset it by `src` bytes.
+        let passive_segment_base = builder.ins().load(
+            self.pointer_type(),
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            i32::try_from(self.offsets.vmctx_passive_data_base(segment)).unwrap(),
+        );
+        let src_ptr = self.unchecked_cast_wasm_addr_to_native_addr(
+            &mut builder.cursor(),
+            src,
+            IndexType::I32,
+        );
+        builder.ins().iadd(passive_segment_base, src_ptr)
+    }
+
     pub fn translate_memory_init(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -3742,29 +3780,71 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let mut pos = builder.cursor();
-        let memory_init = self.builtin_functions.memory_init(&mut pos.func);
+        let seg_index = DataIndex::from_u32(seg_index);
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
-        let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
+        // First, perform a bounds check to ensure that `dst + len` is inbounds.
+        // Note that `dst` has a type for `memory_index`'s index type, and `len`
+        // always has type i32. For `bounds_check_for_memory_intrinsic` below
+        // they both need to be typed with the memory's type, so cast the length
+        // here appropriately.
+        let len_with_memory_ty = match self.memory(memory_index).idx_type {
+            IndexType::I32 => len,
+            IndexType::I64 => builder.ins().uextend(I64, len),
+        };
+        let raw_dst =
+            self.bounds_check_for_memory_intrinsic(builder, memory_index, dst, len_with_memory_ty);
 
-        let vmctx = self.vmctx_val(&mut pos);
+        // Next see what passive data segment `seg_index` corresponds to. If
+        // this is actually an active data segment then it unconditionally has
+        // length zero. In this situation perform a conditional trap if `src` or
+        // `len` are nonzero, because if they're nonzero then this is out-of-bounds.
+        let raw_src = match self.translation.passive_data_map[seg_index] {
+            Some(idx) => self.get_passive_data_pointer(builder, idx, src, len),
+            None => {
+                self.trapnz(builder, src, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+                self.trapnz(builder, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+                return Ok(());
+            }
+        };
 
-        let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(memory_index).idx_type);
-
-        pos.ins().call(
-            memory_init,
-            &[vmctx, memory_index_arg, seg_index_arg, dst, src, len],
-        );
+        // At this point bounds checks have all passed, so it's time to perform
+        // the actual copy by calling the `memory.copy` libcall.
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let memory_copy = self.builtin_functions.memory_copy(&mut builder.func);
+        let len_native = match self.pointer_type() {
+            I32 => len,
+            I64 => builder.ins().uextend(I64, len),
+            _ => unreachable!(),
+        };
+        builder
+            .ins()
+            .call(memory_copy, &[vmctx, raw_dst, raw_src, len_native]);
 
         Ok(())
     }
 
     pub fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
-        let data_drop = self.builtin_functions.data_drop(&mut pos.func);
-        let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
+        let seg_index = DataIndex::from_u32(seg_index);
+
+        // Lookup the passive data segment corresponding to this data segment.
+        // If this is an active data segment then it already has length 0 so
+        // there's nothing to do.
+        let passive_index = match self.translation.passive_data_map[seg_index] {
+            Some(idx) => idx,
+            None => return Ok(()),
+        };
+
+        // For passive data segments to implement `data.drop` it's a store of
+        // the value 0 to the `VMContext`'s slot for this passive data segment.
         let vmctx = self.vmctx_val(&mut pos);
-        pos.ins().call(data_drop, &[vmctx, seg_index_arg]);
+        let new_length = pos.ins().iconst(I32, 0);
+        pos.ins().store(
+            ir::MemFlagsData::trusted(),
+            new_length,
+            vmctx,
+            i32::try_from(self.offsets.vmctx_passive_data_length(passive_index)).unwrap(),
+        );
+
         Ok(())
     }
 

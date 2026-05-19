@@ -1712,24 +1712,6 @@ impl StorageType {
             Self::ValType(v) => WasmStorageType::Val(v.to_wasm_type()),
         }
     }
-
-    /// The byte size of this type, if it has a defined size in the spec.
-    ///
-    /// See
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-fieldtype
-    /// and
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-valtype
-    #[cfg(feature = "gc")]
-    pub(crate) fn data_byte_size(&self) -> Option<u32> {
-        match self {
-            StorageType::I8 => Some(1),
-            StorageType::I16 => Some(2),
-            StorageType::ValType(ValType::I32 | ValType::F32) => Some(4),
-            StorageType::ValType(ValType::I64 | ValType::F64) => Some(8),
-            StorageType::ValType(ValType::V128) => Some(16),
-            StorageType::ValType(ValType::Ref(_)) => None,
-        }
-    }
 }
 
 /// The type of a `struct` field or an `array`'s elements.

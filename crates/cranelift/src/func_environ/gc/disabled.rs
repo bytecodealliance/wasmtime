@@ -5,7 +5,7 @@ use crate::func_environ::{Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
-use wasmtime_environ::{TagIndex, TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
+use wasmtime_environ::{DataIndex, TagIndex, TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
@@ -173,6 +173,30 @@ pub fn translate_array_copy(
     _src_array_type_index: TypeIndex,
     _src_array: ir::Value,
     _src_index: ir::Value,
+    _len: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn translate_array_new_data(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _data_index: DataIndex,
+    _data_offset: ir::Value,
+    _len: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn translate_array_init_data(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _array: ir::Value,
+    _dst_index: ir::Value,
+    _data_index: DataIndex,
+    _data_offset: ir::Value,
     _len: ir::Value,
 ) -> WasmResult<()> {
     disabled()

@@ -1691,10 +1691,18 @@ impl Default for VMSharedTypeIndex {
     }
 }
 
-/// Index type of a passive data segment inside the WebAssembly module.
+/// Index type of a data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DataIndex(u32);
 entity_impl_with_try_clone!(DataIndex);
+
+/// Index type of a passive data segment inside the WebAssembly module.
+///
+/// Not a spec-level concept, just used to get dense index spaces for passive
+/// data segments inside of Wasmtime.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct PassiveDataIndex(u32);
+entity_impl_with_try_clone!(PassiveDataIndex);
 
 /// Index type of an element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]

@@ -24,8 +24,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind, MemoryTunables, PtrSize, TableIndex,
-    Tunables, TypeIndex, WasmHeapType, WasmValType,
+    DataIndex, FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind, MemoryTunables, PtrSize,
+    TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
 };
 
 mod context;
@@ -1287,6 +1287,124 @@ where
             Callee::Builtin(builtin),
         )?;
         Ok(())
+    }
+
+    /// Emit the `memory.init` operation.
+    pub fn emit_memory_init(&mut self, segment: DataIndex, mem: MemoryIndex) -> Result<()> {
+        let dst_heap = self.env.resolve_heap(mem);
+
+        let len = self.context.pop_to_reg(self.masm, None)?;
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.pop_to_reg(self.masm, None)?;
+
+        // Make sure `len` is zero extended within its register ensuring that
+        // the full 64-bits of the register are defined. This assists in
+        // situations like cross-memory copies where one memory is 32-bit and
+        // one is 64-bit and the same register can be used for the length in
+        // both bounds checks below.
+        self.masm.extend(
+            writable!(len.reg),
+            len.reg,
+            Extend::<Zero>::I64Extend32.into(),
+        )?;
+
+        let dst_raw_addr = self.context.any_gpr(self.masm)?;
+        self.emit_bounds_check_and_compute_addr(&dst_heap, dst_raw_addr, dst.reg, len.reg)?;
+        self.context.free_reg(dst);
+
+        let passive_data_index = match self.env.translation.passive_data_map[segment] {
+            Some(i) => i,
+
+            // Active data segments always have length zero, so this is only
+            // valid of src and len are both zero.
+            None => {
+                self.masm.cmp(src.reg, RegImm::i32(0), OperandSize::S32)?;
+                self.masm
+                    .trapif(IntCmpKind::Ne, TrapCode::HEAP_OUT_OF_BOUNDS)?;
+                self.masm.cmp(len.reg, RegImm::i32(0), OperandSize::S32)?;
+                self.masm
+                    .trapif(IntCmpKind::Ne, TrapCode::HEAP_OUT_OF_BOUNDS)?;
+                self.context.free_reg(dst_raw_addr);
+                self.context.free_reg(src);
+                self.context.free_reg(len);
+                return Ok(());
+            }
+        };
+
+        // Bounds check this passive data segment. Load its
+        // dynamically-specified length and see if that's in the range
+        // of `src+len`.
+        let data_segment_length_offset = self
+            .env
+            .vmoffsets
+            .vmctx_passive_data_length(passive_data_index);
+        let tmp1 = self.context.any_gpr(self.masm)?;
+        let tmp2 = self.context.any_gpr(self.masm)?;
+        self.masm.load(
+            self.masm.address_at_vmctx(data_segment_length_offset)?,
+            writable!(tmp1),
+            OperandSize::S32,
+        )?;
+        self.masm
+            .mov(writable!(tmp2), src.reg.into(), OperandSize::S32)?;
+        self.masm.checked_uadd(
+            writable!(tmp2),
+            tmp2,
+            len.reg.into(),
+            OperandSize::S32,
+            TrapCode::HEAP_OUT_OF_BOUNDS,
+        )?;
+        self.masm.cmp(tmp2, tmp1.into(), OperandSize::S32)?;
+        self.masm
+            .trapif(IntCmpKind::GtU, TrapCode::HEAP_OUT_OF_BOUNDS)?;
+        self.context.free_reg(tmp2);
+
+        // Calculate the src pointer by loading the base of the passive segment
+        // and adding in the `src` offset.
+        let data_segment_base_offset = self
+            .env
+            .vmoffsets
+            .vmctx_passive_data_base(passive_data_index);
+        self.masm.load(
+            self.masm.address_at_vmctx(data_segment_base_offset)?,
+            writable!(tmp1),
+            OperandSize::S64,
+        )?;
+        self.masm.add_uextend(
+            writable!(tmp1),
+            tmp1,
+            src.reg,
+            OperandSize::S32,
+            OperandSize::S64,
+        )?;
+        self.context.free_reg(src);
+
+        // And finally, the final step is calling the `memory_copy` libcall.
+        self.context.stack.push(TypedReg::i64(dst_raw_addr).into());
+        self.context.stack.push(TypedReg::i64(tmp1).into());
+        self.context.stack.push(len.into());
+        let builtin = self.env.builtins.memory_copy::<M::ABI>()?;
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin),
+        )?;
+        Ok(())
+    }
+
+    pub fn emit_data_drop(&mut self, data_index: DataIndex) -> Result<()> {
+        let passive_data_index = match self.env.translation.passive_data_map[data_index] {
+            Some(idx) => idx,
+            // Active data segments do nothing when dropped, so this is a noop.
+            None => return Ok(()),
+        };
+        let data_segment_offset = self
+            .env
+            .vmoffsets
+            .vmctx_passive_data_length(passive_data_index);
+        let len_addr = self.masm.address_at_vmctx(data_segment_offset)?;
+        self.masm.store(RegImm::i32(0), len_addr, OperandSize::S32)
     }
 
     /// Checks if fuel consumption is enabled and emits a series of instructions

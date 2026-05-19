@@ -9,7 +9,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32 x0+0 // flags = notrap
+;   xload32be_o32 x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+0 // flags = notrap
+;   xload64be_o32 x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32 x0+4 // flags = notrap
+;   xload32be_o32 x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+8 // flags = notrap
+;   xload64be_o32 x0, x0, 8
 ;   ret
 ;
 ; Disassembled:

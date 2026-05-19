@@ -28,8 +28,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    FUNCREF_INIT_BIT, FuncIndex, GlobalIndex, IndexType, MemoryIndex, TableIndex, TypeIndex,
-    WasmHeapType, WasmValType,
+    DataIndex, FUNCREF_INIT_BIT, FuncIndex, GlobalIndex, IndexType, MemoryIndex, TableIndex,
+    TypeIndex, WasmHeapType, WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -1876,18 +1876,7 @@ where
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-        self.context
-            .stack
-            .insert_many(at, &[mem.try_into()?, data_index.try_into()?]);
-        let builtin = self.env.builtins.memory_init::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_init(DataIndex::from_u32(data_index), MemoryIndex::from_u32(mem))
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) -> Self::Output {
@@ -1936,16 +1925,7 @@ where
     }
 
     fn visit_data_drop(&mut self, data_index: u32) -> Self::Output {
-        self.context.stack.extend([data_index.try_into()?]);
-
-        let builtin = self.env.builtins.data_drop::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_data_drop(DataIndex::from_u32(data_index))
     }
 
     fn visit_nop(&mut self) -> Self::Output {

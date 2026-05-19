@@ -329,8 +329,8 @@ pub struct Module {
     /// index in `passive_elements`.
     pub passive_elements_map: TryBTreeMap<ElemIndex, PassiveElemIndex>,
 
-    /// The map from passive data index (data segment index space) to index in `passive_data`.
-    pub passive_data_map: TryBTreeMap<DataIndex, Range<u32>>,
+    /// Where passive data segments are located in the module's image.
+    pub passive_data: PrimaryMap<PassiveDataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
     pub types: TryPrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
@@ -409,7 +409,7 @@ impl Module {
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
             passive_elements_map: Default::default(),
-            passive_data_map: Default::default(),
+            passive_data: Default::default(),
             types: Default::default(),
             num_imported_funcs: Default::default(),
             num_imported_tables: Default::default(),
@@ -700,7 +700,7 @@ impl TypeTrace for Module {
             memory_initialization: _,
             passive_elements: _,
             passive_elements_map: _,
-            passive_data_map: _,
+            passive_data: _,
             types,
             num_imported_funcs: _,
             num_imported_tables: _,
@@ -752,7 +752,7 @@ impl TypeTrace for Module {
             memory_initialization: _,
             passive_elements: _,
             passive_elements_map: _,
-            passive_data_map: _,
+            passive_data: _,
             types,
             num_imported_funcs: _,
             num_imported_tables: _,

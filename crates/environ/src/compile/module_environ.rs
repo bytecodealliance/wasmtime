@@ -7,10 +7,10 @@ use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PrimaryMap, SizeOverflow,
-    StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag, TagIndex,
-    Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType, WasmResult,
-    WasmValType, WasmparserTypeConverter,
+    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PassiveDataIndex, PrimaryMap,
+    SizeOverflow, StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag,
+    TagIndex, Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType,
+    WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -99,6 +99,9 @@ pub struct ModuleTranslation<'data> {
     /// an object file into a linear memory.
     pub data_align: Option<u64>,
 
+    /// Map from a data segment to whether it's a passive data segment or not.
+    pub passive_data_map: SecondaryMap<DataIndex, Option<PassiveDataIndex>>,
+
     /// Total size of all data pushed onto `data` so far.
     total_data: u32,
 
@@ -137,6 +140,7 @@ impl<'data> ModuleTranslation<'data> {
             total_passive_data: 0,
             code_index: 0,
             types: None,
+            passive_data_map: Default::default(),
         }
     }
 
@@ -645,6 +649,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         data,
                         range: _,
                     } = entry?;
+                    let data_index = DataIndex::from_u32(index.try_into().unwrap());
                     let mk_range = |total: &mut u32| -> Result<_, WasmError> {
                         let range = u32::try_from(data.len())
                             .ok()
@@ -661,7 +666,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         *total += range.end - range.start;
                         Ok(range)
                     };
-                    match kind {
+                    let passive_index = match kind {
                         DataKind::Active {
                             memory_index,
                             offset_expr,
@@ -681,17 +686,17 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 data: range,
                             })?;
                             self.result.data.push(data.into());
+                            None
                         }
                         DataKind::Passive => {
-                            let data_index = DataIndex::from_u32(index as u32);
                             let range = mk_range(&mut self.result.total_passive_data)?;
                             self.result.passive_data.push(data);
-                            self.result
-                                .module
-                                .passive_data_map
-                                .insert(data_index, range)?;
+                            Some(self.result.module.passive_data.push(range))
                         }
-                    }
+                    };
+                    self.result
+                        .passive_data_map
+                        .insert(data_index, passive_index);
                 }
             }
 
