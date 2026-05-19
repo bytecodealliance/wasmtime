@@ -1211,7 +1211,7 @@ pub struct VMStoreContext {
     pub stack_limit: UnsafeCell<usize>,
 
     /// The `VMMemoryDefinition` for this store's GC heap.
-    pub gc_heap: VMMemoryDefinition,
+    pub gc_heap: UnsafeCell<VMMemoryDefinition>,
 
     /// The value of the frame pointer register in the trampoline used
     /// to call from Wasm to the host.
@@ -1372,10 +1372,10 @@ impl Default for VMStoreContext {
             epoch_deadline: UnsafeCell::new(0),
             execution_version: 0,
             stack_limit: UnsafeCell::new(usize::max_value()),
-            gc_heap: VMMemoryDefinition {
+            gc_heap: UnsafeCell::new(VMMemoryDefinition {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
-            },
+            }),
             last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
