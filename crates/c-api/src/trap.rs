@@ -54,6 +54,7 @@ const _: () = {
     assert!(Trap::ConcurrentFutureStreamOp as u8 == 45);
     assert!(Trap::ReferenceCountOverflow as u8 == 46);
     assert!(Trap::StreamOpTooBig as u8 == 47);
+    assert!(Trap::WaitableSyncAndAsync as u8 == 48);
 };
 
 #[repr(C)]

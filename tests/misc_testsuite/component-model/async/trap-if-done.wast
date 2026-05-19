@@ -58,6 +58,7 @@
       )
       (func $future-write-sync (export "future-write-sync") (result i32)
         ;; the caller will assert what they expect the return value to be
+        (call $waitable.join (global.get $writable-end) (i32.const 0))
         (i32.store (i32.const 16) (i32.const 42))
         (call $future.write-sync (global.get $writable-end) (i32.const 16))
       )
@@ -91,6 +92,7 @@
       )
       (func $stream-write-sync (export "stream-write-sync") (result i32)
         ;; the caller will assert what they expect the return value to be
+        (call $waitable.join (global.get $writable-end) (i32.const 0))
         (i32.store (i32.const 16) (i32.const 42))
         (call $stream.write-sync (global.get $writable-end) (i32.const 16) (i32.const 1))
       )
