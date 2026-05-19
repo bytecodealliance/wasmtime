@@ -611,6 +611,7 @@ impl From<crate::filesystem::DescriptorType> for types::DescriptorType {
             crate::filesystem::DescriptorType::Directory => Self::Directory,
             crate::filesystem::DescriptorType::SymbolicLink => Self::SymbolicLink,
             crate::filesystem::DescriptorType::RegularFile => Self::RegularFile,
+            crate::filesystem::DescriptorType::Fifo => Self::Fifo,
         }
     }
 }
