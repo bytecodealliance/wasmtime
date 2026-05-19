@@ -88,37 +88,32 @@ pub async fn request(
         .set_path_with_query(Some(&path_with_query))
         .map_err(|()| anyhow!("failed to set path_with_query"))?;
 
-    let (transmit, handle) = join!(
+    let (transmit, (), handle) = join!(
         async { transmit.await.context("failed to transmit request") },
+        async {
+            if let Some(buf) = body {
+                let remaining = contents_tx.write_all(buf.into()).await;
+                assert!(remaining.is_empty());
+            }
+            drop(contents_tx);
+            // This can fail in HTTP/1.1, since the connection might already be closed
+            _ = trailers_tx.write(Ok(None)).await;
+        },
         async {
             let response = client::send(request).await?;
             let status = response.get_status_code();
             let headers = response.get_headers().copy_all();
             let (_, result_rx) = wit_future::new(|| Ok(()));
             let (body_rx, trailers_rx) = types::Response::consume_body(response, result_rx);
-            let ((), rx) = join!(
-                async {
-                    if let Some(buf) = body {
-                        let remaining = contents_tx.write_all(buf.into()).await;
-                        assert!(remaining.is_empty());
-                    }
-                    drop(contents_tx);
-                    // This can fail in HTTP/1.1, since the connection might already be closed
-                    _ = trailers_tx.write(Ok(None)).await;
-                },
-                async {
-                    let body = body_rx.collect().await;
-                    let trailers = trailers_rx.await.context("failed to read body")?;
-                    let trailers = trailers.map(|trailers| trailers.copy_all());
-                    anyhow::Ok(Response {
-                        status,
-                        headers,
-                        body,
-                        trailers,
-                    })
-                }
-            );
-            rx
+            let body = body_rx.collect().await;
+            let trailers = trailers_rx.await.context("failed to read body")?;
+            let trailers = trailers.map(|trailers| trailers.copy_all());
+            anyhow::Ok(Response {
+                status,
+                headers,
+                body,
+                trailers,
+            })
         },
     );
     let response = handle?;
