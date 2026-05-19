@@ -4968,22 +4968,47 @@
           (mask Gpr (x64_pmovmskb any_byte_zero))
         )
         (CondResult.CC (x64_cmpl_mi mask 0xffff) (CC.NZ))))
+
+;; With `ptest` that'll set `ZF` based on whether `val & val` has any nonzero
+;; bit, which is equivalent to saying that anything is true (or not equal to
+;; zero).
 (rule 1 (is_vany_true val)
   (if-let true (has_sse41))
   (let ((val Xmm val))
     (CondResult.CC (x64_ptest val val) (CC.NZ))))
+
+;; A `band` operation can get folded into `ptest` directly since it already does
+;; the operation for us.
+(rule 2 (is_vany_true (band (ty_vec128 _) a b))
+  (if-let true (has_sse41))
+  (CondResult.CC (x64_ptest a b) (CC.NZ)))
+
+;; In addition to `band`, the `ptest` instruction also performs "andnot" and
+;; puts the results in the `C` flag. This means that `(band a (bnot b))` can
+;; also be folded in. Note that bitwise negation happens in the first operand.
+(rule 3 (is_vany_true (band (ty_vec128 _) a (bnot _ b)))
+  (if-let true (has_sse41))
+  (CondResult.CC (x64_ptest b a) (CC.NB)))
+(rule 4 (is_vany_true (band (ty_vec128 _) (bnot _ a) b))
+  (if-let true (has_sse41))
+  (CondResult.CC (x64_ptest a b) (CC.NB)))
+
+;; Vector inequality can be a bit more efficient with `ptest`. When testing
+;; this property of vectors the inputs are xor'd together and the result is
+;; passed to `ptest`. The logical operation here is: is any lane of `a` not
+;; equal to the corresponding lane in `b`? With `pxor` we can reduce that to
+;; if any bit in the xor is set, and that's exactly that testing the `ZF` flag
+;; after `ptest` will tell us.
+(rule 2 (is_vany_true (ne (ty_vec128 ty) a b))
+  (if-let true (has_sse41))
+  (let ((tmp Xmm (x64_pxor a b)))
+    (CondResult.CC (x64_ptest tmp tmp) (CC.NZ))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (vall_true _ val)) (lower_cond_bool (is_vall_true val)))
 
 (decl is_vall_true (Value) CondResult)
-(rule 1 (is_vall_true val @ (value_type ty))
-        (if-let true (has_sse41))
-        (let ((src Xmm val)
-              (zeros Xmm (xmm_zero ty))
-              (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
-          (CondResult.CC (x64_ptest cmp cmp) (CC.Z))))
 
 ;; Perform an appropriately-sized lane-wise comparison with zero. If the
 ;; result is all 0s then all of them are true because nothing was equal to
@@ -4992,6 +5017,26 @@
       (let ((lanes_with_zero Xmm (x64_pcmpeq (vec_int_type ty) val (xmm_zero ty)))
             (mask Gpr (x64_pmovmskb lanes_with_zero)))
         (CondResult.CC (x64_testl_mr mask mask) (CC.Z))))
+
+;; With `ptest` this can be a bit smaller. Compare `val` to an all-zeros mask,
+;; then `ptest` that comparison with itself. If any lane in `val` is zero then
+;; the result will have some 1s, otherwise it's all zeros.
+(rule 1 (is_vall_true val @ (value_type ty))
+        (if-let true (has_sse41))
+        (let ((src Xmm val)
+              (zeros Xmm (xmm_zero ty))
+              (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+          (CondResult.CC (x64_ptest cmp cmp) (CC.Z))))
+
+;; This is similar to `(is_vany_true (ne _ a b))` above. The logical operation
+;; here is: is every lane of `a` equal to the corresponding lane of `b`. With
+;; `a ^ b` this property is only true if every single bit in the output is 0.
+;; That is exactly what `ptest` tells us, so look for the `ZF` flag on the
+;; xor'd result.
+(rule 2 (is_vall_true (eq (ty_vec128 ty) a b))
+  (if-let true (has_sse41))
+  (let ((tmp Xmm (x64_pxor a b)))
+    (CondResult.CC (x64_ptest tmp tmp) (CC.Z))))
 
 ;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
