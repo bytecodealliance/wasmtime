@@ -14,12 +14,13 @@ use super::VMArrayRef;
 use super::trace_info::{TraceInfo, TraceInfos};
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
-    VMMemoryDefinition,
+    GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
+    VMGcRef, VMMemoryDefinition,
 };
 use crate::{Engine, prelude::*};
-use core::sync::atomic::AtomicUsize;
-use core::{alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull};
+use core::{
+    alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull, sync::atomic::AtomicUsize,
+};
 use wasmtime_environ::copying::{
     ALIGN, ARRAY_LENGTH_OFFSET, CopyingTypeLayouts, HEADER_COPIED_BIT,
 };
@@ -175,12 +176,39 @@ unsafe impl GcHeapObject for VMCopyingExternRef {
 ///
 /// NB: Layout is defined by constants in `wasmtime_environ::copying`. Keep in
 /// sync!
+#[derive(Default)]
 #[repr(C)]
-struct VMCopyingHeapData {
+struct VMCopyingHeapDataInner {
     /// Current bump pointer (index into the GC heap).
     bump_ptr: u32,
     /// End of the active semi-space.
     active_space_end: u32,
+}
+
+#[derive(Default)]
+#[repr(transparent)]
+struct VMCopyingHeapData {
+    inner: SendSyncUnsafeCell<VMCopyingHeapDataInner>,
+}
+
+impl VMCopyingHeapData {
+    fn bump_ptr(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).bump_ptr }
+    }
+
+    fn set_bump_ptr(&mut self, val: u32) {
+        self.inner.get_mut().bump_ptr = val;
+    }
+
+    fn active_space_end(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).active_space_end }
+    }
+
+    fn set_active_space_end(&mut self, val: u32) {
+        self.inner.get_mut().active_space_end = val;
+    }
 }
 
 /// Get a typed reference to a copying-collector object from a raw `VMGcRef`.
@@ -264,10 +292,7 @@ impl CopyingHeap {
             no_gc_count: 0,
             memory: None,
             vmmemory: None,
-            vmctx_data: VMCopyingHeapData {
-                bump_ptr: 0,
-                active_space_end: 0,
-            },
+            vmctx_data: VMCopyingHeapData::default(),
             active_space_start: 0,
             idle_space_start: 0,
             idle_space_end: 0,
@@ -278,19 +303,19 @@ impl CopyingHeap {
     }
 
     fn bump_ptr(&self) -> u32 {
-        self.vmctx_data.bump_ptr
+        self.vmctx_data.bump_ptr()
     }
 
     fn set_bump_ptr(&mut self, val: u32) {
-        self.vmctx_data.bump_ptr = val;
+        self.vmctx_data.set_bump_ptr(val);
     }
 
     fn active_space_end(&self) -> u32 {
-        self.vmctx_data.active_space_end
+        self.vmctx_data.active_space_end()
     }
 
     fn set_active_space_end(&mut self, val: u32) {
-        self.vmctx_data.active_space_end = val;
+        self.vmctx_data.set_active_space_end(val);
     }
 
     fn capacity(&self) -> u32 {
@@ -883,8 +908,7 @@ unsafe impl GcHeap for CopyingHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: *const VMCopyingHeapData = &self.vmctx_data;
-        NonNull::new(ptr as *mut u8).unwrap()
+        NonNull::from(&self.vmctx_data).cast::<u8>()
     }
 
     fn take_memory(&mut self) -> crate::vm::Memory {
