@@ -287,8 +287,8 @@ pub enum Type {
         ///
         /// Incompatible with `is_extern`.
         is_nodebug: bool,
-        /// The different variants for this enum.
-        fields: Vec<Field>,
+        /// The different variants for this struct.
+        fields: Fields,
         /// The ISLE source position where this `enum` is defined.
         pos: Pos,
     },
@@ -343,14 +343,59 @@ pub struct Variant {
     pub id: VariantId,
 
     /// The data fields of this enum variant.
-    pub fields: Vec<Field>,
+    pub fields: Fields,
 }
 
-/// A field of a `Variant`.
+/// The fields of a struct or enum variant, formatted as a struct or tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Fields {
+    /// a struct or enum variant without fields
+    Unit,
+    /// Named fields
+    Struct(StructFields),
+    /// Unnamed fields like a tuple
+    Tuple(TupleFields),
+}
+
+impl Fields {
+    /// Vec of all field types
+    pub fn types(&self) -> Vec<TypeId> {
+        match self {
+            Fields::Unit => Vec::new(),
+            Fields::Struct(fields) => fields.fields.iter().map(|f| f.ty).collect(),
+            Fields::Tuple(fields) => fields.fields.iter().map(|f| f.ty).collect(),
+        }
+    }
+}
+
+/// A List of named fields of a struct.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructFields {
+    /// the fields
+    pub fields: Vec<StructField>,
+}
+
+/// One named field of a struct or enum variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Field {
+pub struct StructField {
     /// The name of this field.
     pub name: Sym,
+    /// This field's id.
+    pub id: FieldId,
+    /// The type of this field.
+    pub ty: TypeId,
+}
+
+/// A List of unnamed fields of a tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TupleFields {
+    /// the fields
+    pub fields: Vec<TupleField>,
+}
+
+/// One unnamed field of a tuple.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TupleField {
     /// This field's id.
     pub id: FieldId,
     /// The type of this field.
@@ -1344,13 +1389,29 @@ impl TypeEnv {
 
     fn fields_from_ast(
         &mut self,
-        fields: &[ast::Field],
+        fields: &ast::Fields,
         variant_name: Option<&ast::Ident>,
-    ) -> Option<Vec<Field>> {
-        let mut out = Vec::with_capacity(fields.len());
-        for field in fields {
+    ) -> Option<Fields> {
+        match fields {
+            ast::Fields::Unit => Some(Fields::Unit),
+            ast::Fields::Struct(fields) => Some(Fields::Struct(
+                self.struct_fields_from_ast(fields, variant_name)?,
+            )),
+            ast::Fields::Tuple(fields) => Some(Fields::Tuple(
+                self.tuple_fields_from_ast(fields, variant_name)?,
+            )),
+        }
+    }
+
+    fn struct_fields_from_ast(
+        &mut self,
+        fields: &ast::StructFields,
+        variant_name: Option<&ast::Ident>,
+    ) -> Option<StructFields> {
+        let mut out = Vec::with_capacity(fields.fields.len());
+        for field in &fields.fields {
             let field_name = self.intern_mut(&field.name);
-            if out.iter().any(|f: &Field| f.name == field_name) {
+            if out.iter().any(|f: &StructField| f.name == field_name) {
                 let msg = if let Some(variant_name) = variant_name {
                     format!(
                         "Duplicate field name '{}' in variant '{}' of type",
@@ -1377,13 +1438,46 @@ impl TypeEnv {
                     return None;
                 }
             };
-            out.push(Field {
+            out.push(StructField {
                 name: field_name,
                 id: FieldId(out.len()),
                 ty: field_tid,
             });
         }
-        Some(out)
+        Some(StructFields { fields: out })
+    }
+
+    fn tuple_fields_from_ast(
+        &mut self,
+        fields: &ast::TupleFields,
+        variant_name: Option<&ast::Ident>,
+    ) -> Option<TupleFields> {
+        let mut out = Vec::with_capacity(fields.fields.len());
+        for field in &fields.fields {
+            let field_tid = match self.get_type_by_name(&field.ty) {
+                Some(tid) => tid,
+                None => {
+                    let msg = if let Some(variant_name) = variant_name {
+                        format!(
+                            "Unknown type '{}' for tuple field '{}' in variant '{}'",
+                            field.ty.0, field.index, variant_name.0
+                        )
+                    } else {
+                        format!(
+                            "Unknown type '{}' for tuple field '{}'",
+                            field.ty.0, field.index
+                        )
+                    };
+                    self.report_error(field.ty.1, msg);
+                    return None;
+                }
+            };
+            out.push(TupleField {
+                id: FieldId(out.len()),
+                ty: field_tid,
+            });
+        }
+        Some(TupleFields { fields: out })
     }
 
     fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
@@ -1600,7 +1694,7 @@ impl TermEnv {
                             continue 'types;
                         }
                         let tid = TermId(self.terms.len());
-                        let arg_tys = variant.fields.iter().map(|fld| fld.ty).collect::<Vec<_>>();
+                        let arg_tys = variant.fields.types();
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
@@ -1628,7 +1722,7 @@ impl TermEnv {
                         continue 'types;
                     }
                     let tid = TermId(self.terms.len());
-                    let arg_tys = fields.iter().map(|fld| fld.ty).collect::<Vec<_>>();
+                    let arg_tys = fields.types();
                     let ret_ty = id;
                     self.terms.push(Term {
                         id: tid,
@@ -2841,28 +2935,32 @@ mod test {
                         name: sym_b,
                         fullname: sym_a_b,
                         id: VariantId(0),
-                        fields: vec![
-                            Field {
-                                name: sym_f1,
-                                id: FieldId(0),
-                                ty: TypeId::U32,
-                            },
-                            Field {
-                                name: sym_f2,
-                                id: FieldId(1),
-                                ty: TypeId::U32,
-                            },
-                        ],
+                        fields: Fields::Struct(StructFields {
+                            fields: vec![
+                                StructField {
+                                    name: sym_f1,
+                                    id: FieldId(0),
+                                    ty: TypeId::U32,
+                                },
+                                StructField {
+                                    name: sym_f2,
+                                    id: FieldId(1),
+                                    ty: TypeId::U32,
+                                },
+                            ],
+                        }),
                     },
                     Variant {
                         name: sym_c,
                         fullname: sym_a_c,
                         id: VariantId(1),
-                        fields: vec![Field {
-                            name: sym_f1,
-                            id: FieldId(0),
-                            ty: TypeId::U32,
-                        }],
+                        fields: Fields::Struct(StructFields {
+                            fields: vec![StructField {
+                                name: sym_f1,
+                                id: FieldId(0),
+                                ty: TypeId::U32,
+                            }],
+                        }),
                     },
                 ],
                 pos: Pos {

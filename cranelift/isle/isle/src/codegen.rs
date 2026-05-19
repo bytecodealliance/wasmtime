@@ -2,12 +2,13 @@
 
 use crate::files::Files;
 use crate::sema::{
-    BuiltinType, ExternalSig, Field, IntType, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv,
+    BuiltinType, ExternalSig, Fields, IntType, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv,
     TypeId,
 };
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::stablemapset::StableSet;
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
+use std::borrow::Cow;
 use std::fmt::Write;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -412,7 +413,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
                     // Generate the `derive`s.
                     let debug_derive = if is_nodebug { "" } else { ", Debug" };
-                    if variants.iter().all(|v| v.fields.is_empty()) {
+                    if variants.iter().all(|v| v.fields == Fields::Unit) {
                         writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
                             .unwrap();
                     } else {
@@ -422,18 +423,10 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     writeln!(code, "pub enum {name} {{").unwrap();
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];
-                        if variant.fields.is_empty() {
-                            writeln!(code, "    {name},").unwrap();
-                        } else {
-                            writeln!(code, "    {name} {{").unwrap();
-                            for field in &variant.fields {
-                                let name = &self.typeenv.syms[field.name.index()];
-                                let ty_name =
-                                    self.typeenv.types[field.ty.index()].name(self.typeenv);
-                                writeln!(code, "        {name}: {ty_name},").unwrap();
-                            }
-                            writeln!(code, "    }},").unwrap();
-                        }
+                        write!(code, "    {name}").unwrap();
+                        self.generate_fields(&mut *code, &variant.fields, "    ", false)
+                            .unwrap();
+                        writeln!(code, ",").unwrap();
                     }
                     writeln!(code, "}}").unwrap();
                 }
@@ -456,22 +449,56 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
                     // Generate the `derive`s.
                     let debug_derive = if is_nodebug { "" } else { ", Debug" };
-                    if fields.is_empty() {
-                        writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
-                            .unwrap();
-                        writeln!(code, "pub struct {name};").unwrap();
-                    } else {
-                        writeln!(code, "#[derive(Clone{debug_derive})]").unwrap();
-                        writeln!(code, "pub struct {name} {{").unwrap();
-                        for field in fields {
-                            let name = &self.typeenv.syms[field.name.index()];
-                            let ty_name = self.typeenv.types[field.ty.index()].name(self.typeenv);
-                            writeln!(code, "    pub {name}: {ty_name},").unwrap();
+                    match fields {
+                        Fields::Unit => {
+                            writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
+                                .unwrap();
+                            writeln!(code, "pub struct {name};").unwrap();
                         }
-                        writeln!(code, "}}").unwrap();
+                        Fields::Tuple(_) | Fields::Struct(_) => {
+                            writeln!(code, "#[derive(Clone{debug_derive})]").unwrap();
+                            write!(code, "pub struct {name}").unwrap();
+                            self.generate_fields(&mut *code, &fields, "", true).unwrap();
+                            if matches!(fields, Fields::Tuple(_)) {
+                                write!(code, ";").unwrap();
+                            }
+                        }
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    fn generate_fields(
+        &self,
+        code: &mut String,
+        fields: &Fields,
+        pad: &str,
+        allow_pub: bool,
+    ) -> std::fmt::Result {
+        let _pub = if allow_pub { "pub " } else { "" };
+        match fields {
+            Fields::Unit => Ok(()),
+            Fields::Struct(fields) => {
+                writeln!(code, " {{")?;
+                for field in &fields.fields {
+                    let name = &self.typeenv.syms[field.name.index()];
+                    let ty_name = self.typeenv.types[field.ty.index()].name(self.typeenv);
+                    writeln!(code, "{pad}    {_pub}{name}: {ty_name},")?;
+                }
+                write!(code, "{pad}}}")
+            }
+            Fields::Tuple(fields) => {
+                write!(code, "(")?;
+                for (i, field) in fields.fields.iter().enumerate() {
+                    let ty_name = self.typeenv.types[field.ty.index()].name(self.typeenv);
+                    write!(code, "{_pub}{ty_name}")?;
+                    if i < fields.fields.len() - 1 {
+                        write!(code, ", ")?;
+                    }
+                }
+                write!(code, ")")
             }
         }
     }
@@ -926,17 +953,19 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
         let extract_fields = |ctx: &mut BodyContext<W>,
                               field_bindings: &[BindingId],
-                              type_fields: &[Field]|
+                              fields: &Fields|
          -> std::fmt::Result {
             if !field_bindings.is_empty() {
                 ctx.begin_block()?;
-                for (field, value) in type_fields.iter().zip(field_bindings.iter()) {
-                    write!(
-                        ctx.out,
-                        "{}{}: ",
-                        &ctx.indent,
-                        &self.typeenv.syms[field.name.index()],
-                    )?;
+                for (i, value) in field_bindings.iter().enumerate() {
+                    let field_name = match fields {
+                        Fields::Unit => panic!(),
+                        Fields::Struct(fields) => {
+                            Cow::Borrowed(&self.typeenv.syms[fields.fields[i].name.index()])
+                        }
+                        Fields::Tuple(_) => Cow::Owned(format!("{i}")),
+                    };
+                    write!(ctx.out, "{}{field_name}: ", &ctx.indent)?;
                     self.emit_expr(ctx, *value)?;
                     if ctx.is_ref.contains(value) {
                         write!(ctx.out, ".clone()")?;
@@ -1095,20 +1124,24 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         &self,
         ctx: &mut BodyContext<W>,
         bindings: &[Option<BindingId>],
-        fields: &[Field],
+        fields: &Fields,
     ) -> std::fmt::Result {
         if !bindings.is_empty() {
             ctx.begin_block()?;
             let mut skipped_some = false;
-            for (&binding, field) in bindings.iter().zip(fields.iter()) {
+            for (i, &binding) in bindings.iter().enumerate() {
                 if let Some(binding) = binding {
-                    write!(
-                        ctx.out,
-                        "{}{}: ",
-                        &ctx.indent,
-                        &self.typeenv.syms[field.name.index()]
-                    )?;
-                    let (is_ref, _) = self.ty(field.ty);
+                    let (field_name, field_ty) = match fields {
+                        Fields::Unit => panic!(),
+                        Fields::Struct(fields) => {
+                            let field = &fields.fields[i];
+                            let name = &self.typeenv.syms[field.name.index()];
+                            (Cow::Borrowed(name), field.ty)
+                        }
+                        Fields::Tuple(fields) => (Cow::Owned(format!("{i}")), fields.fields[i].ty),
+                    };
+                    write!(ctx.out, "{}{field_name}: ", &ctx.indent)?;
+                    let (is_ref, _) = self.ty(field_ty);
                     if is_ref {
                         ctx.set_ref(binding, true);
                         write!(ctx.out, "ref ")?;
