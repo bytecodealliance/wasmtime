@@ -1824,13 +1824,13 @@ impl StoreOpaque {
 
         assert!(self.gc_store.is_none());
         assert_eq!(
-            self.vm_store_context.gc_heap.base.as_non_null(),
+            self.vm_store_context.gc_heap.get_mut().base.as_non_null(),
             NonNull::dangling(),
         );
-        assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
+        assert_eq!(self.vm_store_context.gc_heap.get_mut().current_length(), 0);
 
         let gc_store = allocate_gc_store(self, limiter).await?;
-        self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
+        *self.vm_store_context.gc_heap.get_mut() = gc_store.vmmemory_definition();
         return Ok(self.gc_store.insert(gc_store));
 
         #[cfg(feature = "gc")]
