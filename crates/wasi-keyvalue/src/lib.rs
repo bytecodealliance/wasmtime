@@ -222,23 +222,21 @@ impl<'a> WasiKeyValue<'a> {
 impl keyvalue::store::Host for WasiKeyValue<'_> {
     fn open(&mut self, identifier: String) -> Result<Resource<Bucket>, Error> {
         match identifier.as_str() {
-            "" => Ok(self.table.push(Bucket::InMemory(
-                self.ctx.in_memory_data.clone(),
-            ))?),
+            "" => Ok(self
+                .table
+                .push(Bucket::InMemory(self.ctx.in_memory_data.clone()))?),
             #[cfg(feature = "redb")]
-            s if s == "redb" || s.starts_with("redb:") => {
-                match &self.ctx.redb {
-                    Some(_) => {
-                        let bucket_name = if s == "redb" {
-                            "default".to_string()
-                        } else {
-                            s["redb:".len()..].to_string()
-                        };
-                        Ok(self.table.push(Bucket::Redb(bucket_name))?)
-                    }
-                    None => Err(Error::NoSuchStore),
+            s if s == "redb" || s.starts_with("redb:") => match &self.ctx.redb {
+                Some(_) => {
+                    let bucket_name = if s == "redb" {
+                        "default".to_string()
+                    } else {
+                        s["redb:".len()..].to_string()
+                    };
+                    Ok(self.table.push(Bucket::Redb(bucket_name))?)
                 }
-            }
+                None => Err(Error::NoSuchStore),
+            },
             _ => Err(Error::NoSuchStore),
         }
     }
@@ -272,13 +270,19 @@ impl keyvalue::store::HostBucket for WasiKeyValue<'_> {
 
     fn set(&mut self, bucket: Resource<Bucket>, key: String, value: Vec<u8>) -> Result<(), Error> {
         match self.table.get_mut(&bucket)? {
-            Bucket::InMemory(map) => { map.insert(key, value); Ok(()) }
+            Bucket::InMemory(map) => {
+                map.insert(key, value);
+                Ok(())
+            }
             #[cfg(feature = "redb")]
             Bucket::Redb(name) => {
                 let encoded = redb_encode(name, &key);
                 let db = self.ctx.redb.as_ref().unwrap();
                 let txn = db.begin_write()?;
-                { txn.open_table(KV)?.insert(encoded.as_str(), value.as_slice())?; }
+                {
+                    txn.open_table(KV)?
+                        .insert(encoded.as_str(), value.as_slice())?;
+                }
                 txn.commit()?;
                 Ok(())
             }
@@ -287,13 +291,18 @@ impl keyvalue::store::HostBucket for WasiKeyValue<'_> {
 
     fn delete(&mut self, bucket: Resource<Bucket>, key: String) -> Result<(), Error> {
         match self.table.get_mut(&bucket)? {
-            Bucket::InMemory(map) => { map.remove(&key); Ok(()) }
+            Bucket::InMemory(map) => {
+                map.remove(&key);
+                Ok(())
+            }
             #[cfg(feature = "redb")]
             Bucket::Redb(name) => {
                 let encoded = redb_encode(name, &key);
                 let db = self.ctx.redb.as_ref().unwrap();
                 let txn = db.begin_write()?;
-                { txn.open_table(KV)?.remove(encoded.as_str())?; }
+                {
+                    txn.open_table(KV)?.remove(encoded.as_str())?;
+                }
                 txn.commit()?;
                 Ok(())
             }
@@ -338,7 +347,11 @@ impl keyvalue::store::HostBucket for WasiKeyValue<'_> {
                 let table = txn.open_table(KV)?;
                 let skip = cursor.unwrap_or(0) as usize;
                 let mut keys = Vec::new();
-                for entry in table.range(prefix.as_str()..end.as_str()).map_err(Error::from)?.skip(skip) {
+                for entry in table
+                    .range(prefix.as_str()..end.as_str())
+                    .map_err(Error::from)?
+                    .skip(skip)
+                {
                     let (k, _) = entry.map_err(Error::from)?;
                     keys.push(k.value()[prefix_len..].to_string());
                 }
@@ -362,7 +375,9 @@ impl keyvalue::atomics::Host for WasiKeyValue<'_> {
     ) -> Result<u64, Error> {
         match self.table.get_mut(&bucket)? {
             Bucket::InMemory(map) => {
-                let value = map.entry(key.clone()).or_insert("0".to_string().into_bytes());
+                let value = map
+                    .entry(key.clone())
+                    .or_insert("0".to_string().into_bytes());
                 let current_value = String::from_utf8(value.clone())
                     .map_err(|e| Error::Other(e.to_string()))?
                     .parse::<u64>()
@@ -379,8 +394,10 @@ impl keyvalue::atomics::Host for WasiKeyValue<'_> {
                 let new_value = {
                     let mut table = txn.open_table(KV)?;
                     let current: u64 = match table.get(encoded.as_str()).map_err(Error::from)? {
-                        Some(g) => std::str::from_utf8(g.value()).ok()
-                            .and_then(|s| s.parse().ok()).unwrap_or(0),
+                        Some(g) => std::str::from_utf8(g.value())
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0),
                         None => 0,
                     };
                     let next = current.saturating_add(delta);
@@ -401,7 +418,8 @@ impl keyvalue::batch::Host for WasiKeyValue<'_> {
         keys: Vec<String>,
     ) -> Result<Vec<Option<(String, Vec<u8>)>>, Error> {
         match self.table.get_mut(&bucket)? {
-            Bucket::InMemory(map) => Ok(keys.into_iter()
+            Bucket::InMemory(map) => Ok(keys
+                .into_iter()
                 .map(|key| map.get(&key).map(|v| (key.clone(), v.clone())))
                 .collect()),
             #[cfg(feature = "redb")]
@@ -430,7 +448,9 @@ impl keyvalue::batch::Host for WasiKeyValue<'_> {
     ) -> Result<(), Error> {
         match self.table.get_mut(&bucket)? {
             Bucket::InMemory(map) => {
-                for (key, value) in key_values { map.insert(key, value); }
+                for (key, value) in key_values {
+                    map.insert(key, value);
+                }
                 Ok(())
             }
             #[cfg(feature = "redb")]
@@ -453,7 +473,9 @@ impl keyvalue::batch::Host for WasiKeyValue<'_> {
     fn delete_many(&mut self, bucket: Resource<Bucket>, keys: Vec<String>) -> Result<(), Error> {
         match self.table.get_mut(&bucket)? {
             Bucket::InMemory(map) => {
-                for key in keys { map.remove(&key); }
+                for key in keys {
+                    map.remove(&key);
+                }
                 Ok(())
             }
             #[cfg(feature = "redb")]
