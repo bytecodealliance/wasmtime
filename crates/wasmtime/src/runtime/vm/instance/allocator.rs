@@ -509,9 +509,7 @@ fn check_table_init_bounds(
     let mut store = OpaqueRootScope::new(store);
 
     for segment in module.table_initialization.segments.iter() {
-        let start = const_evaluator
-            .eval_int(&mut store, context, &segment.offset)
-            .expect("const expression should be valid");
+        let start = const_evaluator.eval_int(&mut store, context, &segment.offset)?;
         let start = get_index(start, module.tables[segment.table_index].idx_type);
         let end = start.checked_add(segment.elements.len());
 
@@ -565,9 +563,7 @@ async fn initialize_tables(
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
     for segment in module.table_initialization.segments.iter() {
-        let start = const_evaluator
-            .eval_int(&mut store, context, &segment.offset)
-            .expect("const expression should be valid");
+        let start = const_evaluator.eval_int(&mut store, context, &segment.offset)?;
         let start = get_index(start, module.tables[segment.table_index].idx_type);
 
         let end = start
@@ -710,7 +706,7 @@ fn initialize_memories(
             let val = self
                 .const_evaluator
                 .eval_int(&mut store, self.context, expr)
-                .expect("const expression should be valid");
+                .ok()?;
             Some(get_index(
                 val,
                 store.instance(self.context.instance).env_module().memories[memory].idx_type,
