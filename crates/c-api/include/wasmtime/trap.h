@@ -138,6 +138,10 @@ enum wasmtime_trap_code_enum {
   WASMTIME_TRAP_CODE_REFERENCE_COUNT_OVERFLOW = 46,
   /// A read/write on a stream must be <2**28 items.
   WASMTIME_TRAP_CODE_STREAM_OP_TOO_BIG = 47,
+  /// The guest either attempted to add a waitable to a waitable set while it
+  /// was being used in a synchronous operation or tried to use it in a
+  /// synchronous operation while it was added to a waitable set.
+  WASMTIME_TRAP_CODE_WAITABLE_SYNC_AND_ASYNC = 48,
 };
 
 /**
