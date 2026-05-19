@@ -439,10 +439,6 @@ criteria = "safe-to-deploy"
 version = "0.4.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.redb]]
-version = "4.1.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.region]]
 version = "2.2.0"
 criteria = "safe-to-deploy"
