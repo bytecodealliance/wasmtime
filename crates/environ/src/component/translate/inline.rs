@@ -114,9 +114,12 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
-        let index = inliner.result.import_types.push((name.0.to_string(), ty));
+        let index = inliner
+            .result
+            .import_types
+            .push((name.name.to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(name.0, ComponentItemDef::from_import(path, ty)?);
+        args.insert(name.name, ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
@@ -441,7 +444,7 @@ impl<'a> Inliner<'a> {
             // was provided as an import at the instantiation-site to what was
             // needed during the component's instantiation.
             Import(name, ty) => {
-                let arg = match frame.args.get(name.0) {
+                let arg = match frame.args.get(name.name) {
                     Some(arg) => arg,
 
                     // Not all arguments need to be provided for instantiation,

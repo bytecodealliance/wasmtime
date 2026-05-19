@@ -156,18 +156,18 @@
       ))
     ))
 
-    (func (export "big-stream") (result $s)
+    (func (export "big-stream") async (result $s)
       (canon lift (core func $m "big-stream") async
         (callback (func $m "cb"))))
-    (func (export "big-future") (result $f)
+    (func (export "big-future") async (result $f)
       (canon lift (core func $m "big-future") async
         (callback (func $m "cb"))))
   )
 
   (component $B
     (import "a" (instance $a
-      (export "big-future" (func (result $f)))
-      (export "big-stream" (func (result $s)))
+      (export "big-future" (func async (result $f)))
+      (export "big-stream" (func async (result $s)))
     ))
 
     (core module $libc

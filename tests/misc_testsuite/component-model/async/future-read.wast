@@ -26,7 +26,7 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") async (param "x" $future)
+    (func (export "run") (param "x" $future)
       (canon lift (core func $i "run")))
   )
   (instance $child (instantiate $child))
@@ -34,7 +34,7 @@
   (component $other-child
     (type $future (future))
     (import "child" (instance $child
-      (export "run" (func async (param "x" $future)))
+      (export "run" (func (param "x" $future)))
     ))
 
     (core func $new (canon future.new $future))
@@ -62,8 +62,8 @@
   (func (export "run") (alias export $other-child "run"))
 )
 
-;; We expect deadlock since the write end is leaked:
-(assert_trap (invoke "run") "deadlock detected: event loop cannot make further progress")
+;; Sync lower of this async path now traps before the leaked write end can deadlock.
+(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
 
 ;; asynchronous future.read; sync lift
 (component
@@ -87,7 +87,7 @@
         (export "read" (func $read))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run")))
   )
   (instance $child (instantiate $child))
@@ -95,7 +95,7 @@
   (component $other-child
     (type $future (future))
     (import "child" (instance $child
-      (export "run" (func (param "x" $future)))
+      (export "run" (func async (param "x" $future)))
     ))
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
@@ -123,7 +123,7 @@
   (func (export "run") (alias export $other-child "run"))
 )
 
-(assert_return (invoke "run"))
+(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
 
 ;; synchronous future.read; async lift
 (component
@@ -220,7 +220,7 @@
         (export "return" (func $return))
       ))
     ))
-    (func (export "run") (param "x" $future)
+    (func (export "run") async (param "x" $future)
       (canon lift (core func $i "run") async (callback (func $i "cb"))))
   )
   (instance $child (instantiate $child))
@@ -228,7 +228,7 @@
   (component $other-child
     (type $future (future))
     (import "child" (instance $child
-      (export "run" (func (param "x" $future)))
+      (export "run" (func async (param "x" $future)))
     ))
     (core func $new (canon future.new $future))
     (core func $child-run (canon lower (func $child "run")))
@@ -257,4 +257,3 @@
 )
 
 (assert_return (invoke "run"))
-

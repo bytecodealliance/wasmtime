@@ -236,7 +236,7 @@ impl ReencodeComponent for Reencoder<'_> {
     ) -> Result<(), Error> {
         for export in section {
             let export = export?;
-            if !self.wizer.get_keep_init_func() && export.name.0 == self.wizer.get_init_func() {
+            if !self.wizer.get_keep_init_func() && export.name.name == self.wizer.get_init_func() {
                 self.removed_func = Some(self.funcs);
             } else {
                 if export.kind == wasmparser::ComponentExternalKind::Func {

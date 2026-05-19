@@ -129,14 +129,14 @@
       (export "stream.drop-readable" (func $stream.drop-readable))
       (export "stream.drop-writable" (func $stream.drop-writable))
     ))))
-    (func (export "transform") (param "in" (stream u8)) (result (stream u8)) (canon lift
+    (func (export "transform") async (param "in" (stream u8)) (result (stream u8)) (canon lift
       (core func $cm "transform")
       async (memory $memory "mem") (callback (func $cm "transform_cb"))
     ))
   )
 
   (component $D
-    (import "transform" (func $transform (param "in" (stream u8)) (result (stream u8))))
+    (import "transform" (func $transform async (param "in" (stream u8)) (result (stream u8))))
 
     (core module $Memory (memory (export "mem") 1))
     (core instance $memory (instantiate $Memory))

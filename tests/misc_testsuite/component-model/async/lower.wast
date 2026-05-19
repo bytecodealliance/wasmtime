@@ -2,7 +2,7 @@
 
 ;; async lower
 (component
-  (import "host-echo-u32" (func $foo (param "p1" u32) (result u32)))
+  (import "host-echo-u32" (func $foo async (param "p1" u32) (result u32)))
   (core module $libc (memory (export "memory") 1))
   (core instance $libc (instantiate $libc))
   (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
