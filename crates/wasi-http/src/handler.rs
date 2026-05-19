@@ -462,7 +462,10 @@ pub trait WorkerState: 'static + Send + Sync {
     ///
     /// Once #11869 and #11870 have been addressed, this "second level of
     /// defence" will no longer be necessary.
-    fn on_request_start(&self) -> impl Future<Output = ()> + 'static + Send + Sync;
+    fn on_request_start(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
     /// Dispose of the store belonging to the now-exited worker.
     ///
@@ -740,7 +743,7 @@ where
                 //
                 // If it fails to produce a response by the deadline, we'll stop
                 // accepting new requests and eventually exit the worker.
-                let expiration = dropper.state.on_request_start();
+                let expiration = dropper.state.on_request_start(&request);
 
                 let start_time = Instant::now();
                 start_times.add(start_time);

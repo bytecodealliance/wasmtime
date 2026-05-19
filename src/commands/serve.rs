@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -353,20 +353,20 @@ impl ServeCommand {
             .await
     }
 
-    fn new_store(&self, engine: &Engine, req_id: Option<u64>) -> Result<Store<Host>> {
+    fn new_store(&self, engine: &Engine, instance_id: Option<u64>) -> Result<Store<Host>> {
         let mut builder = WasiCtxBuilder::new();
         self.run.configure_wasip2(&mut builder)?;
 
-        if let Some(req_id) = req_id {
-            builder.env("REQUEST_ID", req_id.to_string());
+        if let Some(instance_id) = instance_id {
+            builder.env("INSTANCE_ID", instance_id.to_string());
         }
 
         let stdout_prefix: String;
         let stderr_prefix: String;
-        match req_id {
-            Some(req_id) if !self.no_logging_prefix => {
-                stdout_prefix = format!("stdout [{req_id}] :: ");
-                stderr_prefix = format!("stderr [{req_id}] :: ");
+        match instance_id {
+            Some(instance_id) if !self.no_logging_prefix => {
+                stdout_prefix = format!("stdout [{instance_id}] :: ");
+                stderr_prefix = format!("stderr [{instance_id}] :: ");
             }
             _ => {
                 stdout_prefix = "".to_string();
@@ -673,6 +673,7 @@ impl ServeCommand {
             max_instance_reuse_count,
             max_instance_concurrent_reuse_count,
             instance,
+            next_instance_id: AtomicU64::default(),
             // Give one shutdown guard to this handler which will track the
             // full lifetime of any instances spawned.
             _shutdown_guard: Box::new(shutdown.clone().increment()),
@@ -809,6 +810,7 @@ impl WorkerExpiration for HostWorkerExpiration {
 }
 
 struct HostWorkerState {
+    instance_id: u64,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     request_timeout: Duration,
@@ -827,8 +829,18 @@ impl WorkerState for HostWorkerState {
         }
     }
 
-    fn on_request_start(&self) -> impl Future<Output = ()> + 'static {
-        tokio::time::sleep(self.request_timeout)
+    fn on_request_start(
+        &self,
+        req: &handler::Request,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>> {
+        log::info!(
+            "Instance {} handling request {} {}",
+            self.instance_id,
+            req.method(),
+            req.uri()
+        );
+
+        Box::pin(tokio::time::sleep(self.request_timeout))
     }
 
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
@@ -851,6 +863,7 @@ struct HostHandlerState {
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     instance: ProxyPre<Host>,
+    next_instance_id: AtomicU64,
     _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
 }
 
@@ -862,7 +875,8 @@ impl HandlerState for HostHandlerState {
     async fn instantiate(
         &self,
     ) -> Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>> {
-        let mut store = self.cmd.new_store(&self.engine, None)?;
+        let instance_id = self.next_instance_id.fetch_add(1, Ordering::Relaxed);
+        let mut store = self.cmd.new_store(&self.engine, Some(instance_id))?;
         let write_profile = setup_epoch_handler(&self.cmd, &mut store, self.component.clone())?;
         store.data_mut().write_profile = Some(write_profile);
 
@@ -885,6 +899,7 @@ impl HandlerState for HostHandlerState {
             state: HostWorkerState {
                 max_instance_reuse_count: self.max_instance_reuse_count,
                 max_instance_concurrent_reuse_count: self.max_instance_concurrent_reuse_count,
+                instance_id,
                 request_timeout: self.cmd.run.common.wasm.timeout.unwrap_or(Duration::MAX),
             },
         })
@@ -1218,8 +1233,6 @@ async fn handle_request(
     req: Request,
 ) -> Result<hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>> {
     use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
-
-    log::info!("Request handling {} to {}", req.method(), req.uri());
 
     handler
         .handle(req.map(|body| {
