@@ -3272,10 +3272,12 @@ impl Instance {
         self,
         store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
+        write_instance: Instance,
         write_caller_instance: RuntimeComponentInstanceIndex,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
+        read_instance: Instance,
         read_caller_instance: RuntimeComponentInstanceIndex,
         read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
@@ -3284,15 +3286,17 @@ impl Instance {
         count: ItemCount,
         rep: u32,
     ) -> Result<()> {
-        let (component, mut store) = self.component_and_store_mut(store.0);
-        let types = component.types();
+        let (write_component, store) = write_instance.component_and_store_mut(store.0);
+        let (read_component, mut store) = read_instance.component_and_store_mut(store);
+        let write_types = write_component.types();
+        let read_types = read_component.types();
         let count = count.as_usize();
 
         // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
         // aligned and in-bounds.
-        let write_payload_ty = write_ty.payload(types);
+        let write_payload_ty = write_ty.payload(write_types);
         let write_abi = match write_payload_ty {
-            Some(ty) => types.canonical_abi(ty),
+            Some(ty) => write_types.canonical_abi(ty),
             None => &CanonicalAbiInfo::ZERO,
         };
         let write_length_in_bytes = match flat_abi {
@@ -3303,15 +3307,16 @@ impl Instance {
             if write_address % usize::try_from(write_abi.align32)? != 0 {
                 bail!("write pointer not aligned");
             }
-            self.options_memory(store, write_options)
+            write_instance
+                .options_memory(store, write_options)
                 .get(write_address..)
                 .and_then(|b| b.get(..write_length_in_bytes))
                 .ok_or_else(|| crate::format_err!("write pointer out of bounds"))?;
         }
 
-        let read_payload_ty = read_ty.payload(types);
+        let read_payload_ty = read_ty.payload(read_types);
         let read_abi = match read_payload_ty {
-            Some(ty) => types.canonical_abi(ty),
+            Some(ty) => read_types.canonical_abi(ty),
             None => &CanonicalAbiInfo::ZERO,
         };
         let read_length_in_bytes = match flat_abi {
@@ -3322,7 +3327,8 @@ impl Instance {
             if read_address % usize::try_from(read_abi.align32)? != 0 {
                 bail!("read pointer not aligned");
             }
-            self.options_memory(store, read_options)
+            read_instance
+                .options_memory(store, read_options)
                 .get(read_address..)
                 .and_then(|b| b.get(..read_length_in_bytes))
                 .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
@@ -3344,7 +3350,7 @@ impl Instance {
 
                 let val = write_payload_ty
                     .map(|ty| {
-                        let lift = &mut LiftContext::new(store, write_options, self);
+                        let lift = &mut LiftContext::new(store, write_options, write_instance);
                         let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                         Val::load(lift, *ty, bytes)
                     })
@@ -3355,7 +3361,8 @@ impl Instance {
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
                     let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let lower =
+                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
                         read_abi,
                         lower.as_slice_mut(),
@@ -3387,19 +3394,23 @@ impl Instance {
 
                     assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
-                    if self.options_memory(store_opaque, read_options).as_ptr()
-                        == self.options_memory(store_opaque, write_options).as_ptr()
+                    if read_instance
+                        .options_memory(store_opaque, read_options)
+                        .as_ptr()
+                        == write_instance
+                            .options_memory(store_opaque, write_options)
+                            .as_ptr()
                     {
-                        let memory = self.options_memory_mut(store_opaque, read_options);
+                        let memory = read_instance.options_memory_mut(store_opaque, read_options);
                         memory.copy_within(
                             write_address..write_address + write_length_in_bytes,
                             read_address,
                         );
                     } else {
-                        let src = self.options_memory(store_opaque, write_options)[write_address..]
-                            [..write_length_in_bytes]
+                        let src = write_instance.options_memory(store_opaque, write_options)
+                            [write_address..][..write_length_in_bytes]
                             .as_ptr();
-                        let dst = self.options_memory_mut(store_opaque, read_options)
+                        let dst = read_instance.options_memory_mut(store_opaque, read_options)
                             [read_address..][..read_length_in_bytes]
                             .as_mut_ptr();
 
@@ -3418,7 +3429,7 @@ impl Instance {
                     }
                 } else {
                     let store_opaque = store.store_opaque_mut();
-                    let lift = &mut LiftContext::new(store_opaque, write_options, self);
+                    let lift = &mut LiftContext::new(store_opaque, write_options, write_instance);
                     let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                     lift.consume_fuel_array(count, size_of::<Val>())?;
 
@@ -3436,7 +3447,8 @@ impl Instance {
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
                     let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let lower =
+                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let mut ptr = read_address;
                     for value in values {
                         value.store(lower, *read_payload_ty, ptr)?;
@@ -3605,10 +3617,12 @@ impl Instance {
                 self.copy(
                     store.as_context_mut(),
                     flat_abi,
+                    self,
                     caller,
                     ty,
                     options,
                     address,
+                    read_instance,
                     read_caller_instance,
                     read_caller_thread,
                     read_ty,
@@ -3618,9 +3632,9 @@ impl Instance {
                     rep,
                 )?;
 
-                let instance = self.id().get_mut(store.0);
+                let instance = read_instance.id().get(store.0);
                 let types = instance.component().types();
-                let item_size = match ty.payload(types) {
+                let item_size = match read_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
@@ -3809,7 +3823,7 @@ impl Instance {
 
         let mut result = match mem::replace(&mut transmit.write, new_state) {
             WriteState::GuestReady {
-                instance: _,
+                instance: write_instance,
                 ty: write_ty,
                 flat_abi: write_flat_abi,
                 options: write_options,
@@ -3841,10 +3855,12 @@ impl Instance {
                 self.copy(
                     store.as_context_mut(),
                     flat_abi,
+                    write_instance,
                     write_caller,
                     write_ty,
                     write_options,
                     write_address,
+                    self,
                     caller_instance,
                     caller_thread,
                     ty,
@@ -3854,9 +3870,9 @@ impl Instance {
                     rep,
                 )?;
 
-                let instance = self.id().get_mut(store.0);
+                let instance = write_instance.id().get(store.0);
                 let types = instance.component().types();
-                let item_size = match ty.payload(types) {
+                let item_size = match write_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
@@ -3886,7 +3902,7 @@ impl Instance {
                 if write_buffer_remaining {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.write = WriteState::GuestReady {
-                        instance: self,
+                        instance: write_instance,
                         caller: write_caller,
                         ty: write_ty,
                         flat_abi: write_flat_abi,
