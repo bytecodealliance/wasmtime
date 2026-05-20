@@ -128,6 +128,10 @@ Unreleased.
 * The performance of reading stdin in WASI has been improved.
   [#13256](https://github.com/bytecodealliance/wasmtime/pull/13256)
 
+* WASI path_open(TRUNCATE) bypasses `FilePerms::WRITE` host restriction.
+  [GHSA-2r75-cxrj-cmph](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-2r75-cxrj-cmph)
+
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
