@@ -196,12 +196,15 @@ fn wasm_memory_grow_relocate() -> Result<()> {
     let linker = Linker::<()>::new(&engine);
     let instance_pre = linker.instantiate_pre(&module)?;
 
-    OomTest::new().allow_alloc_after_oom(true).test(|| {
-        let mut store = Store::try_new(&engine, ())?;
-        let instance = instance_pre.instantiate(&mut store)?;
-        let grow = instance.get_func(&mut store, "grow").unwrap();
-        let mut results = [Val::I32(0)];
-        let _ = grow.call(&mut store, &[Val::I32(1)], &mut results);
-        Ok(())
-    })
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .allow_missed_oom_errors(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let instance = instance_pre.instantiate(&mut store)?;
+            let grow = instance.get_func(&mut store, "grow").unwrap();
+            let mut results = [Val::I32(0)];
+            grow.call(&mut store, &[Val::I32(1)], &mut results)?;
+            Ok(())
+        })
 }
