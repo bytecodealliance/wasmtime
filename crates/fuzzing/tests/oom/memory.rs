@@ -1,6 +1,6 @@
 #![cfg(arc_try_new)]
 
-use wasmtime::{Config, Engine, Memory, MemoryType, Result, Store};
+use wasmtime::{Config, Engine, Linker, Memory, MemoryType, Module, Result, Store, Val};
 use wasmtime_fuzzing::oom::OomTest;
 
 #[test]
@@ -165,4 +165,47 @@ fn memory_data_mut() -> Result<()> {
         assert_eq!(data[0], 42);
         Ok(())
     })
+}
+
+#[test]
+fn wasm_memory_grow_relocate() -> Result<()> {
+    let module_bytes = {
+        let mut config = Config::new();
+        config.concurrency_support(false);
+        config.memory_reservation(65536);
+        config.memory_reservation_for_growth(0);
+        let engine = Engine::new(&config)?;
+        Module::new(
+            &engine,
+            r#"(module
+                (memory (export "memory") 1)
+                (func (export "grow") (param i32) (result i32)
+                    (memory.grow (local.get 0))
+                )
+            )"#,
+        )?
+        .serialize()?
+    };
+    let mut config = Config::new();
+    config.enable_compiler(false);
+    config.concurrency_support(false);
+    config.memory_reservation(65536);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let module = unsafe { Module::deserialize(&engine, &module_bytes)? };
+    let linker = Linker::<()>::new(&engine);
+    let instance_pre = linker.instantiate_pre(&module)?;
+
+    OomTest::new()
+        .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
+        .allow_missed_oom_errors(true)
+        .test(|| {
+            let mut store = Store::try_new(&engine, ())?;
+            let instance = instance_pre.instantiate(&mut store)?;
+            let grow = instance.get_func(&mut store, "grow").unwrap();
+            let mut results = [Val::I32(0)];
+            grow.call(&mut store, &[Val::I32(1)], &mut results)?;
+            Ok(())
+        })
 }
