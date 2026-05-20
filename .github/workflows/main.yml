@@ -621,7 +621,21 @@ jobs:
           os: macos-latest
           test: cargo build
           env:
-            IPHONEOS_DEPLOYMENT_TARGET: 13.0
+            IPHONEOS_DEPLOYMENT_TARGET: 16.0
+        # watchOS targets are Tier 3 in Rust so there is no prebuilt `std`.
+        # Check cranelift-codegen (no std, no mach2, no C helpers) which is
+        # the core thing needed for executing Wasm on Apple Watch.
+        # arm64_32 uses ILP32 (32-bit pointer width). cranelift-codegen has
+        # heavy deps (regalloc2, cranelift-assembler-x64) that may not compile
+        # for 32-bit pointer targets; so we only test the lighter cranelift-entity
+        # which still exercises wasmtime-core, entity references, and bitsets.
+        - target: arm64_32-apple-watchos
+          os: macos-latest
+          toolchain: wasmtime-ci-pinned-nightly
+          build_std: true
+          test: cargo check -p cranelift-entity --no-default-features -Zbuild-std=core,alloc
+          env:
+            WATCHOS_DEPLOYMENT_TARGET: "11.0"
         # Test that when Cranelift has no support for an architecture, even a
         # 64-bit one, that Wasmtime still compiles. Note that this is also
         # intended to test various fallbacks in the codebase where we have no
@@ -644,7 +658,12 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
+      with:
+        toolchain: ${{ matrix.toolchain || 'default' }}
+    - run: rustup component add rust-src
+      if: ${{ matrix.build_std }}
     - run: rustup target add ${{ matrix.target }}
+      if: ${{ !matrix.build_std }}
     - name: Install cross
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
