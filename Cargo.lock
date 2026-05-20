@@ -4845,6 +4845,7 @@ dependencies = [
  "memchr",
  "num_cpus",
  "object 0.39.0",
+ "pin-project-lite",
  "pulley-interpreter",
  "rand 0.10.1",
  "rayon",

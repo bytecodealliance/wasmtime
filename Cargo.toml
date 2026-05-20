@@ -91,6 +91,7 @@ hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+pin-project-lite = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "process"] }
@@ -596,6 +597,7 @@ serve = [
   "component-model",
   "dep:http-body-util",
   "dep:http",
+  "dep:pin-project-lite",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
 ]

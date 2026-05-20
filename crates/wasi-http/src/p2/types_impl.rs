@@ -401,11 +401,7 @@ impl types::HostResponseOutparam for WasiHttpCtxView<'_> {
         };
 
         let resp = self.table.delete(id)?;
-        // Giving the API doesn't return any error, it's probably
-        // better to ignore the error than trap the guest, in case of
-        // host timeout and dropped the receiver side of the channel.
-        // See also: #10784
-        let _ = resp.result.send(val);
+        (resp.send)(val);
         Ok(())
     }
 
