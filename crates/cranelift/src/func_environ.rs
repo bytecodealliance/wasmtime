@@ -2529,18 +2529,32 @@ impl FuncEnvironment<'_> {
         value: ir::Value,
         index: ir::Value,
     ) -> WasmResult<()> {
-        let table = self.module.tables[table_index];
         let table_data = self.get_or_create_table(builder.func, table_index);
-        let heap_ty = table.ref_type.heap_type;
-        match heap_ty.top() {
+        let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
+        self.emit_table_set(builder, table_index, dst, flags, value)
+    }
+
+    /// Helper to store `value` into the table address at `addr` using `flags`.
+    ///
+    /// This assumes that `addr` is a native address and is already
+    /// bounds-checked. Additionally `value` must be appropriately typed.
+    fn emit_table_set(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        addr: ir::Value,
+        flags: ir::MemFlagsData,
+        value: ir::Value,
+    ) -> WasmResult<()> {
+        let table = self.module.tables[table_index];
+        match table.ref_type.heap_type.top() {
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
                 gc::gc_compiler(self)?.translate_write_gc_reference(
                     self,
                     builder,
                     table.ref_type,
-                    dst,
+                    addr,
                     value,
                     flags,
                 )
@@ -2548,15 +2562,13 @@ impl FuncEnvironment<'_> {
 
             // Function types.
             WasmHeapTopType::Func => {
-                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
-                self.table_set_funcref(builder, value, elem_addr, flags);
+                self.table_set_funcref(builder, value, addr, flags);
                 Ok(())
             }
 
             // Continuation types.
             WasmHeapTopType::Cont => {
-                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
-                builder.ins().store(flags, value, elem_addr, 0);
+                builder.ins().store(flags, value, addr, 0);
                 Ok(())
             }
         }
@@ -3905,7 +3917,7 @@ impl FuncEnvironment<'_> {
     fn emit_raw_array_or_table_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        _dst_entity: CheckedEntity,
+        dst_entity: CheckedEntity,
         src_entity: CheckedEntity,
         elem_ty: WasmStorageType,
         dst_elem_addr: ir::Value,
@@ -3924,12 +3936,7 @@ impl FuncEnvironment<'_> {
             index_type_to_ir_type(src_entity.index_type(self))
         );
 
-        enum CopyKind {
-            Memcpy,
-            VMGcRef,
-            TableFuncref(TableIndex),
-        }
-        let kind = match elem_ty {
+        let type_forbids_memcpy = match elem_ty {
             // Scalar types can always use a memcpy.
             WasmStorageType::I8
             | WasmStorageType::I16
@@ -3939,7 +3946,7 @@ impl FuncEnvironment<'_> {
                 | WasmValType::F32
                 | WasmValType::F64
                 | WasmValType::V128,
-            ) => CopyKind::Memcpy,
+            ) => false,
 
             WasmStorageType::Val(WasmValType::Ref(ty)) => match ty.heap_type.top() {
                 // These types are represented the same in all locations (e.g.
@@ -3953,13 +3960,7 @@ impl FuncEnvironment<'_> {
                 WasmHeapTopType::Extern
                 | WasmHeapTopType::Any
                 | WasmHeapTopType::Exn
-                | WasmHeapTopType::Cont => {
-                    if ty.heap_type.is_vmgcref_type_and_not_i31() {
-                        CopyKind::VMGcRef
-                    } else {
-                        CopyKind::Memcpy
-                    }
-                }
+                | WasmHeapTopType::Cont => ty.heap_type.is_vmgcref_type_and_not_i31(),
 
                 // `funcref` is stored differently in tables and the GC heap, so
                 // futher inspection is necessary of where the copy is
@@ -3969,75 +3970,66 @@ impl FuncEnvironment<'_> {
                     // would mean that memcpy isn't suitable. If lazy init is
                     // disabled though then funcrefs are just pointers so a
                     // memcpy can be used.
-                    CheckedEntity::Table(i) => {
-                        if self.tunables.table_lazy_init {
-                            CopyKind::TableFuncref(i)
-                        } else {
-                            CopyKind::Memcpy
-                        }
-                    }
+                    CheckedEntity::Table(_) => self.tunables.table_lazy_init,
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
-                    CheckedEntity::Array => CopyKind::Memcpy,
+                    CheckedEntity::Array => false,
                     // Not possible
                     CheckedEntity::Memory(_) | CheckedEntity::Data(_) => unreachable!(),
                 },
             },
         };
 
-        match kind {
-            // For memcpy, that's easy, just call the intrinsic with the right
-            // parameters.
-            CopyKind::Memcpy => {
-                let copy_byte_len = builder.ins().imul(one_elem_size, copy_len);
-                self.raw_bulk_memory_operation(
-                    builder,
-                    BulkOp::MemoryCopy {
-                        dst: dst_elem_addr,
-                        src: src_elem_addr,
-                        len: copy_byte_len,
-                    },
-                );
-            }
-
-            // For other copies, this is a per-element loop. Use the helper to
-            // setup the general structure, and then the per-element closures is
-            // used to dispatch `other` further.
-            other => {
-                self.translate_per_element_copy(
-                    builder,
-                    dst_elem_addr,
-                    src_elem_addr,
-                    one_elem_size,
-                    copy_len,
-                    src_index,
-                    &|this, builder, dst, src, src_index| {
-                        match other {
-                            CopyKind::VMGcRef => {
-                                let val =
-                                    gc::read_field_at_addr(this, builder, elem_ty, src, None)?;
-                                gc::write_field_at_addr(this, builder, elem_ty, dst, val)?;
-                            }
-                            CopyKind::TableFuncref(i) => {
-                                // FIXME: this `table_get_funcref` helper is
-                                // duplicating the bounds check already done.
-                                // In theory can be refactored in the future to
-                                // avoid that.
-                                let funcref = this.table_get_funcref(builder, i, src_index, false);
-                                this.table_set_funcref(
-                                    builder,
-                                    funcref,
-                                    dst,
-                                    ir::MemFlagsData::trusted(),
-                                );
-                            }
-                            CopyKind::Memcpy => unreachable!(),
-                        }
-                        Ok(())
-                    },
-                )?;
-            }
+        // For memcpy, that's easy, just call the intrinsic with the right
+        // parameters.
+        if !type_forbids_memcpy {
+            let copy_byte_len = builder.ins().imul(one_elem_size, copy_len);
+            self.raw_bulk_memory_operation(
+                builder,
+                BulkOp::MemoryCopy {
+                    dst: dst_elem_addr,
+                    src: src_elem_addr,
+                    len: copy_byte_len,
+                },
+            );
+            return Ok(());
         }
+
+        // For other copies, this is a per-element loop. Use the helper to
+        // setup the general structure, and then the per-element closures is
+        // used to dispatch `other` further.
+        self.translate_per_element_copy(
+            builder,
+            dst_elem_addr,
+            src_elem_addr,
+            one_elem_size,
+            copy_len,
+            src_index,
+            &|this, builder, dst, src, src_index| {
+                let val = match src_entity {
+                    // FIXME: ideally this wouldn't redo the bounds check but
+                    // it's easier right now to share the internals of
+                    // `translate_table_get` which are a bit tricky with
+                    // funcrefs.
+                    CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
+                    CheckedEntity::Array => {
+                        gc::read_field_at_addr(this, builder, elem_ty, src, None)?
+                    }
+                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                };
+                match dst_entity {
+                    CheckedEntity::Table(i) => {
+                        this.emit_table_set(builder, i, dst, ir::MemFlagsData::trusted(), val)?;
+                    }
+                    CheckedEntity::Array => {
+                        gc::write_field_at_addr(this, builder, elem_ty, dst, val)?
+                    }
+                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                }
+
+                Ok(())
+            },
+        )?;
 
         Ok(())
     }
