@@ -5,6 +5,8 @@
 #![deny(missing_docs)]
 
 mod backend;
+#[cfg(feature = "unwind")]
+mod unwind;
 
 pub use crate::backend::{ObjectBuilder, ObjectModule, ObjectProduct};
 
