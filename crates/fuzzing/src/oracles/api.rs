@@ -19,6 +19,8 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut globals: HashMap<usize, (Global, usize)> = Default::default();
     let mut table_types: HashMap<usize, TableType> = Default::default();
     let mut tables: HashMap<usize, (Table, usize)> = Default::default();
+    let mut memory_types: HashMap<usize, MemoryType> = Default::default();
+    let mut memories: HashMap<usize, (Memory, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -35,6 +37,7 @@ pub fn make_api_calls(api: ApiCalls) {
                 instances.retain(|_, (_, store_id)| *store_id != id);
                 globals.retain(|_, (_, store_id)| *store_id != id);
                 tables.retain(|_, (_, store_id)| *store_id != id);
+                memories.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
             }
 
@@ -357,6 +360,210 @@ pub fn make_api_calls(api: ApiCalls) {
                     continue;
                 }
                 tables.insert(id, (ts[nth % ts.len()], store_id));
+            }
+
+            ApiCall::MemoryTypeNew {
+                id,
+                minimum,
+                maximum,
+            } => {
+                log::trace!("creating memory type {id}");
+                let old = memory_types.insert(id, MemoryType::new(minimum, maximum));
+                assert!(old.is_none());
+            }
+
+            ApiCall::MemoryTypeDrop { id } => {
+                log::trace!("dropping memory type {id}");
+                memory_types.remove(&id);
+            }
+
+            ApiCall::MemoryNew {
+                id,
+                memory_ty,
+                store,
+            } => {
+                log::trace!("creating memory {id} with type {memory_ty} in store {store}");
+                let mt = match memory_types.get(&memory_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                match Memory::new(&mut *st, mt) {
+                    Ok(m) => {
+                        memories.insert(id, (m, store));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::MemoryRead {
+                memory,
+                offset,
+                len,
+            } => {
+                log::trace!("reading {len} bytes from memory {memory} at offset {offset}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut buf = vec![0u8; len];
+                let _ = m.read(st, offset, &mut buf);
+            }
+
+            ApiCall::MemoryWrite {
+                memory,
+                offset,
+                ref data,
+            } => {
+                log::trace!(
+                    "writing {} bytes to memory {memory} at offset {offset}",
+                    data.len()
+                );
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.write(&mut *st, offset, data);
+            }
+
+            ApiCall::MemoryData { memory } => {
+                log::trace!("getting data slice of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.data(st);
+            }
+
+            ApiCall::MemoryDataMut { memory } => {
+                log::trace!("getting mutable data slice of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.data_mut(&mut *st);
+            }
+
+            ApiCall::MemoryGrow { memory, delta } => {
+                log::trace!("growing memory {memory} by {delta} pages");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.grow(&mut *st, delta.into());
+            }
+
+            ApiCall::MemoryDataSize { memory } => {
+                log::trace!("getting data size of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.data_size(st);
+            }
+
+            ApiCall::MemorySize { memory } => {
+                log::trace!("getting size of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.size(st);
+            }
+
+            ApiCall::MemoryPageSize { memory } => {
+                log::trace!("getting page size of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.page_size(st);
+            }
+
+            ApiCall::MemoryPageSizeLog2 { memory } => {
+                log::trace!("getting page size log2 of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.page_size_log2(st);
+            }
+
+            ApiCall::MemoryTy { memory } => {
+                log::trace!("checking type of memory {memory}");
+                let (m, store_id) = match memories.get(&memory) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = m.ty(st);
+            }
+
+            ApiCall::MemoryDrop { id } => {
+                log::trace!("dropping memory {id}");
+                memories.remove(&id);
+            }
+
+            ApiCall::GetMemoryExport { id, instance, nth } => {
+                log::trace!("getting {nth}th memory export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ms = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| e.into_memory())
+                    .collect::<Vec<_>>();
+                if ms.is_empty() {
+                    continue;
+                }
+                memories.insert(id, (ms[nth % ms.len()], store_id));
             }
         }
     }

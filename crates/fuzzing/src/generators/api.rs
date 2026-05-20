@@ -68,6 +68,21 @@ struct Swarm {
     table_ty: bool,
     table_drop: bool,
     get_table_export: bool,
+    memory_type_new: bool,
+    memory_type_drop: bool,
+    memory_new: bool,
+    memory_read: bool,
+    memory_write: bool,
+    memory_data: bool,
+    memory_data_mut: bool,
+    memory_grow: bool,
+    memory_data_size: bool,
+    memory_size: bool,
+    memory_page_size: bool,
+    memory_page_size_log2: bool,
+    memory_ty: bool,
+    memory_drop: bool,
+    get_memory_export: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -168,6 +183,62 @@ pub enum ApiCall {
         instance: usize,
         nth: usize,
     },
+    MemoryTypeNew {
+        id: usize,
+        minimum: u32,
+        maximum: Option<u32>,
+    },
+    MemoryTypeDrop {
+        id: usize,
+    },
+    MemoryNew {
+        id: usize,
+        memory_ty: usize,
+        store: usize,
+    },
+    MemoryRead {
+        memory: usize,
+        offset: usize,
+        len: usize,
+    },
+    MemoryWrite {
+        memory: usize,
+        offset: usize,
+        data: Vec<u8>,
+    },
+    MemoryData {
+        memory: usize,
+    },
+    MemoryDataMut {
+        memory: usize,
+    },
+    MemoryGrow {
+        memory: usize,
+        delta: u32,
+    },
+    MemoryDataSize {
+        memory: usize,
+    },
+    MemorySize {
+        memory: usize,
+    },
+    MemoryPageSize {
+        memory: usize,
+    },
+    MemoryPageSizeLog2 {
+        memory: usize,
+    },
+    MemoryTy {
+        memory: usize,
+    },
+    MemoryDrop {
+        id: usize,
+    },
+    GetMemoryExport {
+        id: usize,
+        instance: usize,
+        nth: usize,
+    },
 }
 use ApiCall::*;
 
@@ -197,6 +268,13 @@ struct Scope {
     /// Tables that are currently live. Maps from `table_id` to the table's
     /// associated `store_id`.
     tables: BTreeMap<usize, usize>, // table_id -> store_id
+
+    /// Memory types that are currently live.
+    memory_types: BTreeSet<usize>,
+
+    /// Memories that are currently live. Maps from `memory_id` to the memory's
+    /// associated `store_id`.
+    memories: BTreeMap<usize, usize>, // memory_id -> store_id
 
     config: Config,
 }
@@ -233,6 +311,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             globals: BTreeMap::default(),
             table_types: BTreeSet::default(),
             tables: BTreeMap::default(),
+            memory_types: BTreeSet::default(),
+            memories: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -271,6 +351,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.instances.retain(|_, store_id| *store_id != id);
                     scope.globals.retain(|_, store_id| *store_id != id);
                     scope.tables.retain(|_, store_id| *store_id != id);
+                    scope.memories.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -478,6 +559,149 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let store = *scope.instances.get(&instance).unwrap();
                     scope.tables.insert(id, store);
                     Ok(GetTableExport { id, instance, nth })
+                });
+            }
+            if swarm.memory_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let minimum = u32::arbitrary(input)? % 10;
+                    let has_max = bool::arbitrary(input)?;
+                    let maximum = if has_max {
+                        Some(minimum + u32::arbitrary(input)? % 10)
+                    } else {
+                        None
+                    };
+                    scope.memory_types.insert(id);
+                    Ok(MemoryTypeNew {
+                        id,
+                        minimum,
+                        maximum,
+                    })
+                });
+            }
+            if swarm.memory_type_drop && !scope.memory_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.memory_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.memory_types.remove(&id);
+                    Ok(MemoryTypeDrop { id })
+                });
+            }
+            if swarm.memory_new && !scope.memory_types.is_empty() && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.memory_types.iter().collect();
+                    let memory_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.memories.insert(id, store);
+                    Ok(MemoryNew {
+                        id,
+                        memory_ty,
+                        store,
+                    })
+                });
+            }
+            if swarm.memory_read && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    let offset = usize::arbitrary(input)?;
+                    let len = usize::arbitrary(input)? % 64;
+                    Ok(MemoryRead {
+                        memory,
+                        offset,
+                        len,
+                    })
+                });
+            }
+            if swarm.memory_write && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    let offset = usize::arbitrary(input)?;
+                    let data = Vec::<u8>::arbitrary(input)?;
+                    Ok(MemoryWrite {
+                        memory,
+                        offset,
+                        data,
+                    })
+                });
+            }
+            if swarm.memory_data && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryData { memory })
+                });
+            }
+            if swarm.memory_data_mut && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryDataMut { memory })
+                });
+            }
+            if swarm.memory_grow && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    let delta = u32::arbitrary(input)? % 10;
+                    Ok(MemoryGrow { memory, delta })
+                });
+            }
+            if swarm.memory_data_size && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryDataSize { memory })
+                });
+            }
+            if swarm.memory_size && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemorySize { memory })
+                });
+            }
+            if swarm.memory_page_size && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryPageSize { memory })
+                });
+            }
+            if swarm.memory_page_size_log2 && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryPageSizeLog2 { memory })
+                });
+            }
+            if swarm.memory_ty && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let memory = **input.choose(&memories)?;
+                    Ok(MemoryTy { memory })
+                });
+            }
+            if swarm.memory_drop && !scope.memories.is_empty() {
+                choices.push(|input, scope| {
+                    let memories: Vec<_> = scope.memories.keys().collect();
+                    let id = **input.choose(&memories)?;
+                    scope.memories.remove(&id);
+                    Ok(MemoryDrop { id })
+                });
+            }
+            if swarm.get_memory_export && !scope.instances.is_empty() {
+                choices.push(|input, scope| {
+                    let instances: Vec<_> = scope.instances.keys().collect();
+                    let instance = **input.choose(&instances)?;
+                    let nth = usize::arbitrary(input)?;
+                    let id = scope.next_id();
+                    let store = *scope.instances.get(&instance).unwrap();
+                    scope.memories.insert(id, store);
+                    Ok(GetMemoryExport { id, instance, nth })
                 });
             }
 
