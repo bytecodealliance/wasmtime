@@ -198,6 +198,7 @@ fn wasm_memory_grow_relocate() -> Result<()> {
 
     OomTest::new()
         .allow_alloc_after_oom(true)
+        .alloc_succeeds_after_oom(true)
         .allow_missed_oom_errors(true)
         .test(|| {
             let mut store = Store::try_new(&engine, ())?;
