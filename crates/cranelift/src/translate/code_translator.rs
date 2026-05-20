@@ -1653,7 +1653,7 @@ pub fn translate_operator(
         }
         Operator::TableSize { table: index } => {
             let result =
-                environ.translate_table_size(builder.cursor(), TableIndex::from_u32(*index))?;
+                environ.translate_table_size(builder.cursor(), TableIndex::from_u32(*index));
             environ.stacks.push1(result);
         }
         Operator::TableGrow { table: index } => {

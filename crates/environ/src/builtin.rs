@@ -5,9 +5,6 @@ macro_rules! foreach_builtin_function {
         $mac! {
             // Returns an index for wasm's `memory.grow` builtin function.
             memory_grow(vmctx: vmctx, delta: u64, index: u32) -> pointer;
-            // Returns an index for wasm's `table.copy` when both tables are locally
-            // defined.
-            table_copy(vmctx: vmctx, dst_index: u32, src_index: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `table.init`.
             table_init(vmctx: vmctx, table: u32, elem: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `elem.drop`.

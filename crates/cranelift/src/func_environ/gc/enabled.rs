@@ -1,7 +1,7 @@
 use super::{ArrayInit, GcCompiler};
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{BulkOp, Extension, FuncEnvironment};
+use crate::func_environ::{BulkOp, CheckedEntity, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
@@ -15,7 +15,7 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
-    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT,
+    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, IndexType,
     ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
     wasm_unsupported,
@@ -196,7 +196,7 @@ fn emit_gc_kind_assert(
 ///
 /// The given address MUST have already been bounds-checked via
 /// `prepare_gc_ref_access`.
-fn read_field_at_addr(
+pub fn read_field_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     ty: WasmStorageType,
@@ -321,7 +321,7 @@ fn write_func_ref_at_addr(
     Ok(())
 }
 
-fn write_field_at_addr(
+pub fn write_field_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
@@ -1003,13 +1003,7 @@ pub fn translate_array_copy(
     let copy_byte_size = builder.ins().imul(copy_len, one_elem_size);
     let copy_byte_size =
         uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_byte_size);
-    let src_end_addr = builder.ins().iadd(src_elem_addr, copy_byte_size);
-    let dst_end_addr = builder.ins().iadd(dst_elem_addr, copy_byte_size);
 
-    // If the element of this array isn't a GC reference, or if it's an i31ref,
-    // then there's no need for the barrier-using loops below. Instead use the
-    // `memory.copy` intrinsic to do a raw `memcpy` from one array to another.
-    //
     // Note that like `memory.fill` this is preceded with a defensive check
     // against heap corruption to ensure that, even in the face of heap
     // corruption, the `memory.copy` call on the host should not ever fault.
@@ -1017,13 +1011,15 @@ pub fn translate_array_copy(
         let base = func_env.get_gc_heap_base(builder);
         let bound = func_env.get_gc_heap_bound(builder);
         let heap_end = builder.ins().iadd(base, bound);
+        let src_end = builder.ins().iadd(src_elem_addr, copy_byte_size);
+        let dst_end = builder.ins().iadd(dst_elem_addr, copy_byte_size);
         let corrupt = builder
             .ins()
-            .icmp(IntCC::UnsignedGreaterThan, src_end_addr, heap_end);
+            .icmp(IntCC::UnsignedGreaterThan, src_end, heap_end);
         func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
         let corrupt = builder
             .ins()
-            .icmp(IntCC::UnsignedGreaterThan, dst_end_addr, heap_end);
+            .icmp(IntCC::UnsignedGreaterThan, dst_end, heap_end);
         func_env.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
 
         func_env.raw_bulk_memory_operation(
@@ -1036,121 +1032,20 @@ pub fn translate_array_copy(
         );
         return Ok(());
     }
-
-    // For GC references, inline the copy loop here with barriers. This is
-    // either a forwards copy or a backwards copy depending on the src/dst
-    // pointers. The loop here looks like:
-    //
-    //  current_block:
-    //      ...
-    //      brif len, nonempty_block, done_block
-    //
-    //  nonempty_block:
-    //      forward = icmp ult dst_elem_addr, src_elem_addr
-    //      brif forward,
-    //          forward_block(dst_elem_addr, src_elem_addr),
-    //          backwards_block(dst_end_addr, src_end_addr)
-    //
-    //  forward_block(dst, src):
-    //      *dst = *src
-    //      dst += elem_size
-    //      src += elem_size
-    //      done = icmp eq src, src_end_addr
-    //      brif done, done_block, forward_block(dst, src)
-    //
-    //  backwards_block(dst, src):
-    //      dst -= elem_size
-    //      src -= elem_size
-    //      *dst = *src
-    //      done = icmp eq src, src_elem_addr
-    //      brif done, done_block, backwards_block(dst, src)
-    //
-    //  done_block:
-    //      ...
-    let current_block = builder.current_block().unwrap();
-    let nonempty_block = builder.create_block();
-    let forward_block = builder.create_block();
-    let backwards_block = builder.create_block();
-    let done_block = builder.create_block();
-
-    builder.ensure_inserted_block();
-    builder.insert_block_after(nonempty_block, current_block);
-    builder.insert_block_after(forward_block, nonempty_block);
-    builder.insert_block_after(backwards_block, forward_block);
-    builder.insert_block_after(done_block, backwards_block);
-
-    let ext = match elem_ty {
-        WasmStorageType::I8 => Some(Extension::Zero),
-        WasmStorageType::I16 => Some(Extension::Zero),
-        _ => None,
-    };
-
-    // Terminate `current_block` by testing to see if we're copying any
-    // elements at all.
-    builder
-        .ins()
-        .brif(copy_len, nonempty_block, &[], done_block, &[]);
-
-    // In the nonempty_block test to see if this is a forward or backwards
-    // copy.
-    builder.switch_to_block(nonempty_block);
     let one_elem_size =
         uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
-    let dst_first = builder
-        .ins()
-        .icmp(IntCC::UnsignedLessThan, dst_elem_addr, src_elem_addr);
-    builder.ins().brif(
-        dst_first,
-        forward_block,
-        &[dst_elem_addr.into(), src_elem_addr.into()],
-        backwards_block,
-        &[dst_end_addr.into(), src_end_addr.into()],
-    );
-
-    // Forward copy -- copy one field, then mutate the current pointers, then
-    // check to see if we're done.
-    builder.switch_to_block(forward_block);
-    let dst_cur = builder.append_block_param(forward_block, func_env.pointer_type());
-    let src_cur = builder.append_block_param(forward_block, func_env.pointer_type());
-    func_env.translate_loop_header(builder)?;
-    let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
-    write_field_at_addr(func_env, builder, elem_ty, dst_cur, value)?;
-    let dst_next = builder.ins().iadd(dst_cur, one_elem_size);
-    let src_next = builder.ins().iadd(src_cur, one_elem_size);
-    let done = builder.ins().icmp(IntCC::Equal, src_next, src_end_addr);
-    builder.ins().brif(
-        done,
-        done_block,
-        &[],
-        forward_block,
-        &[dst_next.into(), src_next.into()],
-    );
-
-    // Backwards copy -- update the pointers, then perform a copy, then check
-    // to see if we're done.
-    builder.switch_to_block(backwards_block);
-    let dst_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
-    let src_cur = builder.append_block_param(backwards_block, func_env.pointer_type());
-    func_env.translate_loop_header(builder)?;
-    let dst_cur = builder.ins().isub(dst_cur, one_elem_size);
-    let src_cur = builder.ins().isub(src_cur, one_elem_size);
-    let value = read_field_at_addr(func_env, builder, elem_ty, src_cur, ext)?;
-    write_field_at_addr(func_env, builder, elem_ty, dst_cur, value)?;
-    let done = builder.ins().icmp(IntCC::Equal, src_cur, src_elem_addr);
-    builder.ins().brif(
-        done,
-        done_block,
-        &[],
-        backwards_block,
-        &[dst_cur.into(), src_cur.into()],
-    );
-
-    builder.switch_to_block(done_block);
-
-    builder.seal_block(nonempty_block);
-    builder.seal_block(forward_block);
-    builder.seal_block(backwards_block);
-    builder.seal_block(done_block);
+    let copy_len = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_len);
+    func_env.emit_raw_array_or_table_copy(
+        builder,
+        CheckedEntity::Array,
+        CheckedEntity::Array,
+        elem_ty,
+        dst_elem_addr,
+        src_elem_addr,
+        one_elem_size,
+        copy_len,
+        src_index,
+    )?;
 
     Ok(())
 }
@@ -2078,32 +1973,22 @@ pub fn translate_array_new_data(
         ir::TrapCode::HEAP_OUT_OF_BOUNDS,
     );
     let init_byte_length = builder.ins().ireduce(ir::types::I32, init_byte_length);
+    let src_addr =
+        env.translate_entity_bounds_check(builder, data_index, data_offset, init_byte_length);
 
-    let src_addr = match env.translation.passive_data_map[data_index] {
-        Some(idx) => {
-            Some(env.get_passive_data_pointer(builder, idx, data_offset, init_byte_length))
-        }
-        None => {
-            env.trapnz(builder, data_offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-            env.trapnz(builder, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-            None
-        }
-    };
     let array =
         gc_compiler(env)?.alloc_array(env, builder, array_type_index, ArrayInit::Uninit { len })?;
-    if let Some(src_addr) = src_addr {
-        let dst = builder.ins().iconst(ir::types::I32, 0);
-        emit_array_init_data(
-            env,
-            builder,
-            array_type_index,
-            array,
-            len,
-            dst,
-            src_addr,
-            init_byte_length,
-        );
-    }
+    let dst = builder.ins().iconst(ir::types::I32, 0);
+    emit_array_init_data(
+        env,
+        builder,
+        array_type_index,
+        array,
+        len,
+        dst,
+        src_addr,
+        init_byte_length,
+    );
     Ok(array)
 }
 
@@ -2136,18 +2021,8 @@ pub fn translate_array_init_data(
     let len_in_bytes = builder
         .ins()
         .imul_imm(len, i64::from(array_layout.elem_size));
-
-    let src_addr = match env.translation.passive_data_map[data_index] {
-        Some(idx) => env.get_passive_data_pointer(builder, idx, data_offset, len_in_bytes),
-        // If this is an active data segments it's by-definition zero-length so
-        // test the size and then return as we've indeed successfully copied
-        // zero bytes.
-        None => {
-            env.trapnz(builder, data_offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-            env.trapnz(builder, len, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-            return Ok(());
-        }
-    };
+    let src_addr =
+        env.translate_entity_bounds_check(builder, data_index, data_offset, len_in_bytes);
 
     emit_array_init_data(
         env,
@@ -2197,15 +2072,17 @@ fn emit_array_init_data(
 
     // At this point bounds checks have all passed, so it's time to perform
     // the actual copy by calling the `memory.copy` libcall.
-    let vmctx = env.vmctx_val(&mut builder.cursor());
-    let memory_copy = env.builtin_functions.memory_copy(&mut builder.func);
-    let len_in_bytes_native = match env.pointer_type() {
-        ir::types::I32 => len_in_bytes,
-        ir::types::I64 => builder.ins().uextend(ir::types::I64, len_in_bytes),
-        _ => unreachable!(),
-    };
-    builder.ins().call(
-        memory_copy,
-        &[vmctx, dst_elem_addr, src_addr, len_in_bytes_native],
+    let len_in_bytes = env.unchecked_cast_wasm_addr_to_native_addr(
+        &mut builder.cursor(),
+        len_in_bytes,
+        IndexType::I32,
+    );
+    env.raw_bulk_memory_operation(
+        builder,
+        BulkOp::MemoryCopy {
+            dst: dst_elem_addr,
+            src: src_addr,
+            len: len_in_bytes,
+        },
     );
 }

@@ -24,8 +24,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    DataIndex, FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind, MemoryTunables, PtrSize,
-    TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
+    DataIndex, FUNCREF_INIT_BIT, FUNCREF_MASK, GlobalIndex, MemoryIndex, MemoryKind,
+    MemoryTunables, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
 };
 
 mod context;
@@ -567,13 +567,22 @@ where
         }
     }
 
-    pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) -> Result<()> {
-        assert!(self.tunables.table_lazy_init, "unsupported eager init");
+    pub fn emit_table_get(&mut self, table_index: TableIndex) -> Result<()> {
+        let table = self.env.table(table_index);
+        let heap_type = table.ref_type.heap_type;
+        ensure!(
+            heap_type == WasmHeapType::Func,
+            CodeGenError::unsupported_wasm_type()
+        );
+        ensure!(
+            self.tunables.table_lazy_init,
+            CodeGenError::unsupported_table_eager_init()
+        );
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
         let builtin = self.env.builtins.table_get_lazy_init_func_ref::<M::ABI>()?;
 
-        // Request the builtin's  result register and use it to hold the table
+        // Request the builtin's result register and use it to hold the table
         // element value. We preemptively spill and request this register to
         // avoid conflict at the control flow merge below. Requesting the result
         // register is safe since we know ahead-of-time the builtin's signature.
@@ -645,6 +654,239 @@ where
             .and(writable!(dst), dst, imm, top.ty.try_into()?)?;
 
         self.masm.bind(cont)
+    }
+
+    /// Emit the `table.set` operation for a function-reference table.
+    ///
+    /// Expects the value stack to contain `[index, value]` (with `value` on
+    /// top) and consumes both.
+    pub fn emit_table_set(&mut self, table_index: TableIndex) -> Result<()> {
+        let table = self.env.table(table_index);
+        ensure!(
+            table.ref_type.heap_type == WasmHeapType::Func,
+            CodeGenError::unsupported_wasm_type()
+        );
+        ensure!(
+            self.tunables.table_lazy_init,
+            CodeGenError::unsupported_table_eager_init()
+        );
+        let ptr_type = self.env.ptr_type();
+        let table_data = self.env.resolve_table_data(table_index);
+        let value = self.context.pop_to_reg(self.masm, None)?;
+        let index = self.context.pop_to_reg(self.masm, None)?;
+        let base = self.context.any_gpr(self.masm)?;
+        let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data)?;
+        // Set the initialized bit.
+        self.masm.or(
+            writable!(value.into()),
+            value.into(),
+            RegImm::i64(FUNCREF_INIT_BIT as i64),
+            ptr_type.try_into()?,
+        )?;
+
+        self.masm.store_ptr(value.into(), elem_addr)?;
+
+        self.context.free_reg(value);
+        self.context.free_reg(index);
+        self.context.free_reg(base);
+        Ok(())
+    }
+
+    /// Emits a bounds check for the range `[idx, idx + len)` against the
+    /// current size of `table_data`, trapping with `TRAP_TABLE_OUT_OF_BOUNDS`
+    /// if the range is out-of-bounds.
+    ///
+    /// Both `idx` and `len` are expected to be 64-bit values.
+    fn emit_table_range_bounds_check(
+        &mut self,
+        table_data: &TableData,
+        idx: Reg,
+        len: Reg,
+    ) -> Result<()> {
+        self.emit_compute_table_size(table_data)?;
+        let size = self.context.pop_to_reg(self.masm, None)?;
+
+        // Compute `end = idx + len`, trapping on overflow, and then trap if
+        // `end > size`.
+        let end = self.context.any_gpr(self.masm)?;
+        self.masm
+            .mov(writable!(end), idx.into(), OperandSize::S64)?;
+        self.masm.checked_uadd(
+            writable!(end),
+            end,
+            len.into(),
+            OperandSize::S64,
+            TRAP_TABLE_OUT_OF_BOUNDS,
+        )?;
+        self.masm.cmp(end, size.reg.into(), OperandSize::S64)?;
+        self.masm
+            .trapif(IntCmpKind::GtU, TRAP_TABLE_OUT_OF_BOUNDS)?;
+
+        self.context.free_reg(size);
+        self.context.free_reg(end);
+        Ok(())
+    }
+
+    /// Emit the `table.copy` operation.
+    pub fn emit_table_copy(&mut self, dst_table: TableIndex, src_table: TableIndex) -> Result<()> {
+        let dst_data = self.env.resolve_table_data(dst_table);
+        let src_data = self.env.resolve_table_data(src_table);
+
+        // The value stack contains `[dst, src, len]` (top is `len`).
+        let len = self.context.pop_to_reg(self.masm, None)?;
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.pop_to_reg(self.masm, None)?;
+
+        // Zero-extend each operand to a full 64-bit value so that the
+        // arithmetic and bounds checks below can uniformly operate on 64-bit
+        // quantities regardless of the table's index type.
+        for op in [&len, &src, &dst] {
+            if op.ty == WasmValType::I32 {
+                self.masm.extend(
+                    writable!(op.reg),
+                    op.reg,
+                    Extend::<Zero>::I64Extend32.into(),
+                )?;
+            }
+        }
+
+        // Bounds check both ranges up-front; `table.copy` traps without
+        // copying anything if either range is out-of-bounds.
+        self.emit_table_range_bounds_check(&src_data, src.reg, len.reg)?;
+        self.emit_table_range_bounds_check(&dst_data, dst.reg, len.reg)?;
+
+        // Decide the copy direction. If `dst <= src` then do a forwards copy
+        // and otherwise it's backwards.
+        let step = self.context.any_gpr(self.masm)?;
+        let forward = self.masm.get_label()?;
+        let setup_done = self.masm.get_label()?;
+        self.masm.branch(
+            IntCmpKind::LeU,
+            dst.reg,
+            src.reg.into(),
+            forward,
+            OperandSize::S64,
+        )?;
+        // Backwards: start at the last element and walk down.
+        {
+            self.masm
+                .mov(writable!(step), RegImm::i64(-1), OperandSize::S64)?;
+            self.masm.add(
+                writable!(src.reg),
+                src.reg,
+                len.reg.into(),
+                OperandSize::S64,
+            )?;
+            self.masm.sub(
+                writable!(src.reg),
+                src.reg,
+                RegImm::i64(1),
+                OperandSize::S64,
+            )?;
+            self.masm.add(
+                writable!(dst.reg),
+                dst.reg,
+                len.reg.into(),
+                OperandSize::S64,
+            )?;
+            self.masm.sub(
+                writable!(dst.reg),
+                dst.reg,
+                RegImm::i64(1),
+                OperandSize::S64,
+            )?;
+        }
+        self.masm.jmp(setup_done)?;
+        // Forwards: start at the first element and walk up.
+        self.masm.bind(forward)?;
+        {
+            self.masm
+                .mov(writable!(step), RegImm::i64(1), OperandSize::S64)?;
+        }
+
+        self.masm.bind(setup_done)?;
+
+        let header = self.masm.get_label()?;
+        let exit = self.masm.get_label()?;
+
+        self.masm.bind(header)?;
+
+        // Exit the loop once there are no more elements to copy.
+        self.masm.branch(
+            IntCmpKind::Eq,
+            len.reg,
+            RegImm::i64(0),
+            exit,
+            OperandSize::S64,
+        )?;
+
+        // Spill all loop variables to the stack for the body of the loop.
+        // These will get reloaded back into the same registers at the end of
+        // the loop.
+        self.context.stack.push(TypedReg::i64(step).into());
+        self.context.stack.push(TypedReg::i64(len.reg).into());
+        self.context.stack.push(TypedReg::i64(dst.reg).into());
+        self.context.stack.push(TypedReg::i64(src.reg).into());
+
+        // Do a `table.get` followed by a `table.set`. Note that this'll redo
+        // bounds checks which technically aren't necessary, but it's less code
+        // duplication/complexity in Winch.
+        //
+        // Note that `dst` and `src` are on the stack and are needed for these
+        // operations. They're also needed at the end of the loop, so some
+        // stack-shuffling is necessary to "dup" the right values and get
+        // everything in the expected shapes for `emit_table_{get,set}`.
+        {
+            let tmp_src = self.context.pop_to_reg(self.masm, None)?;
+            let s = self.context.any_gpr(self.masm)?;
+            self.masm
+                .mov(writable!(s), tmp_src.reg.into(), OperandSize::S64)?;
+            self.context.stack.push(tmp_src.into());
+            self.context.stack.push(TypedReg::i64(s).into());
+            self.emit_table_get(src_table)?;
+            let funcref = self.context.pop_to_reg(self.masm, None)?;
+
+            let tmp_src = self.context.pop_to_reg(self.masm, None)?;
+            let tmp_dst = self.context.pop_to_reg(self.masm, None)?;
+
+            let d = self.context.any_gpr(self.masm)?;
+            self.masm
+                .mov(writable!(d), tmp_dst.reg.into(), OperandSize::S64)?;
+            self.context.stack.push(tmp_dst.into());
+            self.context.stack.push(tmp_src.into());
+            self.context.stack.push(TypedReg::i64(d).into());
+            self.context.stack.push(funcref.into());
+            self.emit_table_set(dst_table)?;
+        }
+
+        // Reload loop variables specifically back into the same registers to
+        // ensure that modifications below are picked up on the next iteration.
+        self.context.pop_to_reg(self.masm, Some(src.reg))?;
+        self.context.pop_to_reg(self.masm, Some(dst.reg))?;
+        self.context.pop_to_reg(self.masm, Some(len.reg))?;
+        self.context.pop_to_reg(self.masm, Some(step))?;
+
+        // Advance the running indices and decrement the remaining count.
+        self.masm
+            .add(writable!(dst.reg), dst.reg, step.into(), OperandSize::S64)?;
+        self.masm
+            .add(writable!(src.reg), src.reg, step.into(), OperandSize::S64)?;
+        self.masm.sub(
+            writable!(len.reg),
+            len.reg,
+            RegImm::i64(1),
+            OperandSize::S64,
+        )?;
+
+        self.masm.jmp(header)?;
+
+        self.masm.bind(exit)?;
+
+        self.context.free_reg(src);
+        self.context.free_reg(dst);
+        self.context.free_reg(len);
+        self.context.free_reg(step);
+        Ok(())
     }
 
     /// Emits a series of instructions to bounds check and calculate the address

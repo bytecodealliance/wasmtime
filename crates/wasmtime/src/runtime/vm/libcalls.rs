@@ -58,7 +58,7 @@
 use super::stack_switching::VMContObj;
 use crate::bail_bug;
 use crate::prelude::*;
-use crate::runtime::store::{Asyncness, InstanceId, StoreInstanceId, StoreOpaque};
+use crate::runtime::store::{Asyncness, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
 use crate::runtime::vm::table::TableElementType;
@@ -467,46 +467,6 @@ unsafe fn table_fill_cont_obj(
         }
         _ => panic!("Wrong table filling function"),
     }
-}
-
-// Implementation of `table.copy`.
-fn table_copy(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    dst_table_index: u32,
-    src_table_index: u32,
-    dst: u64,
-    src: u64,
-    len: u64,
-) -> Result<(), Trap> {
-    let dst_table_index = TableIndex::from_u32(dst_table_index);
-    let src_table_index = TableIndex::from_u32(src_table_index);
-    let store = store.store_opaque_mut();
-    let mut instance = store.instance_mut(instance);
-
-    // Convert the two table indices relative to `instance` into two
-    // defining instances and the defined table index within that instance.
-    let (dst_def_index, dst_instance) = instance
-        .as_mut()
-        .defined_table_index_and_instance(dst_table_index);
-    let dst_instance_id = dst_instance.id();
-    let (src_def_index, src_instance) = instance
-        .as_mut()
-        .defined_table_index_and_instance(src_table_index);
-    let src_instance_id = src_instance.id();
-
-    let src_table = crate::Table::from_raw(
-        StoreInstanceId::new(store.id(), src_instance_id),
-        src_def_index,
-    );
-    let dst_table = crate::Table::from_raw(
-        StoreInstanceId::new(store.id(), dst_instance_id),
-        dst_def_index,
-    );
-
-    // SAFETY: this is only safe if the two tables have the same type, and that
-    // was validated during wasm-validation time.
-    unsafe { crate::Table::copy_raw(store, &dst_table, dst, &src_table, src, len) }
 }
 
 // Implementation of `table.init`.
