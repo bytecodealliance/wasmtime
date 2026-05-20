@@ -3902,7 +3902,7 @@ impl Instance {
                 if write_buffer_remaining {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.write = WriteState::GuestReady {
-                        instance: self,
+                        instance: write_instance,
                         caller: write_caller,
                         ty: write_ty,
                         flat_abi: write_flat_abi,
