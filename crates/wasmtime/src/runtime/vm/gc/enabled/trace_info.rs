@@ -106,6 +106,11 @@ impl TraceInfos {
         self.engine.upgrade().unwrap()
     }
 
+    /// Remove all trace info from this collection.
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
+
     /// Index into the trace infos, panicking if the type is not present.
     pub fn trace_info(&self, ty: &VMSharedTypeIndex) -> &TraceInfo {
         &self.map[ty]

@@ -625,10 +625,7 @@ unsafe impl GcHeap for CopyingHeap {
             worklist_ptr,
             active_extern_ref_set_head,
             idle_extern_ref_set_head,
-            // NB: we will only ever be reused with the same engine, so no need
-            // to clear out our tracing info just to fill it back in with the
-            // same exact stuff.
-            trace_infos: _,
+            trace_infos,
         } = self;
 
         *no_gc_count = 0;
@@ -639,6 +636,7 @@ unsafe impl GcHeap for CopyingHeap {
         *worklist_ptr = 0;
         *active_extern_ref_set_head = None;
         *idle_extern_ref_set_head = None;
+        trace_infos.clear();
 
         memory.take().unwrap()
     }

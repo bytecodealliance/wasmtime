@@ -789,11 +789,7 @@ unsafe impl GcHeap for DrcHeap {
             memory,
             vmmemory,
             allocated_bytes,
-
-            // NB: we will only ever be reused with the same engine, so no need
-            // to clear out our tracing info just to fill it back in with the
-            // same exact stuff.
-            trace_infos: _,
+            trace_infos,
         } = self;
 
         *no_gc_count = 0;
@@ -801,6 +797,7 @@ unsafe impl GcHeap for DrcHeap {
         *free_list = None;
         *vmmemory = None;
         *allocated_bytes = 0;
+        trace_infos.clear();
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
         debug_assert!(
             large_array_dec_ref_stack
