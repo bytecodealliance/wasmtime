@@ -1,3 +1,14 @@
+## 36.0.10
+
+Unreleased.
+
+### Fixed
+
+* WASI path_open(TRUNCATE) bypasses `FilePerms::WRITE` host restriction.
+  [GHSA-2r75-cxrj-cmph](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-2r75-cxrj-cmph)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.9
 
 Released 2026-05-05.
