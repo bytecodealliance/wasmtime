@@ -1985,8 +1985,12 @@ impl StoreOpaque {
 
     fn wait_for_event(&mut self, waitable: Waitable) -> Result<()> {
         let state = self.concurrent_state_mut();
+
+        if waitable.common(state)?.set.is_some() {
+            bail!(Trap::WaitableSyncAndAsync);
+        }
+
         let caller = state.current_guest_thread()?;
-        let old_set = waitable.common(state)?.set;
         let set = state.get_mut(caller.thread)?.sync_call_set;
         waitable.join(state, Some(set))?;
         self.suspend(SuspendReason::Waiting {
@@ -1995,7 +1999,7 @@ impl StoreOpaque {
             skip_may_block_check: false,
         })?;
         let state = self.concurrent_state_mut();
-        waitable.join(state, old_set)
+        waitable.join(state, None)
     }
 
     /// Cleans up the data structures backing the `guest_thread` specified,
@@ -3263,6 +3267,13 @@ impl Instance {
                 .handle_table()
                 .waitable_set_rep(set_handle)?;
 
+            let state = store.concurrent_state_mut();
+            if let Some(old) = waitable.common(state)?.set
+                && state.get_mut(old)?.is_sync_call_set
+            {
+                bail!(Trap::WaitableSyncAndAsync);
+            }
+
             Some(TableId::<WaitableSet>::new(set))
         };
 
@@ -4502,7 +4513,10 @@ impl GuestThread {
     }
 
     fn new_implicit(state: &mut ConcurrentState, parent_task: TableId<GuestTask>) -> Result<Self> {
-        let sync_call_set = state.push(WaitableSet::default())?;
+        let sync_call_set = state.push(WaitableSet {
+            is_sync_call_set: true,
+            ..WaitableSet::default()
+        })?;
         Ok(Self {
             context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
@@ -4520,7 +4534,10 @@ impl GuestThread {
             dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync,
         >,
     ) -> Result<Self> {
-        let sync_call_set = state.push(WaitableSet::default())?;
+        let sync_call_set = state.push(WaitableSet {
+            is_sync_call_set: true,
+            ..WaitableSet::default()
+        })?;
         Ok(Self {
             context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
@@ -4762,7 +4779,7 @@ impl Waitable {
     /// remove it from any set it may currently belong to (when `set` is
     /// `None`).
     fn join(&self, state: &mut ConcurrentState, set: Option<TableId<WaitableSet>>) -> Result<()> {
-        log::trace!("waitable {self:?} join set {set:?}",);
+        log::trace!("waitable {self:?} join set {set:?}");
 
         let old = mem::replace(&mut self.common(state)?.set, set);
 
@@ -4894,6 +4911,9 @@ struct WaitableSet {
     ready: BTreeSet<Waitable>,
     /// Which guest threads are currently waiting on this set, if any.
     waiting: BTreeMap<QualifiedThreadId, WaitMode>,
+    /// Whether this set is a synthetic, internal one meant for handling
+    /// synchronous calls.
+    is_sync_call_set: bool,
 }
 
 impl TableDebug for WaitableSet {
