@@ -151,9 +151,9 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "gc")]
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
 mod send_sync_unsafe_cell;
-#[cfg(feature = "gc")]
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
 pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
 cfg_if::cfg_if! {
