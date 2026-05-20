@@ -275,3 +275,59 @@ block0(v0: f64, v1: f64):
 ;   flt.d a0, fa0, fa1
 ;   ret
 
+function %extend_band(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+  v3 = band v0, v1
+  v4 = sextend.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   and a0,a0,a1
+;   sext.w a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and a0, a0, a1
+;   sext.w a0, a0
+;   ret
+
+function %extend_band_1(i32) -> i64 {
+block0(v0: i32):
+  v3 = band_imm v0, 1
+  v4 = sextend.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a0, a0, 1
+;   ret
+
+
+function %extend_band_minus_2(i32) -> i64 {
+block0(v0: i32):
+  v3 = band_imm v0, -2
+  v4 = sextend.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,-2
+;   sext.w a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   andi a0, a0, -2
+;   sext.w a0, a0
+;   ret
+
