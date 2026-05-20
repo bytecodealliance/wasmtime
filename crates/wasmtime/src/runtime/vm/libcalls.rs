@@ -59,7 +59,6 @@ use crate::prelude::*;
 use crate::runtime::store::{Asyncness, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x2, i8x16};
 use core::convert::Infallible;
 use core::ptr::NonNull;
@@ -524,6 +523,7 @@ unsafe fn intern_func_ref_for_gc_heap(
     _instance: InstanceId,
     func_ref: *mut u8,
 ) -> Result<u32> {
+    use crate::runtime::vm::vmcontext::VMFuncRef;
     use crate::{store::AutoAssertNoGc, vm::SendSyncPtr};
     use core::ptr::NonNull;
 
