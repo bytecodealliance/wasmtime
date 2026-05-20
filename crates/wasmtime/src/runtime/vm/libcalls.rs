@@ -416,6 +416,17 @@ fn drop_gc_ref(store: &mut dyn VMStore, _instance: InstanceId, gc_ref: u32) {
         .drop_gc_ref(gc_ref);
 }
 
+/// Force a DRC GC cycle.
+#[cfg(feature = "gc-drc")]
+fn force_gc(store: &mut dyn VMStore, _instance: InstanceId) -> Result<()> {
+    let store = store.store_opaque_mut();
+    block_on!(store, async |store, asyncness| {
+        store.gc(None, None, None, asyncness).await;
+        Ok::<(), Error>(())
+    })??;
+    Ok(())
+}
+
 /// Grow the GC heap.
 #[cfg(feature = "gc-null")]
 fn grow_gc_heap(store: &mut dyn VMStore, _instance: InstanceId, bytes_needed: u64) -> Result<()> {
