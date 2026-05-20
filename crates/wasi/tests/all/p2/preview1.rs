@@ -280,3 +280,35 @@ async fn preview1_sleep_quickly_but_lots() {
     .await
     .unwrap()
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_file_truncation_readonly() {
+    use std::path::PathBuf;
+    use wasmtime_wasi::{DirPerms, FilePerms};
+
+    let prefix = format!("wasi_components_truncation_readonly_ro_");
+    let tempdir = tempfile::Builder::new()
+        .prefix(&prefix)
+        .tempdir()
+        .expect("create readonly tempdir");
+    const FILENAME: &str = "test.txt";
+    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    let mut file: PathBuf = PathBuf::from(tempdir.path());
+    file.push(FILENAME);
+    std::fs::write(&file, EXPECTED_CONTENTS).expect("write truncation test file");
+
+    run(PREVIEW1_FILE_TRUNCATION_READONLY, |b| {
+        b.preopened_dir(
+            tempdir.path(),
+            "readonly",
+            DirPerms::READ | DirPerms::MUTATE,
+            FilePerms::READ,
+        )
+        .unwrap();
+    })
+    .await
+    .expect("run p1_file_truncation_readonly guest");
+
+    let contents = std::fs::read(&file).expect("read truncation test file");
+    assert_eq!(EXPECTED_CONTENTS, contents);
+}

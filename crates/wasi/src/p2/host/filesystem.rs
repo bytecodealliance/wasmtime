@@ -521,6 +521,7 @@ impl HostDescriptor for WasiCtxView<'_> {
 
         if oflags.contains(OpenFlags::TRUNCATE) {
             opts.truncate(true).write(true);
+            open_mode |= OpenMode::WRITE;
         }
         if flags.contains(DescriptorFlags::READ) {
             opts.read(true);
