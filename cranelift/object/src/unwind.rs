@@ -8,50 +8,15 @@
 //!
 //! [`ObjectModule`]: crate::ObjectModule
 
-// Shared by the real implementation and the feature-off stub so that
-// `ObjectModule` can use `UnwindBuilder` without any `#[cfg]` of its own.
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::isa::unwind::UnwindInfo;
-use object::write::{Object, SymbolId};
-
-#[cfg(feature = "unwind")]
-use anyhow::anyhow;
-#[cfg(feature = "unwind")]
 use gimli::write::{
     Address, CieId, EhFrame, EndianVec, FrameTable, RelocateWriter, Relocation, RelocationTarget,
 };
-#[cfg(feature = "unwind")]
-use object::write::{Relocation as ObjectRelocation, StandardSection};
-#[cfg(feature = "unwind")]
+use object::write::{Object, Relocation as ObjectRelocation, StandardSection, SymbolId};
 use object::{BinaryFormat, RelocationEncoding, RelocationFlags, RelocationKind};
 
-/// No-op stand-in used when the `unwind` feature is disabled. It carries no
-/// state and emits nothing, so callers need no `#[cfg]` and pull in no
-/// `gimli` dependency.
-#[cfg(not(feature = "unwind"))]
-pub(crate) struct UnwindBuilder;
-
-#[cfg(not(feature = "unwind"))]
-impl UnwindBuilder {
-    pub(crate) fn new(_endian: object::Endianness) -> Self {
-        UnwindBuilder
-    }
-
-    pub(crate) fn add_function(
-        &mut self,
-        _isa: &dyn TargetIsa,
-        _func_symbol: SymbolId,
-        _info: UnwindInfo,
-    ) {
-    }
-
-    pub(crate) fn finish(self, _object: &mut Object<'static>, _isa: &dyn TargetIsa) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[cfg(feature = "unwind")]
 pub(crate) struct UnwindBuilder {
     section: EhFrameSection,
     frame_table: FrameTable,
@@ -60,7 +25,6 @@ pub(crate) struct UnwindBuilder {
     symbols: Vec<SymbolId>,
 }
 
-#[cfg(feature = "unwind")]
 impl UnwindBuilder {
     pub(crate) fn new(endian: object::Endianness) -> Self {
         let endian = match endian {
@@ -170,13 +134,11 @@ impl UnwindBuilder {
     }
 }
 
-#[cfg(feature = "unwind")]
 struct EhFrameSection {
     writer: EndianVec<gimli::RunTimeEndian>,
     relocations: Vec<Relocation>,
 }
 
-#[cfg(feature = "unwind")]
 impl RelocateWriter for EhFrameSection {
     type Writer = EndianVec<gimli::RunTimeEndian>;
 
@@ -198,7 +160,6 @@ impl RelocateWriter for EhFrameSection {
 ///
 /// `eh_pe` is `None` for non-pointer relocations (rare in `.eh_frame`); in that
 /// case we treat the request as an absolute pointer of the requested width.
-#[cfg(feature = "unwind")]
 fn translate_eh_pe(
     eh_pe: Option<gimli::constants::DwEhPe>,
     size: u8,
@@ -256,7 +217,7 @@ fn translate_eh_pe(
     })
 }
 
-#[cfg(all(test, feature = "unwind"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use gimli::constants::*;

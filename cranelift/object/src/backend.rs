@@ -34,6 +34,7 @@ pub struct ObjectBuilder {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     per_function_section: bool,
     per_data_object_section: bool,
+    #[cfg(feature = "unwind")]
     unwind_info: bool,
 }
 
@@ -122,6 +123,7 @@ impl ObjectBuilder {
             libcall_names,
             per_function_section: false,
             per_data_object_section: false,
+            #[cfg(feature = "unwind")]
             unwind_info: false,
         })
     }
@@ -247,6 +249,7 @@ pub struct ObjectModule {
     known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
     per_data_object_section: bool,
+    #[cfg(feature = "unwind")]
     unwind: Option<crate::unwind::UnwindBuilder>,
 }
 
@@ -264,6 +267,7 @@ impl ObjectModule {
             // https://github.com/bytecodealliance/wasmtime/issues/8730
             object.set_macho_build_version(info);
         }
+        #[cfg(feature = "unwind")]
         let unwind = builder
             .unwind_info
             .then(|| crate::unwind::UnwindBuilder::new(builder.endian));
@@ -280,6 +284,7 @@ impl ObjectModule {
             known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
             per_data_object_section: builder.per_data_object_section,
+            #[cfg(feature = "unwind")]
             unwind,
         }
     }
@@ -448,6 +453,7 @@ impl Module for ObjectModule {
         let alignment = res.buffer.alignment as u64;
 
         let compiled = ctx.compiled_code().unwrap();
+        #[cfg(feature = "unwind")]
         let unwind_info = if self.unwind.is_some() {
             compiled.create_unwind_info(self.isa())?
         } else {
@@ -462,6 +468,7 @@ impl Module for ObjectModule {
             })
             .collect::<Vec<_>>();
         self.define_function_inner(func_id, alignment, buffer.data(), relocs)?;
+        #[cfg(feature = "unwind")]
         if let (Some(builder), Some(info)) = (self.unwind.as_mut(), unwind_info) {
             let symbol = self.functions[func_id].unwrap().0;
             builder.add_function(&*self.isa, symbol, info);
@@ -732,6 +739,7 @@ impl ObjectModule {
             );
         }
 
+        #[cfg(feature = "unwind")]
         if let Some(unwind) = self.unwind.take() {
             unwind
                 .finish(&mut self.object, &*self.isa)
