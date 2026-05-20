@@ -380,7 +380,7 @@ impl WastContext {
                     let engine = self.engine().clone();
                     let mut linker = self.component_linker.instance(name)?;
                     for (name, item) in ty.exports(&engine) {
-                        match item {
+                        match item.ty {
                             component::types::ComponentItem::Module(_) => {
                                 let module = instance.get_module(&mut store, name).unwrap();
                                 linker.module(name, &module)?;

@@ -283,6 +283,7 @@ macro_rules! foreach_config_option {
             component_model_gc
             component_model_map
             component_model_fixed_length_lists
+            component_model_implements
             simd
             gc_types
             exceptions

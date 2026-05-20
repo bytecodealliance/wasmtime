@@ -1031,43 +1031,43 @@ impl Component {
     }
 
     /// Returns import associated with `name`, if such exists in the component
-    pub fn get_import(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
+    pub fn get_import<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .imports
             .get(name)
-            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
+            .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
     /// Iterates over imports of the component
     pub fn imports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> + 'a {
-        self.0.types[self.0.index].imports.iter().map(|(name, ty)| {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
+        self.0.types[self.0.index].imports.iter().map(|(name, e)| {
             (
                 name.as_str(),
-                ComponentItem::from(engine, ty, &self.0.instance()),
+                ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
     }
 
     /// Returns export associated with `name`, if such exists in the component
-    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
+    pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .exports
             .get(name)
-            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
+            .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
     /// Iterates over exports of the component
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> + 'a {
-        self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> + 'a {
+        self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
                 name.as_str(),
-                ComponentItem::from(engine, ty, &self.0.instance()),
+                ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
     }
@@ -1091,24 +1091,49 @@ impl ComponentInstance {
     }
 
     /// Returns export associated with `name`, if such exists in the component instance
-    pub fn get_export(&self, engine: &Engine, name: &str) -> Option<ComponentItem> {
+    pub fn get_export<'a>(&'a self, engine: &'a Engine, name: &str) -> Option<ComponentExtern<'a>> {
         self.0.types[self.0.index]
             .exports
             .get(name)
-            .map(|ty| ComponentItem::from(engine, ty, &self.0.instance()))
+            .map(|e| ComponentExtern::new(engine, &self.0.instance(), e))
     }
 
     /// Iterates over exports of the component instance
     pub fn exports<'a>(
         &'a self,
         engine: &'a Engine,
-    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentItem)> {
-        self.0.types[self.0.index].exports.iter().map(|(name, ty)| {
+    ) -> impl ExactSizeIterator<Item = (&'a str, ComponentExtern<'a>)> {
+        self.0.types[self.0.index].exports.iter().map(|(name, e)| {
             (
                 name.as_str(),
-                ComponentItem::from(engine, ty, &self.0.instance()),
+                ComponentExtern::new(engine, &self.0.instance(), e),
             )
         })
+    }
+}
+
+/// An import or an export from either [`Component`] or [`ComponentInstance`].
+///
+/// This records the type of the item that is being imported or exported along
+/// with any other metadata associated.
+#[derive(Clone, Debug)]
+pub struct ComponentExtern<'a> {
+    /// The type of this item.
+    pub ty: ComponentItem,
+    /// The `(implements "...")` annotation, if present.
+    pub implements: Option<&'a str>,
+}
+
+impl<'a> ComponentExtern<'a> {
+    fn new(
+        engine: &'a Engine,
+        instance_ty: &InstanceType<'_>,
+        env: &'a wasmtime_environ::component::ComponentExtern,
+    ) -> Self {
+        Self {
+            implements: env.data.implements.as_deref(),
+            ty: ComponentItem::from(engine, &env.ty, instance_ty),
+        }
     }
 }
 

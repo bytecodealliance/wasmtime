@@ -159,7 +159,7 @@ struct Translation<'data> {
 
     /// The list of exports from this component, as pairs of names and an
     /// index into an index space of what's being exported.
-    exports: IndexMap<&'data str, ComponentItem>,
+    exports: IndexMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
 
     /// Type information produced by `wasmparser` for this component.
     ///
@@ -355,7 +355,10 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
+    ComponentSynthetic(
+        HashMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
+        ComponentInstanceTypeId,
+    ),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -1310,7 +1313,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for export in s {
                     let export = export?;
                     let item = self.kind_to_item(export.kind, export.index)?;
-                    let prev = self.result.exports.insert(export.name.name, item);
+                    let prev = self
+                        .result
+                        .exports
+                        .insert(export.name.name, (item, export.name));
                     assert!(prev.is_none());
                     self.result
                         .initializers
@@ -1452,7 +1458,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = self.kind_to_item(export.kind, export.index)?;
-            map.insert(export.name.name, idx);
+            map.insert(export.name.name, (idx, export.name));
         }
 
         Ok(LocalInitializer::ComponentSynthetic(map, ty))

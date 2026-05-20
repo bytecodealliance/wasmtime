@@ -960,7 +960,7 @@ impl RunCommand {
                     .flat_map(move |(name, item)| {
                         let mut names = basename.clone();
                         names.push(name.to_string());
-                        collect_exports(engine, item, names)
+                        collect_exports(engine, item.ty, names)
                     })
                     .collect::<Vec<_>>(),
                 CItem::ComponentInstance(c) => c
@@ -968,7 +968,7 @@ impl RunCommand {
                     .flat_map(move |(name, item)| {
                         let mut names = basename.clone();
                         names.push(name.to_string());
-                        collect_exports(engine, item, names)
+                        collect_exports(engine, item.ty, names)
                     })
                     .collect::<Vec<_>>(),
                 _ => vec![(basename, item)],

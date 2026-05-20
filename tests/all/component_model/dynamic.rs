@@ -994,28 +994,28 @@ fn introspection() -> Result<()> {
     assert_eq!(imports.len(), 3);
     let (name, res_ty) = imports.next().unwrap();
     assert_eq!(name, "res");
-    let ComponentItem::Resource(res_ty) = res_ty else {
+    let ComponentItem::Resource(res_ty) = res_ty.ty else {
         panic!("`res` import item of wrong type")
     };
     assert_eq!(res_ty, ResourceType::host::<MyType>());
 
     let (name, ai_ty) = imports.next().unwrap();
     assert_eq!(name, "ai");
-    let ComponentItem::ComponentInstance(ai_ty) = ai_ty else {
+    let ComponentItem::ComponentInstance(ai_ty) = ai_ty.ty else {
         panic!("`ai` import item of wrong type")
     };
     assert_eq!(ai_ty.exports(linker.engine()).len(), 0);
 
     let (name, bi_ty) = imports.next().unwrap();
     assert_eq!(name, "bi");
-    let ComponentItem::ComponentInstance(bi_ty) = bi_ty else {
+    let ComponentItem::ComponentInstance(bi_ty) = bi_ty.ty else {
         panic!("`bi` import item of wrong type")
     };
     let mut bi_exports = bi_ty.exports(linker.engine());
     assert_eq!(bi_exports.len(), 1);
     let (name, bi_m_ty) = bi_exports.next().unwrap();
     assert_eq!(name, "m");
-    let ComponentItem::Module(bi_m_ty) = bi_m_ty else {
+    let ComponentItem::Module(bi_m_ty) = bi_m_ty.ty else {
         panic!("`bi.m` import item of wrong type")
     };
     assert_eq!(bi_m_ty.imports(linker.engine()).len(), 0);
@@ -1026,7 +1026,7 @@ fn introspection() -> Result<()> {
 
     let (name, run_ty) = exports.next().unwrap();
     assert_eq!(name, "run");
-    let ComponentItem::ComponentFunc(run_ty) = run_ty else {
+    let ComponentItem::ComponentFunc(run_ty) = run_ty.ty else {
         panic!("`run` export item of wrong type")
     };
     assert_eq!(run_ty.params().len(), 0);
@@ -1037,21 +1037,21 @@ fn introspection() -> Result<()> {
 
     let (name, i_ty) = exports.next().unwrap();
     assert_eq!(name, "i");
-    let ComponentItem::ComponentInstance(i_ty) = i_ty else {
+    let ComponentItem::ComponentInstance(i_ty) = i_ty.ty else {
         panic!("`i` export item of wrong type")
     };
     let mut i_ty_exports = i_ty.exports(linker.engine());
     assert_eq!(i_ty_exports.len(), 1);
     let (name, i_i_ty) = i_ty_exports.next().unwrap();
     assert_eq!(name, "i");
-    let ComponentItem::ComponentInstance(i_i_ty) = i_i_ty else {
+    let ComponentItem::ComponentInstance(i_i_ty) = i_i_ty.ty else {
         panic!("`i.i` import item of wrong type")
     };
     let mut i_i_ty_exports = i_i_ty.exports(linker.engine());
     assert_eq!(i_i_ty_exports.len(), 1);
     let (name, i_i_m_ty) = i_i_ty_exports.next().unwrap();
     assert_eq!(name, "m");
-    let ComponentItem::Module(i_i_m_ty) = i_i_m_ty else {
+    let ComponentItem::Module(i_i_m_ty) = i_i_m_ty.ty else {
         panic!("`i.i.m` import item of wrong type")
     };
     assert_eq!(i_i_m_ty.imports(linker.engine()).len(), 0);
@@ -1059,21 +1059,21 @@ fn introspection() -> Result<()> {
 
     let (name, r_ty) = exports.next().unwrap();
     assert_eq!(name, "r");
-    let ComponentItem::ComponentInstance(r_ty) = r_ty else {
+    let ComponentItem::ComponentInstance(r_ty) = r_ty.ty else {
         panic!("`r` export item of wrong type")
     };
     assert_eq!(r_ty.exports(linker.engine()).len(), 0);
 
     let (name, r2_ty) = exports.next().unwrap();
     assert_eq!(name, "r2");
-    let ComponentItem::ComponentInstance(r2_ty) = r2_ty else {
+    let ComponentItem::ComponentInstance(r2_ty) = r2_ty.ty else {
         panic!("`r2` export item of wrong type")
     };
     let mut r2_exports = r2_ty.exports(linker.engine());
     assert_eq!(r2_exports.len(), 1);
     let (name, r2_m_ty) = r2_exports.next().unwrap();
     assert_eq!(name, "m");
-    let ComponentItem::Module(r2_m_ty) = r2_m_ty else {
+    let ComponentItem::Module(r2_m_ty) = r2_m_ty.ty else {
         panic!("`r2.m` export item of wrong type")
     };
     assert_eq!(r2_m_ty.imports(linker.engine()).len(), 0);
@@ -1081,14 +1081,14 @@ fn introspection() -> Result<()> {
 
     let (name, b_ty) = exports.next().unwrap();
     assert_eq!(name, "b");
-    let ComponentItem::Type(b_ty) = b_ty else {
+    let ComponentItem::Type(b_ty) = b_ty.ty else {
         panic!("`b` export item of wrong type")
     };
     assert_eq!(b_ty.unwrap_enum().names().collect::<Vec<_>>(), ["a", "b"]);
 
     let (name, c_ty) = exports.next().unwrap();
     assert_eq!(name, "c");
-    let ComponentItem::Type(c_ty) = c_ty else {
+    let ComponentItem::Type(c_ty) = c_ty.ty else {
         panic!("`c` export item of wrong type")
     };
     let mut fields = c_ty.unwrap_record().fields();
@@ -1103,7 +1103,7 @@ fn introspection() -> Result<()> {
 
     let (name, f_ty) = exports.next().unwrap();
     assert_eq!(name, "f");
-    let ComponentItem::Type(f_ty) = f_ty else {
+    let ComponentItem::Type(f_ty) = f_ty.ty else {
         panic!("`f` export item of wrong type")
     };
     assert_eq!(
@@ -1113,7 +1113,7 @@ fn introspection() -> Result<()> {
 
     let (name, m_ty) = exports.next().unwrap();
     assert_eq!(name, "m");
-    let ComponentItem::Type(m_ty) = m_ty else {
+    let ComponentItem::Type(m_ty) = m_ty.ty else {
         panic!("`m` export item of wrong type")
     };
     {
@@ -1128,7 +1128,7 @@ fn introspection() -> Result<()> {
 
     let (name, j_ty) = exports.next().unwrap();
     assert_eq!(name, "j");
-    let ComponentItem::Type(j_ty) = j_ty else {
+    let ComponentItem::Type(j_ty) = j_ty.ty else {
         panic!("`j` export item of wrong type")
     };
     let mut cases = j_ty.unwrap_variant().cases();
@@ -1146,7 +1146,7 @@ fn introspection() -> Result<()> {
 
     let (name, foo_ty) = exports.next().unwrap();
     assert_eq!(name, "foo");
-    let ComponentItem::Type(foo_ty) = foo_ty else {
+    let ComponentItem::Type(foo_ty) = foo_ty.ty else {
         panic!("`foo` export item of wrong type")
     };
     {
@@ -1213,7 +1213,7 @@ fn introspection() -> Result<()> {
 
     let (name, fn_ty) = exports.next().unwrap();
     assert_eq!(name, "fn");
-    let ComponentItem::ComponentFunc(fn_ty) = fn_ty else {
+    let ComponentItem::ComponentFunc(fn_ty) = fn_ty.ty else {
         panic!("`fn` export item of wrong type")
     };
     let mut params = fn_ty.params();

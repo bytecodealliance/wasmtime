@@ -681,11 +681,11 @@ where
 
 impl InstanceExportLookup for str {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        component
+        let (index, _) = component
             .env_component()
             .exports
-            .get(self, &NameMapNoIntern)
-            .copied()
+            .get(self, &NameMapNoIntern)?;
+        Some(*index)
     }
 }
 

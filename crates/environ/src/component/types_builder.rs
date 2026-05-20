@@ -146,12 +146,15 @@ impl ComponentTypesBuilder {
     pub fn finish(mut self, component: &Component) -> (ComponentTypes, TypeComponentIndex) {
         let mut component_ty = TypeComponent::default();
         for (_, (name, ty)) in component.import_types.iter() {
-            component_ty.imports.insert(name.clone(), *ty);
+            component_ty.imports.insert(name.clone(), ty.clone());
         }
-        for (name, ty) in component.exports.raw_iter() {
+        for (name, (ty, data)) in component.exports.raw_iter() {
             component_ty.exports.insert(
                 name.clone_panic_on_oom().into(),
-                self.export_type_def(&component.export_items, *ty),
+                ComponentExtern {
+                    data: data.clone(),
+                    ty: self.export_type_def(&component.export_items, *ty),
+                },
             );
         }
         let ty = self.component_types.components.push(component_ty);
@@ -266,6 +269,21 @@ impl ComponentTypesBuilder {
         Ok(self.add_func_type(ty))
     }
 
+    /// Converts a wasmparser `wasmparser::ComponentItem` into Wasmtime's type
+    /// representation.
+    pub fn convert_component_item(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &wasmparser::component_types::ComponentItem,
+    ) -> Result<ComponentExtern> {
+        Ok(ComponentExtern {
+            ty: self.convert_component_entity_type(types, ty.ty)?,
+            data: ComponentExternData {
+                implements: ty.implements.clone(),
+            },
+        })
+    }
+
     /// Converts a wasmparser `ComponentEntityType` into Wasmtime's type
     /// representation.
     pub fn convert_component_entity_type(
@@ -326,17 +344,15 @@ impl ComponentTypesBuilder {
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
             self.register_abstract_component_entity_type(types, ty.ty);
-            result.imports.insert(
-                name.clone(),
-                self.convert_component_entity_type(types, ty.ty)?,
-            );
+            result
+                .imports
+                .insert(name.clone(), self.convert_component_item(types, ty)?);
         }
         for (name, ty) in ty.exports.iter() {
             self.register_abstract_component_entity_type(types, ty.ty);
-            result.exports.insert(
-                name.clone(),
-                self.convert_component_entity_type(types, ty.ty)?,
-            );
+            result
+                .exports
+                .insert(name.clone(), self.convert_component_item(types, ty)?);
         }
         Ok(self.component_types.components.push(result))
     }
@@ -351,10 +367,9 @@ impl ComponentTypesBuilder {
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
             self.register_abstract_component_entity_type(types, ty.ty);
-            result.exports.insert(
-                name.clone(),
-                self.convert_component_entity_type(types, ty.ty)?,
-            );
+            result
+                .exports
+                .insert(name.clone(), self.convert_component_item(types, ty)?);
         }
         Ok(self.component_types.component_instances.push(result))
     }
