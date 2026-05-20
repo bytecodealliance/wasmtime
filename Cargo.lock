@@ -963,6 +963,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-module",
+ "gimli 0.33.0",
  "log",
  "object 0.39.0",
  "target-lexicon",
