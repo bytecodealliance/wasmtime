@@ -406,6 +406,15 @@ impl Table {
     ) -> Result<()> {
         let store = store.as_context_mut().0;
 
+        let src_range = src_index..src_index.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
+        let dst_range = dst_index..dst_index.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
+
+        // Bounds-check up front before any modifications to ensure everything
+        // is in-bounds.
+        if src_range.end > src_table.size_(store) || dst_range.end > dst_table.size_(store) {
+            return Err(Trap::TableOutOfBounds.into());
+        }
+
         let dst_ty = dst_table.ty(&store);
         let src_ty = src_table.ty(&store);
         src_ty
@@ -416,91 +425,25 @@ impl Table {
                  destination table's element type",
             )?;
 
-        // SAFETY: the the two tables have the same type, as type-checked above.
-        unsafe {
-            Self::copy_raw(store, dst_table, dst_index, src_table, src_index, len)?;
+        // Do a forwards or backwards copy depending on the indices involved to
+        // ensure that elements that are part of the copy aren't accidentally
+        // clobbered.
+        if dst_index < src_index {
+            for (src, dst) in src_range.zip(dst_range) {
+                let val = src_table
+                    .get(&mut *store, src)
+                    .ok_or(Trap::TableOutOfBounds)?;
+                dst_table.set(&mut *store, dst, val)?;
+            }
+        } else {
+            for (src, dst) in src_range.rev().zip(dst_range.rev()) {
+                let val = src_table
+                    .get(&mut *store, src)
+                    .ok_or(Trap::TableOutOfBounds)?;
+                dst_table.set(&mut *store, dst, val)?;
+            }
         }
         Ok(())
-    }
-
-    /// Copies the elements of `src_table` to `dst_table`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the either table doesn't belong to `store`.
-    ///
-    /// # Safety
-    ///
-    /// Requires that the two tables have previously been type-checked to have
-    /// the same type.
-    pub(crate) unsafe fn copy_raw(
-        store: &mut StoreOpaque,
-        dst_table: &Table,
-        dst_index: u64,
-        src_table: &Table,
-        src_index: u64,
-        len: u64,
-    ) -> Result<(), Trap> {
-        // Handle lazy initialization of the source table first before doing
-        // anything else.
-        let src_range = src_index..(src_index.checked_add(len).unwrap_or(u64::MAX));
-        src_table.wasmtime_table(store, src_range);
-
-        // validate `dst_table` belongs to `store`.
-        dst_table.wasmtime_table(store, iter::empty());
-
-        // Figure out which of the three cases we're in:
-        //
-        // 1. Cross-instance table copy.
-        // 2. Intra-instance table copy.
-        // 3. Intra-table copy.
-        //
-        // We handle each of them slightly differently.
-        let src_instance = src_table.instance.instance();
-        let dst_instance = dst_table.instance.instance();
-        match (
-            src_instance == dst_instance,
-            src_table.index == dst_table.index,
-        ) {
-            // 1. Cross-instance table copy: split the mutable store borrow into
-            // two mutable instance borrows, get each instance's defined table,
-            // and do the copy.
-            (false, _) => {
-                // SAFETY: accessing two instances mutably at the same time
-                // requires only accessing defined entities on each instance
-                // which is done below with `get_defined_*` methods.
-                let (gc_store, [src_instance, dst_instance]) = unsafe {
-                    store.optional_gc_store_and_instances_mut([src_instance, dst_instance])
-                };
-                src_instance.get_defined_table(src_table.index).copy_to(
-                    dst_instance.get_defined_table(dst_table.index),
-                    gc_store,
-                    dst_index,
-                    src_index,
-                    len,
-                )
-            }
-
-            // 2. Intra-instance, distinct-tables copy: split the mutable
-            // instance borrow into two distinct mutable table borrows and do
-            // the copy.
-            (true, false) => {
-                let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
-                let [(_, src_table), (_, dst_table)] = instance
-                    .tables_mut()
-                    .get_disjoint_mut([src_table.index, dst_table.index])
-                    .unwrap();
-                src_table.copy_to(dst_table, gc_store, dst_index, src_index, len)
-            }
-
-            // 3. Intra-table copy: get the table and copy within it!
-            (true, true) => {
-                let (gc_store, instance) = store.optional_gc_store_and_instance_mut(src_instance);
-                instance
-                    .get_defined_table(src_table.index)
-                    .copy_within(gc_store, dst_index, src_index, len)
-            }
-        }
     }
 
     /// Fill `table[dst..(dst + len)]` with the given value.

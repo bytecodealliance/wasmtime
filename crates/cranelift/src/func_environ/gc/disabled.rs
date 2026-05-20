@@ -5,7 +5,9 @@ use crate::func_environ::{Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
-use wasmtime_environ::{DataIndex, TagIndex, TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
+use wasmtime_environ::{
+    DataIndex, TagIndex, TypeIndex, WasmRefType, WasmResult, WasmStorageType, wasm_unsupported,
+};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
@@ -198,6 +200,26 @@ pub fn translate_array_init_data(
     _data_index: DataIndex,
     _data_offset: ir::Value,
     _len: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn read_field_at_addr(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _ty: WasmStorageType,
+    _addr: ir::Value,
+    _extension: Option<Extension>,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn write_field_at_addr(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _field_ty: WasmStorageType,
+    _field_addr: ir::Value,
+    _new_val: ir::Value,
 ) -> WasmResult<()> {
     disabled()
 }
