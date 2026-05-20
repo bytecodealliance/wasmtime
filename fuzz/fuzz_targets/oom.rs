@@ -8,12 +8,6 @@ use wasmtime_fuzzing::oom::{OomTest, OomTestAllocator};
 use wasmtime_fuzzing::oracles::dummy;
 use wasmtime_fuzzing::single_module_fuzzer::KnownValid;
 
-#[cfg(not(arc_try_new))]
-compile_error!(
-    "The OOM fuzzer is disabled because `cfg(arc_try_new)` was not enabled. Build with \
-     `RUSTFLAGS=--cfg=arc_try_new` to enable."
-);
-
 const OOM_TEST_ITERS: u32 = 10;
 const OOM_TEST_FUEL: u64 = 1000;
 
@@ -58,6 +52,13 @@ fn execute(
     input: OomInput,
     _u: &mut Unstructured<'_>,
 ) -> Result<()> {
+    if cfg!(not(arc_try_new)) {
+        panic!(
+            "The OOM fuzzer is disabled because `cfg(arc_try_new)` was not enabled. Build with \
+             `RUSTFLAGS=--cfg=arc_try_new` to enable."
+        );
+    }
+
     let module_bytes = match compile(&input.config, module) {
         Ok(bytes) => bytes,
         Err(_) => return Ok(()),
