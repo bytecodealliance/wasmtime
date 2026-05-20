@@ -5294,7 +5294,10 @@ impl CheckedEntity {
         match *self {
             CheckedEntity::Memory(_) | CheckedEntity::Data(_) => 1,
             CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
+            #[cfg(feature = "gc")]
             CheckedEntity::Array(ty) => env.array_layout(ty).elem_size,
+            #[cfg(not(feature = "gc"))]
+            CheckedEntity::Array(_) => unreachable!(),
         }
     }
 
