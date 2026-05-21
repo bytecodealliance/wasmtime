@@ -45,7 +45,7 @@ impl NullCompiler {
         ty: Option<ModuleInternedTypeIndex>,
         size: ir::Value,
         align: ir::Value,
-    ) -> (ir::Value, ir::Value) {
+    ) -> WasmResult<(ir::Value, ir::Value)> {
         log::trace!("emit_inline_alloc(kind={kind:?}, ty={ty:?}, size={size}, align={align})");
 
         assert_eq!(builder.func.dfg.value_type(size), ir::types::I32);
@@ -105,7 +105,7 @@ impl NullCompiler {
         let end_of_object =
             func_env.uadd_overflow_trap(builder, aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
         let uext_end_of_object = uextend_i32_to_pointer_type(builder, pointer_type, end_of_object);
-        let bound = func_env.get_gc_heap_bound(builder);
+        let bound = func_env.get_gc_heap_bound(builder)?;
         let is_in_bounds = builder.ins().icmp(
             ir::condcodes::IntCC::UnsignedLessThanOrEqual,
             uext_end_of_object,
@@ -142,7 +142,7 @@ impl NullCompiler {
         // header and the type index, but that requires generating different
         // code for big-endian architectures, and I haven't bothered doing that
         // yet.
-        let base = func_env.get_gc_heap_base(builder);
+        let base = func_env.get_gc_heap_base(builder)?;
         let uext_aligned = uextend_i32_to_pointer_type(builder, pointer_type, aligned);
         let ptr_to_object = builder.ins().iadd(base, uext_aligned);
         let kind = builder
@@ -173,7 +173,7 @@ impl NullCompiler {
             .store(GC_MEMFLAGS, end_of_object, ptr_to_next, 0);
 
         log::trace!("emit_inline_alloc(..) -> ({aligned}, {ptr_to_object})");
-        (aligned, ptr_to_object)
+        Ok((aligned, ptr_to_object))
     }
 }
 
@@ -186,26 +186,22 @@ impl GcCompiler for NullCompiler {
         false
     }
 
-    fn alloc_array(
+    fn alloc_uninit_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
-        init: super::ArrayInit<'_>,
+        len: ir::Value,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[array_type_index].unwrap_module_type_index();
-        let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
-        let array_layout = func_env.array_layout(interned_type_index).clone();
-        let base_size = array_layout.base_size;
+        let array_layout = func_env.array_layout(interned_type_index)?.clone();
         let align = array_layout.align;
-        let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let len = init.len(&mut builder.cursor());
         let size = emit_array_size(func_env, builder, &array_layout, len);
 
         // Next, allocate the array.
@@ -218,7 +214,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             size,
             align,
-        );
+        )?;
 
         // Write the array's length into its field.
         //
@@ -226,23 +222,7 @@ impl GcCompiler for NullCompiler {
         // the result of the inline allocation is trusted and we aren't reading
         // any pointers or offsets out from the (untrusted) GC heap.
         let len_addr = builder.ins().iadd_imm(ptr_to_object, i64::from(len_offset));
-        let len = init.len(&mut builder.cursor());
         builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
-
-        // Finally, initialize the elements.
-        let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));
-        let elems_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
-        init.initialize(
-            func_env,
-            builder,
-            interned_type_index,
-            base_size,
-            size,
-            elems_addr,
-            |func_env, builder, elem_ty, elem_addr, val| {
-                write_field_at_addr(func_env, builder, elem_ty, elem_addr, val)
-            },
-        )?;
 
         Ok(gc_ref)
     }
@@ -277,7 +257,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             struct_size_val,
             align,
-        );
+        )?;
 
         // Initialize the struct's fields.
         //
@@ -290,9 +270,6 @@ impl GcCompiler for NullCompiler {
             interned_type_index,
             raw_struct_pointer,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                write_field_at_addr(func_env, builder, ty, field_addr, val)
-            },
         )?;
 
         Ok(struct_ref)
@@ -329,7 +306,7 @@ impl GcCompiler for NullCompiler {
             Some(interned_type_index),
             exn_size_val,
             align,
-        );
+        )?;
 
         // Initialize the exception object's fields.
         //
@@ -342,9 +319,6 @@ impl GcCompiler for NullCompiler {
             interned_type_index,
             raw_exn_pointer,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                write_field_at_addr(func_env, builder, ty, field_addr, val)
-            },
         )?;
 
         // Initialize the tag fields.
@@ -395,5 +369,16 @@ impl GcCompiler for NullCompiler {
         flags: ir::MemFlagsData,
     ) -> WasmResult<()> {
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
+    }
+
+    fn init_field(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        ty: WasmStorageType,
+        field_addr: ir::Value,
+        val: ir::Value,
+    ) -> WasmResult<()> {
+        write_field_at_addr(func_env, builder, ty, field_addr, val)
     }
 }

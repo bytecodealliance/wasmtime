@@ -92,7 +92,7 @@ impl CopyingCompiler {
         kind: VMGcKind,
         ty: ModuleInternedTypeIndex,
         size: ir::Value,
-    ) -> (ir::Value, ir::Value) {
+    ) -> WasmResult<(ir::Value, ir::Value)> {
         debug_assert_ne!(kind, VMGcKind::ExternRef);
         debug_assert!(!ty.is_reserved_value());
         assert_eq!(builder.func.dfg.value_type(size), ir::types::I32);
@@ -133,7 +133,7 @@ impl CopyingCompiler {
             builder.seal_block(slow_block);
             builder.set_cold_block(slow_block);
             let gc_ref = emit_gc_raw_alloc(func_env, builder, kind, ty, size, ALIGN);
-            let base = func_env.get_gc_heap_base(builder);
+            let base = func_env.get_gc_heap_base(builder)?;
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
             builder
@@ -161,7 +161,7 @@ impl CopyingCompiler {
             );
 
             // Compute the raw pointer to the new object.
-            let base = func_env.get_gc_heap_base(builder);
+            let base = func_env.get_gc_heap_base(builder)?;
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
@@ -206,48 +206,7 @@ impl CopyingCompiler {
         builder.seal_block(merge_block);
         builder.declare_value_needs_stack_map(gc_ref);
 
-        (gc_ref, ptr_to_object)
-    }
-
-    fn init_field(
-        &mut self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder<'_>,
-        field_addr: ir::Value,
-        ty: WasmStorageType,
-        val: ir::Value,
-    ) -> WasmResult<()> {
-        // Data inside GC objects is always little endian.
-        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
-
-        match ty {
-            WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
-                WasmHeapTopType::Func => {
-                    write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?
-                }
-                WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
-                    // No init barrier needed for the copying collector; just
-                    // store the reference directly.
-                    unbarriered_store_gc_ref(builder, r.heap_type, field_addr, val, flags)?;
-                }
-                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
-            },
-            WasmStorageType::I8 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore8(flags, val, field_addr, 0);
-            }
-            WasmStorageType::I16 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore16(flags, val, field_addr, 0);
-            }
-            WasmStorageType::Val(_) => {
-                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty);
-                assert_eq!(builder.func.dfg.value_type(val).bytes(), size_of_access);
-                builder.ins().store(flags, val, field_addr, 0);
-            }
-        }
-
-        Ok(())
+        Ok((gc_ref, ptr_to_object))
     }
 }
 
@@ -260,24 +219,20 @@ impl GcCompiler for CopyingCompiler {
         true
     }
 
-    fn alloc_array(
+    fn alloc_uninit_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
-        init: super::ArrayInit<'_>,
+        len: ir::Value,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[array_type_index].unwrap_module_type_index();
-        let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
-        let array_layout = func_env.array_layout(interned_type_index).clone();
-        let base_size = array_layout.base_size;
-        let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
+        let array_layout = func_env.array_layout(interned_type_index)?.clone();
 
         // First, compute the array's total size.
-        let len = init.len(&mut builder.cursor());
         let size = emit_array_size(func_env, builder, &array_layout, len);
 
         // Allocate inline (with fallback to libcall).
@@ -287,25 +242,10 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::ArrayRef,
             interned_type_index,
             size,
-        );
+        )?;
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
-        let len = init.len(&mut builder.cursor());
         builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
 
-        // Initialize elements.
-        let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));
-        let elems_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
-        init.initialize(
-            func_env,
-            builder,
-            interned_type_index,
-            base_size,
-            size,
-            elems_addr,
-            |func_env, builder, elem_ty, elem_addr, val| {
-                self.init_field(func_env, builder, elem_addr, elem_ty, val)
-            },
-        )?;
         Ok(array_ref)
     }
 
@@ -330,7 +270,7 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::StructRef,
             interned_type_index,
             struct_size_val,
-        );
+        )?;
 
         // Initialize fields.
         initialize_struct_fields(
@@ -339,9 +279,6 @@ impl GcCompiler for CopyingCompiler {
             interned_type_index,
             raw_ptr_to_struct,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
-            },
         )?;
 
         Ok(struct_ref)
@@ -371,7 +308,7 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::ExnRef,
             interned_type_index,
             exn_size_val,
-        );
+        )?;
 
         // Initialize fields.
         initialize_struct_fields(
@@ -380,9 +317,6 @@ impl GcCompiler for CopyingCompiler {
             interned_type_index,
             raw_ptr_to_exn,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
-            },
         )?;
 
         // Initialize tag fields.
@@ -392,8 +326,8 @@ impl GcCompiler for CopyingCompiler {
         self.init_field(
             func_env,
             builder,
-            instance_id_addr,
             WasmStorageType::Val(WasmValType::I32),
+            instance_id_addr,
             instance_id,
         )?;
         let tag_addr = builder
@@ -402,8 +336,8 @@ impl GcCompiler for CopyingCompiler {
         self.init_field(
             func_env,
             builder,
-            tag_addr,
             WasmStorageType::Val(WasmValType::I32),
+            tag_addr,
             tag,
         )?;
 
@@ -456,5 +390,46 @@ impl GcCompiler for CopyingCompiler {
     ) -> WasmResult<()> {
         // No write barrier needed for the copying collector.
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
+    }
+
+    fn init_field(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        ty: WasmStorageType,
+        field_addr: ir::Value,
+        val: ir::Value,
+    ) -> WasmResult<()> {
+        // Data inside GC objects is always little endian.
+        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+
+        match ty {
+            WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
+                WasmHeapTopType::Func => {
+                    write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?
+                }
+                WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                    // No init barrier needed for the copying collector; just
+                    // store the reference directly.
+                    unbarriered_store_gc_ref(builder, r.heap_type, field_addr, val, flags)?;
+                }
+                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
+            },
+            WasmStorageType::I8 => {
+                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
+                builder.ins().istore8(flags, val, field_addr, 0);
+            }
+            WasmStorageType::I16 => {
+                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
+                builder.ins().istore16(flags, val, field_addr, 0);
+            }
+            WasmStorageType::Val(_) => {
+                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty);
+                assert_eq!(builder.func.dfg.value_type(val).bytes(), size_of_access);
+                builder.ins().store(flags, val, field_addr, 0);
+            }
+        }
+
+        Ok(())
     }
 }

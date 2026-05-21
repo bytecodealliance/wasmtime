@@ -7,7 +7,10 @@ use crate::translate::{
     TableSize, TargetEnvironment,
 };
 use crate::trap::TranslateTrap;
-use crate::{BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_TABLE_OUT_OF_BOUNDS};
+use crate::{
+    BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
+    TRAP_TABLE_OUT_OF_BOUNDS,
+};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
@@ -2835,14 +2838,21 @@ impl FuncEnvironment<'_> {
         src_index: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        gc::translate_array_copy(
-            self,
+        let dst_ty = self.module.types[dst_array_type_index].unwrap_module_type_index();
+        let src_ty = self.module.types[src_array_type_index].unwrap_module_type_index();
+        self.translate_entity_copy(
             builder,
-            dst_array_type_index,
-            dst_array,
+            CheckedEntity::Array {
+                ty: dst_ty,
+                array: dst_array,
+                initialized: true,
+            },
+            CheckedEntity::Array {
+                ty: src_ty,
+                array: src_array,
+                initialized: true,
+            },
             dst_index,
-            src_array_type_index,
-            src_array,
             src_index,
             len,
         )
@@ -2857,7 +2867,18 @@ impl FuncEnvironment<'_> {
         value: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        gc::translate_array_fill(self, builder, array_type_index, array, index, value, len)
+        let ty = self.module.types[array_type_index].unwrap_module_type_index();
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Array {
+                ty,
+                array,
+                initialized: true,
+            },
+            index,
+            value,
+            len,
+        )
     }
 
     pub fn translate_array_init_data(
@@ -2870,13 +2891,20 @@ impl FuncEnvironment<'_> {
         data_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        gc::translate_array_init_data(
-            self,
+        let ty = self.module.types[array_type_index].unwrap_module_type_index();
+        let array_layout = self.array_layout(ty)?.clone();
+        self.translate_entity_copy(
             builder,
-            array_type_index,
-            array,
+            CheckedEntity::Array {
+                array,
+                ty,
+                initialized: true,
+            },
+            CheckedEntity::Data {
+                segment: data_index,
+                element_size: array_layout.elem_size,
+            },
             dst_index,
-            data_index,
             data_offset,
             len,
         )
@@ -3600,7 +3628,7 @@ impl FuncEnvironment<'_> {
         let idx_type = entity.index_type(self);
 
         // Bounds check `dst+len` and convert it to a raw heap address.
-        let raw_dst_addr = self.translate_entity_bounds_check(builder, entity, dst, len);
+        let raw_dst_addr = self.translate_entity_bounds_check(builder, entity, dst, len)?;
 
         // Fit the `len` value to `pointer_type`. Note that at this point it's
         // guaranteed inbounds so there's no loss in precision.
@@ -3630,8 +3658,24 @@ impl FuncEnvironment<'_> {
                     },
                 )?;
             }
-            CheckedEntity::Array(_) => todo!(),
-            CheckedEntity::Data(_) => unreachable!(),
+            CheckedEntity::Array { initialized, .. } => {
+                let elem_ty = entity.storage_type(self);
+                self.emit_raw_array_or_table_fill(
+                    builder,
+                    entity,
+                    raw_dst_addr,
+                    val,
+                    len_ptr,
+                    &|env, builder, addr, value| {
+                        if initialized {
+                            gc::write_field_at_addr(env, builder, elem_ty, addr, value)
+                        } else {
+                            gc::init_field_at_addr(env, builder, elem_ty, addr, value)
+                        }
+                    },
+                )?;
+            }
+            CheckedEntity::Data { .. } => unreachable!(),
         }
 
         Ok(())
@@ -3670,8 +3714,11 @@ impl FuncEnvironment<'_> {
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_ty);
         assert_eq!(builder.func.dfg.value_type(copy_len), pointer_ty);
         let elem_ty = entity.storage_type(self);
-        let elem_size = entity.element_size(self, builder.func);
+        let elem_size = entity.element_size(self, builder.func)?;
         let copy_byte_len = builder.ins().imul_imm(copy_len, i64::from(elem_size));
+        if let CheckedEntity::Array { .. } = entity {
+            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, copy_byte_len)?;
+        }
 
         // If this is a byte array then specialize its fill to use the same
         // libcall as `memory.fill`. This gets us to `memset` on the host which
@@ -3831,7 +3878,17 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let seg_index = DataIndex::from_u32(seg_index);
-        self.translate_entity_copy(builder, memory_index, seg_index, dst, src, len)
+        self.translate_entity_copy(
+            builder,
+            memory_index,
+            CheckedEntity::Data {
+                segment: seg_index,
+                element_size: 1,
+            },
+            dst,
+            src,
+            len,
+        )
     }
 
     pub fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
@@ -3908,8 +3965,8 @@ impl FuncEnvironment<'_> {
 
         // Perform a bounds check for the src/dst entities and compute the raw
         // heap addresses at the same time.
-        let dst_raw_addr = self.translate_entity_bounds_check(builder, dst_entity, dst, dst_len);
-        let src_raw_addr = self.translate_entity_bounds_check(builder, src_entity, src, src_len);
+        let dst_raw_addr = self.translate_entity_bounds_check(builder, dst_entity, dst, dst_len)?;
+        let src_raw_addr = self.translate_entity_bounds_check(builder, src_entity, src, src_len)?;
 
         // Fit the `len` value to `pointer_type`. Note that at this point it's
         // guaranteed inbounds so there's no loss in precision.
@@ -3921,7 +3978,7 @@ impl FuncEnvironment<'_> {
             CheckedEntity::Memory(_) => {
                 assert!(matches!(
                     src_entity,
-                    CheckedEntity::Memory(_) | CheckedEntity::Data(_)
+                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. }
                 ));
                 self.raw_bulk_memory_operation(
                     builder,
@@ -3934,18 +3991,15 @@ impl FuncEnvironment<'_> {
                 Ok(())
             }
 
-            // Tables are sometimes a memcpy, sometimes a per-element loop.
-            // Delegate further to figure that out.
-            CheckedEntity::Table(dst_table) => {
-                let CheckedEntity::Table(src_table) = src_entity else {
-                    unreachable!();
-                };
-                let dst_table = self.get_or_create_table(builder.func, dst_table);
-                let src_table = self.get_or_create_table(builder.func, src_table);
-                assert_eq!(dst_table.element_size, src_table.element_size);
+            // Tables/arrays are sometimes a memcpy, sometimes a per-element
+            // loop. Delegate further to figure that out.
+            CheckedEntity::Table(_) | CheckedEntity::Array { .. } => {
+                let src_size = src_entity.element_size(self, builder.func)?;
+                let dst_size = dst_entity.element_size(self, builder.func)?;
+                assert_eq!(src_size, dst_size);
                 let one_elem_size = builder
                     .ins()
-                    .iconst(self.pointer_type(), i64::from(dst_table.element_size));
+                    .iconst(self.pointer_type(), i64::from(src_size));
                 self.emit_raw_array_or_table_copy(
                     builder,
                     dst_entity,
@@ -3957,11 +4011,9 @@ impl FuncEnvironment<'_> {
                     src,
                 )
             }
-            // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array(_) => todo!(),
 
             // Cannot copy into a data segment in wasm.
-            CheckedEntity::Data(_) => unreachable!(),
+            CheckedEntity::Data { .. } => unreachable!(),
         }
     }
 
@@ -3975,7 +4027,7 @@ impl FuncEnvironment<'_> {
         entity: impl Into<CheckedEntity>,
         idx: ir::Value,
         len: ir::Value,
-    ) -> ir::Value {
+    ) -> WasmResult<ir::Value> {
         let entity = entity.into();
         let pointer_type = self.pointer_type();
         let idx_type = entity.index_type(self);
@@ -3990,7 +4042,8 @@ impl FuncEnvironment<'_> {
                 let size = self.translate_table_size(builder.cursor(), i);
                 self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), size, idx_type)
             }
-            CheckedEntity::Data(i) => match self.translation.passive_data_map[i] {
+            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
                     let offset =
@@ -4005,8 +4058,10 @@ impl FuncEnvironment<'_> {
                 }
                 None => builder.ins().iconst(pointer_type, 0),
             },
-            // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array(_) => todo!(),
+            CheckedEntity::Array { array, .. } => {
+                let len = self.translate_array_len(builder, array)?;
+                self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type)
+            }
         };
         assert_eq!(builder.func.dfg.value_type(entity_size), pointer_type);
 
@@ -4016,13 +4071,26 @@ impl FuncEnvironment<'_> {
         //
         // Note that addition can't overflow after extending 32-bits to
         // 64-bits, so no need to check for overflow in the 32-bit index case.
+        //
+        // Also note that data segments are a little special here where their
+        // `idx` offset is in bytes, but the `len` length of the copy is in
+        // units of elements. Handle that here by factoring a size into the
+        // length.
+        let len_factor = match entity {
+            CheckedEntity::Data { element_size, .. } => element_size,
+            _ => 1,
+        };
         let end64 = match idx_type {
             IndexType::I32 => {
                 let idx64 = builder.ins().uextend(I64, idx);
                 let len64 = builder.ins().uextend(I64, len);
+                let len64 = builder.ins().imul_imm(len64, i64::from(len_factor));
                 builder.ins().iadd(idx64, len64)
             }
-            IndexType::I64 => self.uadd_overflow_trap(builder, idx, len, trap_code),
+            IndexType::I64 => {
+                assert_eq!(len_factor, 1); // not possible at this time
+                self.uadd_overflow_trap(builder, idx, len, trap_code)
+            }
         };
 
         // Cast the host-pointer width to a 64-bit bit width.
@@ -4041,48 +4109,65 @@ impl FuncEnvironment<'_> {
         self.trapnz(builder, inbounds, trap_code);
 
         // Compute the actual raw heap address to return
-        let (base, elem_size) = match entity {
+        let base = match entity {
             CheckedEntity::Memory(i) => {
                 let heap = self.get_or_create_heap(builder.func, i);
                 let heap = &self.heaps()[heap];
-                (builder.ins().global_value(pointer_type, heap.base), 1)
+                builder.ins().global_value(pointer_type, heap.base)
             }
             CheckedEntity::Table(i) => {
                 let table = self.get_or_create_table(builder.func, i);
-                (
-                    builder.ins().global_value(pointer_type, table.base_gv),
-                    table.element_size,
-                )
+                builder.ins().global_value(pointer_type, table.base_gv)
             }
-            CheckedEntity::Data(i) => match self.translation.passive_data_map[i] {
+            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
                     let offset =
                         i32::try_from(self.offsets.vmctx_passive_data_base(passive_index)).unwrap();
-                    let base = builder.ins().load(
+                    builder.ins().load(
                         self.pointer_type(),
                         ir::MemFlagsData::trusted(),
                         vmctx,
                         offset,
-                    );
-                    (base, 1)
+                    )
                 }
 
                 // Any address should do for an active data segment, but pick
                 // something non-null for now. Note that the length of an active
                 // data segment is always 0, so we know that the memcpy, if any,
                 // will be 0 elements, so the actual value here doesn't matter.
-                None => (builder.ins().iconst(pointer_type, 1), 1),
+                None => builder.ins().iconst(pointer_type, 1),
             },
-            // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array(_) => todo!(),
+            CheckedEntity::Array { array, ty, .. } => {
+                let base = self.get_gc_heap_base(builder)?;
+                let array = self.unchecked_cast_wasm_addr_to_native_addr(
+                    &mut builder.cursor(),
+                    array,
+                    IndexType::I32,
+                );
+                let array_base = builder.ins().iadd(base, array);
+                let layout = self.array_layout(ty)?;
+                builder
+                    .ins()
+                    .iadd_imm(array_base, i64::from(layout.base_size))
+            }
         };
         assert_eq!(builder.func.dfg.value_type(base), pointer_type);
         let idx =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), idx, idx_type);
         assert_eq!(builder.func.dfg.value_type(idx), pointer_type);
-        let byte_offset = builder.ins().imul_imm(idx, i64::from(elem_size));
-        builder.ins().iadd(base, byte_offset)
+
+        // Like above data segments are a bit special here -- despite possibly
+        // having a >1 element size the `idx` offset is always a byte offset.
+        let byte_offset = match entity {
+            CheckedEntity::Data { .. } => idx,
+            _ => {
+                let elem_size = entity.element_size(self, builder.func)?;
+                builder.ins().imul_imm(idx, i64::from(elem_size))
+            }
+        };
+        Ok(builder.ins().iadd(base, byte_offset))
     }
 
     pub fn translate_table_copy(
@@ -4150,9 +4235,9 @@ impl FuncEnvironment<'_> {
                 // type. If it is then barriers might be needed, meaning memcpy
                 // can't be used.
                 //
-                // FIXME: should add a method to `GcCompiler` to detect when
-                // the compiler doesn't actually need barriers, in which case
-                // memcpy is fine.
+                // FIXME: should add a method to `GcCompiler` to detect when the
+                // compiler doesn't actually need barriers, in which case memcpy
+                // is fine.
                 WasmHeapTopType::Extern
                 | WasmHeapTopType::Any
                 | WasmHeapTopType::Exn
@@ -4169,17 +4254,24 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Table(_) => self.tunables.table_lazy_init,
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
-                    CheckedEntity::Array(_) => false,
+                    CheckedEntity::Array { .. } => false,
                     // Not possible
-                    CheckedEntity::Memory(_) | CheckedEntity::Data(_) => unreachable!(),
+                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 },
             },
         };
 
+        let copy_byte_len = builder.ins().imul(one_elem_size, copy_len);
+        if let CheckedEntity::Array { .. } = dst_entity {
+            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, copy_byte_len)?;
+        }
+        if let CheckedEntity::Array { .. } = dst_entity {
+            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, copy_byte_len)?;
+        }
+
         // For memcpy, that's easy, just call the intrinsic with the right
         // parameters.
         if !type_forbids_memcpy {
-            let copy_byte_len = builder.ins().imul(one_elem_size, copy_len);
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
@@ -4210,7 +4302,8 @@ impl FuncEnvironment<'_> {
                     // `translate_table_get` which are a bit tricky with
                     // funcrefs.
                     CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
-                    CheckedEntity::Array(_) => {
+                    CheckedEntity::Array { initialized, .. } => {
+                        assert!(initialized);
                         gc::read_field_at_addr(this, builder, read_ty, src, None)?
                     }
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
@@ -4219,8 +4312,12 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Table(i) => {
                         this.emit_table_set(builder, i, dst, ir::MemFlagsData::trusted(), val)?;
                     }
-                    CheckedEntity::Array(_) => {
-                        gc::write_field_at_addr(this, builder, write_ty, dst, val)?
+                    CheckedEntity::Array { initialized, .. } => {
+                        if initialized {
+                            gc::write_field_at_addr(this, builder, write_ty, dst, val)?
+                        } else {
+                            gc::init_field_at_addr(this, builder, write_ty, dst, val)?
+                        }
                     }
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 }
@@ -4229,6 +4326,41 @@ impl FuncEnvironment<'_> {
             },
         )?;
 
+        Ok(())
+    }
+
+    /// For bulk operations (copies, fills, etc) this is an extra check layered
+    /// on the spec-defined bounds check that the address is in-bounds.
+    ///
+    /// This is intended to catch heap corruption where the length of the array
+    /// is corrupted, for example. The `base` being accessed, plus the
+    /// `byte_len` being accessed, must unconditionally be within the bounds of
+    /// the GC heap or else the previous bounds check passing and this failing
+    /// indicates GC heap corruption.
+    ///
+    /// This is required right now because GC array copies are done without the
+    /// same bounds checks of `array.get` and `array.set`, for example, meaning
+    /// that it isn't necessarily caught by the same faulting behavior of the
+    /// heap as usual. Additionally copies may happen in the host if `memcpy` or
+    /// `memset` is involved, in which case we definitely can't catch signals in
+    /// the host.
+    fn emit_defensive_array_bounds_check(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        base: ir::Value,
+        byte_len: ir::Value,
+    ) -> WasmResult<()> {
+        let gc_heap_base = self.get_gc_heap_base(builder)?;
+        let gc_heap_bound = self.get_gc_heap_bound(builder)?;
+
+        let heap_end = builder.ins().iadd(gc_heap_base, gc_heap_bound);
+        let copy_end = builder
+            .ins()
+            .uadd_overflow_trap(base, byte_len, TRAP_GC_HEAP_CORRUPT);
+        let corrupt = builder
+            .ins()
+            .icmp(IntCC::UnsignedGreaterThan, copy_end, heap_end);
+        self.trapnz(builder, corrupt, TRAP_GC_HEAP_CORRUPT);
         Ok(())
     }
 
@@ -5251,14 +5383,28 @@ enum CheckedEntity {
     Memory(MemoryIndex),
     /// A WebAssembly table.
     Table(TableIndex),
-    /// A WebAssembly data segment.
-    Data(DataIndex),
+    /// A WebAssembly data segment loaded in chunks of `element_size` bytes.
+    ///
+    /// For `memory.init` this will have `element_size = 1`, but for
+    /// `array.init_data` for an `i16` array this'll have `element_size = 2` for
+    /// example.
+    Data {
+        /// The data segment being accessed.
+        segment: DataIndex,
+        /// The element size of the data segment being accessed, e.g. one byte
+        /// or possibly more for array initialization.
+        element_size: u32,
+    },
     /// An `arrayref` with the specified type.
-    #[cfg_attr(
-        not(feature = "gc"),
-        expect(dead_code, reason = "not worth the #[cfg]")
-    )]
-    Array(ModuleInternedTypeIndex),
+    Array {
+        /// The type of this array.
+        ty: ModuleInternedTypeIndex,
+        /// The `(ref array)` value.
+        array: ir::Value,
+        /// Whether or not this array is initialized already. For example this
+        /// is `false` during `array.new_*` instructions.
+        initialized: bool,
+    },
 }
 
 impl From<MemoryIndex> for CheckedEntity {
@@ -5273,42 +5419,43 @@ impl From<TableIndex> for CheckedEntity {
     }
 }
 
-impl From<DataIndex> for CheckedEntity {
-    fn from(data_index: DataIndex) -> Self {
-        CheckedEntity::Data(data_index)
-    }
-}
-
 impl CheckedEntity {
     /// Returns the type that's used to index this entity.
     fn index_type(&self, env: &FuncEnvironment) -> IndexType {
         match *self {
             CheckedEntity::Memory(i) => env.memory(i).idx_type,
             CheckedEntity::Table(i) => env.table(i).idx_type,
-            CheckedEntity::Data(_) | CheckedEntity::Array(_) => IndexType::I32,
+            CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => IndexType::I32,
         }
     }
 
     /// Returns the size, in bytes, of an element in this entity.
-    fn element_size(&self, env: &mut FuncEnvironment<'_>, func: &mut ir::Function) -> u32 {
-        match *self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => 1,
+    fn element_size(
+        &self,
+        env: &mut FuncEnvironment<'_>,
+        func: &mut ir::Function,
+    ) -> WasmResult<u32> {
+        Ok(match *self {
+            CheckedEntity::Memory(_) => 1,
+            CheckedEntity::Data { element_size, .. } => element_size,
             CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
-            #[cfg(feature = "gc")]
-            CheckedEntity::Array(ty) => env.array_layout(ty).elem_size,
-            #[cfg(not(feature = "gc"))]
-            CheckedEntity::Array(_) => unreachable!(),
-        }
+            CheckedEntity::Array { ty, .. } => env.array_layout(ty)?.elem_size,
+        })
     }
 
     /// Returns the WebAssembly type that's stored within this entity.
     fn storage_type(&self, env: &mut FuncEnvironment<'_>) -> WasmStorageType {
         match *self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => WasmStorageType::I8,
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data {
+                element_size: 1, ..
+            } => WasmStorageType::I8,
+            // not used at this time.
+            CheckedEntity::Data { .. } => unreachable!(),
             CheckedEntity::Table(table) => {
                 WasmStorageType::Val(WasmValType::Ref(env.table(table).ref_type))
             }
-            CheckedEntity::Array(ty) => {
+            CheckedEntity::Array { ty, .. } => {
                 let array_ty = env.types.unwrap_array(ty).unwrap();
                 array_ty.0.element_type
             }
@@ -5318,9 +5465,11 @@ impl CheckedEntity {
     /// Returns the trap code to use when an index into this entity is out-of-bounds.
     fn oob_trap_code(&self) -> ir::TrapCode {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => {
+                ir::TrapCode::HEAP_OUT_OF_BOUNDS
+            }
             CheckedEntity::Table(_) => TRAP_TABLE_OUT_OF_BOUNDS,
-            CheckedEntity::Array(_) => TRAP_ARRAY_OUT_OF_BOUNDS,
+            CheckedEntity::Array { .. } => TRAP_ARRAY_OUT_OF_BOUNDS,
         }
     }
 
@@ -5328,7 +5477,9 @@ impl CheckedEntity {
     /// bit patterns.
     fn allows_memset(&self, env: &FuncEnvironment) -> bool {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data(_) | CheckedEntity::Array(_) => true,
+            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => {
+                true
+            }
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
             CheckedEntity::Table(_) => !env.tunables.table_lazy_init,
