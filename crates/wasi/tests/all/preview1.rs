@@ -2,8 +2,8 @@ use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime::{Linker, Module};
-use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::preview1::add_to_linker_async;
+use wasmtime_wasi::WasiCtxBuilder;
 
 async fn run(path: &str, with_builder: impl FnOnce(&mut WasiCtxBuilder)) -> Result<()> {
     let path = Path::new(path);

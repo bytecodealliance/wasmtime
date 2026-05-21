@@ -1,9 +1,9 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::add_to_linker_sync;
 use wasmtime_wasi::bindings::sync::Command;
+use wasmtime_wasi::WasiCtxBuilder;
 
 fn run(path: &str, with_builder: impl Fn(&mut WasiCtxBuilder)) -> Result<()> {
     let path = Path::new(path);
