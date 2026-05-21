@@ -3269,7 +3269,6 @@ impl Instance {
     /// Copy `count` items from `read_address` to `write_address` for the
     /// specified stream or future.
     fn copy<T: 'static>(
-        self,
         store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
         write_instance: Instance,
@@ -3614,7 +3613,7 @@ impl Instance {
 
                 let count = count.min(read_count);
 
-                self.copy(
+                Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
                     self,
@@ -3852,7 +3851,7 @@ impl Instance {
 
                 let count = count.min(write_count);
 
-                self.copy(
+                Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
                     write_instance,
