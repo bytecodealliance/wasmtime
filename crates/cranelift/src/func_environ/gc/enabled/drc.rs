@@ -137,6 +137,12 @@ impl DrcCompiler {
         builder.ins().store(GC_MEMFLAGS, gc_ref, head, 0);
 
         // Increment the list's length.
+        //
+        // Can't overflow because the list's max length is the number of objects
+        // in the GC heap and the GC heap's max byte size is `u32::MAX` but the
+        // smallest GC object has a `VMGcHeader` which is multiple bytes large,
+        // meaning that there are always fewer objects in the GC heap than
+        // `u32::MAX`.
         let current_len = self.load_current_over_approximated_stack_roots_len(func_env, builder);
         let new_current_len = builder.ins().iadd_imm(current_len, 1);
         self.store_current_over_approximated_stack_roots_len(func_env, builder, new_current_len);
