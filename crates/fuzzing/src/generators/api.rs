@@ -97,6 +97,12 @@ struct Swarm {
     tag_eq: bool,
     get_tag_export: bool,
     tag_drop: bool,
+    module_imports: bool,
+    module_exports: bool,
+    module_get_export: bool,
+    module_name: bool,
+    module_validate: bool,
+    module_serialize_deserialize: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -306,6 +312,26 @@ pub enum ApiCall {
     },
     TagDrop {
         id: usize,
+    },
+    ModuleImports {
+        module: usize,
+    },
+    ModuleExports {
+        module: usize,
+    },
+    ModuleGetExport {
+        module: usize,
+        name: String,
+    },
+    ModuleName {
+        module: usize,
+    },
+    ModuleValidate {
+        wasm: Vec<u8>,
+    },
+    ModuleSerializeDeserialize {
+        src_id: usize,
+        dst_id: usize,
     },
 }
 use ApiCall::*;
@@ -919,6 +945,55 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let id = **input.choose(&tags)?;
                     scope.tags.remove(&id);
                     Ok(TagDrop { id })
+                });
+            }
+            if swarm.module_imports && !scope.modules.is_empty() {
+                choices.push(|input, scope| {
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let module = **input.choose(&modules)?;
+                    Ok(ModuleImports { module })
+                });
+            }
+            if swarm.module_exports && !scope.modules.is_empty() {
+                choices.push(|input, scope| {
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let module = **input.choose(&modules)?;
+                    Ok(ModuleExports { module })
+                });
+            }
+            if swarm.module_get_export && !scope.modules.is_empty() {
+                choices.push(|input, scope| {
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let module = **input.choose(&modules)?;
+                    let name = String::arbitrary(input)?;
+                    Ok(ModuleGetExport { module, name })
+                });
+            }
+            if swarm.module_name && !scope.modules.is_empty() {
+                choices.push(|input, scope| {
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let module = **input.choose(&modules)?;
+                    Ok(ModuleName { module })
+                });
+            }
+            if swarm.module_validate {
+                choices.push(|input, scope| {
+                    let use_valid_wasm = bool::arbitrary(input)?;
+                    let wasm = if use_valid_wasm {
+                        scope.config.generate(input, Some(1000))?.to_bytes()
+                    } else {
+                        Vec::<u8>::arbitrary(input)?
+                    };
+                    Ok(ModuleValidate { wasm })
+                });
+            }
+            if swarm.module_serialize_deserialize && !scope.modules.is_empty() {
+                choices.push(|input, scope| {
+                    let modules: Vec<_> = scope.modules.iter().collect();
+                    let src_id = **input.choose(&modules)?;
+                    let dst_id = scope.next_id();
+                    scope.modules.insert(dst_id);
+                    Ok(ModuleSerializeDeserialize { src_id, dst_id })
                 });
             }
 
