@@ -15,10 +15,9 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
 use wasmtime_environ::{
-    Collector, DataIndex, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT,
-    ModuleInternedTypeIndex, PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
-    wasm_unsupported,
+    Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
+    PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -1557,26 +1556,18 @@ fn stack_switching_unsupported<T>() -> WasmResult<T> {
     ))
 }
 
-pub fn translate_array_new_data(
+pub fn translate_array_new_entity(
     env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     array_type_index: TypeIndex,
-    data_index: DataIndex,
-    data_offset: ir::Value,
+    entity: CheckedEntity,
+    entity_offset: ir::Value,
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     // Before actually allocating this array first do a bounds-check on the
-    // passive data segment itself. This is done by multiplying the length of
-    // the size of the array in the 64-bit integer space to avoid overflow. If
-    // upper bits are set this is definitely out-of-bounds, and otherwise the
-    // low 32-bits are the byte length.
+    // passive entity itself.
     let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
-    let array_layout = env.array_layout(interned_type_index)?.clone();
-    let data_entity = CheckedEntity::Data {
-        segment: data_index,
-        element_size: array_layout.elem_size,
-    };
-    env.translate_entity_bounds_check(builder, data_entity, data_offset, len)?;
+    env.translate_entity_bounds_check(builder, entity, entity_offset, len)?;
 
     let array = gc_compiler(env)?.alloc_uninit_array(env, builder, array_type_index, len)?;
     let dst = builder.ins().iconst(ir::types::I32, 0);
@@ -1587,9 +1578,9 @@ pub fn translate_array_new_data(
             ty: interned_type_index,
             initialized: false,
         },
-        data_entity,
+        entity,
         dst,
-        data_offset,
+        entity_offset,
         len,
     )?;
 

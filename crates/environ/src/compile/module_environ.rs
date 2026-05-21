@@ -7,10 +7,10 @@ use crate::prelude::*;
 use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PassiveDataIndex, PrimaryMap,
-    SizeOverflow, StaticMemoryInitializer, StaticModuleIndex, TableIndex, TableInitialValue, Tag,
-    TagIndex, Tunables, TypeConvert, TypeIndex, WasmError, WasmHeapTopType, WasmHeapType,
-    WasmResult, WasmValType, WasmparserTypeConverter,
+    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PassiveDataIndex,
+    PassiveElemIndex, PrimaryMap, SizeOverflow, StaticMemoryInitializer, StaticModuleIndex,
+    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, WasmError,
+    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
@@ -102,6 +102,9 @@ pub struct ModuleTranslation<'data> {
     /// Map from a data segment to whether it's a passive data segment or not.
     pub passive_data_map: SecondaryMap<DataIndex, Option<PassiveDataIndex>>,
 
+    /// Map from an elem segment to whether it's a passive elem segment or not.
+    pub passive_elem_map: SecondaryMap<ElemIndex, Option<PassiveElemIndex>>,
+
     /// Total size of all data pushed onto `data` so far.
     total_data: u32,
 
@@ -141,6 +144,7 @@ impl<'data> ModuleTranslation<'data> {
             code_index: 0,
             types: None,
             passive_data_map: Default::default(),
+            passive_elem_map: Default::default(),
         }
     }
 
@@ -553,7 +557,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                     };
 
-                    match kind {
+                    let passive_index = match kind {
                         ElementKind::Active {
                             table_index,
                             offset_expr,
@@ -569,20 +573,21 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     elements,
                                 },
                             )?;
+                            None
                         }
 
                         ElementKind::Passive => {
-                            let elem_index = ElemIndex::from_u32(index as u32);
                             let passive_index =
                                 self.result.module.passive_elements.push(elements)?;
-                            self.result
-                                .module
-                                .passive_elements_map
-                                .insert(elem_index, passive_index)?;
+                            Some(passive_index)
                         }
 
-                        ElementKind::Declared => {}
-                    }
+                        ElementKind::Declared => None,
+                    };
+                    let elem_index = ElemIndex::from_u32(index as u32);
+                    self.result
+                        .passive_elem_map
+                        .insert(elem_index, passive_index);
                 }
             }
 

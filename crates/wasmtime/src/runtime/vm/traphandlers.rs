@@ -199,6 +199,7 @@ host_result_no_catch! {
     u64,
     f32,
     f64,
+    usize,
     i8x16,
     f32x4,
     f64x2,

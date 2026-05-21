@@ -2,8 +2,10 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
+use crate::Val;
 use crate::code::ModuleWithCode;
 use crate::module::ModuleRegistry;
+use crate::prelude::*;
 use crate::runtime::vm::export::{Export, ExportMemory};
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElementType};
@@ -20,8 +22,6 @@ use crate::store::{
     AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque, StoreResourceLimiter,
 };
 use crate::vm::{VMWasmCallFunction, ValRaw};
-use crate::{OpaqueRootScope, Val};
-use crate::{ValType, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::marker;
@@ -35,9 +35,9 @@ use core::{mem, ptr};
 use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::error::OutOfMemory;
 use wasmtime_environ::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, ElemIndex,
-    EntityIndex, EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PassiveDataIndex,
-    PtrSize, TableIndex, TableInitialValue, TagIndex, Trap, VMCONTEXT_MAGIC, VMOffsets,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, EntityIndex,
+    EntityRef, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, PassiveDataIndex, PassiveElemIndex,
+    PtrSize, TableIndex, TableInitialValue, TagIndex, VMCONTEXT_MAGIC, VMOffsets,
     VMSharedTypeIndex, WasmRefType, packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
@@ -899,16 +899,7 @@ impl Instance {
     }
 
     /// Get the passive elements segment at the given index.
-    pub(crate) fn passive_element_segment(&self, elem_index: ElemIndex) -> &[ValRaw] {
-        let Some(passive) = self
-            .env_module()
-            .passive_elements_map
-            .get(elem_index)
-            .copied()
-        else {
-            return &[];
-        };
-
+    pub(crate) fn passive_element_segment(&self, passive: PassiveElemIndex) -> &[ValRaw] {
         self.passive_elements[passive.index()].elements()
     }
 
@@ -919,91 +910,12 @@ impl Instance {
         Pin::new(&mut unsafe { self.get_unchecked_mut() }.passive_elements)
     }
 
-    /// The `table.init` operation: initializes a portion of a table with a
-    /// passive element.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `Trap` error when the range within the table is out of bounds
-    /// or the range within the passive element is out of bounds.
-    pub(crate) fn table_init(
-        store: &mut StoreOpaque,
-        instance_id: InstanceId,
-        table_index: TableIndex,
-        elem_index: ElemIndex,
-        dst: u64,
-        src: u64,
-        len: u64,
-    ) -> Result<()> {
-        let mut store = OpaqueRootScope::new(store);
-        let store_id = store.id();
-        let instance = store.instance(instance_id);
-        let elements = instance.passive_element_segment(elem_index);
-
-        let end = dst.checked_add(len).ok_or_else(|| Trap::TableOutOfBounds)?;
-        let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
-        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
-
-        let table = instance.get_exported_table(store_id, table_index);
-        if end > table.size_(&store) {
-            return Err(Trap::TableOutOfBounds.into());
-        }
-
-        // Subslice into just the target elements.
-        let elements = elements
-            .get(src..)
-            .and_then(|elements| elements.get(..len))
-            .ok_or_else(|| Trap::TableOutOfBounds)?
-            .iter()
-            .copied()
-            .try_collect::<TryVec<_>, OutOfMemory>()?;
-
-        let elem_ty = ValType::from(table.ty_(&store).element().clone());
-
-        let refs = {
-            let mut store = AutoAssertNoGc::new(&mut store);
-            elements
-                .into_iter()
-                // SAFETY: the raw elements are valid because we got them from
-                // this instance.
-                .map(|raw| unsafe { Val::_from_raw(&mut store, raw, &elem_ty) })
-                .map(|v| v.ref_().expect("due to validation"))
-                .try_collect::<TryVec<_>, OutOfMemory>()?
-        };
-
-        let instance = store.instance(instance_id);
-        let table = instance.get_exported_table(store_id, table_index);
-
-        for (i, r) in refs.into_iter().enumerate() {
-            let i = u64::try_from(i)
-                .expect("okay because of `src` and `len` conversions to `usize` up above");
-            let j = i
-                .checked_add(dst)
-                .expect("okay because of `checked_add` up above");
-            table.set_(&mut store, j, r)?;
-        }
-
-        Ok(())
-    }
-
     /// Drop an element.
-    pub(crate) fn elem_drop(
+    pub(crate) fn passive_elem_drop(
         self: Pin<&mut Self>,
         gc_store: Option<&mut GcStore>,
-        elem_index: ElemIndex,
+        passive_index: PassiveElemIndex,
     ) -> Result<(), OutOfMemory> {
-        // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
-
-        let Some(passive_index) = self
-            .env_module()
-            .passive_elements_map
-            .get(elem_index)
-            .copied()
-        else {
-            // Note: dropping a non-passive segment is a no-op (not a trap).
-            return Ok(());
-        };
-
         self.passive_elements_mut()[passive_index.index()].clear(gc_store);
         Ok(())
     }

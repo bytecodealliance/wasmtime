@@ -2793,11 +2793,16 @@ impl FuncEnvironment<'_> {
         data_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_new_data(
+        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
+        let array_layout = self.array_layout(interned_type_index)?.clone();
+        gc::translate_array_new_entity(
             self,
             builder,
             array_type_index,
-            data_index,
+            CheckedEntity::Data {
+                segment: data_index,
+                element_size: array_layout.elem_size,
+            },
             data_offset,
             len,
         )
@@ -2811,20 +2816,14 @@ impl FuncEnvironment<'_> {
         elem_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let libcall = gc::builtins::array_new_elem(self, builder.func)?;
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
-        let interned_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(interned_type_index.as_u32()));
-        let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
-        let call_inst = builder.ins().call(
-            libcall,
-            &[vmctx, interned_type_index, elem_index, elem_offset, len],
-        );
-        let array_ref = builder.func.dfg.first_result(call_inst);
-        builder.declare_value_needs_stack_map(array_ref);
-        Ok(array_ref)
+        gc::translate_array_new_entity(
+            self,
+            builder,
+            array_type_index,
+            CheckedEntity::Elem(elem_index),
+            elem_offset,
+            len,
+        )
     }
 
     pub fn translate_array_copy(
@@ -2920,26 +2919,19 @@ impl FuncEnvironment<'_> {
         elem_offset: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let libcall = gc::builtins::array_init_elem(self, builder.func)?;
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
-        let interned_type_index = builder
-            .ins()
-            .iconst(I32, i64::from(interned_type_index.as_u32()));
-        let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
-        builder.ins().call(
-            libcall,
-            &[
-                vmctx,
-                interned_type_index,
+        let ty = self.module.types[array_type_index].unwrap_module_type_index();
+        self.translate_entity_copy(
+            builder,
+            CheckedEntity::Array {
                 array,
-                dst_index,
-                elem_index,
-                elem_offset,
-                len,
-            ],
-        );
-        Ok(())
+                ty,
+                initialized: true,
+            },
+            CheckedEntity::Elem(elem_index),
+            dst_index,
+            elem_offset,
+            len,
+        )
     }
 
     pub fn translate_array_len(
@@ -3675,7 +3667,8 @@ impl FuncEnvironment<'_> {
                     },
                 )?;
             }
-            CheckedEntity::Data { .. } => unreachable!(),
+            // Not allowed to be written to in wasm.
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
         }
 
         Ok(())
@@ -3993,27 +3986,19 @@ impl FuncEnvironment<'_> {
 
             // Tables/arrays are sometimes a memcpy, sometimes a per-element
             // loop. Delegate further to figure that out.
-            CheckedEntity::Table(_) | CheckedEntity::Array { .. } => {
-                let src_size = src_entity.element_size(self, builder.func)?;
-                let dst_size = dst_entity.element_size(self, builder.func)?;
-                assert_eq!(src_size, dst_size);
-                let one_elem_size = builder
-                    .ins()
-                    .iconst(self.pointer_type(), i64::from(src_size));
-                self.emit_raw_array_or_table_copy(
+            CheckedEntity::Table(_) | CheckedEntity::Array { .. } => self
+                .emit_raw_array_or_table_copy(
                     builder,
                     dst_entity,
                     src_entity,
                     dst_raw_addr,
                     src_raw_addr,
-                    one_elem_size,
                     len_ptr,
                     src,
-                )
-            }
+                ),
 
-            // Cannot copy into a data segment in wasm.
-            CheckedEntity::Data { .. } => unreachable!(),
+            // Cannot copy into a data or element segment in wasm.
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
         }
     }
 
@@ -4055,6 +4040,18 @@ impl FuncEnvironment<'_> {
                         I64 => builder.ins().uload32(flags, vmctx, offset),
                         _ => unreachable!(),
                     }
+                }
+                None => builder.ins().iconst(pointer_type, 0),
+            },
+            CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
+                Some(passive_index) => {
+                    let vmctx = self.vmctx_val(&mut builder.cursor());
+                    let libcall = self
+                        .builtin_functions
+                        .passive_elem_segment_len(&mut builder.func);
+                    let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
+                    let call = builder.ins().call(libcall, &[vmctx, idx]);
+                    builder.func.dfg.first_result(call)
                 }
                 None => builder.ins().iconst(pointer_type, 0),
             },
@@ -4139,6 +4136,21 @@ impl FuncEnvironment<'_> {
                 // will be 0 elements, so the actual value here doesn't matter.
                 None => builder.ins().iconst(pointer_type, 1),
             },
+            // Element segments are quite similar to data segments just above.
+            CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
+                Some(passive_index) => {
+                    let vmctx = self.vmctx_val(&mut builder.cursor());
+                    let libcall = self
+                        .builtin_functions
+                        .passive_elem_segment_base(builder.func);
+                    let idx = builder.ins().iconst(I32, i64::from(passive_index.as_u32()));
+                    let call = builder.ins().call(libcall, &[vmctx, idx]);
+                    builder.func.dfg.first_result(call)
+                }
+
+                // Same as active data segments above.
+                None => builder.ins().iconst(pointer_type, 1),
+            },
             CheckedEntity::Array { array, ty, .. } => {
                 let base = self.get_gc_heap_base(builder)?;
                 let array = self.unchecked_cast_wasm_addr_to_native_addr(
@@ -4203,14 +4215,12 @@ impl FuncEnvironment<'_> {
         src_entity: CheckedEntity,
         dst_elem_addr: ir::Value,
         src_elem_addr: ir::Value,
-        one_elem_size: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_type);
         assert_eq!(builder.func.dfg.value_type(src_elem_addr), pointer_type);
-        assert_eq!(builder.func.dfg.value_type(one_elem_size), pointer_type);
         assert_eq!(builder.func.dfg.value_type(copy_len), pointer_type);
         assert_eq!(
             builder.func.dfg.value_type(src_index),
@@ -4255,29 +4265,39 @@ impl FuncEnvironment<'_> {
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
                     CheckedEntity::Array { .. } => false,
+                    // These are stored as `ValRaw`, not native types, so memcpy
+                    // can't work.
+                    CheckedEntity::Elem(_) => true,
                     // Not possible
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 },
             },
         };
 
-        let copy_byte_len = builder.ins().imul(one_elem_size, copy_len);
+        let dst_element_size = dst_entity.element_size(self, builder.func)?;
+        let src_element_size = src_entity.element_size(self, builder.func)?;
+        let dst_copy_byte_len = builder
+            .ins()
+            .imul_imm(copy_len, i64::from(dst_element_size));
+        let src_copy_byte_len = builder
+            .ins()
+            .imul_imm(copy_len, i64::from(src_element_size));
         if let CheckedEntity::Array { .. } = dst_entity {
-            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, copy_byte_len)?;
+            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, dst_copy_byte_len)?;
         }
-        if let CheckedEntity::Array { .. } = dst_entity {
-            self.emit_defensive_array_bounds_check(builder, dst_elem_addr, copy_byte_len)?;
+        if let CheckedEntity::Array { .. } = src_entity {
+            self.emit_defensive_array_bounds_check(builder, src_elem_addr, src_copy_byte_len)?;
         }
 
         // For memcpy, that's easy, just call the intrinsic with the right
         // parameters.
-        if !type_forbids_memcpy {
+        if !type_forbids_memcpy && dst_element_size == src_element_size {
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
                     dst: dst_elem_addr,
                     src: src_elem_addr,
-                    len: copy_byte_len,
+                    len: dst_copy_byte_len,
                 },
             );
             return Ok(());
@@ -4288,13 +4308,13 @@ impl FuncEnvironment<'_> {
         // used to dispatch `other` further.
         self.translate_per_element_copy(
             builder,
+            dst_entity,
+            src_entity,
             dst_elem_addr,
             src_elem_addr,
-            one_elem_size,
             copy_len,
             src_index,
             &|this, builder, dst, src, src_index| {
-                let read_ty = src_entity.storage_type(this);
                 let write_ty = dst_entity.storage_type(this);
                 let val = match src_entity {
                     // FIXME: ideally this wouldn't redo the bounds check but
@@ -4304,7 +4324,31 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
                     CheckedEntity::Array { initialized, .. } => {
                         assert!(initialized);
+                        let read_ty = src_entity.storage_type(this);
                         gc::read_field_at_addr(this, builder, read_ty, src, None)?
+                    }
+                    CheckedEntity::Elem(_) => {
+                        let WasmStorageType::Val(WasmValType::Ref(ty)) = write_ty else {
+                            unreachable!();
+                        };
+                        // `ValRaw` is always stored as little-endian
+                        let mut flags = ir::MemFlagsData::trusted();
+                        flags.set_endianness(Endianness::Little);
+
+                        match ty.heap_type.top() {
+                            WasmHeapTopType::Func => {
+                                builder.ins().load(this.pointer_type(), flags, src, 0)
+                            }
+                            WasmHeapTopType::Extern
+                            | WasmHeapTopType::Any
+                            | WasmHeapTopType::Exn => gc::gc_compiler(this)?
+                                .translate_read_gc_reference(this, builder, ty, src, flags)?,
+                            WasmHeapTopType::Cont => {
+                                return Err(wasmtime_environ::WasmError::Unsupported(
+                                    "reading of `contref` element segments".to_string(),
+                                ));
+                            }
+                        }
                     }
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 };
@@ -4319,9 +4363,10 @@ impl FuncEnvironment<'_> {
                             gc::init_field_at_addr(this, builder, write_ty, dst, val)?
                         }
                     }
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                    CheckedEntity::Memory(_)
+                    | CheckedEntity::Data { .. }
+                    | CheckedEntity::Elem(_) => unreachable!(),
                 }
-
                 Ok(())
             },
         )?;
@@ -4374,12 +4419,13 @@ impl FuncEnvironment<'_> {
     ///
     /// All IR values have type `self.pointer_type()`, except `src_index` which
     /// has an appropriate type to index into the entity copied from.
-    pub fn translate_per_element_copy(
+    fn translate_per_element_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
+        dst_entity: CheckedEntity,
+        src_entity: CheckedEntity,
         dst_elem_addr: ir::Value,
         src_elem_addr: ir::Value,
-        one_elem_size: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
         copy_one: &dyn Fn(
@@ -4446,9 +4492,16 @@ impl FuncEnvironment<'_> {
             .ins()
             .icmp(IntCC::UnsignedLessThan, dst_elem_addr, src_elem_addr);
         let src_index_ty = builder.func.dfg.value_type(src_index);
-        let copy_byte_len = builder.ins().imul(copy_len, one_elem_size);
-        let dst_end_addr = builder.ins().iadd(dst_elem_addr, copy_byte_len);
-        let src_end_addr = builder.ins().iadd(src_elem_addr, copy_byte_len);
+        let dst_element_size = dst_entity.element_size(self, builder.func)?;
+        let src_element_size = src_entity.element_size(self, builder.func)?;
+        let dst_copy_byte_len = builder
+            .ins()
+            .imul_imm(copy_len, i64::from(dst_element_size));
+        let src_copy_byte_len = builder
+            .ins()
+            .imul_imm(copy_len, i64::from(src_element_size));
+        let dst_end_addr = builder.ins().iadd(dst_elem_addr, dst_copy_byte_len);
+        let src_end_addr = builder.ins().iadd(src_elem_addr, src_copy_byte_len);
         let copy_len_as_src_index_ty = match (self.pointer_type(), src_index_ty) {
             (I32, I32) | (I64, I64) => copy_len,
             (I32, I64) => builder.ins().uextend(I64, copy_len),
@@ -4472,8 +4525,8 @@ impl FuncEnvironment<'_> {
         let src_index = builder.append_block_param(forward_block, src_index_ty);
         self.translate_loop_header(builder)?;
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
-        let dst_next = builder.ins().iadd(dst_cur, one_elem_size);
-        let src_next = builder.ins().iadd(src_cur, one_elem_size);
+        let dst_next = builder.ins().iadd_imm(dst_cur, i64::from(dst_element_size));
+        let src_next = builder.ins().iadd_imm(src_cur, i64::from(src_element_size));
         let src_index_next = builder.ins().iadd_imm(src_index, 1);
         let done = builder.ins().icmp(IntCC::Equal, src_next, src_end_addr);
         builder.ins().brif(
@@ -4491,10 +4544,22 @@ impl FuncEnvironment<'_> {
         let src_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
         self.translate_loop_header(builder)?;
-        let dst_cur = builder.ins().isub(dst_cur, one_elem_size);
-        let src_cur = builder.ins().isub(src_cur, one_elem_size);
-        let one = builder.ins().iconst(src_index_ty, 1);
-        let src_index = builder.ins().isub(src_index, one);
+        let dst_cur = {
+            let size = builder
+                .ins()
+                .iconst(self.pointer_type(), i64::from(dst_element_size));
+            builder.ins().isub(dst_cur, size)
+        };
+        let src_cur = {
+            let size = builder
+                .ins()
+                .iconst(self.pointer_type(), i64::from(src_element_size));
+            builder.ins().isub(src_cur, size)
+        };
+        let src_index = {
+            let one = builder.ins().iconst(src_index_ty, 1);
+            builder.ins().isub(src_index, one)
+        };
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let done = builder.ins().icmp(IntCC::Equal, src_cur, src_elem_addr);
         builder.ins().brif(
@@ -4524,29 +4589,26 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let mut pos = builder.cursor();
-        let table_init = self.builtin_functions.table_init(&mut pos.func);
-        let table_index_arg = pos.ins().iconst(I32, i64::from(table_index.as_u32()));
-        let seg_index_arg = pos.ins().iconst(I32, i64::from(seg_index));
-        let vmctx = self.vmctx_val(&mut pos);
-        let index_type = self.table(table_index).idx_type;
-        let dst = self.cast_index_to_i64(&mut pos, dst, index_type);
-        let src = pos.ins().uextend(I64, src);
-        let len = pos.ins().uextend(I64, len);
-
-        pos.ins().call(
-            table_init,
-            &[vmctx, table_index_arg, seg_index_arg, dst, src, len],
-        );
-
-        Ok(())
+        self.translate_entity_copy(
+            builder,
+            table_index,
+            CheckedEntity::Elem(ElemIndex::from_u32(seg_index)),
+            dst,
+            src,
+            len,
+        )
     }
 
     pub fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
-        let elem_drop = self.builtin_functions.elem_drop(&mut pos.func);
-        let elem_index_arg = pos.ins().iconst(I32, elem_index as i64);
-        let vmctx = self.vmctx_val(&mut pos);
-        pos.ins().call(elem_drop, &[vmctx, elem_index_arg]);
+        let elem = ElemIndex::from_u32(elem_index);
+        if let Some(passive_index) = self.translation.passive_elem_map[elem] {
+            let libcall = self
+                .builtin_functions
+                .passive_elem_segment_drop(&mut pos.func);
+            let idx = pos.ins().iconst(I32, i64::from(passive_index.as_u32()));
+            let vmctx = self.vmctx_val(&mut pos);
+            pos.ins().call(libcall, &[vmctx, idx]);
+        }
         Ok(())
     }
 
@@ -5395,6 +5457,8 @@ enum CheckedEntity {
         /// or possibly more for array initialization.
         element_size: u32,
     },
+    /// A WebAssembly passive element segment.
+    Elem(ElemIndex),
     /// An `arrayref` with the specified type.
     Array {
         /// The type of this array.
@@ -5425,7 +5489,9 @@ impl CheckedEntity {
         match *self {
             CheckedEntity::Memory(i) => env.memory(i).idx_type,
             CheckedEntity::Table(i) => env.table(i).idx_type,
-            CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => IndexType::I32,
+            CheckedEntity::Data { .. } | CheckedEntity::Array { .. } | CheckedEntity::Elem(_) => {
+                IndexType::I32
+            }
         }
     }
 
@@ -5440,6 +5506,7 @@ impl CheckedEntity {
             CheckedEntity::Data { element_size, .. } => element_size,
             CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
             CheckedEntity::Array { ty, .. } => env.array_layout(ty)?.elem_size,
+            CheckedEntity::Elem(_) => 16,
         })
     }
 
@@ -5450,8 +5517,6 @@ impl CheckedEntity {
             | CheckedEntity::Data {
                 element_size: 1, ..
             } => WasmStorageType::I8,
-            // not used at this time.
-            CheckedEntity::Data { .. } => unreachable!(),
             CheckedEntity::Table(table) => {
                 WasmStorageType::Val(WasmValType::Ref(env.table(table).ref_type))
             }
@@ -5459,6 +5524,8 @@ impl CheckedEntity {
                 let array_ty = env.types.unwrap_array(ty).unwrap();
                 array_ty.0.element_type
             }
+            // not used at this time.
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
         }
     }
 
@@ -5468,7 +5535,7 @@ impl CheckedEntity {
             CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => {
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS
             }
-            CheckedEntity::Table(_) => TRAP_TABLE_OUT_OF_BOUNDS,
+            CheckedEntity::Table(_) | CheckedEntity::Elem(_) => TRAP_TABLE_OUT_OF_BOUNDS,
             CheckedEntity::Array { .. } => TRAP_ARRAY_OUT_OF_BOUNDS,
         }
     }
@@ -5480,6 +5547,7 @@ impl CheckedEntity {
             CheckedEntity::Memory(_) | CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => {
                 true
             }
+            CheckedEntity::Elem(_) => false,
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
             CheckedEntity::Table(_) => !env.tunables.table_lazy_init,

@@ -176,39 +176,3 @@ pub trait GcCompiler {
         val: ir::Value,
     ) -> WasmResult<()>;
 }
-
-pub mod builtins {
-    use super::*;
-
-    macro_rules! define_builtin_accessors {
-        ( $( $name:ident , )* ) => {
-            $(
-                #[inline]
-                pub fn $name(
-                    func_env: &mut FuncEnvironment<'_>,
-                    func: &mut ir::Function,
-                ) -> WasmResult<ir::FuncRef> {
-                    #[cfg(feature = "gc")]
-                    {
-                        func_env.needs_gc_heap = true;
-                        return Ok(func_env.builtin_functions.$name(func));
-                    }
-
-                    #[cfg(not(feature = "gc"))]
-                    {
-                        let _ = (func, func_env);
-                        return Err(wasmtime_environ::wasm_unsupported!(
-                            "support for Wasm GC disabled at compile time because the `gc` cargo \
-                             feature was not enabled"
-                        ));
-                    }
-                }
-            )*
-        };
-    }
-
-    define_builtin_accessors! {
-        array_new_elem,
-        array_init_elem,
-    }
-}

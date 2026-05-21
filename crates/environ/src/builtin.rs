@@ -5,14 +5,16 @@ macro_rules! foreach_builtin_function {
         $mac! {
             // Returns an index for wasm's `memory.grow` builtin function.
             memory_grow(vmctx: vmctx, delta: u64, index: u32) -> pointer;
-            // Returns an index for wasm's `table.init`.
-            table_init(vmctx: vmctx, table: u32, elem: u32, dst: u64, src: u64, len: u64) -> bool;
-            // Returns an index for wasm's `elem.drop`.
-            elem_drop(vmctx: vmctx, elem: u32) -> bool;
             // Returns an index for wasm's `memory.copy`
             memory_copy(vmctx: vmctx, dst: pointer, src: pointer, len: size);
             // Returns an index for wasm's `memory.fill` instruction.
             memory_fill(vmctx: vmctx, dst: pointer, val: u32, len: size);
+            // Returns the current size of the passive `elem` segment.
+            passive_elem_segment_len(vmctx: vmctx, elem: u32) -> size;
+            // Returns the base address of the passive `elem` segment.
+            passive_elem_segment_base(vmctx: vmctx, elem: u32) -> pointer;
+            // Guts of `elem.drop` for passive data segments.
+            passive_elem_segment_drop(vmctx: vmctx, elem: u32) -> bool;
             // Returns a value for wasm's `ref.func` instruction.
             ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns a table entry after lazily initializing it.
@@ -116,28 +118,6 @@ macro_rules! foreach_builtin_function {
                 func_ref_id: u32,
                 module_interned_type_index: u32
             ) -> pointer;
-
-            // Builtin implementation of the `array.new_elem` instruction.
-            #[cfg(feature = "gc")]
-            array_new_elem(
-                vmctx: vmctx,
-                array_interned_type_index: u32,
-                elem_index: u32,
-                elem_offset: u32,
-                len: u32
-            ) -> u32;
-
-            // Builtin implementation of the `array.init_elem` instruction.
-            #[cfg(feature = "gc")]
-            array_init_elem(
-                vmctx: vmctx,
-                array_interned_type_index: u32,
-                array: u32,
-                dst: u32,
-                elem_index: u32,
-                src: u32,
-                len: u32
-            ) -> bool;
 
             // Returns whether `actual_engine_type` is a subtype of
             // `expected_engine_type`.
@@ -412,6 +392,8 @@ impl BuiltinFunctionIndex {
             (@get fma_f32x4 f32x4) => (return None);
             (@get fma_f64x2 f64x2) => (return None);
             (@get passive_data_segment_base pointer) => (return None);
+            (@get passive_elem_segment_len size) => (return None);
+            (@get passive_elem_segment_base pointer) => (return None);
 
             (@get cont_new pointer) => (TrapSentinel::Negative);
 

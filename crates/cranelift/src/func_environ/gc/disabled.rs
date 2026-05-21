@@ -1,13 +1,13 @@
 //! `GcCompiler` implementation when GC support is disabled.
 
 use super::GcCompiler;
-use crate::func_environ::{Extension, FuncEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    DataIndex, GcArrayLayout, ModuleInternedTypeIndex, TagIndex, TypeIndex, WasmRefType,
-    WasmResult, WasmStorageType, wasm_unsupported,
+    GcArrayLayout, ModuleInternedTypeIndex, TagIndex, TypeIndex, WasmRefType, WasmResult,
+    WasmStorageType, wasm_unsupported,
 };
 
 fn disabled<T>() -> WasmResult<T> {
@@ -155,11 +155,11 @@ pub fn translate_ref_test(
     disabled()
 }
 
-pub fn translate_array_new_data(
+pub fn translate_array_new_entity(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder,
     _array_type_index: TypeIndex,
-    _data_index: DataIndex,
+    _entity: CheckedEntity,
     _data_offset: ir::Value,
     _len: ir::Value,
 ) -> WasmResult<ir::Value> {
