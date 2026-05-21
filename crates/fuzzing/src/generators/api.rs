@@ -114,6 +114,17 @@ struct Swarm {
     struct_ref_field: bool,
     struct_ref_set_field: bool,
     struct_ref_drop: bool,
+    array_type_new: bool,
+    array_type_drop: bool,
+    array_ref_pre_new: bool,
+    array_ref_pre_drop: bool,
+    array_ref_new: bool,
+    array_ref_new_fixed: bool,
+    array_ref_ty: bool,
+    array_ref_len: bool,
+    array_ref_get: bool,
+    array_ref_set: bool,
+    array_ref_drop: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -389,6 +400,49 @@ pub enum ApiCall {
     StructRefDrop {
         id: usize,
     },
+    ArrayTypeNew {
+        id: usize,
+        elem_ty: FuzzValType,
+        mutable: bool,
+    },
+    ArrayTypeDrop {
+        id: usize,
+    },
+    ArrayRefPreNew {
+        id: usize,
+        array_ty: usize,
+        store: usize,
+    },
+    ArrayRefPreDrop {
+        id: usize,
+    },
+    ArrayRefNew {
+        id: usize,
+        pre: usize,
+        len: u32,
+    },
+    ArrayRefNewFixed {
+        id: usize,
+        pre: usize,
+        count: u8,
+    },
+    ArrayRefTy {
+        array_ref: usize,
+    },
+    ArrayRefLen {
+        array_ref: usize,
+    },
+    ArrayRefGet {
+        array_ref: usize,
+        index: u32,
+    },
+    ArrayRefSet {
+        array_ref: usize,
+        index: u32,
+    },
+    ArrayRefDrop {
+        id: usize,
+    },
 }
 use ApiCall::*;
 
@@ -449,6 +503,15 @@ struct Scope {
     /// StructRefs that are currently live. Maps from `ref_id` to the store's id.
     struct_refs: BTreeMap<usize, usize>, // ref_id -> store_id
 
+    /// Array types that are currently live.
+    array_types: BTreeSet<usize>,
+
+    /// ArrayRefPres that are currently live. Maps from `pre_id` to the store's id.
+    array_ref_pres: BTreeMap<usize, usize>, // pre_id -> store_id
+
+    /// ArrayRefs that are currently live. Maps from `ref_id` to the store's id.
+    array_refs: BTreeMap<usize, usize>, // ref_id -> store_id
+
     config: Config,
 }
 
@@ -493,6 +556,9 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             struct_types: BTreeSet::default(),
             struct_ref_pres: BTreeMap::default(),
             struct_refs: BTreeMap::default(),
+            array_types: BTreeSet::default(),
+            array_ref_pres: BTreeMap::default(),
+            array_refs: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -536,6 +602,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.tags.retain(|_, store_id| *store_id != id);
                     scope.struct_ref_pres.retain(|_, store_id| *store_id != id);
                     scope.struct_refs.retain(|_, store_id| *store_id != id);
+                    scope.array_ref_pres.retain(|_, store_id| *store_id != id);
+                    scope.array_refs.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -1200,6 +1268,109 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let id = **input.choose(&refs)?;
                     scope.struct_refs.remove(&id);
                     Ok(StructRefDrop { id })
+                });
+            }
+            if swarm.array_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let elem_ty = FuzzValType::arbitrary(input)?;
+                    let mutable = bool::arbitrary(input)?;
+                    scope.array_types.insert(id);
+                    Ok(ArrayTypeNew {
+                        id,
+                        elem_ty,
+                        mutable,
+                    })
+                });
+            }
+            if swarm.array_type_drop && !scope.array_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.array_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.array_types.remove(&id);
+                    Ok(ArrayTypeDrop { id })
+                });
+            }
+            if swarm.array_ref_pre_new && !scope.array_types.is_empty() && !scope.stores.is_empty()
+            {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.array_types.iter().collect();
+                    let array_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.array_ref_pres.insert(id, store);
+                    Ok(ArrayRefPreNew {
+                        id,
+                        array_ty,
+                        store,
+                    })
+                });
+            }
+            if swarm.array_ref_pre_drop && !scope.array_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.array_ref_pres.keys().collect();
+                    let id = **input.choose(&pres)?;
+                    scope.array_ref_pres.remove(&id);
+                    Ok(ArrayRefPreDrop { id })
+                });
+            }
+            if swarm.array_ref_new && !scope.array_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.array_ref_pres.iter().collect();
+                    let (&pre, &store_id) = *input.choose(&pres)?;
+                    let id = scope.next_id();
+                    let len = u32::arbitrary(input)? % 17;
+                    scope.array_refs.insert(id, store_id);
+                    Ok(ArrayRefNew { id, pre, len })
+                });
+            }
+            if swarm.array_ref_new_fixed && !scope.array_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.array_ref_pres.iter().collect();
+                    let (&pre, &store_id) = *input.choose(&pres)?;
+                    let id = scope.next_id();
+                    let count = u8::arbitrary(input)? % 9;
+                    scope.array_refs.insert(id, store_id);
+                    Ok(ArrayRefNewFixed { id, pre, count })
+                });
+            }
+            if swarm.array_ref_ty && !scope.array_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.array_refs.keys().collect();
+                    let array_ref = **input.choose(&refs)?;
+                    Ok(ArrayRefTy { array_ref })
+                });
+            }
+            if swarm.array_ref_len && !scope.array_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.array_refs.keys().collect();
+                    let array_ref = **input.choose(&refs)?;
+                    Ok(ArrayRefLen { array_ref })
+                });
+            }
+            if swarm.array_ref_get && !scope.array_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.array_refs.keys().collect();
+                    let array_ref = **input.choose(&refs)?;
+                    let index = u32::arbitrary(input)?;
+                    Ok(ArrayRefGet { array_ref, index })
+                });
+            }
+            if swarm.array_ref_set && !scope.array_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.array_refs.keys().collect();
+                    let array_ref = **input.choose(&refs)?;
+                    let index = u32::arbitrary(input)?;
+                    Ok(ArrayRefSet { array_ref, index })
+                });
+            }
+            if swarm.array_ref_drop && !scope.array_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.array_refs.keys().collect();
+                    let id = **input.choose(&refs)?;
+                    scope.array_refs.remove(&id);
+                    Ok(ArrayRefDrop { id })
                 });
             }
 
