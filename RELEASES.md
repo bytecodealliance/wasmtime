@@ -1,6 +1,6 @@
 ## 45.0.0
 
-Unreleased.
+Released 2026-05-21.
 
 ### Added
 
