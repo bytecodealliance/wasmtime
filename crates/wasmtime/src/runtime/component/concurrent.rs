@@ -634,6 +634,7 @@ enum SuspendReason {
     /// chance to run.
     Yielding {
         thread: QualifiedThreadId,
+        cancellable: bool,
         skip_may_block_check: bool,
     },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
@@ -1434,7 +1435,7 @@ impl<T> StoreContextMut<'_, T> {
                 self.0.resume_fiber(fiber).await?;
             }
             WorkItem::ResumeThread(_, thread) => {
-                if let GuestThreadState::Ready(fiber) = mem::replace(
+                if let GuestThreadState::Ready { fiber, .. } = mem::replace(
                     &mut self.0.concurrent_state_mut().get_mut(thread.thread)?.state,
                     GuestThreadState::Running,
                 ) {
@@ -1898,8 +1899,13 @@ impl StoreOpaque {
                         fiber.dispose(self);
                     }
                 }
-                SuspendReason::Yielding { thread, .. } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready(fiber);
+                SuspendReason::Yielding {
+                    thread,
+                    cancellable,
+                    ..
+                } => {
+                    state.get_mut(thread.thread)?.state =
+                        GuestThreadState::Ready { fiber, cancellable };
                     let instance = state.get_mut(thread.task)?.instance.index;
                     state.push_low_priority(WorkItem::ResumeThread(instance, thread));
                 }
@@ -3509,9 +3515,9 @@ impl Instance {
                     .concurrent_state_mut()
                     .push_work_item(WorkItem::ResumeFiber(fiber), high_priority);
             }
-            GuestThreadState::Ready(fiber) if allow_ready => {
+            GuestThreadState::Ready { fiber, cancellable } if allow_ready => {
                 log::trace!("resuming thread {thread_id:?} that was ready");
-                thread.state = GuestThreadState::Ready(fiber);
+                thread.state = GuestThreadState::Ready { fiber, cancellable };
                 store
                     .concurrent_state_mut()
                     .promote_thread_work_item(guest_thread);
@@ -3590,6 +3596,7 @@ impl Instance {
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
+                cancellable,
                 // Tell `StoreOpaque::suspend` it's okay to suspend here since
                 // we're handling a `thread.yield-to-suspended` call; otherwise it would
                 // panic if we called it in a non-blocking context.
@@ -3789,11 +3796,9 @@ impl Instance {
                         task: guest_task,
                         thread,
                     };
-                    if let Some(set) = concurrent_state
-                        .get_mut(thread.thread)?
-                        .wake_on_cancel
-                        .take()
-                    {
+                    let thread_mut = concurrent_state.get_mut(thread.thread)?;
+                    if let Some(set) = thread_mut.wake_on_cancel.take() {
+                        // The thread is in a cancellable wait, so wake it up:
                         let item = match concurrent_state.get_mut(set)?.waiting.remove(&thread) {
                             Some(WaitMode::Fiber(fiber)) => WorkItem::ResumeFiber(fiber),
                             Some(WaitMode::Callback(instance)) => WorkItem::GuestCall(
@@ -3813,8 +3818,23 @@ impl Instance {
                         let caller = concurrent_state.current_guest_thread()?;
                         store.suspend(SuspendReason::Yielding {
                             thread: caller,
+                            cancellable: false,
                             // `subtask.cancel` is not allowed to be called in a
                             // sync context, so we cannot skip the may-block check.
+                            skip_may_block_check: false,
+                        })?;
+                        break;
+                    } else if let GuestThreadState::Ready {
+                        cancellable: true, ..
+                    } = &thread_mut.state
+                    {
+                        // The thread is in a cancellable yield, so yield back
+                        // to it.
+                        let caller = concurrent_state.current_guest_thread()?;
+                        concurrent_state.promote_thread_work_item(thread);
+                        store.suspend(SuspendReason::Yielding {
+                            thread: caller,
+                            cancellable: false,
                             skip_may_block_check: false,
                         })?;
                         break;
@@ -4466,7 +4486,10 @@ enum GuestThreadState {
     ),
     Running,
     Suspended(StoreFiber<'static>),
-    Ready(StoreFiber<'static>),
+    Ready {
+        fiber: StoreFiber<'static>,
+        cancellable: bool,
+    },
     Completed,
 }
 pub struct GuestThread {
@@ -5087,7 +5110,7 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready(fiber) =
+                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber, .. } =
                     mem::replace(&mut thread.state, GuestThreadState::Completed)
                 {
                     fibers.push(fiber);
