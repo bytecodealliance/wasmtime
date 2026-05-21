@@ -31,8 +31,8 @@
 ;; @002a                               v7 = load.i64 notrap aligned readonly can_move v57+32
 ;; @002a                               v6 = uextend.i64 v2
 ;; @002a                               v8 = iadd v7, v6
-;; @002a                               v9 = iconst.i64 24
-;; @002a                               v10 = iadd v8, v9  ; v9 = 24
+;; @002a                               v9 = iconst.i64 16
+;; @002a                               v10 = iadd v8, v9  ; v9 = 16
 ;; @002a                               v11 = load.i32 user2 readonly v10
 ;; @002a                               v13 = uextend.i64 v3
 ;; @002a                               v14 = uextend.i64 v5
@@ -47,8 +47,8 @@
 ;; @002a                               trapnz v31, heap_oob
 ;; @002a                               v33 = load.i64 notrap aligned v0+48
 ;; @002a                               v40 = load.i64 notrap aligned v57+40
-;;                                     v53 = iconst.i64 28
-;; @002a                               v21 = iadd v8, v53  ; v53 = 28
+;;                                     v53 = iconst.i64 20
+;; @002a                               v21 = iadd v8, v53  ; v53 = 20
 ;; @002a                               v24 = iadd v21, v13
 ;; @002a                               v42 = uadd_overflow_trap v24, v14, user2
 ;; @002a                               v41 = iadd v7, v40

@@ -38,8 +38,8 @@
 ;; @003b                               v7 = load.i64 notrap aligned readonly can_move v52+32
 ;; @003b                               v6 = uextend.i64 v2
 ;; @003b                               v8 = iadd v7, v6
-;; @003b                               v9 = iconst.i64 24
-;; @003b                               v10 = iadd v8, v9  ; v9 = 24
+;; @003b                               v9 = iconst.i64 16
+;; @003b                               v10 = iadd v8, v9  ; v9 = 16
 ;; @003b                               v11 = load.i32 user2 readonly v10
 ;; @003b                               v13 = uextend.i64 v3
 ;; @003b                               v14 = uextend.i64 v5
@@ -48,8 +48,8 @@
 ;; @003b                               v17 = icmp ugt v16, v12
 ;; @003b                               trapnz v17, user17
 ;; @003b                               v28 = load.i64 notrap aligned v52+40
-;;                                     v48 = iconst.i64 28
-;; @003b                               v21 = iadd v8, v48  ; v48 = 28
+;;                                     v48 = iconst.i64 20
+;; @003b                               v21 = iadd v8, v48  ; v48 = 20
 ;;                                     v56 = iconst.i64 2
 ;;                                     v57 = ishl v13, v56  ; v56 = 2
 ;; @003b                               v24 = iadd v21, v57
@@ -98,8 +98,8 @@
 ;; @0049                               v7 = load.i64 notrap aligned readonly can_move v44+32
 ;; @0049                               v6 = uextend.i64 v2
 ;; @0049                               v8 = iadd v7, v6
-;; @0049                               v9 = iconst.i64 24
-;; @0049                               v10 = iadd v8, v9  ; v9 = 24
+;; @0049                               v9 = iconst.i64 16
+;; @0049                               v10 = iadd v8, v9  ; v9 = 16
 ;; @0049                               v11 = load.i32 user2 readonly v10
 ;; @0049                               v13 = uextend.i64 v3
 ;; @0049                               v14 = uextend.i64 v4
@@ -108,8 +108,8 @@
 ;; @0049                               v17 = icmp ugt v16, v12
 ;; @0049                               trapnz v17, user17
 ;; @0049                               v28 = load.i64 notrap aligned v44+40
-;;                                     v40 = iconst.i64 28
-;; @0049                               v21 = iadd v8, v40  ; v40 = 28
+;;                                     v40 = iconst.i64 20
+;; @0049                               v21 = iadd v8, v40  ; v40 = 20
 ;;                                     v47 = iconst.i64 2
 ;;                                     v48 = ishl v13, v47  ; v47 = 2
 ;; @0049                               v24 = iadd v21, v48
@@ -152,8 +152,8 @@
 ;; @0057                               v9 = load.i64 notrap aligned readonly can_move v58+32
 ;; @0057                               v8 = uextend.i64 v44
 ;; @0057                               v10 = iadd v9, v8
-;; @0057                               v11 = iconst.i64 24
-;; @0057                               v12 = iadd v10, v11  ; v11 = 24
+;; @0057                               v11 = iconst.i64 16
+;; @0057                               v12 = iadd v10, v11  ; v11 = 16
 ;; @0057                               v13 = load.i32 user2 readonly v12
 ;; @0057                               v15 = uextend.i64 v3
 ;; @0057                               v16 = uextend.i64 v4
@@ -162,8 +162,8 @@
 ;; @0057                               v19 = icmp ugt v18, v14
 ;; @0057                               trapnz v19, user17
 ;; @0057                               v30 = load.i64 notrap aligned v58+40
-;;                                     v53 = iconst.i64 28
-;; @0057                               v23 = iadd v10, v53  ; v53 = 28
+;;                                     v53 = iconst.i64 20
+;; @0057                               v23 = iadd v10, v53  ; v53 = 20
 ;;                                     v65 = iconst.i64 2
 ;;                                     v66 = ishl v15, v65  ; v65 = 2
 ;; @0057                               v26 = iadd v23, v66
