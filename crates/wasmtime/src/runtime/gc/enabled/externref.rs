@@ -1,6 +1,6 @@
 //! Implementation of `externref` in Wasmtime.
 
-use super::{AnyRef, RootedGcRefImpl};
+use super::AnyRef;
 use crate::prelude::*;
 use crate::runtime::vm::{self, VMGcRef};
 use crate::store::Asyncness;
@@ -471,7 +471,7 @@ impl ExternRef {
         }
         let gc_store = store.require_gc_store()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
-            Ok(Some(gc_store.externref_host_data(externref)))
+            Ok(Some(gc_store.externref_host_data(externref)?))
         } else {
             Ok(None)
         }
@@ -525,7 +525,7 @@ impl ExternRef {
         }
         let gc_store = store.require_gc_store_mut()?;
         if let Some(externref) = gc_ref.as_externref(&*gc_store.gc_heap) {
-            Ok(Some(gc_store.externref_host_data_mut(externref)))
+            Ok(Some(gc_store.externref_host_data_mut(externref)?))
         } else {
             Ok(None)
         }
@@ -593,7 +593,7 @@ impl ExternRef {
 
     pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc) -> Result<u32> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref)?;
         Ok(raw.get())
     }
 }

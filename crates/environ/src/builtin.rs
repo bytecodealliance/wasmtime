@@ -391,10 +391,12 @@ impl BuiltinFunctionIndex {
             // The final epoch represents a trap
             (@get new_epoch u64) => (TrapSentinel::NegativeOne);
 
+            // Failure here indicates GC heap corruption.
+            (@get get_interned_func_ref pointer) => (TrapSentinel::NegativeOne);
+
             // These libcalls can't trap
             (@get ref_func pointer) => (return None);
             (@get table_get_lazy_init_func_ref pointer) => (return None);
-            (@get get_interned_func_ref pointer) => (return None);
             (@get intern_func_ref_for_gc_heap u64) => (return None);
             (@get is_subtype u32) => (return None);
             (@get ceil_f32 f32) => (return None);

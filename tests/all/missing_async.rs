@@ -207,7 +207,7 @@ async fn async_disallows_typed_func_call() -> Result<()> {
 async fn async_disallows_gc() -> Result<()> {
     let mut store = async_limiter_store();
     assert!(store.gc(None).is_err());
-    store.gc_async(None).await;
+    store.gc_async(None).await?;
     Ok(())
 }
 

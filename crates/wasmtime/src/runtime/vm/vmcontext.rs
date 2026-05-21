@@ -4,6 +4,7 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
+use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
@@ -620,17 +621,17 @@ impl VMGlobalDefinition {
                 WasmValType::Ref(r) => match r.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let r = VMGcRef::from_raw_u32(raw.get_externref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                     WasmHeapTopType::Any => {
                         let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                     WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                     WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
                     WasmHeapTopType::Exn => {
                         let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                 },
             }
@@ -673,7 +674,7 @@ impl VMGlobalDefinition {
                         }
                     }),
                     WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                    WasmHeapTopType::Cont => bail_bug!("unimplemented"), // FIXME: #10248 stack switching support.
                 },
             })
         }
@@ -804,7 +805,11 @@ impl VMGlobalDefinition {
     }
 
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn init_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe {
             &mut *(self
                 .storage
@@ -817,7 +822,11 @@ impl VMGlobalDefinition {
     }
 
     /// Write a GC reference into this global value.
-    pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn write_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
         store.write_gc_ref(dest, gc_ref)
     }
