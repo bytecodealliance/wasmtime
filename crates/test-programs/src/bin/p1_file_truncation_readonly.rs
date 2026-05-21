@@ -1,33 +1,24 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::process;
-use test_programs::preview1::{BlockingMode, open_scratch_directory};
+use test_programs::preview1::open_scratch_directory;
 
 const FILENAME: &str = "test.txt";
-unsafe fn test_file_has_expected_contents(dir_fd: wasip1::Fd, blocking_mode: &BlockingMode) {
+unsafe fn test_file_has_expected_contents(dir_fd: wasip1::Fd) {
     // Open a file for reading
-    let file_fd = wasip1::path_open(
-        dir_fd,
-        0,
-        FILENAME,
-        0,
-        wasip1::RIGHTS_FD_READ,
-        0,
-        blocking_mode.fd_flags(),
-    )
-    .expect("opening test.txt for reading");
+    let file_fd = wasip1::path_open(dir_fd, 0, FILENAME, 0, wasip1::RIGHTS_FD_READ, 0, 0)
+        .expect("opening test.txt for reading");
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = blocking_mode
-        .read(
-            file_fd,
-            &[wasip1::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }],
-        )
-        .expect("reading file content");
+    let nread = wasip1::fd_read(
+        file_fd,
+        &[wasip1::Iovec {
+            buf: buffer.as_mut_ptr(),
+            buf_len: buffer.len(),
+        }],
+    )
+    .expect("reading file content");
 
     const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
     // The file should be as created by the test harness, not truncated.
@@ -41,9 +32,9 @@ unsafe fn test_file_has_expected_contents(dir_fd: wasip1::Fd, blocking_mode: &Bl
     wasip1::fd_close(file_fd).expect("closing the file");
 }
 
-unsafe fn test_file_truncation_readonly(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
+unsafe fn test_file_truncation_readonly(dir_fd: wasip1::Fd) {
     // Check test preconditions.
-    test_file_has_expected_contents(dir_fd, &blocking_mode);
+    test_file_has_expected_contents(dir_fd);
 
     // Opening the file for truncation should fail.
     let err = wasip1::path_open(
@@ -53,7 +44,7 @@ unsafe fn test_file_truncation_readonly(dir_fd: wasip1::Fd, blocking_mode: Block
         wasip1::OFLAGS_TRUNC,
         wasip1::RIGHTS_FD_READ,
         0,
-        blocking_mode.fd_flags(),
+        0,
     );
     assert!(err.is_err(), "opening file for truncation should fail");
     assert_eq!(
@@ -63,7 +54,7 @@ unsafe fn test_file_truncation_readonly(dir_fd: wasip1::Fd, blocking_mode: Block
     );
 
     // Check that truncation did not occur.
-    test_file_has_expected_contents(dir_fd, &blocking_mode);
+    test_file_has_expected_contents(dir_fd);
 }
 
 fn main() {
@@ -80,8 +71,5 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe {
-        test_file_truncation_readonly(dir_fd, BlockingMode::Blocking);
-        test_file_truncation_readonly(dir_fd, BlockingMode::NonBlocking);
-    }
+    unsafe { test_file_truncation_readonly(dir_fd) }
 }
