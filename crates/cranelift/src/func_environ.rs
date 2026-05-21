@@ -3757,6 +3757,12 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(loop_block, current_block);
         builder.insert_block_after(continue_block, loop_block);
 
+        // Before entering the loop below flush our fuel counters to ensure
+        // that previous instructions' fuel isn't counted once-per-iteration.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
         // Current block: test to see if this is actually an empty copy. If it
         // is then skip over the entire loop, otherwise enter the loop and
         // perform the first ieration.
@@ -3774,6 +3780,10 @@ impl FuncEnvironment<'_> {
         // by the element size, then see if we turn again or exit.
         builder.switch_to_block(loop_block);
         let elem_addr = builder.append_block_param(loop_block, pointer_ty);
+        // Consume one unit of fuel per loop iteration.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         emit_elem_write(self, builder, elem_addr, value)?;
         let next_elem_addr = builder.ins().iadd_imm(elem_addr, i64::from(elem_size));
@@ -4479,6 +4489,13 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(backwards_block, forward_block);
         builder.insert_block_after(done_block, backwards_block);
 
+        // Update our local fuel counter, if enabled, before entering the loops
+        // below. This zeros out `self.fuel_consumed` so we don't consume
+        // previous fuel on each iteration of the loop.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
         // Terminate `current_block` by testing to see if we're copying any
         // elements at all.
         builder
@@ -4523,6 +4540,10 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_index = builder.append_block_param(forward_block, src_index_ty);
+        // Consume a single unit of fuel on each iteration of the loop.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let dst_next = builder.ins().iadd_imm(dst_cur, i64::from(dst_element_size));
@@ -4543,6 +4564,9 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         let dst_cur = {
             let size = builder

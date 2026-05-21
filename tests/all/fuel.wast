@@ -206,3 +206,182 @@
       end
     )
     (start $f)))
+
+(assert_fuel 105
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 100
+      memory.copy
+    )
+    (start $f)))
+
+(assert_fuel 105
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 100
+      memory.fill
+    )
+    (start $f)))
+
+(assert_fuel 25
+  (module
+    (memory 1)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 20
+      memory.init $d
+    )
+    (start $f)
+    (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
+
+(assert_fuel 105
+  (module
+    (table 100 funcref)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 100
+      table.copy
+    )
+    (start $f)))
+
+(assert_fuel 105
+  (module
+    (table 100 funcref)
+    (func $f
+      i32.const 0
+      ref.null func
+      i32.const 100
+      table.fill
+    )
+    (start $f)))
+
+(assert_fuel 104
+  (module
+    (table 0 funcref)
+    (func $f
+      ref.null func
+      i32.const 100
+      table.grow
+      drop
+    )
+    (start $f)))
+
+(assert_fuel 25
+  (module
+    (table 20 funcref)
+    (func $f
+      i32.const 0
+      i32.const 0
+      i32.const 20
+      table.init $e
+    )
+    (start $f)
+    (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
+
+(assert_fuel 107
+  (module
+    (type $a (array (mut i8)))
+    (global $a (ref $a) (array.new_default $a (i32.const 100)))
+    (func $f
+      global.get $a
+      i32.const 0
+      global.get $a
+      i32.const 0
+      i32.const 100
+      array.copy $a $a
+    )
+    (start $f)))
+
+(assert_fuel 106
+  (module
+    (type $a (array (mut i8)))
+    (global $a (ref $a) (array.new_default $a (i32.const 100)))
+    (func $f
+      global.get $a
+      i32.const 0
+      i32.const 0
+      i32.const 100
+      array.fill $a
+    )
+    (start $f)))
+
+(assert_fuel 24
+  (module
+    (type $a (array (mut i8)))
+    (func $f
+      i32.const 0
+      i32.const 20
+      array.new_data $a $d
+      drop
+    )
+    (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    (start $f)))
+
+(assert_fuel 26
+  (module
+    (type $a (array (mut i8)))
+    (global $a (ref $a) (array.new_default $a (i32.const 100)))
+    (func $f
+      global.get $a
+      i32.const 0
+      i32.const 0
+      i32.const 20
+      array.init_data $a $d
+    )
+    (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    (start $f)))
+
+(assert_fuel 24
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      i32.const 0
+      i32.const 20
+      array.new_elem $a $e
+      drop
+    )
+    (start $f)
+    (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
+
+(assert_fuel 26
+  (module
+    (type $a (array (mut funcref)))
+    (global $a (ref $a) (array.new_default $a (i32.const 100)))
+    (func $f
+      global.get $a
+      i32.const 0
+      i32.const 0
+      i32.const 20
+      array.init_elem $a $e
+    )
+    (start $f)
+    (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
+
+(assert_fuel 403 ;; 400 bytes set + 1 func + 2 instructions (drop is 0)
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      i32.const 100
+      array.new_default $a
+      drop
+    )
+    (start $f)))
+
+(assert_fuel 404 ;; 400 bytes set + 1 func + 3 instructions (drop is 0)
+  (module
+    (type $a (array (mut funcref)))
+    (func $f
+      ref.null func
+      i32.const 100
+      array.new $a
+      drop
+    )
+    (start $f)))
