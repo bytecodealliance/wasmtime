@@ -58,6 +58,16 @@ struct Swarm {
     global_ty: bool,
     global_drop: bool,
     get_global_export: bool,
+    table_type_new: bool,
+    table_type_drop: bool,
+    table_new: bool,
+    table_get: bool,
+    table_set: bool,
+    table_grow: bool,
+    table_size: bool,
+    table_ty: bool,
+    table_drop: bool,
+    get_table_export: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -120,6 +130,44 @@ pub enum ApiCall {
         instance: usize,
         nth: usize,
     },
+    TableTypeNew {
+        id: usize,
+        nullable: bool,
+    },
+    TableTypeDrop {
+        id: usize,
+    },
+    TableNew {
+        id: usize,
+        table_ty: usize,
+        store: usize,
+    },
+    TableGet {
+        table: usize,
+        idx: u64,
+    },
+    TableSet {
+        table: usize,
+        idx: u64,
+    },
+    TableGrow {
+        table: usize,
+        delta: u32,
+    },
+    TableSize {
+        table: usize,
+    },
+    TableTy {
+        table: usize,
+    },
+    TableDrop {
+        id: usize,
+    },
+    GetTableExport {
+        id: usize,
+        instance: usize,
+        nth: usize,
+    },
 }
 use ApiCall::*;
 
@@ -142,6 +190,13 @@ struct Scope {
     /// Globals that are currently live. Maps from `global_id` to the global's
     /// associated `store_id`.
     globals: BTreeMap<usize, usize>, // global_id -> store_id
+
+    /// Table types that are currently live.
+    table_types: BTreeSet<usize>,
+
+    /// Tables that are currently live. Maps from `table_id` to the table's
+    /// associated `store_id`.
+    tables: BTreeMap<usize, usize>, // table_id -> store_id
 
     config: Config,
 }
@@ -176,6 +231,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             instances: BTreeMap::default(),
             global_types: BTreeSet::default(),
             globals: BTreeMap::default(),
+            table_types: BTreeSet::default(),
+            tables: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -213,6 +270,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.stores.remove(&id);
                     scope.instances.retain(|_, store_id| *store_id != id);
                     scope.globals.retain(|_, store_id| *store_id != id);
+                    scope.tables.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -332,6 +390,94 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let store = *scope.instances.get(&instance).unwrap();
                     scope.globals.insert(id, store);
                     Ok(GetGlobalExport { id, instance, nth })
+                });
+            }
+            if swarm.table_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let nullable = bool::arbitrary(input)?;
+                    scope.table_types.insert(id);
+                    Ok(TableTypeNew { id, nullable })
+                });
+            }
+            if swarm.table_type_drop && !scope.table_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.table_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.table_types.remove(&id);
+                    Ok(TableTypeDrop { id })
+                });
+            }
+            if swarm.table_new && !scope.table_types.is_empty() && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.table_types.iter().collect();
+                    let table_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.tables.insert(id, store);
+                    Ok(TableNew {
+                        id,
+                        table_ty,
+                        store,
+                    })
+                });
+            }
+            if swarm.table_get && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    let idx = u64::arbitrary(input)?;
+                    Ok(TableGet { table, idx })
+                });
+            }
+            if swarm.table_set && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    let idx = u64::arbitrary(input)?;
+                    Ok(TableSet { table, idx })
+                });
+            }
+            if swarm.table_grow && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    let delta = u32::arbitrary(input)?;
+                    Ok(TableGrow { table, delta })
+                });
+            }
+            if swarm.table_size && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    Ok(TableSize { table })
+                });
+            }
+            if swarm.table_ty && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    Ok(TableTy { table })
+                });
+            }
+            if swarm.table_drop && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let id = **input.choose(&tables)?;
+                    scope.tables.remove(&id);
+                    Ok(TableDrop { id })
+                });
+            }
+            if swarm.get_table_export && !scope.instances.is_empty() {
+                choices.push(|input, scope| {
+                    let instances: Vec<_> = scope.instances.keys().collect();
+                    let instance = **input.choose(&instances)?;
+                    let nth = usize::arbitrary(input)?;
+                    let id = scope.next_id();
+                    let store = *scope.instances.get(&instance).unwrap();
+                    scope.tables.insert(id, store);
+                    Ok(GetTableExport { id, instance, nth })
                 });
             }
 

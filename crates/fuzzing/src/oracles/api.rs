@@ -17,6 +17,8 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut instances: HashMap<usize, (Instance, usize)> = Default::default();
     let mut global_types: HashMap<usize, GlobalType> = Default::default();
     let mut globals: HashMap<usize, (Global, usize)> = Default::default();
+    let mut table_types: HashMap<usize, TableType> = Default::default();
+    let mut tables: HashMap<usize, (Table, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -32,6 +34,7 @@ pub fn make_api_calls(api: ApiCalls) {
                 log::trace!("dropping store {id}");
                 instances.retain(|_, (_, store_id)| *store_id != id);
                 globals.retain(|_, (_, store_id)| *store_id != id);
+                tables.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
             }
 
@@ -222,6 +225,138 @@ pub fn make_api_calls(api: ApiCalls) {
                     continue;
                 }
                 globals.insert(id, (gs[nth % gs.len()], store_id));
+            }
+
+            ApiCall::TableTypeNew { id, nullable } => {
+                log::trace!("creating table type {id}");
+                let element = RefType::new(nullable, HeapType::Func);
+                let old = table_types.insert(id, TableType::new(element, 0, None));
+                assert!(old.is_none());
+            }
+
+            ApiCall::TableTypeDrop { id } => {
+                log::trace!("dropping table type {id}");
+                table_types.remove(&id);
+            }
+
+            ApiCall::TableNew {
+                id,
+                table_ty,
+                store,
+            } => {
+                log::trace!("creating table {id} with type {table_ty} in store {store}");
+                let tt = match table_types.get(&table_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                match tt.default_value(&mut *st) {
+                    Ok(t) => {
+                        tables.insert(id, (t, store));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::TableGet { table, idx } => {
+                log::trace!("getting table {table} at index {idx}");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = t.get(&mut *st, idx);
+            }
+
+            ApiCall::TableSet { table, idx } => {
+                log::trace!("setting table {table} at index {idx}");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = t.ty(&*st);
+                let val: ValType = ty.element().clone().into();
+                if let Some(init) = val.default_value() {
+                    let _ = t.set(&mut *st, idx, init.ref_().unwrap());
+                }
+            }
+
+            ApiCall::TableGrow { table, delta } => {
+                log::trace!("growing table {table} by {delta}");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = t.ty(&*st);
+                let val: ValType = ty.element().clone().into();
+                if let Some(init) = val.default_value() {
+                    let _ = t.grow(&mut *st, delta.into(), init.ref_().unwrap());
+                }
+            }
+
+            ApiCall::TableSize { table } => {
+                log::trace!("getting size of table {table}");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = t.size(st);
+            }
+
+            ApiCall::TableTy { table } => {
+                log::trace!("checking type of table {table}");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = t.ty(st);
+            }
+
+            ApiCall::TableDrop { id } => {
+                log::trace!("dropping table {id}");
+                tables.remove(&id);
+            }
+
+            ApiCall::GetTableExport { id, instance, nth } => {
+                log::trace!("getting {nth}th table export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ts = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| e.into_table())
+                    .collect::<Vec<_>>();
+                if ts.is_empty() {
+                    continue;
+                }
+                tables.insert(id, (ts[nth % ts.len()], store_id));
             }
         }
     }
