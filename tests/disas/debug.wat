@@ -203,7 +203,7 @@
 ;;       movq    8(%r11), %rax
 ;;       movq    %rax, 0x38(%r10)
 ;;       movq    0x10(%rdi), %rax
-;;       movq    0x170(%rax), %rcx
+;;       movq    0x178(%rax), %rcx
 ;;       movq    %rdi, %rbx
 ;;       callq   *%rcx
 ;;       testb   %al, %al

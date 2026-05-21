@@ -184,6 +184,10 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             throw_ref(vmctx: vmctx, exnref: u32) -> bool;
 
+            // Force a GC cycle for the DRC collector.
+            #[cfg(feature = "gc-drc")]
+            force_gc(vmctx: vmctx) -> bool;
+
             // Process a debug breakpoint.
             breakpoint(vmctx: vmctx) -> bool;
         }

@@ -487,6 +487,40 @@ pub trait PtrSize {
         self.vmctx_epoch_ptr() + self.size()
     }
 
+    /// Return the offset of the `over_approximated_stack_roots` field within
+    /// `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_over_approximated_stack_roots(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of the `current_over_approximated_stack_roots_len`
+    /// field within `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_current_over_approximated_stack_roots_len(&self) -> u8 {
+        4
+    }
+
+    /// Return the offset of the
+    /// `over_approximated_stack_roots_len_after_last_gc` field within
+    /// `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMDrcHeapData`.
+    #[inline]
+    fn size_of_vmdrc_heap_data(&self) -> u8 {
+        12
+    }
+
+    /// Return the alignment of `VMDrcHeapData`.
+    #[inline]
+    fn align_of_vmdrc_heap_data(&self) -> u8 {
+        4
+    }
+
     /// Return the offset of the `bump_ptr` field within `VMCopyingHeapData`.
     #[inline]
     fn vmcopying_heap_data_bump_ptr(&self) -> u8 {

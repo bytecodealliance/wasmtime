@@ -50,7 +50,8 @@ use super::{VMArrayRef, VMGcObjectData};
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
+    GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
+    VMGcRef,
 };
 use crate::vm::VMMemoryDefinition;
 use crate::{Engine, prelude::*};
@@ -95,6 +96,74 @@ unsafe impl GcRuntime for DrcCollector {
     }
 }
 
+/// JIT-accessible DRC heap data.
+#[derive(Default)]
+#[repr(C)]
+struct VMDrcHeapDataInner {
+    /// The head of the over-approximated-stack-roots list.
+    over_approximated_stack_roots: Option<VMGcRef>,
+
+    /// The current size of the over-approximated-stack-roots list.
+    current_over_approximated_stack_roots_len: u32,
+
+    /// The size of the over-approximated-stack-roots list immediately after the
+    /// last GC.
+    over_approximated_stack_roots_len_after_last_gc: u32,
+}
+
+#[derive(Default)]
+#[repr(transparent)]
+struct VMDrcHeapData {
+    inner: SendSyncUnsafeCell<VMDrcHeapDataInner>,
+}
+
+impl VMDrcHeapData {
+    fn over_approximated_stack_roots(&self) -> Option<VMGcRef> {
+        // Safety: `inner` is valid to read from.
+        unsafe {
+            (*self.inner.get())
+                .over_approximated_stack_roots
+                .as_ref()
+                .map(|r: &VMGcRef| r.unchecked_copy())
+        }
+    }
+
+    fn set_over_approximated_stack_roots(&mut self, gc_ref: Option<VMGcRef>) {
+        self.inner.get_mut().over_approximated_stack_roots = gc_ref;
+    }
+
+    fn current_over_approximated_stack_roots_len(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).current_over_approximated_stack_roots_len }
+    }
+
+    fn increment_current_over_approximated_stack_roots_len(&mut self) {
+        self.inner
+            .get_mut()
+            .current_over_approximated_stack_roots_len += 1;
+    }
+
+    fn decrement_current_over_approximated_stack_roots_len(&mut self) {
+        let len = &mut self
+            .inner
+            .get_mut()
+            .current_over_approximated_stack_roots_len;
+        debug_assert!(*len > 0);
+        *len -= 1;
+    }
+
+    fn over_approximated_stack_roots_len_after_last_gc(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).over_approximated_stack_roots_len_after_last_gc }
+    }
+
+    fn set_over_approximated_stack_roots_len_after_last_gc(&mut self, len: u32) {
+        self.inner
+            .get_mut()
+            .over_approximated_stack_roots_len_after_last_gc = len;
+    }
+}
+
 /// A deferred reference-counting (DRC) heap.
 struct DrcHeap {
     /// For every type that we have allocated in this heap, how do we trace it?
@@ -107,7 +176,7 @@ struct DrcHeap {
     ///
     /// Note that this is exposed directly to compiled Wasm code through the
     /// vmctx, so must not move.
-    over_approximated_stack_roots: Box<Option<VMGcRef>>,
+    vmctx_data: Box<VMDrcHeapData>,
 
     /// The storage for the GC heap itself.
     memory: Option<crate::vm::Memory>,
@@ -154,7 +223,7 @@ impl DrcHeap {
         Ok(Self {
             trace_infos: TraceInfos::new(engine, GC_REF_ARRAY_ELEMS_OFFSET),
             no_gc_count: 0,
-            over_approximated_stack_roots: Box::new(None),
+            vmctx_data: Box::default(),
             memory: None,
             vmmemory: None,
             free_list: None,
@@ -357,9 +426,7 @@ impl DrcHeap {
 
     /// Iterate over the over-approximated-stack-roots list.
     fn iter_over_approximated_stack_roots(&self) -> impl Iterator<Item = VMGcRef> + '_ {
-        let mut link = (*self.over_approximated_stack_roots)
-            .as_ref()
-            .map(|r| r.unchecked_copy());
+        let mut link = self.vmctx_data.over_approximated_stack_roots();
 
         core::iter::from_fn(move || {
             let r = link.as_ref()?.unchecked_copy();
@@ -405,6 +472,12 @@ impl DrcHeap {
                 "over-approx list: cycle or duplicate detected at heap index {idx}",
             );
         }
+
+        assert_eq!(
+            self.vmctx_data.current_over_approximated_stack_roots_len() as usize,
+            visited.len(),
+            "over-approx list: tracked size does not match actual size",
+        );
     }
 
     /// Assert that every free block in the free list is filled with the poison
@@ -542,9 +615,7 @@ impl DrcHeap {
 
         // The `VMGcRef` of the next object in the over-approximated-stack-roots
         // list, if any.
-        let mut next = (*self.over_approximated_stack_roots)
-            .as_ref()
-            .map(|r| r.unchecked_copy());
+        let mut next = self.vmctx_data.over_approximated_stack_roots();
 
         while let Some(gc_ref) = next {
             log::trace!("sweeping gc ref: {gc_ref:#p}");
@@ -576,13 +647,20 @@ impl DrcHeap {
             let prev_next = header.next_over_approximated_stack_root();
             header.set_in_over_approximated_stack_roots_bit(false);
             match &prev {
-                None => *self.over_approximated_stack_roots = prev_next,
+                None => self.vmctx_data.set_over_approximated_stack_roots(prev_next),
                 Some(prev) => self
                     .index_mut(drc_ref(prev))
                     .set_next_over_approximated_stack_root(prev_next),
             }
+            self.vmctx_data
+                .decrement_current_over_approximated_stack_roots_len();
             self.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
         }
+
+        self.vmctx_data
+            .set_over_approximated_stack_roots_len_after_last_gc(
+                self.vmctx_data.current_over_approximated_stack_roots_len(),
+            );
 
         log::trace!("Done sweeping");
 
@@ -763,7 +841,16 @@ unsafe impl GcHeap for DrcHeap {
     fn attach(&mut self, memory: crate::vm::Memory) {
         assert!(!self.is_attached());
         assert!(!memory.is_shared_memory());
-        debug_assert!(self.over_approximated_stack_roots.is_none());
+        debug_assert!(self.vmctx_data.over_approximated_stack_roots().is_none());
+        debug_assert_eq!(
+            self.vmctx_data.current_over_approximated_stack_roots_len(),
+            0
+        );
+        debug_assert_eq!(
+            self.vmctx_data
+                .over_approximated_stack_roots_len_after_last_gc(),
+            0
+        );
         let len = memory.vmmemory().current_length();
         self.free_list = Some(FreeList::new(len));
         self.vmmemory = Some(memory.vmmemory());
@@ -781,7 +868,7 @@ unsafe impl GcHeap for DrcHeap {
 
         let DrcHeap {
             no_gc_count,
-            over_approximated_stack_roots,
+            vmctx_data,
             free_list,
             dec_ref_stack,
             large_array_dec_ref_stack,
@@ -793,7 +880,7 @@ unsafe impl GcHeap for DrcHeap {
         } = self;
 
         *no_gc_count = 0;
-        **over_approximated_stack_roots = None;
+        **vmctx_data = VMDrcHeapData::default();
         *free_list = None;
         *vmmemory = None;
         *allocated_bytes = 0;
@@ -857,9 +944,7 @@ unsafe impl GcHeap for DrcHeap {
 
     fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
         // Read the current list head before borrowing through index_mut.
-        let next = (*self.over_approximated_stack_roots)
-            .as_ref()
-            .map(|r| r.unchecked_copy());
+        let next = self.vmctx_data.over_approximated_stack_roots();
 
         let header = self.index_mut(drc_ref(&gc_ref));
         if header.is_in_over_approximated_stack_roots() {
@@ -879,7 +964,10 @@ unsafe impl GcHeap for DrcHeap {
         // list using a single index_mut call.
         header.set_in_over_approximated_stack_roots_bit(true);
         header.set_next_over_approximated_stack_root(next);
-        *self.over_approximated_stack_roots = Some(gc_ref);
+        self.vmctx_data
+            .set_over_approximated_stack_roots(Some(gc_ref));
+        self.vmctx_data
+            .increment_current_over_approximated_stack_roots_len();
     }
 
     fn alloc_externref(
@@ -1060,7 +1148,7 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: NonNull<Option<VMGcRef>> = NonNull::from(&*self.over_approximated_stack_roots);
+        let ptr: NonNull<VMDrcHeapData> = NonNull::from(&*self.vmctx_data);
         ptr.cast()
     }
 
@@ -1121,7 +1209,9 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
     fn collect_increment(&mut self) -> GcProgress {
         match self.phase {
             DrcCollectionPhase::Trace => {
-                log::trace!("Begin DRC trace");
+                #[cfg(feature = "std")]
+                let start = std::time::Instant::now();
+                log::debug!("Begin DRC trace");
 
                 self.heap.assert_over_approximated_stack_roots_integrity();
                 self.heap.assert_free_blocks_are_poisoned();
@@ -1131,12 +1221,17 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
                 self.heap.assert_over_approximated_stack_roots_integrity();
                 self.heap.assert_free_blocks_are_poisoned();
 
-                log::trace!("End DRC trace");
+                log::debug!("End DRC trace");
+                #[cfg(feature = "std")]
+                log::debug!("  -> {:.3} seconds", start.elapsed().as_secs_f64());
+
                 self.phase = DrcCollectionPhase::Sweep;
                 GcProgress::Continue
             }
             DrcCollectionPhase::Sweep => {
-                log::trace!("Begin DRC sweep");
+                #[cfg(feature = "std")]
+                let start = std::time::Instant::now();
+                log::debug!("Begin DRC sweep");
 
                 self.heap.assert_over_approximated_stack_roots_integrity();
                 self.heap.assert_free_blocks_are_poisoned();
@@ -1146,7 +1241,10 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
                 self.heap.assert_over_approximated_stack_roots_integrity();
                 self.heap.assert_free_blocks_are_poisoned();
 
-                log::trace!("End DRC sweep");
+                log::debug!("End DRC sweep");
+                #[cfg(feature = "std")]
+                log::debug!("  -> {:.3} seconds", start.elapsed().as_secs_f64());
+
                 self.phase = DrcCollectionPhase::Done;
                 GcProgress::Complete
             }
@@ -1191,7 +1289,7 @@ impl<T> DerefMut for DebugOnly<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmtime_environ::HostPtr;
+    use wasmtime_environ::{HostPtr, PtrSize};
 
     #[test]
     fn vm_drc_header_size_align() {
@@ -1246,6 +1344,60 @@ mod tests {
         assert_eq!(
             offsets.vm_drc_header_ref_count(),
             u32::try_from(actual_offset).unwrap(),
+        );
+    }
+
+    #[test]
+    fn vm_drc_heap_data_over_approximated_stack_roots_offset() {
+        assert_eq!(
+            HostPtr.vmdrc_heap_data_over_approximated_stack_roots() as usize,
+            core::mem::offset_of!(VMDrcHeapDataInner, over_approximated_stack_roots),
+        );
+    }
+
+    #[test]
+    fn vm_drc_heap_data_current_over_approximated_stack_roots_len_offset() {
+        assert_eq!(
+            HostPtr.vmdrc_heap_data_current_over_approximated_stack_roots_len() as usize,
+            core::mem::offset_of!(
+                VMDrcHeapDataInner,
+                current_over_approximated_stack_roots_len
+            ),
+        );
+    }
+
+    #[test]
+    fn vm_drc_heap_data_over_approximated_stack_roots_len_after_last_gc_offset() {
+        assert_eq!(
+            HostPtr.vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc() as usize,
+            core::mem::offset_of!(
+                VMDrcHeapDataInner,
+                over_approximated_stack_roots_len_after_last_gc
+            ),
+        );
+    }
+
+    #[test]
+    fn vm_drc_heap_data_size() {
+        assert_eq!(
+            HostPtr.size_of_vmdrc_heap_data() as usize,
+            core::mem::size_of::<VMDrcHeapData>(),
+        );
+        assert_eq!(
+            HostPtr.size_of_vmdrc_heap_data() as usize,
+            core::mem::size_of::<VMDrcHeapDataInner>(),
+        );
+    }
+
+    #[test]
+    fn vm_drc_heap_data_align() {
+        assert_eq!(
+            HostPtr.align_of_vmdrc_heap_data() as usize,
+            core::mem::align_of::<VMDrcHeapData>(),
+        );
+        assert_eq!(
+            HostPtr.align_of_vmdrc_heap_data() as usize,
+            core::mem::align_of::<VMDrcHeapDataInner>(),
         );
     }
 }
