@@ -53,6 +53,10 @@ macro_rules! for_each_field_type {
             #[storage(wasm_encoder::StorageType::Val(wasm_encoder::ValType::EXTERNREF))]
             #[default_val(wasm_encoder::Instruction::RefNull(wasm_encoder::HeapType::EXTERN))]
             ExternRef,
+
+            #[storage(wasm_encoder::StorageType::Val(wasm_encoder::ValType::Ref(wasm_encoder::RefType::EQREF)))]
+            #[default_val(wasm_encoder::Instruction::RefNull(wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Eq }))]
+            EqRef,
         }
     };
 }
@@ -708,6 +712,8 @@ impl Types {
 pub enum StackType {
     /// `externref`.
     ExternRef,
+    /// `eqref`.
+    Eq,
     /// `(ref $*)` — optionally with a concrete type index.
     Struct(Option<u32>),
 }
@@ -749,6 +755,21 @@ impl StackType {
                     let popped = stack.pop();
                     log::trace!(
                         "[StackType::fixup] ExternRef: after emit pop -> {popped:?} stack={stack:?}"
+                    );
+                }
+            },
+            Some(Self::Eq) => match stack.last() {
+                // struct <: eq, so a struct on the stack satisfies an eqref requirement.
+                Some(Self::Eq) | Some(Self::Struct(_)) => {
+                    log::trace!("[StackType::fixup] Eq: top ok -> pop");
+                    stack.pop();
+                }
+                other => {
+                    log::trace!("[StackType::fixup] Eq: mismatch top={other:?} -> emit NullEq+pop");
+                    Self::emit(GcOp::NullEq, stack, out, num_types, &mut result_types);
+                    let popped = stack.pop();
+                    log::trace!(
+                        "[StackType::fixup] Eq: after emit pop -> {popped:?} stack={stack:?}"
                     );
                 }
             },

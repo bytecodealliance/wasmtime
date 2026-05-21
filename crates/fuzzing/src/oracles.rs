@@ -847,6 +847,21 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         linker.define(&store, "", "take_struct", func).unwrap();
 
+        let func_ty = FuncType::new(
+            store.engine(),
+            vec![ValType::Ref(RefType::new(true, HeapType::Eq))],
+            vec![],
+        );
+
+        let func = Func::new(&mut store, func_ty, {
+            move |_caller: Caller<'_, StoreLimits>, _params, _results| {
+                log::info!("gc_ops: take_eq(<ref null eq>)");
+                Ok(())
+            }
+        });
+
+        linker.define(&store, "", "take_eq", func).unwrap();
+
         for imp in module.imports() {
             if imp.module() == "" {
                 let name = imp.name();
