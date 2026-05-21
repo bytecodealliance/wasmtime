@@ -103,6 +103,8 @@ struct Swarm {
     module_name: bool,
     module_validate: bool,
     module_serialize_deserialize: bool,
+    table_copy: bool,
+    table_fill: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -332,6 +334,18 @@ pub enum ApiCall {
     ModuleSerializeDeserialize {
         src_id: usize,
         dst_id: usize,
+    },
+    TableCopy {
+        dst_table: usize,
+        dst_index: u64,
+        src_table: usize,
+        src_index: u64,
+        len: u64,
+    },
+    TableFill {
+        table: usize,
+        dst: u64,
+        len: u64,
     },
 }
 use ApiCall::*;
@@ -994,6 +1008,59 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let dst_id = scope.next_id();
                     scope.modules.insert(dst_id);
                     Ok(ModuleSerializeDeserialize { src_id, dst_id })
+                });
+            }
+            if swarm.table_copy && scope.tables.len() >= 2 {
+                choices.push(|input, scope| {
+                    // Find two table ids that map to the same store.
+                    let by_store: std::collections::BTreeMap<usize, Vec<usize>> = scope
+                        .tables
+                        .iter()
+                        .fold(Default::default(), |mut m, (&tid, &sid)| {
+                            m.entry(sid).or_default().push(tid);
+                            m
+                        });
+                    // Only proceed if at least one store has 2+ tables.
+                    let valid_stores: Vec<_> =
+                        by_store.iter().filter(|(_, ts)| ts.len() >= 2).collect();
+                    if valid_stores.is_empty() {
+                        // Fall back: pick any two tables (may be different stores; oracle skips).
+                        let tables: Vec<_> = scope.tables.keys().collect();
+                        let dst_table = **input.choose(&tables)?;
+                        let src_table = **input.choose(&tables)?;
+                        let dst_index = u64::arbitrary(input)?;
+                        let src_index = u64::arbitrary(input)?;
+                        let len = u64::arbitrary(input)? % 8;
+                        return Ok(TableCopy {
+                            dst_table,
+                            dst_index,
+                            src_table,
+                            src_index,
+                            len,
+                        });
+                    }
+                    let (_, store_tables) = *input.choose(&valid_stores)?;
+                    let dst_table = *input.choose(store_tables)?;
+                    let src_table = *input.choose(store_tables)?;
+                    let dst_index = u64::arbitrary(input)?;
+                    let src_index = u64::arbitrary(input)?;
+                    let len = u64::arbitrary(input)? % 8;
+                    Ok(TableCopy {
+                        dst_table,
+                        dst_index,
+                        src_table,
+                        src_index,
+                        len,
+                    })
+                });
+            }
+            if swarm.table_fill && !scope.tables.is_empty() {
+                choices.push(|input, scope| {
+                    let tables: Vec<_> = scope.tables.keys().collect();
+                    let table = **input.choose(&tables)?;
+                    let dst = u64::arbitrary(input)?;
+                    let len = u64::arbitrary(input)? % 8;
+                    Ok(TableFill { table, dst, len })
                 });
             }
 

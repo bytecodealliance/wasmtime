@@ -821,6 +821,51 @@ pub fn make_api_calls(api: ApiCalls) {
                     Err(_) => continue,
                 }
             }
+
+            ApiCall::TableCopy {
+                dst_table,
+                dst_index,
+                src_table,
+                src_index,
+                len,
+            } => {
+                log::trace!(
+                    "copying table {src_table}[{src_index}..+{len}] to {dst_table}[{dst_index}]"
+                );
+                let (dt, dst_store_id) = match tables.get(&dst_table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let (st_tbl, src_store_id) = match tables.get(&src_table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                if dst_store_id != src_store_id {
+                    continue;
+                }
+                let st = match stores.get_mut(&dst_store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = Table::copy(&mut *st, &dt, dst_index, &st_tbl, src_index, len);
+            }
+
+            ApiCall::TableFill { table, dst, len } => {
+                log::trace!("filling table {table}[{dst}..+{len}]");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = t.ty(&*st);
+                let elem_ty: ValType = ty.element().clone().into();
+                if let Some(val) = elem_ty.default_value() {
+                    let _ = t.fill(&mut *st, dst, val.ref_().unwrap(), len);
+                }
+            }
         }
     }
 }
