@@ -1,6 +1,6 @@
 ## 36.0.10
 
-Unreleased.
+Released 2026-05-21.
 
 ### Fixed
 
