@@ -6,28 +6,19 @@ use test_programs::preview1::open_scratch_directory;
 const FILENAME: &str = "test.txt";
 unsafe fn test_file_has_expected_contents(dir_fd: wasip1::Fd) {
     // Open a file for reading
-    let file_fd = wasip1::path_open(
-        dir_fd,
-        0,
-        FILENAME,
-        0,
-        wasip1::RIGHTS_FD_READ,
-        0,
-        0,
-    )
-    .expect("opening test.txt for reading");
+    let file_fd = wasip1::path_open(dir_fd, 0, FILENAME, 0, wasip1::RIGHTS_FD_READ, 0, 0)
+        .expect("opening test.txt for reading");
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasip1::fd_read
-        (
-            file_fd,
-            &[wasip1::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }],
-        )
-        .expect("reading file content");
+    let nread = wasip1::fd_read(
+        file_fd,
+        &[wasip1::Iovec {
+            buf: buffer.as_mut_ptr(),
+            buf_len: buffer.len(),
+        }],
+    )
+    .expect("reading file content");
 
     const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
     // The file should be as created by the test harness, not truncated.
