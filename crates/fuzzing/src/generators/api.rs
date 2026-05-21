@@ -83,6 +83,13 @@ struct Swarm {
     memory_ty: bool,
     memory_drop: bool,
     get_memory_export: bool,
+    func_type_new: bool,
+    func_type_drop: bool,
+    func_new: bool,
+    func_ty: bool,
+    func_call: bool,
+    get_func_export: bool,
+    func_drop: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -239,6 +246,33 @@ pub enum ApiCall {
         instance: usize,
         nth: usize,
     },
+    FuncTypeNew {
+        id: usize,
+        params: Vec<FuzzValType>,
+        results: Vec<FuzzValType>,
+    },
+    FuncTypeDrop {
+        id: usize,
+    },
+    FuncNew {
+        id: usize,
+        func_ty: usize,
+        store: usize,
+    },
+    FuncTy {
+        func: usize,
+    },
+    FuncCall {
+        func: usize,
+    },
+    GetFuncExport {
+        id: usize,
+        instance: usize,
+        nth: usize,
+    },
+    FuncDrop {
+        id: usize,
+    },
 }
 use ApiCall::*;
 
@@ -275,6 +309,13 @@ struct Scope {
     /// Memories that are currently live. Maps from `memory_id` to the memory's
     /// associated `store_id`.
     memories: BTreeMap<usize, usize>, // memory_id -> store_id
+
+    /// Func types that are currently live.
+    func_types: BTreeSet<usize>,
+
+    /// Funcs that are currently live. Maps from `func_id` to the func's
+    /// associated `store_id`.
+    funcs: BTreeMap<usize, usize>, // func_id -> store_id
 
     config: Config,
 }
@@ -313,6 +354,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             tables: BTreeMap::default(),
             memory_types: BTreeSet::default(),
             memories: BTreeMap::default(),
+            func_types: BTreeSet::default(),
+            funcs: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -352,6 +395,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.globals.retain(|_, store_id| *store_id != id);
                     scope.tables.retain(|_, store_id| *store_id != id);
                     scope.memories.retain(|_, store_id| *store_id != id);
+                    scope.funcs.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -702,6 +746,73 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let store = *scope.instances.get(&instance).unwrap();
                     scope.memories.insert(id, store);
                     Ok(GetMemoryExport { id, instance, nth })
+                });
+            }
+            if swarm.func_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let params = Vec::<FuzzValType>::arbitrary(input)?;
+                    let params: Vec<_> = params.into_iter().take(4).collect();
+                    let results = Vec::<FuzzValType>::arbitrary(input)?;
+                    let results: Vec<_> = results.into_iter().take(4).collect();
+                    scope.func_types.insert(id);
+                    Ok(FuncTypeNew {
+                        id,
+                        params,
+                        results,
+                    })
+                });
+            }
+            if swarm.func_type_drop && !scope.func_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.func_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.func_types.remove(&id);
+                    Ok(FuncTypeDrop { id })
+                });
+            }
+            if swarm.func_new && !scope.func_types.is_empty() && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.func_types.iter().collect();
+                    let func_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.funcs.insert(id, store);
+                    Ok(FuncNew { id, func_ty, store })
+                });
+            }
+            if swarm.func_ty && !scope.funcs.is_empty() {
+                choices.push(|input, scope| {
+                    let funcs: Vec<_> = scope.funcs.keys().collect();
+                    let func = **input.choose(&funcs)?;
+                    Ok(FuncTy { func })
+                });
+            }
+            if swarm.func_call && !scope.funcs.is_empty() {
+                choices.push(|input, scope| {
+                    let funcs: Vec<_> = scope.funcs.keys().collect();
+                    let func = **input.choose(&funcs)?;
+                    Ok(FuncCall { func })
+                });
+            }
+            if swarm.get_func_export && !scope.instances.is_empty() {
+                choices.push(|input, scope| {
+                    let instances: Vec<_> = scope.instances.keys().collect();
+                    let instance = **input.choose(&instances)?;
+                    let nth = usize::arbitrary(input)?;
+                    let id = scope.next_id();
+                    let store = *scope.instances.get(&instance).unwrap();
+                    scope.funcs.insert(id, store);
+                    Ok(GetFuncExport { id, instance, nth })
+                });
+            }
+            if swarm.func_drop && !scope.funcs.is_empty() {
+                choices.push(|input, scope| {
+                    let funcs: Vec<_> = scope.funcs.keys().collect();
+                    let id = **input.choose(&funcs)?;
+                    scope.funcs.remove(&id);
+                    Ok(FuncDrop { id })
                 });
             }
 
