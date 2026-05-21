@@ -90,6 +90,13 @@ struct Swarm {
     func_call: bool,
     get_func_export: bool,
     func_drop: bool,
+    tag_type_new: bool,
+    tag_type_drop: bool,
+    tag_new: bool,
+    tag_ty: bool,
+    tag_eq: bool,
+    get_tag_export: bool,
+    tag_drop: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -273,6 +280,33 @@ pub enum ApiCall {
     FuncDrop {
         id: usize,
     },
+    TagTypeNew {
+        id: usize,
+        func_ty: usize,
+    },
+    TagTypeDrop {
+        id: usize,
+    },
+    TagNew {
+        id: usize,
+        tag_ty: usize,
+        store: usize,
+    },
+    TagTy {
+        tag: usize,
+    },
+    TagEq {
+        a: usize,
+        b: usize,
+    },
+    GetTagExport {
+        id: usize,
+        instance: usize,
+        nth: usize,
+    },
+    TagDrop {
+        id: usize,
+    },
 }
 use ApiCall::*;
 
@@ -317,6 +351,13 @@ struct Scope {
     /// associated `store_id`.
     funcs: BTreeMap<usize, usize>, // func_id -> store_id
 
+    /// Tag types that are currently live.
+    tag_types: BTreeSet<usize>,
+
+    /// Tags that are currently live. Maps from `tag_id` to the tag's
+    /// associated `store_id`.
+    tags: BTreeMap<usize, usize>, // tag_id -> store_id
+
     config: Config,
 }
 
@@ -356,6 +397,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             memories: BTreeMap::default(),
             func_types: BTreeSet::default(),
             funcs: BTreeMap::default(),
+            tag_types: BTreeSet::default(),
+            tags: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -396,6 +439,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.tables.retain(|_, store_id| *store_id != id);
                     scope.memories.retain(|_, store_id| *store_id != id);
                     scope.funcs.retain(|_, store_id| *store_id != id);
+                    scope.tags.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -813,6 +857,68 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let id = **input.choose(&funcs)?;
                     scope.funcs.remove(&id);
                     Ok(FuncDrop { id })
+                });
+            }
+            if swarm.tag_type_new && !scope.func_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.func_types.iter().collect();
+                    let func_ty = **input.choose(&types)?;
+                    let id = scope.next_id();
+                    scope.tag_types.insert(id);
+                    Ok(TagTypeNew { id, func_ty })
+                });
+            }
+            if swarm.tag_type_drop && !scope.tag_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.tag_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.tag_types.remove(&id);
+                    Ok(TagTypeDrop { id })
+                });
+            }
+            if swarm.tag_new && !scope.tag_types.is_empty() && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.tag_types.iter().collect();
+                    let tag_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.tags.insert(id, store);
+                    Ok(TagNew { id, tag_ty, store })
+                });
+            }
+            if swarm.tag_ty && !scope.tags.is_empty() {
+                choices.push(|input, scope| {
+                    let tags: Vec<_> = scope.tags.keys().collect();
+                    let tag = **input.choose(&tags)?;
+                    Ok(TagTy { tag })
+                });
+            }
+            if swarm.tag_eq && scope.tags.len() >= 2 {
+                choices.push(|input, scope| {
+                    let tags: Vec<_> = scope.tags.keys().collect();
+                    let a = **input.choose(&tags)?;
+                    let b = **input.choose(&tags)?;
+                    Ok(TagEq { a, b })
+                });
+            }
+            if swarm.get_tag_export && !scope.instances.is_empty() {
+                choices.push(|input, scope| {
+                    let instances: Vec<_> = scope.instances.keys().collect();
+                    let instance = **input.choose(&instances)?;
+                    let nth = usize::arbitrary(input)?;
+                    let id = scope.next_id();
+                    let store = *scope.instances.get(&instance).unwrap();
+                    scope.tags.insert(id, store);
+                    Ok(GetTagExport { id, instance, nth })
+                });
+            }
+            if swarm.tag_drop && !scope.tags.is_empty() {
+                choices.push(|input, scope| {
+                    let tags: Vec<_> = scope.tags.keys().collect();
+                    let id = **input.choose(&tags)?;
+                    scope.tags.remove(&id);
+                    Ok(TagDrop { id })
                 });
             }
 

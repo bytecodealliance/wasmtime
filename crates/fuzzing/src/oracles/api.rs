@@ -23,6 +23,8 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut memories: HashMap<usize, (Memory, usize)> = Default::default();
     let mut func_types: HashMap<usize, FuncType> = Default::default();
     let mut funcs: HashMap<usize, (Func, usize)> = Default::default();
+    let mut tag_types: HashMap<usize, TagType> = Default::default();
+    let mut tags: HashMap<usize, (Tag, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -41,6 +43,7 @@ pub fn make_api_calls(api: ApiCalls) {
                 tables.retain(|_, (_, store_id)| *store_id != id);
                 memories.retain(|_, (_, store_id)| *store_id != id);
                 funcs.retain(|_, (_, store_id)| *store_id != id);
+                tags.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
             }
 
@@ -661,6 +664,97 @@ pub fn make_api_calls(api: ApiCalls) {
             ApiCall::FuncDrop { id } => {
                 log::trace!("dropping func {id}");
                 funcs.remove(&id);
+            }
+
+            ApiCall::TagTypeNew { id, func_ty } => {
+                log::trace!("creating tag type {id} from func type {func_ty}");
+                let ft = match func_types.get(&func_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let old = tag_types.insert(id, TagType::new(ft));
+                assert!(old.is_none());
+            }
+
+            ApiCall::TagTypeDrop { id } => {
+                log::trace!("dropping tag type {id}");
+                tag_types.remove(&id);
+            }
+
+            ApiCall::TagNew { id, tag_ty, store } => {
+                log::trace!("creating tag {id} with type {tag_ty} in store {store}");
+                let tt = match tag_types.get(&tag_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                match Tag::new(&mut *st, &tt) {
+                    Ok(t) => {
+                        tags.insert(id, (t, store));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::TagTy { tag } => {
+                log::trace!("checking type of tag {tag}");
+                let (t, store_id) = match tags.get(&tag) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = t.ty(st);
+            }
+
+            ApiCall::TagEq { a, b } => {
+                log::trace!("comparing tags {a} and {b}");
+                let (ta, store_id) = match tags.get(&a) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let (tb, store_id_b) = match tags.get(&b) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                if store_id != store_id_b {
+                    continue;
+                }
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = Tag::eq(&ta, &tb, st);
+            }
+
+            ApiCall::GetTagExport { id, instance, nth } => {
+                log::trace!("getting {nth}th tag export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ts = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| e.into_tag())
+                    .collect::<Vec<_>>();
+                if ts.is_empty() {
+                    continue;
+                }
+                tags.insert(id, (ts[nth % ts.len()], store_id));
+            }
+
+            ApiCall::TagDrop { id } => {
+                log::trace!("dropping tag {id}");
+                tags.remove(&id);
             }
         }
     }
