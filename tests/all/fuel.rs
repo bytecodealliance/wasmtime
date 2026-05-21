@@ -60,6 +60,8 @@ fn fuel_consumed(config: &Config, wasm: &[u8]) -> Result<u64> {
 #[wasmtime_test(wasm_features(gc, function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn iloop(config: &mut Config) -> Result<()> {
+    let _ = env_logger::try_init();
+
     config.consume_fuel(true);
     iloop_aborts(
         &config,
@@ -301,7 +303,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                 (type $a (array i8))
                 (start 0)
                 (func
-                    i32.const 20000
+                    i32.const 2_0000
                     array.new_default $a
                     drop
                 )
@@ -448,6 +450,7 @@ fn iloop(config: &mut Config) -> Result<()> {
     )?;
 
     fn iloop_aborts(config: &Config, wat: &str) -> Result<()> {
+        log::debug!("Testing infinite loop:\n{wat}");
         let engine = Engine::new(&config)?;
         let module = Module::new(&engine, wat)?;
         let mut store = Store::new(&engine, ());

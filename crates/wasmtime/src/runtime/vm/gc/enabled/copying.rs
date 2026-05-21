@@ -844,7 +844,11 @@ unsafe impl GcHeap for CopyingHeap {
             .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.allocate(size) {
-            None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
+            None => {
+                // Multiply by two because we need capacity in both semi-spaces.
+                let bytes_needed = u64::try_from(layout.size()).unwrap().saturating_mul(2);
+                return Ok(Err(bytes_needed));
+            }
             Some(index) => {
                 debug_assert_ne!(index, 0, "index 0 is reserved; bump_ptr should skip it");
                 VMGcRef::from_heap_index(NonZeroU32::new(index).unwrap()).unwrap()
