@@ -3753,7 +3753,7 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    /// Tests to seew hether `value`, stored as `ty`, can be extracted to a single
+    /// Tests to see whether `value`, stored as `ty`, can be extracted to a single
     /// byte which can be passed to `memset`, or the host's `memory.fill`, to
     /// satisfy this array initialization request.
     fn fill_value_as_memset(
