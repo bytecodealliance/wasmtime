@@ -769,26 +769,28 @@ impl Instance {
         result
     }
 
-    pub(crate) fn table_element_type(
-        self: Pin<&mut Self>,
-        table_index: TableIndex,
-    ) -> TableElementType {
-        self.get_table(table_index).element_type()
-    }
-
     /// Performs a grow operation on the `table_index` specified using `grow`.
     ///
     /// This will handle updating the VMTableDefinition internally as necessary.
-    pub(crate) async fn defined_table_grow(
+    ///
+    /// # Safety
+    ///
+    /// This function requires that the caller, on success, fills in the table
+    /// elements with an appropriately typed value.
+    pub(crate) async unsafe fn defined_table_grow(
         mut self: Pin<&mut Self>,
         table_index: DefinedTableIndex,
-        grow: impl AsyncFnOnce(&mut Table) -> Result<Option<usize>>,
+        limiter: Option<&mut StoreResourceLimiter<'_>>,
+        amt: u64,
     ) -> Result<Option<usize>> {
         let table = self.as_mut().get_defined_table(table_index);
-        let result = grow(table).await;
+        // SAFETY: updating the `VMContext` table pointers and such is done
+        // below, and the responsibility of filling in the new table elements
+        // is forwarded to the caller.
+        let result = unsafe { table.grow(limiter, amt).await? };
         let element = table.vmtable();
         self.set_table(table_index, element);
-        result
+        Ok(result)
     }
 
     fn alloc_layout(offsets: &VMOffsets<HostPtr>) -> Layout {

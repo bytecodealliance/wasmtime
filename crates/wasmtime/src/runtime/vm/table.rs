@@ -603,7 +603,7 @@ impl Table {
     /// Returns the previous size of the table if growth is successful.
     ///
     /// Returns `None` if table can't be grown by the specified amount of
-    /// elements, or if the `init_value` is the wrong kind of table element.
+    /// elements.
     ///
     /// # Panics
     ///
@@ -616,52 +616,14 @@ impl Table {
     /// that are used by Wasm, and they need to be fixed up before we call into
     /// Wasm again. Failure to do so will result in use-after-free inside Wasm.
     ///
-    /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
-    /// this unsafety.
-    pub async unsafe fn grow_func(
+    /// Additionally after growth this table will have null filled in for all
+    /// new entries, if any. The embedder must fill in these slots with an
+    /// appropriately typed value for this table's usage to still be sound
+    /// because this table may contain non-null elements, for example.
+    pub async unsafe fn grow(
         &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        delta: u64,
-        init_value: Option<SendSyncPtr<VMFuncRef>>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)
-        })
-        .await
-    }
-
-    /// Same as [`Self::grow_func`], but for GC references.
-    pub async unsafe fn grow_gc_ref(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        gc_store: Option<&mut GcStore>,
-        delta: u64,
-        init_value: Option<&VMGcRef>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_gc_ref(gc_store, base, init_value, len)
-        })
-        .await
-    }
-
-    /// Same as [`Self::grow_func`], but for continuations.
-    pub async unsafe fn grow_cont(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        delta: u64,
-        init_value: Option<VMContObj>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_cont(base, init_value, len)
-        })
-        .await
-    }
-
-    async fn _grow(
-        &mut self,
-        delta: u64,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-        fill: impl FnOnce(&mut Self, u64, u64) -> Result<(), Trap>,
+        delta: u64,
     ) -> Result<Option<usize>, Error> {
         let old_size = self.size();
 
@@ -742,13 +704,6 @@ impl Table {
                 elements.resize_with(new_size, || None)?;
             }
         }
-
-        fill(
-            self,
-            u64::try_from(old_size).unwrap(),
-            u64::try_from(delta).unwrap(),
-        )
-        .expect("table should not be out of bounds");
 
         Ok(Some(old_size))
     }

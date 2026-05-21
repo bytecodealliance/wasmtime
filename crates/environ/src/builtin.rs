@@ -17,10 +17,9 @@ macro_rules! foreach_builtin_function {
             ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns a table entry after lazily initializing it.
             table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
-            // Returns an index for Wasm's `table.grow` instruction for `funcref`s.
-            table_grow_func_ref(vmctx: vmctx, table: u32, delta: u64, init: pointer) -> pointer;
-            // Returns an index for Wasm's `table.fill` instruction for `funcref`s.
-            table_fill_func_ref(vmctx: vmctx, table: u32, dst: u64, val: pointer, len: u64) -> bool;
+            // Grows `table` by `delta` elements, returning the destination
+            // address that new elements should be written at.
+            table_grow(vmctx: vmctx, table: u32, delta: u64) -> pointer;
             // Returns an index for wasm's `memory.atomic.notify` instruction.
             #[cfg(feature = "threads")]
             memory_atomic_notify(vmctx: vmctx, memory: u32, addr: u64, count: u32) -> u64;
@@ -149,14 +148,6 @@ macro_rules! foreach_builtin_function {
                 expected_engine_type: u32
             ) -> u32;
 
-            // Returns an index for Wasm's `table.grow` instruction for GC references.
-            #[cfg(feature = "gc")]
-            table_grow_gc_ref(vmctx: vmctx, table: u32, delta: u64, init: u32) -> pointer;
-
-            // Returns an index for Wasm's `table.fill` instruction for GC references.
-            #[cfg(feature = "gc")]
-            table_fill_gc_ref(vmctx: vmctx, table: u32, dst: u64, val: u32, len: u64) -> bool;
-
             // Wasm floating-point routines for when the CPU instructions aren't available.
             ceil_f32(vmctx: vmctx, x: f32) -> f32;
             ceil_f64(vmctx: vmctx, x: f64) -> f64;
@@ -184,21 +175,6 @@ macro_rules! foreach_builtin_function {
             // Creates a new continuation from a funcref.
             #[cfg(feature = "stack-switching")]
             cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
-
-            // Returns an index for Wasm's `table.grow` instruction
-            // for `contobj`s.  Note that the initial
-            // Option<VMContObj> (i.e., the value to fill the new
-            // slots with) is split into two arguments: The underlying
-            // continuation reference and the revision count.  To
-            // denote the continuation being `None`, `init_contref`
-            // may be 0.
-            #[cfg(feature = "stack-switching")]
-            table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: size) -> pointer;
-
-            // `value_contref` and `value_revision` together encode
-            // the Option<VMContObj>, as in previous libcall.
-            #[cfg(feature = "stack-switching")]
-            table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: size, len: u64) -> bool;
 
             // Return the instance ID for a given vmctx.
             #[cfg(feature = "gc")]
@@ -395,9 +371,7 @@ impl BuiltinFunctionIndex {
 
             // Growth-related functions return -2 as a sentinel.
             (@get memory_grow pointer) => (TrapSentinel::NegativeTwo);
-            (@get table_grow_func_ref pointer) => (TrapSentinel::NegativeTwo);
-            (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
-            (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);
+            (@get table_grow pointer) => (TrapSentinel::NegativeTwo);
 
             // Atomics-related functions return a negative value to indicate a trap.
             (@get memory_atomic_notify u64) => (TrapSentinel::Negative);

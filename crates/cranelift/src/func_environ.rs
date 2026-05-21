@@ -2454,34 +2454,53 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         let mut pos = builder.cursor();
         let table = self.table(table_index);
-        let ty = table.ref_type.heap_type;
         let (table_vmctx, defined_table_index) =
             self.table_vmctx_and_defined_index(&mut pos, table_index);
         let index_type = table.idx_type;
-        let delta = self.cast_index_to_i64(&mut pos, delta, index_type);
+        let delta64 = self.cast_index_to_i64(&mut pos, delta, index_type);
 
-        let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, defined_table_index, delta];
-        let grow = match ty.top() {
-            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
-                args.push(init_value);
-                gc::builtins::table_grow_gc_ref(self, pos.func)?
-            }
-            WasmHeapTopType::Func => {
-                args.push(init_value);
-                self.builtin_functions.table_grow_func_ref(pos.func)
-            }
-            WasmHeapTopType::Cont => {
-                let (revision, contref) =
-                    stack_switching::fatpointer::deconstruct(self, &mut pos, init_value);
-                args.extend_from_slice(&[contref, revision]);
-                stack_switching::builtins::table_grow_cont_obj(self, pos.func)?
-            }
-        };
-
-        let call_inst = pos.ins().call(grow, &args);
+        // Call out to the host to perform the actual growth of the underlying
+        // table. This will initialize table slots as all null. Afterwards the
+        // `init_value` needs to be placed in all slots in compiled code.
+        //
+        // Note that `table_index`'s type may not allow for null entries, and
+        // this creates a small window of time where the table actually has null
+        // entries. Given that this table isn't shared, however, this is fine
+        // because no other wasm instructions (or embedder code) can execute in
+        // this window.
+        let table_grow = self.builtin_functions.table_grow(pos.func);
+        let call_inst = pos
+            .ins()
+            .call(table_grow, &[table_vmctx, defined_table_index, delta64]);
         let result = builder.func.dfg.first_result(call_inst);
+        let result_idx =
+            self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false);
 
-        Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
+        // If `result_idx` indicates success then `init_value` needs to be
+        // placed into the table. This is done with a `table.fill`.
+        // Conditionally call that on growth success, and otherwise fall through
+        // to continue to yield -1 for this growth operation.
+        let current_block = builder.current_block().unwrap();
+        let fill_block = builder.create_block();
+        let done_block = builder.create_block();
+
+        builder.insert_block_after(fill_block, current_block);
+        builder.insert_block_after(done_block, fill_block);
+
+        let failure = builder.ins().iconst(index_type_to_ir_type(index_type), -1);
+        let failed = builder.ins().icmp(IntCC::Equal, result_idx, failure);
+        builder.ins().brif(failed, done_block, &[], fill_block, &[]);
+
+        builder.switch_to_block(fill_block);
+        self.translate_table_fill(builder, table_index, result_idx, init_value, delta)?;
+        builder.ins().jump(done_block, &[]);
+
+        builder.switch_to_block(done_block);
+
+        builder.seal_block(fill_block);
+        builder.seal_block(done_block);
+
+        Ok(result_idx)
     }
 
     pub fn translate_table_get(
@@ -2606,35 +2625,7 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let mut pos = builder.cursor();
-        let table = self.table(table_index);
-        let ty = table.ref_type.heap_type;
-        let dst = self.cast_index_to_i64(&mut pos, dst, table.idx_type);
-        let len = self.cast_index_to_i64(&mut pos, len, table.idx_type);
-        let (table_vmctx, table_index) = self.table_vmctx_and_defined_index(&mut pos, table_index);
-
-        let mut args: SmallVec<[_; 6]> = smallvec![table_vmctx, table_index, dst];
-        let libcall = match ty.top() {
-            WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                args.push(val);
-                gc::builtins::table_fill_gc_ref(self, &mut pos.func)?
-            }
-            WasmHeapTopType::Func => {
-                args.push(val);
-                self.builtin_functions.table_fill_func_ref(&mut pos.func)
-            }
-            WasmHeapTopType::Cont => {
-                let (revision, contref) =
-                    stack_switching::fatpointer::deconstruct(self, &mut pos, val);
-                args.extend_from_slice(&[contref, revision]);
-                stack_switching::builtins::table_fill_cont_obj(self, &mut pos.func)?
-            }
-        };
-
-        args.push(len);
-        builder.ins().call(libcall, &args);
-
-        Ok(())
+        self.translate_entity_fill(builder, table_index, dst, val, len)
     }
 
     pub fn translate_ref_i31(
@@ -3589,6 +3580,236 @@ impl FuncEnvironment<'_> {
         builder.seal_block(last_chunk_block);
     }
 
+    /// Emits a generic "fill" of `entity` from `dst` for `len` elements,
+    /// setting everything to `val`.
+    ///
+    /// This encompasses the implementation of `memory.fill` and `table.fill`
+    /// for example, as well as various GC array initialization patterns. The
+    /// `dst` and `len` values must be typed appropriately for `entity`. This
+    /// will perform a bounds-check before actually executing the operation and
+    /// then afterwards will perform the operation.
+    fn translate_entity_fill(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        entity: impl Into<CheckedEntity>,
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
+    ) -> WasmResult<()> {
+        let entity = entity.into();
+        let idx_type = entity.index_type(self);
+
+        // Bounds check `dst+len` and convert it to a raw heap address.
+        let raw_dst_addr = self.translate_entity_bounds_check(builder, entity, dst, len);
+
+        // Fit the `len` value to `pointer_type`. Note that at this point it's
+        // guaranteed inbounds so there's no loss in precision.
+        let len_ptr =
+            self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type);
+
+        match entity {
+            CheckedEntity::Memory(_) => {
+                self.raw_bulk_memory_operation(
+                    builder,
+                    BulkOp::MemoryFill {
+                        dst: raw_dst_addr,
+                        val,
+                        len: len_ptr,
+                    },
+                );
+            }
+            CheckedEntity::Table(table) => {
+                self.emit_raw_array_or_table_fill(
+                    builder,
+                    entity,
+                    raw_dst_addr,
+                    val,
+                    len_ptr,
+                    &|env, builder, addr, value| {
+                        env.emit_table_set(builder, table, addr, ir::MemFlagsData::trusted(), value)
+                    },
+                )?;
+            }
+            CheckedEntity::Array(_) => todo!(),
+            CheckedEntity::Data(_) => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    /// Performs a manual element-by-element fill of `entity`, starting at
+    /// `dst_elem_addr`, of `copy_len` elements of the specified `value`.
+    ///
+    /// This is the implementation of `table.fill` and `array.fill` and other
+    /// such array initializations for example. Everything must have already
+    /// been bounds-checked prior to calling this method.
+    ///
+    /// The `dst_elem_addr` and `copy_len` values must have type
+    /// `self.pointer_type()`. The `value` argument must have a type appropriate
+    /// to store in the entity.
+    ///
+    /// The translation of the actual write is performed by `emit_elem_write`,
+    /// which receives ambient state, then the address to write to, then `value`
+    /// again to write.
+    fn emit_raw_array_or_table_fill(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        entity: CheckedEntity,
+        dst_elem_addr: ir::Value,
+        value: ir::Value,
+        copy_len: ir::Value,
+        emit_elem_write: &dyn Fn(
+            &mut Self,
+            &mut FunctionBuilder<'_>,
+            ir::Value,
+            ir::Value,
+        ) -> WasmResult<()>,
+    ) -> WasmResult<()> {
+        let pointer_ty = self.pointer_type();
+
+        assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_ty);
+        assert_eq!(builder.func.dfg.value_type(copy_len), pointer_ty);
+        let elem_ty = entity.storage_type(self);
+        let elem_size = entity.element_size(self, builder.func);
+        let copy_byte_len = builder.ins().imul_imm(copy_len, i64::from(elem_size));
+
+        // If this is a byte array then specialize its fill to use the same
+        // libcall as `memory.fill`. This gets us to `memset` on the host which
+        // for larger arrays can be a big boost due to the vectorized
+        // implementation.
+        if entity.allows_memset(self)
+            && let Some(value) = self.fill_value_as_memset(builder, elem_ty, value)
+        {
+            self.raw_bulk_memory_operation(
+                builder,
+                BulkOp::MemoryFill {
+                    dst: dst_elem_addr,
+                    val: value,
+                    len: copy_byte_len,
+                },
+            );
+            return Ok(());
+        }
+
+        // Loop to fill the elements, emitting the equivalent of the following
+        // pseudo-CLIF:
+        //
+        // current_block:
+        //     ...
+        //     end_addr = iadd dst_elem_addr, copy_byte_len
+        //     empty = icmp_imm eq copy_len, 0
+        //     brif empty, continue_block, loop_block(dst_elem_addr)
+        //
+        // loop_block(elem_addr):
+        //     .. write `value` to `elem_addr`
+        //     next_elem_addr = iadd elem_addr, elem_size
+        //     done = icmp eq next_elem_addr, end_addr
+        //     brif done, continue_block, loop_block(next_elem_addr)
+        //
+        // continue_block:
+        //     ...
+
+        let current_block = builder.current_block().unwrap();
+        let loop_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(loop_block, current_block);
+        builder.insert_block_after(continue_block, loop_block);
+
+        // Current block: test to see if this is actually an empty copy. If it
+        // is then skip over the entire loop, otherwise enter the loop and
+        // perform the first ieration.
+        let end_addr = builder.ins().iadd(dst_elem_addr, copy_byte_len);
+        let empty = builder.ins().icmp_imm(IntCC::Equal, copy_len, 0);
+        builder.ins().brif(
+            empty,
+            continue_block,
+            &[],
+            loop_block,
+            &[dst_elem_addr.into()],
+        );
+
+        // Loop block: write a single element, increment our destination pointer
+        // by the element size, then see if we turn again or exit.
+        builder.switch_to_block(loop_block);
+        let elem_addr = builder.append_block_param(loop_block, pointer_ty);
+        self.translate_loop_header(builder)?;
+        emit_elem_write(self, builder, elem_addr, value)?;
+        let next_elem_addr = builder.ins().iadd_imm(elem_addr, i64::from(elem_size));
+        let done = builder.ins().icmp(IntCC::Equal, next_elem_addr, end_addr);
+        builder.ins().brif(
+            done,
+            continue_block,
+            &[],
+            loop_block,
+            &[next_elem_addr.into()],
+        );
+
+        // Continue...
+        builder.switch_to_block(continue_block);
+        builder.seal_block(loop_block);
+        builder.seal_block(continue_block);
+        Ok(())
+    }
+
+    /// Tests to see whether `value`, stored as `ty`, can be extracted to a single
+    /// byte which can be passed to `memset`, or the host's `memory.fill`, to
+    /// satisfy this array initialization request.
+    fn fill_value_as_memset(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        ty: WasmStorageType,
+        value: ir::Value,
+    ) -> Option<ir::Value> {
+        // If the storage type is `i8`, then no matter the value we can always use
+        // `memset` regardless of the upper bits.
+        let value_ty = builder.func.dfg.value_type(value);
+        if let WasmStorageType::I8 = ty {
+            assert_eq!(value_ty, ir::types::I32);
+            return Some(value);
+        }
+
+        // Otherwise check to see if `value` is a constant whose value we can
+        // inspect here.
+        let inst = builder.func.dfg.value_def(value).inst()?;
+        let bits = match builder.func.dfg.insts[inst] {
+            ir::InstructionData::UnaryImm {
+                opcode: ir::Opcode::Iconst,
+                imm,
+            } => imm.bits(),
+            ir::InstructionData::UnaryIeee32 {
+                opcode: ir::Opcode::F32const,
+                imm,
+            } => i64::from(imm.bits()),
+            ir::InstructionData::UnaryIeee64 {
+                opcode: ir::Opcode::F64const,
+                imm,
+            } => imm.bits().cast_signed(),
+
+            // For other initialization we don't know what the value is, so we
+            // can't check if a byte-set is valid, so bail out which will fall back
+            // to an element-by-element loop.
+            _ => return None,
+        };
+
+        let width = match ty {
+            // Handled above
+            WasmStorageType::I8 => unreachable!(),
+            // These are initialized with CLIF-level `i32` values, but we only want
+            // to check the lower 2 bytes.
+            WasmStorageType::I16 => 2,
+            // For everything else the natural CLIF value is what's written so
+            // that's the byte width to check.
+            WasmStorageType::Val(_) => value_ty.bytes() as usize,
+        };
+        let bytes = bits.to_le_bytes();
+        if bytes[1..width].iter().any(|b| *b != bytes[0]) {
+            return None;
+        }
+        Some(builder.ins().iconst(ir::types::I32, bits & 0xff))
+    }
+
     pub fn translate_memory_fill(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -3596,25 +3817,8 @@ impl FuncEnvironment<'_> {
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
-    ) {
-        let idx_type = self.memory(memory_index).idx_type;
-
-        // Bounds check `dst+len` and convert it to a raw heap address.
-        let raw_heap_addr = self.translate_entity_bounds_check(builder, memory_index, dst, len);
-
-        // Fit the `len` value to `pointer_type`. Note that at this point it's
-        // guaranteed inbounds so there's no loss in precision.
-        let len_ptr =
-            self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, idx_type);
-
-        self.raw_bulk_memory_operation(
-            builder,
-            BulkOp::MemoryFill {
-                dst: raw_heap_addr,
-                val,
-                len: len_ptr,
-            },
-        );
+    ) -> WasmResult<()> {
+        self.translate_entity_fill(builder, memory_index, dst, val, len)
     }
 
     pub fn translate_memory_init(
@@ -3736,7 +3940,6 @@ impl FuncEnvironment<'_> {
                 let CheckedEntity::Table(src_table) = src_entity else {
                     unreachable!();
                 };
-                let ty = self.table(dst_table).ref_type;
                 let dst_table = self.get_or_create_table(builder.func, dst_table);
                 let src_table = self.get_or_create_table(builder.func, src_table);
                 assert_eq!(dst_table.element_size, src_table.element_size);
@@ -3747,7 +3950,6 @@ impl FuncEnvironment<'_> {
                     builder,
                     dst_entity,
                     src_entity,
-                    WasmStorageType::Val(WasmValType::Ref(ty)),
                     dst_raw_addr,
                     src_raw_addr,
                     one_elem_size,
@@ -3756,7 +3958,7 @@ impl FuncEnvironment<'_> {
                 )
             }
             // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array => todo!(),
+            CheckedEntity::Array(_) => todo!(),
 
             // Cannot copy into a data segment in wasm.
             CheckedEntity::Data(_) => unreachable!(),
@@ -3804,16 +4006,11 @@ impl FuncEnvironment<'_> {
                 None => builder.ins().iconst(pointer_type, 0),
             },
             // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array => todo!(),
+            CheckedEntity::Array(_) => todo!(),
         };
         assert_eq!(builder.func.dfg.value_type(entity_size), pointer_type);
 
-        let trap_code = match entity {
-            CheckedEntity::Memory(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
-            CheckedEntity::Table(_) => TRAP_TABLE_OUT_OF_BOUNDS,
-            CheckedEntity::Data(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
-            CheckedEntity::Array => TRAP_ARRAY_OUT_OF_BOUNDS,
-        };
+        let trap_code = entity.oob_trap_code();
 
         // Compute the end index of this operation, casted to the `I64` type.
         //
@@ -3878,7 +4075,7 @@ impl FuncEnvironment<'_> {
                 None => (builder.ins().iconst(pointer_type, 1), 1),
             },
             // Note that future refactorings will fill this out soon.
-            CheckedEntity::Array => todo!(),
+            CheckedEntity::Array(_) => todo!(),
         };
         assert_eq!(builder.func.dfg.value_type(base), pointer_type);
         let idx =
@@ -3919,7 +4116,6 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         dst_entity: CheckedEntity,
         src_entity: CheckedEntity,
-        elem_ty: WasmStorageType,
         dst_elem_addr: ir::Value,
         src_elem_addr: ir::Value,
         one_elem_size: ir::Value,
@@ -3936,7 +4132,7 @@ impl FuncEnvironment<'_> {
             index_type_to_ir_type(src_entity.index_type(self))
         );
 
-        let type_forbids_memcpy = match elem_ty {
+        let type_forbids_memcpy = match dst_entity.storage_type(self) {
             // Scalar types can always use a memcpy.
             WasmStorageType::I8
             | WasmStorageType::I16
@@ -3973,7 +4169,7 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Table(_) => self.tunables.table_lazy_init,
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
-                    CheckedEntity::Array => false,
+                    CheckedEntity::Array(_) => false,
                     // Not possible
                     CheckedEntity::Memory(_) | CheckedEntity::Data(_) => unreachable!(),
                 },
@@ -4006,14 +4202,16 @@ impl FuncEnvironment<'_> {
             copy_len,
             src_index,
             &|this, builder, dst, src, src_index| {
+                let read_ty = src_entity.storage_type(this);
+                let write_ty = dst_entity.storage_type(this);
                 let val = match src_entity {
                     // FIXME: ideally this wouldn't redo the bounds check but
                     // it's easier right now to share the internals of
                     // `translate_table_get` which are a bit tricky with
                     // funcrefs.
                     CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
-                    CheckedEntity::Array => {
-                        gc::read_field_at_addr(this, builder, elem_ty, src, None)?
+                    CheckedEntity::Array(_) => {
+                        gc::read_field_at_addr(this, builder, read_ty, src, None)?
                     }
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 };
@@ -4021,8 +4219,8 @@ impl FuncEnvironment<'_> {
                     CheckedEntity::Table(i) => {
                         this.emit_table_set(builder, i, dst, ir::MemFlagsData::trusted(), val)?;
                     }
-                    CheckedEntity::Array => {
-                        gc::write_field_at_addr(this, builder, elem_ty, dst, val)?
+                    CheckedEntity::Array(_) => {
+                        gc::write_field_at_addr(this, builder, write_ty, dst, val)?
                     }
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
                 }
@@ -5040,16 +5238,27 @@ enum BulkOp {
     },
 }
 
+/// A list of entities which can participate in various kinds of bulk operations
+/// in wasm.
+///
+/// These entities are used in `{table,array,memory}.{copy,fill}`, for example,
+/// as well as all the other matrix permutations of src/dst/etc. This is here
+/// and used as a helper type to help deduplicate various checks around
+/// modifications of these entities.
 #[derive(Copy, Clone)]
 enum CheckedEntity {
+    /// A WebAssembly linear memory.
     Memory(MemoryIndex),
+    /// A WebAssembly table.
     Table(TableIndex),
+    /// A WebAssembly data segment.
     Data(DataIndex),
+    /// An `arrayref` with the specified type.
     #[cfg_attr(
         not(feature = "gc"),
         expect(dead_code, reason = "not worth the #[cfg]")
     )]
-    Array,
+    Array(ModuleInternedTypeIndex),
 }
 
 impl From<MemoryIndex> for CheckedEntity {
@@ -5071,12 +5280,58 @@ impl From<DataIndex> for CheckedEntity {
 }
 
 impl CheckedEntity {
+    /// Returns the type that's used to index this entity.
     fn index_type(&self, env: &FuncEnvironment) -> IndexType {
         match *self {
             CheckedEntity::Memory(i) => env.memory(i).idx_type,
             CheckedEntity::Table(i) => env.table(i).idx_type,
-            CheckedEntity::Data(_) => IndexType::I32,
-            CheckedEntity::Array => IndexType::I32,
+            CheckedEntity::Data(_) | CheckedEntity::Array(_) => IndexType::I32,
+        }
+    }
+
+    /// Returns the size, in bytes, of an element in this entity.
+    fn element_size(&self, env: &mut FuncEnvironment<'_>, func: &mut ir::Function) -> u32 {
+        match *self {
+            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => 1,
+            CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
+            #[cfg(feature = "gc")]
+            CheckedEntity::Array(ty) => env.array_layout(ty).elem_size,
+            #[cfg(not(feature = "gc"))]
+            CheckedEntity::Array(_) => unreachable!(),
+        }
+    }
+
+    /// Returns the WebAssembly type that's stored within this entity.
+    fn storage_type(&self, env: &mut FuncEnvironment<'_>) -> WasmStorageType {
+        match *self {
+            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => WasmStorageType::I8,
+            CheckedEntity::Table(table) => {
+                WasmStorageType::Val(WasmValType::Ref(env.table(table).ref_type))
+            }
+            CheckedEntity::Array(ty) => {
+                let array_ty = env.types.unwrap_array(ty).unwrap();
+                array_ty.0.element_type
+            }
+        }
+    }
+
+    /// Returns the trap code to use when an index into this entity is out-of-bounds.
+    fn oob_trap_code(&self) -> ir::TrapCode {
+        match self {
+            CheckedEntity::Memory(_) | CheckedEntity::Data(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            CheckedEntity::Table(_) => TRAP_TABLE_OUT_OF_BOUNDS,
+            CheckedEntity::Array(_) => TRAP_ARRAY_OUT_OF_BOUNDS,
+        }
+    }
+
+    /// Returns whether it's safe to use `memset` on this entity for candidate
+    /// bit patterns.
+    fn allows_memset(&self, env: &FuncEnvironment) -> bool {
+        match self {
+            CheckedEntity::Memory(_) | CheckedEntity::Data(_) | CheckedEntity::Array(_) => true,
+            // Tables that are lazily initialized can't be memset because the
+            // initialized bit needs to be set when storing values.
+            CheckedEntity::Table(_) => !env.tunables.table_lazy_init,
         }
     }
 }

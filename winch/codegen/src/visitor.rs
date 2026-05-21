@@ -19,7 +19,7 @@ use crate::masm::{
 };
 use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
-use crate::{Result, bail, ensure, format_err};
+use crate::{Result, bail, format_err};
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
@@ -28,7 +28,7 @@ use wasmparser::{
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    DataIndex, FuncIndex, GlobalIndex, IndexType, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    DataIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
     WasmValType,
 };
 
@@ -1743,46 +1743,7 @@ where
 
     fn visit_table_grow(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
-        let ptr_type = self.env.ptr_type();
-        let (heap_type, idx_type) = {
-            let table_ty = self.env.table(table_index);
-            (table_ty.ref_type.heap_type, table_ty.idx_type)
-        };
-        let builtin = match heap_type {
-            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI>()?,
-            _ => bail!(CodeGenError::unsupported_wasm_type()),
-        };
-
-        let len = self.context.stack.len();
-        // table.grow` requires at least 2 elements on the value stack.
-        let at = self.context.stack.ensure_index_at(2)?;
-
-        // The table_grow builtin expects the parameters in a different
-        // order.
-        // The value stack at this point should contain:
-        // [ init_value | delta ] (stack top)
-        // but the builtin function expects the init value as the last
-        // argument.
-        self.context.stack.inner_mut().swap(len - 1, len - 2);
-
-        let builtin = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
-
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
-
-        // Similar to the memory.grow builtin, `table.grow` returns a
-        // pointer, however, we need to ensure that the returned index
-        // is representative of the address space for tables.
-        match (ptr_type, idx_type) {
-            (WasmValType::I64, IndexType::I64) => Ok(()),
-            (WasmValType::I64, IndexType::I32) => {
-                let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
-                self.masm.wrap(writable!(top), top)?;
-                self.context.stack.push(TypedReg::i32(top).into());
-                Ok(())
-            }
-
-            _ => Err(format_err!(CodeGenError::unsupported_32_bit_platform())),
-        }
+        self.emit_table_grow(table_index)
     }
 
     fn visit_table_size(&mut self, table: u32) -> Self::Output {
@@ -1793,21 +1754,7 @@ where
 
     fn visit_table_fill(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
-        let table_ty = self.env.table(table_index);
-
-        ensure!(
-            table_ty.ref_type.heap_type == WasmHeapType::Func,
-            CodeGenError::unsupported_wasm_type()
-        );
-
-        let builtin = self.env.builtins.table_fill_func_ref::<M::ABI>()?;
-
-        let at = self.context.stack.ensure_index_at(3)?;
-
-        let callee = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
-
-        self.context.pop_and_free(self.masm)
+        self.emit_table_fill(table_index)
     }
 
     fn visit_table_set(&mut self, table: u32) -> Self::Output {

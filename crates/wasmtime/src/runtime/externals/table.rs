@@ -1,7 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::{
-    self, GcStore, SendSyncPtr, TableElementType, VMFuncRef, VMGcRef, VMStore,
-};
+use crate::runtime::vm::{self, GcStore, TableElementType, VMFuncRef, VMGcRef, VMStore};
 use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque, StoreResourceLimiter};
 use crate::trampoline::generate_table_export;
 use crate::{
@@ -305,55 +303,36 @@ impl Table {
 
     async fn _grow<T>(&self, store: StoreContextMut<'_, T>, delta: u64, init: Ref) -> Result<u64> {
         let store = store.0;
-        let ty = self.ty(&store);
         let (mut limiter, store) = store.resource_limiter_and_store_opaque();
         let limiter = limiter.as_mut();
-        let result = match element_type(&ty) {
-            TableElementType::Func => {
-                let element = init
-                    .into_table_func(store, ty.element())?
-                    .map(SendSyncPtr::new);
-                self.instance
-                    .get_mut(store)
-                    .defined_table_grow(self.index, async |table| {
-                        // SAFETY: in the context of `defined_table_grow` this
-                        // is safe to call as it'll update the internal table
-                        // pointer in the instance.
-                        unsafe { table.grow_func(limiter, delta, element).await }
-                    })
-                    .await?
-            }
-            TableElementType::GcRef => {
-                let mut store = AutoAssertNoGc::new(store);
-                let element = init
-                    .into_table_gc_ref(&mut store, ty.element())?
-                    .map(|r| r.unchecked_copy());
-                let (gc_store, instance) = self.instance.get_with_gc_store_mut(&mut store);
-                instance
-                    .defined_table_grow(self.index, async |table| {
-                        // SAFETY: in the context of `defined_table_grow` this
-                        // is safe to call as it'll update the internal table
-                        // pointer in the instance.
-                        unsafe {
-                            table
-                                .grow_gc_ref(limiter, gc_store, delta, element.as_ref())
-                                .await
-                        }
-                    })
-                    .await?
-            }
-            // TODO(#10248) Required to support stack switching in the
-            // embedder API.
-            TableElementType::Cont => bail!("unimplemented table for cont"),
+
+        // First, type-check to make sure that `init` does indeed match this
+        // table's element type.
+        let ty = self.ty_(store);
+        init.ensure_matches_ty(store, ty.element())
+            .context("type mismatch: value does not match table element type")?;
+
+        // SAFETY: the requirement here is that the new table elements, on
+        // success, are filled in with an appropriately typed value. That's done
+        // below in `_fill`.
+        let result = unsafe {
+            self.instance
+                .get_mut(store)
+                .defined_table_grow(self.index, limiter, delta)
+                .await?
         };
-        match result {
-            Some(size) => {
-                // unwrap here should be ok because the runtime should always
-                // guarantee that we can fit the table size in a 64-bit integer.
-                Ok(u64::try_from(size).unwrap())
-            }
+        let start = match result {
+            // unwrap here should be ok because the runtime should always
+            // guarantee that we can fit the table size in a 64-bit integer.
+            Some(size) => u64::try_from(size).unwrap(),
             None => bail!("failed to grow table by `{delta}`"),
-        }
+        };
+        // This should be in-bounds and well-typed, meaning that it should not
+        // fail, hence the unwrap. Note that this is required for the safety of
+        // this operation because this table's type may be non-nullable elements
+        // which means this must happen after growth.
+        self._fill(store, start, init, delta).unwrap();
+        Ok(start)
     }
 
     /// Async variant of [`Table::grow`].
@@ -477,28 +456,16 @@ impl Table {
         val: Ref,
         len: u64,
     ) -> Result<()> {
-        let ty = self.ty_(&store);
-        match element_type(&ty) {
-            TableElementType::Func => {
-                let val = val.into_table_func(store, ty.element())?;
-                let (table, _) = self.wasmtime_table(store, iter::empty());
-                table.fill_func(dst, val, len)?;
-            }
-            TableElementType::GcRef => {
-                // Note that `val` is a `VMGcRef` temporarily read from the
-                // store here, and blocking GC with `AutoAssertNoGc` should
-                // ensure that it's not collected while being worked on here.
-                let mut store = AutoAssertNoGc::new(store);
-                let val = val.into_table_gc_ref(&mut store, ty.element())?;
-                let val = val.map(|g| g.unchecked_copy());
-                let (table, gc_store) = self.wasmtime_table(&mut store, iter::empty());
-                table.fill_gc_ref(gc_store, dst, val.as_ref(), len)?;
-            }
-            // TODO(#10248) Required to support stack switching in the embedder
-            // API.
-            TableElementType::Cont => bail!("unimplemented table for cont"),
+        let ty = self.ty_(store);
+        val.ensure_matches_ty(store, ty.element())
+            .context("type mismatch: value does not match table element type")?;
+        let end = dst.checked_add(len).ok_or(Trap::TableOutOfBounds)?;
+        if end > self.size_(store) {
+            bail!(Trap::TableOutOfBounds);
         }
-
+        for i in dst..dst + len {
+            self.set_(&mut *store, i, val.clone())?;
+        }
         Ok(())
     }
 

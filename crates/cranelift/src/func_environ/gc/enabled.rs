@@ -947,14 +947,16 @@ pub fn translate_array_copy(
     dst_array_type_index: TypeIndex,
     dst_array: ir::Value,
     dst_index: ir::Value,
-    _src_array_type_index: TypeIndex,
+    src_array_type_index: TypeIndex,
     src_array: ir::Value,
     src_index: ir::Value,
     copy_len: ir::Value,
 ) -> WasmResult<()> {
-    let interned_type_index =
+    let dst_array_type_index =
         func_env.module.types[dst_array_type_index].unwrap_module_type_index();
-    let array_ty = func_env.types[interned_type_index]
+    let src_array_type_index =
+        func_env.module.types[src_array_type_index].unwrap_module_type_index();
+    let array_ty = func_env.types[dst_array_type_index]
         .composite_type
         .inner
         .unwrap_array();
@@ -978,7 +980,7 @@ pub fn translate_array_copy(
             obj_size,
             one_elem_size,
             base_size,
-        } = emit_array_size_info(func_env, builder, interned_type_index, array_len);
+        } = emit_array_size_info(func_env, builder, dst_array_type_index, array_len);
         let offset_in_elems = builder.ins().imul(index, one_elem_size);
         let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
         let elem_addr = func_env.prepare_gc_ref_access(
@@ -1037,9 +1039,8 @@ pub fn translate_array_copy(
     let copy_len = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), copy_len);
     func_env.emit_raw_array_or_table_copy(
         builder,
-        CheckedEntity::Array,
-        CheckedEntity::Array,
-        elem_ty,
+        CheckedEntity::Array(dst_array_type_index),
+        CheckedEntity::Array(src_array_type_index),
         dst_elem_addr,
         src_elem_addr,
         one_elem_size,
@@ -1673,7 +1674,7 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the `GcArrayLayout` for the array type at the given `type_index`.
-    fn array_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcArrayLayout {
+    pub(crate) fn array_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcArrayLayout {
         self.gc_layout(type_index).unwrap_array()
     }
 

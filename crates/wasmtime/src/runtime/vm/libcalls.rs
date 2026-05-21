@@ -54,18 +54,12 @@
 //! }
 //! ```
 
-#[cfg(feature = "stack-switching")]
-use super::stack_switching::VMContObj;
 use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::store::{Asyncness, InstanceId, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::table::TableElementType;
-use crate::runtime::vm::vmcontext::VMFuncRef;
-use crate::runtime::vm::{
-    self, HostResultHasUnwindSentinel, SendSyncPtr, VMStore, f32x4, f64x2, i8x16,
-};
+use crate::runtime::vm::{self, HostResultHasUnwindSentinel, VMStore, f32x4, f64x2, i8x16};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -305,168 +299,24 @@ unsafe impl HostResultHasUnwindSentinel for Option<AllocationSize> {
     }
 }
 
-/// Implementation of `table.grow` for `funcref` tables.
-unsafe fn table_grow_func_ref(
+/// Implementation of `table.grow`.
+unsafe fn table_grow(
     store: &mut dyn VMStore,
     instance: InstanceId,
     defined_table_index: u32,
     delta: u64,
-    init_value: *mut u8,
 ) -> Result<Option<AllocationSize>> {
     let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
-    let element = NonNull::new(init_value.cast::<VMFuncRef>()).map(SendSyncPtr::new);
     let (mut limiter, store) = store.resource_limiter_and_store_opaque();
     let limiter = limiter.as_mut();
-    block_on!(store, async |store, _| {
-        let mut instance = store.instance_mut(instance);
-        let table_index = instance.env_module().table_index(defined_table_index);
-        debug_assert!(matches!(
-            instance.as_mut().table_element_type(table_index),
-            TableElementType::Func,
-        ));
-        let result = instance
-            .defined_table_grow(defined_table_index, async |table| unsafe {
-                table.grow_func(limiter, delta, element).await
-            })
+    block_on!(store, async |store, _| unsafe {
+        let result = store
+            .instance_mut(instance)
+            .defined_table_grow(defined_table_index, limiter, delta)
             .await?
             .map(AllocationSize);
         Ok(result)
     })?
-}
-
-/// Implementation of `table.grow` for GC-reference tables.
-#[cfg(feature = "gc")]
-fn table_grow_gc_ref(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    defined_table_index: u32,
-    delta: u64,
-    init_value: u32,
-) -> Result<Option<AllocationSize>> {
-    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
-    let element = VMGcRef::from_raw_u32(init_value);
-    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    let limiter = limiter.as_mut();
-    block_on!(store, async |store, _| {
-        let (gc_store, mut instance) = store.optional_gc_store_and_instance_mut(instance);
-        let table_index = instance.env_module().table_index(defined_table_index);
-        debug_assert!(matches!(
-            instance.as_mut().table_element_type(table_index),
-            TableElementType::GcRef,
-        ));
-
-        let result = instance
-            .defined_table_grow(defined_table_index, async |table| unsafe {
-                table
-                    .grow_gc_ref(limiter, gc_store, delta, element.as_ref())
-                    .await
-            })
-            .await?
-            .map(AllocationSize);
-        Ok(result)
-    })?
-}
-
-#[cfg(feature = "stack-switching")]
-unsafe fn table_grow_cont_obj(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    defined_table_index: u32,
-    delta: u64,
-    // The following two values together form the initial Option<VMContObj>.
-    // A None value is indicated by the pointer being null.
-    init_value_contref: *mut u8,
-    init_value_revision: usize,
-) -> Result<Option<AllocationSize>> {
-    let defined_table_index = DefinedTableIndex::from_u32(defined_table_index);
-    let element = unsafe { VMContObj::from_raw_parts(init_value_contref, init_value_revision) };
-    let (mut limiter, store) = store.resource_limiter_and_store_opaque();
-    let limiter = limiter.as_mut();
-    block_on!(store, async |store, _| {
-        let mut instance = store.instance_mut(instance);
-        let table_index = instance.env_module().table_index(defined_table_index);
-        debug_assert!(matches!(
-            instance.as_mut().table_element_type(table_index),
-            TableElementType::Cont,
-        ));
-        let result = instance
-            .defined_table_grow(defined_table_index, async |table| unsafe {
-                table.grow_cont(limiter, delta, element).await
-            })
-            .await?
-            .map(AllocationSize);
-        Ok(result)
-    })?
-}
-
-/// Implementation of `table.fill` for `funcref`s.
-unsafe fn table_fill_func_ref(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    table_index: u32,
-    dst: u64,
-    val: *mut u8,
-    len: u64,
-) -> Result<()> {
-    let instance = store.instance_mut(instance);
-    let table_index = DefinedTableIndex::from_u32(table_index);
-    let table = instance.get_defined_table(table_index);
-    match table.element_type() {
-        TableElementType::Func => {
-            let val = NonNull::new(val.cast::<VMFuncRef>());
-            table.fill_func(dst, val, len)?;
-            Ok(())
-        }
-        TableElementType::GcRef => unreachable!(),
-        TableElementType::Cont => unreachable!(),
-    }
-}
-
-#[cfg(feature = "gc")]
-fn table_fill_gc_ref(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    table_index: u32,
-    dst: u64,
-    val: u32,
-    len: u64,
-) -> Result<()> {
-    let (gc_store, instance) = store.optional_gc_store_and_instance_mut(instance);
-    let table_index = DefinedTableIndex::from_u32(table_index);
-    let table = instance.get_defined_table(table_index);
-    match table.element_type() {
-        TableElementType::Func => unreachable!(),
-        TableElementType::GcRef => {
-            let gc_ref = VMGcRef::from_raw_u32(val);
-            table.fill_gc_ref(gc_store, dst, gc_ref.as_ref(), len)?;
-            Ok(())
-        }
-
-        TableElementType::Cont => unreachable!(),
-    }
-}
-
-#[cfg(feature = "stack-switching")]
-unsafe fn table_fill_cont_obj(
-    store: &mut dyn VMStore,
-    instance: InstanceId,
-    table_index: u32,
-    dst: u64,
-    value_contref: *mut u8,
-    value_revision: usize,
-    len: u64,
-) -> Result<()> {
-    let instance = store.instance_mut(instance);
-    let table_index = DefinedTableIndex::from_u32(table_index);
-    let table = instance.get_defined_table(table_index);
-    match table.element_type() {
-        TableElementType::Cont => {
-            let contobj = unsafe { VMContObj::from_raw_parts(value_contref, value_revision) };
-            table.fill_cont(dst, contobj, len)?;
-            Ok(())
-        }
-        _ => panic!("Wrong table filling function"),
-    }
 }
 
 // Implementation of `table.init`.
@@ -673,6 +523,7 @@ unsafe fn intern_func_ref_for_gc_heap(
     _instance: InstanceId,
     func_ref: *mut u8,
 ) -> Result<u32> {
+    use crate::runtime::vm::vmcontext::VMFuncRef;
     use crate::{store::AutoAssertNoGc, vm::SendSyncPtr};
     use core::ptr::NonNull;
 
