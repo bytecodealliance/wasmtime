@@ -291,3 +291,9 @@ async fn p1_path_open_lots() {
 async fn p1_sleep_quickly_but_lots() {
     run(P1_SLEEP_QUICKLY_BUT_LOTS, true).await.unwrap()
 }
+#[test]
+fn p1_file_truncation_readonly() {
+    println!(
+        "blank placeholder test to satisfy assert_test_exists. This test exercises wasmtime-wasi functionality is not relevant to wasi-common"
+    );
+}
