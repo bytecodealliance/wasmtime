@@ -1425,6 +1425,84 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn call_indirect1(&mut self, dst: XReg, arg1: XReg) -> ControlFlow<Done> {
+        // Phase-4 fusion: combines `xmov x0, arg1` with `call_indirect dst`.
+        // Read arg1 BEFORE writing x0 so this is safe even when `arg1 == x0`.
+        let arg1_val = self.state[arg1];
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = arg1_val;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect2(&mut self, dst: XReg, arg1: XReg, arg2: XReg) -> ControlFlow<Done> {
+        let (a1, a2) = (self.state[arg1], self.state[arg2]);
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect3(
+        &mut self,
+        dst: XReg,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+    ) -> ControlFlow<Done> {
+        let (a1, a2, a3) = (self.state[arg1], self.state[arg2], self.state[arg3]);
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        self.state[XReg::x2] = a3;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn call_indirect4(
+        &mut self,
+        dst: XReg,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+        arg4: XReg,
+    ) -> ControlFlow<Done> {
+        let (a1, a2, a3, a4) = (
+            self.state[arg1],
+            self.state[arg2],
+            self.state[arg3],
+            self.state[arg4],
+        );
+        let target = self.state[dst].get_ptr();
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = a1;
+        self.state[XReg::x1] = a2;
+        self.state[XReg::x2] = a3;
+        self.state[XReg::x3] = a4;
+        // SAFETY: same as `call_indirect`.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(target));
+        }
+        ControlFlow::Continue(())
+    }
+
     fn jump(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         self.pc_rel_jump::<crate::Jump>(offset)
     }
