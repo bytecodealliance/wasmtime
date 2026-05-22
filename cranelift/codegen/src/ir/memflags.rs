@@ -3,9 +3,9 @@
 use super::TrapCode;
 use crate::HashMap;
 use crate::entity::{self, PrimaryMap};
+pub use crate::machinst::MachMemFlags;
 use core::fmt;
 use core::hash::{Hash, Hasher};
-use core::num::NonZeroU8;
 use core::ops::Index;
 use core::str::FromStr;
 use cranelift_entity::{entity_impl, packed_option::PackedOption};
@@ -161,46 +161,8 @@ pub struct MemFlagsData {
     region: PackedOption<AliasRegion>,
 }
 
-/// Backend memory-operation flags.
-///
-/// This is the same bit-packed representation as [`MemFlagsData`] without the
-/// IR-only alias-region metadata.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MachMemFlags {
-    bits: u16,
-}
-
-/// Guaranteed to use "natural alignment" for the given type. This
-/// may enable better instruction selection.
-const BIT_ALIGNED: u16 = 1 << 0;
-
-/// A load that reads data in memory that does not change for the
-/// duration of the function's execution. This may enable
-/// additional optimizations to be performed.
-const BIT_READONLY: u16 = 1 << 1;
-
-/// Load multi-byte values from memory in a little-endian format.
-const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
-
-/// Load multi-byte values from memory in a big-endian format.
-const BIT_BIG_ENDIAN: u16 = 1 << 3;
-
-/// Trap code, if any, for this memory operation.
-const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
-const TRAP_CODE_OFFSET: u16 = 7;
-
-/// Whether this memory operation may be freely moved by the optimizer so long
-/// as its data dependencies are satisfied. That is, by setting this flag, the
-/// producer is guaranteeing that this memory operation's safety is not guarded
-/// by outside-the-data-flow-graph properties, like implicit bounds-checking
-/// control dependencies.
-const BIT_CAN_MOVE: u16 = 1 << 15;
-
 const fn no_alias_region() -> PackedOption<AliasRegion> {
-    // `PackedOption<T>` is `#[repr(transparent)]` over `T` and uses the
-    // reserved-value bit pattern to represent `None`.
-    unsafe { core::mem::transmute(AliasRegion(u32::MAX)) }
+    PackedOption::new(AliasRegion(u32::MAX))
 }
 
 impl MemFlagsData {
@@ -216,17 +178,6 @@ impl MemFlagsData {
     /// known to be aligned and non-trapping.
     pub const fn trusted() -> Self {
         Self::new().with_notrap().with_aligned()
-    }
-
-    /// Read a flag bit.
-    const fn read_bit(self, bit: u16) -> bool {
-        self.flags.read_bit(bit)
-    }
-
-    /// Return a new `MemFlagsData` with this flag bit set.
-    const fn with_bit(mut self, bit: u16) -> Self {
-        self.flags = self.flags.with_bit(bit);
-        self
     }
 
     /// Reads the alias region that this memory operation works with.
@@ -260,13 +211,13 @@ impl MemFlagsData {
             "aligned" => self.with_aligned(),
             "readonly" => self.with_readonly(),
             "little" => {
-                if self.read_bit(BIT_BIG_ENDIAN) {
+                if self.flags.explicit_endianness() == Some(Endianness::Big) {
                     return Err("cannot set both big and little endian bits");
                 }
                 self.with_endianness(Endianness::Little)
             }
             "big" => {
-                if self.read_bit(BIT_LITTLE_ENDIAN) {
+                if self.flags.explicit_endianness() == Some(Endianness::Little) {
                     return Err("cannot set both big and little endian bits");
                 }
                 self.with_endianness(Endianness::Big)
@@ -287,13 +238,7 @@ impl MemFlagsData {
     /// caller since it is not explicitly encoded in CLIF IR -- this allows a
     /// front end to create IR without having to know the target endianness.
     pub const fn endianness(self, native_endianness: Endianness) -> Endianness {
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            Endianness::Little
-        } else if self.read_bit(BIT_BIG_ENDIAN) {
-            Endianness::Big
-        } else {
-            native_endianness
-        }
+        self.flags.endianness(native_endianness)
     }
 
     /// Return endianness of the memory access, if explicitly specified.
@@ -301,13 +246,7 @@ impl MemFlagsData {
     /// If the endianness is not explicitly specified, this will return `None`,
     /// which means "native endianness".
     pub const fn explicit_endianness(self) -> Option<Endianness> {
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            Some(Endianness::Little)
-        } else if self.read_bit(BIT_BIG_ENDIAN) {
-            Some(Endianness::Big)
-        } else {
-            None
-        }
+        self.flags.explicit_endianness()
     }
 
     /// Set endianness of the memory access.
@@ -316,13 +255,9 @@ impl MemFlagsData {
     }
 
     /// Set endianness of the memory access, returning new flags.
-    pub const fn with_endianness(self, endianness: Endianness) -> Self {
-        let res = match endianness {
-            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
-            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
-        };
-        assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
-        res
+    pub const fn with_endianness(mut self, endianness: Endianness) -> Self {
+        self.flags = self.flags.with_endianness(endianness);
+        self
     }
 
     /// Test if this memory operation cannot trap.
@@ -372,7 +307,7 @@ impl MemFlagsData {
     /// unsafe to code motion it above the bounds check, even if its data
     /// dependencies would still be satisfied.
     pub const fn can_move(self) -> bool {
-        self.read_bit(BIT_CAN_MOVE)
+        self.flags.can_move()
     }
 
     /// Set the `can_move` flag.
@@ -381,8 +316,9 @@ impl MemFlagsData {
     }
 
     /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(self) -> Self {
-        self.with_bit(BIT_CAN_MOVE)
+    pub const fn with_can_move(mut self) -> Self {
+        self.flags = self.flags.with_can_move();
+        self
     }
 
     /// Test if the `aligned` flag is set.
@@ -391,7 +327,7 @@ impl MemFlagsData {
     /// `aligned` flag is set, the instruction is permitted to trap or return a wrong result if the
     /// effective address is misaligned.
     pub const fn aligned(self) -> bool {
-        self.read_bit(BIT_ALIGNED)
+        self.flags.aligned()
     }
 
     /// Set the `aligned` flag.
@@ -400,8 +336,9 @@ impl MemFlagsData {
     }
 
     /// Set the `aligned` flag, returning new flags.
-    pub const fn with_aligned(self) -> Self {
-        self.with_bit(BIT_ALIGNED)
+    pub const fn with_aligned(mut self) -> Self {
+        self.flags = self.flags.with_aligned();
+        self
     }
 
     /// Test if the `readonly` flag is set.
@@ -410,7 +347,7 @@ impl MemFlagsData {
     /// This results in undefined behavior if the dereferenced memory is mutated at any time
     /// between when the function is called and when it is exited.
     pub const fn readonly(self) -> bool {
-        self.read_bit(BIT_READONLY)
+        self.flags.readonly()
     }
 
     /// Set the `readonly` flag.
@@ -419,8 +356,9 @@ impl MemFlagsData {
     }
 
     /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(self) -> Self {
-        self.with_bit(BIT_READONLY)
+    pub const fn with_readonly(mut self) -> Self {
+        self.flags = self.flags.with_readonly();
+        self
     }
     /// Get the trap code to report if this memory access traps.
     ///
@@ -456,151 +394,12 @@ impl From<MachMemFlags> for MemFlagsData {
     }
 }
 
-impl MachMemFlags {
-    /// Create a new empty set of flags.
-    pub const fn new() -> Self {
-        Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
-    }
-
-    /// Create a set of flags representing an access from a "trusted" address.
-    pub const fn trusted() -> Self {
-        Self::new().with_notrap().with_aligned()
-    }
-
-    const fn read_bit(self, bit: u16) -> bool {
-        self.bits & bit != 0
-    }
-
-    const fn with_bit(mut self, bit: u16) -> Self {
-        self.bits |= bit;
-        self
-    }
-
-    /// Return endianness of the memory access.
-    pub const fn endianness(self, native_endianness: Endianness) -> Endianness {
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            Endianness::Little
-        } else if self.read_bit(BIT_BIG_ENDIAN) {
-            Endianness::Big
-        } else {
-            native_endianness
-        }
-    }
-
-    /// Return endianness of the memory access, if explicitly specified.
-    pub const fn explicit_endianness(self) -> Option<Endianness> {
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            Some(Endianness::Little)
-        } else if self.read_bit(BIT_BIG_ENDIAN) {
-            Some(Endianness::Big)
-        } else {
-            None
-        }
-    }
-
-    /// Set endianness of the memory access, returning new flags.
-    pub const fn with_endianness(self, endianness: Endianness) -> Self {
-        let res = match endianness {
-            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
-            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
-        };
-        assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
-        res
-    }
-
-    /// Test if this memory access cannot trap.
-    pub const fn notrap(self) -> bool {
-        self.trap_code().is_none()
-    }
-
-    /// Set these flags to indicate this access does not trap.
-    pub const fn with_notrap(self) -> Self {
-        self.with_trap_code(None)
-    }
-
-    /// Test if the `can_move` flag is set.
-    pub const fn can_move(self) -> bool {
-        self.read_bit(BIT_CAN_MOVE)
-    }
-
-    /// Set the `can_move` flag, returning new flags.
-    pub const fn with_can_move(self) -> Self {
-        self.with_bit(BIT_CAN_MOVE)
-    }
-
-    /// Test if the `aligned` flag is set.
-    pub const fn aligned(self) -> bool {
-        self.read_bit(BIT_ALIGNED)
-    }
-
-    /// Set the `aligned` flag, returning new flags.
-    pub const fn with_aligned(self) -> Self {
-        self.with_bit(BIT_ALIGNED)
-    }
-
-    /// Test if the `readonly` flag is set.
-    pub const fn readonly(self) -> bool {
-        self.read_bit(BIT_READONLY)
-    }
-
-    /// Set the `readonly` flag, returning new flags.
-    pub const fn with_readonly(self) -> Self {
-        self.with_bit(BIT_READONLY)
-    }
-
-    /// Get the trap code to report if this memory access traps.
-    pub const fn trap_code(self) -> Option<TrapCode> {
-        let byte = ((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8;
-        match NonZeroU8::new(byte) {
-            Some(code) => Some(TrapCode::from_raw(code)),
-            None => None,
-        }
-    }
-
-    /// Configures these flags with the specified trap code `code`.
-    pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
-        let bits = match code {
-            Some(code) => code.as_raw().get() as u16,
-            None => 0,
-        };
-        self.bits &= !MASK_TRAP_CODE;
-        self.bits |= bits << TRAP_CODE_OFFSET;
-        self
-    }
-}
-
 impl fmt::Display for MemFlagsData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.flags)?;
         match self.alias_region() {
             None => {}
             Some(region) => write!(f, " {region}")?,
-        }
-        Ok(())
-    }
-}
-
-impl fmt::Display for MachMemFlags {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.trap_code() {
-            None => write!(f, " notrap")?,
-            Some(TrapCode::HEAP_OUT_OF_BOUNDS) => {}
-            Some(t) => write!(f, " {t}")?,
-        }
-        if self.aligned() {
-            write!(f, " aligned")?;
-        }
-        if self.readonly() {
-            write!(f, " readonly")?;
-        }
-        if self.can_move() {
-            write!(f, " can_move")?;
-        }
-        if self.read_bit(BIT_BIG_ENDIAN) {
-            write!(f, " big")?;
-        }
-        if self.read_bit(BIT_LITTLE_ENDIAN) {
-            write!(f, " little")?;
         }
         Ok(())
     }

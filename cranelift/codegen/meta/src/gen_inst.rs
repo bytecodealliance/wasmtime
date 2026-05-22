@@ -1178,8 +1178,6 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
 
     // We need to mutate `self` if this instruction accepts a value list, will construct
     // BlockCall values, or has memflags operands (which need DFG insertion).
-    // We need to mutate `self` if this instruction accepts a value list, will construct
-    // BlockCall values, or has memflags operands (which need DFG insertion).
     let has_memflags = inst
         .operands_in
         .iter()

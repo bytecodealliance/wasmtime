@@ -48,10 +48,6 @@ impl IsleContext<'_, '_, '_> {
     pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
         &self.ctx.func.dfg
     }
-
-    pub(crate) fn dfg_mut(&mut self) -> &mut crate::ir::DataFlowGraph {
-        &mut self.ctx.func.dfg
-    }
 }
 
 pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
