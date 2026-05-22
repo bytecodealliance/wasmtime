@@ -2159,6 +2159,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<Option<CallRets>> {
+        // Fast path: if we can statically resolve this indirect call to a
+        // single defined function (immutable funcref table + constant
+        // callee index + matching signature), emit a direct call instead.
+        // See `try_static_resolve_indirect_call`.
+        if let Some(target) = self.try_static_resolve_indirect_call(table_index, ty_index, callee) {
+            return self.direct_call(target, sig_ref, call_args).map(Some);
+        }
+
         let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
             table_index,
             ty_index,
@@ -2171,6 +2179,109 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
         self.unchecked_call_impl(sig_ref, code_ptr, callee_vmctx, call_args)
             .map(Some)
+    }
+
+    /// Try to statically resolve a `call_indirect` site to a single defined
+    /// function so the call can be lowered as a direct call.
+    ///
+    /// All four of these must hold for the resolution to succeed:
+    ///
+    /// 1. The target table must be provably immutable for the lifetime of
+    ///    any instance of this module: defined (not imported) and never the
+    ///    target of `table.set` / `table.fill` / `table.copy` (as the dst)
+    ///    / `table.grow` / `table.init`. This is the `tables_mutated` bit
+    ///    populated in `ModuleEnvironment::translate`.
+    ///
+    /// 2. The callee index value (the operand to `call_indirect`) must be a
+    ///    compile-time constant — i.e., the wasm did `i32.const N;
+    ///    call_indirect (table $t) (type $sig)`. This is what hand-lowered
+    ///    C++/Rust vtable calls and AOT-compiled JS-to-wasm dispatch tables
+    ///    look like in practice.
+    ///
+    /// 3. The slot at index `N` in the table must be precomputable from
+    ///    static `elem` segments: `module.table_initialization
+    ///    .initial_values[defined_index]` must be `TableInitialValue::Null
+    ///    { precomputed }` (i.e., not a fully-dynamic `Expr`-style init),
+    ///    and the index `N` must be in range and resolved to a concrete
+    ///    `FuncIndex` (not the reserved-value sentinel).
+    ///
+    /// 4. The function's signature in the module's interned type table
+    ///    must equal the `ty_index` declared by the `call_indirect` site.
+    ///    Otherwise the original semantics are "trap on signature
+    ///    mismatch", which we don't want to replace with a static direct
+    ///    call.
+    ///
+    /// Returns the resolved function on success, `None` otherwise (in
+    /// which case the caller falls back to a normal indirect call).
+    fn try_static_resolve_indirect_call(
+        &self,
+        table_index: TableIndex,
+        ty_index: TypeIndex,
+        callee: ir::Value,
+    ) -> Option<FuncIndex> {
+        let translation = self.env.translation;
+        let module = &translation.module;
+
+        // (1) Table must be provably immutable. Imported tables are
+        //     pre-marked as mutated in `ModuleEnvironment::translate`, so
+        //     this check also rules them out (along with the explicit
+        //     `defined_table_index` check below for clarity).
+        if translation.tables_mutated[table_index] {
+            return None;
+        }
+        let defined_table = module.defined_table_index(table_index)?;
+
+        // (2) Callee must be a constant `iconst`. Pattern adapted from
+        //     `bounds_checks::statically_known_in_bounds`.
+        let dfg = &self.builder.func.dfg;
+        let inst = dfg.value_def(callee).inst()?;
+        let imm = match dfg.insts[inst] {
+            ir::InstructionData::UnaryImm {
+                opcode: ir::Opcode::Iconst,
+                imm,
+            } => imm,
+            _ => return None,
+        };
+        let callee_ty = dfg.value_type(callee);
+        let callee_idx_u64 = imm
+            .zero_extend_from_width(callee_ty.bits())
+            .bits()
+            .cast_unsigned();
+
+        // (3) Slot must be precomputable.
+        let init = module
+            .table_initialization
+            .initial_values
+            .get(defined_table)?;
+        let precomputed = match init {
+            TableInitialValue::Null { precomputed } => precomputed,
+            // A fully-expression-driven initializer can't be resolved at
+            // compile time. Bail.
+            TableInitialValue::Expr(_) => return None,
+        };
+        let slot = usize::try_from(callee_idx_u64).ok()?;
+        if slot >= precomputed.len() {
+            return None;
+        }
+        let target = precomputed[slot];
+        // `FuncIndex::reserved_value()` is the "no entry" sentinel —
+        // this slot wasn't covered by any static `elem` segment.
+        if target.is_reserved_value() {
+            return None;
+        }
+
+        // (4) Signature match. The site's declared `ty_index` and the
+        //     target function's declared signature must intern to the same
+        //     module type index.
+        let expected_ty = module.types[ty_index].unwrap_module_type_index();
+        let target_ty = module.functions[target]
+            .signature
+            .unwrap_module_type_index();
+        if expected_ty != target_ty {
+            return None;
+        }
+
+        Some(target)
     }
 
     fn check_and_load_code_and_callee_vmctx(
