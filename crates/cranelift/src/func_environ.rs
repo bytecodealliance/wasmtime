@@ -2096,6 +2096,41 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// the resolved target per call site, we observe at module-load that
     /// the table contents make the sig check uninformative for the
     /// lifetime of any instance.
+    /// True iff every slot in the precomputed `elem`-segment contents for
+    /// `table_index` is a concrete `FuncIndex` (no
+    /// `FuncIndex::reserved_value()` "no-entry" sentinel).
+    ///
+    /// Caller has already proven the table is immutable, so the contents
+    /// observed here are stable for the lifetime of any instance —
+    /// `false` here implies "no slot is ever null at runtime."
+    ///
+    /// When this is true, the runtime funcref-NULL check on the loaded
+    /// funcref pointer is provably redundant: any in-bounds index leads
+    /// to a non-null funcref. The bounds check still runs (so an
+    /// out-of-bounds index traps as before with `TRAP_TABLE_OUT_OF_BOUNDS`).
+    fn precomputed_table_has_no_null_slots(&self, table_index: TableIndex) -> bool {
+        let module = &self.env.translation.module;
+        let Some(defined_table) = module.defined_table_index(table_index) else {
+            return false;
+        };
+        let Some(init) = module.table_initialization.initial_values.get(defined_table)
+        else {
+            return false;
+        };
+        let precomputed = match init {
+            TableInitialValue::Null { precomputed } => precomputed,
+            TableInitialValue::Expr(_) => return false,
+        };
+        // Empty precomputed means we have no information.
+        if precomputed.is_empty() {
+            return false;
+        }
+        // Every slot must be a real FuncIndex — no reserved-value sentinels.
+        precomputed
+            .iter()
+            .all(|f| !f.is_reserved_value())
+    }
+
     fn try_elide_sig_check_for_immutable_table(
         &self,
         table_index: TableIndex,
@@ -2226,9 +2261,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             WasmHeapType::Func
                 if self.try_elide_sig_check_for_immutable_table(table_index, ty_index) =>
             {
-                return CheckIndirectCallTypeSignature::StaticMatch {
-                    may_be_null: table.ref_type.nullable,
-                };
+                // If we additionally know every entry in the precomputed
+                // table is non-null, lower `may_be_null` to false so the
+                // downstream funcref-NULL check is also elided. This is
+                // only sound if the table can't be grown or have its
+                // entries cleared after init (i.e., immutable, which we
+                // already proved above).
+                let may_be_null = table.ref_type.nullable
+                    && !self.precomputed_table_has_no_null_slots(table_index);
+                return CheckIndirectCallTypeSignature::StaticMatch { may_be_null };
             }
 
             // Functions do not have a statically known type in the table, a
