@@ -108,6 +108,26 @@
       (taken MachLabel)
       (not_taken MachLabel))
 
+    ;; Phase-3 fusion: absorbs the preceding standalone `xband_s8 dst, src,
+    ;; -2` into the same MachInst as a `FuncrefDispatch`. Operand
+    ;; structure differs: `src` here is the UNMASKED funcref (the band's
+    ;; input), and `dst_masked` is added as a third def so the brif's
+    ;; block-call-arg copy to the continuation block still has a real
+    ;; producer for the funcref-ptr block param. The underlying Pulley
+    ;; ops are `xband_funcref_dispatch_{x64,not_x64,x32,not_x32}`. See
+    ;; `try_fuse_band_into_funcref_dispatch` in `pulley_shared::lower`
+    ;; for when phase 3 fires vs phase 2.
+    (BandFuncrefDispatch
+      (dst_masked WritableXReg)
+      (dst_code WritableXReg)
+      (dst_vmctx WritableXReg)
+      (src XReg)
+      (offset_code i8)
+      (offset_vmctx i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 

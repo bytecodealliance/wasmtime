@@ -487,30 +487,47 @@ where
         return false;
     };
 
-    // Source vreg: `cond` (the band's result — already-masked funcref
-    // pointer). The band stays as a separate Pulley `xband_s8` op (we
-    // do NOT sink it). Its result feeds both us and the brif's
-    // block-call-arg in continuation, which is what makes the
-    // predecessor brif's block-arg machinery well-defined here.
-    //
-    // Note we look up cond directly via the brif's cond arg — it's the
-    // same value the matching pattern returned as `pat.code_val`'s base
-    // (`funcref_ptr` after block-arg substitution).
     let InstructionData::Brif { arg: cond, .. } = ctx.f.dfg.insts[ir_inst] else {
         return false;
     };
-    let src_reg = ctx
-        .put_value_in_regs(cond)
-        .only_reg()
-        .expect("scalar funcref source");
-    let src = XReg::new(src_reg).expect("funcref source is an x-class register");
+
+    // Phase 3: try to ALSO absorb the band into a BandFuncrefDispatch.
+    // The band defines cond; if absorbed, its standalone xband_s8
+    // dispatch goes away (one less match_loop dispatch per call_indirect
+    // site vs phase 2). The fused MachInst defs three vregs:
+    // `dst_masked` (= cond's vreg) so the brif's block-call-arg copy
+    // still finds the masked value, plus `dst_code` and `dst_vmctx`.
+    //
+    // We re-derive the band inst and unmasked source `v` rather than
+    // threading them through `FuncrefDispatchPattern` — the match
+    // succeeded if we got here, and we already know cond's def is
+    // `band(v, -2)`. Width-aware `is_minus_two_for` matches the same
+    // way as `match_funcref_dispatch_pattern`.
+    let dfg = ctx.dfg();
+    let band_inst = dfg.value_def(cond).inst();
+    let v = band_inst.and_then(|bi| match dfg.insts[bi] {
+        InstructionData::Binary {
+            opcode: Opcode::Band,
+            args: [a, b],
+        } => match dfg.value_def(b).inst() {
+            Some(b_inst) => match dfg.insts[b_inst] {
+                InstructionData::UnaryImm {
+                    opcode: Opcode::Iconst,
+                    imm,
+                } if is_minus_two_for(imm, dfg.value_type(cond)) => Some(a),
+                _ => None,
+            },
+            None => None,
+        },
+        _ => None,
+    });
 
     // Destination vregs: the loads' result values' canonical vregs.
     // pre_lower marked the loads as absorbed_pure, so their standalone
     // lowering (in the continuation block, processed earlier in reverse
     // iteration) was skipped — value_regs[code_val] and value_regs[vmctx_val]
-    // are un-aliased, and our FuncrefDispatch's def of them is the sole
-    // def each one has across the function.
+    // are un-aliased, and our def of them is the sole def each one has
+    // across the function.
     let dst_code_reg = ctx
         .put_value_in_regs(pat.code_val)
         .only_reg()
@@ -523,6 +540,47 @@ where
         .expect("funcref code dst is an x-class register");
     let dst_vmctx = WritableXReg::try_from(Writable::from_reg(dst_vmctx_reg))
         .expect("funcref vmctx dst is an x-class register");
+
+    if let (Some(band_inst), Some(v)) = (band_inst, v) {
+        // Phase 3: source = unmasked `v`; emit BandFuncrefDispatch which
+        // does the masking internally and writes the masked value to
+        // dst_masked (= cond's vreg). Sink the band — its standalone
+        // lowering is skipped, removing one Pulley dispatch from the
+        // call_indirect tail.
+        let dst_masked_regs = ctx.put_value_in_regs(cond);
+        let dst_masked_reg = dst_masked_regs.only_reg().expect("scalar cond");
+        let dst_masked = WritableXReg::try_from(Writable::from_reg(dst_masked_reg))
+            .expect("cond is an x-class register");
+        let src_reg = ctx
+            .put_value_in_regs(v)
+            .only_reg()
+            .expect("scalar funcref source");
+        let src = XReg::new(src_reg).expect("funcref source is an x-class register");
+        ctx.sink_pure_inst(band_inst);
+        ctx.emit(
+            Inst::BandFuncrefDispatch {
+                dst_masked,
+                dst_code,
+                dst_vmctx,
+                src,
+                offset_code: pat.offset_code,
+                offset_vmctx: pat.offset_vmctx,
+                size: pat.size,
+                taken: targets[0],
+                not_taken: targets[1],
+            }
+            .into(),
+        );
+        return true;
+    }
+
+    // Phase 2 fallback: band stays standalone, FuncrefDispatch consumes
+    // its masked result as src.
+    let src_reg = ctx
+        .put_value_in_regs(cond)
+        .only_reg()
+        .expect("scalar funcref source");
+    let src = XReg::new(src_reg).expect("funcref source is an x-class register");
 
     ctx.emit(
         Inst::FuncrefDispatch {

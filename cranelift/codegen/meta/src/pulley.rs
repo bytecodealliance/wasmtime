@@ -97,6 +97,13 @@ impl Inst<'_> {
             // Skip special instructions not used in Cranelift.
             "XPush32Many" | "XPush64Many" | "XPop32Many" | "XPop64Many" => true,
 
+            // Phase-3 fused dispatch op: 3 writable results would
+            // require extending the auto-codegen `results[..]` match
+            // arms below. The op is emitted only via the hand-written
+            // `MInst::BandFuncrefDispatch` path, so no auto-generated
+            // ISLE rule is needed — skip here.
+            n if n.starts_with("XbandFuncrefDispatch") => true,
+
             // Skip more branching-related instructions.
             n => n.starts_with("Br"),
         }

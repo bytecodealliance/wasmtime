@@ -53,27 +53,25 @@
 ;;       push_frame_save 48, x16, x17, x18, x27, x28, x29
 ;;       xmov x18, x0
 ;;       xmov x29, x3
-;;       br_if_xugteq32_u8 x2, 3, 0xac    // target = 0xc8
+;;       br_if_xugteq32_u8 x2, 3, 0xa6    // target = 0xc2
 ;;   23: xload64le_o32 x28, x0, 48
 ;;       zext32 x1, x2
 ;;       xshl64_u6 x0, x1, 3
 ;;       xadd64 x0, x28, x0
 ;;       xload64le_o32 x0, x0, 0
-;;       xband64_s8 x0, x0, -2
-;;       xfuncref_dispatch_not_x64 x16, x17, x0, 8, 24, 0x57    // target = 0x95
+;;       xband_funcref_dispatch_not_x64 x0, x16, x17, x0, 8, 24, 0x55    // target = 0x8f
 ;;       xmov x2, x0
 ;;       xmov x0, x17
 ;;       xmov x1, x18
 ;;       call_indirect x16
 ;;       xmov x3, x29
 ;;       xmov x17, x0
-;;       br_if_xugteq32_u8 x3, 3, 0x72    // target = 0xcb
-;;   60: zext32 x1, x3
+;;       br_if_xugteq32_u8 x3, 3, 0x6f    // target = 0xc5
+;;   5d: zext32 x1, x3
 ;;       xshl64_u6 x0, x1, 3
 ;;       xadd64 x0, x28, x0
 ;;       xload64le_o32 x0, x0, 0
-;;       xband64_s8 x0, x0, -2
-;;       xfuncref_dispatch_not_x64 x27, x28, x0, 8, 24, 0x39    // target = 0xad
+;;       xband_funcref_dispatch_not_x64 x0, x27, x28, x0, 8, 24, 0x3a    // target = 0xa7
 ;;       xmov x2, x0
 ;;       xmov x1, x18
 ;;       xmov x0, x28
@@ -82,18 +80,18 @@
 ;;       xadd32 x0, x1, x0
 ;;       pop_frame_restore 48, x16, x17, x18, x27, x28, x29
 ;;       ret
-;;   95: xzero x0
-;;   97: xmov x2, x18
-;;   9a: call3 x2, x0, x1, 0x29e    // target = 0x338
-;;   a2: xmov x2, x0
-;;   a5: xmov x0, x17
-;;   a8: jump -0x5a    // target = 0x4e
-;;   ad: xzero x0
-;;   af: xmov x16, x18
-;;   b2: call3 x16, x0, x1, 0x286    // target = 0x338
-;;   ba: xmov x2, x0
-;;   bd: xmov x0, x28
-;;   c0: xmov x1, x16
-;;   c3: jump -0x3c    // target = 0x87
-;;   c8: trap
-;;   cb: trap
+;;   8f: xzero x0
+;;   91: xmov x2, x18
+;;   94: call3 x2, x0, x1, 0x29e    // target = 0x332
+;;   9c: xmov x2, x0
+;;   9f: xmov x0, x17
+;;   a2: jump -0x57    // target = 0x4b
+;;   a7: xzero x0
+;;   a9: xmov x16, x18
+;;   ac: call3 x16, x0, x1, 0x286    // target = 0x332
+;;   b4: xmov x2, x0
+;;   b7: xmov x0, x28
+;;   ba: xmov x1, x16
+;;   bd: jump -0x3c    // target = 0x81
+;;   c2: trap
+;;   c5: trap
