@@ -21,6 +21,8 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut tables: HashMap<usize, (Table, usize)> = Default::default();
     let mut memory_types: HashMap<usize, MemoryType> = Default::default();
     let mut memories: HashMap<usize, (Memory, usize)> = Default::default();
+    let mut func_types: HashMap<usize, FuncType> = Default::default();
+    let mut funcs: HashMap<usize, (Func, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -38,6 +40,7 @@ pub fn make_api_calls(api: ApiCalls) {
                 globals.retain(|_, (_, store_id)| *store_id != id);
                 tables.retain(|_, (_, store_id)| *store_id != id);
                 memories.retain(|_, (_, store_id)| *store_id != id);
+                funcs.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
             }
 
@@ -564,6 +567,100 @@ pub fn make_api_calls(api: ApiCalls) {
                     continue;
                 }
                 memories.insert(id, (ms[nth % ms.len()], store_id));
+            }
+
+            ApiCall::FuncTypeNew {
+                id,
+                ref params,
+                ref results,
+            } => {
+                log::trace!("creating func type {id}");
+                let param_tys = params.iter().map(|p| p.to_wasmtime());
+                let result_tys = results.iter().map(|r| r.to_wasmtime());
+                let ft = FuncType::new(&engine, param_tys, result_tys);
+                let old = func_types.insert(id, ft);
+                assert!(old.is_none());
+            }
+
+            ApiCall::FuncTypeDrop { id } => {
+                log::trace!("dropping func type {id}");
+                func_types.remove(&id);
+            }
+
+            ApiCall::FuncNew { id, func_ty, store } => {
+                log::trace!("creating func {id} with type {func_ty} in store {store}");
+                let ft = match func_types.get(&func_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let f = Func::new(&mut *st, ft, |_caller, _params, _results| Ok(()));
+                funcs.insert(id, (f, store));
+            }
+
+            ApiCall::FuncTy { func } => {
+                log::trace!("checking type of func {func}");
+                let (f, store_id) = match funcs.get(&func) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = f.ty(&*st);
+            }
+
+            ApiCall::FuncCall { func } => {
+                log::trace!("calling func {func}");
+                let (f, store_id) = match funcs.get(&func) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = f.ty(&*st);
+                if let Some(params) = ty
+                    .params()
+                    .map(|p| p.default_value())
+                    .collect::<Option<Vec<_>>>()
+                {
+                    let mut results = vec![Val::I32(0); ty.results().len()];
+                    let _ = f.call(st, &params, &mut results);
+                }
+            }
+
+            ApiCall::GetFuncExport { id, instance, nth } => {
+                log::trace!("getting {nth}th func export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let fs = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| match e.into_extern() {
+                        Extern::Func(f) => Some(f),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if fs.is_empty() {
+                    continue;
+                }
+                funcs.insert(id, (fs[nth % fs.len()], store_id));
+            }
+
+            ApiCall::FuncDrop { id } => {
+                log::trace!("dropping func {id}");
+                funcs.remove(&id);
             }
         }
     }
