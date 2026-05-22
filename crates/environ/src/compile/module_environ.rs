@@ -789,9 +789,14 @@ and for re-adding support for interface types you can see this issue:
                         })
                         .collect::<Box<[_]>>();
                     if !hints.is_empty() {
+                        // A well-formed section lists each function at most once;
+                        // if a malformed one repeats a function, keep the first
+                        // entry deterministically rather than silently
+                        // overwriting it.
                         self.result
                             .branch_hints
-                            .insert(FuncIndex::from_u32(func.func), hints);
+                            .entry(FuncIndex::from_u32(func.func))
+                            .or_insert(hints);
                     }
                 }
             }
