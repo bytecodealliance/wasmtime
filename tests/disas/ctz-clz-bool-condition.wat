@@ -73,9 +73,6 @@
   (func $if_clz_ne0_i64 (param i64) (result i32)
     (i64.ne (i64.clz (local.get 0)) (i64.const 0))
     if (result i32) i32.const 100 else i32.const 200 end)
-  ;; Wasm-natural shape mirroring `$if_ctz_bare_i64`: `i64.clz` produces
-  ;; i64, narrowed via `i32.wrap_i64` before `if`. Same `ireduce` peel as
-  ;; the ctz form; collapses to a sign-bit test on the wider input.
   (func $if_clz_bare_i64 (param i64) (result i32)
     (i64.clz (local.get 0)) i32.wrap_i64
     if (result i32) i32.const 100 else i32.const 200 end)
