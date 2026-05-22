@@ -206,14 +206,25 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
         Inst::IndirectCall { info } => {
-            collector.reg_use(&mut info.dest);
             let CallInfo {
                 uses,
                 defs,
+                dest,
                 try_call_info,
                 clobbers,
                 ..
             } = &mut **info;
+
+            // Phase-4: the target and the first up-to-4 integer args live
+            // in `dest` and are passed as free reg uses; the emitted
+            // `call_indirect{1,2,3,4}` op moves the args into x0..x3 at
+            // call time. Remaining args still flow through `uses` with
+            // fixed pregs as before.
+            let PulleyCallIndirect { target, args } = dest;
+            collector.reg_use(target);
+            for arg in args {
+                collector.reg_use(arg);
+            }
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -770,7 +781,7 @@ impl Inst {
             }
 
             Inst::IndirectCall { info } => {
-                let callee = format_reg(*info.dest);
+                let callee = format_reg(*info.dest.target);
                 let try_call = info
                     .try_call_info
                     .as_ref()
