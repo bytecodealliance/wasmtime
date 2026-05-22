@@ -3015,4 +3015,95 @@ block2:
             "#,
         );
     }
+
+    /// Regression test for a missed stack-map slot when a stack-map
+    /// variable is re-defined in the same block while an earlier SSA
+    /// value bound to it is still live across a safepoint.
+    ///
+    /// Previously, `SSABuilder::variables` stored only the *latest*
+    /// `Value` per `(Variable, Block)`, and `values_for_var` iterated
+    /// that map, so the earlier `Value` was dropped from the set the
+    /// safepoint pass propagates stack-map flags onto. The expected
+    /// output below requires `v1` to be spilled and listed in the
+    /// `call` instruction's stack map alongside `v2`.
+    #[test]
+    fn var_redefined_in_same_block_keeps_earlier_value_in_stack_map() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+        sig.returns
+            .push(AbiParam::new(cranelift_codegen::ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let var = builder.declare_var(cranelift_codegen::ir::types::I32);
+        builder.declare_var_needs_stack_map(var);
+
+        let name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let signature = builder
+            .func
+            .import_signature(Signature::new(CallConv::SystemV));
+        let func_ref = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        let block0 = builder.create_block();
+        builder.switch_to_block(block0);
+
+        // First definition of `var`. Read it out (giving us an SSA
+        // value `v1` that we'll keep live across the safepoint below).
+        let v1 = builder.ins().iconst(ir::types::I32, 11);
+        builder.def_var(var, v1);
+        let v1_use = builder.use_var(var);
+
+        // Re-define `var` to a different SSA value within the same
+        // block. Without the fix, this overwrites the only place
+        // `v1` was recorded, so `values_for_var(var)` no longer
+        // returns it and the safepoint pass omits it from the
+        // upcoming stack map.
+        let v2 = builder.ins().iconst(ir::types::I32, 22);
+        builder.def_var(var, v2);
+        let v2_use = builder.use_var(var);
+
+        // Safepoint at which both `v1_use` (= v1) and `v2_use` (= v2)
+        // must be live and listed in the stack map.
+        builder.ins().call(func_ref, &[]);
+
+        builder.ins().return_(&[v1_use, v2_use]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %sample() -> i32, i32 system_v {
+    ss0 = explicit_slot 4, align = 4
+    ss1 = explicit_slot 4, align = 4
+    sig0 = () system_v
+    fn0 = colocated u0:0 sig0
+
+block0:
+    v0 = iconst.i32 11
+    stack_store v0, ss0  ; v0 = 11
+    v1 = iconst.i32 22
+    stack_store v1, ss1  ; v1 = 22
+    call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0]
+    v2 = stack_load.i32 ss0
+    v3 = stack_load.i32 ss1
+    return v2, v3
+}
+            "#
+        );
+    }
 }
