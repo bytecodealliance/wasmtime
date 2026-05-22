@@ -4526,12 +4526,56 @@ impl FuncEnvironment<'_> {
             _ => unreachable!(),
         };
         let end_index = builder.ins().iadd(src_index, copy_len_as_src_index_ty);
+
+        // The per-element loop uses only raw pointers derived from the
+        // source and destination array gc-refs. Cranelift's stack-map
+        // machinery tracks SSA-value liveness, and raw pointers don't keep
+        // their base gc-ref alive, so without intervention the gc-refs are
+        // dead in CLIF inside the loop. If a GC fires from a safe point in
+        // the loop body (e.g. `force_gc` from the DRC read barrier), sweep
+        // can drop the arrays from OASR, free them, and cascade dec-refs
+        // through their elements, leaving the rest of the copy reading
+        // freed memory. Thread the array gc-refs through the loop's
+        // iteration blocks as block params so each iteration's brif gives
+        // them a live use and they appear in the stack map at every safe
+        // point inside the loop.
+        let keepalives: SmallVec<[ir::Value; 2]> = [dst_entity, src_entity]
+            .into_iter()
+            .filter_map(|e| match e {
+                CheckedEntity::Array { array, .. } => Some(array),
+                _ => None,
+            })
+            .collect();
+
+        // Build a brif args list of `fixed` followed by the keepalive values.
+        let with_keepalives = |fixed: &[ir::Value]| -> SmallVec<[ir::BlockArg; 5]> {
+            fixed
+                .iter()
+                .chain(&keepalives[..])
+                .map(|v| (*v).into())
+                .collect()
+        };
+
+        // Append one block param per keepalive value to `block`, declare each
+        // as needing a stack map, and return the new params.
+        let append_keepalive_params =
+            |builder: &mut FunctionBuilder<'_>, block: ir::Block| -> SmallVec<[ir::Value; 2]> {
+                keepalives
+                    .iter()
+                    .map(|_| {
+                        let v = builder.append_block_param(block, ir::types::I32);
+                        builder.declare_value_needs_stack_map(v);
+                        v
+                    })
+                    .collect()
+            };
+
         builder.ins().brif(
             dst_first,
             forward_block,
-            &[dst_elem_addr.into(), src_elem_addr.into(), src_index.into()],
+            &with_keepalives(&[dst_elem_addr, src_elem_addr, src_index])[..],
             backwards_block,
-            &[dst_end_addr.into(), src_end_addr.into(), end_index.into()],
+            &with_keepalives(&[dst_end_addr, src_end_addr, end_index])[..],
         );
 
         // Forward copy -- copy one field, then mutate the current pointers, then
@@ -4540,6 +4584,7 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_index = builder.append_block_param(forward_block, src_index_ty);
+        let forward_keepalives = append_keepalive_params(builder, forward_block);
         // Consume a single unit of fuel on each iteration of the loop.
         if self.tunables.consume_fuel {
             self.fuel_consumed += 1;
@@ -4550,13 +4595,14 @@ impl FuncEnvironment<'_> {
         let src_next = builder.ins().iadd_imm(src_cur, i64::from(src_element_size));
         let src_index_next = builder.ins().iadd_imm(src_index, 1);
         let done = builder.ins().icmp(IntCC::Equal, src_next, src_end_addr);
-        builder.ins().brif(
-            done,
-            done_block,
-            &[],
-            forward_block,
-            &[dst_next.into(), src_next.into(), src_index_next.into()],
-        );
+        let forward_next_args: SmallVec<[ir::BlockArg; 5]> = [dst_next, src_next, src_index_next]
+            .iter()
+            .chain(&forward_keepalives[..])
+            .map(|v| (*v).into())
+            .collect();
+        builder
+            .ins()
+            .brif(done, done_block, &[], forward_block, &forward_next_args[..]);
 
         // Backwards copy -- update the pointers, then perform a copy, then check
         // to see if we're done.
@@ -4564,6 +4610,7 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
+        let backward_keepalives = append_keepalive_params(builder, backwards_block);
         if self.tunables.consume_fuel {
             self.fuel_consumed += 1;
         }
@@ -4586,12 +4633,17 @@ impl FuncEnvironment<'_> {
         };
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let done = builder.ins().icmp(IntCC::Equal, src_cur, src_elem_addr);
+        let backward_next_args: SmallVec<[ir::BlockArg; 5]> = [dst_cur, src_cur, src_index]
+            .iter()
+            .chain(&backward_keepalives[..])
+            .map(|v| (*v).into())
+            .collect();
         builder.ins().brif(
             done,
             done_block,
             &[],
             backwards_block,
-            &[dst_cur.into(), src_cur.into(), src_index.into()],
+            &backward_next_args[..],
         );
 
         builder.switch_to_block(done_block);
