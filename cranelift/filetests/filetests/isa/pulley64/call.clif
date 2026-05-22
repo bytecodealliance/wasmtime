@@ -291,7 +291,7 @@ block0(v0: i64):
 ; VCode:
 ;   push_frame
 ; block0:
-;   indirect_call x0, CallInfo { dest: XReg(p0i), uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }], clobbers: PRegSet { bits: [65534, 4294967295, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: None, patchable: false }
+;   indirect_call x0, CallInfo { dest: PulleyCallIndirect { target: XReg(p0i), args: [] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I64) }], clobbers: PRegSet { bits: [65534, 4294967295, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: None, patchable: false }
 ;   pop_frame
 ;   ret
 ;

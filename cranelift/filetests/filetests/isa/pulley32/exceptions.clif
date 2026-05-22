@@ -75,7 +75,7 @@ function %f2(i32, i32) -> i32, f32, f64 {
 ; block0:
 ;   fconst64 f1, 4607182418800017408
 ;   fstore64 Slot(0), f1 // flags =  notrap aligned
-;   indirect_call x1, CallInfo { dest: XReg(p1i), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: false }; jump MachLabel(1); catch [default: MachLabel(2)]
+;   indirect_call x1, CallInfo { dest: PulleyCallIndirect { target: XReg(p1i), args: [XReg(p0i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_handlers: [Default(MachLabel(2))] }), patchable: false }; jump MachLabel(1); catch [default: MachLabel(2)]
 ; block1:
 ;   xone x0
 ;   f1 = fload64 Slot(0) // flags = notrap aligned
