@@ -77,6 +77,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
     // Exiting the scope and unrooting `r` should have dropped the inner
     // `SetFlagOnDrop` value.
+    store.gc(None)?;
     assert!(inner_dropped.load(SeqCst));
 
     Ok(())
@@ -265,6 +266,7 @@ fn drop_externref_via_table_set() -> Result<()> {
     assert!(!bar_is_dropped.load(SeqCst));
 
     table_set.call(&mut store, &[Val::ExternRef(None)], &mut [])?;
+    store.gc(None)?;
     assert!(foo_is_dropped.load(SeqCst));
     assert!(bar_is_dropped.load(SeqCst));
 

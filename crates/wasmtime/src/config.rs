@@ -3394,9 +3394,9 @@ impl Strategy {
 ///
 /// | Collector                   | Collects Garbage[^1]  | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
 /// |-----------------------------|-----------------------|-------------|----------------|----------------------|----------------------|
+/// | `Copying`                   | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
 /// | `DeferredReferenceCounting` | Yes, but not cycles   | 🙂         | 🙁             | 😐                   | 😐                  |
 /// | `Null`                      | No                    | 🙂         | 🙂             | 🙂                   | 🙂                  |
-/// | `Copying`[^copying]         | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
 ///
 /// [^1]: Whether or not the collector is capable of collecting garbage and cyclic garbage.
 ///
@@ -3416,9 +3416,6 @@ impl Strategy {
 ///       require? Less space taken up by metadata means more space for
 ///       additional objects. Reference counts are larger than mark bits and
 ///       free lists are larger than bump pointers, for example.
-///
-/// [^copying]: The copying collector is still under construction and is not yet
-///             functional.
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Collector {
@@ -3427,10 +3424,10 @@ pub enum Collector {
     ///
     /// This is generally what you want for most projects and indicates that the
     /// `wasmtime` crate itself should make the decision about what the best
-    /// collector for a wasm module is.
+    /// collector to use is.
     ///
-    /// Currently this always defaults to the deferred reference-counting
-    /// collector, but the default value may change over time.
+    /// Currently this always defaults to the copying collector, but the default
+    /// value may change over time.
     Auto,
 
     /// The deferred reference-counting collector.
@@ -3491,7 +3488,9 @@ impl Collector {
     fn not_auto(&self) -> Option<Collector> {
         match self {
             Collector::Auto => {
-                if cfg!(feature = "gc-drc") {
+                if cfg!(feature = "gc-copying") {
+                    Some(Collector::Copying)
+                } else if cfg!(feature = "gc-drc") {
                     Some(Collector::DeferredReferenceCounting)
                 } else if cfg!(feature = "gc-null") {
                     Some(Collector::Null)
