@@ -465,3 +465,16 @@
 ;; `brif (clz X) bt be` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
 (rule (simplify_skeleton (brif (clz x_ty X) _ _))
       (replace_branch_cond (sge $I8 X (iconst_u x_ty 0))))
+
+;; Peer through `ireduce` when its operand is a `ctz`/`clz`. The wasm
+;; shape is `i64.ctz; i32.wrap_i64; br_if` (motoko/moc's EOP peephole
+;; emits this, and the same applies to clz). `ireduce` is harmless on a
+;; ctz/clz result because the value is in [0, bitwidth] — always fits in
+;; the smaller type without loss. We rewrite to the same bit-extract
+;; condition as the bare-form rules above, using the wider source type.
+(rule (simplify_skeleton (brif (ireduce _ (ctz x_ty X)) _ _))
+      (replace_branch_cond
+        (eq $I8 (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0))))
+
+(rule (simplify_skeleton (brif (ireduce _ (clz x_ty X)) _ _))
+      (replace_branch_cond (sge $I8 X (iconst_u x_ty 0))))
