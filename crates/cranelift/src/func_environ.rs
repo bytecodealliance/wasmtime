@@ -2035,10 +2035,16 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// All four of these must hold for the resolution to succeed:
     ///
     /// 1. The target table must be provably immutable for the lifetime of
-    ///    any instance of this module: defined (not imported) and never the
-    ///    target of `table.set` / `table.fill` / `table.copy` (as the dst)
-    ///    / `table.grow` / `table.init`. This is the `tables_mutated` bit
-    ///    populated in `ModuleEnvironment::translate`.
+    ///    any instance of this module: defined (not imported), not exported,
+    ///    never the target of `table.set` / `table.fill` / `table.copy`
+    ///    (as the dst) / `table.grow` / `table.init`, and not the target
+    ///    of any leftover active `elem` segment (one
+    ///    `try_func_table_init` couldn't fold into the precomputed image
+    ///    and that will execute at instantiation time, potentially
+    ///    overwriting precomputed slots with arbitrary funcrefs). All of
+    ///    these conditions are folded into the `tables_mutated` bit
+    ///    populated in `ModuleEnvironment::translate` —
+    ///    `tables_mutated[t] == false` is necessary and sufficient.
     ///
     /// 2. The callee index value (the operand to `call_indirect`) must be a
     ///    compile-time constant — i.e., the wasm did `i32.const N;
@@ -2138,8 +2144,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// True when:
     ///
     /// 1. The table is provably immutable (`tables_mutated[table_index] ==
-    ///    false`). Defined-not-imported is implied since imported tables
-    ///    are pre-marked as mutated.
+    ///    false`). The `tables_mutated` bit set by
+    ///    `analyze_table_mutability` covers imports, exports, runtime
+    ///    mutation opcodes, AND tables targeted by leftover active `elem`
+    ///    segments (segments that didn't fold into the precomputed image
+    ///    and execute at instantiation time, potentially overwriting
+    ///    precomputed slots with a funcref of a different signature).
+    ///    `false` here is therefore sufficient to treat the precomputed
+    ///    image as authoritative for the lifetime of any instance.
     ///
     /// 2. The table is precomputable from static `elem` segments
     ///    (`TableInitialValue::Null { precomputed }`).
@@ -2177,7 +2189,10 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let Some(defined_table) = module.defined_table_index(table_index) else {
             return false;
         };
-        let Some(init) = module.table_initialization.initial_values.get(defined_table)
+        let Some(init) = module
+            .table_initialization
+            .initial_values
+            .get(defined_table)
         else {
             return false;
         };
@@ -2203,9 +2218,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             return false;
         }
         // Every slot must be a real FuncIndex — no reserved-value sentinels.
-        precomputed
-            .iter()
-            .all(|f| !f.is_reserved_value())
+        precomputed.iter().all(|f| !f.is_reserved_value())
     }
 
     fn try_elide_sig_check_for_immutable_table(
@@ -2224,7 +2237,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             None => return false,
         };
 
-        let init = match module.table_initialization.initial_values.get(defined_table) {
+        let init = match module
+            .table_initialization
+            .initial_values
+            .get(defined_table)
+        {
             Some(i) => i,
             None => return false,
         };

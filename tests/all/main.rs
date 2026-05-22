@@ -34,6 +34,7 @@ mod import_indexes;
 mod instance;
 mod intrinsics;
 mod invoke_func_via_table;
+mod leftover_elem_segment_soundness;
 mod limits;
 mod linker;
 mod memory;

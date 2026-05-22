@@ -714,7 +714,14 @@ impl Module {
     /// - The table is provably immutable
     ///   (`tables_mutated[idx] == false`). Imported and exported
     ///   tables are pre-marked as mutated by
-    ///   `analyze_table_mutability` and so excluded.
+    ///   `analyze_table_mutability` and so excluded. The same pass
+    ///   marks tables with **leftover active `elem` segments**
+    ///   (segments that `try_func_table_init` couldn't fold into the
+    ///   precomputed image and that will run at instantiation time)
+    ///   as mutated, since those segments can overwrite slots after
+    ///   the precomputed image is applied — making any predicate
+    ///   that reads from `precomputed` non-authoritative for the
+    ///   lifetime of an instance.
     /// - The table has a precomputed image
     ///   (`TableInitialValue::Null { precomputed }`, not `Expr`).
     /// - The precomputed image covers the full minimum-size range of

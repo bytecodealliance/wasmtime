@@ -76,7 +76,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u805306368:9 sig1
+;;     fn0 = colocated u805306368:7 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -89,7 +89,7 @@
 ;; @0050                               v9 = iadd v7, v8
 ;; @0050                               v10 = iconst.i64 0
 ;; @0050                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @0050                               v12 = load.i64 user5 aligned table v11
+;; @0050                               v12 = load.i64 user6 aligned table v11
 ;;                                     v22 = iconst.i64 -2
 ;; @0050                               v13 = band v12, v22  ; v22 = -2
 ;; @0050                               brif v12, block3(v13), block2

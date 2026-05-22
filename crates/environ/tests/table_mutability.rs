@@ -305,3 +305,132 @@ fn module_with_no_tables_produces_empty_mutability_vec() {
     );
     assert!(bits.is_empty(), "no tables ⇒ no mutability bits");
 }
+
+// -----------------------------------------------------------------------------
+// Leftover active elem segments — soundness gate for the call_indirect
+// elisions in `crates/cranelift/src/func_environ.rs`.
+//
+// `try_func_table_init` folds *some* active `elem` segments into
+// `table_initialization.initial_values[t].precomputed` at compile time
+// and drains them from `table_initialization.segments`. Any segment it
+// can't fold (dynamic offset, `Expressions` form, out-of-range, ...)
+// stays in the `segments` list and runs at instantiation time *after*
+// the precomputed image is applied — potentially overwriting slots
+// that downstream optimizations have read from `precomputed` and
+// assumed stable. Pin the analyzer to mark every such target as
+// mutated so the elisions correctly bail out. Caught by review on
+// PR #2 (`https://github.com/rebeckerspecialties/wasmtime/pull/2#
+// discussion_r3193374159` and `…#discussion_r3193374164`).
+// -----------------------------------------------------------------------------
+
+/// A second elem segment whose offset is `(global.get $g)` (an imported
+/// global, resolved at instantiation time) cannot be folded into
+/// `precomputed` — `try_func_table_init` only folds segments with a
+/// constant `i32.const`/`i64.const` offset. So the segment stays in
+/// `table_initialization.segments` and overwrites slots at instance
+/// time. Without the leftover-segment pass in `analyze_table_mutability`,
+/// the table would be marked immutable and the type-confusion soundness
+/// bug fires (a function of a different signature could end up at slot
+/// 0 of an "immutable" table, defeating
+/// `try_elide_sig_check_for_immutable_table`).
+#[test]
+fn dynamic_offset_leftover_segment_marks_table_mutated() {
+    let bits = translate_and_get_mutability(
+        r#"
+        (module
+          (import "" "g" (global $g i32))
+          (table 4 4 funcref)
+          (func $f (result i32) i32.const 42)
+          (elem (i32.const 0) func $f)
+          (elem (offset (global.get $g)) func $f))
+        "#,
+    );
+    assert_eq!(
+        bits,
+        vec![true],
+        "leftover segment with dynamic offset must mark its target table mutated"
+    );
+}
+
+/// A segment in `Expressions` form (`funcref (item ref.func ...)`)
+/// rather than `Functions` form is also rejected by
+/// `try_func_table_init` and stays in `segments`. Same soundness
+/// argument as the dynamic-offset case: the segment's evaluation
+/// happens at instantiation time and can produce arbitrary funcrefs
+/// (including null via `ref.null func`), which would invalidate any
+/// elision proof that read from `precomputed`.
+#[test]
+fn expressions_form_leftover_segment_marks_table_mutated() {
+    let bits = translate_and_get_mutability(
+        r#"
+        (module
+          (table 4 4 funcref)
+          (func $f (result i32) i32.const 42)
+          (elem (i32.const 0) funcref (item ref.func $f) (item ref.null func)))
+        "#,
+    );
+    assert_eq!(
+        bits,
+        vec![true],
+        "Expressions-form leftover segment must mark its target table mutated"
+    );
+}
+
+/// `try_func_table_init` short-circuits the *whole* segment-folding
+/// loop on the first segment it can't fold — including any later
+/// segments that target a different table. This preserves wasm's
+/// trap-ordering semantics (the failing segment might trap, in which
+/// case later segments shouldn't have been applied either). The
+/// upshot: a single dynamic-offset segment can leave many leftover
+/// segments behind. Verify the analyzer marks every targeted table,
+/// not just the one whose segment broke the loop.
+#[test]
+fn leftover_segments_after_short_circuit_mark_all_targets() {
+    let bits = translate_and_get_mutability(
+        r#"
+        (module
+          (import "" "g" (global $g i32))
+          (table $t0 4 4 funcref)
+          (table $t1 4 4 funcref)
+          (func $f (result i32) i32.const 42)
+          ;; First segment for t0 has dynamic offset → breaks the
+          ;; folding loop → both this segment AND the later t1
+          ;; segment stay in `table_initialization.segments`.
+          (elem (table $t0) (offset (global.get $g)) func $f)
+          (elem (table $t1) (i32.const 0) func $f))
+        "#,
+    );
+    assert_eq!(
+        bits,
+        vec![true, true],
+        "both targets of leftover segments must be marked mutated"
+    );
+}
+
+/// Independence sanity check: a leftover segment for table 0 must NOT
+/// mark a separate table 1 that has only foldable segments. Mirrors
+/// the `mutation_isolated_to_target_table` test for runtime opcodes.
+#[test]
+fn leftover_segment_marks_only_its_target_table() {
+    let bits = translate_and_get_mutability(
+        r#"
+        (module
+          (import "" "g" (global $g i32))
+          (table $t0 4 4 funcref)
+          (table $t1 4 4 funcref)
+          (func $f (result i32) i32.const 42)
+          ;; Foldable segment for t1 — applied first, before any
+          ;; segment for t0 is reached. (Wasm specifies segments are
+          ;; processed in order, but `try_func_table_init` walks them
+          ;; in order too, so applying t1 first matches.)
+          (elem (table $t1) (i32.const 0) func $f $f $f $f)
+          ;; Dynamic-offset (leftover) segment for t0.
+          (elem (table $t0) (offset (global.get $g)) func $f))
+        "#,
+    );
+    assert_eq!(
+        bits,
+        vec![true, false],
+        "leftover-segment marking must not bleed into other tables"
+    );
+}
