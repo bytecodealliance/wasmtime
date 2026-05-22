@@ -131,11 +131,7 @@ block2:
 ;     return v3  ; v3 = 200
 ; }
 
-;; `brif (ireduce (ctz X))` — 3-op form with an `i32.wrap_i64`-style
-;; truncation between ctz and brif.  The truncation is harmless because
-;; ctz's output is in [0, 64].  Source pattern: motoko/moc's EOP LSB→ctz
-;; peephole emits `i64.ctz; i32.wrap_i64; br_if` for the
-;; `(value & 1) == 0`-as-branch-condition shape.
+;; Same with a truncating `ireduce` between ctz and brif.
 function %brif_ireduce_ctz_i64(i64) -> i32 {
 block0(v0: i64):
     v1 = ctz v0
