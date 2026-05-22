@@ -887,6 +887,28 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         assert_eq!(FUNCREF_MASK as isize, -2);
         let value_masked = builder.ins().band_imm(value, Imm64::from(-2));
 
+        // If the table is provably immutable AND every slot in the bounds-
+        // checked range is populated by a static elem segment with a
+        // non-null funcref, the lazy-init brif is dead: at runtime, the
+        // matching coordination in `Instance::initialize_tables` (commit 8)
+        // eagerly populates every slot from the precomputed image, so the
+        // funcref load above always returns a tagged-funcref entry, never
+        // the lazy-init sentinel `0`. Skip emitting the brif and the cold
+        // block (the lazy-init builtin call would never be entered for
+        // these tables anyway).
+        //
+        // The `band_imm(-2)` above stays — clearing the FUNCREF_INIT_BIT
+        // is correct on the eagerly-populated tagged storage and a 1-cycle
+        // ALU no-op on any future untagged-storage variant. Keeping it
+        // here keeps the codegen simple.
+        if self
+            .translation
+            .module
+            .is_eagerly_initialized_funcref_table(table_index)
+        {
+            return value_masked;
+        }
+
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
         if cold_blocks {
@@ -1661,7 +1683,7 @@ impl FuncEnvironment<'_> {
         // max (`(table 17 17 funcref)`) OR if we proved during translation
         // that no opcode in the module ever calls `table.grow` /
         // `table.set` / `table.fill` / `table.copy` (as dst) / `table.init`
-        // on it (`translation.tables_mutated[index] == false`). In either
+        // on it (`translation.module.tables_mutated[index] == false`). In either
         // case the table's base address won't move and its element count is
         // fixed at `table.limits.min`, so:
         //
@@ -1675,7 +1697,7 @@ impl FuncEnvironment<'_> {
         // output (Porffor's 46/∞ table, sqlite3's 620/∞ table both
         // looked dynamic to the previous heuristic). Commit 1's analysis
         // proves they're effectively static and unblocks this peephole.
-        let immutable = !self.translation.tables_mutated[index];
+        let immutable = !self.translation.module.tables_mutated[index];
         let fixed_size = immutable || Some(table.limits.min) == table.limits.max;
 
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
@@ -2029,7 +2051,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         //     pre-marked as mutated in `ModuleEnvironment::translate`, so
         //     this check also rules them out (along with the explicit
         //     `defined_table_index` check below for clarity).
-        if translation.tables_mutated[table_index] {
+        if translation.module.tables_mutated[table_index] {
             return None;
         }
         let defined_table = module.defined_table_index(table_index)?;
@@ -2171,7 +2193,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let translation = self.env.translation;
         let module = &translation.module;
 
-        if translation.tables_mutated[table_index] {
+        if translation.module.tables_mutated[table_index] {
             return false;
         }
         let defined_table = match module.defined_table_index(table_index) {

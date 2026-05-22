@@ -63,7 +63,7 @@ fn translate_and_get_mutability(wat: &str) -> Vec<bool> {
     let translation = env.translate(parser, &bytes).expect("translate failed");
     let n: u32 = translation.module.tables.len().try_into().unwrap();
     (0..n)
-        .map(|i| translation.tables_mutated[TableIndex::from_u32(i)])
+        .map(|i| translation.module.tables_mutated[TableIndex::from_u32(i)])
         .collect()
 }
 

@@ -15,7 +15,7 @@ use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityRef, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, MemoryKind, Module, SizeOverflow, TableInitialValue, TableSegmentElements,
-    Trap, VMOffsets, WasmRefType,
+    Trap, VMOffsets, WasmRefType, packed_option::ReservedValue,
 };
 
 #[cfg(feature = "gc")]
@@ -535,16 +535,55 @@ async fn initialize_tables(
     module: &Module,
 ) -> Result<()> {
     let mut store = OpaqueRootScope::new(store);
-    for (table, init) in module.table_initialization.initial_values.iter() {
+    for (defined_table, init) in module.table_initialization.initial_values.iter() {
         match init {
-            // Tables are always initially null-initialized at this time
-            TableInitialValue::Null { precomputed: _ } => {}
+            // Tables are normally initially null-initialized at this time —
+            // the precomputed funcref-table image is consumed lazily by
+            // `Instance::get_table_with_lazy_init` on first access of each
+            // slot. But for tables that are provably immutable AND fully
+            // covered by the precomputed image AND have no null slots, we
+            // populate eagerly here. The Cranelift codegen for
+            // `call_indirect` through these tables elides the lazy-init
+            // `brif` (see `get_or_init_func_ref_table_elem`), so the
+            // generated dispatch is unsound unless the slots are actually
+            // populated by the time the wasm runs.
+            TableInitialValue::Null { precomputed } => {
+                let table_index = module.table_index(defined_table);
+                if !module.is_eagerly_initialized_funcref_table(table_index) {
+                    continue;
+                }
+                // Eager-populate this table from `precomputed`. The same
+                // funcref-materialization path the lazy-init libcall would
+                // take per-slot at first access (`Instance::get_func_ref` +
+                // `Table::set_func`), just done all at once here so the
+                // table contents are ready before any `call_indirect`
+                // dispatch through this table runs. The Cranelift codegen
+                // for those dispatches has elided its lazy-init brif on
+                // the strength of this very predicate, so the eager fill
+                // is required for soundness, not just an optimization.
+                let (mut instance, registry) =
+                    store.instance_and_module_registry_mut(context.instance);
+                for (i, func_idx) in precomputed.iter().enumerate() {
+                    debug_assert!(!func_idx.is_reserved_value());
+                    let func_ref = instance.as_mut().get_func_ref(registry, *func_idx);
+                    let result = instance
+                        .as_mut()
+                        .get_defined_table(defined_table)
+                        .set_func(i as u64, func_ref);
+                    if let Err(trap) = result {
+                        // `precomputed.len() <= table.limits.min` is checked by
+                        // the predicate; an OOB error here means the predicate
+                        // is wrong (programmer error). Trap loudly.
+                        return Err(trap.into());
+                    }
+                }
+            }
 
             TableInitialValue::Expr(expr) => {
                 let init = const_evaluator
                     .eval(&mut store, limiter.as_deref_mut(), context, expr)
                     .await?;
-                let idx = module.table_index(table);
+                let idx = module.table_index(defined_table);
                 let id = store.id();
                 let table = store
                     .instance_mut(context.instance)

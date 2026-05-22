@@ -81,21 +81,13 @@ pub struct ModuleTranslation<'data> {
     /// function defined in this module via `table.set` / `table.fill` /
     /// `table.copy` (as the destination) / `table.grow` / `table.init`.
     ///
-    /// `false` (the default) means the table's contents are determined
-    /// entirely by its `elem` segments and any active initializer, and never
-    /// change at runtime — provably immutable for the lifetime of any
-    /// instance of this module.
-    ///
-    /// `true` means the contents can change at runtime (or the table is
-    /// imported, in which case we conservatively assume the importer
-    /// mutates it).
-    ///
-    /// This is groundwork for later passes that turn `call_indirect`
-    /// through provably-immutable function tables into direct calls when
-    /// the dispatched-to slot is statically known. Set during module
-    /// translation (see `analyze_table_mutability`); read by Cranelift
-    /// lowering and by Pulley AOT IC seeding.
-    pub tables_mutated: SecondaryMap<TableIndex, bool>,
+    // The per-table mutability bit lives on `Module::tables_mutated` so
+    // that the bit survives serialization to `ModuleArtifacts` and is
+    // therefore visible at instance creation time (commit 8 reads it
+    // from the runtime to decide whether to eagerly populate
+    // precomputed funcref-table images). Use
+    // `translation.module.tables_mutated[idx]` instead of a separate
+    // field on `ModuleTranslation`.
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -154,7 +146,6 @@ impl<'data> ModuleTranslation<'data> {
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
             exported_signatures: Vec::default(),
-            tables_mutated: SecondaryMap::default(),
             debuginfo: DebugInfoData::default(),
             has_unparsed_debuginfo: false,
             data: Vec::default(),
@@ -1432,7 +1423,7 @@ fn analyze_table_mutability<'data>(
     // assumption is that they are not stable across calls.
     let num_imported = translation.module.num_imported_tables;
     for i in 0..num_imported {
-        translation.tables_mutated[TableIndex::from_u32(i as u32)] = true;
+        translation.module.tables_mutated[TableIndex::from_u32(i as u32)] = true;
     }
 
     // Mark all *exported* tables as mutated as well. A host (or another
@@ -1443,7 +1434,7 @@ fn analyze_table_mutability<'data>(
     // therefore treat exported tables as conservatively non-stable.
     for (_, entity_index) in &translation.module.exports {
         if let EntityIndex::Table(table_index) = entity_index {
-            translation.tables_mutated[*table_index] = true;
+            translation.module.tables_mutated[*table_index] = true;
         }
     }
 
@@ -1459,7 +1450,7 @@ fn analyze_table_mutability<'data>(
                 Operator::TableSet { table }
                 | Operator::TableFill { table }
                 | Operator::TableGrow { table } => {
-                    translation.tables_mutated[TableIndex::from_u32(table)] = true;
+                    translation.module.tables_mutated[TableIndex::from_u32(table)] = true;
                 }
                 Operator::TableCopy {
                     dst_table,
@@ -1467,13 +1458,13 @@ fn analyze_table_mutability<'data>(
                 } => {
                     // `src_table` is read-only in `table.copy`; only the
                     // destination is mutated.
-                    translation.tables_mutated[TableIndex::from_u32(dst_table)] = true;
+                    translation.module.tables_mutated[TableIndex::from_u32(dst_table)] = true;
                 }
                 Operator::TableInit {
                     table,
                     elem_index: _,
                 } => {
-                    translation.tables_mutated[TableIndex::from_u32(table)] = true;
+                    translation.module.tables_mutated[TableIndex::from_u32(table)] = true;
                 }
                 _ => {}
             }

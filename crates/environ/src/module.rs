@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use crate::*;
 use core::ops::Range;
-use cranelift_entity::{EntityRef, packed_option::ReservedValue};
+use cranelift_entity::{EntityRef, SecondaryMap, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
 
 /// A WebAssembly linear memory initializer.
@@ -362,6 +362,20 @@ pub struct Module {
     /// WebAssembly tables.
     pub tables: TryPrimaryMap<TableIndex, Table>,
 
+    /// Per-table flag set during translation: `true` iff any of the
+    /// module's function bodies contains an opcode that mutates the
+    /// table at runtime (`table.set` / `table.fill` / `table.copy[dst]`
+    /// / `table.grow` / `table.init`), or the table is imported (the
+    /// importer can mutate it), or the table is exported (the host or
+    /// another instance importing the export can mutate it via the
+    /// public wasmtime API).
+    ///
+    /// Read by Cranelift to gate `call_indirect` optimizations on
+    /// immutable funcref tables, and by the runtime to decide whether
+    /// to eagerly populate a precomputed funcref-table image at
+    /// instance creation (commit 8 of the table-mutability stack).
+    pub tables_mutated: SecondaryMap<TableIndex, bool>,
+
     /// WebAssembly linear memory plans.
     pub memories: TryPrimaryMap<MemoryIndex, Memory>,
 
@@ -415,6 +429,7 @@ impl Module {
             num_escaped_funcs: Default::default(),
             functions: Default::default(),
             tables: Default::default(),
+            tables_mutated: Default::default(),
             memories: Default::default(),
             globals: Default::default(),
             global_initializers: Default::default(),
@@ -675,6 +690,60 @@ impl Module {
             EntityIndex::Tag(i) => self.tags.is_valid(i),
         }
     }
+
+    /// True iff the funcref table at `table_index` is provably eagerly
+    /// initialized to non-null entries on every in-bounds slot, with
+    /// contents stable for the lifetime of any instance.
+    ///
+    /// When true:
+    ///
+    /// 1. The runtime should populate the table directly from the
+    ///    precomputed `elem`-segment image at instance creation
+    ///    (commit 8 — `crates/wasmtime/src/runtime/vm/instance/
+    ///    allocator.rs::initialize_tables`), rather than deferring to
+    ///    the lazy-init libcall.
+    /// 2. The Cranelift codegen for `call_indirect` through this
+    ///    table can elide the lazy-init `brif` plus its cold block,
+    ///    because every in-bounds slot is guaranteed to hold a real
+    ///    funcref pointer (commit 8 —
+    ///    `crates/cranelift/src/func_environ.rs::
+    ///    get_or_init_func_ref_table_elem`).
+    ///
+    /// Conditions (all must hold):
+    ///
+    /// - The table is provably immutable
+    ///   (`tables_mutated[idx] == false`). Imported and exported
+    ///   tables are pre-marked as mutated by
+    ///   `analyze_table_mutability` and so excluded.
+    /// - The table has a precomputed image
+    ///   (`TableInitialValue::Null { precomputed }`, not `Expr`).
+    /// - The precomputed image covers the full minimum-size range of
+    ///   the table (`precomputed.len() >= table.limits.min`).
+    /// - Every entry in the precomputed image is a concrete
+    ///   `FuncIndex` (no `FuncIndex::reserved_value()` sentinel).
+    pub fn is_eagerly_initialized_funcref_table(&self, table_index: TableIndex) -> bool {
+        if self.tables_mutated[table_index] {
+            return false;
+        }
+        let Some(defined_table) = self.defined_table_index(table_index) else {
+            return false;
+        };
+        let Some(init) = self.table_initialization.initial_values.get(defined_table) else {
+            return false;
+        };
+        let precomputed = match init {
+            TableInitialValue::Null { precomputed } => precomputed,
+            TableInitialValue::Expr(_) => return false,
+        };
+        if precomputed.is_empty() {
+            return false;
+        }
+        let table_min = self.tables[table_index].limits.min;
+        if (precomputed.len() as u64) < table_min {
+            return false;
+        }
+        precomputed.iter().all(|f| !f.is_reserved_value())
+    }
 }
 
 impl TypeTrace for Module {
@@ -705,6 +774,7 @@ impl TypeTrace for Module {
             needs_gc_heap: _,
             functions,
             tables,
+            tables_mutated: _,
             memories: _,
             globals,
             global_initializers: _,
@@ -756,6 +826,7 @@ impl TypeTrace for Module {
             needs_gc_heap: _,
             functions,
             tables,
+            tables_mutated: _,
             memories: _,
             globals,
             global_initializers: _,
