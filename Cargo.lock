@@ -4984,6 +4984,7 @@ dependencies = [
  "wasmparser 0.250.0",
  "wasmtime",
  "wasmtime-fuzzing",
+ "wasmtime-internal-core",
  "wasmtime-test-util",
 ]
 
