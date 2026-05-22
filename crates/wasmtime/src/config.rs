@@ -893,6 +893,20 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly [branch-hinting] proposal is enabled.
+    ///
+    /// When enabled, the `metadata.code.branch_hint` custom section is parsed
+    /// and used to lay out cold code paths during compilation. The hints are
+    /// advisory and never affect execution semantics.
+    ///
+    /// This is `false` by default until the proposal has been fuzzed.
+    ///
+    /// [branch-hinting]: https://github.com/WebAssembly/branch-hinting
+    pub fn wasm_branch_hinting(&mut self, enable: bool) -> &mut Self {
+        self.tunables.branch_hinting = Some(enable);
+        self
+    }
+
     /// Configures whether the WebAssembly custom-page-sizes proposal will be
     /// enabled for compilation or not.
     ///

@@ -74,17 +74,22 @@ The emoji legend is:
 
 |  Proposal                   | Phase 4 | Tests | Finished | Fuzzed | API | C API |
 |-----------------------------|---------|-------|----------|--------|-----|-------|
+| [`branch-hinting`] [^12]    | ❌      | ❌    | 🚧       | ❌     | ✅  | ✅    |
 | [`stack-switching`] [^11]   | ❌      | 🚧    | 🚧       | ❌     | ❌  | ❌    |
 
 [^11]: The stack-switching proposal is a work-in-progress being tracked
     at [#9465](https://github.com/bytecodealliance/wasmtime/issues/9465).
     Currently the implementation is only for x86\_64 Linux.
+[^12]: Branch hinting parses the `metadata.code.branch_hint` custom section and
+    uses it to mark cold blocks during Cranelift compilation. It is disabled by
+    default (`Config::wasm_branch_hinting`) until it has been fuzzed; spec-test
+    enablement and validation of malformed sections are still pending. Tracked
+    at [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463).
 
 ## Unimplemented proposals
 
 | Proposal                      | Tracking Issue |
 |-------------------------------|----------------|
-| [`branch-hinting`]            | [#9463](https://github.com/bytecodealliance/wasmtime/issues/9463) |
 | [`flexible-vectors`]          | [#9464](https://github.com/bytecodealliance/wasmtime/issues/9464) |
 | [`memory-control`]            | [#9467](https://github.com/bytecodealliance/wasmtime/issues/9467) |
 | [`shared-everything-threads`] | [#9466](https://github.com/bytecodealliance/wasmtime/issues/9466) |

@@ -319,6 +319,18 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
         let FunctionBodyData { validator, body } = input;
+
+        // Branch hints are keyed by function-body-relative offset, so record the
+        // body's module-relative start to convert source locations later.
+        func_env.set_branch_hints(
+            translation
+                .branch_hints
+                .get(&func_index)
+                .map(|hints| &hints[..])
+                .unwrap_or(&[]),
+            body.get_binary_reader().original_position(),
+        );
+
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
         compiler.cx.func_translator.translate_body(

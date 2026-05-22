@@ -286,6 +286,9 @@ pub fn translate_operator(
             environ.translate_loop_header(builder)?;
         }
         Operator::If { blockty } => {
+            // Read the hint before `environ` is borrowed mutably below.
+            let branch_hint = environ.take_branch_hint(builder.srcloc().bits() as usize);
+
             let val = environ.stacks.pop1();
 
             let next_block = builder.create_block();
@@ -330,6 +333,24 @@ pub fn translate_operator(
                 (destination, ElseData::WithElse { else_block })
             };
 
+            // Mark the unlikely successor cold per the branch hint. A likely
+            // condition makes the else block cold; when it is allocated lazily
+            // (`NoElse`) defer that to `Operator::Else` via `cold_else`.
+            let cold_else = match branch_hint {
+                Some(false) => {
+                    builder.set_cold_block(next_block);
+                    false
+                }
+                Some(true) => match &else_data {
+                    ElseData::WithElse { else_block } => {
+                        builder.set_cold_block(*else_block);
+                        false
+                    }
+                    ElseData::NoElse { .. } => true,
+                },
+                None => false,
+            };
+
             builder.seal_block(next_block); // Only predecessor is the current block.
             builder.switch_to_block(next_block);
 
@@ -345,6 +366,7 @@ pub fn translate_operator(
                 params.len(),
                 results.len(),
                 *blockty,
+                cold_else,
             );
         }
         Operator::Else => {
@@ -358,6 +380,7 @@ pub fn translate_operator(
                     num_return_values,
                     blocktype,
                     destination,
+                    else_is_cold,
                     ..
                 } => {
                     // We finished the consequent, so record its final
@@ -406,6 +429,12 @@ pub fn translate_operator(
                                 else_block
                             }
                         };
+
+                        // Apply a likely-taken hint deferred from a lazily
+                        // allocated else block (see `Operator::If`).
+                        if else_is_cold {
+                            builder.set_cold_block(else_block);
+                        }
 
                         // You might be expecting that we push the parameters for this
                         // `else` block here, something like this:
@@ -3339,6 +3368,7 @@ fn translate_unreachable_operator(
                 0,
                 0,
                 blockty,
+                false,
             );
         }
         Operator::Loop { blockty: _ }
@@ -3981,9 +4011,18 @@ fn translate_br_if(
     builder: &mut FunctionBuilder,
     env: &mut FuncEnvironment<'_>,
 ) {
+    // Read the hint before `env` is borrowed mutably below.
+    let branch_hint = env.take_branch_hint(builder.srcloc().bits() as usize);
+
     let val = env.stacks.pop1();
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);
     let next_block = builder.create_block();
+
+    if let Some(taken) = branch_hint {
+        // Likely taken => the fallthrough is cold, else the branch target is.
+        builder.set_cold_block(if taken { next_block } else { br_destination });
+    }
+
     canonicalise_brif(builder, val, br_destination, inputs, next_block, &[]);
 
     builder.seal_block(next_block); // The only predecessor is the current block.

@@ -122,6 +122,21 @@ pub struct ModuleTranslation<'data> {
     /// The type information of the current module made available at the end of the
     /// validation process.
     types: Option<Types>,
+
+    /// Branch hints parsed from the `metadata.code.branch_hint` custom section,
+    /// keyed by module-level function index. Only populated when
+    /// [`Tunables::branch_hinting`] is enabled.
+    pub branch_hints: HashMap<FuncIndex, Box<[BranchHint]>>,
+}
+
+/// A single branch hint from the `metadata.code.branch_hint` custom section
+/// ([branch-hinting proposal](https://github.com/WebAssembly/branch-hinting)).
+#[derive(Debug, Copy, Clone)]
+pub struct BranchHint {
+    /// Byte offset of the hinted `br_if`/`if` from the start of the function body.
+    pub func_offset: u32,
+    /// Whether the branch's condition is hinted to be true.
+    pub taken: bool,
 }
 
 impl<'data> ModuleTranslation<'data> {
@@ -145,6 +160,7 @@ impl<'data> ModuleTranslation<'data> {
             types: None,
             passive_data_map: Default::default(),
             passive_elem_map: Default::default(),
+            branch_hints: HashMap::default(),
         }
     }
 
@@ -755,6 +771,28 @@ and for re-adding support for interface types you can see this issue:
                 let result = self.name_section(name);
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {e:?}");
+                }
+            }
+            KnownCustom::BranchHints(reader) if self.tunables.branch_hinting => {
+                // Compilation relies on the proposal's guarantee that hints are
+                // in ascending `func_offset` order; we trust it rather than
+                // re-sort (validating malformed sections is not yet done). Hints
+                // are advisory, so skip entries that fail to parse.
+                for func in reader.into_iter().flatten() {
+                    let hints = func
+                        .hints
+                        .into_iter()
+                        .flatten()
+                        .map(|h| BranchHint {
+                            func_offset: h.func_offset,
+                            taken: h.taken,
+                        })
+                        .collect::<Box<[_]>>();
+                    if !hints.is_empty() {
+                        self.result
+                            .branch_hints
+                            .insert(FuncIndex::from_u32(func.func), hints);
+                    }
                 }
             }
             _ => {

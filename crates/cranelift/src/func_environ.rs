@@ -29,7 +29,7 @@ use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
+    BranchHint, BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
     EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
     GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
     ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
@@ -232,6 +232,14 @@ pub struct FuncEnvironment<'module_environment> {
     /// nonlinear control flow). This is useful in cases where we need
     /// to e.g. record the return-address of a callsite for debuginfo.
     pub(crate) next_srcloc: ir::SourceLoc,
+
+    /// Branch hints for the current function, consumed in program-counter order
+    /// by `take_branch_hint`.
+    branch_hints: &'module_environment [BranchHint],
+    /// Forward cursor into `branch_hints`.
+    branch_hint_cursor: usize,
+    /// Module-relative byte offset of the current function body's start.
+    func_body_offset: usize,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -294,7 +302,47 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
             wasm_module_offset: translation.wasm_module_offset,
+
+            branch_hints: &[],
+            branch_hint_cursor: 0,
+            func_body_offset: 0,
         }
+    }
+
+    /// Set the branch hints and the module-relative start offset for the
+    /// function about to be translated. Hints are expected in ascending
+    /// `func_offset` order (as the proposal requires); `take_branch_hint`
+    /// simply skips any that are out of order.
+    pub(crate) fn set_branch_hints(
+        &mut self,
+        hints: &'module_environment [BranchHint],
+        func_body_offset: usize,
+    ) {
+        self.branch_hints = hints;
+        self.branch_hint_cursor = 0;
+        self.func_body_offset = func_body_offset;
+    }
+
+    /// Consume the branch hint for the instruction at module-relative `offset`
+    /// (i.e. `builder.srcloc().bits()`), if any; `Some(true)` means likely
+    /// taken. The cursor only advances, making this O(n) over a function body.
+    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<bool> {
+        if self.branch_hints.is_empty() {
+            return None;
+        }
+        let rel = u32::try_from(offset.checked_sub(self.func_body_offset)?).ok()?;
+        // Skip hints that don't line up with this (or a later) branch.
+        while matches!(
+            self.branch_hints.get(self.branch_hint_cursor),
+            Some(h) if h.func_offset < rel,
+        ) {
+            self.branch_hint_cursor += 1;
+        }
+        let hint = self.branch_hints.get(self.branch_hint_cursor)?;
+        (hint.func_offset == rel).then(|| {
+            self.branch_hint_cursor += 1;
+            hint.taken
+        })
     }
 
     pub(crate) fn pointer_type(&self) -> ir::Type {
