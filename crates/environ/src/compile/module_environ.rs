@@ -1606,6 +1606,18 @@ fn analyze_table_mutability<'data>(
         translation.tables_mutated[TableIndex::from_u32(i as u32)] = true;
     }
 
+    // Mark all *exported* tables as mutated as well. A host (or another
+    // instance importing the export) can call `Table::set` /
+    // `Table::grow` via the public wasmtime API on any exported table,
+    // and those mutations are not visible in this module's bytecode.
+    // The `call_indirect` optimizations that read this bit must
+    // therefore treat exported tables as conservatively non-stable.
+    for (_, entity_index) in &translation.module.exports {
+        if let EntityIndex::Table(table_index) = entity_index {
+            translation.tables_mutated[*table_index] = true;
+        }
+    }
+
     // Walk every defined function body and look for table-mutation opcodes.
     // The cost is O(total opcodes), one extra pass on top of the validator;
     // typical large modules (sqlite3 ~50K opcodes) take well under a

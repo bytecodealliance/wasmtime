@@ -2345,6 +2345,19 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         if precomputed.is_empty() {
             return false;
         }
+        // The precomputed list only describes slots covered by the elem
+        // segments processed in `try_func_table_init`; slots beyond
+        // `precomputed.len()` are null at runtime. To prove the table
+        // can never yield a null funcref to a `call_indirect` we need
+        // coverage all the way to the table's minimum (== full, since
+        // the caller already proved the table is immutable and so can't
+        // be grown). Without this guard, a `call_indirect` to an
+        // uncovered-but-in-bounds slot would skip the null trap and
+        // dereference a null funcref pointer.
+        let table_min = module.tables[table_index].limits.min;
+        if (precomputed.len() as u64) < table_min {
+            return false;
+        }
         // Every slot must be a real FuncIndex — no reserved-value sentinels.
         precomputed
             .iter()

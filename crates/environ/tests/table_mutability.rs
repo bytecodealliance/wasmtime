@@ -68,13 +68,17 @@ fn translate_and_get_mutability(wat: &str) -> Vec<bool> {
 }
 
 /// A table only used as the source of `call_indirect` and `table.get` is
-/// provably immutable. (Both ops READ the table; neither writes it.)
+/// provably immutable. (Both ops READ the table; neither writes it.) The
+/// table is intentionally NOT exported — exported tables are
+/// conservatively pre-marked as mutated (see
+/// `exported_tables_are_pre_marked` for the export case) since the host
+/// can mutate them via the public wasmtime API.
 #[test]
 fn read_only_table_is_immutable() {
     let bits = translate_and_get_mutability(
         r#"
         (module
-          (table (export "t") 4 funcref)
+          (table 4 funcref)
           (func $f (result i32) i32.const 42)
           (elem (i32.const 0) $f $f $f $f)
           (func (export "call_zero") (result i32)
@@ -86,6 +90,26 @@ fn read_only_table_is_immutable() {
         "#,
     );
     assert_eq!(bits, vec![false], "no opcode mutated this table");
+}
+
+/// Exported tables are always pre-marked as mutated, regardless of
+/// whether any opcode in this module touches them. The host can call
+/// `Table::set` / `Table::grow` via the public wasmtime API on any
+/// exported table, and another module that imports the export can also
+/// mutate it. Without this rule, downstream optimizations would
+/// happily elide null traps and sig checks on exported tables on the
+/// (false) assumption that the table contents are stable.
+#[test]
+fn exported_tables_are_pre_marked() {
+    let bits = translate_and_get_mutability(
+        r#"
+        (module
+          (table (export "t") 4 funcref)
+          (func $f (result i32) i32.const 42)
+          (elem (i32.const 0) $f $f $f $f))
+        "#,
+    );
+    assert_eq!(bits, vec![true]);
 }
 
 /// `table.set` marks its destination as mutated.
