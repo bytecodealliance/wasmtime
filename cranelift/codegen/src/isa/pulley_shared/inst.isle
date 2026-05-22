@@ -67,16 +67,10 @@
     ;; Jump to `then` if `c` is true, otherwise to `else`.
     (BrIf (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
-    ;; Fused band-immediate + brif: compute `dst = src & sign_extend(mask)`,
-    ;; then conditionally branch to `taken` if `src` is non-zero (low-32 or
-    ;; full 64-bit comparison per `size`), otherwise fall through to
-    ;; `not_taken`. The mask + dst write happen unconditionally.
-    ;;
-    ;; Emitted by the Cranelift Pulley backend at the call_indirect lazy-init
-    ;; brif site when the same funcref-pointer value feeds both the init-bit
-    ;; mask (`band v, -2`) and the null-check branch (`brif v`). The fusion
-    ;; saves one match_loop dispatch per call_indirect site. See pulley/
-    ;; `xband*_s8_br_if_*` ops for the underlying bytecode.
+    ;; Fused `band src, mask` + `brif src` emitted at the call_indirect
+    ;; lazy-init brif site. `dst = src & sign_extend(mask)` is
+    ;; unconditional; the branch test is on `src`'s low-32 or full-64 bits
+    ;; per `size`. Pulley-side: `xband*_s8_br_if_*`.
     (BandBrIf
       (dst WritableXReg)
       (src XReg)
@@ -85,19 +79,11 @@
       (taken MachLabel)
       (not_taken MachLabel))
 
-    ;; Funcref-dispatch fusion: branch-and-load fused dispatch op emitted
-    ;; at the call_indirect lazy-init brif site under the eager-init
-    ;; predicate + statically-elided sig check. Fuses
-    ;;   `band v, -2 ; brif ; xload (v_masked + offset_code) ; xload (v_masked + offset_vmctx)`
-    ;; from across the brif's predecessor and continuation blocks into one
-    ;; Pulley dispatch. The pulley-side ops are `xfuncref_dispatch_{x64,
-    ;; not_x64, x32, not_x32}`; the runtime null check is defence-in-depth
-    ;; (the predicate guarantees the funcref is non-null at runtime, but
-    ;; the handler must match the original brif's null branch as a
-    ;; correctness fallback). See `try_fuse_funcref_dispatch` in
-    ;; `pulley_shared::lower` for the recogniser + Pulley's
-    ;; `pre_lower_analysis` for the cross-block sink that lets the
-    ;; continuation-block loads be absorbed into one MachInst here.
+    ;; Funcref-dispatch fusion: `brif (band v -2) + load code + load vmctx`
+    ;; across the brif and its continuation block. Emitted at the
+    ;; call_indirect lazy-init site under
+    ;; `is_eagerly_initialized_funcref_table`. Pulley-side:
+    ;; `xfuncref_dispatch_{x64,not_x64,x32,not_x32}`.
     (FuncrefDispatch
       (dst_code WritableXReg)
       (dst_vmctx WritableXReg)
@@ -108,15 +94,10 @@
       (taken MachLabel)
       (not_taken MachLabel))
 
-    ;; Phase-3 fusion: absorbs the preceding standalone `xband_s8 dst, src,
-    ;; -2` into the same MachInst as a `FuncrefDispatch`. Operand
-    ;; structure differs: `src` here is the UNMASKED funcref (the band's
-    ;; input), and `dst_masked` is added as a third def so the brif's
-    ;; block-call-arg copy to the continuation block still has a real
-    ;; producer for the funcref-ptr block param. The underlying Pulley
-    ;; ops are `xband_funcref_dispatch_{x64,not_x64,x32,not_x32}`. See
-    ;; `try_fuse_band_into_funcref_dispatch` in `pulley_shared::lower`
-    ;; for when phase 3 fires vs phase 2.
+    ;; FuncrefDispatch + the preceding `xband_s8 -2` absorbed. `src` is
+    ;; the unmasked funcref; the fused op writes `dst_masked = src & -2`
+    ;; so the brif's block-call-arg copy still has a producer.
+    ;; Pulley-side: `xband_funcref_dispatch_{x64,not_x64,x32,not_x32}`.
     (BandFuncrefDispatch
       (dst_masked WritableXReg)
       (dst_code WritableXReg)

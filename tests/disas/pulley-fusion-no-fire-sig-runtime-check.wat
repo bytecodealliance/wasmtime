@@ -55,33 +55,33 @@
 ;;       ret
 ;;
 ;; wasm[0]::function[3]:
-;;       push_frame_save 16, x16, x19
+;;       push_frame_save 16, x18, x29
 ;;       xmov x3, x0
-;;       br_if_xugteq32_u8 x2, 3, 0x7d    // target = 0x96
-;;   20: xload64le_o32 x0, x0, 48
+;;       br_if_xugteq32_u8 x2, 3, 0x7f    // target = 0x98
+;;   20: xmov x1, x3
+;;       xload64le_o32 x0, x1, 48
 ;;       zext32 x1, x2
-;;       xmov x19, x2
+;;       xmov x18, x2
 ;;       xshl64_u6 x2, x1, 3
 ;;       xadd64 x0, x0, x2
 ;;       xload64le_o32 x0, x0, 0
-;;       xband64_s8_br_if_not_x64 x0, x0, -2, 0x4a    // target = 0x84
-;;   42: xmov x16, x3
-;;       br_if_xeq64_i8 x0, 0, 0x54    // target = 0x99
-;;   4c: xload32le_o32 x1, x0, 16
-;;       xload64le_o32 x2, x16, 40
+;;       xband64_s8_br_if_not_x64 x0, x0, -2, 0x49    // target = 0x86
+;;   45: xmov x29, x3
+;;       br_if_xeq64_i8 x0, 0, 0x53    // target = 0x9b
+;;   4f: xload32le_o32 x1, x0, 16
+;;       xload64le_o32 x2, x29, 40
 ;;       xload32le_o32 x2, x2, 0
-;;       br_if_xneq32 x1, x2, 0x3b    // target = 0x9c
-;;   68: xload64le_o32 x3, x0, 8
+;;       br_if_xneq32 x1, x2, 0x3a    // target = 0x9e
+;;   6b: xload64le_o32 x1, x0, 8
 ;;       xload64le_o32 x0, x0, 24
-;;       xmov x1, x16
-;;       xmov x2, x19
-;;       call_indirect x3
-;;       pop_frame_restore 16, x16, x19
+;;       xmov x2, x18
+;;       call_indirect2 x1, x0, x29
+;;       pop_frame_restore 16, x18, x29
 ;;       ret
-;;   84: xzero x0
-;;   86: xmov x16, x3
-;;   89: call3 x16, x0, x1, 0x281    // target = 0x30a
-;;   91: jump -0x4c    // target = 0x45
-;;   96: trap
-;;   99: trap
-;;   9c: trap
+;;   86: xzero x0
+;;   88: xmov x29, x3
+;;   8b: call3 x29, x0, x1, 0x281    // target = 0x30c
+;;   93: jump -0x4b    // target = 0x48
+;;   98: trap
+;;   9b: trap
+;;   9e: trap

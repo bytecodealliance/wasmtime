@@ -516,23 +516,13 @@ fn decode_unaligned() -> Result<()> {
     Ok(())
 }
 
-// --- Pulley opcode-fusion (band+brif and funcref-dispatch) integration ---
-//
-// These tests pin runtime semantics for the Pulley call_indirect lazy-init
-// fusion stack (`tests/disas/pulley-fusion-*.wat` pins the static disasm).
-// They exercise edges identified by upstream-engine bug-classes the
-// fusion shape echoes (V8 issue 5913 cross-module table sharing; WAMR
-// #4041 call_indirect index > 0; WasmEdge #4757 null-from-typed-table;
-// ChakraCore #5915 multi-call-site IC poisoning; Luau release/717
-// store-cache invalidation on mutation). Each test runs identically
-// against Pulley AND wasmtime's native Cranelift backend, asserting the
-// results agree — the fusion is only present on the Pulley side, so any
-// divergence indicates a phase-1 or phase-2 lowering bug.
+// Runtime-semantics tests for the call_indirect fusion stack
+// (`tests/disas/pulley-fusion-*.wat` covers the static disasm side).
+// Each test runs the same wasm under Pulley and native Cranelift and
+// asserts the results agree.
 
-/// Pulley config that's safe for tests that exercise traps
-/// (call_indirect to null, OOB indices, etc.) — `signals_based_traps(false)`
-/// is required because Pulley's interpreter cannot catch signals; it must
-/// see explicit trapz / bounds-check emissions.
+/// Pulley config for tests that exercise traps. The interpreter can't
+/// catch signals, so trap emission must be explicit.
 fn pulley_trap_safe_config() -> Config {
     let mut config = pulley_config();
     config.signals_based_traps(false);
@@ -572,12 +562,8 @@ where
     Ok(pulley)
 }
 
-/// Phase 2 firing returns the right callee result for every in-bounds
-/// table index, AND traps at the right index for OOB.
-///
-/// Reference: WAMR #4041 ("call_indirect index > 0 in AOT silently
-/// broken — only `table[0]` callable"); wasm3 #547 ("op_CallIndirect
-/// SEGV — missing bounds check").
+/// Fusion returns the right callee for every in-bounds index and traps
+/// on OOB.
 #[test]
 fn fusion_call_indirect_every_index() -> Result<()> {
     let wat = r#"
@@ -595,8 +581,8 @@ fn fusion_call_indirect_every_index() -> Result<()> {
         let got: i32 = pulley_and_native_agree(wat, "call", idx)?;
         assert_eq!(got, expected, "idx {idx}");
     }
-    // Index 3 is OOB; check Pulley only (native trap-via-signal
-    // interacts badly with `cargo test`'s debug-mode signal handlers).
+    // Pulley only — native signal-based traps interact badly with
+    // `cargo test`'s debug-mode signal handlers.
     let bytes = wat::parse_str(wat)?;
     let engine = Engine::new(&pulley_trap_safe_config())?;
     let module = Module::new(&engine, &bytes)?;
@@ -609,13 +595,8 @@ fn fusion_call_indirect_every_index() -> Result<()> {
     Ok(())
 }
 
-/// Two call_indirect sites in the same function. Phase 2 must fire
-/// per-site (each fused MachInst defs its own dst vregs; the pre-pass
-/// `to_sink` list doesn't dedup or drop one).
-///
-/// Reference: ChakraCore #5915 ("setPrototypeOf does not invalidate
-/// cached instanceof IC inside currently-executing frame") — per-site
-/// IC state must be independent.
+/// Two call_indirect sites in the same function; each must fuse
+/// independently.
 #[test]
 fn fusion_call_indirect_multi_site() -> Result<()> {
     let wat = r#"
@@ -637,10 +618,7 @@ fn fusion_call_indirect_multi_site() -> Result<()> {
     Ok(())
 }
 
-/// `return_call_indirect` (tail call). Phase 2 fires here too — see
-/// `tests/disas/pulley-fusion-fires-return-call-indirect.wat`. This
-/// test pins the runtime correctness: the tail call uses the
-/// fused-op-loaded code+vmctx and returns the right value.
+/// `return_call_indirect` correctness with fusion applied.
 #[test]
 fn fusion_return_call_indirect() -> Result<()> {
     let wat = r#"
@@ -661,15 +639,8 @@ fn fusion_return_call_indirect() -> Result<()> {
     Ok(())
 }
 
-/// Host mutates the table via `Table::set` to `ref.null func`. Both
-/// Pulley and native must trap `IndirectCallToNull` at the now-null
-/// slot. The phase-2 fused op's runtime null check has to catch the
-/// host-injected null.
-///
-/// Reference: GHSA-q49f-xg75-m9xw (Winch `table.fill` host panic);
-/// V8 CVE-2024-2887 ("JS-to-wasm boundary funcref injection bypasses
-/// immutability"). The predicate is compile-time; host mutation at
-/// runtime is OK only because the fused op still does the null check.
+/// Host mutates a slot to `ref.null func`; call_indirect must trap
+/// `IndirectCallToNull`.
 #[test]
 fn fusion_call_indirect_with_host_null_set() -> Result<()> {
     let wat = r#"
@@ -698,20 +669,12 @@ fn fusion_call_indirect_with_host_null_set() -> Result<()> {
     assert_eq!(call.call(&mut store, 0)?, 100);
     let err = call.call(&mut store, 1).unwrap_err();
     let trap = err.downcast_ref::<Trap>().expect("Trap");
-    assert_eq!(
-        *trap,
-        Trap::IndirectCallToNull,
-        "phase-2 fused op missed runtime null check"
-    );
+    assert_eq!(*trap, Trap::IndirectCallToNull);
     Ok(())
 }
 
-/// Host `Table::set` to a different (non-null) funcref between calls.
-/// The fused op must re-load `wasm_call` and `vmctx` on every dispatch
-/// — no caching of code/vmctx across calls.
-///
-/// Reference: Luau release/717 ("writes to userdata did not invalidate
-/// the store cache" — fused-op cached state survived a mutation).
+/// Host `Table::set` swaps to a different funcref between calls; the
+/// second call must observe the new target.
 #[test]
 fn fusion_call_indirect_with_host_swap() -> Result<()> {
     let wat = r#"
@@ -729,7 +692,11 @@ fn fusion_call_indirect_with_host_swap() -> Result<()> {
     let bytes = wat::parse_str(wat)?;
 
     for use_pulley in [true, false] {
-        let cfg = if use_pulley { pulley_trap_safe_config() } else { Config::new() };
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
         let engine = Engine::new(&cfg)?;
         let module = Module::new(&engine, &bytes)?;
         let mut store = Store::new(&engine, ());
@@ -744,24 +711,15 @@ fn fusion_call_indirect_with_host_swap() -> Result<()> {
         let table = inst.get_table(&mut store, "t").expect("table export");
         table.set(&mut store, 0, wasmtime::Ref::Func(Some(f1_ref)))?;
 
-        assert_eq!(
-            call.call(&mut store, 0)?,
-            200,
-            "use_pulley={use_pulley}: fused op cached stale code/vmctx?"
-        );
+        assert_eq!(call.call(&mut store, 0)?, 200, "use_pulley={use_pulley}");
     }
     Ok(())
 }
 
-/// Module B imports module A's table and calls into it via
-/// call_indirect. Module B's fusion (if any) must use module A's
-/// actual VMFuncRef layout, not B's local assumptions about the
-/// table.
-///
-/// Reference: V8 issue 5913 ("call_indirect signature mismatch with
-/// table-sharing"); the predicate scope is module-local; an imported
-/// table breaks the "tables_mutated == false" assumption from the
-/// importer's perspective.
+/// Module B imports module A's table and calls into it. Tables are
+/// imported, so the importer's `tables_mutated` is `true` and no
+/// fusion fires on B's side; the call must still produce the right
+/// result.
 #[test]
 fn fusion_call_indirect_imported_table() -> Result<()> {
     let wat_a = r#"
@@ -782,7 +740,11 @@ fn fusion_call_indirect_imported_table() -> Result<()> {
     let bytes_b = wat::parse_str(wat_b)?;
 
     for use_pulley in [true, false] {
-        let cfg = if use_pulley { pulley_trap_safe_config() } else { Config::new() };
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
         let engine = Engine::new(&cfg)?;
         let module_a = Module::new(&engine, &bytes_a)?;
         let module_b = Module::new(&engine, &bytes_b)?;
@@ -810,14 +772,7 @@ fn fusion_call_indirect_imported_table() -> Result<()> {
 /// op's runtime null check must trap cleanly with the right trap kind,
 /// not crash on the field deref.
 ///
-/// For an uninitialised slot the trap kind is `UninitializedElement`
-/// (the slot's contents are the lazy-init sentinel `0`, which is
-/// distinct from an explicit `Ref::Func(None)` — see
-/// `fusion_call_indirect_with_host_null_set` for the latter).
-///
-/// Reference: WasmEdge #4757 ("GC null ref from concrete-typed table
-/// SEGV — null check sequenced after deref"). Our handler does the
-/// null check BEFORE the field deref, so this should trap cleanly.
+/// Call into an uninitialised table slot must trap.
 #[test]
 fn fusion_call_indirect_null_slot() -> Result<()> {
     let wat = r#"
@@ -828,13 +783,7 @@ fn fusion_call_indirect_null_slot() -> Result<()> {
         call_indirect (result i32)))
     "#;
     let bytes = wat::parse_str(wat)?;
-    // Pulley only: native-backend trap-via-signal interacts with cargo
-    // test's signal-handler setup in debug mode and shows up as a
-    // SIGSEGV instead of a Trap. Running the same code via `cargo run
-    // --release` or directly outside the test harness traps cleanly,
-    // so this is a test-harness limitation rather than a real native
-    // backend bug. Pulley uses explicit trapz (no signals) so it works
-    // in both modes.
+    // Pulley only — see note on `fusion_call_indirect_every_index`.
     let engine = Engine::new(&pulley_trap_safe_config())?;
     let module = Module::new(&engine, &bytes)?;
     let mut store = Store::new(&engine, ());

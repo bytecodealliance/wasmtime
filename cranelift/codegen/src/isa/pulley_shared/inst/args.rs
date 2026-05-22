@@ -577,23 +577,16 @@ pub struct PulleyCall {
     pub args: SmallVec<[XReg; 4]>,
 }
 
-/// Payload of `CallInfo` for indirect-call instructions.
-///
-/// Mirror of `PulleyCall` for `Inst::IndirectCall`: the call target is a
-/// runtime register (the loaded `wasm_call` pointer at the call_indirect
-/// dispatch tail), and the first 0–4 integer ABI args are passed as free
-/// registers so the `call_indirect1/2/3/4` opcodes can move them into
-/// `x0..x3` as part of the call (saving one `xmov` per arg on the hot
-/// dispatch path). Remaining args live in `CallInfo::uses` with fixed
-/// pregs, just as for `PulleyCall`.
+/// Payload of `CallInfo` for `Inst::IndirectCall`. Mirror of `PulleyCall`:
+/// the first 0–4 integer ABI args are tracked here so the emitted
+/// `call_indirect{1,2,3,4}` opcode moves them into `x0..x3` itself
+/// instead of regalloc synthesising `xmov`s. Remaining args use the
+/// fixed-preg path in `CallInfo::uses`.
 #[derive(Clone, Debug)]
 pub struct PulleyCallIndirect {
-    /// The register holding the call target (e.g. the `wasm_call` pointer
-    /// loaded out of a `VMFuncRef`).
+    /// The register holding the call target.
     pub target: XReg,
-    /// Up to 4 integer args destined for `x0..x3`. Tracked separately so
-    /// regalloc doesn't insert moves and the `call_indirectN` opcode moves
-    /// them itself.
+    /// Up to 4 integer args destined for `x0..x3`.
     pub args: SmallVec<[XReg; 4]>,
 }
 

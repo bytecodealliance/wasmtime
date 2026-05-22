@@ -1074,18 +1074,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
-        // When the table is eagerly-initialized (immutable + precomputed +
-        // fully-covered + no-null), every funcref slot at runtime is either
-        // `0` (uninitialized, never observable here) or `addr | 1` (a real
-        // tagged pointer). The tagged-null value `1` — produced only by
-        // `table.fill(null)` on a tagged table — is excluded by the
-        // immutability half of the predicate. Under those conditions,
-        // `value != 0` and `value_masked != 0` agree on every reachable
-        // slot value, so we can test the masked result and unlock the
-        // Pulley backend's `band + brif` fusion at lowering time (see
-        // `MInst::BandBrIf` and `pulley_shared::lower::try_fuse_band_brif`).
-        // The fusion saves one match_loop dispatch per call_indirect
-        // site — the main lever once c1-7 pinned the predictor anchor.
+        // Under `is_eagerly_initialized_funcref_table`, `value != 0` and
+        // `value_masked != 0` agree on every reachable slot, so we can
+        // test the masked result. The Pulley backend then fuses the
+        // `band + brif` pair.
         let brif_cond = if self
             .module
             .is_eagerly_initialized_funcref_table(table_index)

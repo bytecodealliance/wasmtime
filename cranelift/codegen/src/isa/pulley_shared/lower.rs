@@ -25,18 +25,12 @@ where
         ir_inst: ir::Inst,
         targets: &[MachLabel],
     ) -> Option<()> {
-        // Phase-2 first: try fusing band+brif+xload+xload across the brif's
-        // predecessor block and its taken (continuation) target. The matching
-        // continuation-block loads were marked `absorbed_pure` by the
-        // `pre_lower` analysis hook below, so they have already been skipped
-        // in `lower_clif_block` and the FuncrefDispatch MachInst here defs
-        // their result vregs directly.
+        // Phase-2/3 fuse band+brif+xload+xload across the brif and its
+        // continuation block; phase-1 just band+brif. Both gated on the
+        // eager-init predicate.
         if try_fuse_funcref_dispatch::<P>(ctx, ir_inst, targets) {
             return Some(());
         }
-        // Phase-1 fallback: fuse just band+brif (no continuation loads).
-        // Emits MInst::BandBrIf. See the doc-comment on the variant in
-        // `pulley_shared::inst::Inst`.
         if try_fuse_band_brif(ctx, ir_inst, targets) {
             return Some(());
         }
@@ -49,39 +43,22 @@ where
     }
 
     fn pre_lower(&self, ctx: &mut Lower<Self::MInst>) {
-        // Cross-block fusion analysis for phase-2 funcref dispatch.
-        //
-        // The main block-lowering loop runs in reverse layout order, so by
-        // the time `lower_branch` fires for the predecessor's brif, its
-        // taken target (the continuation block) has already had its
-        // instructions emitted to VCode. Marking the continuation's loads
-        // as `inst_absorbed_pure` AFTER that point is too late — the loads
-        // have already been lowered into MachInsts that write to the
-        // result vregs, and the FuncrefDispatch we'd emit at brif time
-        // would double-write to those same vregs (SSA violation).
-        //
-        // This analysis runs once before any block is lowered. For each
-        // brif whose cond is `band(v, -2)` AND whose taken target is a
-        // block that starts with two loads from the brif's first
-        // block-call-arg at the canonical VMFuncRef wasm_call / vmctx
-        // offsets, mark band + the two loads as absorbed_pure. The brif
-        // lowering then sees a clean slate (no double-writes) and emits
-        // one FuncrefDispatch MachInst.
+        // Block lowering runs in reverse layout order, so by the time
+        // `lower_branch` sees the brif, the continuation block has already
+        // been lowered. Marking the continuation's loads `absorbed_pure`
+        // after the fact would create double-writes to their result vregs.
+        // Run the recogniser once up front instead.
         pre_lower_pulley(ctx, P::pointer_width().bytes());
     }
 }
 
-/// Recognise the `brif (band v c) block(...) cold` shape emitted by
-/// `func_environ::get_or_init_func_ref_table_elem` under the
-/// `is_eagerly_initialized_funcref_table` predicate, and fuse it into a
-/// single `MInst::BandBrIf`. Returns `true` if the fusion fired; the caller
-/// then skips the generic ISLE rule.
+/// Recognise `brif (band v -2) ...` at the call_indirect lazy-init site
+/// and fuse it into `MInst::BandBrIf`. Returns true if fusion fired.
 ///
-/// Soundness: testing `v_masked != 0` instead of `v != 0` is identical on
-/// every funcref-slot value REACHABLE in eagerly-initialized tables. The
-/// only differing case is `v == 1` (the explicit tagged-null slot value),
-/// which can only appear via runtime `table.fill(null)` and is therefore
-/// excluded by the `tables_mutated == false` half of the predicate.
+/// Soundness: testing `v_masked != 0` instead of `v != 0` is identical for
+/// every reachable funcref-slot value under
+/// `is_eagerly_initialized_funcref_table` — they differ only at the
+/// tagged-null value `1`, which the predicate excludes.
 fn try_fuse_band_brif<P>(
     ctx: &mut Lower<InstAndKind<P>>,
     ir_inst: ir::Inst,
@@ -104,50 +81,15 @@ where
         return false;
     };
 
-    // The brif's cond must be defined by a `band v -2`. The mask = -2 gate
-    // is load-bearing for two distinct reasons:
-    //
-    // 1. Soundness. The fused op tests the UNMASKED `src` for non-zero, not
-    //    the masked `dst`. That equivalence holds iff `(v & mask != 0) <=>
-    //    (v != 0)`. For mask = -2 the equivalence fails only at `v == 1`
-    //    (tagged-null), which the eager-init predicate excludes at
-    //    runtime. For other masks the equivalence fails on a much wider
-    //    range of `v` and the fused branch direction would silently flip.
-    //
-    // 2. Regalloc safety + scope. Before this gate was added, the recogniser
-    //    accepted any `i8::try_from(imm.bits())`-fitting mask, which
-    //    matched user-code `band(v, 127)` / `band(v, 60)` etc. in real
-    //    workloads (e.g. xmrsplayer). Absorbing those user-code bands via
-    //    `sink_pure_inst` violated SSA assumptions when the band's result
-    //    had multiple uses, crashing regalloc with `EntryLivein`. The
-    //    mask = -2 gate confines the fusion to the call_indirect IR-rewrite
-    //    site (where `func_environ::get_or_init_func_ref_table_elem` emits
-    //    `band_imm(value, Imm64::from(-2))` — i.e. `Imm64(-2)` literally).
-    //
-    // Note that wasm's own `br_if` cond is always i32, and the wat parser
-    // encodes `(i32.const -2)` as `Imm64(0xFFFFFFFE)` (= 4294967294),
-    // NOT `Imm64(-2)`. So even though the surface check looks like it
-    // would match user wasm with `(i32.const -2)`, that branch of the
-    // imm-encoding decision tree is unreachable from wasm input. The
-    // only producer of `Imm64(-2)` reaching here is func_environ's own
-    // call to `Imm64::from(-2_i64)`. This is the de facto narrowing that
-    // makes the gate strong against wasm-side abuse.
+    // The brif's cond must be `band(v, -2)` with a bit-exact `Imm64(-2)`.
+    // The bit-exact match is load-bearing: it confines the fusion to
+    // func_environ's `Imm64::from(-2_i64)` IR-rewrite site. The wat parser
+    // encodes `(i32.const -2)` as `Imm64(0xFFFFFFFE)`, so user wasm can't
+    // produce `Imm64(-2)` and slip into this code path.
     let band_inst = match dfg.value_def(cond).inst() {
         Some(inst) => inst,
         None => return false,
     };
-    // Phase-1's mask check is intentionally bit-exact (`imm.bits() == -2`).
-    // The wider, width-aware check `is_minus_two_for` is reserved for
-    // phase 2 — phase 2's stronger pattern (continuation-block 2-load
-    // shape) makes it unreachable from wasm user code, so it can safely
-    // accept the i32-canonicalised `Imm64(0xFFFFFFFE)` encoding. Phase 1
-    // has only the mask gate to keep it away from wasm user code, so
-    // the bit-exact gate is load-bearing — `Imm64(-2)` is only produced
-    // by func_environ's `Imm64::from(-2_i64)`, never by the wat parser
-    // for `(i32.const -2)`. The cost of this strictness: phase 1 does
-    // NOT fire on pulley32 funcref dispatch (the i32 band's imm is
-    // egraph-canonicalised to `Imm64(0xFFFFFFFE)` and bails). Phase 2
-    // fires there instead, so the call_indirect tail is still fused.
     let (band_src, band_imm) = match dfg.insts[band_inst] {
         InstructionData::Binary {
             opcode: Opcode::Band,
@@ -185,11 +127,8 @@ where
     let src = XReg::new(ctx.put_value_in_regs(band_src).only_reg().expect("scalar"))
         .expect("band source is an x-class register");
 
-    // `put_value_in_regs(cond)` bumped value_lowered_uses[cond] above zero,
-    // which would normally force the band's standalone lowering. Sink the
-    // band as a pure absorption: the BandBrIf MInst we emit below produces
-    // exactly the same dst vreg, so any future use of `cond` (e.g. the
-    // brif's block-call argument) finds the right value already populated.
+    // Sink the band: the BandBrIf we emit below defines the same dst vreg,
+    // so downstream uses of `cond` still find the value populated.
     ctx.sink_pure_inst(band_inst);
 
     ctx.emit(
@@ -207,20 +146,9 @@ where
     true
 }
 
-/// Does this Imm64 encode `-2` when interpreted in `ty`'s width?
-///
-/// Cranelift stores all immediates as `Imm64` regardless of the CLIF type,
-/// and the egraph canonicalises i32 immediates to their unsigned u32-in-i64
-/// encoding (so `i32(-2)` is stored as `Imm64(0xFFFFFFFE)` = 4294967294,
-/// NOT `Imm64(-2)` = 0xFFFFFFFFFFFFFFFE). To check "this is the -2 mask the
-/// IR rewrite from `get_or_init_func_ref_table_elem` produces", we have to
-/// width-aware-compare against -2 in the type the band operates on.
-///
-/// This affects pulley32 specifically: the funcref pointer is i32, the
-/// band is `band_imm(i32_value, Imm64::from(-2))`, and after egraph the
-/// imm shows up as `Imm64(0xFFFFFFFE)`. Without width-aware comparison,
-/// phase 1 / phase 2 fusion would silently fail to fire on
-/// arm64_32-apple-watchos.
+/// True iff `imm` encodes `-2` in `ty`'s width. The egraph canonicalises
+/// `i32(-2)` as `Imm64(0xFFFFFFFE)`, not `Imm64(-2)`, so a width-aware
+/// compare is needed for pulley32.
 fn is_minus_two_for(imm: ir::immediates::Imm64, ty: ir::Type) -> bool {
     match ty {
         ir::types::I32 => (imm.bits() as u32) == (-2_i32 as u32),
@@ -229,38 +157,25 @@ fn is_minus_two_for(imm: ir::immediates::Imm64, ty: ir::Type) -> bool {
     }
 }
 
-/// VMFuncRef field offsets, parameterised on the Pulley pointer width.
-///
-/// Mirrors `crates/environ/src/vmoffsets.rs`'s `vm_func_ref_wasm_call` (=
-/// 1 * size) and `vm_func_ref_vmctx` (= 3 * size). Both fit in i8 for both
-/// pointer widths (8 + 24 on 64-bit, 4 + 12 on 32-bit), which is the
-/// constraint imposed by the pulley `xfuncref_dispatch_*` ops (i8
-/// sign-extended offsets).
+/// `(wasm_call, vmctx)` byte offsets in `VMFuncRef`. Both fit in i8 (8/24
+/// on 64-bit, 4/12 on 32-bit), matching the `xfuncref_dispatch_*` ops'
+/// sign-extended-i8 offset operand.
 fn vm_func_ref_offsets(pointer_bytes: u8) -> (i8, i8) {
     let size = pointer_bytes as i8;
     (size, size.checked_mul(3).expect("VMFuncRef offsets fit i8"))
 }
 
-/// Recognise the canonical funcref-dispatch shape produced by
-/// `func_environ::get_or_init_func_ref_table_elem` followed by
-/// `load_code_and_vmctx` under the eager-init predicate + statically-
-/// elided sig check:
+/// Recognise the canonical funcref-dispatch shape:
 ///
 /// ```text
 /// predecessor:
 ///     value        = load .ptr (table_entry + 0)
 ///     value_masked = band value, -2
 ///     brif value_masked, continuation([value_masked]), null_block([])
-///
 /// continuation(funcref_ptr):
 ///     code  = load .ptr (funcref_ptr + offset_code)
 ///     vmctx = load .ptr (funcref_ptr + offset_vmctx)
-///     ...                                       <- other uses of code, vmctx
 /// ```
-///
-/// If found, returns the brif inst, the band inst, the two load insts (in
-/// continuation), the funcref source value `v` (band's first arg), the
-/// CLIF result values `code` and `vmctx`, and the offsets. Otherwise None.
 fn match_funcref_dispatch_pattern<P: PulleyTargetKind>(
     f: &ir::Function,
     brif_inst: ir::Inst,
@@ -334,9 +249,8 @@ fn match_funcref_dispatch_pattern<P: PulleyTargetKind>(
     }
     let funcref_ptr = cont_params[0];
 
-    // First two instructions in the continuation block must be the two
-    // canonical loads. We tolerate the block-param ordering: load1 is
-    // at offset_code, load2 at offset_vmctx (in either positional order).
+    // The first two instructions in the continuation block must be the
+    // two field loads in either order.
     let (offset_code_expected, offset_vmctx_expected) = vm_func_ref_offsets(pointer_bytes);
     let mut iter = f.layout.block_insts(continuation);
     let load1 = iter.next()?;
@@ -433,18 +347,8 @@ fn pre_lower_pulley<P>(ctx: &mut Lower<InstAndKind<P>>, pointer_bytes: u8)
 where
     P: PulleyTargetKind,
 {
-    // Collect candidates first so we don't hold &ctx.f while calling
-    // sink_pure_inst (which takes &mut ctx).
-    //
-    // We only absorb the two field loads, NOT the band. The band stays
-    // as a separate Pulley `xband_s8` op because `cond` (the band's
-    // result) is the SOURCE vreg consumed by FuncrefDispatch — that
-    // already-masked value gives us the branch test (`src != 0`) with
-    // the same predictor-anchor semantics as the original brif. If we
-    // also absorbed the band, FuncrefDispatch would have nothing
-    // defining `cond`'s vreg, and the predecessor brif's block-call-arg
-    // copy (which passes `cond` to the continuation block param) would
-    // see an undefined vreg.
+    // Collect candidates first so `&ctx.f` isn't held across the
+    // `sink_pure_inst` calls below.
     let mut to_sink: smallvec::SmallVec<[(ir::Inst, ir::Inst); 8]> = smallvec::SmallVec::new();
     {
         let f = ctx.f;
@@ -491,18 +395,9 @@ where
         return false;
     };
 
-    // Phase 3: try to ALSO absorb the band into a BandFuncrefDispatch.
-    // The band defines cond; if absorbed, its standalone xband_s8
-    // dispatch goes away (one less match_loop dispatch per call_indirect
-    // site vs phase 2). The fused MachInst defs three vregs:
-    // `dst_masked` (= cond's vreg) so the brif's block-call-arg copy
-    // still finds the masked value, plus `dst_code` and `dst_vmctx`.
-    //
-    // We re-derive the band inst and unmasked source `v` rather than
-    // threading them through `FuncrefDispatchPattern` — the match
-    // succeeded if we got here, and we already know cond's def is
-    // `band(v, -2)`. Width-aware `is_minus_two_for` matches the same
-    // way as `match_funcref_dispatch_pattern`.
+    // Try phase-3 (absorb the band into BandFuncrefDispatch). The fused
+    // op defines `dst_masked` (= cond's vreg) so the brif's block-call
+    // copy still has a producer, plus `dst_code` and `dst_vmctx`.
     let dfg = ctx.dfg();
     let band_inst = dfg.value_def(cond).inst();
     let v = band_inst.and_then(|bi| match dfg.insts[bi] {
@@ -522,12 +417,8 @@ where
         _ => None,
     });
 
-    // Destination vregs: the loads' result values' canonical vregs.
-    // pre_lower marked the loads as absorbed_pure, so their standalone
-    // lowering (in the continuation block, processed earlier in reverse
-    // iteration) was skipped — value_regs[code_val] and value_regs[vmctx_val]
-    // are un-aliased, and our def of them is the sole def each one has
-    // across the function.
+    // The loads' result vregs become the fused op's defs. Their original
+    // lowering was skipped via `sink_pure_inst` in `pre_lower_pulley`.
     let dst_code_reg = ctx
         .put_value_in_regs(pat.code_val)
         .only_reg()
@@ -542,11 +433,8 @@ where
         .expect("funcref vmctx dst is an x-class register");
 
     if let (Some(band_inst), Some(v)) = (band_inst, v) {
-        // Phase 3: source = unmasked `v`; emit BandFuncrefDispatch which
-        // does the masking internally and writes the masked value to
-        // dst_masked (= cond's vreg). Sink the band — its standalone
-        // lowering is skipped, removing one Pulley dispatch from the
-        // call_indirect tail.
+        // Phase 3 fires: source is the unmasked `v`; the fused op masks
+        // internally and writes `dst_masked = cond`.
         let dst_masked_regs = ctx.put_value_in_regs(cond);
         let dst_masked_reg = dst_masked_regs.only_reg().expect("scalar cond");
         let dst_masked = WritableXReg::try_from(Writable::from_reg(dst_masked_reg))
@@ -574,8 +462,8 @@ where
         return true;
     }
 
-    // Phase 2 fallback: band stays standalone, FuncrefDispatch consumes
-    // its masked result as src.
+    // Phase-2 fallback: band stays as a standalone op; FuncrefDispatch
+    // consumes its masked result.
     let src_reg = ctx
         .put_value_in_regs(cond)
         .only_reg()

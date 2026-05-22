@@ -233,10 +233,9 @@ fn pulley_emit<P>(
         }
 
         Inst::IndirectCall { info } => {
-            // If x0..xN args are already in their correct ABI register
-            // (because regalloc allocated the producer's vreg there), drop
-            // them off the end so we can use a narrower `call_indirectN`
-            // op — mirror of the direct-call shrink loop above.
+            // Drop args already in their ABI register so we can pick a
+            // narrower `call_indirectN` — mirrors the direct-call shrink
+            // above.
             let target = info.dest.target;
             let mut args = &info.dest.args[..];
             while !args.is_empty() && args.last().copied() == XReg::new(x_reg(args.len() - 1)) {
@@ -407,12 +406,20 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xband32_s8_br_if_not_x32(
-                        &mut inverted, dst_writable, src_reg, mask_imm, 0,
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        0,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xband64_s8_br_if_not_x64(
-                        &mut inverted, dst_writable, src_reg, mask_imm, 0,
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        0,
                     );
                 }
             }
@@ -422,12 +429,20 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xband32_s8_br_if_not_x32(
-                        &mut inverted, dst_writable, src_reg, mask_imm, inv_rel,
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        inv_rel,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xband64_s8_br_if_not_x64(
-                        &mut inverted, dst_writable, src_reg, mask_imm, inv_rel,
+                        &mut inverted,
+                        dst_writable,
+                        src_reg,
+                        mask_imm,
+                        inv_rel,
                     );
                 }
             }
@@ -482,12 +497,24 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xfuncref_dispatch_not_x32(
-                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xfuncref_dispatch_not_x64(
-                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
                     );
                 }
             }
@@ -497,12 +524,24 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xfuncref_dispatch_not_x32(
-                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, inv_rel,
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xfuncref_dispatch_not_x64(
-                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, inv_rel,
+                        &mut inverted,
+                        dst_code_w,
+                        dst_vmctx_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
                     );
                 }
             }
@@ -513,12 +552,12 @@ fn pulley_emit<P>(
             sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
             sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
             patch_pc_rel_offset(sink, |sink| match size {
-                OperandSize::Size32 => enc::xfuncref_dispatch_x32(
-                    sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
-                ),
-                OperandSize::Size64 => enc::xfuncref_dispatch_x64(
-                    sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
-                ),
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_x32(sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_x64(sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0)
+                }
             });
             debug_assert_eq!(sink.cur_offset(), taken_end);
 
@@ -559,12 +598,26 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xband_funcref_dispatch_not_x32(
-                        &mut inverted, dm_w, dc_w, dv_w, src_reg, oc, ov, 0,
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xband_funcref_dispatch_not_x64(
-                        &mut inverted, dm_w, dc_w, dv_w, src_reg, oc, ov, 0,
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        0,
                     );
                 }
             }
@@ -574,12 +627,26 @@ fn pulley_emit<P>(
             match size {
                 OperandSize::Size32 => {
                     enc::xband_funcref_dispatch_not_x32(
-                        &mut inverted, dm_w, dc_w, dv_w, src_reg, oc, ov, inv_rel,
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
                     );
                 }
                 OperandSize::Size64 => {
                     enc::xband_funcref_dispatch_not_x64(
-                        &mut inverted, dm_w, dc_w, dv_w, src_reg, oc, ov, inv_rel,
+                        &mut inverted,
+                        dm_w,
+                        dc_w,
+                        dv_w,
+                        src_reg,
+                        oc,
+                        ov,
+                        inv_rel,
                     );
                 }
             }
@@ -589,12 +656,12 @@ fn pulley_emit<P>(
             sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
             sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
             patch_pc_rel_offset(sink, |sink| match size {
-                OperandSize::Size32 => enc::xband_funcref_dispatch_x32(
-                    sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0,
-                ),
-                OperandSize::Size64 => enc::xband_funcref_dispatch_x64(
-                    sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0,
-                ),
+                OperandSize::Size32 => {
+                    enc::xband_funcref_dispatch_x32(sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xband_funcref_dispatch_x64(sink, dm_w, dc_w, dv_w, src_reg, oc, ov, 0)
+                }
             });
             debug_assert_eq!(sink.cur_offset(), taken_end);
 
