@@ -104,20 +104,50 @@ where
         return false;
     };
 
-    // The brif's cond must be defined by a `band v -2`. We restrict the
-    // mask to exactly `-2` (the init-bit strip used by the call_indirect
-    // lazy-init brif site) because the fused op tests the UNMASKED `src`
-    // for non-zero, not the masked `dst`. That equivalence holds iff
-    // `(v & mask != 0) <=> (v != 0)`. For mask = -2 this holds for every
-    // funcref-slot value reachable in eagerly-initialized tables (the
-    // soundness argument from `is_eagerly_initialized_funcref_table`).
-    // For other masks the equivalence is generally false, so fusing
-    // would silently flip branch direction on user-code `band+brif`
-    // sites. See pulley/PR for the design discussion.
+    // The brif's cond must be defined by a `band v -2`. The mask = -2 gate
+    // is load-bearing for two distinct reasons:
+    //
+    // 1. Soundness. The fused op tests the UNMASKED `src` for non-zero, not
+    //    the masked `dst`. That equivalence holds iff `(v & mask != 0) <=>
+    //    (v != 0)`. For mask = -2 the equivalence fails only at `v == 1`
+    //    (tagged-null), which the eager-init predicate excludes at
+    //    runtime. For other masks the equivalence fails on a much wider
+    //    range of `v` and the fused branch direction would silently flip.
+    //
+    // 2. Regalloc safety + scope. Before this gate was added, the recogniser
+    //    accepted any `i8::try_from(imm.bits())`-fitting mask, which
+    //    matched user-code `band(v, 127)` / `band(v, 60)` etc. in real
+    //    workloads (e.g. xmrsplayer). Absorbing those user-code bands via
+    //    `sink_pure_inst` violated SSA assumptions when the band's result
+    //    had multiple uses, crashing regalloc with `EntryLivein`. The
+    //    mask = -2 gate confines the fusion to the call_indirect IR-rewrite
+    //    site (where `func_environ::get_or_init_func_ref_table_elem` emits
+    //    `band_imm(value, Imm64::from(-2))` — i.e. `Imm64(-2)` literally).
+    //
+    // Note that wasm's own `br_if` cond is always i32, and the wat parser
+    // encodes `(i32.const -2)` as `Imm64(0xFFFFFFFE)` (= 4294967294),
+    // NOT `Imm64(-2)`. So even though the surface check looks like it
+    // would match user wasm with `(i32.const -2)`, that branch of the
+    // imm-encoding decision tree is unreachable from wasm input. The
+    // only producer of `Imm64(-2)` reaching here is func_environ's own
+    // call to `Imm64::from(-2_i64)`. This is the de facto narrowing that
+    // makes the gate strong against wasm-side abuse.
     let band_inst = match dfg.value_def(cond).inst() {
         Some(inst) => inst,
         None => return false,
     };
+    // Phase-1's mask check is intentionally bit-exact (`imm.bits() == -2`).
+    // The wider, width-aware check `is_minus_two_for` is reserved for
+    // phase 2 — phase 2's stronger pattern (continuation-block 2-load
+    // shape) makes it unreachable from wasm user code, so it can safely
+    // accept the i32-canonicalised `Imm64(0xFFFFFFFE)` encoding. Phase 1
+    // has only the mask gate to keep it away from wasm user code, so
+    // the bit-exact gate is load-bearing — `Imm64(-2)` is only produced
+    // by func_environ's `Imm64::from(-2_i64)`, never by the wat parser
+    // for `(i32.const -2)`. The cost of this strictness: phase 1 does
+    // NOT fire on pulley32 funcref dispatch (the i32 band's imm is
+    // egraph-canonicalised to `Imm64(0xFFFFFFFE)` and bails). Phase 2
+    // fires there instead, so the call_indirect tail is still fused.
     let (band_src, band_imm) = match dfg.insts[band_inst] {
         InstructionData::Binary {
             opcode: Opcode::Band,
@@ -175,6 +205,28 @@ where
     );
 
     true
+}
+
+/// Does this Imm64 encode `-2` when interpreted in `ty`'s width?
+///
+/// Cranelift stores all immediates as `Imm64` regardless of the CLIF type,
+/// and the egraph canonicalises i32 immediates to their unsigned u32-in-i64
+/// encoding (so `i32(-2)` is stored as `Imm64(0xFFFFFFFE)` = 4294967294,
+/// NOT `Imm64(-2)` = 0xFFFFFFFFFFFFFFFE). To check "this is the -2 mask the
+/// IR rewrite from `get_or_init_func_ref_table_elem` produces", we have to
+/// width-aware-compare against -2 in the type the band operates on.
+///
+/// This affects pulley32 specifically: the funcref pointer is i32, the
+/// band is `band_imm(i32_value, Imm64::from(-2))`, and after egraph the
+/// imm shows up as `Imm64(0xFFFFFFFE)`. Without width-aware comparison,
+/// phase 1 / phase 2 fusion would silently fail to fire on
+/// arm64_32-apple-watchos.
+fn is_minus_two_for(imm: ir::immediates::Imm64, ty: ir::Type) -> bool {
+    match ty {
+        ir::types::I32 => (imm.bits() as u32) == (-2_i32 as u32),
+        ir::types::I64 => imm.bits() == -2_i64,
+        _ => false,
+    }
 }
 
 /// VMFuncRef field offsets, parameterised on the Pulley pointer width.
@@ -235,7 +287,7 @@ fn match_funcref_dispatch_pattern<P: PulleyTargetKind>(
                 InstructionData::UnaryImm {
                     opcode: Opcode::Iconst,
                     imm,
-                } if imm.bits() == -2 => (a, -2_i8),
+                } if is_minus_two_for(imm, dfg.value_type(cond)) => (a, -2_i8),
                 _ => return None,
             },
             None => return None,
@@ -301,11 +353,10 @@ fn match_funcref_dispatch_pattern<P: PulleyTargetKind>(
     let code_val = dfg.inst_results(load_code_inst)[0];
     let vmctx_val = dfg.inst_results(load_vmctx_inst)[0];
 
+    let _ = (band_inst, v); // captured for future variants of the pattern check
     Some(FuncrefDispatchPattern {
-        band_inst,
         load_code_inst,
         load_vmctx_inst,
-        v,
         code_val,
         vmctx_val,
         offset_code: offset_code_expected,
@@ -315,10 +366,8 @@ fn match_funcref_dispatch_pattern<P: PulleyTargetKind>(
 }
 
 struct FuncrefDispatchPattern {
-    band_inst: ir::Inst,
     load_code_inst: ir::Inst,
     load_vmctx_inst: ir::Inst,
-    v: ir::Value,
     code_val: ir::Value,
     vmctx_val: ir::Value,
     offset_code: i8,
