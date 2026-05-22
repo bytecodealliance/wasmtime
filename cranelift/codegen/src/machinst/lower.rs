@@ -148,6 +148,18 @@ pub trait LowerBackend {
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
     }
+
+    /// Backend-specific analysis hook, run once after `Lower::new` but
+    /// before the main reverse-block lowering loop. Default: no-op.
+    ///
+    /// Use this to mark instructions as `sink_pure_inst` when they will be
+    /// absorbed by a fused MachInst emitted in a different (earlier-in-CFG,
+    /// later-in-reverse-order) block. The block-by-block lowering loop
+    /// processes blocks in reverse, so cross-block absorption can't be
+    /// arranged at the absorbing instruction's lowering time — it has to be
+    /// arranged here, before any block is lowered. Within a single block,
+    /// `sink_pure_inst` called during normal lowering is still sufficient.
+    fn pre_lower(&self, _ctx: &mut Lower<Self::MInst>) {}
 }
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
@@ -1703,8 +1715,26 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// lowering side effect: it is specifically for pure ALU ops whose value
     /// flows into the fused MachInst's output operand. Color tracking is
     /// likewise unnecessary because pure insts have no color anchor.
+    ///
+    /// We additionally allow absorbing trusted readonly loads — CLIF
+    /// considers them side-effecting (via `can_load()`), but the
+    /// `notrap + readonly` flags assert they're safe to skip from the
+    /// codegen's perspective. The absorbing MachInst takes responsibility
+    /// for performing the load itself. Color tracking is still
+    /// unnecessary because we're not moving a side-effecting op — we're
+    /// telling the lowerer it has been handled elsewhere.
     pub fn sink_pure_inst(&mut self, ir_inst: Inst) {
-        assert!(!has_lowering_side_effect(self.f, ir_inst));
+        let dfg_inst = &self.f.dfg.insts[ir_inst];
+        let is_pure = !has_lowering_side_effect(self.f, ir_inst);
+        let is_safe_load = matches!(
+            dfg_inst,
+            InstructionData::Load {
+                opcode: crate::ir::Opcode::Load,
+                flags,
+                ..
+            } if flags.readonly() && flags.notrap()
+        );
+        assert!(is_pure || is_safe_load);
         self.inst_absorbed_pure.insert(ir_inst);
     }
 
