@@ -87,6 +87,6 @@
 ;;       ret
 ;;   d3: xmov x1, x17
 ;;   d6: xload64le_o32 x0, x1, 16
-;;   dd: xload64le_o32 x0, x0, 408
-;;   e4: call_indirect_host 52
+;;   dd: xload64le_o32 x0, x0, 328
+;;   e4: call_indirect_host 42
 ;;   e8: trap

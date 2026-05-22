@@ -49,30 +49,23 @@
 ;;       ret
 ;;
 ;; wasm[0]::function[3]:
-;;       push_frame_save 32, x16, x17, x25
-;;       br_if_xugteq32_u8 x2, 3, 0x58    // target = 0x6e
+;;       push_frame_save 32, x16, x17, x24
+;;       br_if_xugteq32_u8 x2, 3, 0x45    // target = 0x5b
 ;;   1d: xload32le_o32 x15, x0, 24
-;;       xmov x3, x0
+;;       xmov x24, x0
 ;;       xshl32_u6 x0, x2, 2
 ;;       xadd32 x15, x15, x0
 ;;       xload32le_o32 x15, x15, 0
-;;       xband_funcref_dispatch_not_x32 x0, x16, x17, x15, 4, 12, 0x1c    // target = 0x50
-;;       xmov x2, x0
-;;       xmov x1, x3
-;;       xmov x0, x17
-;;       call_indirect x16
-;;       pop_frame_restore 32, x16, x17, x25
+;;       xband_funcref_dispatch_not_x32 x0, x17, x16, x15, 4, 12, 0x15    // target = 0x49
+;;       call_indirect2 x17, x16, x24
+;;       pop_frame_restore 32, x16, x17, x24
 ;;       ret
-;;   50: xzero x0
-;;   52: zext32 x1, x2
-;;   55: xmov x25, x3
-;;   58: call3 x25, x0, x1, 0x270    // target = 0x2c8
-;;   60: xmov x2, x0
-;;   63: xmov x0, x17
-;;   66: xmov x1, x25
-;;   69: jump -0x21    // target = 0x48
-;;   6e: trap
-;;       ╰─╼ trap: TableOutOfBounds
+;;   49: xzero x0
+;;   4b: zext32 x1, x2
+;;   4e: call3 x24, x0, x1, 0x267    // target = 0x2b5
+;;   56: jump -0x17    // target = 0x3f
+;;   5b: trap
+;;       ╰─╼ trap: Normal(TableOutOfBounds)
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[0]:
 ;;       push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -82,19 +75,19 @@
 ;;       xstore32le_o32 x13, 48, x14
 ;;       xmov x14, sp
 ;;       xstore32le_o32 x13, 44, x14
-;;       xpcadd x15, 0x2a    // target = 0xc3
+;;       xpcadd x15, 0x2a    // target = 0xb0
 ;;       xstore32le_o32 x13, 52, x15
-;;       call -0xa8    // target = 0x0
+;;       call -0x95    // target = 0x0
 ;;       ├─╼ exception frame offset: SP = FP - 0x90
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0xc3
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0xb0
 ;;       xload64le_o32 x2, sp, 0
 ;;       xstore32le_o32 x2, 0, x0
 ;;       xone x0
 ;;       pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ;;       ret
-;;   c3: xzero x0
-;;   c5: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
-;;   ca: ret
+;;   b0: xzero x0
+;;   b2: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+;;   b7: ret
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[1]:
 ;;       push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -104,19 +97,19 @@
 ;;       xstore32le_o32 x13, 48, x14
 ;;       xmov x14, sp
 ;;       xstore32le_o32 x13, 44, x14
-;;       xpcadd x15, 0x2a    // target = 0x11d
+;;       xpcadd x15, 0x2a    // target = 0x10a
 ;;       xstore32le_o32 x13, 52, x15
-;;       call -0xfd    // target = 0x5
+;;       call -0xea    // target = 0x5
 ;;       ├─╼ exception frame offset: SP = FP - 0x90
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x11d
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x10a
 ;;       xload64le_o32 x2, sp, 0
 ;;       xstore32le_o32 x2, 0, x0
 ;;       xone x0
 ;;       pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ;;       ret
-;;  11d: xzero x0
-;;  11f: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
-;;  124: ret
+;;  10a: xzero x0
+;;  10c: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+;;  111: ret
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[2]:
 ;;       push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -126,19 +119,19 @@
 ;;       xstore32le_o32 x13, 48, x14
 ;;       xmov x14, sp
 ;;       xstore32le_o32 x13, 44, x14
-;;       xpcadd x15, 0x2a    // target = 0x177
+;;       xpcadd x15, 0x2a    // target = 0x164
 ;;       xstore32le_o32 x13, 52, x15
-;;       call -0x151    // target = 0xb
+;;       call -0x13e    // target = 0xb
 ;;       ├─╼ exception frame offset: SP = FP - 0x90
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x177
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x164
 ;;       xload64le_o32 x2, sp, 0
 ;;       xstore32le_o32 x2, 0, x0
 ;;       xone x0
 ;;       pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ;;       ret
-;;  177: xzero x0
-;;  179: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
-;;  17e: ret
+;;  164: xzero x0
+;;  166: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+;;  16b: ret
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[3]:
 ;;       push_frame_save 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
@@ -149,19 +142,19 @@
 ;;       xstore32le_o32 x15, 48, x2
 ;;       xmov x2, sp
 ;;       xstore32le_o32 x15, 44, x2
-;;       xpcadd x2, 0x2d    // target = 0x1db
+;;       xpcadd x2, 0x2d    // target = 0x1c8
 ;;       xstore32le_o32 x15, 52, x2
-;;       call3 x0, x1, x14, -0x1ac    // target = 0x11
+;;       call3 x0, x1, x14, -0x199    // target = 0x11
 ;;       ├─╼ exception frame offset: SP = FP - 0x90
-;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x1db
+;;       ╰─╼ exception handler: default handler, no dynamic context, handler=0x1c8
 ;;       xload64le_o32 x2, sp, 0
 ;;       xstore32le_o32 x2, 0, x0
 ;;       xone x0
 ;;       pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
 ;;       ret
-;;  1db: xzero x0
-;;  1dd: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
-;;  1e2: ret
+;;  1c8: xzero x0
+;;  1ca: pop_frame_restore 144, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+;;  1cf: ret
 ;;
 ;; signatures[0]::wasm_to_array_trampoline:
 ;;       push_frame_save 32, x16, x17
@@ -180,15 +173,15 @@
 ;;       xmov x3, x16
 ;;       call_indirect_host 0
 ;;       zext8 x15, x0
-;;       br_if_not32 x15, 0x13    // target = 0x23a
-;;  22d: xload32le_o32 x0, x16, 0
+;;       br_if_not32 x15, 0x13    // target = 0x227
+;;  21a: xload32le_o32 x0, x16, 0
 ;;       pop_frame_restore 32, x16, x17
 ;;       ret
-;;  23a: xmov x1, x17
-;;  23d: xload32le_o32 x0, x1, 8
-;;  244: xload32le_o32 x0, x0, 204
-;;  24b: call_indirect_host 52
-;;  24f: trap
+;;  227: xmov x1, x17
+;;  22a: xload32le_o32 x0, x1, 8
+;;  231: xload32le_o32 x0, x0, 164
+;;  238: call_indirect_host 42
+;;  23c: trap
 ;;
 ;; signatures[1]::wasm_to_array_trampoline:
 ;;       push_frame_save 32, x16, x17
@@ -208,15 +201,15 @@
 ;;       xmov x3, x16
 ;;       call_indirect_host 0
 ;;       zext8 x0, x0
-;;       br_if_not32 x0, 0x13    // target = 0x2b0
-;;  2a3: xload32le_o32 x0, x16, 0
+;;       br_if_not32 x0, 0x13    // target = 0x29d
+;;  290: xload32le_o32 x0, x16, 0
 ;;       pop_frame_restore 32, x16, x17
 ;;       ret
-;;  2b0: xmov x1, x17
-;;  2b3: xload32le_o32 x0, x1, 8
-;;  2ba: xload32le_o32 x0, x0, 204
-;;  2c1: call_indirect_host 52
-;;  2c5: trap
+;;  29d: xmov x1, x17
+;;  2a0: xload32le_o32 x0, x1, 8
+;;  2a7: xload32le_o32 x0, x0, 164
+;;  2ae: call_indirect_host 42
+;;  2b2: trap
 ;;
 ;; wasmtime_builtin_table_get_lazy_init_func_ref:
 ;;       push_frame
@@ -227,10 +220,10 @@
 ;;       xstore32le_o32 x9, 40, x10
 ;;       xload32le_o32 x11, x0, 8
 ;;       xmov x13, x0
-;;       xload32le_o32 x0, x11, 36
+;;       xload32le_o32 x0, x11, 28
 ;;       xmov x3, x2
 ;;       xmov x2, x1
 ;;       xmov x1, x13
-;;       call_indirect_host 10
+;;       call_indirect_host 8
 ;;       pop_frame
 ;;       ret

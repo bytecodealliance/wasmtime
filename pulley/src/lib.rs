@@ -603,16 +603,24 @@ macro_rules! for_each_op {
             /// already-masked funcref pointer (`band v, -2` upstream).
             ///
             /// Forward form: loads-and-branch fire on the non-null side
-            /// (`src != 0`); the null side falls through. Used at the
+            /// (`src != 0`); the **null side TRAPS**. Used at the
             /// call_indirect lazy-init brif site under
             /// `is_eagerly_initialized_funcref_table` AND when the signature
             /// check is statically elided — under those conditions the only
             /// uses of the masked funcref pointer are the two `VMFuncRef`
             /// field loads, and the brif's null branch is provably
-            /// unreachable at runtime. The handler's runtime null check is
-            /// defence-in-depth (matching the original brif's role); it MUST
-            /// fall through on null so the slow path's lazy-init builtin
-            /// stays callable in the (provably-unreachable) error case.
+            /// unreachable at runtime.
+            ///
+            /// The handler traps on null (rather than falling through to
+            /// the original `null_block`'s lazy-init libcall) because the
+            /// fusion absorbs the two field loads from the continuation
+            /// block — and the lazy-init slow path rejoins THAT same
+            /// continuation. If we fell through and the slow path ran,
+            /// call_indirect would observe uninitialized `dst_code` /
+            /// `dst_vmctx`. The predicate guarantees the null path is
+            /// unreachable in correct code; trapping there is a fail-closed
+            /// defence-in-depth that protects against future predicate bugs
+            /// or runtime invariant violations.
             ///
             /// Fused form of `br_if + xload64 + xload64` (the preceding
             /// `xband64_s8` stays as a separate op since `src` is consumed
@@ -623,10 +631,11 @@ macro_rules! for_each_op {
             /// pattern matches), so the per-new-opcode predictor cost
             /// stays at one new op family rather than two.
             xfuncref_dispatch_x64 = XfuncrefDispatchX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
-            /// Inverted form of `xfuncref_dispatch_x64`: the null side
-            /// branches and the loads-and-fall-through fire on `src != 0`.
-            /// Used by MachBuffer's branch-direction-flip fallthrough
-            /// optimization when the fast path is the natural fall-through.
+            /// Inverted form of `xfuncref_dispatch_x64`: fast-path
+            /// (loads-and-fall-through) fires on `src != 0`; the null side
+            /// **traps** (same rationale as the forward variant). `offset`
+            /// is vestigial after the trap-on-null fix; kept in the
+            /// encoding for shape parity with the forward variant.
             xfuncref_dispatch_not_x64 = XfuncrefDispatchNotX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
             /// 32-bit pointer-width form of `xfuncref_dispatch_x64`. Same
             /// semantics; `src`, `dst_code`, `dst_vmctx` are i32 loaded into
@@ -646,7 +655,9 @@ macro_rules! for_each_op {
             /// if `src != 0`, load `wasm_call` from `dst_masked + offset_code`
             /// into `dst_code`, load callee `vmctx` from `dst_masked +
             /// offset_vmctx` into `dst_vmctx`, and branch by `offset`. The
-            /// null side falls through to the slow path.
+            /// null side **traps** (same rationale as `xfuncref_dispatch_*`:
+            /// the continuation-block loads were absorbed, so the slow path
+            /// would misdispatch if we fell through).
             ///
             /// Soundness: same as `xfuncref_dispatch_*` — gated on
             /// `is_eagerly_initialized_funcref_table` so `src` is provably
@@ -656,11 +667,12 @@ macro_rules! for_each_op {
             /// match_loop dispatch per call_indirect site vs phase 2 (the
             /// preceding standalone `xband64_s8` is absorbed).
             xband_funcref_dispatch_x64 = XbandFuncrefDispatchX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
-            /// Inverted form: branch when `src == 0`, loads-and-fall-through
-            /// on `src != 0`. Used by MachBuffer's branch-direction flip
-            /// when the fast path is the natural fall-through. The
-            /// `dst_masked = src & -2` write is unconditional in both
-            /// forms.
+            /// Inverted form: fast-path (loads-and-fall-through) on
+            /// `src != 0`; null path traps. Used by MachBuffer's
+            /// branch-direction flip when the fast path is the natural
+            /// fall-through. The `dst_masked = src & -2` write is
+            /// unconditional in both forms. `offset` is vestigial after
+            /// the trap-on-null fix; kept for encoding-shape parity.
             xband_funcref_dispatch_not_x64 = XbandFuncrefDispatchNotX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
             /// 32-bit pointer-width form of `xband_funcref_dispatch_x64`.
             /// Used on `pulley32` / arm64_32-apple-watchos.

@@ -729,7 +729,11 @@ fn fusion_call_indirect_with_host_swap() -> Result<()> {
     let bytes = wat::parse_str(wat)?;
 
     for use_pulley in [true, false] {
-        let cfg = if use_pulley { pulley_trap_safe_config() } else { Config::new() };
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
         let engine = Engine::new(&cfg)?;
         let module = Module::new(&engine, &bytes)?;
         let mut store = Store::new(&engine, ());
@@ -782,7 +786,11 @@ fn fusion_call_indirect_imported_table() -> Result<()> {
     let bytes_b = wat::parse_str(wat_b)?;
 
     for use_pulley in [true, false] {
-        let cfg = if use_pulley { pulley_trap_safe_config() } else { Config::new() };
+        let cfg = if use_pulley {
+            pulley_trap_safe_config()
+        } else {
+            Config::new()
+        };
         let engine = Engine::new(&cfg)?;
         let module_a = Module::new(&engine, &bytes_a)?;
         let module_b = Module::new(&engine, &bytes_b)?;
