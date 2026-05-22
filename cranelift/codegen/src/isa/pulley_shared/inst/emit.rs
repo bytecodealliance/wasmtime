@@ -367,6 +367,79 @@ fn pulley_emit<P>(
             assert_eq!(sink.cur_offset(), not_taken_end);
         }
 
+        Inst::BandBrIf {
+            dst,
+            src,
+            mask,
+            size,
+            taken,
+            not_taken,
+        } => {
+            // The forward form branches to `taken` if `src` is non-zero
+            // (after computing `dst = src & sext(mask)`). The inverted form
+            // branches if `src` is zero — used by MachBuffer's fallthrough-
+            // flip optimization. Both must encode to equal-length bytes; the
+            // `_x*` and `_not_x*` ops share the same operand shape, so they
+            // do.
+            let dst_writable = *dst;
+            let src_reg = *src;
+            let mask_imm = *mask;
+
+            // Compute the inverted-form encoding (branch on src == 0) into a
+            // SmallVec so MachBuffer can use it for branch-direction flipping.
+            let mut inverted = SmallVec::<[u8; 16]>::new();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_not_x32(
+                        &mut inverted, dst_writable, src_reg, mask_imm, 0,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_not_x64(
+                        &mut inverted, dst_writable, src_reg, mask_imm, 0,
+                    );
+                }
+            }
+            let len = inverted.len() as u32;
+            inverted.clear();
+            let inv_rel = i32::try_from(len - 4).unwrap();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_not_x32(
+                        &mut inverted, dst_writable, src_reg, mask_imm, inv_rel,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_not_x64(
+                        &mut inverted, dst_writable, src_reg, mask_imm, inv_rel,
+                    );
+                }
+            }
+            assert!(len > 4);
+
+            // Emit the forward form (branch on src != 0).
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
+            sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
+            patch_pc_rel_offset(sink, |sink| match size {
+                OperandSize::Size32 => {
+                    enc::xband32_s8_br_if_x32(sink, dst_writable, src_reg, mask_imm, 0)
+                }
+                OperandSize::Size64 => {
+                    enc::xband64_s8_br_if_x64(sink, dst_writable, src_reg, mask_imm, 0)
+                }
+            });
+            debug_assert_eq!(sink.cur_offset(), taken_end);
+
+            // Unconditional jump to `not_taken` for the fall-through path.
+            let not_taken_start = taken_end + 1;
+            let not_taken_end = not_taken_start + 4;
+            sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);
+            sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
+            patch_pc_rel_offset(sink, |sink| enc::jump(sink, 0));
+            assert_eq!(sink.cur_offset(), not_taken_end);
+        }
+
         Inst::LoadAddr { dst, mem } => {
             let base = mem.get_base_register();
             let offset = mem.get_offset_with_state(state);

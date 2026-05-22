@@ -92,7 +92,7 @@
 ;; @0050                               v12 = load.i64 user6 aligned table v11
 ;;                                     v22 = iconst.i64 -2
 ;; @0050                               v13 = band v12, v22  ; v22 = -2
-;; @0050                               brif v12, block3(v13), block2
+;; @0050                               brif v13, block3(v13), block2
 ;;
 ;;                                 block2 cold:
 ;; @0050                               v15 = iconst.i32 0
