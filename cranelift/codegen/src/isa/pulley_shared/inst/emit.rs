@@ -440,6 +440,81 @@ fn pulley_emit<P>(
             assert_eq!(sink.cur_offset(), not_taken_end);
         }
 
+        Inst::FuncrefDispatch {
+            dst_code,
+            dst_vmctx,
+            src,
+            offset_code,
+            offset_vmctx,
+            size,
+            taken,
+            not_taken,
+        } => {
+            // Same scaffolding as Inst::BrIf / Inst::BandBrIf. Forward
+            // form's branch fires on `src != 0` (after loads); inverted
+            // form branches on `src == 0` (loads on fall-through). Both
+            // encodings have the same length because they share the
+            // 5-operand shape.
+            let dst_code_w = *dst_code;
+            let dst_vmctx_w = *dst_vmctx;
+            let src_reg = *src;
+            let oc = *offset_code;
+            let ov = *offset_vmctx;
+
+            // Inverted encoding into a scratch SmallVec for MachBuffer.
+            let mut inverted = SmallVec::<[u8; 16]>::new();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_not_x32(
+                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_not_x64(
+                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                    );
+                }
+            }
+            let len = inverted.len() as u32;
+            inverted.clear();
+            let inv_rel = i32::try_from(len - 4).unwrap();
+            match size {
+                OperandSize::Size32 => {
+                    enc::xfuncref_dispatch_not_x32(
+                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, inv_rel,
+                    );
+                }
+                OperandSize::Size64 => {
+                    enc::xfuncref_dispatch_not_x64(
+                        &mut inverted, dst_code_w, dst_vmctx_w, src_reg, oc, ov, inv_rel,
+                    );
+                }
+            }
+            assert!(len > 4);
+
+            // Emit the forward form (branch on src != 0).
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::PcRel);
+            sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
+            patch_pc_rel_offset(sink, |sink| match size {
+                OperandSize::Size32 => enc::xfuncref_dispatch_x32(
+                    sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                ),
+                OperandSize::Size64 => enc::xfuncref_dispatch_x64(
+                    sink, dst_code_w, dst_vmctx_w, src_reg, oc, ov, 0,
+                ),
+            });
+            debug_assert_eq!(sink.cur_offset(), taken_end);
+
+            // Unconditional jump to `not_taken` for the fall-through path.
+            let not_taken_start = taken_end + 1;
+            let not_taken_end = not_taken_start + 4;
+            sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::PcRel);
+            sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
+            patch_pc_rel_offset(sink, |sink| enc::jump(sink, 0));
+            assert_eq!(sink.cur_offset(), not_taken_end);
+        }
+
         Inst::LoadAddr { dst, mem } => {
             let base = mem.get_base_register();
             let offset = mem.get_offset_with_state(state);

@@ -85,6 +85,29 @@
       (taken MachLabel)
       (not_taken MachLabel))
 
+    ;; Funcref-dispatch fusion: branch-and-load fused dispatch op emitted
+    ;; at the call_indirect lazy-init brif site under the eager-init
+    ;; predicate + statically-elided sig check. Fuses
+    ;;   `band v, -2 ; brif ; xload (v_masked + offset_code) ; xload (v_masked + offset_vmctx)`
+    ;; from across the brif's predecessor and continuation blocks into one
+    ;; Pulley dispatch. The pulley-side ops are `xfuncref_dispatch_{x64,
+    ;; not_x64, x32, not_x32}`; the runtime null check is defence-in-depth
+    ;; (the predicate guarantees the funcref is non-null at runtime, but
+    ;; the handler must match the original brif's null branch as a
+    ;; correctness fallback). See `try_fuse_funcref_dispatch` in
+    ;; `pulley_shared::lower` for the recogniser + Pulley's
+    ;; `pre_lower_analysis` for the cross-block sink that lets the
+    ;; continuation-block loads be absorbed into one MachInst here.
+    (FuncrefDispatch
+      (dst_code WritableXReg)
+      (dst_vmctx WritableXReg)
+      (src XReg)
+      (offset_code i8)
+      (offset_vmctx i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 

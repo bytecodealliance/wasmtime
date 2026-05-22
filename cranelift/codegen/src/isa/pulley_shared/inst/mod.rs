@@ -273,6 +273,21 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
         }
 
+        Inst::FuncrefDispatch {
+            dst_code,
+            dst_vmctx,
+            src,
+            offset_code: _,
+            offset_vmctx: _,
+            size: _,
+            taken: _,
+            not_taken: _,
+        } => {
+            collector.reg_def(dst_code);
+            collector.reg_def(dst_vmctx);
+            collector.reg_use(src);
+        }
+
         Inst::LoadAddr { dst, mem } => {
             collector.reg_def(dst);
             mem.get_operands(collector);
@@ -496,6 +511,7 @@ where
             Inst::Jump { .. } => MachTerminator::Branch,
             Inst::BrIf { .. } => MachTerminator::Branch,
             Inst::BandBrIf { .. } => MachTerminator::Branch,
+            Inst::FuncrefDispatch { .. } => MachTerminator::Branch,
             Inst::BrTable { .. } => MachTerminator::Branch,
             Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::RetCall,
             Inst::Call { info } if info.try_call_info.is_some() => MachTerminator::Branch,
@@ -794,6 +810,32 @@ impl Inst {
                 format!(
                     "{dst} = xband{width}_s8 {src}, {mask}; \
                      br_if_x{width} {src}, {taken}; jump {not_taken}"
+                )
+            }
+
+            Inst::FuncrefDispatch {
+                dst_code,
+                dst_vmctx,
+                src,
+                offset_code,
+                offset_vmctx,
+                size,
+                taken,
+                not_taken,
+            } => {
+                let dst_code = format_reg(*dst_code.to_reg());
+                let dst_vmctx = format_reg(*dst_vmctx.to_reg());
+                let src = format_reg(**src);
+                let taken = taken.to_string();
+                let not_taken = not_taken.to_string();
+                let width = match size {
+                    OperandSize::Size32 => 32,
+                    OperandSize::Size64 => 64,
+                };
+                format!(
+                    "{dst_code}, {dst_vmctx} = xfuncref_dispatch_x{width} \
+                     {src}, code+{offset_code}, vmctx+{offset_vmctx}; \
+                     br_if {taken}; jump {not_taken}"
                 )
             }
 
