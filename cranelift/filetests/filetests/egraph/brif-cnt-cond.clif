@@ -130,3 +130,67 @@ block2:
 ;     v3 = iconst.i32 200
 ;     return v3  ; v3 = 200
 ; }
+
+;; Same with a truncating `ireduce` between ctz and brif.
+function %brif_ireduce_ctz_i64(i64) -> i32 {
+block0(v0: i64):
+    v1 = ctz v0
+    v2 = ireduce.i32 v1
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i32 100
+    return v3
+
+block2:
+    v4 = iconst.i32 200
+    return v4
+}
+
+; function %brif_ireduce_ctz_i64(i64) -> i32 fast {
+; block0(v0: i64):
+;     v5 = iconst.i64 1
+;     v6 = band v0, v5  ; v5 = 1
+;     v7 = iconst.i64 0
+;     v8 = icmp eq v6, v7  ; v7 = 0
+;     brif v8, block1, block2
+;
+; block1:
+;     v3 = iconst.i32 100
+;     return v3  ; v3 = 100
+;
+; block2:
+;     v4 = iconst.i32 200
+;     return v4  ; v4 = 200
+; }
+
+;; Same shape with `clz` instead of `ctz`.
+function %brif_ireduce_clz_i64(i64) -> i32 {
+block0(v0: i64):
+    v1 = clz v0
+    v2 = ireduce.i32 v1
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i32 100
+    return v3
+
+block2:
+    v4 = iconst.i32 200
+    return v4
+}
+
+; function %brif_ireduce_clz_i64(i64) -> i32 fast {
+; block0(v0: i64):
+;     v5 = iconst.i64 0
+;     v6 = icmp sge v0, v5  ; v5 = 0
+;     brif v6, block1, block2
+;
+; block1:
+;     v3 = iconst.i32 100
+;     return v3  ; v3 = 100
+;
+; block2:
+;     v4 = iconst.i32 200
+;     return v4  ; v4 = 200
+; }

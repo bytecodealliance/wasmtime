@@ -465,3 +465,12 @@
 ;; `brif (clz X) bt be` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
 (rule (simplify_skeleton (brif (clz x_ty X) _ _))
       (replace_branch_cond (sge $I8 X (iconst_u x_ty 0))))
+
+;; Same when an `ireduce` (truncation) sits between the count and the
+;; brif. The count is in [0, bitwidth] so the truncation is lossless.
+(rule (simplify_skeleton (brif (ireduce _ (ctz x_ty x)) _ _))
+      (replace_branch_cond
+        (eq $I8 (band x_ty x (iconst_u x_ty 1)) (iconst_u x_ty 0))))
+
+(rule (simplify_skeleton (brif (ireduce _ (clz x_ty x)) _ _))
+      (replace_branch_cond (sge $I8 x (iconst_u x_ty 0))))
