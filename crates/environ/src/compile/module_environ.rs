@@ -270,6 +270,25 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
 
         analyze_table_mutability(&mut self.result)?;
 
+        // Precompute static funcref-table contents from `elem` segments
+        // before Cranelift lowering runs. The redundant call later in
+        // `wasmtime/src/compile.rs::build_module_artifacts` is a no-op
+        // once this has run (the segments list is already drained).
+        //
+        // This used to only happen *after* Cranelift compilation, which
+        // meant the `table_initialization.initial_values[*].precomputed`
+        // list was empty when `func_environ.rs` checked it for the
+        // `call_indirect` optimizations introduced in the prior commits
+        // (constant-index → direct call, sig-check elision on uniform-
+        // typed immutable tables, funcref-NULL elision on no-null
+        // immutable tables). Those optimizations all bailed out at the
+        // empty-precomputed check, never firing on real workloads —
+        // their measured improvements in earlier commit messages were
+        // measurement noise, not real signal.
+        if self.tunables.table_lazy_init {
+            self.result.try_func_table_init();
+        }
+
         Ok(self.result)
     }
 
