@@ -2296,6 +2296,70 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xband32_s8_br_if_x32(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i32();
+        self.state[dst].set_i32(s & i32::from(mask));
+        if s != 0 {
+            self.pc_rel_jump::<crate::Xband32S8BrIfX32>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband32_s8_br_if_not_x32(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i32();
+        self.state[dst].set_i32(s & i32::from(mask));
+        if s == 0 {
+            self.pc_rel_jump::<crate::Xband32S8BrIfNotX32>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband64_s8_br_if_x64(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i64();
+        self.state[dst].set_i64(s & i64::from(mask));
+        if s != 0 {
+            self.pc_rel_jump::<crate::Xband64S8BrIfX64>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xband64_s8_br_if_not_x64(
+        &mut self,
+        dst: XReg,
+        src: XReg,
+        mask: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_i64();
+        self.state[dst].set_i64(s & i64::from(mask));
+        if s == 0 {
+            self.pc_rel_jump::<crate::Xband64S8BrIfNotX64>(offset)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
     fn xbor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();

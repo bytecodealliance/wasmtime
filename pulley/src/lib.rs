@@ -562,6 +562,27 @@ macro_rules! for_each_op {
             xband64_s8 = Xband64S8 { dst: XReg, src1: XReg, src2: i8 };
             /// Same as `xband64` but `src2` is a sign-extended 32-bit immediate.
             xband64_s32 = Xband64S32 { dst: XReg, src1: XReg, src2: i32 };
+
+            /// `low32(dst) = low32(src) & sign_extend(mask)`, then conditionally
+            /// branch by `offset` if `low32(src)` is non-zero.
+            ///
+            /// Fused form of `xband32_s8 dst, src, mask` + `br_if32 src, offset`,
+            /// emitted by the Cranelift Pulley backend at call_indirect lazy-init
+            /// brif sites where the same loaded funcref value feeds both the
+            /// init-bit mask (`band v, -2`) and the null-check branch
+            /// (`brif v`). Shaves one match_loop dispatch per call_indirect
+            /// site. See pulley/PR for the full design discussion.
+            xband32_s8_br_if_x32 = Xband32S8BrIfX32 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// Inverted form of `xband32_s8_br_if_x32`: branch if `low32(src)`
+            /// is zero. The mask + dst write happen unconditionally. Used by
+            /// MachBuffer's branch-direction-flip fallthrough optimization.
+            xband32_s8_br_if_not_x32 = Xband32S8BrIfNotX32 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// 64-bit form: `dst = src & sign_extend(mask)`, then conditionally
+            /// branch by `offset` if `src` is non-zero. Same fusion as
+            /// `xband32_s8_br_if_x32` but for 64-bit pointer-width Pulley.
+            xband64_s8_br_if_x64 = Xband64S8BrIfX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+            /// Inverted form of `xband64_s8_br_if_x64`: branch if `src` is zero.
+            xband64_s8_br_if_not_x64 = Xband64S8BrIfNotX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
             /// `low32(dst) = low32(src1) | low32(src2)`
             xbor32 = XBor32 { operands: BinaryOperands<XReg> };
             /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.
