@@ -1855,7 +1855,12 @@ impl FuncEnvironment<'_> {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
 
-        let base_flags = if Some(table.limits.min) == table.limits.max {
+        // A table is fixed-size if min == max or if translation proved it
+        // is never mutated; either way the base address and element count
+        // are constant for the instance's lifetime.
+        let fixed_size =
+            !self.translation.tables_mutated[index] || Some(table.limits.min) == table.limits.max;
+        let base_flags = if fixed_size {
             func.dfg
                 .mem_flags
                 .insert(MemFlagsData::trusted().with_readonly().with_can_move())
@@ -1867,11 +1872,10 @@ impl FuncEnvironment<'_> {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            // A fixed-size table can't be resized so its base address won't change.
             flags: base_flags,
         });
 
-        let bound = if Some(table.limits.min) == table.limits.max {
+        let bound = if fixed_size {
             TableSize::Static {
                 bound: table.limits.min,
             }
