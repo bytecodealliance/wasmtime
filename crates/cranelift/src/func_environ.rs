@@ -336,7 +336,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reasion = "included for completeness, will be used in follow up commits")]
     pub(crate) fn get_vmctx_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
         *self.vmctx_alias_region.get_or_insert_with(|| {
             func.dfg.alias_regions.insert(ir::AliasRegionData {

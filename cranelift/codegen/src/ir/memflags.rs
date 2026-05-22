@@ -4,12 +4,12 @@ use super::TrapCode;
 use crate::HashMap;
 use crate::entity::{self, PrimaryMap};
 pub use crate::machinst::MachMemFlags;
+use alloc::borrow::Cow;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::ops::Index;
 use core::str::FromStr;
 use cranelift_entity::{entity_impl, packed_option::PackedOption};
-use std::borrow::Cow;
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
