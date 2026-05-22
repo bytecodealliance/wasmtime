@@ -2068,6 +2068,85 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         Some(target)
     }
 
+    /// Try to prove that the runtime signature check at a `call_indirect`
+    /// site through an untyped `funcref` table is redundant.
+    ///
+    /// True when:
+    ///
+    /// 1. The table is provably immutable (`tables_mutated[table_index] ==
+    ///    false`). Defined-not-imported is implied since imported tables
+    ///    are pre-marked as mutated.
+    ///
+    /// 2. The table is precomputable from static `elem` segments
+    ///    (`TableInitialValue::Null { precomputed }`).
+    ///
+    /// 3. Every non-null entry in `precomputed` has the same module-
+    ///    interned signature as the `ty_index` declared at the call site.
+    ///    Null slots are fine — they trap on the funcref-NULL load that
+    ///    happens after sig-check elision.
+    ///
+    /// When this returns true, the caller short-circuits to
+    /// `CheckIndirectCallTypeSignature::StaticMatch`, which removes the
+    /// sig load + compare from the hot path. Bounds-check on the table
+    /// index and the funcref-NULL check are still emitted by the
+    /// surrounding code, so the call still traps correctly on OOB or
+    /// null index — only the sig check is elided.
+    ///
+    /// This is the static analog of an inline-cache: instead of caching
+    /// the resolved target per call site, we observe at module-load that
+    /// the table contents make the sig check uninformative for the
+    /// lifetime of any instance.
+    fn try_elide_sig_check_for_immutable_table(
+        &self,
+        table_index: TableIndex,
+        ty_index: TypeIndex,
+    ) -> bool {
+        let translation = self.env.translation;
+        let module = &translation.module;
+
+        if translation.tables_mutated[table_index] {
+            return false;
+        }
+        let defined_table = match module.defined_table_index(table_index) {
+            Some(d) => d,
+            None => return false,
+        };
+
+        let init = match module.table_initialization.initial_values.get(defined_table) {
+            Some(i) => i,
+            None => return false,
+        };
+        let precomputed = match init {
+            TableInitialValue::Null { precomputed } => precomputed,
+            TableInitialValue::Expr(_) => return false,
+        };
+
+        // Empty precomputed list means we have no information — fall back
+        // to the runtime sig check. (A subsequent `call_indirect` could
+        // still trap on OOB, but we don't have anything to elide against.)
+        if precomputed.is_empty() {
+            return false;
+        }
+
+        let expected_ty = module.types[ty_index].unwrap_module_type_index();
+        for &func_idx in precomputed.iter() {
+            // Null slots can't be called without trapping — fine to ignore
+            // here; the elided check would have trapped anyway, and the
+            // unchecked code path will trap on the null funcref deref.
+            if func_idx.is_reserved_value() {
+                continue;
+            }
+            let actual_ty = module.functions[func_idx]
+                .signature
+                .unwrap_module_type_index();
+            if actual_ty != expected_ty {
+                return false;
+            }
+        }
+
+        true
+    }
+
     fn check_and_load_code_and_callee_vmctx(
         &mut self,
         features: &WasmFeatures,
@@ -2130,6 +2209,28 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // table of typed functions and that type matches `ty_index`, then
         // there's no need to perform a typecheck.
         match table.ref_type.heap_type {
+            // Untyped `funcref` tables ordinarily need a runtime sig check.
+            // But if (a) the table is provably immutable (`tables_mutated`
+            // bit clear) and (b) every non-null entry in the precomputed
+            // static `elem` segments has the same `VMSharedTypeIndex` as
+            // the call site, then the runtime check is provably redundant
+            // and we can elide it the same way we do for typed-funcref
+            // tables.
+            //
+            // This is the AOT-IC-seeding analog: instead of caching the
+            // resolved target at the call site, we cache the *signature*
+            // at module-load time and skip the hot-path sig load+compare.
+            // Helps the megamorphic case (computed `call_indirect` index)
+            // that the static-monomorphization fast path above can't
+            // handle.
+            WasmHeapType::Func
+                if self.try_elide_sig_check_for_immutable_table(table_index, ty_index) =>
+            {
+                return CheckIndirectCallTypeSignature::StaticMatch {
+                    may_be_null: table.ref_type.nullable,
+                };
+            }
+
             // Functions do not have a statically known type in the table, a
             // typecheck is required. Fall through to below to perform the
             // actual typecheck.
