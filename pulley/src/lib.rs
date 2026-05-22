@@ -115,6 +115,17 @@ macro_rules! for_each_op {
             /// Transfer control to the PC in `reg` and set `lr` to the PC just
             /// after this instruction.
             call_indirect = CallIndirect { reg: XReg };
+            /// Like `call_indirect`, but also `x0 = arg1`. Saves one Pulley
+            /// dispatch vs `xmov x0, arg1; call_indirect reg` for the common
+            /// call_indirect pattern where one ABI register (usually `vmctx`)
+            /// is set up immediately before the indirect call.
+            call_indirect1 = CallIndirect1 { reg: XReg, arg1: XReg };
+            /// Like `call_indirect`, but also `x0, x1 = arg1, arg2`.
+            call_indirect2 = CallIndirect2 { reg: XReg, arg1: XReg, arg2: XReg };
+            /// Like `call_indirect`, but also `x0, x1, x2 = arg1, arg2, arg3`.
+            call_indirect3 = CallIndirect3 { reg: XReg, arg1: XReg, arg2: XReg, arg3: XReg };
+            /// Like `call_indirect`, but also `x0, x1, x2, x3 = arg1, arg2, arg3, arg4`.
+            call_indirect4 = CallIndirect4 { reg: XReg, arg1: XReg, arg2: XReg, arg3: XReg, arg4: XReg };
 
             /// Unconditionally transfer control to the PC at the given offset.
             jump = Jump { offset: PcRelOffset };
