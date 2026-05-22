@@ -1,4 +1,4 @@
-use crate::ir::{MachMemFlags, MemFlagsData, TrapCode};
+use crate::ir::{MachMemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 

@@ -1165,7 +1165,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
                 } else {
                     op.kind.rust_type
                 };
-                tmpl_types.push(format!("{}: Into<{}>", t, api_type));
+                tmpl_types.push(format!("{t}: Into<{api_type}>"));
                 into_args.push(op.name);
                 t
             } else {
