@@ -1657,20 +1657,39 @@ impl FuncEnvironment<'_> {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
 
+        // A table is "fixed-size at runtime" if its declared min equals its
+        // max (`(table 17 17 funcref)`) OR if we proved during translation
+        // that no opcode in the module ever calls `table.grow` /
+        // `table.set` / `table.fill` / `table.copy` (as dst) / `table.init`
+        // on it (`translation.tables_mutated[index] == false`). In either
+        // case the table's base address won't move and its element count is
+        // fixed at `table.limits.min`, so:
+        //
+        //   - `base_gv` can be marked `readonly + can_move` (one load total
+        //     per function, not per dispatch);
+        //   - `TableSize::Static { bound: min }` removes the runtime bound
+        //     load + compare on every `call_indirect` / `table.get`.
+        //
+        // Without commit 1's `tables_mutated` bit the static path was
+        // gated only on `min == max`, which is rare in real toolchain
+        // output (Porffor's 46/∞ table, sqlite3's 620/∞ table both
+        // looked dynamic to the previous heuristic). Commit 1's analysis
+        // proves they're effectively static and unblocks this peephole.
+        let immutable = !self.translation.tables_mutated[index];
+        let fixed_size = immutable || Some(table.limits.min) == table.limits.max;
+
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: if Some(table.limits.min) == table.limits.max {
-                // A fixed-size table can't be resized so its base address won't
-                // change.
+            flags: if fixed_size {
                 MemFlagsData::trusted().with_readonly().with_can_move()
             } else {
                 MemFlagsData::trusted()
             },
         });
 
-        let bound = if Some(table.limits.min) == table.limits.max {
+        let bound = if fixed_size {
             TableSize::Static {
                 bound: table.limits.min,
             }
