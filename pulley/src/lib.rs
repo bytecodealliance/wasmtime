@@ -625,6 +625,38 @@ macro_rules! for_each_op {
             /// Inverted form of `xfuncref_dispatch_x32`.
             xfuncref_dispatch_not_x32 = XfuncrefDispatchNotX32 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
 
+            /// Phase-3 fusion: combine `xband64_s8 dst_masked, src, -2` with
+            /// `xfuncref_dispatch_*_x64 dst_code, dst_vmctx, dst_masked,
+            /// offset_code, offset_vmctx, offset` into a single Pulley
+            /// dispatch. `src` is the UNMASKED funcref pointer; the
+            /// init-bit strip happens internally.
+            ///
+            /// 64-bit forward form: `dst_masked = src & -2` unconditionally;
+            /// if `src != 0`, load `wasm_call` from `dst_masked + offset_code`
+            /// into `dst_code`, load callee `vmctx` from `dst_masked +
+            /// offset_vmctx` into `dst_vmctx`, and branch by `offset`. The
+            /// null side falls through to the slow path.
+            ///
+            /// Soundness: same as `xfuncref_dispatch_*` — gated on
+            /// `is_eagerly_initialized_funcref_table` so `src` is provably
+            /// non-zero at runtime. Testing the unmasked `src` for null vs
+            /// the masked `dst_masked` differs only at `v == 1`
+            /// (tagged-null) which the predicate excludes. Saves one more
+            /// match_loop dispatch per call_indirect site vs phase 2 (the
+            /// preceding standalone `xband64_s8` is absorbed).
+            xband_funcref_dispatch_x64 = XbandFuncrefDispatchX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form: branch when `src == 0`, loads-and-fall-through
+            /// on `src != 0`. Used by MachBuffer's branch-direction flip
+            /// when the fast path is the natural fall-through. The
+            /// `dst_masked = src & -2` write is unconditional in both
+            /// forms.
+            xband_funcref_dispatch_not_x64 = XbandFuncrefDispatchNotX64 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// 32-bit pointer-width form of `xband_funcref_dispatch_x64`.
+            /// Used on `pulley32` / arm64_32-apple-watchos.
+            xband_funcref_dispatch_x32 = XbandFuncrefDispatchX32 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xband_funcref_dispatch_x32`.
+            xband_funcref_dispatch_not_x32 = XbandFuncrefDispatchNotX32 { dst_masked: XReg, dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+
             /// `low32(dst) = low32(src1) | low32(src2)`
             xbor32 = XBor32 { operands: BinaryOperands<XReg> };
             /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.
