@@ -27,9 +27,8 @@
   ;; Fully cover the table — no null slot anywhere.
   (elem (i32.const 0) func $f1 $f2 $f3))
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -42,9 +41,8 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -57,9 +55,8 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -72,16 +69,14 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u805306368:7 sig1
+;;     fn0 = colocated u805306368:9 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -89,28 +84,28 @@
 ;; @0050                               v5 = icmp uge v2, v4  ; v4 = 3
 ;; @0050                               v6 = uextend.i64 v2
 ;; @0050                               v7 = load.i64 notrap aligned readonly can_move v0+48
-;; @0050                               v8 = iconst.i64 3
-;; @0050                               v9 = ishl v6, v8  ; v8 = 3
-;; @0050                               v10 = iadd v7, v9
-;; @0050                               v11 = iconst.i64 0
-;; @0050                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @0050                               v13 = load.i64 user6 aligned region1 v12
-;; @0050                               v14 = iconst.i64 -2
-;; @0050                               v15 = band v13, v14  ; v14 = -2
-;; @0050                               brif v13, block3(v15), block2
+;;                                     v23 = iconst.i64 3
+;; @0050                               v8 = ishl v6, v23  ; v23 = 3
+;; @0050                               v9 = iadd v7, v8
+;; @0050                               v10 = iconst.i64 0
+;; @0050                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
+;; @0050                               v12 = load.i64 user5 aligned table v11
+;;                                     v22 = iconst.i64 -2
+;; @0050                               v13 = band v12, v22  ; v22 = -2
+;; @0050                               brif v13, block3(v13), block2
 ;;
 ;;                                 block2 cold:
-;; @0050                               v17 = iconst.i32 0
-;; @0050                               v18 = uextend.i64 v2
-;; @0050                               v19 = call fn0(v0, v17, v18)  ; v17 = 0
-;; @0050                               jump block3(v19)
+;; @0050                               v15 = iconst.i32 0
+;; @0050                               v17 = uextend.i64 v2
+;; @0050                               v18 = call fn0(v0, v15, v17)  ; v15 = 0
+;; @0050                               jump block3(v18)
 ;;
-;;                                 block3(v16: i64):
-;; @0050                               v20 = load.i64 notrap aligned readonly v16+8
-;; @0050                               v21 = load.i64 notrap aligned readonly v16+24
-;; @0050                               v22 = call_indirect sig0, v20(v21, v0)
+;;                                 block3(v14: i64):
+;; @0050                               v19 = load.i64 notrap aligned readonly v14+8
+;; @0050                               v20 = load.i64 notrap aligned readonly v14+24
+;; @0050                               v21 = call_indirect sig0, v19(v20, v0)
 ;; @0053                               jump block1
 ;;
 ;;                                 block1:
-;; @0053                               return v22
+;; @0053                               return v21
 ;; }

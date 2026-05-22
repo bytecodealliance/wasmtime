@@ -261,6 +261,18 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             cond.get_operands(collector);
         }
 
+        Inst::BandBrIf {
+            dst,
+            src,
+            mask: _,
+            size: _,
+            taken: _,
+            not_taken: _,
+        } => {
+            collector.reg_def(dst);
+            collector.reg_use(src);
+        }
+
         Inst::LoadAddr { dst, mem } => {
             collector.reg_def(dst);
             mem.get_operands(collector);
@@ -483,6 +495,7 @@ where
             | Inst::Rets { .. } => MachTerminator::Ret,
             Inst::Jump { .. } => MachTerminator::Branch,
             Inst::BrIf { .. } => MachTerminator::Branch,
+            Inst::BandBrIf { .. } => MachTerminator::Branch,
             Inst::BrTable { .. } => MachTerminator::Branch,
             Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::RetCall,
             Inst::Call { info } if info.try_call_info.is_some() => MachTerminator::Branch,
@@ -760,6 +773,28 @@ impl Inst {
                 let taken = taken.to_string();
                 let not_taken = not_taken.to_string();
                 format!("br_{cond}, {taken}; jump {not_taken}")
+            }
+
+            Inst::BandBrIf {
+                dst,
+                src,
+                mask,
+                size,
+                taken,
+                not_taken,
+            } => {
+                let dst = format_reg(*dst.to_reg());
+                let src = format_reg(**src);
+                let taken = taken.to_string();
+                let not_taken = not_taken.to_string();
+                let width = match size {
+                    OperandSize::Size32 => 32,
+                    OperandSize::Size64 => 64,
+                };
+                format!(
+                    "{dst} = xband{width}_s8 {src}, {mask}; \
+                     br_if_x{width} {src}, {taken}; jump {not_taken}"
+                )
             }
 
             Inst::LoadAddr { dst, mem } => {

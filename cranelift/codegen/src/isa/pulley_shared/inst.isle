@@ -67,6 +67,24 @@
     ;; Jump to `then` if `c` is true, otherwise to `else`.
     (BrIf (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
+    ;; Fused band-immediate + brif: compute `dst = src & sign_extend(mask)`,
+    ;; then conditionally branch to `taken` if `src` is non-zero (low-32 or
+    ;; full 64-bit comparison per `size`), otherwise fall through to
+    ;; `not_taken`. The mask + dst write happen unconditionally.
+    ;;
+    ;; Emitted by the Cranelift Pulley backend at the call_indirect lazy-init
+    ;; brif site when the same funcref-pointer value feeds both the init-bit
+    ;; mask (`band v, -2`) and the null-check branch (`brif v`). The fusion
+    ;; saves one match_loop dispatch per call_indirect site. See pulley/
+    ;; `xband*_s8_br_if_*` ops for the underlying bytecode.
+    (BandBrIf
+      (dst WritableXReg)
+      (src XReg)
+      (mask i8)
+      (size OperandSize)
+      (taken MachLabel)
+      (not_taken MachLabel))
+
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 
