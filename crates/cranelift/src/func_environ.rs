@@ -901,13 +901,36 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // is correct on the eagerly-populated tagged storage and a 1-cycle
         // ALU no-op on any future untagged-storage variant. Keeping it
         // here keeps the codegen simple.
-        if self
-            .translation
-            .module
-            .is_eagerly_initialized_funcref_table(table_index)
-        {
-            return value_masked;
-        }
+        // The c1-8 brif-skip and c1-9 brif-with-trap-cold-block
+        // variants were both measured on iPhone 12 A14 E-core with
+        // Pulley-only PMU traces and BENCH_TARGET_MS=8000 wallclock.
+        // The corrected aggregates (see `OPTIMIZATION-CEILING.md`):
+        //
+        //                       c1-7       c1-8         c1-9
+        //   Useful              34.6M      33.3M        34.6M
+        //   Processing          35.3M      34.2M        37.9M
+        //   Delivery            75.9M      76.5M        73.6M
+        //   Discarded           34.9M  →  37.1M (+6.5%) 39.7M (+13.8%)
+        //   TOTAL              180.7M     181.2M       185.7M
+        //
+        // c1-7 is the local minimum on Discarded (mispredicts).
+        // Eliding the brif (c1-8) shifts ~6.5% of cycles into the
+        // Discarded bucket; replacing the cold block with a trap
+        // (c1-9) shifts ~14% — the egraph optimizer folds it to
+        // `trapz` and the resulting Pulley shape is even worse for
+        // the predictor than c1-8's bare lowering. Both were
+        // wallclock-equivalent at N=3 replicates (within ±2-3%
+        // noise) on all measured E-core platforms, so the bucket
+        // shift doesn't translate to a wallclock regression — but
+        // it does mark the ceiling.
+        //
+        // Going below this Discarded floor requires reducing
+        // match_loop indirect-branch dispatch count (= opcode
+        // fusion + lowering scheduler — the "next branch" thesis).
+        // We keep the brif emission as in c1-7, leaving the runtime
+        // eager-init from `Instance::initialize_tables` active as
+        // dead-code-after-warmup since the brif still catches the
+        // (now never-true) lazy-init bit.
 
         let null_block = builder.create_block();
         let continuation_block = builder.create_block();
