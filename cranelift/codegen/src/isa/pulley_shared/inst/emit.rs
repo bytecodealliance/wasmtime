@@ -233,7 +233,23 @@ fn pulley_emit<P>(
         }
 
         Inst::IndirectCall { info } => {
-            enc::call_indirect(sink, info.dest);
+            // If x0..xN args are already in their correct ABI register
+            // (because regalloc allocated the producer's vreg there), drop
+            // them off the end so we can use a narrower `call_indirectN`
+            // op — mirror of the direct-call shrink loop above.
+            let target = info.dest.target;
+            let mut args = &info.dest.args[..];
+            while !args.is_empty() && args.last().copied() == XReg::new(x_reg(args.len() - 1)) {
+                args = &args[..args.len() - 1];
+            }
+            match args {
+                [] => enc::call_indirect(sink, target),
+                [x0] => enc::call_indirect1(sink, target, *x0),
+                [x0, x1] => enc::call_indirect2(sink, target, *x0, *x1),
+                [x0, x1, x2] => enc::call_indirect3(sink, target, *x0, *x1, *x2),
+                [x0, x1, x2, x3] => enc::call_indirect4(sink, target, *x0, *x1, *x2, *x3),
+                _ => unreachable!(),
+            }
 
             if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
