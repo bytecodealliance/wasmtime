@@ -583,6 +583,48 @@ macro_rules! for_each_op {
             xband64_s8_br_if_x64 = Xband64S8BrIfX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
             /// Inverted form of `xband64_s8_br_if_x64`: branch if `src` is zero.
             xband64_s8_br_if_not_x64 = Xband64S8BrIfNotX64 { dst: XReg, src: XReg, mask: i8, offset: PcRelOffset };
+
+            /// Funcref-dispatch fusion (64-bit pointer width): if `src` is
+            /// non-zero, load the `wasm_call` code pointer from
+            /// `src + offset_code` into `dst_code`, load the callee vmctx
+            /// pointer from `src + offset_vmctx` into `dst_vmctx`, then
+            /// conditionally branch by `offset`. `src` is the
+            /// already-masked funcref pointer (`band v, -2` upstream).
+            ///
+            /// Forward form: loads-and-branch fire on the non-null side
+            /// (`src != 0`); the null side falls through. Used at the
+            /// call_indirect lazy-init brif site under
+            /// `is_eagerly_initialized_funcref_table` AND when the signature
+            /// check is statically elided — under those conditions the only
+            /// uses of the masked funcref pointer are the two `VMFuncRef`
+            /// field loads, and the brif's null branch is provably
+            /// unreachable at runtime. The handler's runtime null check is
+            /// defence-in-depth (matching the original brif's role); it MUST
+            /// fall through on null so the slow path's lazy-init builtin
+            /// stays callable in the (provably-unreachable) error case.
+            ///
+            /// Fused form of `br_if + xload64 + xload64` (the preceding
+            /// `xband64_s8` stays as a separate op since `src` is consumed
+            /// here as the band's result). Saves 2 match_loop dispatches
+            /// per call_indirect site vs the unfused sequence. At the same
+            /// call site, phase-1's `xband64_s8_br_if_*` ops are not
+            /// emitted (the recogniser prefers this larger fusion when its
+            /// pattern matches), so the per-new-opcode predictor cost
+            /// stays at one new op family rather than two.
+            xfuncref_dispatch_x64 = XfuncrefDispatchX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xfuncref_dispatch_x64`: the null side
+            /// branches and the loads-and-fall-through fire on `src != 0`.
+            /// Used by MachBuffer's branch-direction-flip fallthrough
+            /// optimization when the fast path is the natural fall-through.
+            xfuncref_dispatch_not_x64 = XfuncrefDispatchNotX64 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// 32-bit pointer-width form of `xfuncref_dispatch_x64`. Same
+            /// semantics; `src`, `dst_code`, `dst_vmctx` are i32 loaded into
+            /// the low halves of their XReg slots. Used on `pulley32` /
+            /// arm64_32-apple-watchos.
+            xfuncref_dispatch_x32 = XfuncrefDispatchX32 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+            /// Inverted form of `xfuncref_dispatch_x32`.
+            xfuncref_dispatch_not_x32 = XfuncrefDispatchNotX32 { dst_code: XReg, dst_vmctx: XReg, src: XReg, offset_code: i8, offset_vmctx: i8, offset: PcRelOffset };
+
             /// `low32(dst) = low32(src1) | low32(src2)`
             xbor32 = XBor32 { operands: BinaryOperands<XReg> };
             /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.

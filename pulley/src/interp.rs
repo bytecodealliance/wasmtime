@@ -2360,6 +2360,113 @@ impl OpVisitor for Interpreter<'_> {
         }
     }
 
+    fn xfuncref_dispatch_x64(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        // `src` is the ALREADY-MASKED funcref (`band v, -2` upstream — the
+        // band stays as a separate Pulley op; this fusion absorbs only the
+        // brif + the two field loads). The branch fires when src != 0,
+        // matching the brif's original semantics in the eager-init
+        // predicate's IR rewrite (`brif value_masked, taken, null`). Under
+        // the predicate `src` is never zero at runtime, but the handler
+        // still has to match the brif's null fall-through as
+        // defence-in-depth.
+        let s = self.state[src].get_u64();
+        if s == 0 {
+            ControlFlow::Continue(())
+        } else {
+            // SAFETY: under the eager-init predicate, the wasmtime runtime
+            // enforces that the funcref slot contains a real VMFuncRef
+            // pointer, so the field loads are valid memory accesses.
+            let base = s as *const u8;
+            unsafe {
+                let code = base.byte_offset(offset_code as isize).cast::<i64>().read_unaligned();
+                let vmctx = base.byte_offset(offset_vmctx as isize).cast::<i64>().read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            self.pc_rel_jump::<crate::XfuncrefDispatchX64>(offset)
+        }
+    }
+
+    fn xfuncref_dispatch_not_x64(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_u64();
+        if s == 0 {
+            self.pc_rel_jump::<crate::XfuncrefDispatchNotX64>(offset)
+        } else {
+            let base = s as *const u8;
+            unsafe {
+                let code = base.byte_offset(offset_code as isize).cast::<i64>().read_unaligned();
+                let vmctx = base.byte_offset(offset_vmctx as isize).cast::<i64>().read_unaligned();
+                self.state[dst_code].set_i64(code);
+                self.state[dst_vmctx].set_i64(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xfuncref_dispatch_x32(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_u32();
+        if s == 0 {
+            ControlFlow::Continue(())
+        } else {
+            let base = s as usize as *const u8;
+            unsafe {
+                let code = base.byte_offset(offset_code as isize).cast::<i32>().read_unaligned();
+                let vmctx = base.byte_offset(offset_vmctx as isize).cast::<i32>().read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            self.pc_rel_jump::<crate::XfuncrefDispatchX32>(offset)
+        }
+    }
+
+    fn xfuncref_dispatch_not_x32(
+        &mut self,
+        dst_code: XReg,
+        dst_vmctx: XReg,
+        src: XReg,
+        offset_code: i8,
+        offset_vmctx: i8,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let s = self.state[src].get_u32();
+        if s == 0 {
+            self.pc_rel_jump::<crate::XfuncrefDispatchNotX32>(offset)
+        } else {
+            let base = s as usize as *const u8;
+            unsafe {
+                let code = base.byte_offset(offset_code as isize).cast::<i32>().read_unaligned();
+                let vmctx = base.byte_offset(offset_vmctx as isize).cast::<i32>().read_unaligned();
+                self.state[dst_code].set_i32(code);
+                self.state[dst_vmctx].set_i32(vmctx);
+            }
+            ControlFlow::Continue(())
+        }
+    }
+
     fn xbor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();
