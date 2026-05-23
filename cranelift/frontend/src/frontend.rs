@@ -31,8 +31,6 @@ pub struct FunctionBuilderContext {
     ssa: SSABuilder,
     status: SecondaryMap<Block, BlockStatus>,
     variables: PrimaryMap<Variable, Type>,
-    stack_map_vars: EntitySet<Variable>,
-    stack_map_values: EntitySet<Value>,
     safepoints: safepoints::SafepointSpiller,
 }
 
@@ -72,15 +70,11 @@ impl FunctionBuilderContext {
             ssa,
             status,
             variables,
-            stack_map_vars,
-            stack_map_values,
             safepoints,
         } = self;
         ssa.clear();
         status.clear();
         variables.clear();
-        stack_map_values.clear();
-        stack_map_vars.clear();
         safepoints.clear();
     }
 
@@ -441,7 +435,7 @@ impl<'a> FunctionBuilder<'a> {
         let ty = self.func_ctx.variables[var];
         assert!(ty != types::INVALID);
         assert!(ty.bytes() <= 16);
-        self.func_ctx.stack_map_vars.insert(var);
+        self.func_ctx.ssa.stack_map_vars_mut().insert(var);
     }
 
     /// Returns the Cranelift IR necessary to use a previously defined user
@@ -559,7 +553,7 @@ impl<'a> FunctionBuilder<'a> {
         assert!(size <= 16);
         assert!(size.is_power_of_two());
 
-        self.func_ctx.stack_map_values.insert(val);
+        self.func_ctx.ssa.stack_map_values_mut().insert(val);
     }
 
     /// Creates a jump table in the function, to be used by [`br_table`](InstBuilder::br_table) instructions.
@@ -709,23 +703,13 @@ impl<'a> FunctionBuilder<'a> {
             }
         }
 
-        // Propagate the needs-stack-map bit from variables to each of their
-        // associated values.
-        for var in self.func_ctx.stack_map_vars.iter() {
-            for val in self.func_ctx.ssa.values_for_var(var) {
-                log::trace!("propagating needs-stack-map from {var:?} to {val:?}");
-                debug_assert_eq!(self.func.dfg.value_type(val), self.func_ctx.variables[var]);
-                self.func_ctx.stack_map_values.insert(val);
-            }
-        }
-
         // If we have any values that need inclusion in stack maps, then we need
         // to run our pass to spill those values to the stack at safepoints and
         // generate stack maps.
-        if !self.func_ctx.stack_map_values.is_empty() {
+        if !self.func_ctx.ssa.stack_map_values().is_empty() {
             self.func_ctx
                 .safepoints
-                .run(&mut self.func, &self.func_ctx.stack_map_values);
+                .run(&mut self.func, self.func_ctx.ssa.stack_map_values());
         }
 
         // Clear the state (but preserve the allocated buffers) in preparation
