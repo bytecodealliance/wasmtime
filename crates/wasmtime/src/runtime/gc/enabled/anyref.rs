@@ -334,15 +334,7 @@ impl AnyRef {
     }
 
     pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = if gc_ref.is_i31() {
-            gc_ref.as_raw_non_zero_u32()
-        } else {
-            store
-                .require_gc_store_mut()?
-                .expose_gc_ref_to_wasm(gc_ref)?
-        };
-        Ok(raw.get())
+        self.inner.expose_gc_ref_to_wasm(store).map(|r| r.get())
     }
 
     /// Get the type of this reference.
