@@ -4435,13 +4435,14 @@ impl FuncEnvironment<'_> {
         }
     }
 
-    /// Expand a small, statically-sized scalar `array.copy` into inline loads
-    /// and stores, avoiding the `memory_copy` libcall.
+    /// Expand a small, statically-sized `array.copy` into inline loads then
+    /// stores, avoiding the `memory_copy` libcall.
     ///
-    /// Every element is loaded before any is stored so that overlapping source
-    /// and destination ranges (`array.copy` has `memmove` semantics) copy
-    /// correctly. The addresses and length have already been bounds-checked by
-    /// the caller.
+    /// The copy is bitwise: `elem_ty` is an integer or vector type matching the
+    /// element width (`f32`/`f64` use `i32`/`i64`, `v128` uses `i8x16`), so any
+    /// fixed-width element works. Every element is loaded before any is stored,
+    /// so overlapping ranges keep `array.copy`'s `memmove` semantics. The caller
+    /// has already bounds-checked the addresses and length.
     fn emit_inline_array_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -4457,15 +4458,14 @@ impl FuncEnvironment<'_> {
         // GC-heap access flags (trap on corruption, no alignment assumed). Not
         // `GC_MEMFLAGS` directly: that constant is gated to the `gc` feature.
         let flags = ir::MemFlagsData::new().with_trap_code(Some(TRAP_GC_HEAP_CORRUPT));
-        let elem_size = i32::try_from(elem_size).unwrap();
-        let n = i32::try_from(n).unwrap();
+        let stride = i32::try_from(elem_size).unwrap();
+        let count = i32::try_from(n).unwrap();
         let mut vals: SmallVec<[ir::Value; 8]> = smallvec![];
-        for i in 0..n {
-            vals.push(builder.ins().load(elem_ty, flags, src_addr, i * elem_size));
+        for i in 0..count {
+            vals.push(builder.ins().load(elem_ty, flags, src_addr, i * stride));
         }
-        for (i, val) in vals.into_iter().enumerate() {
-            let offset = i32::try_from(i).unwrap() * elem_size;
-            builder.ins().store(flags, val, dst_addr, offset);
+        for (i, val) in (0..count).zip(vals) {
+            builder.ins().store(flags, val, dst_addr, i * stride);
         }
     }
 
