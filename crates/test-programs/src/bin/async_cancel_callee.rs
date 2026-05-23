@@ -165,7 +165,9 @@ unsafe extern "C" fn callback_yield_with_options_yield_times(
             } => {
                 assert_eq!(event0, EVENT_CANCELLED);
 
+                waitable_join(*waitable, 0);
                 let result = subtask_cancel(*waitable);
+                waitable_join(*waitable, *set);
 
                 assert_eq!(result, STATUS_RETURN_CANCELLED);
 
