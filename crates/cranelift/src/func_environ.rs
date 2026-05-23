@@ -4302,6 +4302,37 @@ impl FuncEnvironment<'_> {
         // For memcpy, that's easy, just call the intrinsic with the right
         // parameters.
         if !type_forbids_memcpy && dst_element_size == src_element_size {
+            // Expand small, statically-sized copies inline to skip the
+            // `memory_copy` libcall's fixed per-call cost (a wasm/host transition
+            // and indirect call), which dominates for tiny copies. Dynamic or
+            // larger copies keep the libcall, whose `memmove` amortizes it. Only
+            // arrays (in the GC heap) qualify; tables stay on the libcall.
+            const INLINE_ARRAY_COPY_MAX_ELEMS: u64 = 8;
+            if let CheckedEntity::Array { .. } = dst_entity {
+                let elem_ty = match dst_element_size {
+                    1 => Some(ir::types::I8),
+                    2 => Some(ir::types::I16),
+                    4 => Some(ir::types::I32),
+                    8 => Some(ir::types::I64),
+                    16 => Some(ir::types::I8X16),
+                    _ => None,
+                };
+                if let (Some(elem_ty), Some(n)) =
+                    (elem_ty, Self::value_as_const_int(builder, copy_len))
+                {
+                    if (1..=INLINE_ARRAY_COPY_MAX_ELEMS).contains(&n) {
+                        self.emit_inline_array_copy(
+                            builder,
+                            dst_elem_addr,
+                            src_elem_addr,
+                            elem_ty,
+                            dst_element_size,
+                            n,
+                        );
+                        return Ok(());
+                    }
+                }
+            }
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
@@ -4382,6 +4413,60 @@ impl FuncEnvironment<'_> {
         )?;
 
         Ok(())
+    }
+
+    /// If `value` is a compile-time constant integer (possibly behind a widening
+    /// cast of one, as inserted for array indices), return its raw bits.
+    /// Out-of-range values are left for the caller to reject.
+    fn value_as_const_int(builder: &FunctionBuilder<'_>, mut value: ir::Value) -> Option<u64> {
+        loop {
+            let inst = builder.func.dfg.value_def(value).inst()?;
+            match builder.func.dfg.insts[inst] {
+                ir::InstructionData::UnaryImm {
+                    opcode: ir::Opcode::Iconst,
+                    imm,
+                } => return Some(imm.bits().cast_unsigned()),
+                ir::InstructionData::Unary {
+                    opcode: ir::Opcode::Uextend,
+                    arg,
+                } => value = arg,
+                _ => return None,
+            }
+        }
+    }
+
+    /// Expand a small, statically-sized scalar `array.copy` into inline loads
+    /// and stores, avoiding the `memory_copy` libcall.
+    ///
+    /// Every element is loaded before any is stored so that overlapping source
+    /// and destination ranges (`array.copy` has `memmove` semantics) copy
+    /// correctly. The addresses and length have already been bounds-checked by
+    /// the caller.
+    fn emit_inline_array_copy(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        dst_addr: ir::Value,
+        src_addr: ir::Value,
+        elem_ty: ir::Type,
+        elem_size: u32,
+        n: u64,
+    ) {
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += n as i64;
+        }
+        // GC-heap access flags (trap on corruption, no alignment assumed). Not
+        // `GC_MEMFLAGS` directly: that constant is gated to the `gc` feature.
+        let flags = ir::MemFlagsData::new().with_trap_code(Some(TRAP_GC_HEAP_CORRUPT));
+        let elem_size = i32::try_from(elem_size).unwrap();
+        let n = i32::try_from(n).unwrap();
+        let mut vals: SmallVec<[ir::Value; 8]> = smallvec![];
+        for i in 0..n {
+            vals.push(builder.ins().load(elem_ty, flags, src_addr, i * elem_size));
+        }
+        for (i, val) in vals.into_iter().enumerate() {
+            let offset = i32::try_from(i).unwrap() * elem_size;
+            builder.ins().store(flags, val, dst_addr, offset);
+        }
     }
 
     /// For bulk operations (copies, fills, etc) this is an extra check layered
