@@ -242,6 +242,15 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Configures the initial current working directory reported to the guest.
+    ///
+    /// By default no initial current working directory is configured and
+    /// `wasi:cli/environment.initial-cwd` returns `none`.
+    pub fn initial_cwd(&mut self, path: impl AsRef<str>) -> &mut Self {
+        self.cli.initial_cwd = Some(path.as_ref().to_owned());
+        self
+    }
+
     /// Configures a "preopened directory" to be available to WebAssembly.
     ///
     /// By default WebAssembly does not have access to the filesystem because
@@ -565,5 +574,22 @@ impl WasiCtx {
     /// Returns access to the underlying [`WasiSocketsCtx`].
     pub fn sockets(&mut self) -> &mut WasiSocketsCtx {
         &mut self.sockets
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WasiCtxBuilder;
+
+    #[test]
+    fn initial_cwd_defaults_to_none() {
+        let ctx = WasiCtxBuilder::new().build();
+        assert_eq!(ctx.cli.initial_cwd, None);
+    }
+
+    #[test]
+    fn initial_cwd_can_be_configured() {
+        let ctx = WasiCtxBuilder::new().initial_cwd("/sandbox").build();
+        assert_eq!(ctx.cli.initial_cwd.as_deref(), Some("/sandbox"));
     }
 }

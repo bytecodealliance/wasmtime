@@ -546,6 +546,8 @@ wasmtime_option_group! {
         pub inherit_stdout: Option<bool>,
         /// Inherit stderr from the parent process. On by default.
         pub inherit_stderr: Option<bool>,
+        /// Initial current working directory reported through `wasi:cli/environment`.
+        pub cwd: Option<String>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,
@@ -1378,6 +1380,10 @@ mod tests {
                 "Mismatch for input '{collector_value}'. Parsed: {parsed_collector:?}, Expected: {expected:?}",
             );
         }
+
+        let mut common_options = CommonOptions::try_parse_from(["test", "-Scwd=/sandbox"]).unwrap();
+        common_options.configure().unwrap();
+        assert_eq!(common_options.wasi.cwd.as_deref(), Some("/sandbox"));
     }
 }
 
