@@ -1339,6 +1339,8 @@ impl RequestHeaders {
     }
 
     fn apply(&self, headers: &mut HeaderMap) {
+        // Remove all request-provided values before appending CLI-provided
+        // values so repeated CLI headers with the same name are preserved.
         for name in self.entries.iter().map(|(name, _)| name) {
             headers.remove(name);
         }
@@ -1353,9 +1355,9 @@ fn parse_header(header: &str) -> Result<(HeaderName, HeaderValue)> {
         .split_once(':')
         .with_context(|| format!("header `{header}` is missing `:`"))?;
     let name = HeaderName::from_bytes(name.trim().as_bytes())
-        .with_context(|| format!("invalid header name in `{header}`"))?;
+        .with_context(|| format!("invalid header name in header `{header}`"))?;
     let value = HeaderValue::from_str(value.trim_start())
-        .with_context(|| format!("invalid header value in `{header}`"))?;
+        .with_context(|| format!("invalid header value in header `{header}`"))?;
     Ok((name, value))
 }
 

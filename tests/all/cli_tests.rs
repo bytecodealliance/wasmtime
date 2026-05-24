@@ -1756,6 +1756,8 @@ mod test_programs {
             cmd.arg("--env=FOO=bar");
             cmd.arg("--env=BAR=baz");
             cmd.arg("--header=env: FOO");
+            cmd.arg("--header=env: BAR");
+            cmd.arg("--header=expect-env-count: 2");
             cmd.arg("-Scli");
         })?;
 
@@ -1764,6 +1766,38 @@ mod test_programs {
                 hyper::Request::builder()
                     .uri("http://localhost/")
                     .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty());
+        assert_eq!(
+            resp.headers().get("env"),
+            Some(&HeaderValue::from_static("bar"))
+        );
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_header_file() -> Result<()> {
+        let td = tempfile::TempDir::new()?;
+        let headers_path = td.path().join("headers.txt");
+        std::fs::write(&headers_path, "env: FOO\n\nunused: value\n")?;
+
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg(format!("--header=@{}", headers_path.display()));
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
                     .body(String::new())
                     .context("failed to make request")?,
             )
