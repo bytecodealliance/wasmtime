@@ -1751,6 +1751,36 @@ mod test_programs {
     }
 
     #[tokio::test]
+    async fn p2_cli_serve_header_replaces_request_header() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg("--env=BAR=baz");
+            cmd.arg("--header=env: FOO");
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty());
+        assert_eq!(
+            resp.headers().get("env"),
+            Some(&HeaderValue::from_static("bar"))
+        );
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn p2_cli_serve_outgoing_body_config() -> Result<()> {
         let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Scli");
