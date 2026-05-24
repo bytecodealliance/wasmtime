@@ -759,20 +759,23 @@ impl SafepointSpiller {
 
             let mut option_inst = func.layout.last_inst(block);
             while let Some(inst) = option_inst {
-                // If this instruction defines a needs-stack-map value that is
-                // live across a safepoint, then spill the value to its stack
-                // slot.
-                let mut pos = FuncCursor::new(func).after_inst(inst);
-                vals.extend_from_slice(pos.func.dfg.inst_results(inst));
-                for val in vals.drain(..) {
-                    self.rewrite_def(&mut pos, val);
-                }
-
                 // If this instruction is a safepoint, then we must add stack
                 // map entries for the needs-stack-map values that are live
                 // across it.
                 if self.liveness.safepoints.contains_key(&inst) {
                     self.rewrite_safepoint(func, inst);
+                }
+
+                // If this instruction defines a needs-stack-map value that is
+                // live across a safepoint, then spill the value to its stack
+                // slot. Do this after rewriting the safepoint itself so that
+                // the stack map reserves slots for values live across this
+                // instruction before any slots for instruction results are
+                // freed for reuse.
+                let mut pos = FuncCursor::new(func).after_inst(inst);
+                vals.extend_from_slice(pos.func.dfg.inst_results(inst));
+                for val in vals.drain(..) {
+                    self.rewrite_def(&mut pos, val);
                 }
 
                 // Replace all uses of needs-stack-map values with loads from
@@ -3104,6 +3107,62 @@ block0:
     return v2, v3
 }
             "#
+        );
+    }
+
+    #[test]
+    fn safepoint_reserves_live_slots_before_freeing_result_slots() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 0,
+            });
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(ir::types::I32));
+        let signature = builder.func.import_signature(sig);
+        let func_ref = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        let block0 = builder.create_block();
+        builder.switch_to_block(block0);
+
+        let live = builder.ins().iconst(ir::types::I32, 1);
+        let call = builder.ins().call(func_ref, &[]);
+        let result = builder.func.dfg.first_result(call);
+        builder.ins().return_(&[result]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        let mut spiller = SafepointSpiller::default();
+        spiller.liveness.post_order.push(block0);
+        spiller.liveness.live_across_any_safepoint.insert(live);
+        spiller
+            .liveness
+            .safepoints
+            .insert(call, [live].into_iter().collect());
+
+        let result_slot = spiller
+            .stack_slots
+            .get_or_create_stack_slot(&mut func, result);
+        spiller.rewrite(&mut func);
+
+        let live_slot = spiller.stack_slots.get(live).unwrap();
+        assert_ne!(
+            result_slot, live_slot,
+            "the safepoint result slot must not be reused for a value live across that same safepoint"
         );
     }
 }
