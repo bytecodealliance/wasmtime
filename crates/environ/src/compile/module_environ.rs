@@ -123,21 +123,19 @@ pub struct ModuleTranslation<'data> {
     /// validation process.
     types: Option<Types>,
 
-    /// Branch hints parsed from the `metadata.code.branch_hint` custom section,
+    /// Per-function readers into the `metadata.code.branch_hint` custom section,
     /// keyed by module-level function index. Only populated when
-    /// [`Tunables::branch_hinting`] is enabled.
-    pub branch_hints: HashMap<FuncIndex, Box<[BranchHint]>>,
+    /// [`Tunables::branch_hinting`] is enabled. The hints are decoded lazily
+    /// during compilation, so this holds the section's per-function sub-readers
+    /// rather than fully-decoded hints; access them via
+    /// [`ModuleTranslation::branch_hints`].
+    branch_hints: HashMap<FuncIndex, BranchHintReader<'data>>,
 }
 
-/// A single branch hint from the `metadata.code.branch_hint` custom section
+/// Lazy decoder over the branch hints attached to a single function in the
+/// `metadata.code.branch_hint` custom section
 /// ([branch-hinting proposal](https://github.com/WebAssembly/branch-hinting)).
-#[derive(Debug, Copy, Clone)]
-pub struct BranchHint {
-    /// Byte offset of the hinted `br_if`/`if` from the start of the function body.
-    pub func_offset: u32,
-    /// Whether the branch's condition is hinted to be true.
-    pub taken: bool,
-}
+pub type BranchHintReader<'a> = wasmparser::SectionLimited<'a, wasmparser::BranchHint>;
 
 impl<'data> ModuleTranslation<'data> {
     /// Create a new translation for the module with the given index.
@@ -162,6 +160,13 @@ impl<'data> ModuleTranslation<'data> {
             passive_elem_map: Default::default(),
             branch_hints: HashMap::default(),
         }
+    }
+
+    /// Returns a lazy decoder over the branch hints for `func`, if the
+    /// `metadata.code.branch_hint` section attached any. Hints are decoded on
+    /// demand during compilation rather than eagerly during parsing.
+    pub fn branch_hints(&self, func: FuncIndex) -> Option<BranchHintReader<'data>> {
+        self.branch_hints.get(&func).cloned()
     }
 
     /// Returns a reference to the type information of the current module.
@@ -774,30 +779,23 @@ and for re-adding support for interface types you can see this issue:
                 }
             }
             KnownCustom::BranchHints(reader) if self.tunables.branch_hinting => {
-                // Compilation relies on the proposal's guarantee that hints are
-                // in ascending `func_offset` order; we trust it rather than
-                // re-sort (validating malformed sections is not yet done). Hints
-                // are advisory, so skip entries that fail to parse.
-                for func in reader.into_iter().flatten() {
-                    let hints = func
-                        .hints
-                        .into_iter()
-                        .flatten()
-                        .map(|h| BranchHint {
-                            func_offset: h.func_offset,
-                            taken: h.taken,
-                        })
-                        .collect::<Box<[_]>>();
-                    if !hints.is_empty() {
-                        // A well-formed section lists each function at most once;
-                        // if a malformed one repeats a function, keep the first
-                        // entry deterministically rather than silently
-                        // overwriting it.
-                        self.result
-                            .branch_hints
-                            .entry(FuncIndex::from_u32(func.func))
-                            .or_insert(hints);
-                    }
+                // Branch hints are advisory and this section is never validated;
+                // it is decoded lazily during compilation, so record only the
+                // per-function sub-readers here. Discard the whole section if any
+                // entry is malformed rather than applying it partially.
+                let mut hints = HashMap::new();
+                let result: wasmparser::Result<()> = reader.into_iter().try_for_each(|func| {
+                    let func = func?;
+                    // A well-formed section lists each function at most once; keep
+                    // the first entry deterministically if it repeats.
+                    hints
+                        .entry(FuncIndex::from_u32(func.func))
+                        .or_insert(func.hints);
+                    Ok(())
+                });
+                match result {
+                    Ok(()) => self.result.branch_hints = hints,
+                    Err(e) => log::warn!("failed to parse branch-hint section {e:?}"),
                 }
             }
             _ => {

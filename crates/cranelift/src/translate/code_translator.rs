@@ -335,13 +335,13 @@ pub fn translate_operator(
 
             // Mark the unlikely successor cold per the branch hint. A likely
             // condition makes the else block cold; when it is allocated lazily
-            // (`NoElse`) defer that to `Operator::Else` via `cold_else`.
-            let cold_else = match branch_hint {
-                Some(false) => {
+            // (`NoElse`) defer that to `Operator::Else` via `else_is_cold`.
+            let else_is_cold = match branch_hint {
+                Some(hint) if !hint.taken => {
                     builder.set_cold_block(next_block);
                     false
                 }
-                Some(true) => match &else_data {
+                Some(_) => match &else_data {
                     ElseData::WithElse { else_block } => {
                         builder.set_cold_block(*else_block);
                         false
@@ -366,7 +366,7 @@ pub fn translate_operator(
                 params.len(),
                 results.len(),
                 *blockty,
-                cold_else,
+                else_is_cold,
             );
         }
         Operator::Else => {
@@ -4018,9 +4018,9 @@ fn translate_br_if(
     let (br_destination, inputs) = translate_br_if_args(relative_depth, env);
     let next_block = builder.create_block();
 
-    if let Some(taken) = branch_hint {
+    if let Some(hint) = branch_hint {
         // Likely taken => the fallthrough is cold, else the branch target is.
-        builder.set_cold_block(if taken { next_block } else { br_destination });
+        builder.set_cold_block(if hint.taken { next_block } else { br_destination });
     }
 
     canonicalise_brif(builder, val, br_destination, inputs, next_block, &[]);

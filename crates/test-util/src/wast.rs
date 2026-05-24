@@ -273,6 +273,7 @@ macro_rules! foreach_config_option {
             tail_call
             extended_const
             wide_arithmetic
+            branch_hinting
             hogs_memory
             nan_canonicalization
             component_model_async

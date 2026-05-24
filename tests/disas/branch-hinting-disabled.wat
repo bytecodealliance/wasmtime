@@ -1,9 +1,9 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
+;;! flags = "-Wbranch-hinting=n"
 
-;; Same hinted module as branch-hinting.wat, but WITHOUT `-Wbranch-hinting`:
-;; with the knob off (the default) the `metadata.code.branch_hint` section is
-;; ignored and no block is marked `cold`. This pins the no-regression behavior.
+;; With branch hinting disabled, codegen ignores the `metadata.code.branch_hint`
+;; custom section entirely: no block is marked `cold`.
 
 (module
   (func $if_unlikely (param i32) (result i32)

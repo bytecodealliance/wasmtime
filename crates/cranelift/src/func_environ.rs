@@ -26,10 +26,12 @@ use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::{SmallVec, smallvec};
 use std::mem;
-use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
+use wasmparser::{
+    BranchHint, FuncValidator, Operator, SectionLimitedIntoIter, WasmFeatures, WasmModuleResources,
+};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BranchHint, BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
+    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
     EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
     GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
     ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
@@ -233,11 +235,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// to e.g. record the return-address of a callsite for debuginfo.
     pub(crate) next_srcloc: ir::SourceLoc,
 
-    /// Branch hints for the current function, consumed in program-counter order
-    /// by `take_branch_hint`.
-    branch_hints: &'module_environment [BranchHint],
-    /// Forward cursor into `branch_hints`.
-    branch_hint_cursor: usize,
+    /// Lazily-decoded branch hints for the current function, in ascending
+    /// `func_offset` order (as the proposal requires). `None` once exhausted or
+    /// when the function carries no hints.
+    branch_hints: Option<SectionLimitedIntoIter<'module_environment, BranchHint>>,
+    /// One-item lookahead into `branch_hints`, consumed by `take_branch_hint`.
+    peeked_hint: Option<BranchHint>,
     /// Module-relative byte offset of the current function body's start.
     func_body_offset: usize,
 }
@@ -249,9 +252,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         wasm_func_ty: &'module_environment WasmFuncType,
         key: FuncKey,
+        func_index: FuncIndex,
+        func_body_offset: usize,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
+
+        // Resolve the lazy branch-hint decoder for this function, if any.
+        // `func_body_offset` lets `take_branch_hint` convert source locations to
+        // the function-body-relative offsets the hints use.
+        let branch_hints = translation
+            .branch_hints(func_index)
+            .map(|reader| reader.into_iter());
 
         // This isn't used during translation, so squash the warning about this
         // being unused from the compiler.
@@ -303,46 +315,48 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             next_srcloc: ir::SourceLoc::default(),
             wasm_module_offset: translation.wasm_module_offset,
 
-            branch_hints: &[],
-            branch_hint_cursor: 0,
-            func_body_offset: 0,
+            branch_hints,
+            peeked_hint: None,
+            func_body_offset,
         }
-    }
-
-    /// Set the branch hints and the module-relative start offset for the
-    /// function about to be translated. Hints are expected in ascending
-    /// `func_offset` order (as the proposal requires); `take_branch_hint`
-    /// simply skips any that are out of order.
-    pub(crate) fn set_branch_hints(
-        &mut self,
-        hints: &'module_environment [BranchHint],
-        func_body_offset: usize,
-    ) {
-        self.branch_hints = hints;
-        self.branch_hint_cursor = 0;
-        self.func_body_offset = func_body_offset;
     }
 
     /// Consume the branch hint for the instruction at module-relative `offset`
-    /// (i.e. `builder.srcloc().bits()`), if any; `Some(true)` means likely
-    /// taken. The cursor only advances, making this O(n) over a function body.
-    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<bool> {
-        if self.branch_hints.is_empty() {
+    /// (i.e. `builder.srcloc().bits()`), if any. The lazy decoder only moves
+    /// forward, making this O(n) over a function body.
+    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<BranchHint> {
+        // Fast path for the common case of a function with no hints (always so
+        // when the proposal is disabled): this is called for every `if`/`br_if`.
+        if self.branch_hints.is_none() {
             return None;
         }
         let rel = u32::try_from(offset.checked_sub(self.func_body_offset)?).ok()?;
-        // Skip hints that don't line up with this (or a later) branch.
-        while matches!(
-            self.branch_hints.get(self.branch_hint_cursor),
-            Some(h) if h.func_offset < rel,
-        ) {
-            self.branch_hint_cursor += 1;
+        loop {
+            // Refill the one-item lookahead from the lazy decoder.
+            if self.peeked_hint.is_none() {
+                self.peeked_hint = self.next_branch_hint();
+            }
+            let hint = self.peeked_hint?;
+            if hint.func_offset < rel {
+                // Hint precedes this branch (or never lined up); drop it.
+                self.peeked_hint = None;
+                continue;
+            }
+            if hint.func_offset == rel {
+                self.peeked_hint = None;
+                return Some(hint);
+            }
+            // The next hint is for a later offset; nothing for this branch.
+            return None;
         }
-        let hint = self.branch_hints.get(self.branch_hint_cursor)?;
-        (hint.func_offset == rel).then(|| {
-            self.branch_hint_cursor += 1;
-            hint.taken
-        })
+    }
+
+    /// Decode the next hint for the current function, if any.
+    fn next_branch_hint(&mut self) -> Option<BranchHint> {
+        // These bytes were already validated when the section was decoded into
+        // per-function readers, so this re-decode cannot fail; defensively treat
+        // an unexpected error as the end of the hints.
+        self.branch_hints.as_mut()?.next()?.ok()
     }
 
     pub(crate) fn pointer_type(&self) -> ir::Type {
