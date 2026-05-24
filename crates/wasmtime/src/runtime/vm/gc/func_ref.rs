@@ -79,12 +79,14 @@ impl FuncRefTable {
 
             // Ensure that the funcref actually is a subtype of the expected
             // type. This protects against GC heap corruption being leveraged in
-            // attacks: if the attacker has a write gadget inside the GC heap, they
-            // can overwrite a funcref ID to point to a different funcref, but this
-            // assertion ensures that any calls to that wrong funcref at least
-            // remain well-typed, which reduces the attack surface and maintains
-            // memory safety.
-            assert!(types.is_subtype(actual_ty, expected_ty));
+            // attacks: if the attacker has a write gadget inside the GC heap,
+            // they can overwrite a funcref ID to point to a different funcref,
+            // but this check ensures that any calls to that wrong funcref at
+            // least remain well-typed, which reduces the attack surface and
+            // maintains memory safety.
+            if !types.is_subtype(actual_ty, expected_ty) {
+                bail_bug!("funcref table type mismatch")
+            }
         }
 
         Ok(f)
@@ -100,6 +102,46 @@ impl FuncRefTable {
         match self.slab.get(id.0).copied() {
             Some(f) => Ok(f),
             None => bail_bug!("bad FuncRefTableId"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Engine, FuncType, ValType};
+    use alloc::boxed::Box;
+    use core::ptr::NonNull;
+
+    #[cfg_attr(
+        debug_assertions,
+        should_panic(expected = "BUG: funcref table type mismatch")
+    )]
+    #[test]
+    fn typed_get_rejects_mismatched_func_type() {
+        let engine = Engine::default();
+        let actual_ty = FuncType::new(&engine, [ValType::I32], []);
+        let expected_ty = FuncType::new(&engine, [], []);
+        assert!(
+            !engine
+                .signatures()
+                .is_subtype(actual_ty.type_index(), expected_ty.type_index())
+        );
+
+        let mut func_ref = Box::new(VMFuncRef {
+            array_call: crate::runtime::vm::VmPtr::dangling(),
+            wasm_call: None,
+            type_index: actual_ty.type_index(),
+            vmctx: crate::runtime::vm::VmPtr::dangling(),
+        });
+
+        let mut table = FuncRefTable::default();
+        let id = unsafe { table.intern(Some(SendSyncPtr::new(NonNull::from(&mut *func_ref)))) };
+
+        let result = table.get_typed(engine.signatures(), id, expected_ty.type_index());
+        if cfg!(not(debug_assertions)) {
+            let err = result.unwrap_err();
+            assert!(err.is::<crate::WasmtimeBug>());
         }
     }
 }
