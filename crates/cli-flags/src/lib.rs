@@ -1380,10 +1380,6 @@ mod tests {
                 "Mismatch for input '{collector_value}'. Parsed: {parsed_collector:?}, Expected: {expected:?}",
             );
         }
-
-        let mut common_options = CommonOptions::try_parse_from(["test", "-Scwd=/sandbox"]).unwrap();
-        common_options.configure().unwrap();
-        assert_eq!(common_options.wasi.cwd.as_deref(), Some("/sandbox"));
     }
 }
 

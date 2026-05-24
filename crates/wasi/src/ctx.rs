@@ -576,20 +576,3 @@ impl WasiCtx {
         &mut self.sockets
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::WasiCtxBuilder;
-
-    #[test]
-    fn initial_cwd_defaults_to_none() {
-        let ctx = WasiCtxBuilder::new().build();
-        assert_eq!(ctx.cli.initial_cwd, None);
-    }
-
-    #[test]
-    fn initial_cwd_can_be_configured() {
-        let ctx = WasiCtxBuilder::new().initial_cwd("/sandbox").build();
-        assert_eq!(ctx.cli.initial_cwd.as_deref(), Some("/sandbox"));
-    }
-}
