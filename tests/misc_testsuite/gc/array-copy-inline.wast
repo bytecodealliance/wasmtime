@@ -1,12 +1,12 @@
 ;;! gc = true
 ;;! simd = true
 
-;; A small, statically-sized `array.copy` of scalar elements is expanded inline
-;; (every element loaded, then every element stored) instead of calling the
+;; A small, constant-length `array.copy` is expanded inline as wide loads then
+;; stores (every byte loaded before any is stored) instead of calling the
 ;; `memory_copy` libcall; the codegen shape is locked by
 ;; tests/disas/array-copy-inline.wat. These tests check that the inline path
-;; produces correct results for every element size, that the threshold boundary
-;; agrees (inline at 8 elements, libcall at 9), and that overlapping copies keep
+;; produces correct results for every element width, that the threshold boundary
+;; agrees (inline at 64 bytes, libcall above), and that overlapping copies keep
 ;; `memmove` semantics. The wast harness runs these across all collectors.
 
 ;; --- one inline copy per element size; check the first and last copied
@@ -101,41 +101,43 @@
              (i32x4.extract_lane 0 (array.get $a (local.get $d) (i32.const 1))))))
 (assert_return (invoke "v128") (i32.const 16))
 
-;; --- threshold boundary: 8 elements is inlined, 9 falls back to the libcall;
-;; --- both must copy correctly.
+;; --- threshold boundary: 16 i64 elements (128 bytes) is inlined, 17 (136 bytes)
+;; --- falls back to the libcall; both must copy correctly.
 
 (module
-  (type $a (array (mut i32)))
-  (func $sum (param $arr (ref $a)) (param $n i32) (result i32)
-    (local $i i32) (local $acc i32)
+  (type $a (array (mut i64)))
+  (func $sum (param $arr (ref $a)) (param $n i32) (result i64)
+    (local $i i32) (local $acc i64)
     (block $e (loop $l
       (br_if $e (i32.ge_u (local.get $i) (local.get $n)))
-      (local.set $acc (i32.add (local.get $acc)
+      (local.set $acc (i64.add (local.get $acc)
         (array.get $a (local.get $arr) (local.get $i))))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $l)))
     (local.get $acc))
 
   (func $src (result (ref $a))
-    (array.new_fixed $a 9
-      (i32.const 1) (i32.const 2) (i32.const 3) (i32.const 4) (i32.const 5)
-      (i32.const 6) (i32.const 7) (i32.const 8) (i32.const 9)))
+    (array.new_fixed $a 17
+      (i64.const 1) (i64.const 2) (i64.const 3) (i64.const 4) (i64.const 5)
+      (i64.const 6) (i64.const 7) (i64.const 8) (i64.const 9) (i64.const 10)
+      (i64.const 11) (i64.const 12) (i64.const 13) (i64.const 14) (i64.const 15)
+      (i64.const 16) (i64.const 17)))
 
-  ;; constant length 8 -> inline
-  (func (export "boundary-8") (result i32)
+  ;; constant length 16 (128 bytes) -> inline
+  (func (export "boundary-128") (result i64)
     (local $d (ref $a))
-    (local.set $d (array.new_default $a (i32.const 9)))
-    (array.copy $a $a (local.get $d) (i32.const 0) (call $src) (i32.const 0) (i32.const 8))
-    (call $sum (local.get $d) (i32.const 9)))  ;; 1..8 copied, [8]=0 -> 36
+    (local.set $d (array.new_default $a (i32.const 17)))
+    (array.copy $a $a (local.get $d) (i32.const 0) (call $src) (i32.const 0) (i32.const 16))
+    (call $sum (local.get $d) (i32.const 17)))  ;; 1..16 copied, [16]=0 -> 136
 
-  ;; constant length 9 -> libcall
-  (func (export "boundary-9") (result i32)
+  ;; constant length 17 (136 bytes) -> libcall
+  (func (export "boundary-136") (result i64)
     (local $d (ref $a))
-    (local.set $d (array.new_default $a (i32.const 9)))
-    (array.copy $a $a (local.get $d) (i32.const 0) (call $src) (i32.const 0) (i32.const 9))
-    (call $sum (local.get $d) (i32.const 9))))  ;; 1..9 -> 45
-(assert_return (invoke "boundary-8") (i32.const 36))
-(assert_return (invoke "boundary-9") (i32.const 45))
+    (local.set $d (array.new_default $a (i32.const 17)))
+    (array.copy $a $a (local.get $d) (i32.const 0) (call $src) (i32.const 0) (i32.const 17))
+    (call $sum (local.get $d) (i32.const 17))))  ;; 1..17 -> 153
+(assert_return (invoke "boundary-128") (i64.const 136))
+(assert_return (invoke "boundary-136") (i64.const 153))
 
 ;; --- overlapping inline copy keeps memmove semantics for a wider element type
 ;; --- (i64), in both directions.
