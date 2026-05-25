@@ -2,7 +2,7 @@ use crate::common::{HttpHooks, Profile, RunCommon, RunTarget};
 use bytes::Bytes;
 use clap::Parser;
 use futures::future::FutureExt;
-use http::{Response, StatusCode};
+use http::{HeaderMap, HeaderName, HeaderValue, Response, StatusCode};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use hyper::body::{Body, Frame, SizeHint};
@@ -158,6 +158,14 @@ pub struct ServeCommand {
     /// (microseconds), and `ns` (nanoseconds).
     #[arg(long, default_value = "1s", value_parser = parse_duration)]
     idle_instance_timeout: Duration,
+
+    /// Replace or add a request header before forwarding it to the component.
+    ///
+    /// The argument must have the form `name: value`. May be specified more
+    /// than once. An argument beginning with `@` is treated as a file containing
+    /// one header per line.
+    #[arg(short = 'H', long = "header", value_name = "HEADER")]
+    headers: Vec<String>,
 }
 
 impl ServeCommand {
@@ -305,6 +313,7 @@ impl ServeCommand {
         engine: &Engine,
         linker: &Linker<Host>,
         component: &Component,
+        request_headers: RequestHeaders,
     ) -> Result<()> {
         let instance_pre = linker.instantiate_pre(component)?;
         let proxy_pre = wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance_pre)?;
@@ -342,7 +351,14 @@ impl ServeCommand {
                 &debug_component,
                 &mut debug_linker,
                 debuggee_store,
-                move |store| Box::pin(debug_serve_body(store, proxy_pre, addr)),
+                move |store| {
+                    Box::pin(debug_serve_body(
+                        store,
+                        proxy_pre,
+                        addr,
+                        request_headers.clone(),
+                    ))
+                },
             )
             .await
     }
@@ -574,11 +590,12 @@ impl ServeCommand {
             RunTarget::Core(_) => bail!("The serve command currently requires a component"),
             RunTarget::Component(c) => c,
         };
+        let request_headers = RequestHeaders::parse(&self.headers)?;
 
         #[cfg(feature = "debug")]
         if let Some(debug_run) = debug_run {
             return self
-                .serve_under_debugger(debug_run, &engine, &linker, &component)
+                .serve_under_debugger(debug_run, &engine, &linker, &component, request_headers)
                 .await;
         }
 
@@ -664,6 +681,7 @@ impl ServeCommand {
                 cmd: self,
                 engine,
                 component,
+                request_headers,
                 max_instance_reuse_count,
                 max_instance_concurrent_reuse_count,
                 // Give one shutdown guard to this handler which will track the
@@ -769,6 +787,7 @@ struct HostHandlerState {
     cmd: ServeCommand,
     engine: Engine,
     component: Component,
+    request_headers: RequestHeaders,
     max_instance_reuse_count: usize,
     max_instance_concurrent_reuse_count: usize,
     _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
@@ -1005,6 +1024,7 @@ async fn debug_serve_body(
     store: &mut Store<Host>,
     proxy_pre: wasmtime_wasi_http::p2::bindings::ProxyPre<Host>,
     addr: SocketAddr,
+    request_headers: RequestHeaders,
 ) -> Result<()> {
     use hyper::server::conn::http1;
     use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
@@ -1082,6 +1102,8 @@ async fn debug_serve_body(
                 }
                 msg = req_rx.recv() => {
                     let Some((req, resp_tx)) = msg else { break };
+                    let mut req = req;
+                    request_headers.apply(req.headers_mut());
 
                     let (p2_tx, p2_rx) = tokio::sync::oneshot::channel::<P2Response>();
                     let wasi_req = store
@@ -1143,6 +1165,8 @@ async fn handle_request(
         req.method(),
         req.uri()
     );
+    let mut req = req;
+    handler.state().request_headers.apply(req.headers_mut());
 
     // Here we must declare different channel types for p2 and p3 since p2's
     // `WasiHttpView::new_response_outparam` expects a specific kind of sender
@@ -1290,6 +1314,51 @@ async fn handle_request(
             self.body.size_hint()
         }
     }
+}
+
+#[derive(Clone, Default)]
+struct RequestHeaders {
+    entries: Vec<(HeaderName, HeaderValue)>,
+}
+
+impl RequestHeaders {
+    fn parse(headers: &[String]) -> Result<Self> {
+        let mut entries = Vec::new();
+        for header in headers {
+            if let Some(path) = header.strip_prefix('@') {
+                let contents = std::fs::read_to_string(path)
+                    .with_context(|| format!("failed to read header file `{path}`"))?;
+                for line in contents.lines().filter(|line| !line.trim().is_empty()) {
+                    entries.push(parse_header(line)?);
+                }
+            } else {
+                entries.push(parse_header(header)?);
+            }
+        }
+        Ok(Self { entries })
+    }
+
+    fn apply(&self, headers: &mut HeaderMap) {
+        // Remove all request-provided values before appending CLI-provided
+        // values so repeated CLI headers with the same name are preserved.
+        for name in self.entries.iter().map(|(name, _)| name) {
+            headers.remove(name);
+        }
+        for (name, value) in &self.entries {
+            headers.append(name, value.clone());
+        }
+    }
+}
+
+fn parse_header(header: &str) -> Result<(HeaderName, HeaderValue)> {
+    let (name, value) = header
+        .split_once(':')
+        .with_context(|| format!("header `{header}` is missing `:`"))?;
+    let name = HeaderName::from_bytes(name.trim().as_bytes())
+        .with_context(|| format!("invalid header name in header `{header}`"))?;
+    let value = HeaderValue::from_str(value.trim_start())
+        .with_context(|| format!("invalid header value in header `{header}`"))?;
+    Ok((name, value))
 }
 
 #[derive(Clone)]
