@@ -354,6 +354,9 @@ impl RunCommon {
                 wasmtime_wasi::FilePerms::all(),
             )?;
         }
+        if let Some(cwd) = &self.common.wasi.cwd {
+            builder.initial_cwd(cwd);
+        }
 
         if self.common.wasi.listenfd == Some(true) {
             bail!("components do not support --listenfd");

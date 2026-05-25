@@ -1150,6 +1150,17 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_initial_cwd() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "-Scwd=/sandbox",
+            P2_CLI_INITIAL_CWD_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_stdin_empty() -> Result<()> {
         let mut child = get_wasmtime_command()?
             .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_EMPTY_COMPONENT])

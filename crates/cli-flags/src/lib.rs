@@ -546,6 +546,8 @@ wasmtime_option_group! {
         pub inherit_stdout: Option<bool>,
         /// Inherit stderr from the parent process. On by default.
         pub inherit_stderr: Option<bool>,
+        /// Initial current working directory reported through `wasi:cli/environment`.
+        pub cwd: Option<String>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,
