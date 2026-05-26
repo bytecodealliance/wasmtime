@@ -33,9 +33,9 @@
 ;; @0024                               trapnz v22, heap_oob
 ;; @0024                               v12 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0024                               v26 = iadd v12, v18
-;; @0024                               v28 = load.i8x16 little heap v26
+;; @0024                               v28 = load.i8x16 notrap aligned v26
 ;; @0024                               v15 = iadd v12, v7
-;; @0024                               store little heap v28, v15
+;; @0024                               store notrap aligned v28, v15
 ;; @0028                               jump block1
 ;;
 ;;                                 block1:

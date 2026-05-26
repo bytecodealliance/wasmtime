@@ -6,8 +6,8 @@
 ;; `memory_copy` libcall; the codegen shape is locked by
 ;; tests/disas/array-copy-inline.wat. These tests check that the inline path
 ;; produces correct results for every element width, that the threshold boundary
-;; agrees (inline at 64 bytes, libcall above), and that overlapping copies keep
-;; `memmove` semantics. The wast harness runs these across all collectors.
+;; agrees (inline through 128 bytes, libcall above), and that overlapping copies
+;; keep `memmove` semantics. The wast harness runs these across all collectors.
 
 ;; --- one inline copy per element size; check the first and last copied
 ;; --- element (encoded as last*1000 + first) so a wrong element-size stride is

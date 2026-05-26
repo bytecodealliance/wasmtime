@@ -3461,18 +3461,16 @@ impl FuncEnvironment<'_> {
         if let BulkOp::MemoryCopy {
             dst,
             src,
-            len,
-            flags,
+            const_len: Some(bytes),
+            ..
         } = op
         {
-            if let Some(bytes) = Self::value_as_const_int(builder, len) {
-                if (1..=INLINE_COPY_MAX_BYTES).contains(&bytes) {
-                    if self.tunables.consume_fuel {
-                        self.fuel_consumed += bytes as i64;
-                    }
-                    self.emit_inline_memcpy(builder, dst, src, bytes, flags);
-                    return;
+            if bytes <= INLINE_COPY_MAX_BYTES {
+                if self.tunables.consume_fuel {
+                    self.fuel_consumed += bytes as i64;
                 }
+                self.emit_inline_memcpy(builder, dst, src, bytes);
+                return;
             }
         }
 
@@ -4004,6 +4002,12 @@ impl FuncEnvironment<'_> {
         let len_ptr =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, len_idx_ty);
 
+        // A constant wasm length lets a small copy be expanded inline. Capture it
+        // straight from wasm here (a count of entity elements; for memories an
+        // element is a byte) so the fast path only has to recognize an `iconst`,
+        // not the casts and `* element_size` multiply applied further down.
+        let const_count = Self::value_as_const_int(builder, len);
+
         match dst_entity {
             // Memories are always a `memcpy`.
             CheckedEntity::Memory(_) => {
@@ -4011,18 +4015,15 @@ impl FuncEnvironment<'_> {
                     src_entity,
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. }
                 ));
-                // Linear-memory access flags (little-endian, heap alias region),
-                // as in `prepare_addr`.
-                let flags = ir::MemFlagsData::new()
-                    .with_endianness(ir::Endianness::Little)
-                    .with_alias_region(Some(ir::AliasRegion::Heap));
+                // A memory's elements are bytes, so the element count is already
+                // the byte length.
                 self.raw_bulk_memory_operation(
                     builder,
                     BulkOp::MemoryCopy {
                         dst: dst_raw_addr,
                         src: src_raw_addr,
                         len: len_ptr,
-                        flags,
+                        const_len: const_count,
                     },
                 );
                 Ok(())
@@ -4039,6 +4040,7 @@ impl FuncEnvironment<'_> {
                     src_raw_addr,
                     len_ptr,
                     src,
+                    const_count,
                 ),
 
             // Cannot copy into a data or element segment in wasm.
@@ -4245,7 +4247,9 @@ impl FuncEnvironment<'_> {
     /// `src_elem_addr` and stored to `dst_elem_addr`. The `elem_ty` is the type
     /// being transferred, `one_elem_size` is the byte size of each element,
     /// `copy_len` is the number of elements being copied, and `src_index` is
-    /// the first index within `src_entity` being loaded.
+    /// the first index within `src_entity` being loaded. `const_count` is that
+    /// same element count when it is a wasm constant, used to expand small copies
+    /// inline.
     ///
     /// All values here have type `self.pointer_type()`, except `src_index`
     /// which is typed appropriately to index `src_entity`.
@@ -4261,6 +4265,7 @@ impl FuncEnvironment<'_> {
         src_elem_addr: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
+        const_count: Option<u64>,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_type);
@@ -4334,23 +4339,16 @@ impl FuncEnvironment<'_> {
         }
 
         // For memcpy, that's easy, just call the intrinsic with the right
-        // parameters. The inline path in `raw_bulk_memory_operation` uses these
-        // per-entity flags: GC arrays trap on heap corruption, tables use the
-        // table alias region.
+        // parameters (or expand it inline; see `raw_bulk_memory_operation`).
         if !type_forbids_memcpy && dst_element_size == src_element_size {
-            let flags = match dst_entity {
-                CheckedEntity::Array { .. } => {
-                    ir::MemFlagsData::new().with_trap_code(Some(TRAP_GC_HEAP_CORRUPT))
-                }
-                _ => ir::MemFlagsData::new().with_alias_region(Some(ir::AliasRegion::Table)),
-            };
+            let const_len = const_count.and_then(|c| c.checked_mul(u64::from(dst_element_size)));
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
                     dst: dst_elem_addr,
                     src: src_elem_addr,
                     len: dst_copy_byte_len,
-                    flags,
+                    const_len,
                 },
             );
             return Ok(());
@@ -4427,28 +4425,21 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    /// If `value` is a compile-time constant integer — possibly behind the
-    /// widening/narrowing casts and constant multiply that length computations
-    /// insert (a byte length is `element_count * element_size`) — return its raw
-    /// bits. Out-of-range values are left for the caller to reject.
+    /// If `value` is an `iconst`, return its immediate as a `u64`.
+    ///
+    /// This deliberately peeks at a single `iconst` and nothing else. Callers
+    /// pass the length exactly as it appears in wasm, before the width casts and
+    /// `* element_size` multiply that the byte-length computation wraps it in, so
+    /// there is no need to (incorrectly) fold those type-changing ops here.
     fn value_as_const_int(builder: &FunctionBuilder<'_>, value: ir::Value) -> Option<u64> {
         let inst = builder.func.dfg.value_def(value).inst()?;
-        Some(match builder.func.dfg.insts[inst] {
+        match builder.func.dfg.insts[inst] {
             ir::InstructionData::UnaryImm {
                 opcode: ir::Opcode::Iconst,
                 imm,
-            } => imm.bits().cast_unsigned(),
-            ir::InstructionData::Unary {
-                opcode: ir::Opcode::Uextend | ir::Opcode::Ireduce,
-                arg,
-            } => Self::value_as_const_int(builder, arg)?,
-            ir::InstructionData::BinaryImm64 {
-                opcode: ir::Opcode::ImulImm,
-                arg,
-                imm,
-            } => Self::value_as_const_int(builder, arg)?.wrapping_mul(imm.bits().cast_unsigned()),
-            _ => return None,
-        })
+            } => Some(imm.bits().cast_unsigned()),
+            _ => None,
+        }
     }
 
     /// Expand a copy of `bytes` (a small compile-time constant) into inline loads
@@ -4457,17 +4448,20 @@ impl FuncEnvironment<'_> {
     /// The copy is bitwise and element-type agnostic: the byte range is covered
     /// greedily with the widest convenient access (`i8x16` down to `i8`). Every
     /// chunk is loaded before any is stored, so overlapping ranges keep `memmove`
-    /// semantics. `flags` must carry the entity-appropriate access flags and must
-    /// not assume alignment, since wide chunks may straddle element boundaries.
-    /// The caller has already bounds-checked the range.
+    /// semantics. The caller has already bounds-checked the range.
     fn emit_inline_memcpy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         dst_addr: ir::Value,
         src_addr: ir::Value,
         bytes: u64,
-        flags: ir::MemFlagsData,
     ) {
+        // `trusted()` (notrap + aligned) is sound even though the chunks may be
+        // unaligned: each load feeds only its paired store, never an instruction
+        // operand that requires alignment, so the backend selects unaligned
+        // moves regardless of the `aligned` flag. The range was already
+        // bounds-checked, so `notrap` is fine too.
+        let flags = ir::MemFlagsData::trusted();
         const WIDTHS: &[(u64, ir::Type)] = &[
             (16, ir::types::I8X16),
             (8, ir::types::I64),
@@ -4475,7 +4469,10 @@ impl FuncEnvironment<'_> {
             (2, ir::types::I16),
             (1, ir::types::I8),
         ];
-        let mut chunks: SmallVec<[(i32, ir::Type); 8]> = smallvec![];
+        // 12 covers the worst case under the 128-byte cap: n=127 decomposes into
+        // 7×i8x16 + i64 + i32 + i16 + i8 = 11 chunks. Sized so both `SmallVec`s
+        // stay inline.
+        let mut chunks: SmallVec<[(i32, ir::Type); 12]> = smallvec![];
         let mut offset = 0u64;
         let mut remaining = bytes;
         for &(width, ty) in WIDTHS {
@@ -4485,7 +4482,7 @@ impl FuncEnvironment<'_> {
                 remaining -= width;
             }
         }
-        let vals: SmallVec<[ir::Value; 8]> = chunks
+        let vals: SmallVec<[ir::Value; 12]> = chunks
             .iter()
             .map(|&(off, ty)| builder.ins().load(ty, flags, src_addr, off))
             .collect();
@@ -5546,14 +5543,14 @@ enum BulkOp {
     /// A `memory.copy` operation, copying memory from `src` to `dst`.
     ///
     /// All of `dst`, `src`, and `len` must be pre-validated and inbounds. All
-    /// must have type `env.pointer_type()`. `flags` are the access flags used if
-    /// the copy is expanded inline (see `emit_inline_memcpy`); they vary by the
-    /// entity being copied (GC heap, linear memory, or table).
+    /// must have type `env.pointer_type()`. `const_len`, when set, is the
+    /// statically-known byte length (from a constant wasm length); the inline
+    /// fast path in `raw_bulk_memory_operation` uses it to expand small copies.
     MemoryCopy {
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
-        flags: ir::MemFlagsData,
+        const_len: Option<u64>,
     },
 
     /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
