@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::{
-    Engine,
+    Engine, Trap,
     prelude::*,
     vm::{
         ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
@@ -311,9 +311,7 @@ unsafe impl GcHeap for NullHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
-        let layout = layout
-            .layout(length)
-            .ok_or_else(|| format_err!("allocation size too large"))?;
+        let layout = layout.layout(length).ok_or(Trap::AllocationTooLarge)?;
         let gc_ref = match self.alloc(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
             layout,
