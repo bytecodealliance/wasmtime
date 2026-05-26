@@ -190,7 +190,24 @@ fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersi
             // TODO(madsmtm): Properly support simulator after
             // https://github.com/bytecodealliance/target-lexicon/pull/130
             let platform = match (triple.operating_system, triple.environment) {
-                (Darwin(_), _) => 0, // PLATFORM_UNKNOWN
+                // Problem: `cranelift_native::builder()` produces a
+                // `Darwin(_)` triple on macOS hosts, which falls
+                // through to `PLATFORM_UNKNOWN (0)` in the Mach-O
+                // `LC_BUILD_VERSION` load command. macOS `ld64`
+                // rejects object files whose platform is unknown,
+                // breaking native object emission on Darwin hosts.
+                //
+                // Fix: when the host itself is macOS, treat
+                // `Darwin(_)` the same as `MacOSX(_)` and tag the
+                // build version as PLATFORM_MACOS so `ld64` accepts
+                // the .o. Cross-targets to `Darwin(_)` from a non-
+                // macOS host keep the upstream PLATFORM_UNKNOWN
+                // behaviour — the issue is specific to `ld64`'s
+                // host-side rejection. Expected to dovetail with
+                // target-lexicon PR #130 which adds proper simulator
+                // / platform discrimination upstream.
+                #[cfg(target_os = "macos")]
+                (Darwin(_), _) => PLATFORM_MACOS,
                 (MacOSX(_), _) => PLATFORM_MACOS,
                 (_, Macabi) => PLATFORM_MACCATALYST,
                 (IOS(_), Sim) => PLATFORM_IOSSIMULATOR,
