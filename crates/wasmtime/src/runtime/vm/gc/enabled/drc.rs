@@ -1370,7 +1370,8 @@ mod tests {
             num_defined_globals: 0,
             num_defined_tags: 0,
             num_escaped_funcs: 0,
-            num_passive_data: 0,
+            num_runtime_data: 0,
+            has_startup_func: false,
         });
 
         assert_eq!(

@@ -1699,13 +1699,19 @@ impl Default for VMSharedTypeIndex {
 pub struct DataIndex(u32);
 entity_impl_with_try_clone!(DataIndex);
 
-/// Index type of a passive data segment inside the WebAssembly module.
+/// Index into data segments needed at runtime by a module.
 ///
-/// Not a spec-level concept, just used to get dense index spaces for passive
-/// data segments inside of Wasmtime.
+/// This does not directly correspond to either active or passive data segments
+/// in the wasm spec. Instead this is a concept purely for Wasmtime and
+/// organizing memory initialization within the
+/// `ModuleTranslation::finalize_memory_init` function, for example.
+///
+/// Passive data segments at runtime all have a corresponding
+/// `RuntimeDataIndex`, but active data segments maybe coalesced or mutated if
+/// they're statically evaluated.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct PassiveDataIndex(u32);
-entity_impl_with_try_clone!(PassiveDataIndex);
+pub struct RuntimeDataIndex(u32);
+entity_impl_with_try_clone!(RuntimeDataIndex);
 
 /// Index type of an element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
@@ -2007,7 +2013,7 @@ impl ConstExpr {
 
 /// A global's constant value, known at compile time.
 #[expect(missing_docs, reason = "self-describing variants")]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum GlobalConstValue {
     I32(i32),
     I64(i64),
@@ -2027,7 +2033,7 @@ pub enum ConstOp {
     V128Const(u128),
     GlobalGet(GlobalIndex),
     RefI31,
-    RefNull(WasmHeapTopType),
+    RefNull(WasmHeapType),
     RefFunc(FuncIndex),
     I32Add,
     I32Sub,
@@ -2069,7 +2075,7 @@ impl ConstOp {
             O::F32Const { value } => Self::F32Const(value.bits()),
             O::F64Const { value } => Self::F64Const(value.bits()),
             O::V128Const { value } => Self::V128Const(u128::from_le_bytes(*value.bytes())),
-            O::RefNull { hty } => Self::RefNull(env.convert_heap_type(hty)?.top()),
+            O::RefNull { hty } => Self::RefNull(env.convert_heap_type(hty)?),
             O::RefFunc { function_index } => Self::RefFunc(FuncIndex::from_u32(function_index)),
             O::GlobalGet { global_index } => Self::GlobalGet(GlobalIndex::from_u32(global_index)),
             O::RefI31 => Self::RefI31,

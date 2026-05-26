@@ -3051,11 +3051,11 @@ fn profile_guest() -> Result<()> {
         None,
     )?;
 
-    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("> stdout:\n{stdout}");
     println!("> stderr:\n{stderr}");
+    assert!(output.status.success());
     assert!(!stderr.contains("Error"));
     let out_json = std::fs::read_to_string(format!("{dir}/out.json")).unwrap();
     println!("> out.json:\n{out_json}");

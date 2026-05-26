@@ -9,11 +9,9 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::ops::{Add, Range, Sub};
 use wasmtime_core::error::OutOfMemory;
-use wasmtime_environ::DefinedFuncIndex;
-use wasmtime_environ::ModuleTypes;
-use wasmtime_environ::StaticModuleIndex;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
+use wasmtime_environ::{FuncKey, ModuleTypes, StaticModuleIndex};
 
 macro_rules! define_pc_kind {
     ($ty:ident) => {
@@ -431,30 +429,10 @@ impl<'a> ModuleWithCode<'a> {
     }
 
     /// Returns the slice in the text section of the function that
-    /// `index` points to.
+    /// `key` points to.
     #[inline]
-    pub fn finished_function(&self, def_func_index: DefinedFuncIndex) -> &[u8] {
-        let range = self
-            .module
-            .compiled_module()
-            .finished_function_range(def_func_index);
+    pub fn function(&self, key: FuncKey) -> &[u8] {
+        let range = self.module.compiled_module().function_range(key);
         &self.store_code.text()[range]
-    }
-
-    /// Get the array-to-Wasm trampoline for the function `index`
-    /// points to, as a slice of raw code that can be converted to a
-    /// callable function pointer.
-    ///
-    /// If the function `index` points to does not escape, then `None` is
-    /// returned.
-    ///
-    /// These trampolines are used for array callers (e.g. `Func::new`)
-    /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline(&self, def_func_index: DefinedFuncIndex) -> Option<&[u8]> {
-        let range = self
-            .module
-            .compiled_module()
-            .array_to_wasm_trampoline_range(def_func_index)?;
-        Some(&self.store_code.text()[range])
     }
 }

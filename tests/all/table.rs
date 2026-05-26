@@ -368,6 +368,7 @@ fn host_table_keep_type_registration() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn gc_store_with_table_initializers() -> Result<()> {
     let mut config = Config::new();
     config.wasm_gc(true);

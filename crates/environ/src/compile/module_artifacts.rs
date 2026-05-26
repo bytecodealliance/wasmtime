@@ -5,8 +5,7 @@ use crate::WasmChecksum;
 use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
-    CompiledModuleInfo, DebugInfoData, FunctionName, MemoryInitialization, Metadata,
-    ModuleTranslation, Tunables, obj,
+    CompiledModuleInfo, DebugInfoData, FunctionName, Metadata, ModuleTranslation, Tunables, obj,
 };
 use object::SectionKind;
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
@@ -118,9 +117,8 @@ impl<'a> ObjectBuilder<'a> {
             mut module,
             debuginfo,
             has_unparsed_debuginfo,
-            data,
             data_align,
-            passive_data,
+            runtime_data,
             wasm,
             ..
         } = translation;
@@ -128,20 +126,15 @@ impl<'a> ObjectBuilder<'a> {
         // Place all data from the wasm module into a section which will the
         // source of the data later at runtime. This additionally keeps track of
         // the offset of
-        let mut total_data_len = 0;
         let data_offset = self
             .obj
             .append_section_data(self.data, &[], data_align.unwrap_or(1));
-        for (i, data) in data.iter().enumerate() {
-            // The first data segment has its alignment specified as the alignment
-            // for the entire section, but everything afterwards is adjacent so it
-            // has alignment of 1.
+        for (i, (_, data)) in runtime_data.iter().enumerate() {
+            // The first data segment has its alignment specified as the
+            // alignment for the entire section, but everything afterwards is
+            // adjacent so it has alignment of 1.
             let align = if i == 0 { data_align.unwrap_or(1) } else { 1 };
             self.obj.append_section_data(self.data, data, align);
-            total_data_len += data.len();
-        }
-        for data in passive_data.iter() {
-            self.obj.append_section_data(self.data, data, 1);
         }
 
         // If any names are present in the module then the `ELF_NAME_DATA` section
@@ -172,34 +165,12 @@ impl<'a> ObjectBuilder<'a> {
             }
         }
 
-        // Data offsets in `MemoryInitialization` are offsets within the
-        // `translation.data` list concatenated which is now present in the data
-        // segment that's appended to the object. Increase the offsets by
-        // `self.data_size` to account for any previously added module.
-        let data_offset = u32::try_from(data_offset).unwrap();
-        match &mut module.memory_initialization {
-            MemoryInitialization::Segmented(list) => {
-                for segment in list {
-                    segment.data.start = segment.data.start.checked_add(data_offset).unwrap();
-                    segment.data.end = segment.data.end.checked_add(data_offset).unwrap();
-                }
-            }
-            MemoryInitialization::Static { map } => {
-                for (_, segment) in map {
-                    if let Some(segment) = segment {
-                        segment.data.start = segment.data.start.checked_add(data_offset).unwrap();
-                        segment.data.end = segment.data.end.checked_add(data_offset).unwrap();
-                    }
-                }
-            }
-        }
-
         // Data offsets for passive data are relative to the start of
-        // `translation.passive_data` which was appended to the data segment
+        // `translation.runtime_data` which was appended to the data segment
         // of this object, after active data in `translation.data`. Update the
         // offsets to account prior modules added in addition to active data.
-        let data_offset = data_offset + u32::try_from(total_data_len).unwrap();
-        for (_, range) in module.passive_data.iter_mut() {
+        let data_offset = u32::try_from(data_offset).unwrap();
+        for (_, range) in module.runtime_data.iter_mut() {
             range.start = range.start.checked_add(data_offset).unwrap();
             range.end = range.end.checked_add(data_offset).unwrap();
         }

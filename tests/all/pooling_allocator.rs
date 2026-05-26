@@ -98,6 +98,7 @@ fn memory_limit() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn memory_init() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(2 << 16).table_elements(0);
@@ -441,6 +442,7 @@ fn total_core_instances_limit() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn preserve_data_segments() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(2);
@@ -516,6 +518,7 @@ fn multi_memory_with_imported_memories() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn drop_externref_global_during_module_init() -> Result<()> {
     struct Limiter;
 
@@ -1248,6 +1251,7 @@ fn decommit_batching() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn tricky_empty_table_with_empty_virtual_memory_alloc() -> Result<()> {
     // Configure the pooling allocator to have no access to virtual memory, e.g.
     // no table elements but a single table. This should technically support a
@@ -1458,6 +1462,7 @@ fn pooling_reuse_resets() -> Result<()> {
 // asserts that the previous image is indeed not available any more as that
 // would otherwise mean data was leaked between modules.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn memory_reset_if_instantiation_fails() -> Result<()> {
     struct Limiter;
 

@@ -216,6 +216,7 @@ fn exception_across_no_wasm(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test(wasm_features(gc, exceptions))]
+#[cfg_attr(miri, ignore)]
 fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
     let engine = Engine::new(config)?;
     let mut store = Store::new(&engine, ());

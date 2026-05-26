@@ -4,7 +4,6 @@ use crate::{
     StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
-use wasmtime_environ::WasmHeapTopType;
 
 pub use crate::runtime::vm::ValRaw;
 
@@ -123,16 +122,6 @@ impl Val {
     #[inline]
     pub const fn null_any_ref() -> Val {
         Val::AnyRef(None)
-    }
-
-    pub(crate) const fn null_top(top: WasmHeapTopType) -> Val {
-        match top {
-            WasmHeapTopType::Func => Val::FuncRef(None),
-            WasmHeapTopType::Extern => Val::ExternRef(None),
-            WasmHeapTopType::Any => Val::AnyRef(None),
-            WasmHeapTopType::Exn => Val::ExnRef(None),
-            WasmHeapTopType::Cont => Val::ContRef(None),
-        }
     }
 
     /// Returns the default value for the given type, if any exists.

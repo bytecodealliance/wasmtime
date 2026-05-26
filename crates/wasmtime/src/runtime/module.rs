@@ -19,8 +19,8 @@ use core::ptr::NonNull;
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
-    StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
+    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, FuncKey, HostPtr, ModuleTypes,
+    ObjectKind, StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
 };
 mod registry;
 
@@ -1092,7 +1092,8 @@ impl Module {
         let module = self.compiled_module();
         let module_index = self.env_module().module_index;
         self.env_module().defined_func_indices().map(move |idx| {
-            let loc = module.func_loc(idx);
+            let key = FuncKey::DefinedWasmFunction(module_index, idx);
+            let loc = module.func_loc(key);
             let idx = module.module().func_index(idx);
             ModuleFunction {
                 module: module_index,
@@ -1158,7 +1159,6 @@ impl Module {
         let ptr = self
             .compiled_module()
             .wasm_to_array_trampoline(trampoline_module_ty)
-            .expect("always have a trampoline for the trampoline type")
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();
@@ -1275,6 +1275,7 @@ mod tests {
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
         let engine = Engine::default();
         let module = Module::new(

@@ -85,10 +85,11 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
     )
     .translate(parser, wasm)
     .context("failed to parse WebAssembly module")?;
+    prepare_translation(engine, compiler, &mut translation, &mut types);
     let functions = mem::take(&mut translation.function_body_inputs);
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
-    let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+    let unlinked_compile_outputs = compile_inputs.compile(engine, &types)?;
     let PreLinkOutput {
         needs_gc_heap,
         compiled_funcs,
@@ -165,6 +166,15 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         .translate(binary)
         .context("failed to parse WebAssembly module")?;
 
+    for (_, translation) in module_translations.iter_mut() {
+        prepare_translation(
+            engine,
+            compiler,
+            translation,
+            types.module_types_builder_mut(),
+        );
+    }
+
     let compile_inputs = CompileInputs::for_component(
         engine,
         &types,
@@ -174,7 +184,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
             (i, &*translation, functions)
         }),
     );
-    let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
+    let unlinked_compile_outputs = compile_inputs.compile(&engine, types.module_types_builder())?;
 
     let PreLinkOutput {
         needs_gc_heap,
@@ -228,6 +238,26 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
 
     let result = T::finish_object(object, obj_state)?;
     Ok((result, Some(artifacts)))
+}
+
+fn prepare_translation(
+    engine: &Engine,
+    compiler: &dyn Compiler,
+    translation: &mut ModuleTranslation<'_>,
+    types: &mut ModuleTypesBuilder,
+) {
+    // If configured attempt to use static memory initialization
+    // which can either at runtime be implemented as a single memcpy
+    // to initialize memory or otherwise enabling
+    // virtual-memory-tricks such as mmap'ing from a file to get
+    // copy-on-write.
+    let align = compiler.page_size_align();
+    let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
+    translation.finalize_memory_init(engine.tunables(), align, max_always_allowed, types);
+
+    // Attempt to convert table initializer segments to FuncTable
+    // representation where possible, to enable table lazy init.
+    translation.finalize_table_init(engine.tunables(), types);
 }
 
 type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput<'a>> + Send + 'a>;
@@ -357,7 +387,7 @@ impl<'a> CompileInputs<'a> {
                     );
                     let function = compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, key, abi, tunables, &symbol)
+                        .compile_component_trampoline(component, types, key, abi, tunables, &symbol)
                         .with_context(|| format!("failed to compile {symbol}"))?;
                     Ok(CompileOutput {
                         key,
@@ -378,12 +408,16 @@ impl<'a> CompileInputs<'a> {
         // resources from the embedder and otherwise won't be explicitly
         // requested through initializers above or such.
         if component.component.num_resources > 0 {
-            if let Some(sig) = types.find_resource_drop_signature() {
+            if types
+                .module_types_builder()
+                .find_resource_drop_signature()
+                .is_some()
+            {
                 ret.push_input(move |compiler| {
                     let key = FuncKey::ResourceDropTrampoline;
                     let symbol = "resource_drop_trampoline".to_string();
                     let function = compiler
-                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func(), key, &symbol)
+                        .compile_trampoline(None, key, types.module_types_builder(), &symbol)
                         .with_context(|| format!("failed to compile `{symbol}`"))?;
                     Ok(CompileOutput {
                         key,
@@ -493,12 +527,32 @@ impl<'a> CompileInputs<'a> {
                             func_index.as_u32()
                         );
                         let function = compiler
-                            .compile_array_to_wasm_trampoline(translation, types, key, &symbol)
+                            .compile_trampoline(Some(translation), key, types, &symbol)
                             .with_context(|| format!("failed to compile: {symbol}"))?;
                         Ok(CompileOutput {
                             key,
                             symbol,
                             function,
+                            start_srcloc: FilePos::default(),
+                            translation: None,
+                            func_body: None,
+                        })
+                    });
+                }
+            }
+
+            if !translation.module.startup.is_none() {
+                for abi in [Abi::Wasm, Abi::Array] {
+                    self.push_input(move |compiler| {
+                        let key = FuncKey::ModuleStartup(abi, module);
+                        let symbol = format!("module_start[{}]::{abi:?}", module.as_u32());
+                        let function = compiler
+                            .compile_trampoline(Some(translation), key, types, &symbol)
+                            .with_context(|| format!("failed to compile: {symbol}"))?;
+                        Ok(CompileOutput {
+                            key,
+                            function,
+                            symbol,
                             start_srcloc: FilePos::default(),
                             translation: None,
                             func_body: None,
@@ -514,7 +568,6 @@ impl<'a> CompileInputs<'a> {
             if !is_new {
                 continue;
             }
-            let trampoline_func_ty = types[trampoline_type_index].unwrap_func();
             self.push_input(move |compiler| {
                 let key = FuncKey::WasmToArrayTrampoline(trampoline_type_index);
                 let symbol = format!(
@@ -522,7 +575,7 @@ impl<'a> CompileInputs<'a> {
                     trampoline_type_index.as_u32()
                 );
                 let function = compiler
-                    .compile_wasm_to_array_trampoline(trampoline_func_ty, key, &symbol)
+                    .compile_trampoline(None, key, types, &symbol)
                     .with_context(|| format!("failed to compile: {symbol}"))?;
                 Ok(CompileOutput {
                     key,
@@ -538,7 +591,11 @@ impl<'a> CompileInputs<'a> {
 
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
-    fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs<'a>> {
+    fn compile(
+        self,
+        engine: &Engine,
+        types: &'a ModuleTypesBuilder,
+    ) -> Result<UnlinkedCompileOutputs<'a>> {
         let compiler = engine.try_compiler()?;
 
         if self.inputs.len() > 0 && cfg!(miri) {
@@ -597,7 +654,7 @@ the use case.
         // wasmtime-builtin functions are necessary. If so those need to be
         // collected and then those trampolines additionally need to be
         // compiled.
-        compile_required_builtins(engine, &mut raw_outputs)?;
+        compile_required_builtins(engine, types, &mut raw_outputs)?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<FuncKey, CompileOutput> = BTreeMap::new();
@@ -910,7 +967,8 @@ fn is_inlining_function(key: FuncKey) -> bool {
         FuncKey::ArrayToWasmTrampoline(..)
         | FuncKey::WasmToArrayTrampoline(..)
         | FuncKey::WasmToBuiltinTrampoline(..)
-        | FuncKey::PatchableToBuiltinTrampoline(..) => false,
+        | FuncKey::PatchableToBuiltinTrampoline(..)
+        | FuncKey::ModuleStartup(..) => false,
         #[cfg(feature = "component-model")]
         FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
 
@@ -934,7 +992,11 @@ fn inlining_functions<'a>(
     })
 }
 
-fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutput>) -> Result<()> {
+fn compile_required_builtins<'a>(
+    engine: &Engine,
+    types: &'a ModuleTypesBuilder,
+    raw_outputs: &mut Vec<CompileOutput<'a>>,
+) -> Result<()> {
     let compiler = engine.try_compiler()?;
     let mut builtins = HashSet::new();
     let mut new_inputs: Vec<CompileInput<'_>> = Vec::new();
@@ -951,7 +1013,7 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
                 _ => unreachable!(),
             };
             let mut function = compiler
-                .compile_wasm_to_builtin(key, &symbol)
+                .compile_trampoline(None, key, types, &symbol)
                 .with_context(|| format!("failed to compile `{symbol}`"))?;
             if let Some(compiler) = compiler.inlining_compiler() {
                 compiler.finish_compiling(&mut function, None, &symbol)?;
@@ -1116,26 +1178,7 @@ impl FunctionIndices {
         let mut obj = wasmtime_environ::ObjectBuilder::new(obj, tunables);
         let modules = translations
             .into_iter()
-            .map(|(_, mut translation)| {
-                // If configured attempt to use static memory initialization
-                // which can either at runtime be implemented as a single memcpy
-                // to initialize memory or otherwise enabling
-                // virtual-memory-tricks such as mmap'ing from a file to get
-                // copy-on-write.
-                if engine.tunables().memory_init_cow {
-                    let align = compiler.page_size_align();
-                    let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
-                    translation.try_static_init(align, max_always_allowed);
-                }
-
-                // Attempt to convert table initializer segments to FuncTable
-                // representation where possible, to enable table lazy init.
-                if engine.tunables().table_lazy_init {
-                    translation.try_func_table_init();
-                }
-
-                obj.append(translation)
-            })
+            .map(|(_, translation)| obj.append(translation))
             .collect::<Result<PrimaryMap<_, _>>>()?;
 
         let artifacts = Artifacts {

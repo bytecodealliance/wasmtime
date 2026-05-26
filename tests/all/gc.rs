@@ -373,6 +373,7 @@ fn table_drops_externref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn global_init_no_leak() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -1157,6 +1158,7 @@ fn issue_9669() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn drc_transitive_drop_cons_list() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -3315,6 +3317,8 @@ fn typed_option_noextern() -> Result<()> {
 /// A test that performs a GC without actually compiling or running any Wasm
 /// functions so we can run this test under MIRI.
 #[test]
+// FIXME: need to fold this into other miri testing which precompiles
+#[cfg_attr(miri, ignore)]
 fn miri_gc_smoke_test() -> Result<()> {
     for collector in [
         Collector::Copying,

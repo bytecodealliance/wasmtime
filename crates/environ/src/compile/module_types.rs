@@ -2,7 +2,7 @@ use crate::{
     EngineOrModuleTypeIndex, EntityRef, ModuleInternedRecGroupIndex, ModuleInternedTypeIndex,
     ModuleTypes, PanicOnOom as _, TypeConvert, TypeIndex, WasmArrayType, WasmCompositeInnerType,
     WasmCompositeType, WasmExnType, WasmFieldType, WasmFuncType, WasmHeapType, WasmResult,
-    WasmStorageType, WasmStructType, WasmSubType,
+    WasmStorageType, WasmStructType, WasmSubType, WasmValType,
     collections::{TryClone as _, TryCow},
     wasm_unsupported,
 };
@@ -59,6 +59,9 @@ pub struct ModuleTypesBuilder {
     /// If we are in the middle of defining a recursion group, this is the
     /// metadata about the recursion group we started defining.
     defining_rec_group: Option<RecGroupStart>,
+
+    /// Cache of the return value of [`Self::startup_func_type`].
+    startup_func_type: Option<ModuleInternedTypeIndex>,
 }
 
 impl ModuleTypesBuilder {
@@ -72,6 +75,7 @@ impl ModuleTypesBuilder {
             wasmparser_to_wasmtime: HashMap::default(),
             already_seen: HashMap::default(),
             defining_rec_group: None,
+            startup_func_type: None,
         }
     }
 
@@ -461,6 +465,45 @@ impl ModuleTypesBuilder {
             ));
         }
         Ok(composite_type.inner.unwrap_func())
+    }
+
+    /// Gets a type for the "module startup" function, or `[] -> []` in the wasm
+    /// type system.
+    pub fn startup_func_type(&mut self) -> ModuleInternedTypeIndex {
+        *self.startup_func_type.get_or_insert_with(|| {
+            let idx = self.types.push(WasmSubType {
+                is_final: true,
+                supertype: None,
+                composite_type: WasmCompositeType {
+                    inner: WasmCompositeInnerType::Func(WasmFuncType::new([], []).panic_on_oom()),
+                    shared: false,
+                },
+            });
+            let next = self.types.next_ty();
+            self.types.push_rec_group(idx..next);
+            idx
+        })
+    }
+
+    /// Smaller helper method to find a `ModuleInternedTypeIndex` which
+    /// corresponds to the `resource.drop` intrinsic in components, namely a
+    /// core wasm function type which takes one `i32` argument and has no
+    /// results.
+    ///
+    /// This is a bit of a hack right now as ideally this find operation
+    /// wouldn't be needed and instead the `ModuleInternedTypeIndex` itself
+    /// would be threaded through appropriately, but that's left for a future
+    /// refactoring. Try not to lean too hard on this method though.
+    pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
+        self.wasm_types()
+            .find(|(_, ty)| {
+                ty.as_func().map_or(false, |sig| {
+                    sig.params().len() == 1
+                        && sig.results().len() == 0
+                        && sig.params()[0] == WasmValType::I32
+                })
+            })
+            .map(|(i, _)| i)
     }
 }
 

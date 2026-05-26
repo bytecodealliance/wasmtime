@@ -2,8 +2,8 @@ use crate::component::*;
 use crate::error::{Result, bail};
 use crate::prelude::*;
 use crate::{
-    EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
-    PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
+    EngineOrModuleTypeIndex, EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, TypeConvert,
+    WasmHeapType,
 };
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
@@ -161,28 +161,6 @@ impl ComponentTypesBuilder {
 
         self.component_types.module_types = Some(self.module_types.finish());
         (self.component_types, ty)
-    }
-
-    /// Smaller helper method to find a `ModuleInternedTypeIndex` which
-    /// corresponds to the `resource.drop` intrinsic in components, namely a
-    /// core wasm function type which takes one `i32` argument and has no
-    /// results.
-    ///
-    /// This is a bit of a hack right now as ideally this find operation
-    /// wouldn't be needed and instead the `ModuleInternedTypeIndex` itself
-    /// would be threaded through appropriately, but that's left for a future
-    /// refactoring. Try not to lean too hard on this method though.
-    pub fn find_resource_drop_signature(&self) -> Option<ModuleInternedTypeIndex> {
-        self.module_types
-            .wasm_types()
-            .find(|(_, ty)| {
-                ty.as_func().map_or(false, |sig| {
-                    sig.params().len() == 1
-                        && sig.results().len() == 0
-                        && sig.params()[0] == WasmValType::I32
-                })
-            })
-            .map(|(i, _)| i)
     }
 
     /// Returns the underlying builder used to build up core wasm module types.

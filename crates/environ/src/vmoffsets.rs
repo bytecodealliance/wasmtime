@@ -31,13 +31,14 @@
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      tags: [VMTagDefinition; module.num_defined_tags],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
-//      passive_data_bases: [*const u8; module.num_passive_data],
-//      passive_data_lengths: [u32; module.num_passive_data],
+//      startup_func_ref: [VMFuncRef; module.has_startup_func ? 1 : 0],
+//      runtime_data_bases: [*const u8; module.num_runtime_data],
+//      runtime_data_lengths: [u32; module.num_runtime_data],
 // }
 
 use crate::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, FuncIndex,
-    FuncRefIndex, GlobalIndex, MemoryIndex, Module, OwnedMemoryIndex, PassiveDataIndex, TableIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, OwnedMemoryIndex, RuntimeDataIndex, TableIndex,
     TagIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -90,8 +91,10 @@ pub struct VMOffsets<P> {
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
-    /// The number of passive data segments in the module.
-    pub num_passive_data: u32,
+    /// The number of runtime data segments in the module.
+    pub num_runtime_data: u32,
+    /// Whether or not the module has a start function.
+    pub has_startup_func: bool,
 
     // precalculated offsets of various member fields
     imported_functions: u32,
@@ -105,8 +108,9 @@ pub struct VMOffsets<P> {
     defined_globals: u32,
     defined_tags: u32,
     defined_func_refs: u32,
-    passive_data_bases: u32,
-    passive_data_lengths: u32,
+    startup_func_ref: u32,
+    runtime_data_bases: u32,
+    runtime_data_lengths: u32,
     size: u32,
 }
 
@@ -607,8 +611,10 @@ pub struct VMOffsetsFields<P> {
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
-    /// The number of passive data segments in the module.
-    pub num_passive_data: u32,
+    /// The number of runtime data segments in the module.
+    pub num_runtime_data: u32,
+    /// Whether or not the module has a start function.
+    pub has_startup_func: bool,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -635,7 +641,8 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_defined_tags: cast_to_u32(module.tags.len() - module.num_imported_tags),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
-            num_passive_data: cast_to_u32(module.passive_data.len()),
+            num_runtime_data: cast_to_u32(module.runtime_data.len()),
+            has_startup_func: !module.startup.is_none(),
         })
     }
 
@@ -667,7 +674,8 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_tags: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
-                    num_passive_data: _,
+                    num_runtime_data: _,
+                    has_startup_func: _,
 
                     // used as the initial size below
                     size,
@@ -696,8 +704,9 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
-            passive_data_lengths: "passive data lengths",
-            passive_data_bases: "passive data base pointers",
+            runtime_data_lengths: "runtime data lengths",
+            runtime_data_bases: "runtime data base pointers",
+            startup_func_ref: "startup funcref",
             defined_func_refs: "module functions",
             defined_tags: "defined tags",
             defined_globals: "defined globals",
@@ -728,7 +737,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_globals: fields.num_defined_globals,
             num_defined_tags: fields.num_defined_tags,
             num_escaped_funcs: fields.num_escaped_funcs,
-            num_passive_data: fields.num_passive_data,
+            num_runtime_data: fields.num_runtime_data,
+            has_startup_func: fields.has_startup_func,
             imported_functions: 0,
             imported_tables: 0,
             imported_memories: 0,
@@ -740,8 +750,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             defined_globals: 0,
             defined_tags: 0,
             defined_func_refs: 0,
-            passive_data_bases: 0,
-            passive_data_lengths: 0,
+            startup_func_ref: 0,
+            runtime_data_bases: 0,
+            runtime_data_lengths: 0,
             size: 0,
         };
 
@@ -800,8 +811,13 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
             ),
-            size(passive_data_bases) = cmul(ret.num_passive_data, ret.ptr.size()),
-            size(passive_data_lengths) = cmul(ret.num_passive_data, 4),
+            size(startup_func_ref) = if ret.has_startup_func {
+                ret.ptr.size_of_vm_func_ref()
+            } else {
+                0
+            },
+            size(runtime_data_bases) = cmul(ret.num_runtime_data, ret.ptr.size()),
+            size(runtime_data_lengths) = cmul(ret.num_runtime_data, 4),
         }
 
         ret.size = next_field_offset;
@@ -1050,16 +1066,16 @@ impl<P: PtrSize> VMOffsets<P> {
         self.defined_func_refs
     }
 
-    /// The offset of the `passive_data_bases` array.
+    /// The offset of the `runtime_data_bases` array.
     #[inline]
-    pub fn vmctx_passive_data_bases_begin(&self) -> u32 {
-        self.passive_data_bases
+    pub fn vmctx_runtime_data_bases_begin(&self) -> u32 {
+        self.runtime_data_bases
     }
 
-    /// The offset of the `passive_data_lengths` array.
+    /// The offset of the `runtime_data_lengths` array.
     #[inline]
-    pub fn vmctx_passive_data_lengths_begin(&self) -> u32 {
-        self.passive_data_lengths
+    pub fn vmctx_runtime_data_lengths_begin(&self) -> u32 {
+        self.runtime_data_lengths
     }
 
     /// Return the size of the `VMContext` allocation.
@@ -1154,20 +1170,29 @@ impl<P: PtrSize> VMOffsets<P> {
         self.vmctx_func_refs_begin() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
-    /// Return the offset to the base of the passive data segment at `index`.
+    /// Returns the offset to the `VMFuncRef` for the module startup function.
+    ///
+    /// Panics if this module does not have a startup function.
     #[inline]
-    pub fn vmctx_passive_data_base(&self, index: PassiveDataIndex) -> u32 {
-        assert!(!index.is_reserved_value());
-        assert!(index.as_u32() < self.num_passive_data);
-        self.vmctx_passive_data_bases_begin() + index.as_u32() * u32::from(self.ptr.size())
+    pub fn vmctx_startup_func_ref(&self) -> u32 {
+        assert!(self.has_startup_func);
+        self.startup_func_ref
     }
 
-    /// Return the offset to the length of the passive data segment at `index`.
+    /// Return the offset to the base of the runtime data segment at `index`.
     #[inline]
-    pub fn vmctx_passive_data_length(&self, index: PassiveDataIndex) -> u32 {
+    pub fn vmctx_runtime_data_base(&self, index: RuntimeDataIndex) -> u32 {
         assert!(!index.is_reserved_value());
-        assert!(index.as_u32() < self.num_passive_data);
-        self.vmctx_passive_data_lengths_begin() + index.as_u32() * 4
+        assert!(index.as_u32() < self.num_runtime_data);
+        self.vmctx_runtime_data_bases_begin() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// Return the offset to the length of the runtime data segment at `index`.
+    #[inline]
+    pub fn vmctx_runtime_data_length(&self, index: RuntimeDataIndex) -> u32 {
+        assert!(!index.is_reserved_value());
+        assert!(index.as_u32() < self.num_runtime_data);
+        self.vmctx_runtime_data_lengths_begin() + index.as_u32() * 4
     }
 
     /// Return the offset to the `wasm_call` field in `*const VMFunctionBody` index `index`.
