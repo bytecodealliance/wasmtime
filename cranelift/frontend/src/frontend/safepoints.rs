@@ -753,9 +753,41 @@ impl SafepointSpiller {
         // the slot can be reappropriated for a new needs-stack-map value with a
         // non-overlapping live range. See `rewrite_def` and `free_stack_slots`
         // for more details.
+        let mut to_reserve: SmallVec<[ir::Value; 8]> = SmallVec::new();
         for block_index in 0..self.liveness.post_order.len() {
             let block = self.liveness.post_order[block_index];
             log::trace!("rewriting: processing {block:?}");
+
+            // Reserve stack slots for all values that propagate through this
+            // block (alive at both entry and exit) and are live across some
+            // safepoint.
+            //
+            // This is required for loop-invariant values. Since they are
+            // defined outside the loop and not passed as block parameters,
+            // the reverse walk of the block's instructions might not otherwise
+            // be aware of their liveness at the block's exit.
+            //
+            // Without this pre-reservation, a block-local definition can free
+            // its slot onto the free list. That slot is then incorrectly
+            // reclaimed by the loop-invariant value later in the reverse
+            // walk, leading to shared storage and data corruption.
+            //
+            // Sort for determinism (HashSet iteration is unstable).
+            to_reserve.clear();
+            {
+                let live_in = &self.liveness.live_ins[block_index];
+                let live_out = &self.liveness.live_outs[block_index];
+                let live_across = &self.liveness.live_across_any_safepoint;
+                for val in live_in.iter() {
+                    if live_out.contains(val) && live_across.contains(*val) {
+                        to_reserve.push(*val);
+                    }
+                }
+            }
+            to_reserve.sort();
+            for val in to_reserve.drain(..) {
+                self.stack_slots.get_or_create_stack_slot(func, val);
+            }
 
             let mut option_inst = func.layout.last_inst(block);
             while let Some(inst) = option_inst {
