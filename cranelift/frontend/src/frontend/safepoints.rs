@@ -2150,6 +2150,120 @@ block1:
     }
 
     #[test]
+    fn cond_loop_with_body_local_pre_reserves_loop_invariant() {
+        // This test exercises the per-block pre-reserve pass at the top
+        // of `rewrite`. v0 is a loop-invariant needs-stack-map value
+        // defined outside the loop (a function parameter passed through
+        // `block0` to `block1` via the unconditional jump). Crucially,
+        // v0 is NOT a block parameter of `block1` and is NOT passed back
+        // as a branch arg on the loop's back-edge `brif`, so no operand
+        // inside `block1` mentions v0 — only the safepoint at the top of
+        // the block does. v2 is a body-local needs-stack-map value
+        // produced by a non-safepoint `iconst` and live across
+        // `foo(v2)` in `block2`.
+        //
+        // Without the pre-reserve, the reverse walk of `block1`
+        // proceeds:
+        //
+        //   1. `brif`: no operand mentions v0, so `rewrite_use` does not
+        //      run for v0 and v0 still has no slot.
+        //   2. `rewrite_def(v2)` at `iconst`: v2 was given ss0 when
+        //      `block2` was processed; spill v2 and push ss0 onto the
+        //      free list.
+        //   3. `rewrite_safepoint(foo(v0))`: needing a slot for v0,
+        //      `get_or_create_stack_slot` pops ss0 (just released by
+        //      step 2).
+        //
+        // v0 and v2 now share ss0. On every loop iteration the spill of
+        // v2 overwrites v0, and the next iteration's `foo(v0)` reload
+        // reads v2's stale value.
+        //
+        // The per-block pre-reserve fixes this: v0 is in `live_in ∩
+        // live_out` of `block1`, so it is allocated at the top of the
+        // block, before any instruction is rewritten. When v2's slot is
+        // freed later, nothing in this block claims it for v0, and the
+        // two values land on disjoint slots (`v0 → ss1`, `v2 → ss0` in
+        // the expected output below).
+        //
+        //     block0(v0: i32, v1: i32):
+        //       jump block1
+        //
+        //     block1:
+        //       call $foo(v0)        // safepoint; v0 alive across
+        //       v2 = iconst.i32 1    // non-safepoint def of v2
+        //       brif v1, block1, block2
+        //
+        //     block2:
+        //       call $foo(v2)        // safepoint; v2 alive across
+        //       return v2
+        let _ = env_logger::try_init();
+
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(ir::types::I32));
+        sig.params.push(AbiParam::new(ir::types::I32));
+        sig.returns.push(AbiParam::new(ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let foo = import_func(&mut builder, [ir::types::I32], []);
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+
+        builder.switch_to_block(block0);
+        let v0 = builder.func.dfg.block_params(block0)[0];
+        let v1 = builder.func.dfg.block_params(block0)[1];
+        builder.declare_value_needs_stack_map(v0);
+        builder.ins().jump(block1, &[]);
+
+        builder.switch_to_block(block1);
+        builder.ins().call(foo, &[v0]);
+        let v2 = builder.ins().iconst(ir::types::I32, 1);
+        builder.declare_value_needs_stack_map(v2);
+        builder.ins().brif(v1, block1, &[], block2, &[]);
+
+        builder.switch_to_block(block2);
+        builder.ins().call(foo, &[v2]);
+        builder.ins().return_(&[v2]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %sample(i32, i32) -> i32 system_v {
+    ss0 = explicit_slot 4, align = 4
+    ss1 = explicit_slot 4, align = 4
+    sig0 = (i32) system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i32, v1: i32):
+    stack_store v0, ss1
+    jump block1
+
+block1:
+    v5 = stack_load.i32 ss1
+    call fn0(v5), stack_map=[i32 @ ss1+0]
+    v2 = iconst.i32 1
+    stack_store v2, ss0  ; v2 = 1
+    brif.i32 v1, block1, block2
+
+block2:
+    v4 = stack_load.i32 ss0
+    call fn0(v4), stack_map=[i32 @ ss0+0]
+    v3 = stack_load.i32 ss0
+    return v3
+}
+            "#,
+        );
+    }
+
+    #[test]
     fn needs_stack_map_and_irreducible_loops() {
         let _ = env_logger::try_init();
 
