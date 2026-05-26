@@ -641,12 +641,16 @@ impl StoreOpaque {
             "we should always get a valid frame pointer for Wasm frames"
         );
 
-        let (module_with_code, _offset) = self
+        let (store_code, offset) = self
             .modules()
-            .module_and_code_by_pc(pc)
-            .expect("should have module info for Wasm frame");
+            .store_code_by_pc(pc)
+            .expect("should have store code for Wasm frame");
+        let offset = u32::try_from(offset).unwrap();
 
-        if let Some(stack_map) = module_with_code.lookup_stack_map(pc) {
+        let stack_map =
+            wasmtime_environ::StackMap::lookup(offset, store_code.code_memory().stack_map_data());
+
+        if let Some(stack_map) = stack_map {
             log::trace!(
                 "We have a stack map that maps {} bytes in this Wasm frame",
                 stack_map.frame_size()
@@ -661,11 +665,8 @@ impl StoreOpaque {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(frame_table) = module_with_code.module().frame_table() {
-            let relpc = module_with_code
-                .text_offset(pc)
-                .expect("PC should be within module");
-            for stack_slot in crate::debug::gc_refs_in_frame(frame_table, relpc, fp) {
+        if let Some(frame_table) = store_code.code_memory().frame_table() {
+            for stack_slot in crate::debug::gc_refs_in_frame(frame_table, offset, fp) {
                 unsafe {
                     self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
                 }

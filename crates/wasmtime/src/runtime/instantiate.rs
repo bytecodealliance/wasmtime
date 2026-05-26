@@ -267,6 +267,10 @@ impl CompiledModule {
         self.engine_code
             .wasm_bytecode_for_module(self.module.module_index)
     }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.index
+    }
 }
 
 #[cfg(feature = "addr2line")]
