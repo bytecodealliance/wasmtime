@@ -5798,8 +5798,15 @@ impl CheckedEntity {
     /// bit patterns.
     fn allows_memset(&self, env: &FuncEnvironment) -> bool {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => {
-                true
+            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => true,
+            CheckedEntity::Array { ty, .. } => {
+                let array_ty = env.types.unwrap_array(*ty).unwrap();
+                // Most GC references need barriers, funcrefs need intern-ing,
+                // etc. Disallow memset on all reference types.
+                !matches!(
+                    array_ty.0.element_type,
+                    WasmStorageType::Val(WasmValType::Ref(_))
+                )
             }
             CheckedEntity::Elem(_) => false,
             // Tables that are lazily initialized can't be memset because the

@@ -365,7 +365,7 @@
     (start $f)
     (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
 
-(assert_fuel 403 ;; 400 bytes set + 1 func + 2 instructions (drop is 0)
+(assert_fuel 103
   (module
     (type $a (array (mut funcref)))
     (func $f
@@ -375,7 +375,7 @@
     )
     (start $f)))
 
-(assert_fuel 404 ;; 400 bytes set + 1 func + 3 instructions (drop is 0)
+(assert_fuel 104
   (module
     (type $a (array (mut funcref)))
     (func $f
