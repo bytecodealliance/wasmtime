@@ -612,7 +612,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                 choices.push(|input, scope| {
                     let tables: Vec<_> = scope.tables.keys().collect();
                     let table = **input.choose(&tables)?;
-                    let delta = u32::arbitrary(input)?;
+                    let delta = input.int_in_range(0..=100)?;
                     Ok(TableGrow { table, delta })
                 });
             }
@@ -734,7 +734,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                 choices.push(|input, scope| {
                     let memories: Vec<_> = scope.memories.keys().collect();
                     let memory = **input.choose(&memories)?;
-                    let delta = u32::arbitrary(input)? % 10;
+                    let delta = input.int_in_range(0..=10)?;
                     Ok(MemoryGrow { memory, delta })
                 });
             }
