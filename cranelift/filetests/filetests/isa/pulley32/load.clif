@@ -9,7 +9,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xload32le_z x0, x0, 0
+;   xload32le_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 0
+;   xload64le_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xload32le_z x0, x0, 4
+;   xload32le_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 8
+;   xload64le_z x0, x0, 8 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:

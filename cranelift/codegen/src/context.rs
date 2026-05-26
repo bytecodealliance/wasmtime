@@ -333,7 +333,10 @@ impl Context {
     where
         FOI: Into<FlagsOrIsa<'a>>,
     {
-        eliminate_unreachable_code(&mut self.func, &mut self.cfg, &self.domtree);
+        let domtree = &self.domtree;
+        eliminate_unreachable_code(&mut self.func, &mut self.cfg, |block| {
+            domtree.is_reachable(block)
+        });
         self.verify_if(fisa)
     }
 
@@ -381,13 +384,19 @@ impl Context {
             &self.domtree,
             &self.loop_analysis,
             &mut alias_analysis,
-            &fisa.flags,
             ctrl_plane,
+            &mut self.cfg,
         );
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);
         trace!("After egraph optimization:\n{}", self.func.display());
 
-        self.verify_if(fisa)
+        // Branch optimizations can invalidate these; recompute them.
+        self.compute_cfg();
+        self.compute_domtree();
+
+        self.verify_if(fisa)?;
+
+        Ok(())
     }
 }

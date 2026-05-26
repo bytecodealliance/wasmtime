@@ -1,0 +1,38 @@
+test run
+target aarch64
+
+function %iadd_repro() -> i64x2 {
+block0:
+    v0 = iconst.i64 0x0001_0001_0001_0001
+    v1 = bitcast.i16x4 little v0
+    v2 = iadd v1, v1 ; it compiles
+    v3 = bitcast.i64 little v2
+    v4 = scalar_to_vector.i64x2 v3
+    return v4
+}
+
+; run: %iadd_repro() == [0x0002000200020002 0]
+
+function %isub_repro() -> i64x2 {
+block0:
+    v0 = iconst.i64 0x0001_0001_0001_0001
+    v1 = bitcast.i16x4 little v0
+    v2 = isub v1, v1 ; it compiles
+    v3 = bitcast.i64 little v2
+    v4 = scalar_to_vector.i64x2 v3
+    return v4
+}
+
+; run: %isub_repro() == [0 0]
+
+function %imul_repro() -> i64x2 {
+block0:
+    v0 = iconst.i64 0x0002_0002_0002_0002
+    v1 = bitcast.i16x4 little v0
+    v2 = imul v1, v1 ; it compiles
+    v3 = bitcast.i64 little v2
+    v4 = scalar_to_vector.i64x2 v3
+    return v4
+}
+
+; run: %imul_repro() == [0x0004000400040004 0]

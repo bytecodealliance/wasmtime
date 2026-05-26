@@ -20,12 +20,13 @@
 ;;       movl    $0x539, %eax
 ;;       movl    $0x2a, %ecx
 ;;       movl    $0, %edx
-;;       andq    $7, %rdx
-;;       cmpq    $0, %rdx
+;;       andl    $7, %edx
+;;       cmpl    $0, %edx
 ;;       jne     0x72
-;;   4f: movl    $0, %edx
+;;   4d: movl    $0, %edx
 ;;       movq    0x30(%r14), %r11
 ;;       movq    (%r11), %rbx
+;;       movl    %edx, %edx
 ;;       addq    %rdx, %rbx
 ;;       pushq   %rcx
 ;;       pushq   %rax

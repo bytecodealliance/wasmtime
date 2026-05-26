@@ -1,5 +1,6 @@
 ;;! custom_page_sizes = true
 ;;! multi_memory = true
+;;! bulk_memory = true
 
 ;; Check all the valid custom page sizes.
 (module (memory 1 (pagesize 1)))

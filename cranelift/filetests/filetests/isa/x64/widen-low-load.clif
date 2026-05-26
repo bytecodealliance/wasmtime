@@ -1,0 +1,171 @@
+test compile precise-output
+target x86_64 sse41
+
+function %swiden_low_i8x16_load(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i8x16 v0
+    v2 = swiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovsxbw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovsxbw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %uwiden_low_i8x16_load(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i8x16 v0
+    v2 = uwiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovzxbw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovzxbw %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %swiden_low_i16x8_load(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i16x8 v0
+    v2 = swiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovsxwd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovsxwd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %uwiden_low_i16x8_load(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i16x8 v0
+    v2 = uwiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovzxwd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovzxwd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %swiden_low_i32x4_load(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i32x4 v0
+    v2 = swiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovsxdq %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovsxdq %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %uwiden_low_i32x4_load(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i32x4 v0
+    v2 = uwiden_low v1
+    return v2
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   pmovzxdq %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   pmovzxdq %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

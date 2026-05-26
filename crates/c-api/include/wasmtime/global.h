@@ -70,7 +70,7 @@ WASM_API_EXTERN void wasmtime_global_get(wasmtime_context_t *store,
  * This function may return an error if `global` is not mutable or if `val` has
  * the wrong type for `global`.
  *
- * THis does not take ownership of any argument but returns ownership of the
+ * This does not take ownership of any argument but returns ownership of the
  * error.
  */
 WASM_API_EXTERN wasmtime_error_t *

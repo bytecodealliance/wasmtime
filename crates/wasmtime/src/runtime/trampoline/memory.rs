@@ -9,9 +9,11 @@ use crate::runtime::vm::{
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, StoreResourceLimiter};
 use alloc::sync::Arc;
+use core::future::Future;
+use core::pin::Pin;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, StaticModuleIndex,
-    Tunables, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryKind, MemoryTunables,
+    Module, StaticModuleIndex, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -42,7 +44,7 @@ pub async fn create_memory(
     module
         .exports
         .insert(name, EntityIndex::Memory(memory_id))?;
-    let info = ModuleRuntimeInfo::bare(Arc::new(module))?;
+    let info = ModuleRuntimeInfo::bare(try_new::<Arc<_>>(module)?)?;
 
     // We create an instance in the on-demand allocator when creating handles
     // associated with external objects. The configured instance allocator
@@ -103,18 +105,18 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let reserved_size_in_bytes = Some(tunables.memory_reservation.try_into().unwrap());
+        let reserved_size_in_bytes = Some(memory_tunables.reservation().try_into().unwrap());
         self.0
             .new_memory(
                 MemoryType::from_wasmtime_memory(ty),
                 minimum,
                 maximum,
                 reserved_size_in_bytes,
-                usize::try_from(tunables.memory_guard_size).unwrap(),
+                usize::try_from(memory_tunables.guard_size()).unwrap(),
             )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
             .map_err(|e| format_err!(e))
@@ -126,7 +128,6 @@ struct SingleMemoryInstance<'a> {
     ondemand: OnDemandInstanceAllocator,
 }
 
-#[async_trait::async_trait]
 unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
     #[cfg(feature = "component-model")]
     fn validate_component<'a>(
@@ -170,12 +171,13 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         self.ondemand.decrement_core_instance_count();
     }
 
-    async fn allocate_memory(
-        &self,
-        request: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Memory,
+    fn allocate_memory<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        request: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Memory,
         memory_index: Option<DefinedMemoryIndex>,
-    ) -> Result<(MemoryAllocationIndex, Memory)> {
+        memory_kind: MemoryKind,
+    ) -> Pin<Box<dyn Future<Output = Result<(MemoryAllocationIndex, Memory)>> + Send + 'a>> {
         if cfg!(debug_assertions) {
             let module = request.runtime_info.env_module();
             let offsets = request.runtime_info.offsets();
@@ -184,15 +186,15 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         }
 
         match self.preallocation {
-            Some(shared_memory) => Ok((
-                MemoryAllocationIndex::default(),
-                shared_memory.clone().as_memory(),
-            )),
-            None => {
-                self.ondemand
-                    .allocate_memory(request, ty, memory_index)
-                    .await
-            }
+            Some(shared_memory) => crate::runtime::box_future(async move {
+                Ok((
+                    MemoryAllocationIndex::default(),
+                    shared_memory.clone().as_memory(),
+                ))
+            }),
+            None => self
+                .ondemand
+                .allocate_memory(request, ty, memory_index, memory_kind),
         }
     }
 
@@ -208,13 +210,13 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         }
     }
 
-    async fn allocate_table(
-        &self,
-        req: &mut InstanceAllocationRequest<'_, '_>,
-        ty: &wasmtime_environ::Table,
+    fn allocate_table<'a, 'b: 'a, 'c: 'a>(
+        &'a self,
+        req: &'a mut InstanceAllocationRequest<'b, 'c>,
+        ty: &'a wasmtime_environ::Table,
         table_index: DefinedTableIndex,
-    ) -> Result<(TableAllocationIndex, Table)> {
-        self.ondemand.allocate_table(req, ty, table_index).await
+    ) -> Pin<Box<dyn Future<Output = Result<(TableAllocationIndex, Table)>> + Send + 'a>> {
+        self.ondemand.allocate_table(req, ty, table_index)
     }
 
     unsafe fn deallocate_table(

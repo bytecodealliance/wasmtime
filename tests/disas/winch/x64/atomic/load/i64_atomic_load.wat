@@ -20,11 +20,12 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0, %eax
-;;       andq    $7, %rax
-;;       cmpq    $0, %rax
+;;       andl    $7, %eax
+;;       cmpl    $0, %eax
 ;;       jne     0x5e
-;;   44: movl    $0, %eax
+;;   42: movl    $0, %eax
 ;;       movq    0x38(%r14), %rcx
+;;       movl    %eax, %eax
 ;;       addq    %rax, %rcx
 ;;       movq    (%rcx), %rax
 ;;       addq    $0x10, %rsp

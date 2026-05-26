@@ -16,8 +16,7 @@ use alloc::sync::Arc;
 use core::ptr::NonNull;
 use wasmparser::WasmFeatures;
 use wasmtime_environ::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex, TagIndex,
-    TypeTrace,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeTrace,
 };
 
 /// An instantiated WebAssembly module.
@@ -110,6 +109,10 @@ impl Instance {
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [`ExternType`]: crate::ExternType
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(
         mut store: impl AsContextMut,
         module: &Module,
@@ -188,6 +191,12 @@ impl Instance {
     ///
     /// fn assert_send<T: Send>(t: T) -> T { t }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn new_async(
         mut store: impl AsContextMut,
@@ -225,14 +234,14 @@ impl Instance {
         // Note that under normal operation this shouldn't do much as the list
         // of funcs-with-holes should generally be empty. As a result the
         // process of filling this out is not super optimized at this point.
-        let (modules, engine) = store.modules_and_engine_mut();
-        modules.register_module(module, engine)?;
+        let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+        modules.register_module(module, engine, breakpoints)?;
         let (funcrefs, modules) = store.func_refs_and_modules();
         funcrefs.fill(modules);
 
-        let mut owned_imports = OwnedImports::new(module);
+        let mut owned_imports = OwnedImports::new(module)?;
         for import in imports {
-            owned_imports.push(import, store);
+            owned_imports.push(import, store)?;
         }
         Ok(owned_imports)
     }
@@ -299,14 +308,21 @@ impl Instance {
         // Allocate the GC heap, if necessary.
         if module.env_module().needs_gc_heap {
             store.ensure_gc_store(limiter.as_deref_mut()).await?;
+
+            // Eagerly register trace info for all types in this module.
+            if let Some(gc_store) = store.optional_gc_store_mut() {
+                for (_, ty) in module.signatures().as_module_map().iter() {
+                    gc_store.ensure_trace_info(*ty);
+                }
+            }
         }
 
         let compiled_module = module.compiled_module();
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        let (modules, engine) = store.modules_and_engine_mut();
-        let module_id = modules.register_module(module, engine)?;
+        let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+        let module_id = modules.register_module(module, engine, breakpoints)?;
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -408,29 +424,30 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// Panics if `store` does not own this instance.
+    /// Panics if `store` does not own this instance, or if memory allocation
+    /// fails.
     pub fn exports<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        self._exports(store.into().0)
-    }
+        let store = store.into().0;
+        let store_id = store.id();
+        let engine = store.engine().clone();
 
-    fn _exports<'a>(
-        &'a self,
-        store: &'a mut StoreOpaque,
-    ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        let module = store[self.id].env_module().clone();
-        let mut items = Vec::new();
-        for (_name, entity) in module.exports.iter() {
-            items.push(self._get_export(store, *entity));
-        }
-        let module = store[self.id].env_module();
-        module
-            .exports
-            .iter()
-            .zip(items)
-            .map(|((name, _), item)| Export::new(&module.strings[name], item))
+        let (instance, registry) = store.instance_and_module_registry_mut(self.id());
+        let (module, mut instance) = instance.module_and_self();
+        module.exports.iter().map(move |(name, entity)| {
+            // SAFETY: the `store_id` owns this instance and all exports
+            // contained within.
+            let export = unsafe {
+                instance
+                    .as_mut()
+                    .get_export_by_index_mut(registry, store_id, *entity)
+            };
+
+            let ext = Extern::from_wasmtime_export(export, &engine);
+            Export::new(&module.strings[name], ext)
+        })
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -495,7 +512,7 @@ impl Instance {
             let (instance, registry) = self.id.get_mut_and_module_registry(store);
             instance.get_export_by_index_mut(registry, id, entity)
         };
-        Extern::from_wasmtime_export(export, store)
+        Extern::from_wasmtime_export(export, store.engine())
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -521,6 +538,12 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn get_typed_func<Params, Results>(
         &self,
         mut store: impl AsContextMut,
@@ -611,6 +634,18 @@ impl Instance {
         self.id.instance()
     }
 
+    /// Return a unique-within-Store index for this `Instance`.
+    ///
+    /// Allows distinguishing instance identities when introspecting
+    /// the `Store`, e.g. via debug APIs.
+    ///
+    /// This index will match the instance's position in the sequence
+    /// returned by `Store::debug_all_instances()`.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u32 {
+        self.id.instance().as_u32()
+    }
+
     /// Get all globals within this instance.
     ///
     /// Returns both import and defined globals.
@@ -645,37 +680,38 @@ impl Instance {
 }
 
 pub(crate) struct OwnedImports {
-    functions: PrimaryMap<FuncIndex, VMFunctionImport>,
-    tables: PrimaryMap<TableIndex, VMTableImport>,
-    memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
-    globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    tags: PrimaryMap<TagIndex, VMTagImport>,
+    functions: TryPrimaryMap<FuncIndex, VMFunctionImport>,
+    tables: TryPrimaryMap<TableIndex, VMTableImport>,
+    memories: TryPrimaryMap<MemoryIndex, VMMemoryImport>,
+    globals: TryPrimaryMap<GlobalIndex, VMGlobalImport>,
+    tags: TryPrimaryMap<TagIndex, VMTagImport>,
 }
 
 impl OwnedImports {
-    fn new(module: &Module) -> OwnedImports {
+    fn new(module: &Module) -> Result<OwnedImports, OutOfMemory> {
         let mut ret = OwnedImports::empty();
-        ret.reserve(module);
-        return ret;
+        ret.reserve(module)?;
+        Ok(ret)
     }
 
     pub(crate) fn empty() -> OwnedImports {
         OwnedImports {
-            functions: PrimaryMap::new(),
-            tables: PrimaryMap::new(),
-            memories: PrimaryMap::new(),
-            globals: PrimaryMap::new(),
-            tags: PrimaryMap::new(),
+            functions: TryPrimaryMap::new(),
+            tables: TryPrimaryMap::new(),
+            memories: TryPrimaryMap::new(),
+            globals: TryPrimaryMap::new(),
+            tags: TryPrimaryMap::new(),
         }
     }
 
-    pub(crate) fn reserve(&mut self, module: &Module) {
+    pub(crate) fn reserve(&mut self, module: &Module) -> Result<(), OutOfMemory> {
         let raw = module.compiled_module().module();
-        self.functions.reserve(raw.num_imported_funcs);
-        self.tables.reserve(raw.num_imported_tables);
-        self.memories.reserve(raw.num_imported_memories);
-        self.globals.reserve(raw.num_imported_globals);
-        self.tags.reserve(raw.num_imported_tags);
+        self.functions.reserve(raw.num_imported_funcs)?;
+        self.tables.reserve(raw.num_imported_tables)?;
+        self.memories.reserve(raw.num_imported_memories)?;
+        self.globals.reserve(raw.num_imported_globals)?;
+        self.tags.reserve(raw.num_imported_tags)?;
+        Ok(())
     }
 
     #[cfg(feature = "component-model")]
@@ -687,60 +723,59 @@ impl OwnedImports {
         self.tags.clear();
     }
 
-    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
+    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) -> Result<(), OutOfMemory> {
         match item {
             Extern::Func(i) => {
-                self.functions.push(i.vmimport(store));
+                self.functions.push(i.vmimport(store))?;
             }
             Extern::Global(i) => {
-                self.globals.push(i.vmimport(store));
+                self.globals.push(i.vmimport(store))?;
             }
             Extern::Table(i) => {
-                self.tables.push(i.vmimport(store));
+                self.tables.push(i.vmimport(store))?;
             }
             Extern::Memory(i) => {
-                self.memories.push(i.vmimport(store));
+                self.memories.push(i.vmimport(store))?;
             }
             Extern::SharedMemory(i) => {
-                self.memories.push(i.vmimport(store));
+                self.memories.push(i.vmimport(store))?;
             }
             Extern::Tag(i) => {
-                self.tags.push(i.vmimport(store));
+                self.tags.push(i.vmimport(store))?;
             }
         }
+        Ok(())
     }
 
     /// Note that this is unsafe as the validity of `item` is not verified and
     /// it contains a bunch of raw pointers.
     #[cfg(feature = "component-model")]
-    pub(crate) fn push_export(&mut self, store: &StoreOpaque, item: &crate::runtime::vm::Export) {
+    pub(crate) fn push_export(
+        &mut self,
+        store: &StoreOpaque,
+        item: &crate::runtime::vm::Export,
+    ) -> Result<(), OutOfMemory> {
         match item {
             crate::runtime::vm::Export::Function(f) => {
-                // SAFETY: the funcref associated with a `Func` is valid to use
-                // under the `store` that owns the function.
-                let f = unsafe { f.vm_func_ref(store).as_ref() };
-                self.functions.push(VMFunctionImport {
-                    wasm_call: f.wasm_call.unwrap(),
-                    array_call: f.array_call,
-                    vmctx: f.vmctx,
-                });
+                self.functions.push(f.vmimport(store))?;
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(g.vmimport(store));
+                self.globals.push(g.vmimport(store))?;
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(t.vmimport(store));
+                self.tables.push(t.vmimport(store))?;
             }
             crate::runtime::vm::Export::Memory(m) => {
-                self.memories.push(m.vmimport(store));
+                self.memories.push(m.vmimport(store))?;
             }
             crate::runtime::vm::Export::SharedMemory(_, vmimport) => {
-                self.memories.push(*vmimport);
+                self.memories.push(*vmimport)?;
             }
             crate::runtime::vm::Export::Tag(t) => {
-                self.tags.push(t.vmimport(store));
+                self.tags.push(t.vmimport(store))?;
             }
         }
+        Ok(())
     }
 
     pub(crate) fn as_ref(&self) -> Imports<'_> {
@@ -775,10 +810,10 @@ pub struct InstancePre<T> {
     /// provided, passed to `Instance::new_started` after inserting them into a
     /// `Store`.
     ///
-    /// Note that this is stored as an `Arc<[T]>` to quickly move a strong
-    /// reference to everything internally into a `Store<T>` without having to
-    /// clone each individual item.
-    items: Arc<[Definition]>,
+    /// Note that this is stored as an `Arc` to quickly move a strong reference
+    /// to everything internally into a `Store<T>` without having to clone each
+    /// individual item.
+    items: Arc<TryVec<Definition>>,
 
     /// A count of `Definition::HostFunc` entries in `items` above to
     /// preallocate space in a `Store` up front for all entries to be inserted.
@@ -789,8 +824,8 @@ pub struct InstancePre<T> {
     /// `VMFuncRef`s so that we don't have to do it at
     /// instantiation time.
     ///
-    /// This is an `Arc<[T]>` for the same reason as `items`.
-    func_refs: Arc<[VMFuncRef]>,
+    /// This is an `Arc` for the same reason as `items`.
+    func_refs: Arc<TryVec<VMFuncRef>>,
 
     /// Whether or not any import in `items` is flagged as needing async.
     ///
@@ -824,10 +859,10 @@ impl<T: 'static> InstancePre<T> {
     /// This method is unsafe as the `T` of the `InstancePre<T>` is not
     /// guaranteed to be the same as the `T` within the `Store`, the caller must
     /// verify that.
-    pub(crate) unsafe fn new(module: &Module, items: Vec<Definition>) -> Result<InstancePre<T>> {
+    pub(crate) unsafe fn new(module: &Module, items: TryVec<Definition>) -> Result<InstancePre<T>> {
         typecheck(module, &items, |cx, ty, item| cx.definition(ty, &item.ty()))?;
 
-        let mut func_refs = vec![];
+        let mut func_refs = TryVec::with_capacity(items.len())?;
         let mut host_funcs = 0;
         let mut asyncness = Asyncness::No;
         for item in &items {
@@ -841,7 +876,7 @@ impl<T: 'static> InstancePre<T> {
                                 .wasm_to_array_trampoline(f.sig_index())
                                 .map(|f| f.into()),
                             ..*f.func_ref()
-                        });
+                        })?;
                     }
                     asyncness = asyncness | f.asyncness();
                 }
@@ -850,9 +885,9 @@ impl<T: 'static> InstancePre<T> {
 
         Ok(InstancePre {
             module: module.clone(),
-            items: items.into(),
+            items: try_new::<Arc<_>>(items)?,
             host_funcs,
-            func_refs: func_refs.into(),
+            func_refs: try_new::<Arc<_>>(func_refs)?,
             asyncness,
             _marker: core::marker::PhantomData,
         })
@@ -879,6 +914,12 @@ impl<T: 'static> InstancePre<T> {
     /// `store`, or if `store` has async support enabled. Additionally this
     /// function will panic if the `store` provided comes from a different
     /// [`Engine`] than the [`InstancePre`] originally came from.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
@@ -914,6 +955,12 @@ impl<T: 'static> InstancePre<T> {
     ///
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` does not have async support enabled.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
@@ -947,15 +994,15 @@ impl<T: 'static> InstancePre<T> {
 fn pre_instantiate_raw(
     store: &mut StoreOpaque,
     module: &Module,
-    items: &Arc<[Definition]>,
+    items: &Arc<TryVec<Definition>>,
     host_funcs: usize,
-    func_refs: &Arc<[VMFuncRef]>,
+    func_refs: &Arc<TryVec<VMFuncRef>>,
     asyncness: Asyncness,
 ) -> Result<OwnedImports> {
     // Register this module and use it to fill out any funcref wasm_call holes
     // we can. For more comments on this see `typecheck_externs`.
-    let (modules, engine) = store.modules_and_engine_mut();
-    modules.register_module(module, engine)?;
+    let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+    modules.register_module(module, engine, breakpoints)?;
     let (funcrefs, modules) = store.func_refs_and_modules();
     funcrefs.fill(modules);
 
@@ -964,20 +1011,20 @@ fn pre_instantiate_raw(
         // will insert a function into the store automatically as part of
         // instantiation, so reserve space here to make insertion more efficient
         // as it won't have to realloc during the instantiation.
-        funcrefs.reserve_storage(host_funcs);
+        funcrefs.reserve_storage(host_funcs)?;
 
         // The usage of `to_extern_store_rooted` requires that the items are
         // rooted via another means, which happens here by cloning the list of
         // items into the store once. This avoids cloning each individual item
         // below.
-        funcrefs.push_instance_pre_definitions(items.clone());
-        funcrefs.push_instance_pre_func_refs(func_refs.clone());
+        funcrefs.push_instance_pre_definitions(items.clone())?;
+        funcrefs.push_instance_pre_func_refs(func_refs.clone())?;
     }
 
     store.set_async_required(asyncness);
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
-    let mut imports = OwnedImports::new(module);
+    let mut imports = OwnedImports::new(module)?;
     for import in items.iter() {
         if !import.comes_from_same_store(store) {
             bail!("cross-`Store` instantiation is not currently supported");
@@ -1000,7 +1047,7 @@ fn pre_instantiate_raw(
                 .into()
             },
         };
-        imports.push(&item, store);
+        imports.push(&item, store)?;
     }
 
     Ok(imports)

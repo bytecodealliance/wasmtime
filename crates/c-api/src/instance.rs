@@ -4,6 +4,7 @@ use crate::{
     wasmtime_module_t,
 };
 use std::mem::MaybeUninit;
+use std::ptr;
 use wasmtime::{Instance, InstancePre, Trap};
 
 #[derive(Clone)]
@@ -94,6 +95,7 @@ pub(crate) fn handle_instantiate(
     instance_ptr: &mut Instance,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
+    *trap_ptr = ptr::null_mut();
     match instance {
         Ok(i) => {
             *instance_ptr = i;

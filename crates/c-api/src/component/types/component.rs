@@ -37,7 +37,7 @@ pub unsafe extern "C" fn wasmtime_component_type_import_get(
     };
     match ty.ty.get_import(&engine.engine, name) {
         Some(item) => {
-            ret.write(item.into());
+            ret.write(item.ty.into());
             true
         }
         None => false,
@@ -58,7 +58,7 @@ pub extern "C" fn wasmtime_component_type_import_nth(
             let name: &str = name;
             name_ret.write(name.as_ptr());
             name_len_ret.write(name.len());
-            type_ret.write(item.into());
+            type_ret.write(item.ty.into());
             true
         }
         None => false,
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn wasmtime_component_type_export_get(
     };
     match ty.ty.get_export(&engine.engine, name) {
         Some(item) => {
-            ret.write(item.into());
+            ret.write(item.ty.into());
             true
         }
         None => false,
@@ -108,7 +108,7 @@ pub extern "C" fn wasmtime_component_type_export_nth(
             let name: &str = name;
             name_ret.write(name.as_ptr());
             name_len_ret.write(name.len());
-            type_ret.write(item.into());
+            type_ret.write(item.ty.into());
             true
         }
         None => false,

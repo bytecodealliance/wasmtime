@@ -11,23 +11,29 @@
 //! panicking.
 
 pub mod component_api;
-pub mod component_async;
 #[cfg(feature = "fuzz-spec-interpreter")]
 pub mod diff_spec;
 pub mod diff_wasmi;
 pub mod diff_wasmtime;
 pub mod dummy;
 pub mod engine;
+mod gc_access;
 pub mod memory;
 mod stacks;
 
+/// Oracle for sequences of Wasmtime API calls.
+pub mod api;
+pub use api::make_api_calls;
+
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
+use crate::generators::ExceptionOps;
 use crate::generators::GcOps;
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use crate::{YieldN, block_on};
 use arbitrary::Arbitrary;
+pub use gc_access::gc_access;
 pub use stacks::check_stacks;
 use std::future::Future;
 use std::pin::Pin;
@@ -38,7 +44,7 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
-#[cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))]
+#[cfg(feature = "v8")]
 mod diff_v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -324,17 +330,8 @@ fn compile_module(
 ) -> Option<Module> {
     log_wasm(bytes);
 
-    fn is_pcc_error(e: &wasmtime::Error) -> bool {
-        // NOTE: please keep this predicate in sync with the display format of CodegenError,
-        // defined in `wasmtime/cranelift/codegen/src/result.rs`
-        e.to_string().to_lowercase().contains("proof-carrying-code")
-    }
-
     match config.compile(engine, bytes) {
         Ok(module) => Some(module),
-        Err(e) if is_pcc_error(&e) => {
-            panic!("pcc error in input: {e:#?}");
-        }
         Err(_) if known_valid == KnownValid::No => None,
         Err(e) => {
             if let generators::InstanceAllocationStrategy::Pooling(c) = &config.wasmtime.strategy {
@@ -611,101 +608,6 @@ impl<T, U> DiffEqResult<T, U> {
     }
 }
 
-/// Invoke the given API calls.
-pub fn make_api_calls(api: generators::api::ApiCalls) {
-    use crate::generators::api::ApiCall;
-    use std::collections::HashMap;
-
-    let mut store: Option<Store<StoreLimits>> = None;
-    let mut modules: HashMap<usize, Module> = Default::default();
-    let mut instances: HashMap<usize, Instance> = Default::default();
-
-    for call in api.calls {
-        match call {
-            ApiCall::StoreNew(config) => {
-                log::trace!("creating store");
-                assert!(store.is_none());
-                store = Some(config.to_store());
-            }
-
-            ApiCall::ModuleNew { id, wasm } => {
-                log::debug!("creating module: {id}");
-                log_wasm(&wasm);
-                let module = match Module::new(store.as_ref().unwrap().engine(), &wasm) {
-                    Ok(m) => m,
-                    Err(_) => continue,
-                };
-                let old = modules.insert(id, module);
-                assert!(old.is_none());
-            }
-
-            ApiCall::ModuleDrop { id } => {
-                log::trace!("dropping module: {id}");
-                drop(modules.remove(&id));
-            }
-
-            ApiCall::InstanceNew { id, module } => {
-                log::trace!("instantiating module {module} as {id}");
-                let module = match modules.get(&module) {
-                    Some(m) => m,
-                    None => continue,
-                };
-
-                let store = store.as_mut().unwrap();
-                if let Some(instance) = instantiate_with_dummy(store, module) {
-                    instances.insert(id, instance);
-                }
-            }
-
-            ApiCall::InstanceDrop { id } => {
-                log::trace!("dropping instance {id}");
-                instances.remove(&id);
-            }
-
-            ApiCall::CallExportedFunc { instance, nth } => {
-                log::trace!("calling instance export {instance} / {nth}");
-                let instance = match instances.get(&instance) {
-                    Some(i) => i,
-                    None => {
-                        // Note that we aren't guaranteed to instantiate valid
-                        // modules, see comments in `InstanceNew` for details on
-                        // that. But the API call generator can't know if
-                        // instantiation failed, so we might not actually have
-                        // this instance. When that's the case, just skip the
-                        // API call and keep going.
-                        continue;
-                    }
-                };
-                let store = store.as_mut().unwrap();
-
-                let funcs = instance
-                    .exports(&mut *store)
-                    .filter_map(|e| match e.into_extern() {
-                        Extern::Func(f) => Some(f),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-
-                if funcs.is_empty() {
-                    continue;
-                }
-
-                let nth = nth % funcs.len();
-                let f = &funcs[nth];
-                let ty = f.ty(&store);
-                if let Some(params) = ty
-                    .params()
-                    .map(|p| p.default_value())
-                    .collect::<Option<Vec<_>>>()
-                {
-                    let mut results = vec![Val::I32(0); ty.results().len()];
-                    let _ = f.call(store, &params, &mut results);
-                }
-            }
-        }
-    }
-}
-
 /// Executes the wast `test` with the `config` specified.
 ///
 /// Ensures that wast tests pass regardless of the `Config`.
@@ -774,12 +676,14 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     let mut wast_context = WastContext::new(&engine, async_, move |store| {
         fuzz_config.configure_store_epoch_and_fuel(store);
     });
+    wast_context.ignore_error_messages(test.config.spec_test.unwrap_or(false));
     wast_context
         .register_spectest(&wasmtime_wast::SpectestConfig {
             use_shared_memory: true,
             suppress_prints: true,
         })
         .unwrap();
+    wast_context.register_wasmtime().unwrap();
     wast_context
         .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
         .unwrap();
@@ -943,6 +847,21 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         linker.define(&store, "", "take_struct", func).unwrap();
 
+        let func_ty = FuncType::new(
+            store.engine(),
+            vec![ValType::Ref(RefType::new(true, HeapType::Eq))],
+            vec![],
+        );
+
+        let func = Func::new(&mut store, func_ty, {
+            move |_caller: Caller<'_, StoreLimits>, _params, _results| {
+                log::info!("gc_ops: take_eq(<ref null eq>)");
+                Ok(())
+            }
+        });
+
+        linker.define(&store, "", "take_eq", func).unwrap();
+
         for imp in module.imports() {
             if imp.module() == "" {
                 let name = imp.name();
@@ -1028,6 +947,74 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
             log::info!("CountDrops::drop: actual drops: {drops} -> {}", drops + 1);
         }
     }
+}
+
+/// Execute a series of exception-related operations.
+pub fn exception_ops(mut fuzz_config: generators::Config, mut ops: ExceptionOps) -> Result<()> {
+    match fuzz_config.wasmtime.compiler_strategy {
+        // Winch doesn't support exceptions; force to Cranelift.
+        CompilerStrategy::Winch => {
+            fuzz_config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
+        }
+        CompilerStrategy::CraneliftNative | CompilerStrategy::CraneliftPulley => {}
+    }
+
+    let module_cfg = &mut fuzz_config.module_config.config;
+    // Force exceptions + GC on (exceptions require GC).
+    module_cfg.gc_enabled = true;
+    module_cfg.exceptions_enabled = true;
+    module_cfg.reference_types_enabled = true;
+
+    let expected = ops.expected_result();
+
+    let wasm = ops.to_wasm_binary();
+    log_wasm(&wasm);
+
+    let mut store = fuzz_config.to_store();
+
+    let module = compile_module(store.engine(), &wasm, KnownValid::No, &fuzz_config)
+        .ok_or_else(|| wasmtime::format_err!("Compilation failed"))?;
+    let mut linker = Linker::new(store.engine());
+
+    let check_ty = FuncType::new(store.engine(), [ValType::I32, ValType::I32], []);
+    let check_func = Func::new(&mut store, check_ty, |_caller, params, _results| {
+        let actual = params[0].unwrap_i32();
+        let expected = params[1].unwrap_i32();
+        assert_eq!(actual, expected, "check_i32 mismatch");
+        Ok(())
+    });
+    linker.define(&store, "", "check_i32", check_func).unwrap();
+
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let mut results = [Val::I32(0)];
+    match run.call(&mut store, &[], &mut results) {
+        Ok(()) => {
+            let actual = results[0].unwrap_i32();
+            assert_eq!(
+                actual, expected,
+                "exception_ops: run returned {actual}, expected {expected} \
+                 (one catch per scenario)"
+            );
+        }
+        Err(e) => {
+            // AllocationTooLarge / GcHeapOutOfMemory are acceptable resource-limit traps.
+            if let Some(trap) = e.downcast_ref::<Trap>() {
+                match trap {
+                    Trap::AllocationTooLarge => return Ok(()),
+                    _ => {}
+                }
+            }
+            if e.is::<GcHeapOutOfMemory<()>>() {
+                return Ok(());
+            }
+            // Any other error (including ThrownException) is unexpected.
+            panic!("exception_ops: unexpected error during execution: {e:?}");
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Default)]
@@ -1171,6 +1158,10 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
             let func = e.into_extern().into_func()?;
             Some((name, func))
         })
+        // Each function gets up to 2 seconds, so don't let a lot of exports
+        // which all infinitely loop lock up the fuzzer. Limit the number of
+        // exports run.
+        .take(10)
         .collect::<Vec<_>>();
     for (name, func) in funcs {
         let ty = func.ty(&store);

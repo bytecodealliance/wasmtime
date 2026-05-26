@@ -1,7 +1,7 @@
 ;;! target = "x86_64"
 ;;! test = "optimize"
 ;;! filter = "wasm[0]--function"
-;;! flags = "-C inlining=y -C cranelift-wasmtime_inlining_intra_module=y"
+;;! flags = "-C inlining=y"
 
 (module
   (func (result i32)

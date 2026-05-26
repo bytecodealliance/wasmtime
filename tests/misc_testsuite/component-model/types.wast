@@ -353,3 +353,26 @@
     (export "t" (instance $t (type $t')))
   ))
 )
+
+(component definition $A
+  (type $t' (variant (case "a" u32) (case "b")))
+  (export $t "t" (type $t'))
+
+  (core module $m
+    (memory (export "m") 1)
+    (func (export "f") (param i32) (result i32)
+      (i32.store8
+        (i32.const 0)
+        (local.get 0))
+      i32.const 0)
+  )
+  (core instance $m (instantiate $m))
+  (func (export "f") (param "a" u32) (result $t)
+    (canon lift (core func $m "f") (memory $m "m"))
+  )
+)
+
+(component instance $A $A)
+(assert_return (invoke "f" (u32.const 0)) (variant.const "a" (u32.const 0)))
+(assert_return (invoke "f" (u32.const 1)) (variant.const "b"))
+(assert_trap (invoke "f" (u32.const 2)) "discriminant 2 out of range [0..2)")

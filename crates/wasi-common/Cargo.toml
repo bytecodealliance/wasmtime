@@ -20,14 +20,14 @@ thiserror = { workspace = true }
 wiggle = { workspace = true }
 tracing = { workspace = true }
 cap-std = { workspace = true }
-cap-rand = { workspace = true }
 bitflags = { workspace = true }
 log = { workspace = true }
+rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
 async-trait = { workspace = true }
 wasmtime-environ = { workspace = true }
 
 # Optional, enabled by wasmtime feature:
-wasmtime = { workspace = true, optional = true, features = ['runtime'] }
+wasmtime = { workspace = true, optional = true, features = ['runtime', 'component-model'] }
 # Optional, enabled by sync feature:
 cap-fs-ext = { workspace = true, optional = true }
 cap-time-ext = { workspace = true, optional = true }

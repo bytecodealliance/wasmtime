@@ -1,7 +1,7 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self};
-use crate::ir::MemFlags;
+use crate::ir::MemFlagsData;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
@@ -24,13 +24,25 @@ pub trait FromWritableReg: Sized {
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).
+///
+/// Each `reg_mem` / `reg_mem_imm` entry can optionally carry:
+///   * `aligned:BOOL`  -- require aligned memory operands (used for SSE
+///     non-VEX encodings).
+///   * `size:BITS`     -- the bit width of the value the operand holds. This
+///     is purely a type-level distinction (a sized newtype is a different
+///     Rust type than an unsized one of the same "family"), used to prevent
+///     cross-width operand mix-ups at compile time.
 macro_rules! newtype_of_reg {
     (
         $newtype_reg:ident,
         $newtype_writable_reg:ident,
         $newtype_option_writable_reg:ident,
-        reg_mem: ($($newtype_reg_mem:ident $(aligned:$aligned:ident)?),*),
-        reg_mem_imm: ($($newtype_reg_mem_imm:ident $(aligned:$aligned_imm:ident)?),*),
+        reg_mem: ($($newtype_reg_mem:ident
+                    $(size:$size:literal)?
+                    $(aligned:$aligned:ident)?),*),
+        reg_mem_imm: ($($newtype_reg_mem_imm:ident
+                        $(size:$size_imm:literal)?
+                        $(aligned:$aligned_imm:ident)?),*),
         |$check_reg:ident| $check:expr
     ) => {
         /// A newtype wrapper around `Reg`.
@@ -146,6 +158,13 @@ macro_rules! newtype_of_reg {
             }
 
             impl $newtype_reg_mem {
+                $(
+                    /// The bit width of the value this operand holds. This is
+                    /// a type-level distinction only; the underlying `RegMem`
+                    /// does not record the width.
+                    pub const SIZE_BITS: u32 = $size;
+                )?
+
                 /// Construct a `RegMem` newtype from the given `RegMem`, or return
                 /// `None` if the `RegMem` is not a valid instance of this `RegMem`
                 /// newtype.
@@ -227,6 +246,13 @@ macro_rules! newtype_of_reg {
             }
 
             impl $newtype_reg_mem_imm {
+                $(
+                    /// The bit width of the value this operand holds. This is
+                    /// a type-level distinction only; the underlying
+                    /// `RegMemImm` does not record the width.
+                    pub const SIZE_BITS: u32 = $size_imm;
+                )?
+
                 /// Construct this newtype from the given `RegMemImm`, or return
                 /// `None` if the `RegMemImm` is not a valid instance of this
                 /// newtype.
@@ -294,12 +320,24 @@ macro_rules! newtype_of_reg {
 }
 
 // Define a newtype of `Reg` for general-purpose registers.
+//
+// The sized `GprMemN` / `GprMemImmN` variants indicate the width of
+// the register or memory operand that an instruction operates on; for
+// a memory operand, the width of the load or store in particular.
 newtype_of_reg!(
     Gpr,
     WritableGpr,
     OptionWritableGpr,
-    reg_mem: (GprMem),
-    reg_mem_imm: (GprMemImm),
+    reg_mem: (GprMem,
+              GprMem8  size:8,
+              GprMem16 size:16,
+              GprMem32 size:32,
+              GprMem64 size:64),
+    reg_mem_imm: (GprMemImm,
+                  GprMemImm8  size:8,
+                  GprMemImm16 size:16,
+                  GprMemImm32 size:32,
+                  GprMemImm64 size:64),
     |reg| reg.class() == RegClass::Int
 );
 
@@ -324,12 +362,38 @@ impl Gpr {
 }
 
 // Define a newtype of `Reg` for XMM registers.
+//
+// Specific-width newtypes are, as for the GPR case above, used to
+// distinguish the width of the operation particularly when a memory
+// load or store occurs.
 newtype_of_reg!(
     Xmm,
     WritableXmm,
     OptionWritableXmm,
-    reg_mem: (XmmMem, XmmMemAligned aligned:true),
-    reg_mem_imm: (XmmMemImm, XmmMemAlignedImm aligned:true),
+    reg_mem: (XmmMem,
+              XmmMem8          size:8,
+              XmmMem16         size:16,
+              XmmMem32         size:32,
+              XmmMem64         size:64,
+              XmmMem128        size:128,
+              XmmMemAligned                    aligned:true,
+              XmmMemAligned8   size:8          aligned:true,
+              XmmMemAligned16  size:16         aligned:true,
+              XmmMemAligned32  size:32         aligned:true,
+              XmmMemAligned64  size:64         aligned:true,
+              XmmMemAligned128 size:128        aligned:true),
+    reg_mem_imm: (XmmMemImm,
+                  XmmMemImm8          size:8,
+                  XmmMemImm16         size:16,
+                  XmmMemImm32         size:32,
+                  XmmMemImm64         size:64,
+                  XmmMemImm128        size:128,
+                  XmmMemAlignedImm                    aligned:true,
+                  XmmMemAlignedImm8   size:8          aligned:true,
+                  XmmMemAlignedImm16  size:16         aligned:true,
+                  XmmMemAlignedImm32  size:32         aligned:true,
+                  XmmMemAlignedImm64  size:64         aligned:true,
+                  XmmMemAlignedImm128 size:128        aligned:true),
     |reg| reg.class() == RegClass::Float
 );
 
@@ -346,7 +410,7 @@ impl Amode {
         Self::ImmReg {
             simm32,
             base,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
     }
 
@@ -360,7 +424,7 @@ impl Amode {
             base,
             index,
             shift,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
     }
 
@@ -368,8 +432,8 @@ impl Amode {
         Self::RipRelative { target }
     }
 
-    /// Set the specified [MemFlags] to the [Amode].
-    pub fn with_flags(&self, flags: MemFlags) -> Self {
+    /// Set the specified [MemFlagsData] to the [Amode].
+    pub fn with_flags(&self, flags: MemFlagsData) -> Self {
         match self {
             &Self::ImmReg { simm32, base, .. } => Self::ImmReg {
                 simm32,
@@ -431,22 +495,22 @@ impl Amode {
         }
     }
 
-    pub(crate) fn get_flags(&self) -> MemFlags {
+    pub(crate) fn get_flags(&self) -> MemFlagsData {
         match self {
             Amode::ImmReg { flags, .. } | Amode::ImmRegRegShift { flags, .. } => *flags,
-            Amode::RipRelative { .. } => MemFlags::trusted(),
+            Amode::RipRelative { .. } => MemFlagsData::trusted(),
         }
     }
 
     /// Offset the amode by a fixed offset.
-    pub(crate) fn offset(&self, offset: i32) -> Self {
+    pub(crate) fn offset(&self, offset: i32) -> Option<Self> {
         let mut ret = self.clone();
-        match &mut ret {
-            &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
-            &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
+        let simm32 = match &mut ret {
+            Amode::ImmReg { simm32, .. } | Amode::ImmRegRegShift { simm32, .. } => simm32,
             _ => panic!("Cannot offset amode: {self:?}"),
-        }
-        ret
+        };
+        *simm32 = simm32.checked_add(offset)?;
+        Some(ret)
     }
 
     pub(crate) fn aligned(&self) -> bool {
@@ -575,18 +639,18 @@ impl SyntheticAmode {
     }
 
     /// Offset the synthetic amode by a fixed offset.
-    pub(crate) fn offset(&self, offset: i32) -> Self {
+    pub(crate) fn offset(&self, offset: i32) -> Option<Self> {
         let mut ret = self.clone();
         match &mut ret {
-            SyntheticAmode::Real(amode) => *amode = amode.offset(offset),
-            SyntheticAmode::SlotOffset { simm32 } => *simm32 += offset,
+            SyntheticAmode::Real(amode) => *amode = amode.offset(offset)?,
+            SyntheticAmode::SlotOffset { simm32 } => *simm32 = simm32.checked_add(offset)?,
             // `amode_offset` is used only in i128.load/store which
             // takes a synthetic amode from `to_amode`; `to_amode` can
             // only produce Real or SlotOffset amodes, never
             // IncomingArg or ConstantOffset.
             _ => panic!("Cannot offset SyntheticAmode: {self:?}"),
         }
-        ret
+        Some(ret)
     }
 }
 
@@ -1060,4 +1124,35 @@ impl OperandSize {
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
     }
+}
+
+pub use crate::isa::x64::lower::isle::generated_code::Atomic128RmwSeqOp;
+
+/// "Package" of the arguments for the instruction `Atomic128RmwSeq` to avoid
+/// making the `Inst` enum massive.
+#[derive(Debug, Clone)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct Atomic128RmwSeqArgs {
+    pub op: Atomic128RmwSeqOp,
+    pub mem_low: SyntheticAmode,
+    pub mem_high: SyntheticAmode,
+    pub operand_low: Gpr,
+    pub operand_high: Gpr,
+    pub temp_low: WritableGpr,
+    pub temp_high: WritableGpr,
+    pub dst_old_low: WritableGpr,
+    pub dst_old_high: WritableGpr,
+}
+
+/// "Package" of the arguments for the instruction `Atomic128XchgSeq` to avoid
+/// making the `Inst` enum massive.
+#[derive(Debug, Clone)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct Atomic128XchgSeqArgs {
+    pub mem_low: SyntheticAmode,
+    pub mem_high: SyntheticAmode,
+    pub operand_low: Gpr,
+    pub operand_high: Gpr,
+    pub dst_old_low: WritableGpr,
+    pub dst_old_high: WritableGpr,
 }

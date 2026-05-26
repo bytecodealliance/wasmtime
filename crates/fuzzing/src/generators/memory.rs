@@ -124,6 +124,10 @@ pub struct MemoryConfig {
     pub guard_before_linear_memory: bool,
     pub cranelift_enable_heap_access_spectre_mitigations: Option<bool>,
     pub memory_init_cow: bool,
+    pub gc_heap_reservation: Option<u64>,
+    pub gc_heap_guard_size: Option<u64>,
+    pub gc_heap_reservation_for_growth: Option<u64>,
+    pub gc_heap_may_move: Option<bool>,
 }
 
 impl<'a> Arbitrary<'a> for MemoryConfig {
@@ -142,6 +146,12 @@ impl<'a> Arbitrary<'a> for MemoryConfig {
             guard_before_linear_memory: u.arbitrary()?,
             cranelift_enable_heap_access_spectre_mitigations: u.arbitrary()?,
             memory_init_cow: u.arbitrary()?,
+
+            // GC heap tunables, same ranges as corresponding memory tunables.
+            gc_heap_reservation: interesting_virtual_memory_size(u, 33)?,
+            gc_heap_guard_size: interesting_virtual_memory_size(u, 32)?,
+            gc_heap_reservation_for_growth: interesting_virtual_memory_size(u, 30)?,
+            gc_heap_may_move: u.arbitrary()?,
         })
     }
 }
@@ -181,6 +191,10 @@ impl MemoryConfig {
         cfg.opts.memory_reservation_for_growth = self.memory_reservation_for_growth;
         cfg.opts.guard_before_linear_memory = Some(self.guard_before_linear_memory);
         cfg.opts.memory_init_cow = Some(self.memory_init_cow);
+        cfg.opts.gc_heap_reservation = self.gc_heap_reservation;
+        cfg.opts.gc_heap_guard_size = self.gc_heap_guard_size;
+        cfg.opts.gc_heap_reservation_for_growth = self.gc_heap_reservation_for_growth;
+        cfg.opts.gc_heap_may_move = self.gc_heap_may_move;
 
         if let Some(enable) = self.cranelift_enable_heap_access_spectre_mitigations {
             cfg.codegen.cranelift.push((

@@ -75,6 +75,10 @@ impl AnyRef {
         match *self {}
     }
 
+    pub(crate) fn _to_raw(&self, _store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
+        match *self {}
+    }
+
     pub fn ty(&self, _store: impl AsContext) -> Result<HeapType> {
         match *self {}
     }

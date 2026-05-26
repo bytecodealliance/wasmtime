@@ -7,7 +7,9 @@ use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
 use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::inline::InlineCommand;
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
+use cranelift_codegen::ir::{
+    self, InstBuilder, MemFlagsData, UserExternalName, UserFuncName, Value,
+};
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::isa::{
     OwnedTargetIsa, TargetIsa,
@@ -36,14 +38,15 @@ use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
 use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
-    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, InliningCompiler,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection, StaticModuleIndex,
-    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType, WasmValType, prelude::*,
+    FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, Inlining,
+    InliningCompiler, ModulePC, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
+    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType,
+    WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
 #[cfg(feature = "component-model")]
-mod component;
+pub(crate) mod component;
 
 struct IncrementalCacheContext {
     #[cfg(feature = "incremental-cache")]
@@ -301,13 +304,13 @@ impl wasmtime_environ::Compiler for Compiler {
                 base: vmctx,
                 offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
                 global_type: isa.pointer_type(),
-                flags: MemFlags::trusted().with_readonly(),
+                flags: MemFlagsData::trusted().with_readonly(),
             });
             let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: interrupts_ptr,
                 offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
                 global_type: isa.pointer_type(),
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
             if self.tunables.signals_based_traps {
                 context.func.stack_limit = Some(stack_limit);
@@ -325,7 +328,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        if self.tunables.inlining {
+        if self.tunables.inlining != Inlining::No {
             compiler
                 .cx
                 .codegen_context
@@ -404,7 +407,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let ptr = isa.pointer_bytes();
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             caller_vmctx,
             i32::from(ptr.vmcontext_store_context()),
         );
@@ -420,7 +423,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let ptr_size = isa.pointer_bytes();
         let callee = builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             callee_vmctx,
             ptr_size.vmarray_call_host_func_context_func_ref() + ptr_size.vm_func_ref_array_call(),
         );
@@ -440,19 +443,19 @@ impl wasmtime_environ::Compiler for Compiler {
         if self.tunables.debug_guest {
             let vmstore_ctx_ptr = builder.ins().load(
                 pointer_type,
-                MemFlags::trusted().with_readonly(),
+                MemFlagsData::trusted().with_readonly(),
                 caller_vmctx,
                 i32::from(ptr_size.vmctx_store_context()),
             );
             let old_version = builder.ins().load(
                 ir::types::I64,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
                 vmstore_ctx_ptr,
                 i32::from(ptr_size.vmstore_context_execution_version()),
             );
             let new_version = builder.ins().iadd_imm(old_version, 1);
             builder.ins().store(
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
                 new_version,
                 vmstore_ctx_ptr,
                 i32::from(ptr_size.vmstore_context_execution_version()),
@@ -465,7 +468,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         // Return results from the array as native return values.
         let results =
-            self.load_values_from_array(wasm_func_ty.returns(), &mut builder, args_base, args_len);
+            self.load_values_from_array(wasm_func_ty.results(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);
         builder.finalize();
 
@@ -520,7 +523,7 @@ impl wasmtime_environ::Compiler for Compiler {
             }
         }
 
-        let mut breakpoint_table = Vec::new();
+        let mut breakpoint_table: Vec<(ModulePC, Range<u32>)> = Vec::new();
         let mut nop_units = None;
 
         let mut ret = Vec::with_capacity(funcs.len());
@@ -539,7 +542,10 @@ impl wasmtime_environ::Compiler for Compiler {
                 func.buffer.user_stack_maps(),
             );
 
-            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
+            traps.push(
+                range.clone(),
+                &func.traps(&self.tunables).collect::<Vec<_>>(),
+            );
             clif_to_env_exception_tables(
                 &mut exception_tables,
                 range.clone(),
@@ -771,7 +777,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
             vmctx,
             ptr_size.vmcontext_store_context(),
         );
@@ -1068,7 +1074,7 @@ impl Compiler {
 
         // Compute the size of the values vector.
         let value_size = mem::size_of::<u128>();
-        let values_vec_len = cmp::max(ty.params().len(), ty.returns().len());
+        let values_vec_len = cmp::max(ty.params().len(), ty.results().len());
         let values_vec_byte_size = u32::try_from(value_size * values_vec_len).unwrap();
         let values_vec_len = u32::try_from(values_vec_len).unwrap();
 
@@ -1111,7 +1117,7 @@ impl Compiler {
         // despite this load/store being unrelated to execution in Wasm itself.
         // For more details on this see the `ValRaw` type in
         // `wasmtime::runtime::vm`.
-        let flags = ir::MemFlags::new()
+        let flags = ir::MemFlagsData::new()
             .with_notrap()
             .with_endianness(ir::Endianness::Little);
 
@@ -1148,7 +1154,7 @@ impl Compiler {
 
         // Note that this is little-endian like `store_values_to_array` above,
         // see notes there for more information.
-        let flags = MemFlags::new()
+        let flags = MemFlagsData::new()
             .with_notrap()
             .with_endianness(ir::Endianness::Little);
 
@@ -1244,7 +1250,7 @@ impl Compiler {
         // Builtins are stored in an array in all `VMContext`s. First load the
         // base pointer of the array and then load the entry of the array that
         // corresponds to this builtin.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mem_flags = ir::MemFlagsData::trusted().with_readonly();
         let array_addr = builder.ins().load(
             pointer_type,
             mem_flags,
@@ -1260,7 +1266,7 @@ impl Compiler {
         self.call_indirect_host(builder, builtin, sig, func_addr, args)
     }
 
-    pub fn isa(&self) -> &dyn TargetIsa {
+    pub fn isa(&self) -> &(dyn TargetIsa + 'static) {
         &*self.isa
     }
 
@@ -1296,7 +1302,7 @@ impl Compiler {
         }
         let magic = builder.ins().load(
             ir::types::I32,
-            MemFlags::trusted().with_endianness(self.isa.endianness()),
+            MemFlagsData::trusted().with_endianness(self.isa.endianness()),
             vmctx,
             0,
         );
@@ -1419,7 +1425,7 @@ impl Compiler {
         builder.switch_to_block(normal_return);
         self.store_values_to_array(
             &mut builder,
-            callee_sig.returns(),
+            callee_sig.results(),
             &normal_return_values,
             values_vec_ptr,
             values_vec_len,
@@ -1623,7 +1629,7 @@ fn clif_to_env_frame_tables<'a>(
         for frame_tags in tag_site.tags.chunks_exact(3) {
             let &[
                 ir::DebugTag::StackSlot(slot),
-                ir::DebugTag::User(wasm_pc),
+                ir::DebugTag::User(wasm_pc_raw),
                 ir::DebugTag::User(stack_shape),
             ] = frame_tags
             else {
@@ -1645,7 +1651,7 @@ fn clif_to_env_frame_tables<'a>(
             });
 
             frames.push((
-                wasm_pc,
+                ModulePC::new(wasm_pc_raw),
                 frame_descriptor,
                 FrameStackShape::from_raw(stack_shape),
             ));
@@ -1669,8 +1675,8 @@ fn clif_to_env_frame_tables<'a>(
 /// Wasmtime's serialized metadata.
 fn clif_to_env_breakpoints(
     range: Range<u64>,
-    breakpoint_patches: impl Iterator<Item = (u32, Range<u32>)>,
-    patch_table: &mut Vec<(u32, Range<u32>)>,
+    breakpoint_patches: impl Iterator<Item = (ModulePC, Range<u32>)>,
+    patch_table: &mut Vec<(ModulePC, Range<u32>)>,
 ) -> Result<()> {
     patch_table.extend(breakpoint_patches.map(|(wasm_pc, offset_range)| {
         let start = offset_range.start + u32::try_from(range.start).unwrap();
@@ -1691,7 +1697,7 @@ fn save_last_wasm_entry_context(
     // First we need to get the `VMStoreContext`.
     let vm_store_context = builder.ins().load(
         pointer_type,
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         vmctx,
         i32::try_from(vm_store_context_offset).unwrap(),
     );
@@ -1699,14 +1705,14 @@ fn save_last_wasm_entry_context(
     // Save the current fp/sp of the entry trampoline into the `VMStoreContext`.
     let fp = builder.ins().get_frame_pointer(pointer_type);
     builder.ins().store(
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         fp,
         vm_store_context,
         ptr_size.vmstore_context_last_wasm_entry_fp(),
     );
     let sp = builder.ins().get_stack_pointer(pointer_type);
     builder.ins().store(
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         sp,
         vm_store_context,
         ptr_size.vmstore_context_last_wasm_entry_sp(),
@@ -1718,7 +1724,7 @@ fn save_last_wasm_entry_context(
         .ins()
         .get_exception_handler_address(pointer_type, block, 0);
     builder.ins().store(
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         trap_handler,
         vm_store_context,
         ptr_size.vmstore_context_last_wasm_entry_trap_handler(),
@@ -1736,7 +1742,7 @@ fn save_last_wasm_exit_fp_and_pc(
     // last Wasm frame.
     let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
     builder.ins().store(
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         trampoline_fp,
         limits,
         ptr.vmstore_context_last_wasm_exit_trampoline_fp(),
@@ -1745,7 +1751,7 @@ fn save_last_wasm_exit_fp_and_pc(
     // Finally save the Wasm return address to the limits.
     let wasm_pc = builder.ins().get_return_address(pointer_type);
     builder.ins().store(
-        MemFlags::trusted(),
+        MemFlagsData::trusted(),
         wasm_pc,
         limits,
         ptr.vmstore_context_last_wasm_exit_pc(),

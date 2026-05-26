@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 
 /// Check if the MPK feature is supported.
 pub fn is_supported() -> bool {
-    cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") && pkru::has_cpuid_bit_set()
+    wasmtime_core::mpk::is_supported()
 }
 
 /// Allocate up to `max` protection keys.

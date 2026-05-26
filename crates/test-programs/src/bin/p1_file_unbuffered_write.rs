@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::open_scratch_directory;
+use test_programs::preview1::{BlockingMode, open_scratch_directory};
 
-unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd) {
+unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     // Create and open file for reading
     let fd_read = wasip1::path_open(
         dir_fd,
@@ -12,7 +12,7 @@ unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_READ,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("create and open file for reading");
     assert!(
@@ -21,8 +21,16 @@ unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd) {
     );
 
     // Open the same file but for writing
-    let fd_write = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_WRITE, 0, 0)
-        .expect("opening file for writing");
+    let fd_write = wasip1::path_open(
+        dir_fd,
+        0,
+        "file",
+        0,
+        wasip1::RIGHTS_FD_WRITE,
+        0,
+        blocking_mode.fd_flags(),
+    )
+    .expect("opening file for writing");
     assert!(
         fd_write > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
@@ -34,7 +42,9 @@ unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    let nwritten = wasip1::fd_write(fd_write, &[ciovec]).expect("writing byte to file");
+    let nwritten = blocking_mode
+        .write(fd_write, &[ciovec])
+        .expect("writing byte to file");
     assert_eq!(nwritten, 1, "nwritten bytes check");
 
     // Read from file
@@ -43,7 +53,9 @@ unsafe fn test_file_unbuffered_write(dir_fd: wasip1::Fd) {
         buf: contents.as_mut_ptr() as *mut _,
         buf_len: contents.len(),
     };
-    let nread = wasip1::fd_read(fd_read, &[iovec]).expect("reading bytes from file");
+    let nread = blocking_mode
+        .read(fd_read, &[iovec])
+        .expect("reading bytes from file");
     assert_eq!(nread, 1, "nread bytes check");
     assert_eq!(contents, &[1u8], "written bytes equal read bytes");
 
@@ -72,5 +84,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_file_unbuffered_write(dir_fd) }
+    unsafe {
+        test_file_unbuffered_write(dir_fd, BlockingMode::Blocking);
+        test_file_unbuffered_write(dir_fd, BlockingMode::NonBlocking);
+    }
 }

@@ -17,14 +17,17 @@ pub struct ModuleConfig {
     // config-to-`wasmtime::Config` translation.
     pub function_references_enabled: bool,
     pub component_model_async: bool,
-    pub component_model_async_builtins: bool,
+    pub component_model_more_async_builtins: bool,
     pub component_model_async_stackful: bool,
     pub component_model_threading: bool,
     pub component_model_error_context: bool,
     pub component_model_gc: bool,
+    pub component_model_map: bool,
     pub component_model_fixed_length_lists: bool,
+    pub component_model_implements: bool,
     pub legacy_exceptions: bool,
     pub shared_memory: bool,
+    pub stack_switching: bool,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
@@ -75,14 +78,17 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
 
         Ok(ModuleConfig {
             component_model_async: false,
-            component_model_async_builtins: false,
+            component_model_more_async_builtins: false,
             component_model_async_stackful: false,
             component_model_threading: false,
             component_model_error_context: false,
             component_model_gc: false,
+            component_model_map: false,
             component_model_fixed_length_lists: false,
+            component_model_implements: false,
             legacy_exceptions: false,
             shared_memory: false,
+            stack_switching: false,
             function_references_enabled: config.gc_enabled,
             config,
         })

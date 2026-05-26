@@ -135,6 +135,7 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[doc = #as_ref_docs]
         #[unsafe(no_mangle)]
+        #[cfg(feature = "gc")]
         pub extern fn #as_ref(a: &#ty) -> Box<crate::wasm_ref_t> {
             eprintln!("`{}` is not implemented", stringify!(#as_ref));
             std::process::abort();
@@ -142,6 +143,7 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[doc = #as_ref_const_docs]
         #[unsafe(no_mangle)]
+        #[cfg(feature = "gc")]
         pub extern fn #as_ref_const(a: &#ty) -> Box<crate::wasm_ref_t> {
             eprintln!("`{}` is not implemented", stringify!(#as_ref_const));
             std::process::abort();

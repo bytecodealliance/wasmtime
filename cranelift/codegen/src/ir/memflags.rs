@@ -61,7 +61,7 @@ impl AliasRegion {
 /// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemFlags {
+pub struct MemFlagsData {
     // Initialized to all zeros to have all flags have their default value.
     // This is interpreted through various methods below. Currently the bits of
     // this are defined as:
@@ -97,12 +97,6 @@ const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
 /// Load multi-byte values from memory in a big-endian format.
 const BIT_BIG_ENDIAN: u16 = 1 << 3;
 
-/// Check this load or store for safety when using the
-/// proof-carrying-code framework. The address must have a
-/// `PointsTo` fact attached with a sufficiently large valid range
-/// for the accessed size.
-const BIT_CHECKED: u16 = 1 << 4;
-
 /// Used for alias analysis, indicates which disjoint part of the abstract state
 /// is being accessed.
 const MASK_ALIAS_REGION: u16 = 0b11 << ALIAS_REGION_OFFSET;
@@ -119,7 +113,7 @@ const TRAP_CODE_OFFSET: u16 = 7;
 /// control dependencies.
 const BIT_CAN_MOVE: u16 = 1 << 15;
 
-impl MemFlags {
+impl MemFlagsData {
     /// Create a new empty set of flags.
     pub const fn new() -> Self {
         Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
@@ -136,7 +130,7 @@ impl MemFlags {
         self.bits & bit != 0
     }
 
-    /// Return a new `MemFlags` with this flag bit set.
+    /// Return a new `MemFlagsData` with this flag bit set.
     const fn with_bit(mut self, bit: u16) -> Self {
         self.bits |= bit;
         self
@@ -204,7 +198,6 @@ impl MemFlags {
                 }
                 self.with_alias_region(Some(AliasRegion::Vmctx))
             }
-            "checked" => self.with_checked(),
             "can_move" => self.with_can_move(),
 
             other => match TrapCode::from_str(other) {
@@ -261,7 +254,7 @@ impl MemFlags {
 
     /// Test if this memory operation cannot trap.
     ///
-    /// By default `MemFlags` will assume that any load/store can trap and is
+    /// By default `MemFlagsData` will assume that any load/store can trap and is
     /// associated with a `TrapCode::HeapOutOfBounds` code. If the trap code is
     /// configured to `None` though then this method will return `true` and
     /// indicates that the memory operation will not trap.
@@ -279,12 +272,12 @@ impl MemFlags {
         self.trap_code().is_none()
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`.
+    /// Sets the trap code for this `MemFlagsData` to `None`.
     pub fn set_notrap(&mut self) {
         *self = self.with_notrap();
     }
 
-    /// Sets the trap code for this `MemFlags` to `None`, returning the new
+    /// Sets the trap code for this `MemFlagsData` to `None`, returning the new
     /// flags.
     pub const fn with_notrap(self) -> Self {
         self.with_trap_code(None)
@@ -356,32 +349,6 @@ impl MemFlags {
     pub const fn with_readonly(self) -> Self {
         self.with_bit(BIT_READONLY)
     }
-
-    /// Test if the `checked` bit is set.
-    ///
-    /// Loads and stores with this flag are verified to access
-    /// pointers only with a validated `PointsTo` fact attached, and
-    /// with that fact validated, when using the proof-carrying-code
-    /// framework. If initial facts on program inputs are correct
-    /// (i.e., correctly denote the shape and types of data structures
-    /// in memory), and if PCC validates the compiled output, then all
-    /// `checked`-marked memory accesses are guaranteed (up to the
-    /// checker's correctness) to access valid memory. This can be
-    /// used to ensure memory safety and sandboxing.
-    pub const fn checked(self) -> bool {
-        self.read_bit(BIT_CHECKED)
-    }
-
-    /// Set the `checked` bit.
-    pub fn set_checked(&mut self) {
-        *self = self.with_checked();
-    }
-
-    /// Set the `checked` bit, returning new flags.
-    pub const fn with_checked(self) -> Self {
-        self.with_bit(BIT_CHECKED)
-    }
-
     /// Get the trap code to report if this memory access traps.
     ///
     /// A `None` trap code indicates that this memory access does not trap.
@@ -410,7 +377,7 @@ impl MemFlags {
     }
 }
 
-impl fmt::Display for MemFlags {
+impl fmt::Display for MemFlagsData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.trap_code() {
             None => write!(f, " notrap")?,
@@ -434,9 +401,6 @@ impl fmt::Display for MemFlags {
         if self.read_bit(BIT_LITTLE_ENDIAN) {
             write!(f, " little")?;
         }
-        if self.checked() {
-            write!(f, " checked")?;
-        }
         match self.alias_region() {
             None => {}
             Some(AliasRegion::Heap) => write!(f, " heap")?,
@@ -454,33 +418,33 @@ mod tests {
     #[test]
     fn roundtrip_traps() {
         for trap in TrapCode::non_user_traps().iter().copied() {
-            let flags = MemFlags::new().with_trap_code(Some(trap));
+            let flags = MemFlagsData::new().with_trap_code(Some(trap));
             assert_eq!(flags.trap_code(), Some(trap));
         }
-        let flags = MemFlags::new().with_trap_code(None);
+        let flags = MemFlagsData::new().with_trap_code(None);
         assert_eq!(flags.trap_code(), None);
     }
 
     #[test]
     fn cannot_set_big_and_little() {
-        let mut big = MemFlags::new().with_endianness(Endianness::Big);
+        let mut big = MemFlagsData::new().with_endianness(Endianness::Big);
         assert!(big.set_by_name("little").is_err());
 
-        let mut little = MemFlags::new().with_endianness(Endianness::Little);
+        let mut little = MemFlagsData::new().with_endianness(Endianness::Little);
         assert!(little.set_by_name("big").is_err());
     }
 
     #[test]
     fn only_one_region() {
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Heap));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Heap));
         assert!(big.set_by_name("table").is_err());
         assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Table));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Table));
         assert!(big.set_by_name("heap").is_err());
         assert!(big.set_by_name("vmctx").is_err());
 
-        let mut big = MemFlags::new().with_alias_region(Some(AliasRegion::Vmctx));
+        let mut big = MemFlagsData::new().with_alias_region(Some(AliasRegion::Vmctx));
         assert!(big.set_by_name("heap").is_err());
         assert!(big.set_by_name("table").is_err());
     }

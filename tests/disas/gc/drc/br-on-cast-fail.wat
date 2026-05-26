@@ -27,7 +27,7 @@
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) tail
-;;     fn0 = colocated u805306368:35 sig0
+;;     fn0 = colocated u805306368:27 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -51,7 +51,7 @@
 ;; @002e                               v15 = iadd v14, v13
 ;; @002e                               v16 = iconst.i64 4
 ;; @002e                               v17 = iadd v15, v16  ; v16 = 4
-;; @002e                               v18 = load.i32 notrap aligned readonly v17
+;; @002e                               v18 = load.i32 user2 readonly v17
 ;; @002e                               v11 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002e                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @002e                               v19 = icmp eq v18, v12
@@ -70,14 +70,14 @@
 ;; @002e                               brif v24, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+48
-;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+64
+;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+56
+;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+72
 ;; @0034                               call_indirect sig1, v27(v26, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+72
-;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+88
+;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+88
+;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+104
 ;; @0038                               call_indirect sig1, v30(v29, v0)
 ;; @003a                               return
 ;; }

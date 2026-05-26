@@ -580,7 +580,6 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   uxtb w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -588,7 +587,6 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   uxtb w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i8, i16, i16) -> i16 {
@@ -604,7 +602,6 @@ block0(v0: i8, v1: i16, v2: i16):
 ;   uxtb w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -612,7 +609,6 @@ block0(v0: i8, v1: i16, v2: i16):
 ;   uxtb w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i8, i32, i32) -> i32 {
@@ -628,7 +624,6 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   uxtb w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -636,7 +631,6 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   uxtb w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i8, i64, i64) -> i64 {
@@ -652,7 +646,6 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   uxtb w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -660,7 +653,6 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   uxtb w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i8, i128, i128) -> i128 {
@@ -677,7 +669,6 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -686,7 +677,6 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   cmp w6, #0x2a
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 
 function %f(i16, i8, i8) -> i8 {
@@ -702,7 +692,6 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   uxth w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -710,7 +699,6 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   uxth w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i16, i16, i16) -> i16 {
@@ -726,7 +714,6 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   uxth w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -734,7 +721,6 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   uxth w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i16, i32, i32) -> i32 {
@@ -750,7 +736,6 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   uxth w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -758,7 +743,6 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   uxth w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i16, i64, i64) -> i64 {
@@ -774,7 +758,6 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   uxth w4, w0
 ;   subs wzr, w4, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -782,7 +765,6 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   uxth w4, w0
 ;   cmp w4, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i16, i128, i128) -> i128 {
@@ -799,7 +781,6 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   subs wzr, w6, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -808,7 +789,6 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   cmp w6, #0x2a
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 
 function %f(i32, i8, i8) -> i8 {
@@ -823,14 +803,12 @@ block0(v0: i32, v1: i8, v2: i8):
 ; block0:
 ;   subs wzr, w0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i32, i16, i16) -> i16 {
@@ -845,14 +823,12 @@ block0(v0: i32, v1: i16, v2: i16):
 ; block0:
 ;   subs wzr, w0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i32, i32, i32) -> i32 {
@@ -867,14 +843,12 @@ block0(v0: i32, v1: i32, v2: i32):
 ; block0:
 ;   subs wzr, w0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i32, i64, i64) -> i64 {
@@ -889,14 +863,12 @@ block0(v0: i32, v1: i64, v2: i64):
 ; block0:
 ;   subs wzr, w0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i32, i128, i128) -> i128 {
@@ -912,7 +884,6 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   subs wzr, w0, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -920,7 +891,6 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   cmp w0, #0x2a
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 
 function %f(i64, i8, i8) -> i8 {
@@ -935,14 +905,12 @@ block0(v0: i64, v1: i8, v2: i8):
 ; block0:
 ;   subs xzr, x0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i64, i16, i16) -> i16 {
@@ -957,14 +925,12 @@ block0(v0: i64, v1: i16, v2: i16):
 ; block0:
 ;   subs xzr, x0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i64, i32, i32) -> i32 {
@@ -979,14 +945,12 @@ block0(v0: i64, v1: i32, v2: i32):
 ; block0:
 ;   subs xzr, x0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i64, i64, i64) -> i64 {
@@ -1001,14 +965,12 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   subs xzr, x0, #42
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0x2a
 ;   csel x0, x1, x2, eq
-;   csdb
 ;   ret
 
 function %f(i64, i128, i128) -> i128 {
@@ -1024,7 +986,6 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   subs xzr, x0, #42
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1032,7 +993,6 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   cmp x0, #0x2a
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 
 function %f(i128, i8, i8) -> i8 {
@@ -1051,7 +1011,6 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1061,7 +1020,6 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 
 function %f(i128, i16, i16) -> i16 {
@@ -1080,7 +1038,6 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1090,7 +1047,6 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 
 function %f(i128, i32, i32) -> i32 {
@@ -1109,7 +1065,6 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1119,7 +1074,6 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 
 function %f(i128, i64, i64) -> i64 {
@@ -1138,7 +1092,6 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1148,7 +1101,6 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
-;   csdb
 ;   ret
 
 function %f(i128, i128, i128) -> i128 {
@@ -1168,7 +1120,6 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 ;
 ; Disassembled:
@@ -1179,7 +1130,6 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   ccmp x1, x11, #0, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
-;   csdb
 ;   ret
 
 function %g(i8) -> i8 {

@@ -2,17 +2,17 @@ use crate::{
     alloc::{TryClone, str_ptr_from_raw_parts, try_realloc},
     error::OutOfMemory,
 };
-use core::{fmt, mem, ops};
+use core::{borrow::Borrow, fmt, mem, ops};
 use std_alloc::{alloc::Layout, boxed::Box, string as inner};
 
 /// A newtype wrapper around [`std::string::String`] that only exposes
 /// fallible-allocation methods.
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct String {
+pub struct TryString {
     inner: inner::String,
 }
 
-impl TryClone for String {
+impl TryClone for TryString {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
         let mut s = Self::new();
         s.push_str(self)?;
@@ -20,19 +20,19 @@ impl TryClone for String {
     }
 }
 
-impl fmt::Debug for String {
+impl fmt::Debug for TryString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.inner, f)
     }
 }
 
-impl fmt::Display for String {
+impl fmt::Display for TryString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(&self.inner, f)
     }
 }
 
-impl ops::Deref for String {
+impl ops::Deref for TryString {
     type Target = str;
 
     #[inline]
@@ -41,21 +41,52 @@ impl ops::Deref for String {
     }
 }
 
-impl ops::DerefMut for String {
+impl ops::DerefMut for TryString {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl From<inner::String> for String {
+impl AsRef<str> for TryString {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+impl Borrow<str> for TryString {
+    fn borrow(&self) -> &str {
+        self
+    }
+}
+
+impl TryFrom<&str> for TryString {
+    type Error = OutOfMemory;
+
+    #[inline]
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut s = TryString::new();
+        s.push_str(value)?;
+        Ok(s)
+    }
+}
+
+impl From<inner::String> for TryString {
     #[inline]
     fn from(inner: inner::String) -> Self {
         Self { inner }
     }
 }
 
-impl serde::ser::Serialize for String {
+impl From<TryString> for inner::String {
+    #[inline]
+    fn from(s: TryString) -> Self {
+        s.inner
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::ser::Serialize for TryString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -64,7 +95,8 @@ impl serde::ser::Serialize for String {
     }
 }
 
-impl<'de> serde::de::Deserialize<'de> for String {
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Deserialize<'de> for TryString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -72,7 +104,7 @@ impl<'de> serde::de::Deserialize<'de> for String {
         struct Visitor;
 
         impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = String;
+            type Value = TryString;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("a `wasmtime_core::alloc::String` str")
@@ -82,7 +114,7 @@ impl<'de> serde::de::Deserialize<'de> for String {
             where
                 E: serde::de::Error,
             {
-                let mut s = String::new();
+                let mut s = TryString::new();
                 s.reserve_exact(v.len()).map_err(|oom| E::custom(oom))?;
                 s.push_str(v).expect("reserved capacity");
                 Ok(s)
@@ -97,7 +129,7 @@ impl<'de> serde::de::Deserialize<'de> for String {
     }
 }
 
-impl String {
+impl TryString {
     /// Same as [`std::string::String::new`].
     #[inline]
     pub fn new() -> Self {

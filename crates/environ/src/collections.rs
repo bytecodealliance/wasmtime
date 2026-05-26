@@ -1,5 +1,6 @@
 //! Fallible, OOM-handling collections.
 
+pub mod btree_map;
 mod entity_set;
 mod hash_map;
 mod hash_set;
@@ -7,15 +8,19 @@ mod index_map;
 mod primary_map;
 mod secondary_map;
 
-pub use entity_set::EntitySet;
-pub use hash_map::HashMap;
-pub use hash_set::HashSet;
-pub use index_map::IndexMap;
-pub use primary_map::PrimaryMap;
-pub use secondary_map::SecondaryMap;
+pub use btree_map::TryBTreeMap;
+pub use entity_set::TryEntitySet;
+pub use hash_map::TryHashMap;
+pub use hash_set::TryHashSet;
+pub use index_map::TryIndexMap;
+pub use primary_map::TryPrimaryMap;
+pub use secondary_map::TrySecondaryMap;
 pub use wasmtime_core::{
-    alloc::{String, TryClone, TryCollect, TryExtend, TryFromIterator, TryNew, Vec, try_new},
-    vec,
+    alloc::{
+        TryClone, TryCollect, TryCow, TryExtend, TryFromIterator, TryNew, TryString, TryToOwned,
+        TryVec, try_new,
+    },
+    try_vec,
 };
 
 /// Collections which abort on OOM.

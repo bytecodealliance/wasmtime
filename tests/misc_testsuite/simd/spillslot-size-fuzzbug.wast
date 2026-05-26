@@ -1,4 +1,5 @@
 ;;! simd = true
+;;! bulk_memory = true
 
 (module
   (func (export "test") (result f32 f32)

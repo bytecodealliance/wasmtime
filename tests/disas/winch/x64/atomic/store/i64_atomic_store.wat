@@ -18,12 +18,13 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0x2a, %eax
 ;;       movl    $0, %ecx
-;;       andq    $7, %rcx
-;;       cmpq    $0, %rcx
+;;       andl    $7, %ecx
+;;       cmpl    $0, %ecx
 ;;       jne     0x6a
-;;   4a: movl    $0, %ecx
+;;   48: movl    $0, %ecx
 ;;       movq    0x30(%r14), %r11
 ;;       movq    (%r11), %rdx
+;;       movl    %ecx, %ecx
 ;;       addq    %rcx, %rdx
 ;;       movq    %rax, (%rdx)
 ;;       mfence

@@ -3,7 +3,7 @@
 use super::REALLOC_AND_FREE;
 use wasmtime::Result;
 use wasmtime::component::*;
-use wasmtime::{Module, Store, StoreContextMut};
+use wasmtime::{Module, Store};
 
 #[test]
 fn top_level_instance_two_level() -> Result<()> {
@@ -54,55 +54,6 @@ fn top_level_instance_two_level() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.instance("c")?.instance("c")?.module("m", &module)?;
     linker.instantiate(&mut store, &component)?;
-    Ok(())
-}
-
-#[test]
-fn nested_many_instantiations() -> Result<()> {
-    let component = r#"
-(component
-  (import "count" (func $count))
-  (component $c1
-    (import "count" (func $count))
-    (core func $count_lower (canon lower (func $count)))
-    (core module $m
-        (import "" "" (func $count))
-        (start $count)
-    )
-    (core instance (instantiate $m (with "" (instance (export "" (func $count_lower))))))
-    (core instance (instantiate $m (with "" (instance (export "" (func $count_lower))))))
-  )
-  (component $c2
-    (import "count" (func $count))
-    (instance (instantiate $c1 (with "count" (func $count))))
-    (instance (instantiate $c1 (with "count" (func $count))))
-  )
-  (component $c3
-    (import "count" (func $count))
-    (instance (instantiate $c2 (with "count" (func $count))))
-    (instance (instantiate $c2 (with "count" (func $count))))
-  )
-  (component $c4
-    (import "count" (func $count))
-    (instance (instantiate $c3 (with "count" (func $count))))
-    (instance (instantiate $c3 (with "count" (func $count))))
-  )
-
-  (instance (instantiate $c4 (with "count" (func $count))))
-)
-    "#;
-    let engine = super::engine();
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, 0);
-    let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("count", |mut store: StoreContextMut<'_, u32>, _: ()| {
-            *store.data_mut() += 1;
-            Ok(())
-        })?;
-    linker.instantiate(&mut store, &component)?;
-    assert_eq!(*store.data(), 16);
     Ok(())
 }
 

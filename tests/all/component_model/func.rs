@@ -1,7 +1,10 @@
 #![cfg(not(miri))]
 
 use super::{ApiStyle, REALLOC_AND_FREE};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering::SeqCst},
+};
 use wasmtime::Result;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store, StoreContextMut, Trap};
@@ -807,342 +810,6 @@ fn strings() -> Result<()> {
 }
 
 #[tokio::test]
-async fn async_reentrance() -> Result<()> {
-    _ = env_logger::try_init();
-
-    let component = r#"
-        (component
-            (core module $shim
-                (import "" "task.return" (func $task-return (param i32)))
-                (table (export "funcs") 1 1 funcref)
-                (func (export "export") (param i32) (result i32)
-                    (call_indirect (i32.const 0) (local.get 0))
-                )
-                (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
-            )
-            (core func $task-return (canon task.return (result u32)))
-            (core instance $shim (instantiate $shim
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func $shim-export (param "p1" u32) (result u32)
-                (canon lift (core func $shim "export") async (callback (func $shim "callback")))
-            )
-
-            (component $inner
-                (import "import" (func $import (param "p1" u32) (result u32)))
-                (core module $libc (memory (export "memory") 1))
-                (core instance $libc (instantiate $libc))
-                (core func $import (canon lower (func $import) async (memory $libc "memory")))
-
-                (core module $m
-                    (import "libc" "memory" (memory 1))
-                    (import "" "import" (func $import (param i32 i32) (result i32)))
-                    (import "" "task.return" (func $task-return (param i32)))
-                    (func (export "export") (param i32) (result i32)
-                        (i32.store offset=0 (i32.const 1200) (local.get 0))
-                        (call $import (i32.const 1200) (i32.const 1204))
-                        drop
-                        (call $task-return (i32.load offset=0 (i32.const 1204)))
-                        i32.const 0
-                    )
-                    (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
-                )
-                (core type $task-return-type (func (param i32)))
-                (core func $task-return (canon task.return (result u32)))
-                (core instance $i (instantiate $m
-                    (with "" (instance
-                        (export "task.return" (func $task-return))
-                        (export "import" (func $import))
-                    ))
-                    (with "libc" (instance $libc))
-                ))
-                (func (export "export") (param "p1" u32) (result u32)
-                    (canon lift (core func $i "export") async (callback (func $i "callback")))
-                )
-            )
-            (instance $inner (instantiate $inner (with "import" (func $shim-export))))
-
-            (core module $libc (memory (export "memory") 1))
-            (core instance $libc (instantiate $libc))
-            (core func $inner-export (canon lower (func $inner "export") async (memory $libc "memory")))
-
-            (core module $donut
-                (import "" "funcs" (table 1 1 funcref))
-                (import "libc" "memory" (memory 1))
-                (import "" "import" (func $import (param i32 i32) (result i32)))
-                (import "" "task.return" (func $task-return (param i32)))
-                (func $host-export (export "export") (param i32) (result i32)
-                    (i32.store offset=0 (i32.const 1200) (local.get 0))
-                    (call $import (i32.const 1200) (i32.const 1204))
-                    drop
-                    (call $task-return (i32.load offset=0 (i32.const 1204)))
-                    i32.const 0
-                )
-                (func $guest-export (export "guest-export") (param i32) (result i32) unreachable)
-                (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
-                (func $start
-                    (table.set (i32.const 0) (ref.func $guest-export))
-                )
-                (start $start)
-            )
-
-            (core instance $donut (instantiate $donut
-                (with "" (instance
-                    (export "task.return" (func $task-return))
-                    (export "import" (func $inner-export))
-                    (export "funcs" (table $shim "funcs"))
-                ))
-                (with "libc" (instance $libc))
-            ))
-            (func (export "export") (param "p1" u32) (result u32)
-                (canon lift (core func $donut "export") async (callback (func $donut "callback")))
-            )
-        )"#;
-
-    let mut config = Config::new();
-    config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
-    config.wasm_component_model_threading(true);
-    let engine = &Engine::new(&config)?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-
-    let instance = Linker::new(&engine)
-        .instantiate_async(&mut store, &component)
-        .await?;
-    let func = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "export")?;
-    let message = "cannot enter component instance";
-    match store
-        .run_concurrent(async move |accessor| {
-            wasmtime::error::Ok(func.call_concurrent(accessor, (42,)).await?.0)
-        })
-        .await
-    {
-        Ok(_) => panic!(),
-        Err(e) => assert!(
-            format!("{e:?}").contains(message),
-            "expected `{message}`; got `{e:?}`"
-        ),
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn missing_task_return_call_stackless() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (func (export "foo") (result i32)
-                    i32.const 0
-                )
-                (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
-            )
-            (core func $task-return (canon task.return))
-            (core instance $i (instantiate $m
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
-        )"#,
-        "wasm trap: async-lifted export failed to produce a result",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn missing_task_return_call_stackless_explicit_thread() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $libc
-                (table (export "__indirect_function_table") 1 funcref))
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
-                (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
-                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
-                (func $thread-start (param i32) (; empty ;))
-                (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
-                (func (export "foo") (result i32)
-                    (call $thread-unsuspend
-                        (call $thread-new-indirect (i32.const 0) (i32.const 0)))
-                    i32.const 0
-                )
-                (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
-            )
-            (core instance $libc (instantiate $libc))
-            (core type $start-func-ty (func (param i32)))
-            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
-            (core func $thread-new-indirect
-                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
-            (core func $thread-unsuspend (canon thread.unsuspend))
-            (core func $task-return (canon task.return))
-            (core instance $i (instantiate $m
-                (with "" (instance
-                    (export "thread.new-indirect" (func $thread-new-indirect))
-                    (export "thread.unsuspend" (func $thread-unsuspend))
-                    (export "task.return" (func $task-return))
-                ))
-                (with "libc" (instance $libc))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
-        )"#,
-        "wasm trap: async-lifted export failed to produce a result",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn missing_task_return_call_stackful_explicit_thread() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $libc
-                (table (export "__indirect_function_table") 1 funcref))
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (import "" "thread.new-indirect" (func $thread-new-indirect (param i32 i32) (result i32)))
-                (import "" "thread.unsuspend" (func $thread-unsuspend (param i32)))
-                (import "libc" "__indirect_function_table" (table $indirect-function-table 1 funcref))
-                (func $thread-start (param i32) (; empty ;))
-                (elem (table $indirect-function-table) (i32.const 0) func $thread-start)
-                (func (export "foo")
-                    (call $thread-unsuspend
-                        (call $thread-new-indirect (i32.const 0) (i32.const 0)))
-                )
-            )
-            (core instance $libc (instantiate $libc))
-            (core type $start-func-ty (func (param i32)))
-            (alias core export $libc "__indirect_function_table" (core table $indirect-function-table))
-            (core func $thread-new-indirect
-                (canon thread.new-indirect $start-func-ty (table $indirect-function-table)))
-            (core func $thread-unsuspend (canon thread.unsuspend))
-            (core func $task-return (canon task.return))
-            (core instance $i (instantiate $m
-                (with "" (instance
-                    (export "thread.new-indirect" (func $thread-new-indirect))
-                    (export "thread.unsuspend" (func $thread-unsuspend))
-                    (export "task.return" (func $task-return))
-                ))
-                (with "libc" (instance $libc))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
-        )"#,
-        "wasm trap: async-lifted export failed to produce a result",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn missing_task_return_call_stackful() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (func (export "foo"))
-            )
-            (core func $task-return (canon task.return))
-            (core instance $i (instantiate $m
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
-        )"#,
-        "wasm trap: async-lifted export failed to produce a result",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn task_return_type_mismatch() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $m
-                (import "" "task.return" (func $task-return (param i32)))
-                (func (export "foo") (call $task-return (i32.const 42)))
-            )
-            (core func $task-return (canon task.return (result u32)))
-            (core instance $i (instantiate $m
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
-        )"#,
-        "invalid `task.return` signature and/or options for current task",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn task_return_memory_mismatch() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $libc (memory (export "memory") 1))
-            (core instance $libc (instantiate $libc))
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (func (export "foo") (call $task-return))
-            )
-            (core func $task-return (canon task.return (memory $libc "memory")))
-            (core instance $i (instantiate $m
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
-        )"#,
-        "invalid `task.return` signature and/or options for current task",
-    )
-    .await
-}
-
-#[tokio::test]
-async fn task_return_string_encoding_mismatch() -> Result<()> {
-    task_return_trap(
-        r#"(component
-            (core module $m
-                (import "" "task.return" (func $task-return))
-                (func (export "foo") (call $task-return))
-            )
-            (core func $task-return (canon task.return string-encoding=utf16))
-            (core instance $i (instantiate $m
-                (with "" (instance (export "task.return" (func $task-return))))
-            ))
-            (func (export "foo") (canon lift (core func $i "foo") async))
-        )"#,
-        "invalid `task.return` signature and/or options for current task",
-    )
-    .await
-}
-
-async fn task_return_trap(component: &str, substring: &str) -> Result<()> {
-    let mut config = Config::new();
-    config.wasm_component_model_async(true);
-    config.wasm_component_model_async_stackful(true);
-    config.wasm_component_model_threading(true);
-    let engine = &Engine::new(&config)?;
-    let component = Component::new(&engine, component)?;
-    let mut store = Store::new(&engine, ());
-
-    let instance = Linker::new(&engine)
-        .instantiate_async(&mut store, &component)
-        .await?;
-
-    let func = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
-    match store
-        .run_concurrent(async move |accessor| {
-            wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
-        })
-        .await
-    {
-        Ok(_) => panic!(),
-        Err(e) => {
-            assert!(
-                format!("{e:?}").contains(substring),
-                "could not find `{substring}` in `{e:?}`"
-            )
-        }
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn many_parameters() -> Result<()> {
     test_many_parameters(false, false).await
 }
@@ -1241,7 +908,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func
+            (type $t (func async
                 (param "p1" s8)              ;; offset  0, size 1
                 (param "p2" u64)             ;; offset  8, size 8
                 (param "p3" float32)         ;; offset 16, size 4
@@ -1369,7 +1036,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, input).await?)
                 })
                 .await??
                 .0
@@ -1712,7 +1379,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func (result $tuple)))
+            (type $t (func async (result $tuple)))
             (func (export "many-results") (type $t)
                 (canon lift
                     (core func $i "foo")
@@ -1847,7 +1514,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
         if concurrent {
             store
                 .run_concurrent(async move |accessor| {
-                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?.0)
+                    wasmtime::error::Ok(func.call_concurrent(accessor, ()).await?)
                 })
                 .await??
                 .0
@@ -3729,4 +3396,917 @@ fn with_new_instance<T>(
     let mut store = Store::new(engine, ());
     let instance = Linker::new(engine).instantiate(&mut store, component)?;
     fun(&mut store, instance)
+}
+
+#[tokio::test]
+async fn drop_call_async_future() -> Result<()> {
+    let component = r#"
+(component
+  (import "foo" (func $f))
+  (core module $m
+    (func $f (import "" "foo"))
+    (func (export "foo") call $f)
+  )
+  (core func $f (canon lower (func $f)))
+  (core instance $m (instantiate $m (with "" (instance
+     (export "foo" (func $f))
+  ))))
+  (func (export "foo") (canon lift (core func $m "foo")))
+)
+"#;
+
+    let engine = &Engine::new(&Config::new())?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap_async("foo", |_, _: ()| {
+        Box::new(async {
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    })?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let foo = instance.get_typed_func::<(), ()>(&mut store, "foo")?;
+    // Here we'll use `call_async` a few times but only poll each returned
+    // future once.  This will put the instance in a weird state but shouldn't
+    // cause a panic.
+    for _ in 0..5 {
+        let mut future = std::pin::pin!(foo.call_async(&mut store, ()));
+        if let std::task::Poll::Ready(result) =
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx))).await
+        {
+            _ = result;
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn host_call_with_concurrency_disabled() -> Result<()> {
+    let mut config = Config::default();
+    config.concurrency_support(false);
+
+    struct MyResource;
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::<()>::new(&engine);
+
+    linker
+        .root()
+        .resource("r", ResourceType::host::<MyResource>(), |_, _| Ok(()))?;
+
+    let f_called = Arc::new(AtomicBool::new(false));
+    linker.root().func_wrap("f", {
+        let f_called = f_called.clone();
+        move |_ctx, _: (Resource<MyResource>,)| -> Result<()> {
+            f_called.store(true, SeqCst);
+            Ok(())
+        }
+    })?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "r" (type $r (sub resource)))
+                (import "f" (func $f (param "r" (borrow $r))))
+
+                (core func $f' (canon lower (func $f)))
+                (core func $drop (canon resource.drop $r))
+
+                (core module $m
+                    (import "" "f" (func $f (param i32)))
+                    (import "" "drop" (func $drop (param i32)))
+                    (func (export "g") (param i32)
+                        (call $f (local.get 0))
+                        (call $drop (local.get 0))
+                    )
+                )
+
+                (core instance $i (instantiate $m (with
+                    "" (instance
+                           (export "f" (func $f'))
+                           (export "drop" (func $drop))
+                       )
+                )))
+
+                (func (export "g") (param "r" (borrow $r))
+                    (canon lift (core func $i "g"))
+                )
+            )
+        "#
+        .as_bytes(),
+    )?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let g = instance.get_typed_func::<(&Resource<MyResource>,), ()>(&mut store, "g")?;
+
+    let resource = Resource::new_own(100);
+    g.call(&mut store, (&resource,))?;
+
+    assert!(f_called.load(SeqCst));
+
+    Ok(())
+}
+
+/// Tests map types with misaligned key/value combinations through the adapter
+/// trampoline (component-to-component translation).
+///
+/// This specifically tests the alignment bug where the value offset was
+/// calculated as `key_size` instead of `align(key_size, value_align)`.
+/// For map<u8, u64>, the value should be at offset 8 (not 1).
+///
+#[test]
+fn map_trampoline_alignment() -> Result<()> {
+    // Test map<u8, u64> - key_size=1, value_align=8
+    // With the alignment bug, value would be read/written at offset 1 instead of 8
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u8 u64)) (result (map u8 u64))))
+
+    ;; Component A: the "destination" that receives and echoes back
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u8 u64)) (result (map u8 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    ;; Component B: the "source" that calls dst
+    (component $src
+        (import "echo" (func $echo (param "m" (map u8 u64)) (result (map u8 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u64)) (result (map u8 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    ;; Wire: host -> dst -> src creates adapter trampolines between components
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U8(1), Val::U64(0x0102030405060708)),
+        (Val::U8(2), Val::U64(0x1112131415161718)),
+        (Val::U8(255), Val::U64(0xFFFFFFFFFFFFFFFF)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 3);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u32, u64> alignment through trampoline
+#[test]
+fn map_trampoline_alignment_u32_u64() -> Result<()> {
+    // Test map<u32, u64> - key_size=4, value_align=8
+    // With the alignment bug, value would be read/written at offset 4 instead of 8
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u32 u64)) (result (map u32 u64))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u32 u64)) (result (map u32 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u32 u64)) (result (map u32 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u32 u64)) (result (map u32 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U32(1), Val::U64(0x0102030405060708)),
+        (Val::U32(2), Val::U64(0x1112131415161718)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u8, u32> alignment through trampoline
+#[test]
+fn map_trampoline_alignment_u8_u32() -> Result<()> {
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u8 u32)) (result (map u8 u32))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u8 u32)) (result (map u8 u32))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u8 u32)) (result (map u8 u32))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u32)) (result (map u8 u32))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U8(1), Val::U32(0x01020304)),
+        (Val::U8(2), Val::U32(0x11121314)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u16, u64> alignment through trampoline
+#[test]
+fn map_trampoline_alignment_u16_u64() -> Result<()> {
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u16 u64)) (result (map u16 u64))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u16 u64)) (result (map u16 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u16 u64)) (result (map u16 u64))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u16 u64)) (result (map u16 u64))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U16(1), Val::U64(0x0102030405060708)),
+        (Val::U16(2), Val::U64(0x1112131415161718)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u8, u16> alignment through trampoline
+#[test]
+fn map_trampoline_alignment_u8_u16() -> Result<()> {
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u8 u16)) (result (map u8 u16))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u8 u16)) (result (map u8 u16))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u8 u16)) (result (map u8 u16))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u8 u16)) (result (map u8 u16))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U8(1), Val::U16(0x0102)),
+        (Val::U8(2), Val::U16(0x1112)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
+}
+
+/// Tests map<u64, u8> alignment through trampoline (reverse case: key larger than value)
+#[test]
+fn map_trampoline_alignment_u64_u8() -> Result<()> {
+    let component = format!(
+        r#"
+(component
+    (import "host" (func $host (param "m" (map u64 u8)) (result (map u64 u8))))
+
+    (component $dst
+        (import "echo" (func $echo (param "m" (map u64 u8)) (result (map u64 u8))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (component $src
+        (import "echo" (func $echo (param "m" (map u64 u8)) (result (map u64 u8))))
+        (core module $libc
+            (memory (export "memory") 1)
+            {REALLOC_AND_FREE}
+        )
+        (core module $echo_mod
+            (import "" "echo" (func $echo (param i32 i32 i32)))
+            (import "libc" "memory" (memory 0))
+            (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+
+            (func (export "echo") (param i32 i32) (result i32)
+                (local $retptr i32)
+                (local.set $retptr
+                    (call $realloc (i32.const 0) (i32.const 0) (i32.const 4) (i32.const 8)))
+                (call $echo (local.get 0) (local.get 1) (local.get $retptr))
+                local.get $retptr
+            )
+        )
+        (core instance $libc (instantiate $libc))
+        (core func $echo_lower (canon lower (func $echo)
+            (memory $libc "memory")
+            (realloc (func $libc "realloc"))
+        ))
+        (core instance $echo_inst (instantiate $echo_mod
+            (with "libc" (instance $libc))
+            (with "" (instance (export "echo" (func $echo_lower))))
+        ))
+        (func (export "echo2") (param "m" (map u64 u8)) (result (map u64 u8))
+            (canon lift
+                (core func $echo_inst "echo")
+                (memory $libc "memory")
+                (realloc (func $libc "realloc"))
+            )
+        )
+    )
+
+    (instance $dst (instantiate $dst (with "echo" (func $host))))
+    (instance $src (instantiate $src (with "echo" (func $dst "echo2"))))
+    (export "echo" (func $src "echo2"))
+)
+"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_map(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    linker.root().func_new("host", |_cx, _ty, args, results| {
+        results[0] = args[0].clone();
+        Ok(())
+    })?;
+
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance.get_func(&mut store, "echo").unwrap();
+
+    let test_data = vec![
+        (Val::U64(0x0102030405060708), Val::U8(42)),
+        (Val::U64(0x1112131415161718), Val::U8(99)),
+    ];
+    let input = Val::Map(test_data.clone());
+
+    let mut results = [Val::Bool(false)];
+    func.call(&mut store, &[input], &mut results)?;
+
+    match &results[0] {
+        Val::Map(output) => {
+            assert_eq!(output.len(), 2);
+            for (key, value) in &test_data {
+                assert!(
+                    output.iter().any(|(k, v)| k == key && v == value),
+                    "Missing or corrupted entry"
+                );
+            }
+        }
+        _ => panic!("expected map"),
+    }
+
+    Ok(())
 }

@@ -217,6 +217,7 @@ where
 
 unsafe impl<T: 'static> ComponentType for Resource<T> {
     const ABI: CanonicalAbiInfo = HostResource::<Static<T>, ()>::ABI;
+    const MAY_REQUIRE_REALLOC: bool = false;
     type Lower = crate::ValRaw;
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {

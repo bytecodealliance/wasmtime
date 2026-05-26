@@ -226,10 +226,14 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
                             Poll::Pending => return Poll::Pending,
                         }
                     }
-                    Err(err) if err.kind() == std::io::ErrorKind::BrokenPipe => {
-                        break 'result Ok(());
+                    Err(err) => {
+                        break 'result Err(match err.kind() {
+                            // ECONNABORTED is the closest thing to EPIPE on Windows.
+                            std::io::ErrorKind::BrokenPipe
+                            | std::io::ErrorKind::ConnectionAborted => ErrorCode::ConnectionBroken,
+                            _ => err.into(),
+                        });
                     }
-                    Err(err) => break 'result Err(err.into()),
                 }
             }
         };
@@ -274,7 +278,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         let listener = socket.tcp_listener_arc().unwrap().clone();
         let family = socket.address_family();
         let options = socket.non_inherited_options().clone();
-        Ok(StreamReader::new(
+        let ret = StreamReader::new(
             &mut store,
             ListenStreamProducer {
                 listener,
@@ -282,7 +286,9 @@ impl HostTcpSocketWithStore for WasiSockets {
                 options,
                 getter,
             },
-        ))
+        )
+        .map_err(SocketError::trap)?;
+        Ok(ret)
     }
 
     fn send<T: 'static>(
@@ -300,14 +306,12 @@ impl HostTcpSocketWithStore for WasiSockets {
                         stream,
                         result: Some(result_tx),
                     },
-                );
-                Ok(FutureReader::new(&mut store, result_rx))
+                )?;
+                FutureReader::new(&mut store, result_rx)
             }
             Err(err) => {
-                data.close(&mut store);
-                Ok(FutureReader::new(&mut store, async {
-                    wasmtime::error::Ok(Err(err.into()))
-                }))
+                data.close(&mut store)?;
+                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) })
             }
         }
     }
@@ -327,13 +331,13 @@ impl HostTcpSocketWithStore for WasiSockets {
                             stream,
                             result: Some(result_tx),
                         },
-                    ),
-                    FutureReader::new(&mut store, result_rx),
+                    )?,
+                    FutureReader::new(&mut store, result_rx)?,
                 ))
             }
             Err(err) => Ok((
-                StreamReader::new(&mut store, iter::empty()),
-                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) }),
+                StreamReader::new(&mut store, iter::empty())?,
+                FutureReader::new(&mut store, async { wasmtime::error::Ok(Err(err.into())) })?,
             )),
         }
     }

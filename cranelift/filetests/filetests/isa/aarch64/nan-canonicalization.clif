@@ -15,7 +15,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   addps %xmm1, %xmm0
 ;   movl $0x7fc00000, %edi
 ;   movd %edi, %xmm7
-;   shufps $0x0, (%rip), %xmm7
+;   shufps $0x0, %xmm7, %xmm7
 ;   movdqa %xmm0, %xmm1
 ;   cmpunordps %xmm0, %xmm1
 ;   movdqa %xmm0, %xmm2
@@ -35,7 +35,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   addps %xmm1, %xmm0
 ;   movl $0x7fc00000, %edi
 ;   movd %edi, %xmm7
-;   shufps $0, 0x28(%rip), %xmm7
+;   shufps $0, %xmm7, %xmm7
 ;   movdqa %xmm0, %xmm1
 ;   cmpunordps %xmm0, %xmm1
 ;   movdqa %xmm0, %xmm2
@@ -46,16 +46,6 @@ block0(v0: f32x4, v1: f32x4):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   sarb $0, (%rdi)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
 
 function %f1(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):

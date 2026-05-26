@@ -26,12 +26,15 @@ fn main() {
         && (supported_os || cfg!(feature = "custom-native-signals"))
         && has_host_compiler_backend;
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
-    let has_custom_sync = !cfg!(feature = "std") && cfg!(feature = "custom-sync-primitives");
+    let has_custom_sync = !cfg!(feature = "std")
+        && cfg!(feature = "custom-sync-primitives")
+        && cfg!(feature = "runtime");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
     custom_cfg("has_custom_sync", has_custom_sync);
     custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
+    custom_cfg("gc_zeal", cfg("fuzzing"));
 
     // If this OS isn't supported and no debug-builtins or if Cranelift doesn't support
     // the host or there's no need to build these helpers.

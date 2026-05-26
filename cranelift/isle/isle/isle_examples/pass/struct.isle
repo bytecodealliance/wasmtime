@@ -1,0 +1,16 @@
+(type A (struct (x u32) (y u32)))
+(type B (struct (x u32)))
+(type C (enum
+  (Ca (x A))
+  (Cb (x B))))
+(type D (struct (x C)))
+
+(decl D2B (D) B)
+
+(rule 1
+  (D2B (D (C.Ca (A x _))))
+  (B x))
+
+(rule 0
+  (D2B (D (C.Cb (B x))))
+  (B x))

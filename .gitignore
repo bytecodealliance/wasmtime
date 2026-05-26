@@ -22,6 +22,7 @@ publish
 vendor
 examples/build
 examples/.cache
+crates/c-api/build
 *.coredump
 *.smt2
 cranelift/isle/veri/veri_engine/test_output
@@ -33,3 +34,5 @@ testcase*.wasm
 testcase*.dna
 testcase*.json
 perf.data*
+miri-wast/
+report/

@@ -13,6 +13,7 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
     - name: Install ninja (Linux)
-      run: sudo apt-get update && sudo apt-get install -y ninja-build
       if: runner.os == 'Linux'
-      shell: bash
+      uses: ./.github/actions/apt-get-install
+      with:
+        packages: ninja-build

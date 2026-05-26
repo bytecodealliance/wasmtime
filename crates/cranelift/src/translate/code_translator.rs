@@ -84,7 +84,7 @@ use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, ExceptionTag, InstBuilder, JumpTableData, MemFlagsData, Value, ValueLabel,
 };
 use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -203,31 +203,47 @@ pub fn translate_operator(
         Operator::Drop => {
             environ.stacks.pop1();
         }
-        Operator::Select => {
-            let (mut arg1, mut arg2, cond) = environ.stacks.pop3();
-            if builder.func.dfg.value_type(arg1).is_vector() {
-                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
-            }
-            if builder.func.dfg.value_type(arg2).is_vector() {
-                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
-            }
-            environ.stacks.push1(builder.ins().select(cond, arg1, arg2));
+        Operator::Nop => {
+            // We do nothing
         }
-        Operator::TypedSelect { ty: _ } => {
+        Operator::Select
+        | Operator::TypedSelect {
             // We ignore the explicit type parameter as it is only needed for
             // validation, which we require to have been performed before
             // translation.
+            ty: _,
+        } => {
             let (mut arg1, mut arg2, cond) = environ.stacks.pop3();
+
             if builder.func.dfg.value_type(arg1).is_vector() {
                 arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
             }
             if builder.func.dfg.value_type(arg2).is_vector() {
                 arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
             }
-            environ.stacks.push1(builder.ins().select(cond, arg1, arg2));
-        }
-        Operator::Nop => {
-            // We do nothing
+
+            let val = builder.ins().select(cond, arg1, arg2);
+
+            // If either of the input types need inclusion in stack maps, then
+            // the result will as well.
+            //
+            // Note that we don't need to check whether the result's type needs
+            // inclusion in stack maps (that would be a conservative over
+            // approximation) because the input types give us more-precise
+            // information than the result type does. For example, the result
+            // does not need inclusion in stack maps in the scenario where both
+            // inputs are `i31ref`s and the result is an `anyref`. Even though
+            // `anyref`s normally do require inclusion in stack maps, in this
+            // particular case, we know that we are dealing with an `anyref`
+            // that doesn't actually require inclusion.
+            if operand_types
+                .iter()
+                .any(|ty| environ.val_ty_needs_stack_map(*ty))
+            {
+                builder.declare_value_needs_stack_map(val);
+            }
+
+            environ.stacks.push1(val);
         }
         Operator::Unreachable => {
             environ.trap(builder, crate::TRAP_UNREACHABLE);
@@ -664,8 +680,13 @@ pub fn translate_operator(
             let mut args = environ.stacks.peekn(num_args).to_vec();
             bitcast_wasm_params(environ, sig_ref, &mut args, builder);
 
-            let inst_results =
-                environ.translate_call(builder, srcloc, function_index, sig_ref, &args)?;
+            let inst_results = environ.translate_call(
+                builder,
+                environ.next_srcloc,
+                function_index,
+                sig_ref,
+                &args,
+            )?;
 
             debug_assert_eq!(
                 inst_results.len(),
@@ -693,7 +714,7 @@ pub fn translate_operator(
 
             let inst_results = environ.translate_call_indirect(
                 builder,
-                srcloc,
+                environ.next_srcloc,
                 validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
@@ -1140,25 +1161,25 @@ pub fn translate_operator(
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(F32, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(F32, MemFlagsData::new(), val));
         }
         Operator::F64ReinterpretI64 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(F64, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(F64, MemFlagsData::new(), val));
         }
         Operator::I32ReinterpretF32 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(I32, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(I32, MemFlagsData::new(), val));
         }
         Operator::I64ReinterpretF64 => {
             let val = environ.stacks.pop1();
             environ
                 .stacks
-                .push1(builder.ins().bitcast(I64, MemFlags::new(), val));
+                .push1(builder.ins().bitcast(I64, MemFlagsData::new(), val));
         }
         Operator::I32Extend8S => {
             let val = environ.stacks.pop1();
@@ -1632,7 +1653,7 @@ pub fn translate_operator(
         }
         Operator::TableSize { table: index } => {
             let result =
-                environ.translate_table_size(builder.cursor(), TableIndex::from_u32(*index))?;
+                environ.translate_table_size(builder.cursor(), TableIndex::from_u32(*index));
             environ.stacks.push1(result);
         }
         Operator::TableGrow { table: index } => {
@@ -2632,7 +2653,7 @@ pub fn translate_operator(
             bitcast_wasm_params(environ, sigref, &mut args, builder);
 
             let inst_results =
-                environ.translate_call_ref(builder, srcloc, sigref, callee, &args)?;
+                environ.translate_call_ref(builder, environ.next_srcloc, sigref, callee, &args)?;
 
             debug_assert_eq!(
                 inst_results.len(),
@@ -3462,7 +3483,7 @@ fn prepare_addr(
     access_size: u8,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
-) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
+) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     let index = environ.stacks.pop1();
 
     let memory_index = MemoryIndex::from_u32(memarg.memory);
@@ -3612,13 +3633,8 @@ fn prepare_addr(
     // alignment immediate may says it's aligned, because WebAssembly's
     // immediate field is just a hint, while Cranelift's aligned flag needs a
     // guarantee. WebAssembly memory accesses are always little-endian.
-    let mut flags = MemFlags::new();
+    let mut flags = MemFlagsData::new();
     flags.set_endianness(ir::Endianness::Little);
-
-    if heap.pcc_memory_type.is_some() {
-        // Proof-carrying code is enabled; check this memory access.
-        flags.set_checked();
-    }
 
     // The access occurs to the `heap` disjoint category of abstract
     // state. This may allow alias analysis to merge redundant loads,
@@ -3646,8 +3662,7 @@ fn align_atomic_addr(
     // alignment check itself. This can probably be optimized better and we
     // should do so in the future as well.
     if loaded_bytes > 1 {
-        let addr = environ.stacks.pop1(); // "peek" via pop then push
-        environ.stacks.push1(addr);
+        let addr = environ.stacks.peek1();
         let effective_addr = if memarg.offset == 0 {
             addr
         } else {
@@ -3670,7 +3685,7 @@ fn prepare_atomic_addr(
     loaded_bytes: u8,
     builder: &mut FunctionBuilder,
     environ: &mut FuncEnvironment<'_>,
-) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
+) -> WasmResult<Reachability<(MemFlagsData, Value, Value)>> {
     align_atomic_addr(memarg, loaded_bytes, builder, environ);
     prepare_addr(memarg, loaded_bytes, builder, environ)
 }
@@ -4223,7 +4238,7 @@ fn optionally_bitcast_vector(
     builder: &mut FunctionBuilder,
 ) -> Value {
     if builder.func.dfg.value_type(value) != needed_type {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         builder.ins().bitcast(needed_type, flags, value)
     } else {
@@ -4252,7 +4267,7 @@ fn canonicalise_v128_values<'a>(
     // Cast, and push the resulting `Value`s into `canonicalised`.
     for v in values {
         let value = if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
-            let mut flags = MemFlags::new();
+            let mut flags = MemFlagsData::new();
             flags.set_endianness(ir::Endianness::Little);
             builder.ins().bitcast(I8X16, flags, *v)
         } else {
@@ -4386,7 +4401,7 @@ pub fn bitcast_wasm_returns(arguments: &mut [Value], builder: &mut FunctionBuild
         builder.func.signature.returns[i].purpose == ir::ArgumentPurpose::Normal
     });
     for (t, arg) in changes {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         *arg = builder.ins().bitcast(t, flags, *arg);
     }
@@ -4404,7 +4419,7 @@ fn bitcast_wasm_params(
         environ.is_wasm_parameter(i)
     });
     for (t, arg) in changes {
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlagsData::new();
         flags.set_endianness(ir::Endianness::Little);
         *arg = builder.ins().bitcast(t, flags, *arg);
     }

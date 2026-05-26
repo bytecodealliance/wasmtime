@@ -4,7 +4,6 @@ use crate::component::Instance;
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::WaitResult;
 use crate::prelude::*;
-use crate::runtime::component::RuntimeInstance;
 #[cfg(feature = "component-model-async")]
 use crate::runtime::component::concurrent::{ResourcePair, SuspensionTarget};
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
@@ -171,9 +170,9 @@ fn assert_no_overlap<T, U>(a: &[T], b: &[U]) {
     let b_end = b_start + (b.len() * core::mem::size_of::<U>());
 
     if a_start < b_start {
-        assert!(a_end < b_start);
+        assert!(a_end <= b_start);
     } else {
-        assert!(b_end < a_start);
+        assert!(b_end <= a_start);
     }
 }
 
@@ -341,6 +340,7 @@ unsafe fn utf16_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
+    first_pass: u32,
 ) -> Result<SizePair> {
     let src = unsafe { slice::from_raw_parts(src, src_len) };
     let mut dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
@@ -360,6 +360,12 @@ unsafe fn utf16_to_utf8(
 
     for ch in core::char::decode_utf16(src_iter) {
         let ch = ch.map_err(|_| format_err!("invalid utf16 encoding"))?;
+
+        // The spec mandates that the first pass of transcoding bails out on the
+        // first multibyte character.
+        if first_pass != 0 && u32::from(ch) >= 0x80 {
+            break;
+        }
 
         // If the destination doesn't have enough space for this character
         // then the loop is ended and this function will be called later with a
@@ -396,11 +402,19 @@ unsafe fn latin1_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
+    first_pass: u32,
 ) -> Result<SizePair> {
     let src = unsafe { slice::from_raw_parts(src, src_len) };
     let dst = unsafe { slice::from_raw_parts_mut(dst, dst_len) };
     assert_no_overlap(src, dst);
-    let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(src, dst);
+    // The spec mandates that this transcoding in the first pass halts when a
+    // multi-byte utf8 code point is encountered, so handle that here.
+    let stop = if first_pass != 0 {
+        src.iter().position(|i| *i >= 0x80).unwrap_or(src.len())
+    } else {
+        src.len()
+    };
+    let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(&src[..stop], dst);
     log::trace!("latin1-to-utf8 {src_len}/{dst_len} => ({read}, {written})");
     Ok(SizePair {
         src_read: read,
@@ -666,15 +680,9 @@ fn enter_sync_call(
     callee_instance: u32,
 ) -> Result<()> {
     store.enter_guest_sync_call(
-        Some(RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        }),
+        Some(instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(caller_instance))),
         callee_async != 0,
-        RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(callee_instance),
-        },
+        instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(callee_instance)),
     )
 }
 
@@ -682,7 +690,7 @@ fn exit_sync_call(store: &mut dyn VMStore, instance: Instance) -> Result<()> {
     store
         .component_resource_tables(Some(instance))
         .validate_scope_exit()?;
-    store.exit_guest_sync_call(true)
+    store.exit_guest_sync_call()
 }
 
 #[cfg(feature = "component-model-async")]
@@ -693,10 +701,7 @@ fn backpressure_modify(
     increment: u8,
 ) -> Result<()> {
     store.backpressure_modify(
-        RuntimeInstance {
-            instance: instance.id().instance(),
-            index: RuntimeComponentInstanceIndex::from_u32(caller_instance),
-        },
+        instance.runtime_instance(RuntimeComponentInstanceIndex::from_u32(caller_instance)),
         |old| {
             if increment != 0 {
                 old.checked_add(1)
@@ -864,13 +869,15 @@ unsafe fn prepare_call(
         store.component_async_store().prepare_call(
             instance,
             memory.cast::<crate::vm::VMMemoryDefinition>(),
-            start.cast::<crate::vm::VMFuncRef>(),
-            return_.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(start).unwrap().cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(return_)
+                .unwrap()
+                .cast::<crate::vm::VMFuncRef>(),
             RuntimeComponentInstanceIndex::from_u32(caller_instance),
             RuntimeComponentInstanceIndex::from_u32(callee_instance),
             TypeTupleIndex::from_u32(task_return_type),
             callee_async != 0,
-            u8::try_from(string_encoding).unwrap(),
+            StringEncoding::from_u8(u8::try_from(string_encoding).unwrap()).unwrap(),
             result_count_or_max_if_async,
             storage.cast::<crate::ValRaw>(),
             storage_len,
@@ -892,7 +899,7 @@ unsafe fn sync_start(
         store.component_async_store().sync_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
-            callee.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(callee).unwrap().cast::<crate::vm::VMFuncRef>(),
             param_count,
             storage.cast::<std::mem::MaybeUninit<crate::ValRaw>>(),
             storage_len,
@@ -916,7 +923,7 @@ unsafe fn async_start(
             instance,
             callback.cast::<crate::vm::VMFuncRef>(),
             post_return.cast::<crate::vm::VMFuncRef>(),
-            callee.cast::<crate::vm::VMFuncRef>(),
+            NonNull::new(callee).unwrap().cast::<crate::vm::VMFuncRef>(),
             param_count,
             result_count,
             flags,
@@ -1307,27 +1314,6 @@ fn error_context_drop(
         TypeComponentLocalErrorContextTableIndex::from_u32(ty),
         err_ctx_handle,
     )
-}
-
-#[cfg(feature = "component-model-async")]
-fn context_get(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    _caller_instance: u32,
-    slot: u32,
-) -> Result<u32> {
-    instance.context_get(store, slot)
-}
-
-#[cfg(feature = "component-model-async")]
-fn context_set(
-    store: &mut dyn VMStore,
-    instance: Instance,
-    _caller_instance: u32,
-    slot: u32,
-    val: u32,
-) -> Result<()> {
-    instance.context_set(store, slot, val)
 }
 
 #[cfg(feature = "component-model-async")]

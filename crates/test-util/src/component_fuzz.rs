@@ -125,6 +125,7 @@ pub enum Type {
     Char,
     String,
     List(Box<Type>),
+    Map(Box<Type>, Box<Type>),
 
     // Give records the ability to generate a generous amount of fields but
     // don't let the fuzzer go too wild since `wasmparser`'s validator currently
@@ -158,7 +159,7 @@ impl Type {
         fuel: &mut u32,
     ) -> arbitrary::Result<Type> {
         *fuel = fuel.saturating_sub(1);
-        let max = if depth == 0 || *fuel == 0 { 12 } else { 20 };
+        let max = if depth == 0 || *fuel == 0 { 12 } else { 21 };
         Ok(match u.int_in_range(0..=max)? {
             0 => Type::Bool,
             1 => Type::S8,
@@ -195,7 +196,40 @@ impl Type {
                 *fuel -= amt;
                 Type::Flags(amt)
             }
+            21 => Type::Map(
+                Box::new(Type::generate_hashable_key(u, fuel)?),
+                Box::new(Type::generate(u, depth - 1, fuel)?),
+            ),
             // ^-- if you add something here update the `depth != 0` case above
+            _ => unreachable!(),
+        })
+    }
+
+    /// Generate a type that can be used as a HashMap key (implements Hash + Eq).
+    /// This excludes floats and complex types that might contain floats.
+    fn generate_hashable_key(u: &mut Unstructured<'_>, fuel: &mut u32) -> arbitrary::Result<Type> {
+        *fuel = fuel.saturating_sub(1);
+        // Only generate types that implement Hash and Eq:
+        // - No Float32/Float64 (NaN comparison issues)
+        // - No complex types (Record, Tuple, Variant, etc.) as they might contain floats
+        // - String is allowed as it implements Hash + Eq
+        Ok(match u.int_in_range(0..=11)? {
+            0 => Type::Bool,
+            1 => Type::S8,
+            2 => Type::U8,
+            3 => Type::S16,
+            4 => Type::U16,
+            5 => Type::S32,
+            6 => Type::U32,
+            7 => Type::S64,
+            8 => Type::U64,
+            9 => Type::Char,
+            10 => Type::String,
+            11 => {
+                let amt = u.int_in_range(1..=(*fuel).max(1).min(257))?;
+                *fuel = fuel.saturating_sub(amt);
+                Type::Enum(amt)
+            }
             _ => unreachable!(),
         })
     }
@@ -247,7 +281,7 @@ impl Type {
             Type::S64 | Type::U64 => Kind::Primitive("i64.store"),
             Type::Float32 => Kind::Primitive("f32.store"),
             Type::Float64 => Kind::Primitive("f64.store"),
-            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::String | Type::List(_) | Type::Map(_, _) => Kind::PointerPair,
             Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.store8"),
             Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.store16"),
             Type::Enum(_) => Kind::Primitive("i32.store"),
@@ -374,6 +408,7 @@ impl Type {
             | Type::Float64
             | Type::String
             | Type::List(_)
+            | Type::Map(_, _)
             | Type::Flags(_)
             | Type::Enum(_) => unreachable!(),
 
@@ -414,7 +449,7 @@ impl Type {
             Type::U64 | Type::S64 => Kind::Primitive("i64.load"),
             Type::Float32 => Kind::Primitive("f32.load"),
             Type::Float64 => Kind::Primitive("f64.load"),
-            Type::String | Type::List(_) => Kind::PointerPair,
+            Type::String | Type::List(_) | Type::Map(_, _) => Kind::PointerPair,
             Type::Enum(n) if *n <= (1 << 8) => Kind::Primitive("i32.load8_u"),
             Type::Enum(n) if *n <= (1 << 16) => Kind::Primitive("i32.load16_u"),
             Type::Enum(_) => Kind::Primitive("i32.load"),
@@ -551,6 +586,7 @@ impl Type {
             | Type::Float64
             | Type::String
             | Type::List(_)
+            | Type::Map(_, _)
             | Type::Flags(_)
             | Type::Enum(_) => unreachable!(),
 
@@ -667,7 +703,7 @@ impl Type {
             Type::S64 | Type::U64 => vec.push(CoreType::I64),
             Type::Float32 => vec.push(CoreType::F32),
             Type::Float64 => vec.push(CoreType::F64),
-            Type::String | Type::List(_) => {
+            Type::String | Type::List(_) | Type::Map(_, _) => {
                 vec.push(CoreType::I32);
                 vec.push(CoreType::I32);
             }
@@ -706,7 +742,7 @@ impl Type {
                 alignment: 8,
             },
 
-            Type::String | Type::List(_) => SizeAndAlignment {
+            Type::String | Type::List(_) | Type::Map(_, _) => SizeAndAlignment {
                 size: 8,
                 alignment: 4,
             },
@@ -894,7 +930,7 @@ fn make_import_and_export(
     wat.push_str("))\n");
 
     // If the export is async, generate `task.return` as an import as well
-    // which is necesary to communicate the results.
+    // which is necessary to communicate the results.
     if export_results_loc.is_none() {
         wat.push_str(&format!("(type $task.return (func"));
         push_params(&mut wat, &result_lowered, MAX_FLAT_PARAMS);
@@ -1161,6 +1197,11 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let ty = rust_type(ty, name_counter, declarations);
             quote!(Vec<#ty>)
         }
+        Type::Map(key_ty, value_ty) => {
+            let key_ty = rust_type(key_ty, name_counter, declarations);
+            let value_ty = rust_type(value_ty, name_counter, declarations);
+            quote!(std::collections::HashMap<#key_ty, #value_ty>)
+        }
         Type::Record(types) => {
             let fields = types
                 .iter()
@@ -1241,7 +1282,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             };
 
             declarations.extend(quote! {
-                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Copy, Clone, Arbitrary)]
+                #[derive(ComponentType, Lift, Lower, PartialEq, Eq, Hash, Debug, Copy, Clone, Arbitrary)]
                 #[component(enum)]
                 #[repr(#repr)]
                 enum #name {
@@ -1330,6 +1371,7 @@ impl<'a> TypesBuilder<'a> {
             // Otherwise emit a reference to the type and remember to generate
             // the corresponding type alias later.
             Type::List(_)
+            | Type::Map(_, _)
             | Type::Record(_)
             | Type::Tuple(_)
             | Type::Variant(_)
@@ -1365,6 +1407,13 @@ impl<'a> TypesBuilder<'a> {
             Type::List(ty) => {
                 decl.push_str("(list ");
                 self.write_ref(ty, &mut decl);
+                decl.push_str(")");
+            }
+            Type::Map(key_ty, value_ty) => {
+                decl.push_str("(map ");
+                self.write_ref(key_ty, &mut decl);
+                decl.push_str(" ");
+                self.write_ref(value_ty, &mut decl);
                 decl.push_str(")");
             }
             Type::Record(types) => {
@@ -1659,6 +1708,28 @@ pub enum LowerAbi {
     Async,
 }
 
+impl LiftAbi {
+    fn is_async(self) -> bool {
+        !matches!(self, Self::Sync)
+    }
+
+    fn ensure_async(&mut self) {
+        if !self.is_async() {
+            *self = Self::AsyncStackful;
+        }
+    }
+}
+
+impl LowerAbi {
+    fn is_async(self) -> bool {
+        matches!(self, Self::Async)
+    }
+
+    fn ensure_async(&mut self) {
+        *self = Self::Async;
+    }
+}
+
 impl<'a> TestCase<'a> {
     pub fn generate(types: &'a [Type], u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
         let max_params = if types.len() > 0 { 5 } else { 0 };
@@ -1673,15 +1744,25 @@ impl<'a> TestCase<'a> {
 
         let mut options = u.arbitrary::<TestCaseOptions>()?;
 
-        // Sync tasks cannot call async functions via a sync lower, nor can they
-        // block in other ways (e.g. by calling `waitable-set.wait`, returning
-        // `CALLBACK_CODE_WAIT`, etc.) prior to returning.  Therefore,
-        // async-ness cascades to the callers:
-        if options.host_async {
+        // Keep each boundary self-consistent: async function types require async
+        // lowering/lifting, and async callees force their callers async too.
+        if options.host_async || options.callee_lower_abi.is_async() {
+            options.host_async = true;
+            options.callee_lower_abi.ensure_async();
             options.guest_callee_async = true;
         }
-        if options.guest_callee_async {
+        if options.guest_callee_async
+            || options.callee_lift_abi.is_async()
+            || options.caller_lower_abi.is_async()
+        {
+            options.guest_callee_async = true;
+            options.callee_lift_abi.ensure_async();
+            options.caller_lower_abi.ensure_async();
             options.guest_caller_async = true;
+        }
+        if options.guest_caller_async || options.caller_lift_abi.is_async() {
+            options.guest_caller_async = true;
+            options.caller_lift_abi.ensure_async();
         }
 
         Ok(Self {

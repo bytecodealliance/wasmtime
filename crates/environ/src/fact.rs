@@ -20,12 +20,16 @@
 
 use crate::component::dfg::CoreDef;
 use crate::component::{
-    Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
-    RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
+    Adapter, AdapterOptions as AdapterOptionsDfg, CanonicalAbiInfo, ComponentTypesBuilder,
+    FlatType, InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, Transcode,
+    TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
-use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, Tunables};
-use crate::{ModuleInternedTypeIndex, prelude::*};
+use crate::prelude::*;
+use crate::{
+    EntityRef, FuncIndex, GlobalIndex, IndexType, Memory, MemoryIndex, ModuleInternedTypeIndex,
+    PrimaryMap, Tunables,
+};
 use std::collections::HashMap;
 use wasm_encoder::*;
 
@@ -142,11 +146,9 @@ struct AdapterOptions {
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 /// Linear memory.
 struct LinearMemoryOptions {
-    /// Whether or not the `memory` field, if present, is a 64-bit memory.
-    memory64: bool,
     /// An optionally-specified memory where values may travel through for
     /// types like lists.
-    memory: Option<MemoryIndex>,
+    memory: Option<(MemoryIndex, Memory)>,
     /// An optionally-specified function to be used to allocate space for
     /// types such as strings as they go into a module.
     realloc: Option<FuncIndex>,
@@ -154,7 +156,7 @@ struct LinearMemoryOptions {
 
 impl LinearMemoryOptions {
     fn ptr(&self) -> ValType {
-        if self.memory64 {
+        if self.memory64() {
             ValType::I64
         } else {
             ValType::I32
@@ -162,7 +164,22 @@ impl LinearMemoryOptions {
     }
 
     fn ptr_size(&self) -> u8 {
-        if self.memory64 { 8 } else { 4 }
+        if self.memory64() { 8 } else { 4 }
+    }
+
+    fn memory64(&self) -> bool {
+        self.memory
+            .as_ref()
+            .map(|(_, ty)| ty.idx_type == IndexType::I64)
+            .unwrap_or(false)
+    }
+
+    fn sizealign(&self, abi: &CanonicalAbiInfo) -> (u32, u32) {
+        if self.memory64() {
+            (abi.size64, abi.align64)
+        } else {
+            (abi.size32, abi.align32)
+        }
     }
 }
 
@@ -345,30 +362,32 @@ impl<'a> Module<'a> {
 
         let data_model = match data_model {
             crate::component::DataModel::Gc {} => DataModel::Gc {},
-            crate::component::DataModel::LinearMemory {
-                memory,
-                memory64,
-                realloc,
-            } => {
-                let memory = memory.as_ref().map(|memory| {
-                    self.import_memory(
-                        "memory",
-                        &format!("m{}", self.imported_memories.len()),
-                        MemoryType {
-                            minimum: 0,
-                            maximum: None,
-                            shared: false,
-                            memory64: *memory64,
-                            page_size_log2: None,
-                        },
-                        memory.clone().into(),
+            crate::component::DataModel::LinearMemory { memory, realloc } => {
+                let memory = memory.as_ref().map(|(memory, ty)| {
+                    (
+                        self.import_memory(
+                            "memory",
+                            &format!("m{}", self.imported_memories.len()),
+                            MemoryType {
+                                minimum: 0,
+                                maximum: None,
+                                shared: ty.shared,
+                                memory64: ty.idx_type == IndexType::I64,
+                                page_size_log2: if ty.page_size_log2 == 16 {
+                                    None
+                                } else {
+                                    Some(ty.page_size_log2.into())
+                                },
+                            },
+                            memory.clone().into(),
+                        ),
+                        *ty,
                     )
                 });
                 let realloc = realloc.as_ref().map(|func| {
-                    let ptr = if *memory64 {
-                        ValType::I64
-                    } else {
-                        ValType::I32
+                    let ptr = match memory.as_ref().unwrap().1.idx_type {
+                        IndexType::I32 => ValType::I32,
+                        IndexType::I64 => ValType::I64,
                     };
                     let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
                     self.import_func(
@@ -378,11 +397,7 @@ impl<'a> Module<'a> {
                         func.clone(),
                     )
                 });
-                DataModel::LinearMemory(LinearMemoryOptions {
-                    memory64: *memory64,
-                    memory,
-                    realloc,
-                })
+                DataModel::LinearMemory(LinearMemoryOptions { memory, realloc })
             }
         };
 
@@ -907,7 +922,7 @@ impl Options {
         let flat = types.flat_types(ty)?;
         match self.data_model {
             DataModel::Gc {} => todo!("CM+GC"),
-            DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64 {
+            DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64() {
                 flat.memory64
             } else {
                 flat.memory32

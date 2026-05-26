@@ -68,7 +68,7 @@ run_fuzzers! {
     stacks
     api_calls
     dominator_tree
-    component_async
+    gc_access
 }
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
@@ -182,7 +182,9 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
     Ok(())
 }
 
-fn component_async(u: Unstructured<'_>) -> Result<()> {
-    wasmtime_fuzzing::oracles::component_async::run(Arbitrary::arbitrary_take_rest(u)?);
+fn gc_access(mut u: Unstructured<'_>) -> Result<()> {
+    let config: wasmtime_fuzzing::generators::Config = u.arbitrary()?;
+    let input: wasmtime_fuzzing::generators::GcAccess = u.arbitrary()?;
+    wasmtime_fuzzing::oracles::gc_access(config, input);
     Ok(())
 }

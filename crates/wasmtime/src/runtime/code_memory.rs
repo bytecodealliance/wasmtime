@@ -5,14 +5,15 @@ use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
 use alloc::sync::Arc;
 use core::ops::Range;
-use object::SectionIndex;
 use object::read::elf::SectionTable;
+use object::{LittleEndian, SectionIndex, U32};
 use object::{
     elf::{FileHeader64, SectionHeader64},
     endian::Endianness,
     read::elf::{FileHeader as _, SectionHeader as _},
 };
-use wasmtime_environ::{Trap, lookup_trap_code, obj};
+use wasmtime_environ::StaticModuleIndex;
+use wasmtime_environ::{CompiledTrap, lookup_trap_code, obj};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -45,6 +46,8 @@ pub struct CodeMemory {
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
+    wasm_bytecode: Range<usize>,
+    wasm_bytecode_ends: Range<usize>,
 }
 
 impl Drop for CodeMemory {
@@ -153,6 +156,8 @@ impl CodeMemory {
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
+        let mut wasm_bytecode = 0..0;
+        let mut wasm_bytecode_ends = 0..0;
         for section_header in sections.iter() {
             let data = section_header
                 .data(endian, mmap_data)
@@ -212,6 +217,8 @@ impl CodeMemory {
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
                 obj::ELF_WASMTIME_DWARF => wasm_dwarf = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE => wasm_bytecode = range,
+                obj::ELF_WASMTIME_WASM_BYTECODE_ENDS => wasm_bytecode_ends = range,
 
                 #[cfg(feature = "debug-builtins")]
                 ".debug_info" => has_native_debug_info = true,
@@ -269,6 +276,8 @@ impl CodeMemory {
             wasm_dwarf,
             info_data,
             wasm_data,
+            wasm_bytecode,
+            wasm_bytecode_ends,
         })
     }
 
@@ -332,6 +341,17 @@ impl CodeMemory {
         &self.mmap[self.frame_tables_data.clone()]
     }
 
+    /// Returns the concatenated Wasm bytecode section, or an empty slice if
+    /// the artifact was not compiled with `guest-debug` enabled.
+    pub fn wasm_bytecode(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode.clone()]
+    }
+
+    /// Returns the Wasm bytecode section end-offset array.
+    pub fn wasm_bytecode_ends(&self) -> &[u8] {
+        &self.mmap[self.wasm_bytecode_ends.clone()]
+    }
+
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
     /// slice if it wasn't found.
     #[inline]
@@ -344,6 +364,36 @@ impl CodeMemory {
     #[inline]
     pub fn trap_data(&self) -> &[u8] {
         &self.mmap[self.trap_data.clone()]
+    }
+
+    /// Returns the Wasm bytecode section end-offset for a given core
+    /// module, or `None` if no bytecode is present.
+    ///
+    /// # Panics
+    ///
+    /// Panics if index is out-of-range.
+    fn wasm_bytecode_end_for_module(&self, index: StaticModuleIndex) -> Option<usize> {
+        if self.wasm_bytecode_ends().is_empty() {
+            return None;
+        }
+        let ends = self.wasm_bytecode_ends();
+        let count = ends.len() / core::mem::size_of::<u32>();
+        let (ends, _) = object::slice_from_bytes::<U32<LittleEndian>>(ends, count)
+            .expect("Invalid alignment of `ends` section");
+        let index = usize::try_from(index.as_u32()).unwrap();
+        Some(usize::try_from(ends[index].get(LittleEndian)).unwrap())
+    }
+
+    /// Returns the Wasm bytecode for the a core module in this
+    /// artifact, or `None` if bytecode was not preserved.
+    pub(crate) fn wasm_bytecode_for_module(&self, index: StaticModuleIndex) -> Option<&[u8]> {
+        let start = if index.as_u32() == 0 {
+            0
+        } else {
+            self.wasm_bytecode_end_for_module(StaticModuleIndex::from_u32(index.as_u32() - 1))?
+        };
+        let end = self.wasm_bytecode_end_for_module(index)?;
+        Some(&self.wasm_bytecode()[start..end])
     }
 
     /// Publishes the internal ELF image to be ready for execution.
@@ -514,7 +564,7 @@ impl CodeMemory {
     pub fn text_mut(&mut self) -> &mut [u8] {
         assert!(!self.published);
         // SAFETY: we assert !published, which means we either have
-        // not yet applied readonly + execute permissinos, or we have
+        // not yet applied readonly + execute permissions, or we have
         // undone that and flipped back to read-write via unpublish.
         unsafe { &mut self.mmap.as_mut_slice()[self.text.clone()] }
     }
@@ -563,7 +613,7 @@ impl CodeMemory {
 
     /// Looks up the given offset within this module's text section and returns
     /// the trap code associated with that instruction, if there is one.
-    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
+    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<CompiledTrap> {
         lookup_trap_code(self.trap_data(), text_offset)
     }
 

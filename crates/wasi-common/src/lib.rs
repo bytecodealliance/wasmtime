@@ -88,12 +88,12 @@ pub mod table;
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
-pub use cap_rand::RngCore;
 pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};
 pub use ctx::WasiCtx;
 pub use dir::WasiDir;
 pub use error::{Error, ErrorExt, I32Exit};
 pub use file::WasiFile;
+pub use rand::TryRng;
 pub use sched::{Poll, WasiSched};
 pub use string_array::{StringArray, StringArrayError};
 pub use table::Table;

@@ -276,11 +276,13 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Y>(),
                     move |mut store, rep| {
                         wasmtime::component::__internal::Box::new(async move {
-                            HostY::drop(
-                                    &mut host_getter(store.data_mut()),
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostY::drop(
+                                        &mut host_getter(store.data_mut()),
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;

@@ -8,6 +8,7 @@ const FEATURES: &[&str] = &[
     "CACHE",
     "PARALLEL_COMPILATION",
     "WASI",
+    "WASI_HTTP",
     "LOGGING",
     "DISABLE_LOGGING",
     "COREDUMP",
@@ -23,6 +24,7 @@ const FEATURES: &[&str] = &[
     "WAT",
     "POOLING_ALLOCATOR",
     "COMPONENT_MODEL",
+    "COMPONENT_MODEL_ASYNC",
     "PULLEY",
     "ALL_ARCH",
 ];

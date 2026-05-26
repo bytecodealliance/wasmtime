@@ -140,10 +140,14 @@ use clap::Parser;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
-use wasmtime::{Engine, Instance, Linker, Module, Result, Store, error::Context as _};
+use wasmtime::component::ResourceTable;
+use wasmtime::{
+    CodeBuilder, CodeHint, Engine, Instance, Linker, Module, Result, Store, error::Context as _,
+    format_err,
+};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::cli::{InputFile, OutputFile};
-use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, p1::WasiP1Ctx};
+use wasmtime_wasi::{DirPerms, FilePerms, I32Exit, WasiCtx, WasiCtxView, WasiView, p1::WasiP1Ctx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -271,11 +275,18 @@ pub extern "C" fn wasm_bench_create(
     out_bench_ptr: *mut *mut c_void,
 ) -> ExitCode {
     let result = (|| -> Result<_> {
+        // Clone paths for the core Wasm WASI closure.
         let working_dir = config.working_dir()?;
         let stdout_path = config.stdout_path()?;
         let stderr_path = config.stderr_path()?;
         let stdin_path = config.stdin_path()?;
         let options = config.execution_flags()?;
+
+        // Clone paths for the component WASI closure.
+        let working_dir2 = working_dir.clone();
+        let stdout_path2 = stdout_path.clone();
+        let stderr_path2 = stderr_path.clone();
+        let stdin_path2 = stdin_path.clone();
 
         let state = Box::new(BenchState::new(
             options,
@@ -316,6 +327,34 @@ pub extern "C" fn wasm_bench_create(
                 }
 
                 Ok(cx.build_p1())
+            },
+            move || {
+                let mut cx = WasiCtx::builder();
+
+                let stdout = std::fs::File::create(&stdout_path2)
+                    .with_context(|| format!("failed to create {}", stdout_path2.display()))?;
+                cx.stdout(OutputFile::new(stdout));
+
+                let stderr = std::fs::File::create(&stderr_path2)
+                    .with_context(|| format!("failed to create {}", stderr_path2.display()))?;
+                cx.stderr(OutputFile::new(stderr));
+
+                if let Some(stdin_path) = &stdin_path2 {
+                    let stdin = std::fs::File::open(stdin_path)
+                        .with_context(|| format!("failed to open {}", stdin_path.display()))?;
+                    cx.stdin(InputFile::new(stdin));
+                }
+
+                cx.preopened_dir(working_dir2.clone(), ".", DirPerms::READ, FilePerms::READ)?;
+
+                if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
+                    cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val);
+                }
+
+                Ok(ComponentHostState {
+                    wasi: cx.build(),
+                    table: ResourceTable::new(),
+                })
             },
         )?);
         Ok(Box::into_raw(state) as _)
@@ -386,6 +425,7 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
 /// to manage the Wasmtime engine between calls.
 struct BenchState {
     linker: Linker<HostState>,
+    component_linker: wasmtime::component::Linker<ComponentHostState>,
     compilation_timer: *mut u8,
     compilation_start: extern "C" fn(*mut u8),
     compilation_end: extern "C" fn(*mut u8),
@@ -393,8 +433,12 @@ struct BenchState {
     instantiation_start: extern "C" fn(*mut u8),
     instantiation_end: extern "C" fn(*mut u8),
     make_wasi_cx: Box<dyn FnMut() -> Result<WasiP1Ctx>>,
+    make_component_wasi_cx: Box<dyn FnMut() -> Result<ComponentHostState>>,
     module: Option<Module>,
+    component: Option<wasmtime::component::Component>,
     store_and_instance: Option<(Store<HostState>, Instance)>,
+    component_store_and_instance:
+        Option<(Store<ComponentHostState>, wasmtime::component::Instance)>,
     epoch_interruption: bool,
     fuel: Option<u64>,
 }
@@ -403,6 +447,20 @@ struct HostState {
     wasi: WasiP1Ctx,
     #[cfg(feature = "wasi-nn")]
     wasi_nn: wasmtime_wasi_nn::witx::WasiNnCtx,
+}
+
+struct ComponentHostState {
+    wasi: WasiCtx,
+    table: ResourceTable,
+}
+
+impl WasiView for ComponentHostState {
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
+    }
 }
 
 impl BenchState {
@@ -418,12 +476,14 @@ impl BenchState {
         execution_start: extern "C" fn(*mut u8),
         execution_end: extern "C" fn(*mut u8),
         make_wasi_cx: impl FnMut() -> Result<WasiP1Ctx> + 'static,
+        make_component_wasi_cx: impl FnMut() -> Result<ComponentHostState> + 'static,
     ) -> Result<Self> {
         let mut config = options.config(None)?;
         // NB: always disable the compilation cache.
         config.cache(None);
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
+        let mut component_linker = wasmtime::component::Linker::<ComponentHostState>::new(&engine);
 
         // Define the benchmarking start/end functions.
         let execution_timer = unsafe {
@@ -440,11 +500,29 @@ impl BenchState {
             Ok(())
         })?;
 
+        // Define the same benchmarking functions on the component linker.
+        let mut bench_instance = component_linker.instance("bench")?;
+        bench_instance.func_wrap(
+            "start",
+            move |_: wasmtime::StoreContextMut<'_, ComponentHostState>, (): ()| {
+                execution_start(*execution_timer.get());
+                Ok(())
+            },
+        )?;
+        bench_instance.func_wrap(
+            "end",
+            move |_: wasmtime::StoreContextMut<'_, ComponentHostState>, (): ()| {
+                execution_end(*execution_timer.get());
+                Ok(())
+            },
+        )?;
+
         let epoch_interruption = options.wasm.epoch_interruption.unwrap_or(false);
         let fuel = options.wasm.fuel;
 
         if options.wasi.common != Some(false) {
             wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |cx| &mut cx.wasi)?;
+            wasmtime_wasi::p2::add_to_linker_sync(&mut component_linker)?;
         }
 
         #[cfg(feature = "wasi-nn")]
@@ -454,6 +532,7 @@ impl BenchState {
 
         Ok(Self {
             linker,
+            component_linker,
             compilation_timer,
             compilation_start,
             compilation_end,
@@ -461,8 +540,11 @@ impl BenchState {
             instantiation_start,
             instantiation_end,
             make_wasi_cx: Box::new(make_wasi_cx) as _,
+            make_component_wasi_cx: Box::new(make_component_wasi_cx) as _,
             module: None,
+            component: None,
             store_and_instance: None,
+            component_store_and_instance: None,
             epoch_interruption,
             fuel,
         })
@@ -470,70 +552,119 @@ impl BenchState {
 
     fn compile(&mut self, bytes: &[u8]) -> Result<()> {
         self.module = None;
+        self.component = None;
 
-        (self.compilation_start)(self.compilation_timer);
-        let module = Module::from_binary(self.linker.engine(), bytes)?;
-        (self.compilation_end)(self.compilation_timer);
+        let mut builder = CodeBuilder::new(self.linker.engine());
+        builder.wasm_binary(bytes, None)?;
 
-        self.module = Some(module);
+        match builder.hint() {
+            Some(CodeHint::Component) => {
+                (self.compilation_start)(self.compilation_timer);
+                let component = builder.compile_component()?;
+                (self.compilation_end)(self.compilation_timer);
+                self.component = Some(component);
+            }
+            Some(CodeHint::Module) | None => {
+                (self.compilation_start)(self.compilation_timer);
+                let module = builder.compile_module()?;
+                (self.compilation_end)(self.compilation_timer);
+                self.module = Some(module);
+            }
+        }
+
         Ok(())
     }
 
     fn instantiate(&mut self) -> Result<()> {
         self.store_and_instance = None;
+        self.component_store_and_instance = None;
 
-        let module = self
-            .module
-            .as_ref()
-            .expect("compile the module before instantiating it");
+        if let Some(component) = &self.component {
+            let host = (self.make_component_wasi_cx)()
+                .context("failed to create a WASI context for component")?;
 
-        let host = HostState {
-            wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
-            #[cfg(feature = "wasi-nn")]
-            wasi_nn: {
-                let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
-                wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry)
-            },
-        };
+            // NB: Start measuring instantiation time *after* we've created the
+            // WASI context, since that needs to do file I/O to setup
+            // stdin/stdout/stderr.
+            (self.instantiation_start)(self.instantiation_timer);
 
-        // NB: Start measuring instantiation time *after* we've created the WASI
-        // context, since that needs to do file I/O to setup
-        // stdin/stdout/stderr.
-        (self.instantiation_start)(self.instantiation_timer);
-        let mut store = Store::new(self.linker.engine(), host);
-        if self.epoch_interruption {
-            store.set_epoch_deadline(1);
+            let mut store = Store::new(self.component_linker.engine(), host);
+            if self.epoch_interruption {
+                store.set_epoch_deadline(1);
+            }
+            if let Some(fuel) = self.fuel {
+                store.set_fuel(fuel).unwrap();
+            }
+
+            let instance = self.component_linker.instantiate(&mut store, component)?;
+
+            (self.instantiation_end)(self.instantiation_timer);
+
+            self.component_store_and_instance = Some((store, instance));
+        } else {
+            let module = self
+                .module
+                .as_ref()
+                .expect("compile the module before instantiating it");
+
+            let host = HostState {
+                wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
+                #[cfg(feature = "wasi-nn")]
+                wasi_nn: {
+                    let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
+                    wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry)
+                },
+            };
+
+            // NB: Start measuring instantiation time *after* we've created the
+            // WASI context, since that needs to do file I/O to setup
+            // stdin/stdout/stderr.
+            (self.instantiation_start)(self.instantiation_timer);
+
+            let mut store = Store::new(self.linker.engine(), host);
+            if self.epoch_interruption {
+                store.set_epoch_deadline(1);
+            }
+            if let Some(fuel) = self.fuel {
+                store.set_fuel(fuel).unwrap();
+            }
+
+            let instance = self.linker.instantiate(&mut store, &module)?;
+
+            (self.instantiation_end)(self.instantiation_timer);
+
+            self.store_and_instance = Some((store, instance));
         }
-        if let Some(fuel) = self.fuel {
-            store.set_fuel(fuel).unwrap();
-        }
-
-        let instance = self.linker.instantiate(&mut store, &module)?;
-        (self.instantiation_end)(self.instantiation_timer);
-
-        self.store_and_instance = Some((store, instance));
         Ok(())
     }
 
     fn execute(&mut self) -> Result<()> {
-        let (mut store, instance) = self
-            .store_and_instance
-            .take()
-            .expect("instantiate the module before executing it");
+        if let Some((mut store, instance)) = self.component_store_and_instance.take() {
+            let command = wasmtime_wasi::p2::bindings::sync::Command::new(&mut store, &instance)?;
+            match command.wasi_cli_run().call_run(&mut store)? {
+                Ok(()) => Ok(()),
+                Err(()) => Err(format_err!("calling `run` failed")),
+            }
+        } else {
+            let (mut store, instance) = self
+                .store_and_instance
+                .take()
+                .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
-        match start_func.call(&mut store, ()) {
-            Ok(_) => Ok(()),
-            Err(trap) => {
-                // Since _start will likely return by using the system `exit` call, we must
-                // check the trap code to see if it actually represents a successful exit.
-                if let Some(exit) = trap.downcast_ref::<I32Exit>() {
-                    if exit.0 == 0 {
-                        return Ok(());
+            let start_func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
+            match start_func.call(&mut store, ()) {
+                Ok(_) => Ok(()),
+                Err(trap) => {
+                    // Since _start will likely return by using the system `exit` call, we must
+                    // check the trap code to see if it actually represents a successful exit.
+                    if let Some(exit) = trap.downcast_ref::<I32Exit>() {
+                        if exit.0 == 0 {
+                            return Ok(());
+                        }
                     }
-                }
 
-                Err(trap)
+                    Err(trap)
+                }
             }
         }
     }

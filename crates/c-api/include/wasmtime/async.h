@@ -65,7 +65,7 @@ extern "C" {
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_stack_size
  */
-WASMTIME_CONFIG_PROP(void, async_stack_size, uint64_t)
+WASMTIME_CONFIG_PROP(void, async_stack_size, size_t)
 
 /**
  * \brief Configures a Store to yield execution of async WebAssembly code
@@ -184,7 +184,7 @@ typedef struct wasmtime_call_future wasmtime_call_future_t;
 WASM_API_EXTERN bool wasmtime_call_future_poll(wasmtime_call_future_t *future);
 
 /**
- * /brief Frees the underlying memory for a future.
+ * \brief Frees the underlying memory for a future.
  *
  * All wasmtime_call_future_t are owned by the caller and should be deleted
  * using this function.

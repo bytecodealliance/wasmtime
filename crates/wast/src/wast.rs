@@ -19,7 +19,7 @@ pub struct WastContext {
     /// recently defined.
     current: Option<InstanceKind>,
     core_linker: Linker<()>,
-    modules: HashMap<String, ModuleKind>,
+    modules: HashMap<Option<String>, ModuleKind>,
     #[cfg(feature = "component-model")]
     component_linker: component::Linker<()>,
 
@@ -35,6 +35,7 @@ pub struct WastContext {
 
     modules_by_filename: Arc<HashMap<String, Vec<u8>>>,
     configure_store: Arc<dyn Fn(&mut Store<()>) + Send + Sync>,
+    ignore_error_messages: bool,
 }
 
 enum Outcome<T = Results> {
@@ -145,11 +146,19 @@ impl WastContext {
             precompile_load: None,
             modules_by_filename: Arc::default(),
             configure_store: Arc::new(configure),
+            ignore_error_messages: false,
         }
     }
 
     fn engine(&self) -> &Engine {
         self.core_linker.engine()
+    }
+
+    /// Configures whether or not error messages are ignored in directives like
+    /// `assert_invalid`.
+    pub fn ignore_error_messages(&mut self, ignore: bool) -> &mut Self {
+        self.ignore_error_messages = ignore;
+        self
     }
 
     /// Saves precompiled modules/components into `path` instead of executing
@@ -171,7 +180,7 @@ impl WastContext {
             return Ok(Export::Core(
                 self.core_linker
                     .get(&mut self.core_store, module, name)
-                    .ok_or_else(|| format_err!("no item named `{module}::{name}` found"))?,
+                    .with_context(|| format_err!("no item named `{module}::{name}` found"))?,
             ));
         }
 
@@ -233,6 +242,32 @@ impl WastContext {
         link_spectest(&mut self.core_linker, &mut self.core_store, config)?;
         #[cfg(feature = "component-model")]
         link_component_spectest(&mut self.component_linker)?;
+        Ok(())
+    }
+
+    /// Register the "wasmtime" module, which provides utilities that our misc
+    /// tests use.
+    pub fn register_wasmtime(&mut self) -> Result<()> {
+        self.core_linker
+            .func_wrap("wasmtime", "gc", |mut caller: Caller<_>| {
+                caller.gc(None)?;
+                Ok(())
+            })?;
+        #[cfg(feature = "component-model")]
+        {
+            let mut i = self.component_linker.instance("wasmtime")?;
+            i.func_wrap(
+                "set-max-table-capacity",
+                |mut store, (capacity,): (u32,)| {
+                    store
+                        .as_context_mut()
+                        .concurrent_resource_table()
+                        .expect("table must be present")
+                        .set_max_capacity(capacity.try_into().unwrap());
+                    Ok(())
+                },
+            )?;
+        }
         Ok(())
     }
 
@@ -345,7 +380,7 @@ impl WastContext {
                     let engine = self.engine().clone();
                     let mut linker = self.component_linker.instance(name)?;
                     for (name, item) in ty.exports(&engine) {
-                        match item {
+                        match item.ty {
                             component::types::ComponentItem::Module(_) => {
                                 let module = instance.get_module(&mut store, name).unwrap();
                                 linker.module(name, &module)?;
@@ -512,6 +547,10 @@ impl WastContext {
             || (expected.contains("null function") && (actual.contains("uninitialized element") || actual.contains("null reference")))
             // GC tests say "null $kind reference" but we just say "null reference".
             || (expected.contains("null") && expected.contains("reference") && actual.contains("null reference"))
+            // upstream component model tests expect slightly different error
+            // messages than we generate.
+            || (expected.contains("cannot write") && actual.contains("cannot write"))
+            || (expected.contains("cannot read") && actual.contains("cannot read"))
         {
             return Ok(());
         }
@@ -634,18 +673,16 @@ impl WastContext {
                 line: _,
             } => {
                 let module = self.module_definition(&file)?;
-                if let Some(name) = name {
-                    self.modules.insert(name.to_string(), module);
-                }
+                self.modules.insert(name.map(|s| s.to_string()), module);
             }
             ModuleInstance {
                 instance,
                 module,
                 line: _,
             } => {
-                let module = module
-                    .as_deref()
-                    .and_then(|n| self.modules.get(n))
+                let module = self
+                    .modules
+                    .get(&module.as_ref().map(|s| s.to_string()))
                     .cloned()
                     .ok_or_else(|| format_err!("no module named {module:?}"))?;
                 self.module(instance.as_deref(), &module)?;
@@ -705,10 +742,7 @@ impl WastContext {
                     Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
-                let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
-                    bail!("assert_invalid: expected \"{text}\", got \"{error_message}\"",)
-                }
+                self.match_error_message(&text, err)?;
             }
             AssertMalformed {
                 file,
@@ -729,10 +763,7 @@ impl WastContext {
                     Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
                 };
-                let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(filename, &text, &error_message) {
-                    bail!("assert_unlinkable: expected {text}, got {error_message}",)
-                }
+                self.match_error_message(&text, err)?;
             }
             AssertException { line: _, action } => {
                 let result = self.perform_action(&action)?;
@@ -777,6 +808,7 @@ impl WastContext {
                     precompile_load: self.precompile_load.clone(),
                     precompile_save: self.precompile_save.clone(),
                     configure_store: self.configure_store.clone(),
+                    ignore_error_messages: self.ignore_error_messages,
                 };
                 let child = scope.spawn(move || child_cx.run_directives(commands, filename));
                 threads.insert(name.to_string(), child);
@@ -792,6 +824,17 @@ impl WastContext {
             AssertSuspension { .. } => {
                 bail!("unimplemented wast directive");
             }
+
+            AssertMalformedCustom {
+                file: _,
+                text: _,
+                line: _,
+            }
+            | AssertInvalidCustom {
+                file: _,
+                text: _,
+                line: _,
+            } => bail!("unimplemented wast directives"),
         }
 
         Ok(())
@@ -823,25 +866,15 @@ impl WastContext {
         self.generate_dwarf = enable;
         self
     }
-}
 
-fn is_matching_assert_invalid_error_message(test: &str, expected: &str, actual: &str) -> bool {
-    if actual.contains(expected) {
-        return true;
+    fn match_error_message(&self, expected: &str, err: wasmtime::Error) -> Result<()> {
+        if self.ignore_error_messages {
+            return Ok(());
+        }
+        let actual = format!("{err:?}");
+        if actual.contains(expected) {
+            return Ok(());
+        }
+        bail!("assert_invalid: expected \"{expected}\", got \"{actual}\"",)
     }
-
-    // Historically wasmtime/wasm-tools tried to match the upstream error
-    // message. This generally led to a large sequence of matches here which is
-    // not easy to maintain and is particularly difficult when test suites and
-    // proposals conflict with each other (e.g. one asserts one error message
-    // and another asserts a different error message). Overall we didn't benefit
-    // a whole lot from trying to match errors so just assume the error is
-    // roughly the same and otherwise don't try to match it.
-    if test.contains("spec_testsuite") {
-        return true;
-    }
-
-    // we are in control over all non-spec tests so all the error messages
-    // there should exactly match the `assert_invalid` or such
-    false
 }

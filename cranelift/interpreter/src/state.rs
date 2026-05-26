@@ -5,8 +5,8 @@ use crate::frame::Frame;
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
-    Value, types,
+    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlagsData, Signature, StackSlot,
+    Type, Value, types,
 };
 use cranelift_codegen::isa::CallConv;
 use smallvec::SmallVec;
@@ -55,7 +55,7 @@ pub trait State<'a> {
         &self,
         address: Address,
         ty: Type,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     ) -> Result<DataValue, MemoryError>;
     /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
@@ -63,7 +63,7 @@ pub trait State<'a> {
         &mut self,
         address: Address,
         v: DataValue,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     ) -> Result<(), MemoryError>;
 
     /// Compute the address of a function given its name.
@@ -128,13 +128,13 @@ pub enum MemoryError {
     OutOfBoundsLoad {
         addr: Address,
         load_size: usize,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     },
     #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
     OutOfBoundsStore {
         addr: Address,
         store_size: usize,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     },
     #[error("Load of {load_size} bytes is misaligned at address {addr:?}")]
     MisalignedLoad { addr: Address, load_size: usize },

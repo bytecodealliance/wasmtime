@@ -12,9 +12,12 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-wasmtime = { workspace = true, features = ["debug", "std", "async"] }
+wasmtime = { workspace = true, features = ["debug", "std", "async", "component-model", "gc", "gc-drc"] }
+wasmtime-wasi = { workspace = true }
+wasmtime-wasi-io = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "macros"] }
 log = { workspace = true }
+async-trait = { workspace = true }
 
 [dev-dependencies]
 # Depend on `wasmtime` again to get `cranelift` and `wat` so we can

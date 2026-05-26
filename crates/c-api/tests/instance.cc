@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <wasmtime/func.hh>
 #include <wasmtime/instance.hh>
 
 using namespace wasmtime;
@@ -7,8 +8,9 @@ TEST(Instance, Smoke) {
   Engine engine;
   Store store(engine);
   Memory m = Memory::create(store, MemoryType(1)).unwrap();
-  Global g = Global::create(store, GlobalType(ValKind::I32, false), 1).unwrap();
-  Table t = Table::create(store, TableType(ValKind::FuncRef, 1),
+  Global g =
+      Global::create(store, GlobalType(ValType::i32(), false), 1).unwrap();
+  Table t = Table::create(store, TableType(ValType::funcref(), 1),
                           std::optional<Func>())
                 .unwrap();
   Func f(store, FuncType({}, {}),
@@ -44,4 +46,27 @@ TEST(Instance, Smoke) {
   EXPECT_FALSE(i.get(store, 4));
   auto [name, func] = *i.get(store, 0);
   EXPECT_EQ(name, "f");
+}
+
+TEST(Instance, NewClearsTrapPointer) {
+  Engine engine;
+  Store store(engine);
+  auto context = store.context();
+
+  auto ok_module = Module::compile(engine, "(module)").unwrap();
+  wasmtime_instance_t instance;
+  wasm_trap_t *trap = reinterpret_cast<wasm_trap_t *>(1);
+  auto *error = wasmtime_instance_new(context.capi(), ok_module.capi(), nullptr,
+                                      0, &instance, &trap);
+  EXPECT_EQ(error, nullptr);
+  EXPECT_EQ(trap, nullptr);
+
+  auto import_module =
+      Module::compile(engine, "(module (import \"\" \"\" (func)))").unwrap();
+  trap = reinterpret_cast<wasm_trap_t *>(1);
+  error = wasmtime_instance_new(context.capi(), import_module.capi(), nullptr,
+                                0, &instance, &trap);
+  EXPECT_NE(error, nullptr);
+  EXPECT_EQ(trap, nullptr);
+  wasmtime_error_delete(error);
 }

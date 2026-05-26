@@ -255,7 +255,7 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         inner: imp::Suspend,
         initial: Resume,
         func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return,
-    ) {
+    ) -> imp::Suspend {
         let mut suspend = Suspend {
             inner,
             _phantom: PhantomData,
@@ -278,7 +278,8 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         #[cfg(not(feature = "std"))]
         let result = RunResult::Returned((func)(initial, &mut suspend));
 
-        suspend.inner.exit::<Resume, Yield, Return>(result);
+        suspend.inner.start_exit::<Resume, Yield, Return>(result);
+        suspend.inner
     }
 }
 
@@ -427,5 +428,35 @@ mod tests {
         .unwrap();
         assert_eq!(fiber.resume(2.0), Err(4));
         assert_eq!(fiber.resume(3.0), Ok("hello".to_string()));
+    }
+
+    #[test]
+    fn fiber_stack_max_size() {
+        if cfg!(windows) || cfg!(miri) {
+            return;
+        }
+        assert!(FiberStack::new(usize::MAX, true).is_err());
+        assert!(FiberStack::new(usize::MAX, false).is_err());
+    }
+
+    #[test]
+    fn cross_thread_fiber() {
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, s| {
+            s.suspend(());
+        })
+        .unwrap();
+        assert!(fiber.resume(()).is_err());
+        let fiber = UnsafeSendSync(fiber);
+        std::thread::spawn(move || {
+            let fiber = fiber;
+            assert!(fiber.0.resume(()).is_ok());
+        })
+        .join()
+        .unwrap();
+
+        struct UnsafeSendSync<T>(T);
+
+        unsafe impl<T> Send for UnsafeSendSync<T> {}
+        unsafe impl<T> Sync for UnsafeSendSync<T> {}
     }
 }

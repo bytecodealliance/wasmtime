@@ -10,7 +10,7 @@ use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
     AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue, Immediate,
-    InstructionData, MemFlags, Opcode, StackSlot, TrapCode, Type, Value,
+    InstructionData, JumpTable, MemFlagsData, Opcode, StackSlot, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
@@ -103,6 +103,17 @@ where
                     continue;
                 }
                 ValueDef::Result(inst, _) if ctx.ctx.func.dfg.inst_results(inst).len() == 1 => {
+                    // Charge one unit of fuel per yielded match. When
+                    // fuel is exhausted, terminate iteration early:
+                    // returning no matches is always semantically valid
+                    // (we just skip would-be rewrites) and bounds work
+                    // per top-level ISLE invocation.
+                    if ctx.ctx.extractor_fuel == 0 {
+                        ctx.ctx.stats.rewrite_fuel_exhausted += 1;
+                        trace!(" -> rewrite fuel exhausted");
+                        return None;
+                    }
+                    ctx.ctx.extractor_fuel -= 1;
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
                     return Some((ty, ctx.ctx.func.dfg.insts[inst]));
@@ -238,6 +249,18 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     #[inline]
     fn value_type(&mut self, val: Value) -> Type {
         self.ctx.func.dfg.value_type(val)
+    }
+
+    fn resolve_jump_table_entry(&mut self, table: JumpTable, index: u64) -> BlockCall {
+        let jt_data = &self.ctx.func.dfg.jump_tables[table];
+        let entries = jt_data.as_slice();
+        if let Ok(index) = usize::try_from(index)
+            && index < entries.len()
+        {
+            entries[index]
+        } else {
+            jt_data.default_block()
+        }
     }
 
     fn iconst_sextend_etor(

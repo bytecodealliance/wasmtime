@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::CodegenResult;
-use crate::ir::{self, LibCall, MemFlags, Signature, TrapCode, types};
+use crate::ir::{self, LibCall, MemFlagsData, Signature, TrapCode, types};
 use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
@@ -1011,7 +1011,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32: off,
                     base: regs::rsp(),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 })
             }
         }

@@ -270,9 +270,11 @@ const _: () = {
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostWorldResource::drop(
-                            &mut host_getter(store.data_mut()),
-                            resource,
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostWorldResource::drop(
+                                &mut host_getter(store.data_mut()),
+                                resource,
+                            ),
                         )
                     },
                 )?;
@@ -678,7 +680,9 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostBar::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostBar::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 inst.resource(
@@ -686,7 +690,12 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Fallible>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostFallible::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFallible::drop(
+                                &mut host_getter(store.data_mut()),
+                                resource,
+                            ),
+                        )
                     },
                 )?;
                 inst.func_wrap(
@@ -976,7 +985,9 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<A>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostA::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostA::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 Ok(())
@@ -1118,7 +1129,9 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostFoo::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostFoo::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 Ok(())

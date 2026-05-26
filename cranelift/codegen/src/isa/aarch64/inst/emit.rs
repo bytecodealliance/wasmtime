@@ -3,6 +3,7 @@
 use cranelift_control::ControlPlane;
 
 use crate::ir::{self, types::*};
+use crate::isa::aarch64;
 use crate::isa::aarch64::inst::*;
 use crate::trace;
 
@@ -711,12 +712,15 @@ impl EmitState {
 }
 
 /// Constant state used during function compilation.
-pub struct EmitInfo(settings::Flags);
+pub struct EmitInfo {
+    flags: settings::Flags,
+    isa_flags: aarch64::settings::Flags,
+}
 
 impl EmitInfo {
     /// Create a constant state for emission of instructions.
-    pub fn new(flags: settings::Flags) -> Self {
-        Self(flags)
+    pub fn new(flags: settings::Flags, isa_flags: aarch64::settings::Flags) -> Self {
+        Self { flags, isa_flags }
     }
 }
 
@@ -3186,8 +3190,13 @@ impl MachInstEmit for Inst {
                     rm: ridx,
                 };
                 inst.emit(sink, emit_info, state);
-                // Prevent any data value speculation.
-                Inst::Csdb.emit(sink, emit_info, state);
+                // Prevent any data value speculation if spectre mitigations are
+                // enabled.
+                if emit_info.flags.enable_table_access_spectre_mitigation()
+                    && emit_info.isa_flags.use_csdb()
+                {
+                    Inst::Csdb.emit(sink, emit_info, state);
+                }
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
@@ -3200,7 +3209,7 @@ impl MachInstEmit for Inst {
                         rtmp2.to_reg(),
                         ExtendOp::UXTW,
                     ),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -3254,7 +3263,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
             }
@@ -3303,7 +3312,7 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label {
                         label: MemLabel::PCRel(8),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -3457,7 +3466,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: tmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3521,7 +3530,7 @@ impl MachInstEmit for Inst {
                 Inst::ULoad64 {
                     rd: rtmp,
                     mem: AMode::reg(rd.to_reg()),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
 
@@ -3557,7 +3566,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::StackProbeLoop { start, end, step } => {
-                assert!(emit_info.0.enable_probestack());
+                assert!(emit_info.flags.enable_probestack());
 
                 // The loop generated here uses `start` as a counter register to
                 // count backwards until negating it exceeds `end`. In other
@@ -3598,7 +3607,7 @@ impl MachInstEmit for Inst {
                         rn: regs::stack_reg(),
                         rm: start.to_reg(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 }
                 .emit(sink, emit_info, state);
                 Inst::AluRRR {
@@ -3644,9 +3653,11 @@ fn emit_return_call_common_sequence<T>(
     state: &mut EmitState,
     info: &ReturnCallInfo<T>,
 ) {
-    for inst in
-        AArch64MachineDeps::gen_clobber_restore(CallConv::Tail, &emit_info.0, state.frame_layout())
-    {
+    for inst in AArch64MachineDeps::gen_clobber_restore(
+        CallConv::Tail,
+        &emit_info.flags,
+        state.frame_layout(),
+    ) {
         inst.emit(sink, emit_info, state);
     }
 
@@ -3666,7 +3677,7 @@ fn emit_return_call_common_sequence<T>(
                 // https://developer.arm.com/documentation/ddi0596/2020-12/Base-Instructions/LDP--Load-Pair-of-Registers-
                 simm7: SImm7Scaled::maybe_from_i64(i64::from(setup_area_size), types::I64).unwrap(),
             },
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         }
         .emit(sink, emit_info, state);
     }
@@ -3681,7 +3692,9 @@ fn emit_return_call_common_sequence<T>(
         }
     }
 
-    if let Some(key) = info.key {
+    if (setup_area_size > 0 || info.sign_return_address_all)
+        && let Some(key) = info.key
+    {
         sink.put4(key.enc_auti_hint());
     }
 }

@@ -163,9 +163,12 @@ impl AsyncReadStream {
             let mut reader = pin!(reader);
             loop {
                 use tokio::io::AsyncReadExt;
-                let mut buf = bytes::BytesMut::with_capacity(4096);
+                let mut buf = bytes::BytesMut::with_capacity(crate::MAX_READ_SIZE_ALLOC);
                 let sent = match reader.read_buf(&mut buf).await {
-                    Ok(nbytes) if nbytes == 0 => sender.send(Err(StreamError::Closed)).await,
+                    Ok(nbytes) if nbytes == 0 => {
+                        let _ = sender.send(Err(StreamError::Closed)).await;
+                        break;
+                    }
                     Ok(_) => sender.send(Ok(buf.freeze())).await,
                     Err(e) => {
                         sender
@@ -238,6 +241,11 @@ impl InputStream for AsyncReadStream {
             Ok(Err(e)) => {
                 self.closed = true;
                 Err(e)
+            }
+            // Note: if the stream is already closed it should return an error,
+            //       returning empty list would break the wasi contract (returning 0 and ready)
+            Err(TryRecvError::Empty | TryRecvError::Disconnected) if self.closed => {
+                Err(StreamError::Closed)
             }
             Err(TryRecvError::Empty) => Ok(Bytes::new()),
             Err(TryRecvError::Disconnected) => Err(StreamError::Trap(format_err!(
@@ -382,6 +390,11 @@ mod test {
                 assert!(bs.is_empty());
                 resolves_immediately(reader.ready()).await;
                 assert!(matches!(reader.read(0), Err(StreamError::Closed)));
+
+                // Try again to make sure it keeps returning `StreamError::Closed`
+                resolves_immediately(reader.ready()).await;
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
             res => panic!("unexpected: {res:?}"),
         }
@@ -445,6 +458,10 @@ mod test {
             }
             res => panic!("unexpected: {res:?}"),
         }
+
+        // Make sure it stays closed
+        resolves_immediately(reader.ready()).await;
+        assert!(matches!(reader.read(0), Err(StreamError::Closed)));
     }
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -516,12 +533,14 @@ mod test {
     // suitable design for all applications, and we will probably make a knob or change the
     // behavior at some point, but this test shows the behavior as it is implemented:
     async fn backpressure_read_stream() {
-        let (r, mut w) = simplex(16 * 1024); // Make sure this buffer isn't a bottleneck
+        let (r, mut w) = simplex(4 * crate::MAX_READ_SIZE_ALLOC); // Make sure this buffer isn't a bottleneck
         let mut reader = AsyncReadStream::new(r);
 
         let writer_task = tokio::task::spawn(async move {
             // Write twice as much as we can buffer up in an AsyncReadStream:
-            w.write_all(&[123; 8192]).await.unwrap();
+            w.write_all(&[123; 2 * crate::MAX_READ_SIZE_ALLOC])
+                .await
+                .unwrap();
             w
         });
 
@@ -529,16 +548,16 @@ mod test {
 
         // Now we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
-        let bs = reader.read(4097).unwrap();
-        assert_eq!(bs.len(), 4096);
+        let bs = reader.read(crate::MAX_READ_SIZE_ALLOC + 1).unwrap();
+        assert_eq!(bs.len(), crate::MAX_READ_SIZE_ALLOC);
 
         // Allow the crank to turn more:
         resolves_immediately(reader.ready()).await;
 
         // Again we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
-        let bs = reader.read(4097).unwrap();
-        assert_eq!(bs.len(), 4096);
+        let bs = reader.read(crate::MAX_READ_SIZE_ALLOC + 1).unwrap();
+        assert_eq!(bs.len(), crate::MAX_READ_SIZE_ALLOC);
 
         // The writer task is now finished - join with it:
         let w = resolves_immediately(writer_task).await;
@@ -550,7 +569,10 @@ mod test {
         resolves_immediately(reader.ready()).await;
 
         // Now we expect the reader to be empty, and the stream.dropd:
-        assert!(matches!(reader.read(4097), Err(StreamError::Closed)));
+        assert!(matches!(
+            reader.read(crate::MAX_READ_SIZE_ALLOC + 1),
+            Err(StreamError::Closed)
+        ));
     }
 
     #[test_log::test(test_log::test(tokio::test(flavor = "multi_thread")))]

@@ -40,4 +40,4 @@ all-features = true
 
 [[example]]
 name = "profiler-html"
-required-features = ["profile"]
+required-features = ["disas", "interp", "profile"]

@@ -1,12 +1,12 @@
-use crate::get_content_length;
 use crate::p3::bindings::http::types::ErrorCode;
 use crate::p3::body::{Body, BodyExt as _, GuestBody};
-use crate::p3::{WasiHttpCtxView, WasiHttpView};
+use crate::p3::{HttpError, HttpResult, WasiHttpCtxView, WasiHttpView};
+use crate::{FieldMap, get_content_length};
 use bytes::Bytes;
 use core::time::Duration;
 use http::header::HOST;
 use http::uri::{Authority, PathAndQuery, Scheme};
-use http::{HeaderMap, HeaderValue, Method, Uri};
+use http::{HeaderValue, Method, Uri};
 use http_body_util::BodyExt as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub struct Request {
     /// The path and query of the request.
     pub path_with_query: Option<PathAndQuery>,
     /// The request headers.
-    pub headers: Arc<HeaderMap>,
+    pub headers: FieldMap,
     /// Request options.
     pub options: Option<Arc<RequestOptions>>,
     /// Request body.
@@ -55,7 +55,7 @@ impl Request {
         scheme: Option<Scheme>,
         authority: Option<Authority>,
         path_with_query: Option<PathAndQuery>,
-        headers: impl Into<Arc<HeaderMap>>,
+        headers: impl Into<FieldMap>,
         options: Option<Arc<RequestOptions>>,
         body: impl Into<UnsyncBoxBody<Bytes, ErrorCode>>,
     ) -> (
@@ -119,7 +119,7 @@ impl Request {
             scheme,
             authority,
             path_and_query,
-            headers,
+            FieldMap::new_immutable(headers),
             None,
             body.map_err(Into::into).boxed_unsync(),
         )
@@ -134,13 +134,10 @@ impl Request {
         self,
         store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
-    ) -> Result<
-        (
-            http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-            Option<Arc<RequestOptions>>,
-        ),
-        ErrorCode,
-    > {
+    ) -> HttpResult<(
+        http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
+        Option<Arc<RequestOptions>>,
+    )> {
         self.into_http_with_getter(store, fut, T::http)
     }
 
@@ -150,19 +147,16 @@ impl Request {
         mut store: impl AsContextMut<Data = T>,
         fut: impl Future<Output = Result<(), ErrorCode>> + Send + 'static,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> Result<
-        (
-            http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
-            Option<Arc<RequestOptions>>,
-        ),
-        ErrorCode,
-    > {
+    ) -> HttpResult<(
+        http::Request<UnsyncBoxBody<Bytes, ErrorCode>>,
+        Option<Arc<RequestOptions>>,
+    )> {
         let Request {
             method,
             scheme,
             authority,
             path_with_query,
-            headers,
+            mut headers,
             options,
             body,
         } = self;
@@ -170,8 +164,8 @@ impl Request {
         let content_length = match get_content_length(&headers) {
             Ok(content_length) => content_length,
             Err(err) => {
-                body.drop(&mut store);
-                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))));
+                body.drop(&mut store).map_err(HttpError::trap)?;
+                return Err(ErrorCode::InternalError(Some(format!("{err:#}"))).into());
             }
         };
         // This match must appear before any potential errors handled with '?'
@@ -194,6 +188,7 @@ impl Request {
                 ErrorCode::HttpRequestBodySize,
                 getter,
             )
+            .map_err(HttpError::trap)?
             .boxed_unsync(),
             Body::Host { body, result_tx } => {
                 if let Some(limit) = content_length {
@@ -212,22 +207,22 @@ impl Request {
                 }
             }
         };
-        let mut headers = Arc::unwrap_or_clone(headers);
         let mut store = store.as_context_mut();
-        let WasiHttpCtxView { ctx, .. } = getter(store.data_mut());
-        if ctx.set_host_header() {
+        let WasiHttpCtxView { hooks, ctx, .. } = getter(store.data_mut());
+        headers.set_mutable(ctx.field_size_limit);
+        if hooks.set_host_header() {
             let host = if let Some(authority) = authority.as_ref() {
                 HeaderValue::try_from(authority.as_str())
                     .map_err(|err| ErrorCode::InternalError(Some(err.to_string())))?
             } else {
                 HeaderValue::from_static("")
             };
-            headers.insert(HOST, host);
+            headers.append(HOST, host).map_err(HttpError::trap)?;
         }
         let scheme = match scheme {
-            None => ctx.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
-            Some(scheme) if ctx.is_supported_scheme(&scheme) => scheme,
-            Some(..) => return Err(ErrorCode::HttpProtocolError),
+            None => hooks.default_scheme().ok_or(ErrorCode::HttpProtocolError)?,
+            Some(scheme) if hooks.is_supported_scheme(&scheme) => scheme,
+            Some(..) => return Err(ErrorCode::HttpProtocolError.into()),
         };
         let mut uri = Uri::builder().scheme(scheme);
         if let Some(authority) = authority {
@@ -241,7 +236,7 @@ impl Request {
             ErrorCode::HttpRequestUriInvalid
         })?;
         let mut req = http::Request::builder();
-        *req.headers_mut().unwrap() = headers;
+        *req.headers_mut().unwrap() = headers.into();
         let req = req
             .method(method)
             .uri(uri)
@@ -483,7 +478,7 @@ pub async fn default_send_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::p3::DefaultWasiHttpCtx;
+    use crate::WasiHttpCtx;
     use core::future::Future;
     use core::pin::pin;
     use core::str::FromStr;
@@ -496,7 +491,7 @@ mod tests {
     struct TestCtx {
         table: ResourceTable,
         wasi: WasiCtx,
-        http: DefaultWasiHttpCtx,
+        http: WasiHttpCtx,
     }
 
     impl TestCtx {
@@ -504,7 +499,7 @@ mod tests {
             Self {
                 table: ResourceTable::default(),
                 wasi: WasiCtxBuilder::new().build(),
-                http: DefaultWasiHttpCtx,
+                http: Default::default(),
             }
         }
     }
@@ -523,6 +518,7 @@ mod tests {
             WasiHttpCtxView {
                 ctx: &mut self.http,
                 table: &mut self.table,
+                hooks: crate::p3::default_hooks(),
             }
         }
     }
@@ -538,7 +534,7 @@ mod tests {
                 scheme.clone(),
                 Some(Authority::from_static("example.com")),
                 Some(PathAndQuery::from_static("/path?query=1")),
-                HeaderMap::new(),
+                FieldMap::default(),
                 None,
                 Full::new(Bytes::from_static(b"body"))
                     .map_err(|x| match x {})
@@ -574,15 +570,20 @@ mod tests {
             Some(Scheme::HTTP),
             Some(Authority::from_static("example.com")),
             None, // <-- should fail, must be Some(_) when authority is set
-            HeaderMap::new(),
+            FieldMap::default(),
             None,
             Empty::new().map_err(|x| match x {}).boxed_unsync(),
         );
         let mut store = Store::new(&Engine::default(), TestCtx::new());
-        let result = req.into_http(&mut store, async {
-            Err(ErrorCode::InternalError(Some("uh oh".to_string())))
-        });
-        assert!(matches!(result, Err(ErrorCode::HttpRequestUriInvalid)));
+        let result = req
+            .into_http(&mut store, async {
+                Err(ErrorCode::InternalError(Some("uh oh".to_string())))
+            })
+            .unwrap_err();
+        assert!(matches!(
+            result.downcast()?,
+            ErrorCode::HttpRequestUriInvalid,
+        ));
         let mut cx = Context::from_waker(Waker::noop());
         let result = pin!(fut).poll(&mut cx);
         assert!(matches!(

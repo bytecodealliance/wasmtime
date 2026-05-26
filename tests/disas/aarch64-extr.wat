@@ -26,6 +26,14 @@
     i32.const 11
     i32.shr_u
     i32.or)
+  (func $i32_0 (param i32 i32) (result i32)
+    local.get 0
+    i32.const 32
+    i32.shl
+    local.get 1
+    i32.const 0
+    i32.shr_u
+    i32.or)
 
   (func $i64_21 (param i64 i64) (result i64)
     local.get 0
@@ -51,6 +59,14 @@
     i64.const 11
     i64.shr_u
     i64.or)
+  (func $i64_0 (param i64 i64) (result i64)
+    local.get 0
+    i64.const 64
+    i64.shl
+    local.get 1
+    i64.const 0
+    i64.shr_u
+    i64.or)
 )
 
 ;; wasm[0]::function[0]::i32_21:
@@ -74,23 +90,37 @@
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
-;; wasm[0]::function[3]::i64_21:
+;; wasm[0]::function[3]::i32_0:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       orr     w2, w4, w5
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;
+;; wasm[0]::function[4]::i64_21:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       extr    x2, x4, x5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
-;; wasm[0]::function[4]::i64_21_swapped:
+;; wasm[0]::function[5]::i64_21_swapped:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       extr    x2, x4, x5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
-;; wasm[0]::function[5]::i64_11:
+;; wasm[0]::function[6]::i64_11:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       extr    x2, x4, x5, #0xb
+;;       ldp     x29, x30, [sp], #0x10
+;;       ret
+;;
+;; wasm[0]::function[7]::i64_0:
+;;       stp     x29, x30, [sp, #-0x10]!
+;;       mov     x29, sp
+;;       orr     x2, x4, x5
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

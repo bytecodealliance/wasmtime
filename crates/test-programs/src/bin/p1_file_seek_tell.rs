@@ -1,9 +1,9 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::{assert_errno, open_scratch_directory};
+use test_programs::preview1::{BlockingMode, assert_errno, open_scratch_directory};
 
-unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
+unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     // Create a file in the scratch directory.
     let file_fd = wasip1::path_open(
         dir_fd,
@@ -12,7 +12,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("opening a file");
     assert!(
@@ -30,7 +30,9 @@ unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
         buf: data.as_ptr() as *const _,
         buf_len: data.len(),
     };
-    let nwritten = wasip1::fd_write(file_fd, &[iov]).expect("writing to a file");
+    let nwritten = blocking_mode
+        .write(file_fd, &[iov])
+        .expect("writing to a file");
     assert_eq!(nwritten, 100, "should write 100 bytes to file");
 
     // Check current offset
@@ -72,7 +74,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
         buf: buffer.as_mut_ptr(),
         buf_len: buffer.len(),
     };
-    let nread = wasip1::fd_read(file_fd, &[iovec]).expect("reading file");
+    let nread = blocking_mode.read(file_fd, &[iovec]).expect("reading file");
     assert_eq!(nread, buffer.len(), "should read {} bytes", buffer.len());
 
     offset = wasip1::fd_tell(file_fd).expect("getting file offset after reading");
@@ -84,7 +86,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasip1::Fd) {
 
 // Test that when a file is opened with `O_APPEND` that acquiring the current
 // position indicates the end of the file.
-unsafe fn seek_and_o_append(dir_fd: wasip1::Fd) {
+unsafe fn seek_and_o_append(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     let path = "file2";
     let file_fd = wasip1::path_open(
         dir_fd,
@@ -93,7 +95,7 @@ unsafe fn seek_and_o_append(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
-        wasip1::FDFLAGS_APPEND,
+        blocking_mode.fd_flags() | wasip1::FDFLAGS_APPEND,
     )
     .expect("opening a file");
     assert!(
@@ -111,7 +113,7 @@ unsafe fn seek_and_o_append(dir_fd: wasip1::Fd) {
         buf: data.as_ptr() as *const _,
         buf_len: data.len(),
     };
-    let nwritten = wasip1::fd_write(file_fd, &[iov]).unwrap();
+    let nwritten = blocking_mode.write(file_fd, &[iov]).unwrap();
     assert_eq!(nwritten, 100);
 
     let mut offset = wasip1::fd_seek(file_fd, 0, wasip1::WHENCE_CUR).unwrap();
@@ -144,7 +146,9 @@ fn main() {
 
     // Run the tests.
     unsafe {
-        test_file_seek_tell(dir_fd);
-        seek_and_o_append(dir_fd);
+        test_file_seek_tell(dir_fd, BlockingMode::Blocking);
+        test_file_seek_tell(dir_fd, BlockingMode::NonBlocking);
+        seek_and_o_append(dir_fd, BlockingMode::Blocking);
+        seek_and_o_append(dir_fd, BlockingMode::NonBlocking);
     }
 }

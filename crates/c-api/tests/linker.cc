@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <wasmtime/func.hh>
 #include <wasmtime/linker.hh>
 
 using namespace wasmtime;
@@ -8,7 +9,8 @@ TEST(Linker, Smoke) {
   Linker linker(engine);
   Store store(engine);
   linker.allow_shadowing(false);
-  Global g = Global::create(store, GlobalType(ValKind::I32, false), 1).unwrap();
+  Global g =
+      Global::create(store, GlobalType(ValType::i32(), false), 1).unwrap();
   linker.define(store, "a", "g", g).unwrap();
   linker.define_wasi().unwrap();
   linker

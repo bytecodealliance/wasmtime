@@ -76,22 +76,22 @@ impl HostFunc {
     ///
     /// Note that if `asyncness` is mistaken then that'll result in panics
     /// in Wasmtime, but not memory unsafety.
-    fn new<T, F, P, R>(asyncness: Asyncness, func: F) -> Arc<HostFunc>
+    fn new<T, F, P, R>(asyncness: Asyncness, func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         R: Send + Sync + 'static,
         F: HostFn<T, P, R> + Send + Sync + 'static,
     {
-        Arc::new(HostFunc {
+        Ok(try_new::<Arc<_>>(HostFunc {
             entrypoint: F::cabi_entrypoint,
             typecheck: F::typecheck,
-            func: Box::new(func),
+            func: try_new::<Box<_>>(func)?,
             asyncness,
-        })
+        })?)
     }
 
     /// Equivalent for `Linker::func_wrap`
-    pub(crate) fn func_wrap<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
@@ -108,7 +108,7 @@ impl HostFunc {
 
     /// Equivalent for `Linker::func_wrap_async`
     #[cfg(feature = "async")]
-    pub(crate) fn func_wrap_async<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap_async<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, P) -> Box<dyn Future<Output = Result<R>> + Send + '_>
@@ -132,7 +132,7 @@ impl HostFunc {
 
     /// Equivalent for `Linker::func_wrap_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn func_wrap_concurrent<T, F, P, R>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_wrap_concurrent<T, F, P, R>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(&Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
@@ -155,7 +155,7 @@ impl HostFunc {
     }
 
     /// Equivalent of `Linker::func_new`
-    pub(crate) fn func_new<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: Fn(StoreContextMut<'_, T>, ComponentFunc, &[Val], &mut [Val]) -> Result<()>
@@ -177,7 +177,7 @@ impl HostFunc {
 
     /// Equivalent of `Linker::func_new_async`
     #[cfg(feature = "async")]
-    pub(crate) fn func_new_async<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new_async<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: for<'a> Fn(
@@ -209,7 +209,7 @@ impl HostFunc {
 
     /// Equivalent of `Linker::func_new_concurrent`
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn func_new_concurrent<T, F>(func: F) -> Arc<HostFunc>
+    pub(crate) fn func_new_concurrent<T, F>(func: F) -> Result<Arc<HostFunc>>
     where
         T: 'static,
         F: for<'a> Fn(
@@ -378,9 +378,9 @@ where
         }
 
         // Enter the host by pushing a `HostTask` into the concurrent state.
-        store.0.enter_host_call()?;
+        let host_task = store.0.host_task_create()?;
 
-        let task_exited = if async_ {
+        let host_task_complete = if async_ {
             #[cfg(feature = "component-model-async")]
             {
                 self.call_async_lower(store.as_context_mut(), instance, ty, options, storage)?
@@ -395,13 +395,13 @@ where
             true
         };
 
-        // If the host task exited, then it's popped and deallocated.
+        // If the host task completed, then it's deallocated.
         //
         // Note that if the host task did not exit then the `call_async_lower`
         // function transitively would have updated the current guest thread to
         // the caller of this host function.
-        if task_exited {
-            store.0.exit_host_call()?;
+        if host_task_complete {
+            store.0.host_task_delete(host_task)?;
         }
 
         Ok(())
@@ -447,7 +447,7 @@ where
                 ptr,
             )?)
         };
-        Self::lower_result_and_exit_call(&mut lower, ty, ret, dst)
+        Self::lower_result_and_exit_call(&mut lower, ty, Some(ret), dst)
     }
 
     /// Implementation of the "async" ABI of the component model.
@@ -499,7 +499,7 @@ where
                 Self::lower_result_and_exit_call(
                     &mut LowerContext::new(store, options, instance),
                     ty,
-                    result?,
+                    Some(result?),
                     Destination::Memory(retptr),
                 )?;
                 None
@@ -568,19 +568,30 @@ where
     fn lower_result_and_exit_call(
         lower: &mut LowerContext<'_, T>,
         ty: TypeFuncIndex,
-        ret: R,
+        ret: Option<R>,
         dst: Destination<'_>,
     ) -> Result<()> {
-        let caller_instance = lower.options().instance;
-        let mut flags = lower.instance_mut().instance_flags(caller_instance);
-        unsafe {
-            flags.set_may_leave(false);
-        }
-        Self::lower_result(lower, ty, ret, dst)?;
-        unsafe {
-            flags.set_may_leave(true);
-        }
+        // Before lowering below semantically ensure that the caller has dropped
+        // all of its borrows and such.
         lower.validate_scope_exit()?;
+
+        // At this point we're transitioning back to the caller task which means
+        // that the current task needs to be updated. This will restore the
+        // currently running thread as the caller's thread, for example if
+        // lowering below calls `realloc` it'll use the right context.
+        lower.store.0.host_task_reenter_caller()?;
+
+        if let Some(ret) = ret {
+            let caller_instance = lower.options().instance;
+            let mut flags = lower.instance_mut().instance_flags(caller_instance);
+            unsafe {
+                flags.set_may_leave(false);
+            }
+            Self::lower_result(lower, ty, ret, dst)?;
+            unsafe {
+                flags.set_may_leave(true);
+            }
+        }
         Ok(())
     }
 }

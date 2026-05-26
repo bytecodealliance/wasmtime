@@ -215,7 +215,7 @@ impl Wizer {
         }
 
         let instrumented_wasm = instrument::instrument(&mut cx);
-        self.debug_assert_valid_wasm(&instrumented_wasm);
+        self.debug_assert_valid_wasm(&instrumented_wasm, "instrumented module");
 
         Ok((cx, instrumented_wasm))
     }
@@ -237,22 +237,29 @@ impl Wizer {
         let snapshot = snapshot::snapshot(&cx, instance).await;
         let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames, true);
 
-        self.debug_assert_valid_wasm(&rewritten_wasm);
+        self.debug_assert_valid_wasm(&rewritten_wasm, "rewritten module");
 
         Ok(rewritten_wasm)
     }
 
-    fn debug_assert_valid_wasm(&self, wasm: &[u8]) {
+    fn debug_assert_valid_wasm(&self, wasm: &[u8], context: &str) {
         if !cfg!(debug_assertions) {
             return;
         }
         if let Err(error) = self.wasm_validate(&wasm) {
             #[cfg(feature = "wasmprinter")]
             let wat = wasmprinter::print_bytes(&wasm)
-                .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+                .unwrap_or_else(|e| format!("Disassembling to WAT failed: {e}"));
             #[cfg(not(feature = "wasmprinter"))]
             let wat = "`wasmprinter` cargo feature is not enabled".to_string();
-            panic!("instrumented Wasm is not valid: {error:?}\n\nWAT:\n{wat}");
+
+            let wat = if wat.len() > 16 * 1024 {
+                std::fs::write("invalid.wat", wat).expect("writing to invalid.wat");
+                "written to invalid.wat"
+            } else {
+                &wat
+            };
+            panic!("{context} is not valid wasm: {error:?}\n\nWAT:\n{wat}");
         }
     }
 

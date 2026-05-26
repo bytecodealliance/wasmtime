@@ -1,4 +1,4 @@
-use crate::{CExternType, wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t};
+use crate::{CExternType, wasm_externtype_t, wasm_valtype_vec_t};
 use std::cell::OnceCell;
 use std::{
     mem,
@@ -148,12 +148,12 @@ pub extern "C" fn wasm_functype_new(
     let params = params
         .take()
         .into_iter()
-        .map(|vt| vt.unwrap().ty.clone())
+        .map(|vt| (*vt.unwrap()).clone())
         .collect();
     let results = results
         .take()
         .into_iter()
-        .map(|vt| vt.unwrap().ty.clone())
+        .map(|vt| (*vt.unwrap()).clone())
         .collect();
     Box::new(wasm_functype_t::lazy(params, results))
 }
@@ -164,7 +164,7 @@ pub extern "C" fn wasm_functype_params(ft: &wasm_functype_t) -> &wasm_valtype_ve
     ft.params_cache.get_or_init(|| {
         let ty = ft.ty.lock().unwrap();
         ty.params()
-            .map(|p| Some(Box::new(wasm_valtype_t { ty: p.clone() })))
+            .map(|p| Some(Box::new(p.clone())))
             .collect::<Vec<_>>()
             .into()
     })
@@ -176,7 +176,7 @@ pub extern "C" fn wasm_functype_results(ft: &wasm_functype_t) -> &wasm_valtype_v
     ft.returns_cache.get_or_init(|| {
         let ty = ft.ty.lock().unwrap();
         ty.results()
-            .map(|p| Some(Box::new(wasm_valtype_t { ty: p.clone() })))
+            .map(|p| Some(Box::new(p.clone())))
             .collect::<Vec<_>>()
             .into()
     })

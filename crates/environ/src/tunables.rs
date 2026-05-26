@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crate::{IndexType, Limits, Memory, TripleExt};
+use core::num::NonZeroU32;
 use core::{fmt, str::FromStr};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
@@ -132,10 +133,7 @@ define_tunables! {
 
         /// Whether to enable inlining in Wasmtime's compilation orchestration
         /// or not.
-        pub inlining: bool,
-
-        /// Whether to inline calls within the same core Wasm module or not.
-        pub inlining_intra_module: IntraModuleInlining,
+        pub inlining: Inlining,
 
         /// The size of "small callees" that can be inlined regardless of the
         /// caller's size.
@@ -152,6 +150,44 @@ define_tunables! {
         /// Whether recording in RR is enabled or not. This is used primarily
         /// to signal checksum computation for compiled artifacts.
         pub recording: bool,
+
+        /// An allocation counter that triggers GC when it reaches zero.
+        ///
+        /// Decremented on every allocation and when it hits zero, a GC is
+        /// forced and the counter is reset. Only effective when
+        /// `cfg(gc_zeal)` is enabled.
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
+
+        /// Initial size, in bytes, to be allocated for GC heaps.
+        ///
+        /// This is the same as `memory_reservation` but for GC heaps.
+        pub gc_heap_reservation: u64,
+
+        /// The size, in bytes, of the guard page region for GC heaps.
+        ///
+        /// This is the same as `memory_guard_size` but for GC heaps.
+        pub gc_heap_guard_size: u64,
+
+        /// The size, in bytes, to allocate at the end of a relocated GC heap
+        /// for growth.
+        ///
+        /// This is the same as `memory_reservation_for_growth` but for GC
+        /// heaps.
+        pub gc_heap_reservation_for_growth: u64,
+
+        /// Whether or not GC heaps are allowed to be reallocated after initial
+        /// allocation at runtime.
+        ///
+        /// This is the same as `memory_may_move` but for GC heaps.
+        pub gc_heap_may_move: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on internal assertions failing.
+        pub metadata_for_internal_asserts: bool,
+
+        /// Boolean to track whether compiled code retains metadata necessary to
+        /// report extra information on gc heap corruption being detected.
+        pub metadata_for_gc_heap_corruption: bool,
     }
 
     pub struct ConfigTunables {
@@ -192,6 +228,7 @@ impl Tunables {
         if target.is_pulley() {
             ret.signals_based_traps = false;
             ret.memory_guard_size = 0;
+            ret.gc_heap_guard_size = 0;
         }
         Ok(ret)
     }
@@ -223,13 +260,19 @@ impl Tunables {
             winch_callable: false,
             signals_based_traps: false,
             memory_init_cow: true,
-            inlining: false,
-            inlining_intra_module: IntraModuleInlining::WhenUsingGc,
+            inlining: Inlining::No,
             inlining_small_callee_size: 50,
             inlining_sum_size_threshold: 2000,
             debug_guest: false,
             concurrency_support: true,
             recording: false,
+            gc_zeal_alloc_counter: None,
+            gc_heap_reservation: 0,
+            gc_heap_guard_size: 0,
+            gc_heap_reservation_for_growth: 0,
+            gc_heap_may_move: true,
+            metadata_for_internal_asserts: false,
+            metadata_for_gc_heap_corruption: true,
         }
     }
 
@@ -243,6 +286,12 @@ impl Tunables {
             memory_guard_size: 0x1_0000,
             memory_reservation_for_growth: 1 << 20, // 1MB
             signals_based_traps: true,
+
+            // GC heaps on 32-bit: conservative defaults similar to linear
+            // memories.
+            gc_heap_reservation: 10 * (1 << 20),
+            gc_heap_guard_size: 0x1_0000,
+            gc_heap_reservation_for_growth: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
         }
@@ -269,6 +318,12 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            // GC heaps on 64-bit: use 4GiB reservation and 32MiB guard pages
+            // to enable bounds check elision, matching linear memory defaults.
+            gc_heap_reservation: 1 << 32,
+            gc_heap_guard_size: 32 << 20,
+            gc_heap_reservation_for_growth: 2 << 30, // 2GB
+
             signals_based_traps: true,
             ..Tunables::default_miri()
         }
@@ -289,6 +344,73 @@ impl Tunables {
     }
 }
 
+/// Whether a heap is backing a linear memory or a GC heap.
+///
+/// This is used by [`MemoryTunables`] to select between the memory tunables and
+/// the GC heap tunables.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MemoryKind {
+    /// A WebAssembly linear memory.
+    LinearMemory,
+    /// A GC heap for garbage-collected objects.
+    GcHeap,
+}
+
+/// A view into a [`Tunables`] that selects the appropriate linear-memory or
+/// GC-heap flavor of each tunable based on a [`MemoryKind`].
+pub struct MemoryTunables<'a> {
+    tunables: &'a Tunables,
+    kind: MemoryKind,
+}
+
+impl<'a> MemoryTunables<'a> {
+    /// Create a new `MemoryTunables` view.
+    pub fn new(tunables: &'a Tunables, kind: MemoryKind) -> Self {
+        Self { tunables, kind }
+    }
+
+    /// The virtual memory reservation for this kind of memory.
+    pub fn reservation(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation,
+        }
+    }
+
+    /// The size of the guard page region for this kind of memory.
+    pub fn guard_size(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_guard_size,
+            MemoryKind::GcHeap => self.tunables.gc_heap_guard_size,
+        }
+    }
+
+    /// Extra virtual memory to reserve beyond the initially mapped pages for
+    /// this kind of memory.
+    pub fn reservation_for_growth(&self) -> u64 {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_reservation_for_growth,
+            MemoryKind::GcHeap => self.tunables.gc_heap_reservation_for_growth,
+        }
+    }
+
+    /// Whether this kind of memory's base pointer may be relocated at runtime.
+    pub fn may_move(&self) -> bool {
+        match self.kind {
+            MemoryKind::LinearMemory => self.tunables.memory_may_move,
+            MemoryKind::GcHeap => self.tunables.gc_heap_may_move,
+        }
+    }
+
+    /// Get the underlying tunables.
+    ///
+    /// This is ONLY for accessing tunable fields that DO NOT come in a
+    /// linear-memory flavor and a GC-heap flavor.
+    pub fn tunables(&self) -> &'a Tunables {
+        self.tunables
+    }
+}
+
 /// The garbage collector implementation to use.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum Collector {
@@ -296,6 +418,8 @@ pub enum Collector {
     DeferredReferenceCounting,
     /// The null collector.
     Null,
+    /// The copying collector.
+    Copying,
 }
 
 impl fmt::Display for Collector {
@@ -303,31 +427,71 @@ impl fmt::Display for Collector {
         match self {
             Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
             Collector::Null => write!(f, "null"),
+            Collector::Copying => write!(f, "copying"),
         }
     }
 }
 
-/// Whether to inline function calls within the same module.
+/// Inlining modes supported by Wasmtime.
 #[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[expect(missing_docs, reason = "self-describing variants")]
-pub enum IntraModuleInlining {
+pub enum Inlining {
+    /// All inlining is enabled wherever possible.
+    ///
+    /// This includes inter-module inlining (across modules) as well as
+    /// intra-module inlining (within a module).
+    ///
+    /// Note that backtraces may omit inlined stack frames.
     Yes,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is only allowed when the module is using GC.
+    ///
+    /// Note that backtraces may omit inlined stack frames.
+    InterModuleAndIntraGc,
+
+    /// Inter-module inlining (across modules) is allowed, but intra-module
+    /// (within a module) is not allowed.
+    ///
+    /// Note that backtraces may omit inlined stack frames.
+    InterModule,
+
+    /// No module inlining is allowed, either inter- or intra-module. Only
+    /// inlining Wasmtime's intrinsics are allowed.
+    ///
+    /// This option, for example, never emits WebAssembly stack frames from
+    /// backtraces.
+    Intrinsics,
+
+    /// Inlining is disabled entirely.
     No,
-    WhenUsingGc,
 }
 
-impl FromStr for IntraModuleInlining {
+impl FromStr for Inlining {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "y" | "yes" | "true" => Ok(Self::Yes),
             "n" | "no" | "false" => Ok(Self::No),
-            "gc" => Ok(Self::WhenUsingGc),
+            "gc" => Ok(Self::InterModuleAndIntraGc),
+            "inter-module" => Ok(Self::InterModuleAndIntraGc),
+            "intrinsics" => Ok(Self::Intrinsics),
             _ => bail!(
                 "invalid intra-module inlining option string: `{s}`, \
-                 only yes,no,gc accepted"
+                 only yes,no,gc,inter-module,intrinsics accepted"
             ),
+        }
+    }
+}
+
+impl fmt::Display for Inlining {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Inlining::Yes => write!(f, "yes"),
+            Inlining::InterModuleAndIntraGc => write!(f, "gc"),
+            Inlining::InterModule => write!(f, "inter-module"),
+            Inlining::Intrinsics => write!(f, "intrinsics"),
+            Inlining::No => write!(f, "no"),
         }
     }
 }

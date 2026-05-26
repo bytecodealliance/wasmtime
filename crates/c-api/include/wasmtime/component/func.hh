@@ -19,7 +19,7 @@ namespace wasmtime {
 namespace component {
 
 /**
- * \brief Class representing an instantiated WebAssembly component.
+ * \brief Class representing a WebAssembly component function.
  */
 class Func {
   wasmtime_component_func_t func;
@@ -67,4 +67,4 @@ public:
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
-#endif // WASMTIME_COMPONENT_FUNC_H
+#endif // WASMTIME_COMPONENT_FUNC_HH

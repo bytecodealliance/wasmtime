@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: publish
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - run: rustup update stable && rustup default stable

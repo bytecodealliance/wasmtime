@@ -89,13 +89,13 @@ impl<'a> CodeBuilder<'a> {
                         // unfortunately the `wasm-compose` API is not powerful
                         // enough for us to do all that.
                         ensure!(
-                            imp.name.0 != intrinsics_import,
+                            imp.name.name != intrinsics_import,
                             "main Wasm cannot import the unsafe intrinsics (`{intrinsics_import}`) \
                              when using compile-time builtins"
                         );
 
                         if let wasmparser::ComponentTypeRef::Instance(_) = imp.ty {
-                            instance_imports.insert(imp.name.0);
+                            instance_imports.insert(imp.name.name);
                         }
                     }
                 }
@@ -223,6 +223,7 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// See the example in [CodeBuilder::expose_unsafe_intrinsics], which uses
     /// compile-time builtins.
+    #[allow(unused_variables, reason = "`wasm_path` only used with `wat` feature")]
     pub unsafe fn compile_time_builtins_binary_or_text(
         &mut self,
         name: impl Into<Cow<'a, str>>,

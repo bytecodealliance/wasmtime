@@ -233,42 +233,17 @@ pub trait OutputStream: Pollable {
     /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
+        let n = self.check_write()?;
+        if nelem > n {
+            return Err(StreamError::trap(
+                "cannot write more zeroes than `check_write` allows",
+            ));
+        };
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
         self.write(bs)?;
         Ok(())
-    }
-
-    /// Perform a write of up to 4096 zeroes, and then flush the stream.
-    /// Block until all of these operations are complete, or an error
-    /// occurs.
-    ///
-    /// This is a convenience wrapper around the use of `check-write`,
-    /// `subscribe`, `write-zeroes`, and `flush`, and is implemented with
-    /// the following pseudo-code:
-    ///
-    /// ```text
-    /// let pollable = this.subscribe();
-    /// while num_zeroes != 0 {
-    ///     // Wait for the stream to become writable
-    ///     pollable.block();
-    ///     let Ok(n) = this.check-write(); // eliding error handling
-    ///     let len = min(n, num_zeroes);
-    ///     this.write-zeroes(len);         // eliding error handling
-    ///     num_zeroes -= len;
-    /// }
-    /// this.flush();
-    /// // Wait for completion of `flush`
-    /// pollable.block();
-    /// // Check for any errors that arose during `flush`
-    /// let _ = this.check-write();         // eliding error handling
-    /// ```
-    async fn blocking_write_zeroes_and_flush(&mut self, nelem: usize) -> StreamResult<()> {
-        // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
-        // repeatedly from a 'static buffer of zeros.
-        let bs = Bytes::from_iter(core::iter::repeat(0).take(nelem));
-        self.blocking_write_and_flush(bs).await
     }
 
     /// Simultaneously waits for this stream to be writable and then returns how

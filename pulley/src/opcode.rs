@@ -76,7 +76,7 @@ macro_rules! define_extended_opcode {
             /// The value of the maximum defined extended opcode.
             pub const MAX: u16 = $(
                 if true { 1 } else { ExtendedOpcode::$name as u16 } +
-            )* 0;
+            )* 0 - 1;
         }
     };
 }
@@ -102,5 +102,18 @@ impl ExtendedOpcode {
     pub unsafe fn unchecked_new(byte: u16) -> Self {
         debug_assert!(byte <= Self::MAX);
         unsafe { core::mem::transmute(byte) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_values() {
+        assert!(Opcode::new(Opcode::MAX).is_some());
+        assert!(Opcode::new(Opcode::MAX + 1).is_none());
+        assert!(ExtendedOpcode::new(ExtendedOpcode::MAX).is_some());
+        assert!(ExtendedOpcode::new(ExtendedOpcode::MAX + 1).is_none());
     }
 }

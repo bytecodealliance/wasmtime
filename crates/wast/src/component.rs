@@ -290,6 +290,7 @@ fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
         Val::Future(..) => "future",
         Val::Stream(..) => "stream",
         Val::ErrorContext(..) => "error-context",
+        Val::Map(..) => "map",
     };
     bail!("expected `{expected}` got `{actual}`")
 }

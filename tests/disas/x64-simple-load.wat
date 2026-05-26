@@ -17,10 +17,10 @@
 ;;       ╰─╼ addrmap: 0x21
 ;;       movl    %edx, %edi
 ;;       movzbq  (%rsi, %rdi), %rax
-;;       ╰─╼ trap: MemoryOutOfBounds
+;;       ╰─╼ trap: Normal(MemoryOutOfBounds)
 ;;       movzbq  4(%rsi, %rdi), %rcx
 ;;       ├─╼ addrmap: 0x26
-;;       ╰─╼ trap: MemoryOutOfBounds
+;;       ╰─╼ trap: Normal(MemoryOutOfBounds)
 ;;       movq    %rbp, %rsp
 ;;       ╰─╼ addrmap: 0x29
 ;;       popq    %rbp

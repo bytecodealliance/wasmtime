@@ -144,8 +144,10 @@ WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t *context,
  *
  * The `context` argument must not be NULL.
  */
+#ifdef WASMTIME_FEATURE_GC
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_context_gc(wasmtime_context_t *context);
+#endif
 
 /**
  * \brief Set fuel to this context's store for wasm to consume while executing.
@@ -194,6 +196,19 @@ WASM_API_EXTERN wasmtime_error_t *
 wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 #endif // WASMTIME_FEATURE_WASI
+
+#ifdef WASMTIME_FEATURE_WASI_HTTP
+
+/**
+ * \brief Initializes the WASI HTTP context for this store.
+ *
+ * Must be called before instantiating a component that uses `wasi:http`.
+ * Requires WASI to be configured first via #wasmtime_context_set_wasi.
+ */
+WASM_API_EXTERN void
+wasmtime_context_set_wasi_http(wasmtime_context_t *context);
+
+#endif // WASMTIME_FEATURE_WASI_HTTP
 
 /**
  * \brief Configures the relative deadline at which point WebAssembly code will

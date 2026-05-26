@@ -1,0 +1,95 @@
+test compile precise-output
+set unwind_info=false
+target aarch64
+
+;; Regression test: shift_masked_imm in amode_no_more_iconst must use the ishl
+;; type, not the load access type. When load.i8 has ishl.i64 by 56, the old code
+;; computed shift_masked_imm(I8, 56) = 56 & 7 = 0, incorrectly folding the
+;; shift into a RegScaled amode with LSL #0. The correct masking is
+;; shift_masked_imm(I64, 56) = 56 & 63 = 56, which does not match ty_bytes(I8)
+;; and prevents the fold.
+
+function %load_i8_ishl56_should_not_fold(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 56
+  v3 = ishl v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i8 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   lsl x4, x1, #56
+;   ldrb w0, [x0, x4]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x4, x1, #0x38
+;   ldrb w0, [x0, x4] ; trap: heap_oob
+;   ret
+
+function %load_i16_ishl17_should_not_fold(i64, i64) -> i16 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 17
+  v3 = ishl v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i16 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   lsl x4, x1, #17
+;   ldrh w0, [x0, x4]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x4, x1, #0x11
+;   ldrh w0, [x0, x4] ; trap: heap_oob
+;   ret
+
+function %load_i32_ishl34_should_not_fold(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 34
+  v3 = ishl v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i32 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   lsl x4, x1, #34
+;   ldr w0, [x0, x4]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x4, x1, #0x22
+;   ldr w0, [x0, x4] ; trap: heap_oob
+;   ret
+
+;; Same as the i8 case but with iadd operands swapped
+function %load_i8_ishl56_swapped_should_not_fold(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 56
+  v3 = ishl v1, v2
+  v4 = iadd v3, v0
+  v5 = load.i8 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   lsl x4, x1, #56
+;   ldrb w0, [x4, x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x4, x1, #0x38
+;   ldrb w0, [x4, x0] ; trap: heap_oob
+;   ret

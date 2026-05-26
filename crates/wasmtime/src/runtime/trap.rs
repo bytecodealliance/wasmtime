@@ -1,13 +1,14 @@
 #[cfg(feature = "coredump")]
 use super::coredump::WasmCoreDump;
-#[cfg(feature = "gc")]
-use crate::ThrownException;
 use crate::prelude::*;
 use crate::store::StoreOpaque;
-use crate::{AsContext, Module};
+use crate::{AsContext, Module, bug};
 use core::fmt;
 use core::num::NonZeroUsize;
-use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_or_index};
+use wasmtime_core::alloc::TryVec;
+use wasmtime_environ::{
+    CompiledTrap, FilePos, demangle_function_name, demangle_function_name_or_index,
+};
 
 /// Representation of a WebAssembly trap and what caused it to occur.
 ///
@@ -86,8 +87,6 @@ pub(crate) fn from_runtime_box(
         coredumpstack,
     } = *runtime_trap;
     let (mut error, pc) = match reason {
-        #[cfg(feature = "gc")]
-        crate::runtime::vm::TrapReason::Exception => (ThrownException.into(), None),
         // For user-defined errors they're already an `crate::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
         // been captured so it's attempted to get inserted here.
@@ -107,7 +106,15 @@ pub(crate) fn from_runtime_box(
             faulting_addr,
             trap,
         } => {
-            let mut err: Error = trap.into();
+            let mut err: Error = match trap {
+                CompiledTrap::Normal(trap) => trap.into(),
+                CompiledTrap::InternalAssert => {
+                    bug!("internal assert triggered in compiled code").into()
+                }
+                CompiledTrap::GcHeapCorrupt => {
+                    bug!("gc heap corruption detected in compiled code").into()
+                }
+            };
 
             // If a fault address was present, for example with segfaults,
             // then simultaneously assert that it's within a known linear memory
@@ -118,7 +125,6 @@ pub(crate) fn from_runtime_box(
             }
             (err, Some(pc))
         }
-        crate::runtime::vm::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
 
     if let Some(bt) = backtrace {
@@ -308,7 +314,16 @@ impl WasmBacktrace {
                 _runtime_trace: crate::runtime::vm::Backtrace::empty(),
             };
         };
-        let mut wasm_trace = Vec::<FrameInfo>::with_capacity(max_frames.get());
+        let mut wasm_trace = match TryVec::with_capacity(max_frames.get()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Self {
+                    wasm_trace: Vec::new(),
+                    hint_wasm_backtrace_details_env: false,
+                    _runtime_trace: crate::runtime::vm::Backtrace::empty(),
+                };
+            }
+        };
         let mut hint_wasm_backtrace_details_env = false;
         let wasm_backtrace_details_env_used =
             store.engine().config().wasm_backtrace_details_env_used;
@@ -361,7 +376,10 @@ impl WasmBacktrace {
             // and we ignore frames from modules that were not registered in
             // this store's module registry.
             if let Some((info, module)) = store.modules().lookup_frame_info(pc_to_lookup) {
-                wasm_trace.push(info);
+                if wasm_trace.push(info).is_err() {
+                    // Better to return a partial backtrace than none.
+                    break;
+                }
 
                 // If this frame has unparsed debug information and the
                 // store's configuration indicates that we were
@@ -381,7 +399,7 @@ impl WasmBacktrace {
         }
 
         Self {
-            wasm_trace,
+            wasm_trace: wasm_trace.into(),
             _runtime_trace: runtime_trace,
             hint_wasm_backtrace_details_env,
         }

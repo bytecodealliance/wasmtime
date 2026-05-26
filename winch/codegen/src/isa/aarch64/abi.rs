@@ -210,10 +210,7 @@ mod tests {
 
     #[test]
     fn xreg_abi_sig() -> Result<()> {
-        let wasm_sig = WasmFuncType::new(
-            [I32, I64, I32, I64, I32, I32, I64, I32, I64].into(),
-            [].into(),
-        );
+        let wasm_sig = WasmFuncType::new([I32, I64, I32, I64, I32, I32, I64, I32, I64], [])?;
 
         let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
@@ -232,10 +229,7 @@ mod tests {
 
     #[test]
     fn vreg_abi_sig() -> Result<()> {
-        let wasm_sig = WasmFuncType::new(
-            [F32, F64, F32, F64, F32, F32, F64, F32, F64].into(),
-            [].into(),
-        );
+        let wasm_sig = WasmFuncType::new([F32, F64, F32, F64, F32, F32, F64, F32, F64], [])?;
 
         let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
@@ -254,10 +248,7 @@ mod tests {
 
     #[test]
     fn mixed_abi_sig() -> Result<()> {
-        let wasm_sig = WasmFuncType::new(
-            [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
-            [].into(),
-        );
+        let wasm_sig = WasmFuncType::new([F32, I32, I64, F64, I32, F32, F64, F32, F64], [])?;
 
         let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
@@ -276,10 +267,7 @@ mod tests {
 
     #[test]
     fn int_abi_sig_multi_returns() -> Result<()> {
-        let wasm_sig = WasmFuncType::new(
-            [I32, I64, I32, I64, I32, I32].into(),
-            [I32, I32, I32].into(),
-        );
+        let wasm_sig = WasmFuncType::new([I32, I64, I32, I64, I32, I32], [I32, I32, I32])?;
 
         let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
@@ -300,10 +288,7 @@ mod tests {
 
     #[test]
     fn mixed_abi_sig_multi_returns() -> Result<()> {
-        let wasm_sig = WasmFuncType::new(
-            [F32, I32, I64, F64, I32].into(),
-            [I32, F32, I32, F32, I64].into(),
-        );
+        let wasm_sig = WasmFuncType::new([F32, I32, I64, F64, I32], [I32, F32, I32, F32, I64])?;
 
         let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;

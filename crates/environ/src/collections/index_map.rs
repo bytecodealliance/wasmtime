@@ -18,11 +18,11 @@ use hashbrown::DefaultHashBuilder;
 
 /// A wrapper around [`indexmap::IndexMap`] that only provides fallible
 /// allocation.
-pub struct IndexMap<K, V, S = DefaultHashBuilder> {
+pub struct TryIndexMap<K, V, S = DefaultHashBuilder> {
     inner: indexmap::IndexMap<K, V, S>,
 }
 
-impl<K, V, S> TryClone for IndexMap<K, V, S>
+impl<K, V, S> TryClone for TryIndexMap<K, V, S>
 where
     K: Eq + Hash + TryClone,
     V: TryClone,
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<K, V, S> fmt::Debug for IndexMap<K, V, S>
+impl<K, V, S> fmt::Debug for TryIndexMap<K, V, S>
 where
     K: fmt::Debug,
     V: fmt::Debug,
@@ -48,19 +48,19 @@ where
     }
 }
 
-impl<K, V, S> From<IndexMap<K, V, S>> for indexmap::IndexMap<K, V, S> {
-    fn from(map: IndexMap<K, V, S>) -> Self {
+impl<K, V, S> From<TryIndexMap<K, V, S>> for indexmap::IndexMap<K, V, S> {
+    fn from(map: TryIndexMap<K, V, S>) -> Self {
         map.inner
     }
 }
 
-impl<K, V, S> From<indexmap::IndexMap<K, V, S>> for IndexMap<K, V, S> {
+impl<K, V, S> From<indexmap::IndexMap<K, V, S>> for TryIndexMap<K, V, S> {
     fn from(inner: indexmap::IndexMap<K, V, S>) -> Self {
         Self { inner }
     }
 }
 
-impl<K, V, H> serde::ser::Serialize for IndexMap<K, V, H>
+impl<K, V, H> serde::ser::Serialize for TryIndexMap<K, V, H>
 where
     K: serde::ser::Serialize,
     V: serde::ser::Serialize,
@@ -78,7 +78,7 @@ where
     }
 }
 
-impl<'de, K, V> serde::de::Deserialize<'de> for IndexMap<K, V>
+impl<'de, K, V> serde::de::Deserialize<'de> for TryIndexMap<K, V>
 where
     K: serde::de::Deserialize<'de> + Hash + Eq,
     V: serde::de::Deserialize<'de>,
@@ -87,14 +87,14 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        struct Visitor<K, V>(PhantomData<fn() -> IndexMap<K, V>>);
+        struct Visitor<K, V>(PhantomData<fn() -> TryIndexMap<K, V>>);
 
         impl<'de, K, V> serde::de::Visitor<'de> for Visitor<K, V>
         where
             K: serde::de::Deserialize<'de> + Hash + Eq,
             V: serde::de::Deserialize<'de>,
         {
-            type Value = IndexMap<K, V>;
+            type Value = TryIndexMap<K, V>;
 
             fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.write_str("an `IndexMap`")
@@ -106,7 +106,7 @@ where
             {
                 use serde::de::Error as _;
 
-                let mut result = IndexMap::<K, V>::new();
+                let mut result = TryIndexMap::<K, V>::new();
 
                 if let Some(len) = map.size_hint() {
                     result.reserve(len).map_err(|oom| A::Error::custom(oom))?;
@@ -124,7 +124,7 @@ where
     }
 }
 
-impl<K, V> IndexMap<K, V> {
+impl<K, V> TryIndexMap<K, V> {
     /// Same as [`indexmap::IndexMap::new`].
     pub fn new() -> Self {
         Self {
@@ -139,7 +139,7 @@ impl<K, V> IndexMap<K, V> {
     }
 }
 
-impl<K, V, S> IndexMap<K, V, S> {
+impl<K, V, S> TryIndexMap<K, V, S> {
     /// Same as [`indexmap::IndexMap::with_capacity_and_hasher`] but returns an
     /// error on allocation failure.
     pub fn with_capacity_and_hasher(n: usize, hash_builder: S) -> Result<Self, OutOfMemory> {
@@ -150,7 +150,7 @@ impl<K, V, S> IndexMap<K, V, S> {
 
     /// Same as [`indexmap::IndexMap::with_hasher`].
     pub const fn with_hasher(hash_builder: S) -> Self {
-        IndexMap {
+        TryIndexMap {
             inner: indexmap::IndexMap::with_hasher(hash_builder),
         }
     }
@@ -279,7 +279,7 @@ impl<K, V, S> IndexMap<K, V, S> {
     }
 }
 
-impl<K, V, S> IndexMap<K, V, S>
+impl<K, V, S> TryIndexMap<K, V, S>
 where
     K: Hash + Eq,
     S: BuildHasher,
@@ -369,7 +369,7 @@ where
     }
 }
 
-impl<K, V, S> IndexMap<K, V, S>
+impl<K, V, S> TryIndexMap<K, V, S>
 where
     S: BuildHasher,
 {
@@ -509,7 +509,7 @@ where
     }
 }
 
-impl<K, V, S> IndexMap<K, V, S> {
+impl<K, V, S> TryIndexMap<K, V, S> {
     /// Same as [`indexmap::IndexMap::pop`].
     pub fn pop(&mut self) -> Option<(K, V)> {
         self.inner.pop()
@@ -712,7 +712,7 @@ impl<K, V, S> IndexMap<K, V, S> {
     }
 }
 
-impl<K, V, Q, S> Index<&Q> for IndexMap<K, V, S>
+impl<K, V, Q, S> Index<&Q> for TryIndexMap<K, V, S>
 where
     Q: ?Sized + Hash + Eq,
     K: Borrow<Q>,
@@ -725,7 +725,7 @@ where
     }
 }
 
-impl<K, V, Q, S> IndexMut<&Q> for IndexMap<K, V, S>
+impl<K, V, Q, S> IndexMut<&Q> for TryIndexMap<K, V, S>
 where
     Q: ?Sized + Hash + Eq,
     K: Borrow<Q>,
@@ -736,7 +736,7 @@ where
     }
 }
 
-impl<K, V, S> Index<usize> for IndexMap<K, V, S> {
+impl<K, V, S> Index<usize> for TryIndexMap<K, V, S> {
     type Output = V;
 
     fn index(&self, index: usize) -> &V {
@@ -744,13 +744,13 @@ impl<K, V, S> Index<usize> for IndexMap<K, V, S> {
     }
 }
 
-impl<K, V, S> IndexMut<usize> for IndexMap<K, V, S> {
+impl<K, V, S> IndexMut<usize> for TryIndexMap<K, V, S> {
     fn index_mut(&mut self, index: usize) -> &mut V {
         &mut self.inner[index]
     }
 }
 
-impl<K, V, S> Default for IndexMap<K, V, S>
+impl<K, V, S> Default for TryIndexMap<K, V, S>
 where
     S: Default,
 {
@@ -759,19 +759,19 @@ where
     }
 }
 
-impl<K, V1, S1, V2, S2> PartialEq<IndexMap<K, V2, S2>> for IndexMap<K, V1, S1>
+impl<K, V1, S1, V2, S2> PartialEq<TryIndexMap<K, V2, S2>> for TryIndexMap<K, V1, S1>
 where
     K: Hash + Eq,
     V1: PartialEq<V2>,
     S1: BuildHasher,
     S2: BuildHasher,
 {
-    fn eq(&self, other: &IndexMap<K, V2, S2>) -> bool {
+    fn eq(&self, other: &TryIndexMap<K, V2, S2>) -> bool {
         &self.inner == &other.inner
     }
 }
 
-impl<K, V, S> Eq for IndexMap<K, V, S>
+impl<K, V, S> Eq for TryIndexMap<K, V, S>
 where
     K: Eq + Hash,
     V: Eq,
@@ -779,7 +779,7 @@ where
 {
 }
 
-impl<'a, K, V, S> IntoIterator for &'a IndexMap<K, V, S> {
+impl<'a, K, V, S> IntoIterator for &'a TryIndexMap<K, V, S> {
     type Item = (&'a K, &'a V);
     type IntoIter = inner::Iter<'a, K, V>;
 
@@ -788,7 +788,7 @@ impl<'a, K, V, S> IntoIterator for &'a IndexMap<K, V, S> {
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a mut IndexMap<K, V, S> {
+impl<'a, K, V, S> IntoIterator for &'a mut TryIndexMap<K, V, S> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = inner::IterMut<'a, K, V>;
 
@@ -797,7 +797,7 @@ impl<'a, K, V, S> IntoIterator for &'a mut IndexMap<K, V, S> {
     }
 }
 
-impl<K, V, S> IntoIterator for IndexMap<K, V, S> {
+impl<K, V, S> IntoIterator for TryIndexMap<K, V, S> {
     type Item = (K, V);
     type IntoIter = inner::IntoIter<K, V>;
 
@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn smoke() -> Result<()> {
-        let mut map = IndexMap::new();
+        let mut map = TryIndexMap::new();
 
         map.insert("a", 10)?;
         map.insert("b", 20)?;

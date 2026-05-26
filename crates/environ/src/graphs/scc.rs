@@ -187,7 +187,7 @@ where
         &self.component_nodes[start..end]
     }
 
-    /// Iterate over each strongly-connnected component and the `Node`s that are
+    /// Iterate over each strongly-connected component and the `Node`s that are
     /// members of it.
     ///
     /// Iteration happens in reverse-topological order (successors are visited
@@ -275,7 +275,7 @@ where
     /// ```
     ///
     /// Note that a graph's condensation is always acyclic, because the
-    /// strongly-conneted components encapsulate and hide any cycles from the
+    /// strongly-connected components encapsulate and hide any cycles from the
     /// input graph.
     ///
     /// I am not aware of an existing name for the reverse (or transpose)

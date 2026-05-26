@@ -65,7 +65,7 @@ mod unsupported {
 
     pub(crate) unsafe fn wasmtime_fiber_init(
         _top_of_stack: *mut u8,
-        _entry: extern "C" fn(*mut u8, *mut u8),
+        _entry: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
         _entry_arg0: *mut u8,
     ) {
         unreachable!();

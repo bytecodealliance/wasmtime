@@ -83,7 +83,7 @@ use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr};
 use alloc::sync::Arc;
 use core::{ops::Range, ptr::NonNull};
-use wasmtime_environ::Tunables;
+use wasmtime_environ::{MemoryKind, MemoryTunables};
 
 #[cfg(feature = "threads")]
 use wasmtime_environ::Trap;
@@ -117,7 +117,7 @@ pub trait RuntimeMemoryCreator: Send + Sync {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>>;
@@ -131,21 +131,27 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     fn new_memory(
         &self,
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         #[cfg(has_virtual_memory)]
-        if tunables.signals_based_traps
-            || tunables.memory_guard_size > 0
-            || tunables.memory_reservation > 0
-            || tunables.memory_init_cow
+        if memory_tunables.tunables().signals_based_traps
+            || memory_tunables.guard_size() > 0
+            || memory_tunables.reservation() > 0
+            || memory_tunables.tunables().memory_init_cow
         {
-            return Ok(Box::new(MmapMemory::new(ty, tunables, minimum, maximum)?));
+            return Ok(
+                try_new::<Box<_>>(MmapMemory::new(ty, memory_tunables, minimum, maximum)?)?
+                    as Box<dyn RuntimeLinearMemory>,
+            );
         }
 
         let _ = maximum;
-        Ok(Box::new(MallocMemory::new(ty, tunables, minimum)?))
+        Ok(
+            try_new::<Box<_>>(MallocMemory::new(ty, memory_tunables, minimum)?)?
+                as Box<dyn RuntimeLinearMemory>,
+        )
     }
 }
 
@@ -238,12 +244,14 @@ impl Memory {
         creator: &dyn RuntimeMemoryCreator,
         memory_image: Option<&Arc<MemoryImage>>,
         limiter: Option<&mut StoreResourceLimiter<'_>>,
+        kind: MemoryKind,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let tunables = engine.tunables();
-        let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
+        let memory_tunables = MemoryTunables::new(tunables, kind);
+        let allocation = creator.new_memory(ty, &memory_tunables, minimum, maximum)?;
 
-        let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
+        let memory = LocalMemory::new(ty, &memory_tunables, allocation, memory_image)?;
         Ok(if ty.shared {
             Memory::Shared(SharedMemory::wrap(engine, ty, memory)?)
         } else {
@@ -255,7 +263,7 @@ impl Memory {
     #[cfg(feature = "pooling-allocator")]
     pub async fn new_static(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         base: MemoryBase,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
@@ -263,13 +271,13 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
-        let allocation = Box::new(pooled_memory);
+        let allocation = try_new::<Box<_>>(pooled_memory)?;
 
         // Configure some defaults a bit differently for this memory within the
         // `LocalMemory` structure created, notably we already have
         // `memory_image` and regardless of configuration settings this memory
         // can't move its base pointer since it's a fixed allocation.
-        let mut memory = LocalMemory::new(ty, tunables, allocation, None)?;
+        let mut memory = LocalMemory::new(ty, memory_tunables, allocation, None)?;
         assert!(memory.memory_image.is_none());
         memory.memory_image = Some(memory_image);
         memory.memory_may_move = false;
@@ -354,15 +362,19 @@ impl Memory {
             )
         })?;
 
+        if !ty.allow_growth_to(minimum) {
+            bail!(
+                "memory minimum size of {} pages exceeds memory limits",
+                ty.limits.min
+            );
+        }
+
         Ok((minimum, maximum))
     }
 
     /// Returns this memory's page size, in bytes.
     pub fn page_size(&self) -> u64 {
-        match self {
-            Memory::Local(mem) => mem.page_size(),
-            Memory::Shared(mem) => mem.page_size(),
-        }
+        self.ty().page_size()
     }
 
     /// Returns the size of this memory, in bytes.
@@ -507,6 +519,13 @@ impl Memory {
             Memory::Shared(mem) => mem.wasm_accessible(),
         }
     }
+
+    fn ty(&self) -> &wasmtime_environ::Memory {
+        match self {
+            Memory::Local(mem) => mem.ty(),
+            Memory::Shared(mem) => mem.ty(),
+        }
+    }
 }
 
 /// An owned allocation of a wasm linear memory.
@@ -529,7 +548,7 @@ pub struct LocalMemory {
 impl LocalMemory {
     pub fn new(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
+        memory_tunables: &MemoryTunables<'_>,
         alloc: Box<dyn RuntimeLinearMemory>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<LocalMemory> {
@@ -553,7 +572,7 @@ impl LocalMemory {
 
                     let mut slot =
                         MemoryImageSlot::create(mmap_base, byte_size, alloc.byte_capacity());
-                    slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
+                    slot.instantiate(alloc.byte_size(), Some(image), ty, memory_tunables)?;
                     Some(slot)
                 } else {
                     None
@@ -566,15 +585,15 @@ impl LocalMemory {
         Ok(LocalMemory {
             ty: *ty,
             alloc,
-            memory_may_move: ty.memory_may_move(tunables),
+            memory_may_move: ty.memory_may_move(memory_tunables),
             memory_image,
-            memory_guard_size: tunables.memory_guard_size.try_into().unwrap(),
-            memory_reservation: tunables.memory_reservation.try_into().unwrap(),
+            memory_guard_size: memory_tunables.guard_size().try_into().unwrap(),
+            memory_reservation: memory_tunables.reservation().try_into().unwrap(),
         })
     }
 
-    pub fn page_size(&self) -> u64 {
-        self.ty.page_size()
+    pub fn ty(&self) -> &wasmtime_environ::Memory {
+        &self.ty
     }
 
     /// Grows a memory by `delta_pages`.
@@ -595,7 +614,7 @@ impl LocalMemory {
             return Ok(Some((old_byte_size, old_byte_size)));
         }
 
-        let page_size = usize::try_from(self.page_size()).unwrap();
+        let page_size = usize::try_from(self.ty().page_size()).unwrap();
 
         // The largest wasm-page-aligned region of memory is possible to
         // represent in a `usize`. This will be impossible for the system to
@@ -615,6 +634,17 @@ impl LocalMemory {
             .maximum_byte_size()
             .ok()
             .and_then(|n| usize::try_from(n).ok());
+
+        // Disallow growth to a value which this linear memory's type
+        // cannot represent. For example 1-byte-page memories cannot be
+        // 4GiB in size.
+        if !self.ty().allow_growth_to(new_byte_size) {
+            if let Some(limiter) = limiter {
+                let err = crate::format_err!("memory growth exceeds memory type's limits");
+                limiter.memory_grow_failed(err)?;
+            }
+            return Ok(None);
+        }
 
         // Store limiter gets first chance to reject memory_growing.
         if let Some(limiter) = &mut limiter {

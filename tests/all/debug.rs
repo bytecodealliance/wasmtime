@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use wasmtime::{
     AsContextMut, Caller, Config, DebugEvent, DebugHandler, Engine, Extern, FrameHandle, Func,
-    Global, GlobalType, Instance, Module, Mutability, Store, StoreContextMut, Val, ValType,
+    Global, GlobalType, Inlining, Instance, Module, ModulePC, Mutability, Result, Store,
+    StoreContextMut, Val, ValType,
 };
 
 use crate::async_functions::PollOnce;
@@ -73,7 +74,7 @@ fn test_stack_values<
 fn stack_values_two_frames() -> wasmtime::Result<()> {
     let _ = env_logger::try_init();
 
-    for inlining in [false, true] {
+    for inlining in [Inlining::No, Inlining::Yes] {
         test_stack_values(
             r#"
     (module
@@ -91,11 +92,6 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
     "#,
             |config| {
                 config.compiler_inlining(inlining);
-                if inlining {
-                    unsafe {
-                        config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
-                    }
-                }
             },
             |mut caller: Caller<'_, ()>| {
                 let stack = caller.debug_exit_frames().next().unwrap();
@@ -108,8 +104,12 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     1
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-                    65
+                    stack
+                        .wasm_function_index_and_pc(&mut caller)?
+                        .unwrap()
+                        .1
+                        .raw(),
+                    67
                 );
 
                 assert_eq!(stack.num_locals(&mut caller)?, 2);
@@ -129,8 +129,12 @@ fn stack_values_two_frames() -> wasmtime::Result<()> {
                     0
                 );
                 assert_eq!(
-                    stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-                    55
+                    stack
+                        .wasm_function_index_and_pc(&mut caller)?
+                        .unwrap()
+                        .1
+                        .raw(),
+                    57
                 );
 
                 let stack = stack.parent(&mut caller)?;
@@ -289,8 +293,12 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-            56
+            stack
+                .wasm_function_index_and_pc(&mut caller)?
+                .unwrap()
+                .1
+                .raw(),
+            58
         );
         assert!(Module::same(
             stack.module(&mut caller)?.unwrap(),
@@ -317,8 +325,12 @@ fn stack_values_two_activations() -> wasmtime::Result<()> {
             0
         );
         assert_eq!(
-            stack.wasm_function_index_and_pc(&mut caller)?.unwrap().1,
-            56
+            stack
+                .wasm_function_index_and_pc(&mut caller)?
+                .unwrap()
+                .1
+                .raw(),
+            58
         );
         assert!(Module::same(
             stack.module(&mut caller)?.unwrap(),
@@ -499,6 +511,41 @@ fn private_entity_access_shared_memory() -> wasmtime::Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn all_instances_and_modules_in_store() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let m1 = Module::new(
+        &engine,
+        r#"
+        (module (func (param i32) (result i32) (local.get 0)))
+        "#,
+    )?;
+    let m2 = Module::new(
+        &engine,
+        r#"
+        (module (func (param i32) (result i32) (local.get 0)))
+        "#,
+    )?;
+    let i1 = Instance::new(&mut store, &m1, &[])?;
+    let i2 = Instance::new(&mut store, &m2, &[])?;
+
+    let instances = store.debug_all_instances();
+    let modules = store.debug_all_modules();
+    assert_eq!(instances.len(), 2);
+    assert_eq!(modules.len(), 2);
+    assert!(
+        (Module::same(&modules[0], &m1) && Module::same(&modules[1], &m2))
+            || (Module::same(&modules[1], &m1) && Module::same(&modules[0], &m2))
+    );
+    assert!(instances[0] == i1);
+    assert!(instances[1] == i2);
+    Ok(())
+}
+
 macro_rules! debug_event_checker {
     ($ty:tt,
      $store:tt,
@@ -571,7 +618,7 @@ async fn uncaught_exception_events() -> wasmtime::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::UncaughtExceptionThrown(e) => {
+          wasmtime::DebugEvent::Exception(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
               assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
@@ -624,7 +671,7 @@ async fn caught_exception_events() -> wasmtime::Result<()> {
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::CaughtExceptionThrown(e) => {
+          wasmtime::DebugEvent::Exception(e) => {
               assert_eq!(e.field(&mut store, 0).unwrap().unwrap_i32(), 42);
               let stack = store.debug_exit_frames().next().unwrap();
               assert_eq!(stack.num_locals(&mut store).unwrap(), 1);
@@ -659,18 +706,23 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
         },
         r#"
     (module
-      (func (export "main")
+      (func (export "main") (result i32)
         i32.const 0
         i32.const 0
         i32.div_u
-        drop))
+        drop
+        i32.const 42))
     "#,
     )?;
 
     debug_event_checker!(
         D, store,
         { 0 ;
-          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {}
+          wasmtime::DebugEvent::Trap(wasmtime_environ::Trap::IntegerDivisionByZero) => {
+              let frame = store.debug_exit_frames().next().unwrap();
+              let (_func, pc) = frame.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
+              assert_eq!(pc.raw(), 0x26);
+          }
         }
     );
 
@@ -679,7 +731,7 @@ async fn hostcall_trap_events() -> wasmtime::Result<()> {
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
-    let mut results = [];
+    let mut results = [Val::I32(0)];
     let result = func.call_async(&mut store, &[], &mut results).await;
     assert!(result.is_err()); // Uncaught trap.
     assert_eq!(counter.load(Ordering::Relaxed), 1);
@@ -759,7 +811,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
               assert_eq!(stack.local(&mut store, 1).unwrap().unwrap_i32(), 2);
               let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
               assert_eq!(func.as_u32(), 0);
-              assert_eq!(pc, 0x28);
+              assert_eq!(pc.raw(), 0x28);
               let stack = stack.parent(&mut store).unwrap();
               assert!(stack.is_none());
           }
@@ -771,7 +823,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x28)?;
+        .add_breakpoint(&module, ModulePC::new(0x28))?;
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func = instance.get_func(&mut store, "main").unwrap();
@@ -784,12 +836,12 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
     assert_eq!(breakpoints.len(), 1);
     assert!(Module::same(&breakpoints[0].module, &module));
-    assert_eq!(breakpoints[0].pc, 0x28);
+    assert_eq!(breakpoints[0].pc, ModulePC::new(0x28));
 
     store
         .edit_breakpoints()
         .unwrap()
-        .remove_breakpoint(&module, 0x28)?;
+        .remove_breakpoint(&module, ModulePC::new(0x28))?;
     func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
         .await?;
     assert_eq!(counter.load(Ordering::Relaxed), 1); // Should not have incremented from above.
@@ -806,7 +858,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x24);
+              assert_eq!(pc.raw(), 0x24);
           }
         },
         {
@@ -814,7 +866,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x26);
+              assert_eq!(pc.raw(), 0x26);
           }
         },
         {
@@ -822,7 +874,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x28);
+              assert_eq!(pc.raw(), 0x28);
           }
         },
         {
@@ -830,7 +882,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
           wasmtime::DebugEvent::Breakpoint => {
               let stack = store.debug_exit_frames().next().unwrap();
               let (_, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
-              assert_eq!(pc, 0x29);
+              assert_eq!(pc.raw(), 0x29);
           }
         }
     );
@@ -846,7 +898,7 @@ async fn breakpoint_events() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x28)
+        .add_breakpoint(&module, ModulePC::new(0x28))
         .unwrap();
 
     // Now disable single-stepping. The single breakpoint set above
@@ -875,10 +927,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
     let (module, mut store) = get_module_and_store(
         |config| {
             config.wasm_exceptions(true);
-            config.compiler_inlining(true);
-            unsafe {
-                config.cranelift_flag_set("wasmtime_inlining_intra_module", "true");
-            }
+            config.compiler_inlining(Inlining::Yes);
         },
         r#"
     (module
@@ -909,7 +958,7 @@ async fn breakpoints_in_inlined_code() -> wasmtime::Result<()> {
     store
         .edit_breakpoints()
         .unwrap()
-        .add_breakpoint(&module, 0x2d)?; // `i32.add` in `$f`.
+        .add_breakpoint(&module, ModulePC::new(0x2d))?; // `i32.add` in `$f`.
 
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
     let func_main = instance.get_func(&mut store, "main").unwrap();
@@ -1080,4 +1129,539 @@ async fn invalidated_frame_handles_in_dropped_future() -> wasmtime::Result<()> {
     assert!(!frame.is_valid(&mut store));
 
     Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn module_bytecode() -> wasmtime::Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+        (module
+            (func (export "add") (param i32 i32) (result i32)
+                local.get 0
+                local.get 1
+                i32.add
+            )
+        )
+        "#,
+    )
+    .unwrap();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wasm)?;
+
+    assert_eq!(module.debug_bytecode(), Some(&wasm[..]));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn module_bytecode_absent_without_debug() -> wasmtime::Result<()> {
+    let wasm = wat::parse_str("(module)").unwrap();
+
+    let mut config = Config::default();
+    config.guest_debug(false);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wasm)?;
+
+    assert_eq!(module.debug_bytecode(), None);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn component_bytecode() -> wasmtime::Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    // Build the bytecode for each core module by compiling them
+    // standalone.
+    let m1_body = r#"(func (export "f1") (result i32) i32.const 42)"#;
+    let m2_body = r#"(func (export "f2") (result i32) i32.const 99)"#;
+    let m1_wasm = wat::parse_str(&format!("(module $m1 {m1_body})")).unwrap();
+    let m2_wasm = wat::parse_str(&format!("(module $m2 {m2_body})")).unwrap();
+
+    // Build a component that embeds both core modules inline.
+    let component_wasm = wat::parse_str(&format!(
+        r#"(component
+               (core module $m1 {m1_body})
+               (core instance $i1 (instantiate (module $m1)))
+               (core module $m2 {m2_body})
+               (core instance $i2 (instantiate (module $m2))))
+        "#,
+    ))
+    .unwrap();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(&engine, &component_wasm)?;
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    linker.instantiate(&mut store, &component)?;
+
+    let modules = store.debug_all_modules();
+    assert_eq!(modules.len(), 2);
+
+    // Modules should be registered in offset order. The API doesn't
+    // guarantee this, but this suffices for a test.
+    assert_eq!(modules[0].debug_bytecode().unwrap(), &m1_wasm[..]);
+    assert_eq!(modules[1].debug_bytecode().unwrap(), &m2_wasm[..]);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn debug_ids() -> wasmtime::Result<()> {
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.wasm_exceptions(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module1 = Module::new(
+        &engine,
+        r#"
+        (module
+          (memory 1 1)
+          (memory 1 1)
+          (global (mut i32) (i32.const 0))
+          (global (mut i32) (i32.const 1))
+          (table 1 1 funcref)
+          (table 1 1 funcref)
+          (tag (param i32))
+          (tag (param i64)))
+        "#,
+    )?;
+
+    let module2 = Module::new(
+        &engine,
+        r#"
+        (module
+          (memory (export "m") 1 1))
+        "#,
+    )?;
+
+    let instance1 = Instance::new(&mut store, &module1, &[])?;
+    let instance2 = Instance::new(&mut store, &module2, &[])?;
+    let instance3 = Instance::new(&mut store, &module1, &[])?;
+
+    assert_ne!(
+        module1.debug_index_in_engine(),
+        module2.debug_index_in_engine()
+    );
+    assert_ne!(
+        instance1.debug_index_in_store(),
+        instance2.debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance1
+            .debug_memory(&mut store, 1)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance2
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_memory(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_global(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_global(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_table(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_table(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+    assert_ne!(
+        instance1
+            .debug_tag(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store(),
+        instance3
+            .debug_tag(&mut store, 0)
+            .unwrap()
+            .debug_index_in_store()
+    );
+
+    let m_via_export = instance2
+        .get_export(&mut store, "m")
+        .unwrap()
+        .into_memory()
+        .unwrap();
+    let m_via_introspection = instance2.debug_memory(&mut store, 0).unwrap();
+    assert_eq!(
+        m_via_export.debug_index_in_store(),
+        m_via_introspection.debug_index_in_store()
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn single_step_before_instantiation() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+
+    // Enable single-stepping *before* instantiation. The module has not
+    // been registered with this store yet.
+    store.edit_breakpoints().unwrap().single_step(true).unwrap();
+    assert!(store.is_single_step());
+
+    #[derive(Clone)]
+    struct CountingHandler(Arc<AtomicUsize>);
+    impl DebugHandler for CountingHandler {
+        type Data = ();
+        async fn handle(&self, _store: StoreContextMut<'_, ()>, event: DebugEvent<'_>) {
+            match event {
+                DebugEvent::Breakpoint => {
+                    self.0.fetch_add(1, Ordering::Relaxed);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    store.set_debug_handler(CountingHandler(counter.clone()));
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn early_epoch_yield_still_has_vmctx() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    config.epoch_interruption(true);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    store.set_epoch_deadline(1);
+    store.epoch_deadline_async_yield_and_update(1);
+    engine.increment_epoch();
+
+    #[derive(Clone)]
+    struct H;
+    impl DebugHandler for H {
+        type Data = ();
+        async fn handle(&self, mut store: StoreContextMut<'_, ()>, _event: DebugEvent<'_>) {
+            // Ensure we can access the instance (which accesses the
+            // vmctx slot in the frame's debug info).
+            let frame = store.debug_exit_frames().next().unwrap();
+            let _instance = frame.instance(&mut store);
+        }
+    }
+
+    store.set_debug_handler(H);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn breakpoint_slips_to_first_opcode() -> wasmtime::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Breakpoints set at the function body start (which includes the
+    // local declarations and precedes the first opcode) should be
+    // "slipped" forward to the first opcode. This matches how LLDB
+    // sets breakpoints using DWARF `DW_AT_low_pc`.
+    //
+    // For the WAT below, `wasm-objdump -d` shows:
+    //
+    // ```
+    // 000023 func[0] <main>:
+    //  000024: 20 00                      | local.get 0
+    //  000026: 20 01                      | local.get 1
+    //  000028: 6a                         | i32.add
+    //  000029: 0b                         | end
+    // ```
+    //
+    // 0x23 is the function body start (locals count byte), while 0x24
+    // is the first opcode. Setting a breakpoint at 0x23 should slip
+    // to 0x24.
+    let (module, mut store) = get_module_and_store(
+        |_config| {},
+        r#"
+    (module
+      (func (export "main") (param i32 i32) (result i32)
+        local.get 0
+        local.get 1
+        i32.add))
+    "#,
+    )?;
+
+    debug_event_checker!(
+        D, store,
+        { 0 ;
+          wasmtime::DebugEvent::Breakpoint => {
+              let stack = store.debug_exit_frames().next().unwrap();
+              let (func, pc) = stack.wasm_function_index_and_pc(&mut store).unwrap().unwrap();
+              assert_eq!(func.as_u32(), 0);
+              // The breakpoint should fire at the first opcode
+              // (0x24), not at the function body start (0x23).
+              assert_eq!(pc.raw(), 0x24);
+          }
+        }
+    );
+
+    let (handler, counter) = D::new_and_counter();
+    store.set_debug_handler(handler);
+
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&module, ModulePC::new(0x23))?;
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let func = instance.get_func(&mut store, "main").unwrap();
+    let mut results = [Val::I32(0)];
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+    assert_eq!(results[0].unwrap_i32(), 3);
+
+    // The actual breakpoint stored should be at the slipped PC.
+    let breakpoints = store.breakpoints().unwrap().collect::<Vec<_>>();
+    assert_eq!(breakpoints.len(), 1);
+    assert_eq!(breakpoints[0].pc, ModulePC::new(0x24));
+
+    // Removing with the originally requested PC should work.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .remove_breakpoint(&module, ModulePC::new(0x23))?;
+    func.call_async(&mut store, &[Val::I32(1), Val::I32(2)], &mut results)
+        .await?;
+    // Counter should not have incremented now that we removed the
+    // breakpoint.
+    assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn component_module_relative_breakpoint_pcs() -> wasmtime::Result<()> {
+    use wasmtime::component::{Component, Linker};
+
+    let _ = env_logger::try_init();
+
+    let m1_body = r#"(func (export "f1") (param i32 i32) (result i32)
+      local.get 0
+      local.get 1
+      i32.add)"#;
+    let m2_body = r#"(func (export "f2") (param i32 i32) (result i32)
+      local.get 0
+      local.get 1
+      i32.mul)"#;
+
+    let _m1_wasm = wat::parse_str(&format!("(module {m1_body})"))?;
+    let _m2_wasm = wat::parse_str(&format!("(module {m2_body})"))?;
+
+    let component_wat = format!(
+        r#"(component
+             (core module $m1 {m1_body})
+             (core instance $i1 (instantiate $m1))
+             (core module $m2 {m2_body})
+             (core instance $i2 (instantiate $m2))
+             (func (export "f1") (param "a" s32) (param "b" s32) (result s32)
+               (canon lift (core func $i1 "f1")))
+             (func (export "f2") (param "a" s32) (param "b" s32) (result s32)
+               (canon lift (core func $i2 "f2"))))"#,
+    );
+
+    let mut config = Config::default();
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(&engine, &component_wat)?;
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+
+    let modules = store.debug_all_modules();
+    assert_eq!(modules.len(), 2);
+
+    // The i32.add / i32.mul instruction is at module-relative offset
+    // 0x26 in both modules.
+    let breakpoint_pc = ModulePC::new(0x26);
+
+    // Record breakpoint PCs seen in each event.
+    let observed_pcs = Arc::new(Mutex::new(Vec::<(u32, u32)>::new()));
+    let observed_pcs_clone = observed_pcs.clone();
+
+    #[derive(Clone)]
+    struct D(Arc<Mutex<Vec<(u32, u32)>>>);
+    impl DebugHandler for D {
+        type Data = ();
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            _event: DebugEvent<'_>,
+        ) -> impl std::future::Future<Output = ()> + Send {
+            let frame = store.debug_exit_frames().next().unwrap();
+            let (func, pc) = frame
+                .wasm_function_index_and_pc(&mut store)
+                .unwrap()
+                .unwrap();
+            self.0.lock().unwrap().push((func.as_u32(), pc.raw()));
+            async {}
+        }
+    }
+    store.set_debug_handler(D(observed_pcs_clone));
+
+    // Set breakpoints at the same module-relative PC (0x26) in both
+    // modules.
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&modules[0], breakpoint_pc)?;
+    store
+        .edit_breakpoints()
+        .unwrap()
+        .add_breakpoint(&modules[1], breakpoint_pc)?;
+
+    let f1 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f1")?;
+    let (result,) = f1.call_async(&mut store, (3, 5)).await?;
+    assert_eq!(result, 8);
+
+    let f2 = instance.get_typed_func::<(i32, i32), (i32,)>(&mut store, "f2")?;
+    let (result,) = f2.call_async(&mut store, (3, 5)).await?;
+    assert_eq!(result, 15);
+
+    // Both breakpoint PCs should be 0x26 (module-relative).
+    let pcs = observed_pcs.lock().unwrap();
+    assert_eq!(pcs.len(), 2);
+    assert_eq!(pcs[0], (0, 0x26));
+    assert_eq!(pcs[1], (0, 0x26));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn take_exception_in_debug_handler() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_exceptions(true);
+    config.guest_debug(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    store.set_debug_handler(TakeExceptionHandler);
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (tag $t)
+              (func (export "run")
+                (block $h (try_table (catch_all $h) (throw $t)))
+              )
+            )
+        "#,
+    )?;
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    let err = run.call_async(&mut store, ()).await.unwrap_err();
+    assert!(err.is::<wasmtime::ThrownException>());
+    return Ok(());
+
+    #[derive(Clone)]
+    struct TakeExceptionHandler;
+
+    impl DebugHandler for TakeExceptionHandler {
+        type Data = ();
+
+        fn handle(
+            &self,
+            mut store: StoreContextMut<'_, ()>,
+            event: DebugEvent<'_>,
+        ) -> impl Future<Output = ()> + Send {
+            let did_take = matches!(event, DebugEvent::Exception(_));
+            // Eat the pending exception that compute_handler put back.
+            if did_take {
+                let _ = store.take_pending_exception();
+            }
+            async move {}
+        }
+    }
 }

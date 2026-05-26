@@ -16,8 +16,7 @@ block2:
 
 ; VCode:
 ; block0:
-;   mov w4, w0
-;   cbnz x4, label1 ; b label2
+;   cbnz w0, label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -28,11 +27,10 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w4, w0
-;   cbnz x4, #0xc
-; block1: ; offset 0x8
+;   cbnz w0, #8
+; block1: ; offset 0x4
 ;   mov w0, #0x61
-; block2: ; offset 0xc
+; block2: ; offset 0x8
 ;   ret
 
 function %cold_annotation(i32) -> i32 {
@@ -49,8 +47,7 @@ block2 cold:
 
 ; VCode:
 ; block0:
-;   mov w4, w0
-;   cbnz x4, label1 ; b label2
+;   cbnz w0, label1 ; b label2
 ; block1:
 ;   b label3
 ; block3:
@@ -61,11 +58,10 @@ block2 cold:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w4, w0
-;   cbz x4, #0xc
-; block1: ; offset 0x8
+;   cbz w0, #8
+; block1: ; offset 0x4
 ;   ret
-; block2: ; offset 0xc
+; block2: ; offset 0x8
 ;   mov w0, #0x61
-;   b #8
+;   b #4
 

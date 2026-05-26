@@ -28,9 +28,9 @@ pub fn build(
         )?),
         "wasmi" => Box::new(WasmiEngine::new(config)),
 
-        #[cfg(target_arch = "x86_64")]
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         "winch" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Winch)?),
-        #[cfg(not(target_arch = "x86_64"))]
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         "winch" => return Ok(None),
 
         #[cfg(feature = "fuzz-spec-interpreter")]
@@ -38,9 +38,9 @@ pub fn build(
         #[cfg(not(feature = "fuzz-spec-interpreter"))]
         "spec" => return Ok(None),
 
-        #[cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))]
+        #[cfg(feature = "v8")]
         "v8" => Box::new(crate::oracles::diff_v8::V8Engine::new(config)),
-        #[cfg(any(windows, target_arch = "s390x", target_arch = "riscv64"))]
+        #[cfg(not(feature = "v8"))]
         "v8" => return Ok(None),
 
         _ => panic!("unknown engine {name}"),

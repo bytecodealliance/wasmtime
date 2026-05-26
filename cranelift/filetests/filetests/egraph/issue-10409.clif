@@ -23,6 +23,6 @@ function u0:1(i64) -> i64 system_v {
         return v4
 }
 
-; check: v5 = ireduce.i32 v1
-; next: v6 = uextend.i64 v5
-; next: return v6
+; check: v7 = ireduce.i32 v1
+; next: v8 = uextend.i64 v7
+; next: return v8

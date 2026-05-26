@@ -10,7 +10,7 @@ use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VmPtr};
 use core::alloc::Layout;
 use core::mem;
 use core::ops::Range;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use core::slice;
 use core::{cmp, usize};
 use wasmtime_environ::{
@@ -185,7 +185,7 @@ impl From<DynamicContTable> for DynamicTable {
 pub struct DynamicFuncTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<FuncTableElem>,
+    elements: TryVec<FuncTableElem>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
     /// Whether elements of this table are initialized lazily.
@@ -195,7 +195,7 @@ pub struct DynamicFuncTable {
 pub struct DynamicGcRefTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<Option<VMGcRef>>,
+    elements: TryVec<Option<VMGcRef>>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
 }
@@ -203,7 +203,7 @@ pub struct DynamicGcRefTable {
 pub struct DynamicContTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
-    elements: Vec<ContTableElem>,
+    elements: TryVec<ContTableElem>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
 }
@@ -291,7 +291,7 @@ pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 ///
 /// Should only ever be called with a `T` that is a table element type and where
 /// `Option<T>`'s `None` variant is represented with zero.
-unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> {
+unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<TryVec<Option<T>>> {
     debug_assert!(
         unsafe {
             core::mem::MaybeUninit::<Option<T>>::zeroed()
@@ -302,21 +302,25 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
     );
 
     if len == 0 {
-        return Ok(vec![]);
+        return Ok(TryVec::new());
     }
 
     let align = mem::align_of::<Option<T>>();
 
     let size = mem::size_of::<Option<T>>();
     let size = size.next_multiple_of(align);
-    let size = size.checked_mul(len).unwrap();
+    let size = size
+        .checked_mul(len)
+        .ok_or_else(|| format_err!("overflow calculating table allocation size"))?;
 
     let layout = Layout::from_size_align(size, align)?;
 
     let ptr = unsafe { alloc::alloc::alloc_zeroed(layout) };
-    ensure!(!ptr.is_null(), "failed to allocate memory for table");
+    if ptr.is_null() {
+        return Err(OutOfMemory::new(size).into());
+    }
 
-    let elems = unsafe { Vec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
+    let elems = unsafe { TryVec::<Option<T>>::from_raw_parts(ptr.cast(), len, len) };
     debug_assert!(elems.iter().all(|e| e.is_none()));
 
     Ok(elems)
@@ -340,10 +344,11 @@ impl Table {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
                 maximum,
             })),
-            TableElementType::Cont => Ok(Self::from(DynamicContTable {
-                elements: vec![None; minimum],
-                maximum,
-            })),
+            TableElementType::Cont => {
+                let mut elements = TryVec::new();
+                elements.resize_with(minimum, || None)?;
+                Ok(Self::from(DynamicContTable { elements, maximum }))
+            }
         }
     }
 
@@ -563,12 +568,12 @@ impl Table {
         dst: u64,
         val: Option<&VMGcRef>,
         len: u64,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let range = self.validate_fill(dst, len)?;
 
         // Clone the init GC reference into each table slot.
         for slot in &mut self.gc_refs_mut()[range] {
-            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val);
+            GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), slot, val)?;
         }
 
         Ok(())
@@ -598,7 +603,7 @@ impl Table {
     /// Returns the previous size of the table if growth is successful.
     ///
     /// Returns `None` if table can't be grown by the specified amount of
-    /// elements, or if the `init_value` is the wrong kind of table element.
+    /// elements.
     ///
     /// # Panics
     ///
@@ -611,52 +616,14 @@ impl Table {
     /// that are used by Wasm, and they need to be fixed up before we call into
     /// Wasm again. Failure to do so will result in use-after-free inside Wasm.
     ///
-    /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
-    /// this unsafety.
-    pub async unsafe fn grow_func(
+    /// Additionally after growth this table will have null filled in for all
+    /// new entries, if any. The embedder must fill in these slots with an
+    /// appropriately typed value for this table's usage to still be sound
+    /// because this table may contain non-null elements, for example.
+    pub async unsafe fn grow(
         &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        delta: u64,
-        init_value: Option<SendSyncPtr<VMFuncRef>>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_func(base, init_value.map(|p| p.as_non_null()), len)
-        })
-        .await
-    }
-
-    /// Same as [`Self::grow_func`], but for GC references.
-    pub async unsafe fn grow_gc_ref(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        gc_store: Option<&mut GcStore>,
-        delta: u64,
-        init_value: Option<&VMGcRef>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_gc_ref(gc_store, base, init_value, len)
-        })
-        .await
-    }
-
-    /// Same as [`Self::grow_func`], but for continuations.
-    pub async unsafe fn grow_cont(
-        &mut self,
-        limiter: Option<&mut StoreResourceLimiter<'_>>,
-        delta: u64,
-        init_value: Option<VMContObj>,
-    ) -> Result<Option<usize>, Error> {
-        self._grow(delta, limiter, |me, base, len| {
-            me.fill_cont(base, init_value, len)
-        })
-        .await
-    }
-
-    async fn _grow(
-        &mut self,
-        delta: u64,
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
-        fill: impl FnOnce(&mut Self, u64, u64) -> Result<(), Trap>,
+        delta: u64,
     ) -> Result<Option<usize>, Error> {
         let old_size = self.size();
 
@@ -728,22 +695,15 @@ impl Table {
             // that delta is non-zero and the new size doesn't exceed the
             // maximum mean we can't get here.
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
-                elements.resize(new_size, None);
+                elements.resize_with(new_size, || None)?;
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
-                elements.resize_with(new_size, || None);
+                elements.resize_with(new_size, || None)?;
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                elements.resize(new_size, None);
+                elements.resize_with(new_size, || None)?;
             }
         }
-
-        fill(
-            self,
-            u64::try_from(old_size).unwrap(),
-            u64::try_from(delta).unwrap(),
-        )
-        .expect("table should not be out of bounds");
 
         Ok(Some(old_size))
     }
@@ -814,90 +774,15 @@ impl Table {
         store: Option<&mut GcStore>,
         index: u64,
         elem: Option<&VMGcRef>,
-    ) -> Result<(), Trap> {
+    ) -> Result<()> {
         let trap = Trap::TableOutOfBounds;
         let index: usize = index.try_into().map_err(|_| trap)?;
         GcStore::write_gc_ref_optional_store(
             store,
             self.gc_refs_mut().get_mut(index).ok_or(trap)?,
             elem,
-        );
+        )?;
         Ok(())
-    }
-
-    /// Copy `len` elements from `self[src_index..][..len]` into
-    /// `dst_table[dst_index..][..len]`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the range is out of bounds of either the source or
-    /// destination tables.
-    pub fn copy_to(
-        &self,
-        dst: &mut Table,
-        gc_store: Option<&mut GcStore>,
-        dst_index: u64,
-        src_index: u64,
-        len: u64,
-    ) -> Result<(), Trap> {
-        let (src_range, dst_range) = Table::validate_copy(self, dst, dst_index, src_index, len)?;
-        Self::copy_elements(gc_store, dst, self, dst_range, src_range);
-        Ok(())
-    }
-
-    /// Copy `len` elements from `self[src_index..][..len]` into
-    /// `self[dst_index..][..len]`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the range is out of bounds of either the source or
-    /// destination tables.
-    pub fn copy_within(
-        &mut self,
-        gc_store: Option<&mut GcStore>,
-        dst_index: u64,
-        src_index: u64,
-        len: u64,
-    ) -> Result<(), Trap> {
-        let (src_range, dst_range) = Table::validate_copy(self, self, dst_index, src_index, len)?;
-        self.copy_elements_within(gc_store, dst_range, src_range);
-        Ok(())
-    }
-
-    /// Copy `len` elements from `src_table[src_index..]` into `dst_table[dst_index..]`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the range is out of bounds of either the source or
-    /// destination tables.
-    fn validate_copy(
-        src: &Table,
-        dst: &Table,
-        dst_index: u64,
-        src_index: u64,
-        len: u64,
-    ) -> Result<(Range<usize>, Range<usize>), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-copy
-
-        let src_index = usize::try_from(src_index).map_err(|_| Trap::TableOutOfBounds)?;
-        let dst_index = usize::try_from(dst_index).map_err(|_| Trap::TableOutOfBounds)?;
-        let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
-
-        if src_index.checked_add(len).map_or(true, |n| n > src.size())
-            || dst_index.checked_add(len).map_or(true, |m| m > dst.size())
-        {
-            return Err(Trap::TableOutOfBounds);
-        }
-
-        debug_assert!(
-            dst.element_type() == src.element_type(),
-            "table element type mismatch"
-        );
-
-        let src_range = src_index..src_index + len;
-        let dst_range = dst_index..dst_index + len;
-
-        Ok((src_range, dst_range))
     }
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
@@ -1037,94 +922,27 @@ impl Table {
         }
     }
 
-    fn copy_elements(
-        mut gc_store: Option<&mut GcStore>,
-        dst_table: &mut Self,
-        src_table: &Self,
-        dst_range: Range<usize>,
-        src_range: Range<usize>,
-    ) {
-        // This can only be used when copying between different tables
-        debug_assert!(!ptr::eq(dst_table, src_table));
-
-        let ty = dst_table.element_type();
-
-        match ty {
+    /// Manually resets all table elements to a null bit pattern.
+    ///
+    /// Used in the pooling allocator when `madvise` fails to reset pages back
+    /// to their original contents. In such a situation the previous contents of
+    /// the table are unknown so this resets them all to defined values.
+    pub fn manually_memset_zeros(&mut self) {
+        match self.element_type() {
             TableElementType::Func => {
-                // `funcref` are `Copy`, so just do a mempcy
-                let (dst_funcrefs, _lazy_init) = dst_table.funcrefs_mut();
-                let (src_funcrefs, _lazy_init) = src_table.funcrefs();
-                dst_funcrefs[dst_range].copy_from_slice(&src_funcrefs[src_range]);
-            }
-            TableElementType::GcRef => {
-                assert_eq!(
-                    dst_range.end - dst_range.start,
-                    src_range.end - src_range.start
-                );
-                assert!(dst_range.end <= dst_table.gc_refs().len());
-                assert!(src_range.end <= src_table.gc_refs().len());
-                for (dst, src) in dst_range.zip(src_range) {
-                    GcStore::write_gc_ref_optional_store(
-                        gc_store.as_deref_mut(),
-                        &mut dst_table.gc_refs_mut()[dst],
-                        src_table.gc_refs()[src].as_ref(),
-                    );
-                }
-            }
-            TableElementType::Cont => {
-                // `contref` are `Copy`, so just do a mempcy
-                dst_table.contrefs_mut()[dst_range]
-                    .copy_from_slice(&src_table.contrefs()[src_range]);
-            }
-        }
-    }
-
-    fn copy_elements_within(
-        &mut self,
-        mut gc_store: Option<&mut GcStore>,
-        dst_range: Range<usize>,
-        src_range: Range<usize>,
-    ) {
-        assert_eq!(
-            dst_range.end - dst_range.start,
-            src_range.end - src_range.start
-        );
-
-        // This is a no-op.
-        if src_range.start == dst_range.start {
-            return;
-        }
-
-        let ty = self.element_type();
-        match ty {
-            TableElementType::Func => {
-                // `funcref` are `Copy`, so just do a memmove
                 let (funcrefs, _lazy_init) = self.funcrefs_mut();
-                funcrefs.copy_within(src_range, dst_range.start);
+                funcrefs.fill(MaybeTaggedFuncRef(None));
             }
             TableElementType::GcRef => {
-                // We need to clone each `externref` while handling overlapping
-                // ranges
-                let elements = self.gc_refs_mut();
-                if dst_range.start < src_range.start {
-                    for (d, s) in dst_range.zip(src_range) {
-                        let (ds, ss) = elements.split_at_mut(s);
-                        let dst = &mut ds[d];
-                        let src = ss[0].as_ref();
-                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
-                    }
-                } else {
-                    for (s, d) in src_range.rev().zip(dst_range.rev()) {
-                        let (ss, ds) = elements.split_at_mut(d);
-                        let dst = &mut ds[0];
-                        let src = ss[s].as_ref();
-                        GcStore::write_gc_ref_optional_store(gc_store.as_deref_mut(), dst, src);
-                    }
+                // Note that this explicitly contains no barriers as all table
+                // GC elements should already have been dropped before returning
+                // the table back to the pool.
+                for r in self.gc_refs_mut() {
+                    *r = None;
                 }
             }
             TableElementType::Cont => {
-                // `contref` are `Copy`, so just do a memmove
-                self.contrefs_mut().copy_within(src_range, dst_range.start);
+                self.contrefs_mut().fill(None);
             }
         }
     }

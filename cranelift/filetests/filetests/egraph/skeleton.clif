@@ -90,9 +90,9 @@ block0:
 
 ; function %cprop_udiv() -> i32 fast {
 ; block0:
-;     v18 = iconst.i32 1
-;     v2 -> v18
-;     return v18  ; v18 = 1
+;     v16 = iconst.i32 1
+;     v2 -> v16
+;     return v16  ; v16 = 1
 ; }
 
 function %cprop_urem() -> i32 {
@@ -105,9 +105,9 @@ block0:
 
 ; function %cprop_urem() -> i32 fast {
 ; block0:
-;     v37 = iconst.i32 6
-;     v2 -> v37
-;     return v37  ; v37 = 6
+;     v33 = iconst.i32 6
+;     v2 -> v33
+;     return v33  ; v33 = 6
 ; }
 
 function %cprop_sdiv() -> i32 {
@@ -181,11 +181,10 @@ block0:
 
 ; function %cprop_srem() -> i32 fast {
 ; block0:
-;     v28 = iconst.i32 -3
-;     v2 -> v28
-;     return v28  ; v28 = -3
+;     v26 = iconst.i32 -3
+;     v2 -> v26
+;     return v26  ; v26 = -3
 ; }
-
 
 function %udiv_by_one(i32) -> i32 {
 block0(v0: i32):
@@ -304,4 +303,228 @@ block0:
 ;     v1 = iconst.i32 1
 ;     v2 = uadd_overflow_trap v0, v1, user42  ; v0 = -1, v1 = 1
 ;     return v2
+; }
+
+function %brif_true(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    brif v2, block1, block2
+block1:
+    return v0
+block2:
+    return v1
+}
+
+; function %brif_true(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     jump block1
+;
+; block1:
+;     return v0
+; }
+
+function %brif_false(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    brif v2, block1, block2
+block1:
+    return v0
+block2:
+    return v1
+}
+
+; function %brif_false(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     jump block2
+;
+; block2:
+;     return v1
+; }
+
+;; When folding a brif-true into a jump, verify we use the then-branch's
+;; block call arguments, not the else-branch's.
+function %brif_true_args(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 1
+    brif v2, block1(v0), block1(v1)
+block1(v3: i32):
+    return v3
+}
+
+; function %brif_true_args(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     jump block1(v0)
+;
+; block1(v3: i32):
+;     return v3
+; }
+
+;; When folding a brif-false into a jump, verify we use the else-branch's
+;; block call arguments, not the then-branch's.
+function %brif_false_args(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 0
+    brif v2, block1(v0), block1(v1)
+block1(v3: i32):
+    return v3
+}
+
+; function %brif_false_args(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     jump block1(v1)
+;
+; block1(v3: i32):
+;     return v3
+; }
+
+;; When folding a brif-true with multiple block args, verify we preserve
+;; all of the then-branch's arguments.
+function %brif_true_multiple_args(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iconst.i32 1
+    brif v4, block1(v0, v1), block1(v2, v3)
+block1(v5: i32, v6: i32):
+    v7 = iadd v5, v6
+    return v7
+}
+
+; function %brif_true_multiple_args(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     jump block1(v0, v1)
+;
+; block1(v5: i32, v6: i32):
+;     v7 = iadd v5, v6
+;     return v7
+; }
+
+;; When folding a brif-false with multiple block args, verify we preserve
+;; all of the else-branch's arguments.
+function %brif_false_multiple_args(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = iconst.i32 0
+    brif v4, block1(v0, v1), block1(v2, v3)
+block1(v5: i32, v6: i32):
+    v7 = iadd v5, v6
+    return v7
+}
+
+; function %brif_false_multiple_args(i32, i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32, v3: i32):
+;     jump block1(v2, v3)
+;
+; block1(v5: i32, v6: i32):
+;     v7 = iadd v5, v6
+;     return v7
+; }
+
+;; This function has the following CFG:
+;;
+;;        block0
+;;       /      \
+;; block1        block2
+;;       \      /      \
+;;        block3        block4
+;;
+;; And this dominator tree:
+;;
+;; - block0
+;;   - block1
+;;   - block2
+;;     - block4
+;;   - block3
+;;
+;; Furthermore, note that the edge `block2 -> block3` can be optimized away.
+;;
+;; A valid *dominator-tree order* for visiting blocks is `[block0, block2,
+;; block4, block3, block1]`. If the egraph pass visits in this order, and if we
+;; optimize away the `block2 -> block3` edge, then it will never mark `block2`
+;; as reachable before visiting the block, which will lead it to removing the
+;; block, which is invalid because we still have an edge `block1->block3`.
+;;
+;; Therefore, we instead visit blocks in *reverse-post order*, which guarantees
+;; that we will always visit predecessors before successors (and therefore visit
+;; `block1` before `block3` and properly mark `block3` as reachable before it is
+;; visited).
+function %diamond_one_side_unreachable(i32) -> i32 {
+block0(v0: i32):
+    brif v0, block1, block2
+block1:
+    jump block3
+block2:
+    v1 = iconst.i32 0
+    brif v1, block3, block4
+block3:
+    return v0
+block4:
+    v2 = iconst.i32 42
+    return v2
+}
+
+; function %diamond_one_side_unreachable(i32) -> i32 fast {
+; block0(v0: i32):
+;     brif v0, block1, block2
+;
+; block1:
+;     jump block3
+;
+; block2:
+;     jump block4
+;
+; block3:
+;     return v0
+;
+; block4:
+;     v2 = iconst.i32 42
+;     return v2  ; v2 = 42
+; }
+
+function %br_table_in_bounds() -> i32 {
+block0:
+    v0 = iconst.i32 1
+    br_table v0, block4, [block1, block2, block3]
+block1:
+    v1 = iconst.i32 10
+    return v1
+block2:
+    v2 = iconst.i32 20
+    return v2
+block3:
+    v3 = iconst.i32 30
+    return v3
+block4:
+    v4 = iconst.i32 -1
+    return v4
+}
+
+; function %br_table_in_bounds() -> i32 fast {
+; block0:
+;     jump block2
+;
+; block2:
+;     v2 = iconst.i32 20
+;     return v2  ; v2 = 20
+; }
+
+function %br_table_out_of_bounds() -> i32 {
+block0:
+    v0 = iconst.i32 99
+    br_table v0, block3, [block1, block2]
+block1:
+    v1 = iconst.i32 10
+    return v1
+block2:
+    v2 = iconst.i32 20
+    return v2
+block3:
+    v3 = iconst.i32 -1
+    return v3
+}
+
+; function %br_table_out_of_bounds() -> i32 fast {
+; block0:
+;     jump block3
+;
+; block3:
+;     v3 = iconst.i32 -1
+;     return v3  ; v3 = -1
 ; }

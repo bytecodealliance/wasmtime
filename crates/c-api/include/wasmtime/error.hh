@@ -96,16 +96,16 @@ public:
   const T &ok_ref() const { return std::get<T>(data); }
 
   /// \brief Returns the error, if present, aborts if this is not an error.
-  E &err_ref() { return std::get<T>(data); }
+  E &err_ref() { return std::get<E>(data); }
   /// \brief Returns the error, if present, aborts if this is not an error.
-  const E &err_ref() const { return std::get<T>(data); }
+  const E &err_ref() const { return std::get<E>(data); }
 
   /// \brief Returns the success, if present, aborts if this is an error.
   T unwrap() {
-    if (*this) {
-      return this->ok();
+    if (!*this) {
+      unwrap_failed();
     }
-    unwrap_failed();
+    return this->ok();
   }
 
 private:

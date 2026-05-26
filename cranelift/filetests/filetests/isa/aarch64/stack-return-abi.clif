@@ -1,0 +1,73 @@
+test compile precise-output
+set opt_level=speed_and_size
+set enable_nan_canonicalization=true
+set enable_multi_ret_implicit_sret=true
+target aarch64
+
+function %a(i8, i8 uext, i8 uext, i8, i128 uext, i128 uext, i128 uext, f32, i16x8, i16x8, i16x8, f64, i8 uext, f32, f32) -> i128, i128, i128, i128, i128, i128, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 uext apple_aarch64 {
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i128, v5: i128, v6: i128, v7: f32, v8: i16x8, v9: i16x8, v10: i16x8, v11: f64, v12: i8, v13: f32, v14: f32):
+    v16 = iconst.i8 0
+    v17 = iconst.i16 0
+    v18 = iconst.i32 0
+    v19 = iconst.i64 0
+    v20 = uextend.i128 v19
+    return v4, v4, v4, v4, v4, v4, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   str x4, [x8]
+;   str x5, [x8, #8]
+;   str x4, [x8, #16]
+;   str x5, [x8, #24]
+;   strb w0, [x8, #32]
+;   strb w0, [x8, #33]
+;   strb w0, [x8, #34]
+;   strb w0, [x8, #35]
+;   strb w0, [x8, #36]
+;   strb w0, [x8, #37]
+;   strb w0, [x8, #38]
+;   strb w0, [x8, #39]
+;   strb w0, [x8, #40]
+;   uxtb w1, w0
+;   str x0, [x8, #48]
+;   mov x6, x4
+;   mov x7, x5
+;   mov x0, x6
+;   mov x1, x7
+;   mov x2, x6
+;   mov x3, x7
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   stur x4, [x8]
+;   stur x5, [x8, #8]
+;   stur x4, [x8, #0x10]
+;   stur x5, [x8, #0x18]
+;   sturb w0, [x8, #0x20]
+;   sturb w0, [x8, #0x21]
+;   sturb w0, [x8, #0x22]
+;   sturb w0, [x8, #0x23]
+;   sturb w0, [x8, #0x24]
+;   sturb w0, [x8, #0x25]
+;   sturb w0, [x8, #0x26]
+;   sturb w0, [x8, #0x27]
+;   sturb w0, [x8, #0x28]
+;   uxtb w1, w0
+;   stur x0, [x8, #0x30]
+;   mov x6, x4
+;   mov x7, x5
+;   mov x0, x6
+;   mov x1, x7
+;   mov x2, x6
+;   mov x3, x7
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

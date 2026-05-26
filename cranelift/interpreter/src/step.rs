@@ -9,7 +9,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
-    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef, types,
+    InstructionData, MemFlagsData, Opcode, TrapCode, Type, Value as ValueRef, types,
 };
 use log::trace;
 use smallvec::{SmallVec, smallvec};
@@ -538,7 +538,7 @@ where
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
             let offset = sum_unsigned(imm(), args())? as u64;
-            let mem_flags = MemFlags::new();
+            let mem_flags = MemFlagsData::new();
             assign_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
@@ -549,7 +549,7 @@ where
             let arg = arg(0);
             let slot = inst.stack_slot().unwrap();
             let offset = sum_unsigned(imm(), args_range(1..)?)? as u64;
-            let mem_flags = MemFlags::new();
+            let mem_flags = MemFlagsData::new();
             continue_or_memtrap({
                 state
                     .stack_address(AddressSize::_64, slot, offset)
@@ -851,7 +851,7 @@ where
             assign(vectorizelanes(
                 &(arg0
                     .into_iter()
-                    .zip(arg1.into_iter())
+                    .zip(arg1)
                     .map(|(x, y)| {
                         DataValue::bool(
                             fcmp(inst.fp_cond_code().unwrap(), &x, &y).unwrap(),
@@ -876,8 +876,8 @@ where
             assign(vectorizelanes(
                 &(arg0
                     .into_iter()
-                    .zip(arg1.into_iter())
-                    .zip(arg2.into_iter())
+                    .zip(arg1)
+                    .zip(arg2)
                     .map(|((x, y), z)| DataValueExt::fma(x, y, z))
                     .collect::<ValueResult<SimdVec<DataValue>>>()?),
                 ctrl_ty,
@@ -904,7 +904,7 @@ where
                 assign(vectorizelanes(
                     &(arg0
                         .into_iter()
-                        .zip(arg1.into_iter())
+                        .zip(arg1)
                         .map(|(a, b)| scalar_min(a, b))
                         .collect::<ValueResult<SimdVec<DataValue>>>()?),
                     ctrl_ty,
@@ -931,7 +931,7 @@ where
                 assign(vectorizelanes(
                     &(arg0
                         .into_iter()
-                        .zip(arg1.into_iter())
+                        .zip(arg1)
                         .map(|(a, b)| scalar_max(a, b))
                         .collect::<ValueResult<SimdVec<DataValue>>>()?),
                     ctrl_ty,
@@ -1323,7 +1323,7 @@ where
             let max: DataValue = DataValueExt::int(max as i128, double_width)?;
             let new_vec = arg0
                 .into_iter()
-                .zip(arg1.into_iter())
+                .zip(arg1)
                 .map(|(x, y)| {
                     let x = x.into_int_signed()?;
                     let y = y.into_int_signed()?;
@@ -1462,7 +1462,7 @@ fn icmp(
 
     let res = left
         .into_iter()
-        .zip(right.into_iter())
+        .zip(right)
         .map(|(l, r)| cmp(dst_ty.lane_type(), code, &l, &r))
         .collect::<ValueResult<SimdVec<DataValue>>>()?;
 

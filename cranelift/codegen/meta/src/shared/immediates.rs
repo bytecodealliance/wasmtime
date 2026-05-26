@@ -161,7 +161,7 @@ impl Immediates {
                 )
             },
 
-            memflags: new_imm("flags", "ir::MemFlags", "Memory operation flags"),
+            memflags: new_imm("flags", "ir::MemFlagsData", "Memory operation flags"),
 
             trapcode: {
                 let mut trapcode_values = HashMap::new();

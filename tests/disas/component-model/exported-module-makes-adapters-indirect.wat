@@ -67,8 +67,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @00ee                               v6 = load.i64 notrap aligned readonly can_move v0+48
-;; @00ee                               v5 = load.i64 notrap aligned readonly can_move v0+64
+;; @00ee                               v6 = load.i64 notrap aligned readonly can_move v0+56
+;; @00ee                               v5 = load.i64 notrap aligned readonly can_move v0+72
 ;; @00eb                               v3 = iconst.i32 1234
 ;; @00ee                               v7 = call_indirect sig0, v6(v5, v0, v3)  ; v3 = 1234
 ;; @00f0                               jump block1

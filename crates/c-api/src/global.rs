@@ -3,7 +3,9 @@ use crate::{
     wasm_store_t, wasm_val_t, wasmtime_error_t, wasmtime_val_t,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{Extern, Global, RootScope};
+#[cfg(feature = "gc")]
+use wasmtime::RootScope;
+use wasmtime::{Extern, Global};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -84,9 +86,11 @@ pub unsafe extern "C" fn wasmtime_global_new(
     val: &wasmtime_val_t,
     ret: &mut Global,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut scope = RootScope::new(&mut store);
-    let val = val.to_val(&mut scope);
-    let global = Global::new(scope, gt.ty().ty.clone(), val);
+    #[cfg(feature = "gc")]
+    let mut store = RootScope::new(&mut store);
+
+    let val = val.to_val(&mut store);
+    let global = Global::new(&mut store, gt.ty().ty.clone(), val);
     handle_result(global, |global| {
         *ret = global;
     })
@@ -106,9 +110,13 @@ pub extern "C" fn wasmtime_global_get(
     global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
-    let mut scope = RootScope::new(store);
-    let gval = global.get(&mut scope);
-    crate::initialize(val, wasmtime_val_t::from_val(&mut scope, gval))
+    let mut store = store;
+
+    #[cfg(feature = "gc")]
+    let mut store = RootScope::new(&mut store);
+
+    let gval = global.get(&mut store);
+    crate::initialize(val, wasmtime_val_t::from_val(&mut store, gval))
 }
 
 #[unsafe(no_mangle)]
@@ -117,7 +125,9 @@ pub unsafe extern "C" fn wasmtime_global_set(
     global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut scope = RootScope::new(&mut store);
-    let val = val.to_val(&mut scope);
-    handle_result(global.set(scope, val), |()| {})
+    #[cfg(feature = "gc")]
+    let mut store = RootScope::new(&mut store);
+
+    let val = val.to_val(&mut store);
+    handle_result(global.set(&mut store, val), |()| {})
 }

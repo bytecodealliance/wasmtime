@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
-    Ref, RootedGcRefImpl, Val, ValType,
+    Ref, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
@@ -58,6 +58,10 @@ impl Global {
     ///
     /// Returns an error if the `ty` provided does not match the type of the
     /// value `val`, or if `val` comes from a different store than `store`.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Examples
     ///
@@ -216,6 +220,10 @@ impl Global {
     /// it's not a mutable global, or if `val` comes from a different store than
     /// the one provided.
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this global.
@@ -262,7 +270,7 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::AnyRef(a) => {
                     let new = match a {
@@ -270,7 +278,7 @@ impl Global {
                         Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::ExnRef(e) => {
                     let new = match e {
@@ -278,11 +286,11 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::ContRef(None) => {
                     // Allow null continuation references for globals - these are just placeholders
-                    definition.write_gc_ref(&mut store, None);
+                    definition.write_gc_ref(&mut store, None)?;
                 }
                 Val::ContRef(Some(_)) => {
                     // TODO(#10248): Implement non-null global continuation reference handling
@@ -302,9 +310,9 @@ impl Global {
                 return;
             }
 
-            if let Some(gc_ref) = unsafe { self.definition(store).as_ref().as_gc_ref() } {
+            if let Some(gc_ref) = unsafe { self.definition(store).as_mut().as_gc_ref_mut() } {
                 unsafe {
-                    gc_roots_list.add_root(gc_ref.into(), "Wasm global");
+                    gc_roots_list.add_vmgcref_root(gc_ref.into(), "Wasm global");
                 }
             }
         }
@@ -395,6 +403,24 @@ impl Global {
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         store.id() == self.store
+    }
+
+    /// Returns a stable identifier for this global within its store.
+    ///
+    /// This allows distinguishing globals when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        match self.kind {
+            VMGlobalKind::Instance(idx) => u64::from(self.instance) << 32 | u64::from(idx.as_u32()),
+            VMGlobalKind::Host(idx) => u64::from(u32::MAX) << 32 | u64::from(idx.as_u32()),
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::ComponentFlags(idx) => {
+                u64::from(self.instance) << 32 | u64::from(idx.as_u32())
+            }
+            #[cfg(feature = "component-model")]
+            VMGlobalKind::TaskMayBlock => u64::from(self.instance) << 32 | u64::from(u32::MAX),
+        }
     }
 
     /// Get a stable hash key for this global.

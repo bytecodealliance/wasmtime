@@ -456,7 +456,7 @@ impl<'a> CodeBuilder<'a> {
     /// // Enable function inlining during compilation. If you are using unsafe intrinsics, you
     /// // almost assuredly want them inlined to avoid function call overheads.
     /// let mut config = Config::new();
-    /// config.compiler_inlining(true);
+    /// config.compiler_inlining(wasmtime::Inlining::Yes);
     ///
     /// let engine = Engine::new(&config)?;
     /// let linker = wasmtime::component::Linker::new(&engine);

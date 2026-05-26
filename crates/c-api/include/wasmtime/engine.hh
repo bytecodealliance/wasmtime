@@ -37,7 +37,7 @@ class Engine {
   void increment_epoch() const { wasmtime_engine_increment_epoch(ptr.get()); }
 
   /// \brief Returns whether this engine is using Pulley for execution.
-  void is_pulley() const { wasmtime_engine_is_pulley(ptr.get()); }
+  bool is_pulley() const { return wasmtime_engine_is_pulley(ptr.get()); }
 };
 
 } // namespace wasmtime

@@ -203,13 +203,13 @@ impl stdin::HostWithStore for WasiCli {
                 rx: Box::into_pin(rx),
                 result_tx: Some(result_tx),
             },
-        );
+        )?;
         let future = FutureReader::new(&mut store, async {
             wasmtime::error::Ok(match result_rx.await {
                 Ok(err) => Err(err),
                 Err(_) => Ok(()),
             })
-        });
+        })?;
         Ok((stream, future))
     }
 }
@@ -229,13 +229,13 @@ impl stdout::HostWithStore for WasiCli {
                 tx: Box::into_pin(tx),
                 result_tx: Some(result_tx),
             },
-        );
-        Ok(FutureReader::new(&mut store, async {
+        )?;
+        FutureReader::new(&mut store, async {
             wasmtime::error::Ok(match result_rx.await {
                 Ok(err) => Err(err),
                 Err(_) => Ok(()),
             })
-        }))
+        })
     }
 }
 
@@ -254,13 +254,13 @@ impl stderr::HostWithStore for WasiCli {
                 tx: Box::into_pin(tx),
                 result_tx: Some(result_tx),
             },
-        );
-        Ok(FutureReader::new(&mut store, async {
+        )?;
+        FutureReader::new(&mut store, async {
             wasmtime::error::Ok(match result_rx.await {
                 Ok(err) => Err(err),
                 Err(_) => Ok(()),
             })
-        }))
+        })
     }
 }
 

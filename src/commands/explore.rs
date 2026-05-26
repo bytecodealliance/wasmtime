@@ -41,7 +41,6 @@ impl ExploreCommand {
 
         let output = self
             .output
-            .clone()
             .unwrap_or_else(|| self.module.with_extension("explore.html"));
         let output_file = std::fs::File::create(&output)
             .with_context(|| format!("failed to create file: {}", output.display()))?;

@@ -12,7 +12,6 @@ use wasmtime_environ::{
     PanicOnOom as _, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType,
     WasmCompositeInnerType, WasmCompositeType, WasmFieldType, WasmFuncType, WasmHeapType,
     WasmRefType, WasmStorageType, WasmStructType, WasmSubType, WasmValType,
-    collections::Vec as FallibleVec,
 };
 
 pub(crate) mod matching;
@@ -1509,7 +1508,7 @@ impl ExternType {
                         engine,
                         subty.is_final,
                         subty.supertype,
-                        subty.unwrap_func().clone(),
+                        subty.unwrap_func().clone_panic_on_oom(),
                     )
                     .panic_on_oom()
                     .into()
@@ -1568,7 +1567,7 @@ impl From<TagType> for ExternType {
 ///
 /// This is either a packed 8- or -16 bit integer, or else it is some unpacked
 /// Wasm value type.
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum StorageType {
     /// `i8`, an 8-bit integer.
     I8,
@@ -1711,24 +1710,6 @@ impl StorageType {
             Self::I8 => WasmStorageType::I8,
             Self::I16 => WasmStorageType::I16,
             Self::ValType(v) => WasmStorageType::Val(v.to_wasm_type()),
-        }
-    }
-
-    /// The byte size of this type, if it has a defined size in the spec.
-    ///
-    /// See
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-fieldtype
-    /// and
-    /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-valtype
-    #[cfg(feature = "gc")]
-    pub(crate) fn data_byte_size(&self) -> Option<u32> {
-        match self {
-            StorageType::I8 => Some(1),
-            StorageType::I16 => Some(2),
-            StorageType::ValType(ValType::I32 | ValType::F32) => Some(4),
-            StorageType::ValType(ValType::I64 | ValType::F64) => Some(8),
-            StorageType::ValType(ValType::V128) => Some(16),
-            StorageType::ValType(ValType::Ref(_)) => None,
         }
     }
 }
@@ -1926,8 +1907,8 @@ impl StructType {
         // from being reclaimed while constructing this struct type.
         let mut registrations = smallvec::SmallVec::<[_; 4]>::new();
 
-        let fields = fields
-            .map(|ty: FieldType| {
+        let fields: Box<[WasmFieldType]> = fields
+            .map(|ty: FieldType| -> Result<_, Error> {
                 assert!(ty.comes_from_same_engine(engine));
 
                 if supertype.is_some() {
@@ -1940,9 +1921,9 @@ impl StructType {
                     }
                 }
 
-                ty.to_wasm_field_type()
+                Ok(ty.to_wasm_field_type())
             })
-            .collect();
+            .try_collect()?;
 
         if let Some(supertype) = supertype {
             ensure!(
@@ -2207,7 +2188,7 @@ impl ArrayType {
             finality.is_final(),
             supertype.map(|ty| ty.type_index().into()),
             wasm_ty,
-        ))
+        )?)
     }
 
     /// Get the engine that this array type is associated with.
@@ -2324,7 +2305,7 @@ impl ArrayType {
         is_final: bool,
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmArrayType,
-    ) -> ArrayType {
+    ) -> Result<ArrayType> {
         let ty = RegisteredType::new(
             engine,
             WasmSubType {
@@ -2335,11 +2316,10 @@ impl ArrayType {
                     inner: WasmCompositeInnerType::Array(ty),
                 },
             },
-        )
-        .panic_on_oom();
-        Self {
+        )?;
+        Ok(Self {
             registered_type: ty,
-        }
+        })
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
@@ -2415,6 +2395,12 @@ impl FuncType {
 
     /// Like [`FuncType::new`] but returns an
     /// [`OutOfMemory`][crate::error::OutOfMemory] error on allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn try_new(
         engine: &Engine,
         params: impl IntoIterator<Item = ValType>,
@@ -2448,7 +2434,7 @@ impl FuncType {
         let params = params.into_iter();
         let results = results.into_iter();
 
-        let mut wasmtime_params = FallibleVec::with_capacity({
+        let mut wasmtime_params = TryVec::with_capacity({
             let size_hint = params.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Only reserve space if we have a supertype, as that is the only time
@@ -2456,7 +2442,7 @@ impl FuncType {
             supertype.is_some() as usize * cap
         })?;
 
-        let mut wasmtime_results = FallibleVec::with_capacity({
+        let mut wasmtime_results = TryVec::with_capacity({
             let size_hint = results.size_hint();
             let cap = size_hint.1.unwrap_or(size_hint.0);
             // Same as above.
@@ -2468,10 +2454,10 @@ impl FuncType {
         // the only thing keeping a type in the registry, we don't want to
         // unregister it when we convert the `ValType` into a `WasmValType` just
         // before we register our new `WasmFuncType` that will reference it.
-        let mut registrations = FallibleVec::new();
+        let mut registrations = TryVec::new();
 
         let mut to_wasm_type =
-            |ty: ValType, vec: &mut FallibleVec<_>| -> Result<WasmValType, OutOfMemory> {
+            |ty: ValType, vec: &mut TryVec<_>| -> Result<WasmValType, OutOfMemory> {
                 assert!(ty.comes_from_same_engine(engine));
 
                 if supertype.is_some() {
@@ -2493,7 +2479,7 @@ impl FuncType {
         let results: Box<[_]> = results
             .map(|p| to_wasm_type(p, &mut wasmtime_results))
             .try_collect()?;
-        let wasm_func_ty = WasmFuncType::new(params, results);
+        let wasm_func_ty = WasmFuncType::new(params, results)?;
 
         if let Some(supertype) = supertype {
             assert!(supertype.comes_from_same_engine(engine));
@@ -2591,7 +2577,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .get(i)
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
@@ -2602,7 +2588,7 @@ impl FuncType {
         let engine = self.engine();
         self.registered_type
             .unwrap_func()
-            .returns()
+            .results()
             .iter()
             .map(|ty| ValType::from_wasm_type(engine, ty))
     }
@@ -2720,17 +2706,19 @@ impl FuncType {
     }
     /// Construct a func which returns results of default value, if each result type has a default value.
     pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Func> {
-        let dummy_results = self
-            .results()
-            .map(|ty| ty.default_value())
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| format_err!("function results do not have a default value"))?;
-        Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
+        let mut dummy_results = TryVec::new();
+        for ty in self.results() {
+            let val = ty
+                .default_value()
+                .ok_or_else(|| format_err!("function results do not have a default value"))?;
+            dummy_results.push(val)?;
+        }
+        Func::try_new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
             }
             Ok(())
-        }))
+        })
     }
 }
 
@@ -2819,13 +2807,13 @@ impl ExnType {
     /// signature implies a tag type, and when instantiated at
     /// runtime, it must be associated with a tag of that type.
     pub fn new(engine: &Engine, fields: impl IntoIterator<Item = ValType>) -> Result<ExnType> {
-        let fields = fields.into_iter().collect::<Vec<_>>();
+        let fields: TryVec<_> = fields.into_iter().try_collect()?;
 
         // First, construct/intern a FuncType: we need this to exist
         // so we can hand out a TagType, and it also roots any nested registrations.
-        let func_ty = FuncType::new(engine, fields.clone(), []);
+        let func_ty = FuncType::try_new(engine, fields.iter().cloned(), [])?;
 
-        Ok(Self::_new(engine, fields, func_ty))
+        Self::_new(engine, fields, func_ty)
     }
 
     /// Create a new `ExnType` from an existing `TagType`.
@@ -2843,28 +2831,22 @@ impl ExnType {
             "Cannot create an exception type from a tag type with results in the signature"
         );
 
-        Ok(Self::_new(
-            tag.ty.engine(),
-            func_ty.params(),
-            func_ty.clone(),
-        ))
+        Self::_new(tag.ty.engine(), func_ty.params(), func_ty.clone())
     }
 
     fn _new(
         engine: &Engine,
         fields: impl IntoIterator<Item = ValType>,
         func_ty: FuncType,
-    ) -> ExnType {
-        let fields = fields
-            .into_iter()
-            .map(|ty| {
-                assert!(ty.comes_from_same_engine(engine));
-                WasmFieldType {
-                    element_type: WasmStorageType::Val(ty.to_wasm_type()),
-                    mutable: false,
-                }
-            })
-            .collect();
+    ) -> Result<ExnType> {
+        let mut wasm_fields = TryVec::new();
+        for ty in fields.into_iter() {
+            assert!(ty.comes_from_same_engine(engine));
+            wasm_fields.push(WasmFieldType {
+                element_type: WasmStorageType::Val(ty.to_wasm_type()),
+                mutable: false,
+            })?;
+        }
 
         let ty = RegisteredType::new(
             engine,
@@ -2875,17 +2857,16 @@ impl ExnType {
                     shared: false,
                     inner: WasmCompositeInnerType::Exn(WasmExnType {
                         func_ty: EngineOrModuleTypeIndex::Engine(func_ty.type_index()),
-                        fields,
+                        fields: wasm_fields.into_boxed_slice()?,
                     }),
                 },
             },
-        )
-        .panic_on_oom();
+        )?;
 
-        Self {
+        Ok(ExnType {
             func_ty,
             registered_type: ty,
-        }
+        })
     }
 
     /// Get the tag type that this exception type is associated with.

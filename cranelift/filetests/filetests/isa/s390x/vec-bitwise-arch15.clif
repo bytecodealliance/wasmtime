@@ -67,14 +67,14 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 
 ; VCode:
 ; block0:
-;   veval %v24, %v25, %v24, %v26, 4
+;   veval %v24, %v24, %v25, %v26, 4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0xe7, 0x89
-;   .byte 0x80, 0x04
-;   mc 0x7fe, 0x88
+;   .byte 0xe7, 0x88
+;   stm %r0, %r4, 0xf88(%r10)
+;   br %r14
 
 function %band_band_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2, v2: i64x2):

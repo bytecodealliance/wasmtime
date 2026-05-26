@@ -8,7 +8,7 @@
 //! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
@@ -36,6 +36,12 @@ pub struct SSABuilder {
     /// Records for every variable and for every relevant block, the last definition of
     /// the variable in the block.
     variables: SecondaryMap<Variable, SecondaryMap<Block, PackedOption<Value>>>,
+
+    /// Records every SSA `Value` ever associated with a variable, including
+    /// values that `variables` has since overwritten within the same block.
+    /// Used by `values_for_var` to feed `FunctionBuilder::finalize`'s
+    /// stack-map propagation.
+    all_var_values: SecondaryMap<Variable, EntitySet<Value>>,
 
     /// Records the position of the basic blocks and the list of values used but not defined in the
     /// block.
@@ -110,6 +116,7 @@ impl SSABuilder {
     /// deallocating memory.
     pub fn clear(&mut self) {
         self.variables.clear();
+        self.all_var_values.clear();
         self.ssa_blocks.clear();
         self.variable_pool.clear();
         self.inst_pool.clear();
@@ -121,6 +128,7 @@ impl SSABuilder {
     /// Tests whether an `SSABuilder` is in a cleared state.
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty()
+            && self.all_var_values.is_empty()
             && self.ssa_blocks.is_empty()
             && self.calls.is_empty()
             && self.results.is_empty()
@@ -204,7 +212,7 @@ impl SSABuilder {
     /// Get all of the values associated with the given variable that we have
     /// inserted in the function thus far.
     pub fn values_for_var(&self, var: Variable) -> impl Iterator<Item = Value> + '_ {
-        self.variables[var].values().filter_map(|v| v.expand())
+        self.all_var_values[var].iter()
     }
 
     /// Declares a new definition of a variable in a given basic block.
@@ -212,6 +220,7 @@ impl SSABuilder {
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
         self.variables[var][block] = PackedOption::from(val);
+        self.all_var_values[var].insert(val);
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
@@ -274,6 +283,7 @@ impl SSABuilder {
         // any of the blocks before `from`.
         //
         // So in either case there is no definition in these blocks yet and we can blindly set one.
+        debug_assert!(self.all_var_values[var].contains(val));
         let var_defs = &mut self.variables[var];
         while block != from {
             debug_assert!(var_defs[block].is_none());
@@ -330,6 +340,7 @@ impl SSABuilder {
         // find a usable definition. So create one.
         let val = func.dfg.append_block_param(block, ty);
         var_defs[block] = PackedOption::from(val);
+        self.all_var_values[var].insert(val);
 
         // Now every predecessor needs to pass its definition of this variable to the newly added
         // block parameter. To do that we have to "recursively" call `use_var`, but there are two

@@ -114,6 +114,14 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<bool> {
         a.assert_unreachable()
     }
+
+    pub(crate) fn try_gc_ref<'a>(&self, _store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+        match self.inner {}
+    }
+
+    pub(crate) fn try_clone_gc_ref(&self, _: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
+        match self.inner {}
+    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
@@ -183,7 +191,7 @@ impl<T> OwnedRooted<T>
 where
     T: GcRef,
 {
-    pub fn clone(&self, _store: impl AsContextMut) -> Self {
+    pub fn clone(&self) -> Self {
         match self.inner {}
     }
 

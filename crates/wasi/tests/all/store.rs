@@ -72,8 +72,16 @@ impl<T> Drop for Ctx<T> {
 }
 
 pub struct MyWasiCtx {
-    pub wasi: WasiCtx,
-    pub table: ResourceTable,
+    wasi: WasiCtx,
+    table: ResourceTable,
+}
+
+impl MyWasiCtx {
+    pub fn new(wasi: WasiCtx) -> Self {
+        let mut table = ResourceTable::new();
+        table.set_max_capacity(1000);
+        Self { wasi, table }
+    }
 }
 
 impl WasiView for Ctx<MyWasiCtx> {

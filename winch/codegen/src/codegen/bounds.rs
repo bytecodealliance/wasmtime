@@ -10,6 +10,7 @@ use crate::{
     masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
+use wasmtime_environ::WasmValType;
 
 /// A newtype to represent an immediate offset argument for a heap access.
 #[derive(Debug, Copy, Clone)]
@@ -217,8 +218,23 @@ where
     })?;
 
     // Start by adding the index to the heap base addr.
-    let index_reg = index.as_typed_reg().reg;
-    masm.add(writable!(dst), dst, index_reg.into(), ptr_size)?;
+    let index_typed = index.as_typed_reg();
+    let heap_size: OperandSize = heap.index_type().try_into()?;
+
+    // Emit a zero-extend add when dealing with 32-bit heaps to ensure
+    // that the high bits of the 64-bit values are zeroed.
+    if ptr_size == OperandSize::S64 && heap_size == OperandSize::S32 {
+        masm.add_uextend(
+            writable!(dst),
+            dst,
+            index_typed.reg,
+            OperandSize::S32,
+            ptr_size,
+        )?;
+    } else {
+        assert!(index_typed.ty == WasmValType::I64);
+        masm.add(writable!(dst), dst, index_typed.reg.into(), ptr_size)?;
+    }
 
     if offset.as_u32() > 0 {
         masm.add(

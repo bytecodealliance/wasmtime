@@ -1,3 +1,4 @@
+use crate::filesystem::sys;
 use crate::filesystem::{Descriptor, Dir, File, WasiFilesystem, WasiFilesystemCtxView};
 use crate::p3::bindings::clocks::system_clock;
 use crate::p3::bindings::filesystem::types::{
@@ -13,7 +14,6 @@ use core::task::{Context, Poll, ready};
 use core::{iter, mem};
 use std::io::{self, Cursor};
 use std::sync::Arc;
-use system_interface::fs::FileIoExt as _;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
@@ -167,9 +167,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
         cx: &mut Context<'_>,
         store: StoreContextMut<'a, D>,
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
-        // Intentionally ignore this as in blocking mode everything is always
-        // ready and otherwise spawned blocking work can't be cancelled.
-        _finish: bool,
+        finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         if let Some(file) = self.file.as_blocking_file() {
             // Once a blocking file, always a blocking file, so assert as such.
@@ -179,7 +177,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             if buf.is_empty() {
                 return Poll::Ready(Ok(StreamResult::Completed));
             }
-            return match file.read_at(buf, self.offset) {
+            return match sys::read_at_cursor_unspecified(file, buf, self.offset) {
                 Ok(0) => {
                     self.close(Ok(()));
                     Poll::Ready(Ok(StreamResult::Dropped))
@@ -203,7 +201,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             let file = Arc::clone(me.file.as_file());
             let offset = me.offset;
             spawn_blocking(move || {
-                file.read_at(&mut buf, offset).map(|n| {
+                sys::read_at_cursor_unspecified(file, &mut buf, offset).map(|n| {
                     buf.truncate(n);
                     buf
                 })
@@ -213,21 +211,36 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
         // Await the completion of the read task. Note that this is not a
         // cancellable await point because we can't cancel the other task, so
         // the `finish` parameter is ignored.
-        let res = ready!(Pin::new(task).poll(cx)).expect("I/O task should not panic");
+        let result = match Pin::new(&mut *task).poll(cx) {
+            // If cancellation is requested, then flag that to Tokio. Note that
+            // this still waits for the actual completion of the spawned task,
+            // which won't actually happen if it's already executing.
+            Poll::Pending if finish => {
+                task.abort();
+                ready!(Pin::new(task).poll(cx))
+            }
+            other => ready!(other),
+        };
         self.task = None;
-        match res {
-            Ok(buf) if buf.is_empty() => {
+        match result {
+            Ok(Ok(buf)) if buf.is_empty() => {
                 self.close(Ok(()));
                 Poll::Ready(Ok(StreamResult::Dropped))
             }
-            Ok(buf) => {
+            Ok(Ok(buf)) => {
                 let n = buf.len();
                 dst.set_buffer(Cursor::new(buf));
                 Poll::Ready(Ok(self.complete_read(n)))
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 self.close(Err(err.into()));
                 Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Err(err) => {
+                if err.is_cancelled() {
+                    return Poll::Ready(Ok(StreamResult::Cancelled));
+                }
+                panic!("I/O task should not panic: {err}")
             }
         }
     }
@@ -420,8 +433,8 @@ impl WriteStreamConsumer {
 impl WriteLocation {
     fn write(&self, file: &cap_std::fs::File, bytes: &[u8]) -> io::Result<usize> {
         match *self {
-            WriteLocation::End => file.append(bytes),
-            WriteLocation::Offset(at) => file.write_at(bytes, at),
+            WriteLocation::End => sys::append_cursor_unspecified(file, bytes),
+            WriteLocation::Offset(at) => sys::write_at_cursor_unspecified(file, bytes, at),
         }
     }
 }
@@ -434,9 +447,7 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
         cx: &mut Context<'_>,
         store: StoreContextMut<D>,
         src: Source<Self::Item>,
-        // Intentionally ignore this as in blocking mode everything is always
-        // ready and otherwise spawned blocking work can't be cancelled.
-        _finish: bool,
+        finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         let mut src = src.as_direct(store);
         if let Some(file) = self.file.as_blocking_file() {
@@ -462,18 +473,33 @@ impl<D> StreamConsumer<D> for WriteStreamConsumer {
             let location = me.location;
             spawn_blocking(move || location.write(&file, &buf).map(|n| (buf, n)))
         });
-        let res = ready!(Pin::new(task).poll(cx)).expect("I/O task should not panic");
+        let result = match Pin::new(&mut *task).poll(cx) {
+            // If cancellation is requested, then flag that to Tokio. Note that
+            // this still waits for the actual completion of the spawned task,
+            // which won't actually happen if it's already executing.
+            Poll::Pending if finish => {
+                task.abort();
+                ready!(Pin::new(task).poll(cx))
+            }
+            other => ready!(other),
+        };
         self.task = None;
-        match res {
-            Ok((buf, n)) => {
+        match result {
+            Ok(Ok((buf, n))) => {
                 src.mark_read(n);
                 self.buffer = buf;
                 self.buffer.clear();
                 Poll::Ready(Ok(self.complete_write(n)))
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 self.close(Err(err.into()));
                 Poll::Ready(Ok(StreamResult::Dropped))
+            }
+            Err(err) => {
+                if err.is_cancelled() {
+                    return Poll::Ready(Ok(StreamResult::Cancelled));
+                }
+                panic!("I/O task should not panic: {err}")
             }
         }
     }
@@ -502,10 +528,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         let file = get_file(store.get().table, &fd)?;
         if !file.perms.contains(FilePerms::READ) {
             return Ok((
-                StreamReader::new(&mut store, iter::empty()),
+                StreamReader::new(&mut store, iter::empty())?,
                 FutureReader::new(&mut store, async {
                     wasmtime::error::Ok(Err(ErrorCode::NotPermitted))
-                }),
+                })?,
             ));
         }
 
@@ -520,8 +546,8 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                     result: Some(result_tx),
                     task: None,
                 },
-            ),
-            FutureReader::new(&mut store, result_rx),
+            )?,
+            FutureReader::new(&mut store, result_rx)?,
         ))
     }
 
@@ -530,7 +556,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
         offset: Filesize,
-    ) -> FutureReader<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
@@ -543,10 +569,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                 data.pipe(
                     &mut store,
                     WriteStreamConsumer::new_at(file, offset, result_tx),
-                );
+                )?;
             }
             Err(err) => {
-                data.close(&mut store);
+                data.close(&mut store)?;
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
             }
         }
@@ -557,7 +583,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
-    ) -> FutureReader<Result<(), ErrorCode>> {
+    ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
         let (result_tx, result_rx) = oneshot::channel();
         match get_file(store.get().table, &fd).and_then(|file| {
             if !file.perms.contains(FilePerms::WRITE) {
@@ -567,10 +593,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
             }
         }) {
             Ok(file) => {
-                data.pipe(&mut store, WriteStreamConsumer::new_append(file, result_tx));
+                data.pipe(&mut store, WriteStreamConsumer::new_append(file, result_tx))?;
             }
             Err(err) => {
-                data.close(&mut store);
+                data.close(&mut store)?;
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
             }
         }
@@ -642,10 +668,10 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
     fn read_directory<U>(
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
-    ) -> (
+    ) -> wasmtime::Result<(
         StreamReader<DirectoryEntry>,
         FutureReader<Result<(), ErrorCode>>,
-    ) {
+    )> {
         let (result_tx, result_rx) = oneshot::channel();
         let stream = match get_dir(store.get().table, &fd).and_then(|dir| {
             if !dir.perms.contains(DirPerms::READ) {
@@ -665,22 +691,22 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
                                 readdir.filter_map(|e| map_dir_entry(e).transpose()),
                                 result_tx,
                             ),
-                        ),
+                        )?,
                         Err(e) => {
                             let _ = result_tx.send(Err(e.into()));
-                            StreamReader::new(&mut store, iter::empty())
+                            StreamReader::new(&mut store, iter::empty())?
                         }
                     }
                 } else {
-                    StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))
+                    StreamReader::new(&mut store, ReadDirStream::new(dir, result_tx))?
                 }
             }
             Err(err) => {
                 let _ = result_tx.send(Err(err.downcast().unwrap_or(ErrorCode::Io)));
-                StreamReader::new(&mut store, iter::empty())
+                StreamReader::new(&mut store, iter::empty())?
             }
         };
-        (stream, FutureReader::new(&mut store, result_rx))
+        Ok((stream, FutureReader::new(&mut store, result_rx)?))
     }
 
     async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {

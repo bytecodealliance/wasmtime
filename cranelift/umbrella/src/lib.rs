@@ -28,7 +28,7 @@ pub mod prelude {
     pub use crate::codegen::ir::types;
     pub use crate::codegen::ir::{
         AbiParam, Block, ExtFuncData, ExternalName, GlobalValueData, InstBuilder, JumpTableData,
-        MemFlags, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
+        MemFlagsData, Signature, StackSlotData, StackSlotKind, TrapCode, Type, Value,
     };
     pub use crate::codegen::isa;
     pub use crate::codegen::settings::{self, Configurable};

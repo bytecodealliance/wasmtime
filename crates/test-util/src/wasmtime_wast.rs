@@ -19,12 +19,14 @@ pub fn apply_wast_config(config: &mut Config, wast_config: &wast::WastConfig) {
         Collector::Auto => wasmtime::Collector::Auto,
         Collector::Null => wasmtime::Collector::Null,
         Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
+        Collector::Copying => wasmtime::Collector::Copying,
     });
 }
 
 /// Helper method to apply `test_config` to `config`.
 pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let wast::TestConfig {
+        bulk_memory,
         memory64,
         custom_page_sizes,
         multi_memory,
@@ -38,12 +40,14 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         extended_const,
         wide_arithmetic,
         component_model_async,
-        component_model_async_builtins,
+        component_model_more_async_builtins,
         component_model_async_stackful,
         component_model_threading,
         component_model_error_context,
         component_model_gc,
+        component_model_map,
         component_model_fixed_length_lists,
+        component_model_implements,
         nan_canonicalization,
         simd,
         exceptions,
@@ -58,6 +62,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     // Note that all of these proposals/features are currently default-off to
     // ensure that we annotate all tests accurately with what features they
     // need, even in the future when features are stabilized.
+    let bulk_memory = bulk_memory.unwrap_or(false);
     let memory64 = memory64.unwrap_or(false);
     let custom_page_sizes = custom_page_sizes.unwrap_or(false);
     let multi_memory = multi_memory.unwrap_or(false);
@@ -68,12 +73,14 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let extended_const = extended_const.unwrap_or(false);
     let wide_arithmetic = wide_arithmetic.unwrap_or(false);
     let component_model_async = component_model_async.unwrap_or(false);
-    let component_model_async_builtins = component_model_async_builtins.unwrap_or(false);
+    let component_model_more_async_builtins = component_model_more_async_builtins.unwrap_or(false);
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
     let component_model_threading = component_model_threading.unwrap_or(false);
     let component_model_error_context = component_model_error_context.unwrap_or(false);
     let component_model_gc = component_model_gc.unwrap_or(false);
+    let component_model_map = component_model_map.unwrap_or(false);
     let component_model_fixed_length_lists = component_model_fixed_length_lists.unwrap_or(false);
+    let component_model_implements = component_model_implements.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
     let legacy_exceptions = legacy_exceptions.unwrap_or(false);
@@ -94,6 +101,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let _custom_descriptors = custom_descriptors.unwrap_or(false);
 
     config
+        .wasm_bulk_memory(bulk_memory)
         .wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
         .wasm_shared_everything_threads(shared_everything_threads)
@@ -108,12 +116,14 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
         .wasm_component_model_async(component_model_async)
-        .wasm_component_model_async_builtins(component_model_async_builtins)
+        .wasm_component_model_more_async_builtins(component_model_more_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
         .wasm_component_model_threading(component_model_threading)
         .wasm_component_model_error_context(component_model_error_context)
         .wasm_component_model_gc(component_model_gc)
+        .wasm_component_model_map(component_model_map)
         .wasm_component_model_fixed_length_lists(component_model_fixed_length_lists)
+        .wasm_component_model_implements(component_model_implements)
         .wasm_exceptions(exceptions)
         .wasm_stack_switching(stack_switching)
         .cranelift_nan_canonicalization(nan_canonicalization);

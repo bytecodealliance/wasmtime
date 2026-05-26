@@ -24,22 +24,18 @@ where
     Node: EntityRef + Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        struct Edges<'a, Node: EntityRef + Debug>(&'a EntityGraph<Node>);
-
-        impl<'a, Node: EntityRef + Debug> Debug for Edges<'a, Node> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.debug_map()
-                    .entries(
-                        self.0
-                            .nodes()
-                            .map(|n| (n, self.0.successors(n).collect::<Box<[_]>>())),
-                    )
-                    .finish()
-            }
-        }
-
         f.debug_struct("Graph")
-            .field("edges", &Edges(self))
+            .field(
+                "edges",
+                &fmt::from_fn(|f| {
+                    f.debug_map()
+                        .entries(
+                            self.nodes()
+                                .map(|n| (n, self.successors(n).collect::<Box<[_]>>())),
+                        )
+                        .finish()
+                }),
+            )
             .finish()
     }
 }

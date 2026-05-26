@@ -1,10 +1,10 @@
 use cranelift_bitset::ScalarBitSet;
-use object::{Bytes, LittleEndian, U32Bytes};
+use object::{Bytes, LittleEndian, U32};
 
 struct StackMapSection<'a> {
-    pcs: &'a [U32Bytes<LittleEndian>],
-    pointers_to_stack_map: &'a [U32Bytes<LittleEndian>],
-    stack_map_data: &'a [U32Bytes<LittleEndian>],
+    pcs: &'a [U32<LittleEndian>],
+    pointers_to_stack_map: &'a [U32<LittleEndian>],
+    stack_map_data: &'a [U32<LittleEndian>],
 }
 
 impl<'a> StackMapSection<'a> {
@@ -12,14 +12,13 @@ impl<'a> StackMapSection<'a> {
         let mut section = Bytes(section);
         // NB: this matches the encoding written by `append_to` in the
         // `compile::stack_map` module.
-        let pc_count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+        let pc_count = section.read::<U32<LittleEndian>>().ok()?;
         let pc_count = usize::try_from(pc_count.get(LittleEndian)).ok()?;
         let (pcs, section) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, pc_count).ok()?;
+            object::slice_from_bytes::<U32<LittleEndian>>(section.0, pc_count).ok()?;
         let (pointers_to_stack_map, section) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(section, pc_count).ok()?;
-        let stack_map_data =
-            object::slice_from_all_bytes::<U32Bytes<LittleEndian>>(section).ok()?;
+            object::slice_from_bytes::<U32<LittleEndian>>(section, pc_count).ok()?;
+        let stack_map_data = object::slice_from_all_bytes::<U32<LittleEndian>>(section).ok()?;
         Some(StackMapSection {
             pcs,
             pointers_to_stack_map,
@@ -65,7 +64,7 @@ impl<'a> StackMapSection<'a> {
 /// the docs over there.
 pub struct StackMap<'a> {
     frame_size: u32,
-    data: &'a [U32Bytes<LittleEndian>],
+    data: &'a [U32<LittleEndian>],
 }
 
 impl<'a> StackMap<'a> {

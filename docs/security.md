@@ -134,3 +134,7 @@ Wasmtime implements a few forms of basic spectre mitigations at this time:
 
 Mitigating Spectre continues to be a subject of ongoing research, and Wasmtime
 will likely grow more mitigations in the future as well.
+
+Note that on aarch64 the `csdb` instruction is disabled by default due to its
+significant performance penalty, but this can be additionally enabled through
+the `use_csdb` Cranelift setting.

@@ -1,4 +1,4 @@
-use crate::alloc::Vec;
+use crate::alloc::TryVec;
 use crate::error::OutOfMemory;
 use std_alloc::boxed::Box;
 
@@ -21,20 +21,20 @@ impl<I: Iterator> TryCollect for I {}
 /// Analogue of [`FromIterator`] in the standard library, but used with
 /// [`TryCollect::try_collect`] instead.
 pub trait TryFromIterator<T, E>: Sized {
-    /// Creates an intance of this collection from the `iter` provided.
+    /// Creates an instance of this collection from the `iter` provided.
     ///
-    /// Does not abort on OOM but insteads return an error.
+    /// Does not abort on OOM but instead returns an error.
     fn try_from_iter<I>(iter: I) -> Result<Self, E>
     where
         I: Iterator<Item = T>;
 }
 
-impl<T> TryFromIterator<T, OutOfMemory> for Vec<T> {
+impl<T> TryFromIterator<T, OutOfMemory> for TryVec<T> {
     fn try_from_iter<I>(iter: I) -> Result<Self, OutOfMemory>
     where
         I: Iterator<Item = T>,
     {
-        let mut result = Vec::with_capacity(iter.size_hint().0)?;
+        let mut result = TryVec::with_capacity(iter.size_hint().0)?;
         for item in iter {
             result.push(item)?;
         }
@@ -47,12 +47,12 @@ impl<T> TryFromIterator<T, OutOfMemory> for Box<[T]> {
     where
         I: Iterator<Item = T>,
     {
-        let vec = Vec::try_from_iter(iter)?;
+        let vec = TryVec::try_from_iter(iter)?;
         vec.into_boxed_slice()
     }
 }
 
-impl<T, E> TryFromIterator<Result<T, E>, E> for Vec<T>
+impl<T, E> TryFromIterator<Result<T, E>, E> for TryVec<T>
 where
     E: From<OutOfMemory>,
 {
@@ -60,7 +60,7 @@ where
     where
         I: Iterator<Item = Result<T, E>>,
     {
-        let mut result = Vec::with_capacity(iter.size_hint().0)?;
+        let mut result = TryVec::with_capacity(iter.size_hint().0)?;
         for item in iter {
             result.push(item?)?;
         }
@@ -76,7 +76,7 @@ where
     where
         I: Iterator<Item = Result<T, E>>,
     {
-        let vec = iter.try_collect::<Vec<_>, E>()?;
+        let vec = iter.try_collect::<TryVec<_>, E>()?;
         Ok(vec.into_boxed_slice()?)
     }
 }
@@ -93,7 +93,7 @@ pub trait TryExtend<T> {
         I: IntoIterator<Item = T>;
 }
 
-impl<T> TryExtend<T> for Vec<T> {
+impl<T> TryExtend<T> for TryVec<T> {
     fn try_extend<I>(&mut self, iter: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator<Item = T>,
@@ -109,12 +109,12 @@ impl<T> TryExtend<T> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Box, TryCollect, TryExtend, Vec};
+    use super::{Box, TryCollect, TryExtend, TryVec};
     use crate::error::{OutOfMemory, Result};
 
     #[test]
     fn test_vec_collect() -> Result<(), OutOfMemory> {
-        let v: Vec<i32> = (0..10).try_collect()?;
+        let v: TryVec<i32> = (0..10).try_collect()?;
         assert_eq!(&*v, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
         Ok(())
     }
@@ -128,18 +128,18 @@ mod tests {
 
     #[test]
     fn test_vec_result_collect() -> Result<()> {
-        let v: Result<Vec<i32>> = [].into_iter().try_collect();
+        let v: Result<TryVec<i32>> = [].into_iter().try_collect();
         assert!(v?.is_empty());
 
-        let v: Result<Vec<i32>> = [Ok(1), Ok(2)].into_iter().try_collect();
+        let v: Result<TryVec<i32>> = [Ok(1), Ok(2)].into_iter().try_collect();
         assert_eq!(&*v?, &[1, 2]);
 
-        let v: Result<Vec<i32>> = [Ok(1), Err(crate::format_err!("hi"))]
+        let v: Result<TryVec<i32>> = [Ok(1), Err(crate::format_err!("hi"))]
             .into_iter()
             .try_collect();
         assert!(v.is_err());
 
-        let v: Result<Vec<i32>> = [Err(crate::format_err!("hi")), Ok(1)]
+        let v: Result<TryVec<i32>> = [Err(crate::format_err!("hi")), Ok(1)]
             .into_iter()
             .try_collect();
         assert!(v.is_err());
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_try_extend() -> Result<(), OutOfMemory> {
-        let mut vec = Vec::new();
+        let mut vec = TryVec::new();
         vec.try_extend([1, 2, 3].iter().cloned())?;
         assert_eq!(&*vec, &[1, 2, 3]);
 

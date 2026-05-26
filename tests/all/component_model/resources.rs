@@ -187,7 +187,27 @@ fn resource_any() -> Result<()> {
         // reuse of `t` should fail, despite it pointing to a valid resource
         assert_eq!(
             t_dtor.call(&mut store, (t,)).unwrap_err().to_string(),
-            "host-owned resource is being used with the wrong type"
+            "host-owned resource was already de-allocated"
+        );
+    }
+
+    {
+        let mut store = Store::new(&engine, ());
+        let i = linker.instantiate(&mut store, &c)?;
+        let t_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t")?;
+        let t_dtor = i.get_typed_func::<(ResourceAny,), ()>(&mut store, "drop-t")?;
+
+        // `t0` is placed at host index 0
+        let (t0,) = t_ctor.call(&mut store, (100,))?;
+        t_dtor.call(&mut store, (t0,))?;
+
+        // `t1` is also placed at host index 0 since `t0` was deallocated
+        let (_t1,) = t_ctor.call(&mut store, (100,))?;
+
+        // reuse of `t0` should fail, despite it pointing to a valid resource
+        assert_eq!(
+            t_dtor.call(&mut store, (t0,)).unwrap_err().to_string(),
+            "host-owned resource was already de-allocated"
         );
     }
 
@@ -814,7 +834,7 @@ fn thread_through_borrow() -> Result<()> {
 }
 
 #[test]
-fn cannot_use_borrow_for_own() -> Result<()> {
+fn borrows_must_be_dropped_before_lifting() -> Result<()> {
     let engine = super::engine();
     let c = Component::new(
         &engine,
@@ -824,6 +844,9 @@ fn cannot_use_borrow_for_own() -> Result<()> {
 
                 (core module $m
                     (func (export "f") (param i32) (result i32)
+                        ;; this is a `borrow $t`, and we're returning it as an
+                        ;; `own $t`. This should have an error about remaining
+                        ;; borrows rather than a mismatch of own/borrow.
                         local.get 0
                     )
                 )
@@ -848,7 +871,63 @@ fn cannot_use_borrow_for_own() -> Result<()> {
 
     let resource = Resource::new_own(100);
     let err = f.call(&mut store, (&resource,)).unwrap_err();
-    assert_eq!(err.to_string(), "cannot lift own resource from a borrow");
+    assert_eq!(
+        err.to_string(),
+        "borrow handles still remain at the end of the call"
+    );
+    Ok(())
+}
+
+#[test]
+fn cannot_use_borrow_for_own() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (import "f" (func $f (param "x" (own $t))))
+
+                (core module $m
+                    (import "" "f" (func $f (param i32)))
+                    (func (export "f") (param i32)
+                        local.get 0
+                        call $f
+                    )
+                )
+                (core func $f (canon lower (func $f)))
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "f" (func $f))
+                    ))
+                ))
+
+                (func (export "f") (param "x" (borrow $t))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .resource("t", ResourceType::host::<MyType>(), |_, _| Ok(()))?;
+    linker
+        .root()
+        .func_wrap("f", |_, _: (Resource<MyType>,)| Ok(()))?;
+    let i = linker.instantiate(&mut store, &c)?;
+
+    let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
+
+    let resource = Resource::new_own(100);
+    let err = f.call(&mut store, (&resource,)).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("cannot lift own resource from a borrow"),
+        "bad error: {err:?}",
+    );
     Ok(())
 }
 

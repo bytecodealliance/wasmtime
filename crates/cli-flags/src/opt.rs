@@ -9,9 +9,12 @@ use crate::{KeyValuePair, WasiNnGraph};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
 use serde::de::{self, Visitor};
+use std::num::NonZeroU32;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{fmt, marker};
-use wasmtime::{Result, bail};
+use wasmtime::{Result, bail, format_err};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
 const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
@@ -344,6 +347,20 @@ impl WasmtimeOptionValue for String {
     }
 }
 
+impl WasmtimeOptionValue for PathBuf {
+    const VAL_HELP: &'static str = "=path";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            Some(val) => Ok(PathBuf::from_str(val)?),
+            None => bail!("value must be specified with key=val syntax"),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 impl WasmtimeOptionValue for u32 {
     const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
@@ -352,6 +369,19 @@ impl WasmtimeOptionValue for u32 {
             Some(hex) => Ok(u32::from_str_radix(hex, 16)?),
             None => Ok(val.parse()?),
         }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl WasmtimeOptionValue for NonZeroU32 {
+    const VAL_HELP: &'static str = "=N";
+
+    fn parse(val: Option<&str>) -> Result<Self> {
+        let n = <u32 as WasmtimeOptionValue>::parse(val)?;
+        NonZeroU32::new(n).ok_or_else(|| format_err!("value must be non-zero"))
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -518,12 +548,15 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
 }
 
 impl WasmtimeOptionValue for wasmtime::Collector {
-    const VAL_HELP: &'static str = "=drc|null";
+    const VAL_HELP: &'static str = "=drc|null|copying";
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "drc" => Ok(wasmtime::Collector::DeferredReferenceCounting),
             "null" => Ok(wasmtime::Collector::Null),
-            other => bail!("unknown collector `{other}` only `drc` and `null` accepted",),
+            "copying" => Ok(wasmtime::Collector::Copying),
+            other => {
+                bail!("unknown collector `{other}` only `drc`, `null`, and `copying` accepted",)
+            }
         }
     }
 
@@ -531,6 +564,7 @@ impl WasmtimeOptionValue for wasmtime::Collector {
         match *self {
             wasmtime::Collector::DeferredReferenceCounting => f.write_str("drc"),
             wasmtime::Collector::Null => f.write_str("null"),
+            wasmtime::Collector::Copying => f.write_str("copying"),
             _ => unreachable!(),
         }
     }
@@ -553,6 +587,20 @@ impl WasmtimeOptionValue for wasmtime::Enabled {
             wasmtime::Enabled::No => f.write_str("n"),
             wasmtime::Enabled::Auto => f.write_str("auto"),
         }
+    }
+}
+
+impl WasmtimeOptionValue for wasmtime::Inlining {
+    const VAL_HELP: &'static str = "[=y|n|gc|inter-module|intrinsics]";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match val {
+            None => Ok(wasmtime::Inlining::Yes),
+            Some(val) => val.parse(),
+        }
+    }
+
+    fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
     }
 }
 

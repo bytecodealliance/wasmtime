@@ -1,6 +1,7 @@
 //! Data structures to provide transformation of the source
 
-use object::{Bytes, LittleEndian, U32Bytes};
+use core::fmt;
+use object::{Bytes, LittleEndian, U32};
 use serde_derive::{Deserialize, Serialize};
 
 /// Single source location to generated address mapping.
@@ -61,20 +62,97 @@ impl Default for FilePos {
     }
 }
 
+/// A Wasm bytecode offset relative to the start of a component (or
+/// top-level module) binary.
+///
+/// When compiling a component, the Wasm parser returns source
+/// positions relative to the entire component binary. This type
+/// captures that convention. Use
+/// [`ComponentPC::to_module_pc`] to convert to a
+/// [`ModulePC`] given the byte offset of the module within the
+/// component.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ComponentPC(u32);
+
+impl ComponentPC {
+    /// Create a new component-relative PC from a raw offset.
+    pub fn new(offset: u32) -> Self {
+        Self(offset)
+    }
+
+    /// Get the raw u32 offset.
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+
+    /// Convert to a module-relative PC by subtracting the byte offset
+    /// of the module within the component binary.
+    pub fn to_module_pc(self, wasm_module_offset: u64) -> ModulePC {
+        let offset = u32::try_from(wasm_module_offset).unwrap();
+        ModulePC(self.0 - offset)
+    }
+}
+
+impl fmt::Debug for ComponentPC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ComponentPC({:#x})", self.0)
+    }
+}
+
+impl fmt::Display for ComponentPC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
+/// A Wasm bytecode offset relative to the start of a core Wasm
+/// module binary.
+///
+/// In the guest-debug system, PCs are always module-relative because
+/// the debugger presents a core-Wasm view of the world where
+/// components are deconstructed into individual core Wasm modules.
+///
+/// For standalone (non-component) modules, `ModulePC` and
+/// [`ComponentPC`] values are numerically identical.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ModulePC(u32);
+
+impl ModulePC {
+    /// Create a new module-relative PC from a raw offset.
+    pub fn new(offset: u32) -> Self {
+        Self(offset)
+    }
+
+    /// Get the raw u32 offset.
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl fmt::Debug for ModulePC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ModulePC({:#x})", self.0)
+    }
+}
+
+impl fmt::Display for ModulePC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#x}", self.0)
+    }
+}
+
 /// Parse an `ELF_WASMTIME_ADDRMAP` section, returning the slice of code offsets
 /// and the slice of associated file positions for each offset.
-fn parse_address_map(
-    section: &[u8],
-) -> Option<(&[U32Bytes<LittleEndian>], &[U32Bytes<LittleEndian>])> {
+fn parse_address_map(section: &[u8]) -> Option<(&[U32<LittleEndian>], &[U32<LittleEndian>])> {
     let mut section = Bytes(section);
     // NB: this matches the encoding written by `append_to` in the
     // `compile::address_map` module.
-    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+    let count = section.read::<U32<LittleEndian>>().ok()?;
     let count = usize::try_from(count.get(LittleEndian)).ok()?;
     let (offsets, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
+        object::slice_from_bytes::<U32<LittleEndian>>(section.0, count).ok()?;
     let (positions, section) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section, count).ok()?;
+        object::slice_from_bytes::<U32<LittleEndian>>(section, count).ok()?;
     debug_assert!(section.is_empty());
     Some((offsets, positions))
 }

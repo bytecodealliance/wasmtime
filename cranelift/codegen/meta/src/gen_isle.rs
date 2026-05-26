@@ -230,6 +230,9 @@ fn gen_common_isle(
 
                 (IsleTarget::Opt, _, 1, false) => ("Value", true, "make_inst", "inst_data_value"),
                 (IsleTarget::Opt, _, _, _) => ("Inst", false, "make_skeleton_inst", "inst_data"),
+                (IsleTarget::Lower, false, r, _) if r >= 1 => {
+                    ("Inst", true, "make_inst", "inst_data_value")
+                }
                 (IsleTarget::Lower, _, _, _) => ("Inst", false, "make_inst", "inst_data_value"),
             };
 
@@ -268,7 +271,13 @@ fn gen_common_isle(
 
             let mut s = format!(
                 "({inst_data_etor} {}(InstructionData.{} (Opcode.{})",
-                if ty_in_decl { "ty " } else { "" },
+                if ty_in_decl {
+                    "ty "
+                } else if isle_target == IsleTarget::Lower {
+                    "_ "
+                } else {
+                    ""
+                },
                 inst.format.name,
                 inst.camel_name
             );
@@ -783,6 +792,16 @@ impl NumericOp<'_> {
             NumericOp {
                 name: "shr",
                 body: r#"a.checked_shr(b).unwrap_or_else(|| panic!("shr overflow: {a} >> {b}"))"#,
+                ..shift.clone()
+            },
+            NumericOp {
+                name: "rotl",
+                body: "a.rotate_left(b)",
+                ..shift.clone()
+            },
+            NumericOp {
+                name: "rotr",
+                body: "a.rotate_right(b)",
                 ..shift.clone()
             },
             // Predicates.

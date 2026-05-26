@@ -33,14 +33,20 @@ impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(engine: &Engine, ty: &wasmtime_environ::Memory) -> Result<Self> {
         let tunables = engine.tunables();
+        let memory_tunables = wasmtime_environ::MemoryTunables::new(
+            tunables,
+            wasmtime_environ::MemoryKind::LinearMemory,
+        );
         // Note that without a limiter being passed to `limit_new` this
         // `assert_ready` should never panic.
         let (minimum_bytes, maximum_bytes) = vm::assert_ready(Memory::limit_new(ty, None))?;
-        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
+        let mmap_memory = MmapMemory::new(ty, &memory_tunables, minimum_bytes, maximum_bytes)?;
+        let boxed: Box<dyn crate::runtime::vm::RuntimeLinearMemory> =
+            try_new::<Box<_>>(mmap_memory)?;
         Self::wrap(
             engine,
             ty,
-            LocalMemory::new(ty, tunables, Box::new(mmap_memory), None)?,
+            LocalMemory::new(ty, &memory_tunables, boxed, None)?,
         )
     }
 
@@ -58,17 +64,17 @@ impl SharedMemory {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        Ok(Self(Arc::new(SharedMemoryInner {
+        Ok(Self(try_new::<Arc<_>>(SharedMemoryInner {
             ty: *ty,
             spot: ParkingSpot::default(),
             def: LongTermVMMemoryDefinition(memory.vmmemory()),
             memory: RwLock::new(memory),
-        })))
+        })?))
     }
 
     /// Return the memory type for this [`SharedMemory`].
-    pub fn ty(&self) -> wasmtime_environ::Memory {
-        self.0.ty
+    pub fn ty(&self) -> &wasmtime_environ::Memory {
+        &self.0.ty
     }
 
     /// Convert this shared memory into a [`Memory`].
@@ -140,7 +146,12 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { AtomicU32::from_ptr(addr.cast()) };
-        let deadline = timeout.map(|d| Instant::now() + d);
+
+        // Note that `checked_add` is used such that when `timeout` is too large
+        // it'll cause there to be no timeout at all if we can't represent the
+        // deadline. That effectively maps to the requested timeout since if we
+        // can't represent the deadline we'll be here awhile.
+        let deadline = timeout.and_then(|d| Instant::now().checked_add(d));
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
@@ -164,16 +175,14 @@ impl SharedMemory {
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);
         let atomic = unsafe { AtomicU64::from_ptr(addr.cast()) };
-        let deadline = timeout.map(|d| Instant::now() + d);
+
+        // See `atomic_wait32` for why this is using `checked_add`.
+        let deadline = timeout.and_then(|d| Instant::now().checked_add(d));
 
         WAITER.with(|waiter| {
             let mut waiter = waiter.borrow_mut();
             Ok(self.0.spot.wait64(atomic, expected, deadline, &mut waiter))
         })
-    }
-
-    pub(crate) fn page_size(&self) -> u64 {
-        self.0.ty.page_size()
     }
 
     pub(crate) fn byte_size(&self) -> usize {

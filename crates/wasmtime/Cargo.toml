@@ -29,7 +29,7 @@ wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
-wasmtime-core = { workspace = true }
+wasmtime-core = { workspace = true, features = ['serde'] }
 pulley-interpreter = { workspace = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
@@ -95,7 +95,7 @@ rustix = { workspace = true, optional = true, features = ["mm", "param"] }
 [dev-dependencies]
 env_logger = { workspace = true }
 proptest = { workspace = true }
-rand = { workspace = true }
+rand = { workspace = true, features = ['thread_rng'] }
 tempfile = { workspace = true }
 libtest-mimic = { workspace = true }
 cranelift-native = { workspace = true }
@@ -134,6 +134,7 @@ default = [
   'backtrace',
   'cache',
   'gc',
+  'gc-copying',
   'gc-drc',
   'gc-null',
   'wat',
@@ -249,7 +250,7 @@ trace-log = ["wasmtime-cranelift?/trace-log"]
 
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
-demangle = ["wasmtime-environ/demangle", "std"]
+demangle = ["wasmtime-environ/demangle"]
 
 # Enable support for generating core dumps on traps.
 coredump = ["dep:wasm-encoder", "runtime", "std"]
@@ -289,7 +290,7 @@ runtime = [
 # load and run Wasm that uses those proposals.
 #
 # You can additionally configure which GC implementations are enabled via the
-# `gc-drc` and `gc-null` features.
+# `gc-drc`, `gc-null`, and `gc-copying` features.
 gc = [
   "wasmtime-environ/gc",
   "wasmtime-cranelift?/gc",
@@ -310,6 +311,14 @@ gc-null = [
   "wasmtime-environ/gc-null",
   "wasmtime-cranelift?/gc-null",
   "wasmtime-winch?/gc-null",
+]
+
+# Enable the copying garbage collector.
+gc-copying = [
+  "gc",
+  "wasmtime-environ/gc-copying",
+  "wasmtime-cranelift?/gc-copying",
+  "wasmtime-winch?/gc-copying",
 ]
 
 # Enable runtime support for the WebAssembly threads proposal.
@@ -379,7 +388,7 @@ reexport-wasmparser = []
 
 # Enables instances of the traits defined in the wasm-wave crate, which
 # provides a human-readable text format for component values.
-wave = ["dep:wasm-wave", 'component-model']
+wave = ["dep:wasm-wave", "component-model", "std"]
 
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
@@ -402,7 +411,13 @@ custom-sync-primitives = []
 # Off-by-default support to profile the Pulley interpreter. This has a
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
-profile-pulley = ['anyhow', 'pulley', 'profiling', 'pulley-interpreter/profile']
+profile-pulley = [
+    "anyhow",
+    "profiling",
+    "pulley",
+    "pulley-interpreter/interp",
+    "pulley-interpreter/profile",
+]
 
 # Enables support for the Component Model Async ABI, along with `future`,
 # `stream`, and `error-context` types.

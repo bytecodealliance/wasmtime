@@ -90,7 +90,14 @@ where
         (*state).initial_closure.set(ptr::null_mut());
         let suspend = Suspend { state };
         let initial = suspend.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+        let suspend = super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+
+        let parent = (*suspend.state).parent.get();
+        debug_assert!(!parent.is_null());
+
+        // Technically this means that this function `fiber_start` never
+        // returns, but that's how the fibers API works on Windows it seems.
+        SwitchToFiber(parent);
     }
 }
 
@@ -187,9 +194,10 @@ impl Suspend {
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!()
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {

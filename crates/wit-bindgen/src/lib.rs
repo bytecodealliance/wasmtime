@@ -1534,7 +1534,9 @@ impl Wasmtime {
                         move |caller: &{wt}::component::Accessor::<T>, rep| {{
                             {wt}::component::__internal::Box::pin(async move {{
                                 let accessor = &caller.with_getter(host_getter);
-                                Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                {wt}::ToWasmtimeResult::to_wasmtime_result(
+                                    Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                )
                             }})
                         }},
                     )?;"
@@ -1547,7 +1549,9 @@ impl Wasmtime {
                         {wt}::component::ResourceType::host::<{camel}>(),
                         move |mut store, rep| {{
                             {wt}::component::__internal::Box::new(async move {{
-                                Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                                {wt}::ToWasmtimeResult::to_wasmtime_result(
+                                    Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
+                                )
                             }})
                         }},
                     )?;"
@@ -1570,7 +1574,9 @@ impl Wasmtime {
                     move |mut store, rep| -> {wt}::Result<()> {{
 
                         let resource = {wt}::component::Resource::new_own(rep);
-                        Host{camel}{trait_suffix}::drop({first_arg}, resource)
+                        {wt}::ToWasmtimeResult::to_wasmtime_result(
+                            Host{camel}{trait_suffix}::drop({first_arg}, resource)
+                        )
                     }},
                 )?;",
             )
@@ -1627,9 +1633,9 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Stream(t) => self.type_stream(id, name, t.as_ref(), &ty.docs),
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
+            TypeDefKind::Map(k, v) => self.type_map(id, name, k, v, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
             TypeDefKind::FixedLengthList(..) => todo!(),
-            TypeDefKind::Map(..) => todo!(),
         }
     }
 
@@ -2198,6 +2204,22 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
+    fn type_map(&mut self, id: TypeId, _name: &str, key: &Type, value: &Type, docs: &Docs) {
+        let info = self.info(id);
+        for (name, mode) in self.modes_of(id) {
+            let lt = self.lifetime_for(&info, mode);
+            self.rustdoc(docs);
+            self.push_str(&format!("pub type {name}"));
+            self.print_generics(lt);
+            self.push_str(" = ");
+            let key_ty = self.ty(key, mode);
+            let value_ty = self.ty(value, mode);
+            self.push_str(&format!("std::collections::HashMap<{key_ty}, {value_ty}>"));
+            self.push_str(";\n");
+            self.assert_type(id, &name);
+        }
+    }
+
     fn type_stream(&mut self, id: TypeId, name: &str, ty: Option<&Type>, docs: &Docs) {
         self.rustdoc(docs);
         self.push_str(&format!("pub type {name}"));
@@ -2589,31 +2611,27 @@ impl<'a> InterfaceGenerator<'a> {
             let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             let convert = if flags.contains(FunctionFlags::STORE) {
                 if flags.contains(FunctionFlags::ASYNC) {
-                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))?")
+                    format!("caller.with(|mut host| {convert}(&mut host_getter(host.get()), e))")
                 } else {
-                    format!("{convert}(&mut host_getter(caller.data_mut()), e)?")
+                    format!("{convert}(&mut host_getter(caller.data_mut()), e)")
                 }
             } else {
-                format!("{convert}(host, e)?")
+                format!("{convert}(host, e)")
             };
             uwrite!(
                 self.src,
                 "Ok((match r {{
                     Ok(a) => Ok(a),
-                    Err(e) => Err({convert}),
+                    Err(e) => Err({wt}::ToWasmtimeResult::to_wasmtime_result({convert})?),
                 }},))"
             );
         } else if func.result.is_some() {
-            if self.generator.opts.anyhow {
-                uwrite!(
-                    self.src,
-                    "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
-                );
-            } else {
-                uwrite!(self.src, "Ok((r?,))\n");
-            }
+            uwrite!(
+                self.src,
+                "Ok(({wt}::ToWasmtimeResult::to_wasmtime_result(r)?,))\n"
+            );
         } else {
-            uwrite!(self.src, "r\n");
+            uwrite!(self.src, "{wt}::ToWasmtimeResult::to_wasmtime_result(r)\n");
         }
 
         if flags.contains(FunctionFlags::ASYNC) {
@@ -2742,9 +2760,6 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
         }
 
-        let task_exit =
-            flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE | FunctionFlags::TASK_EXIT);
-
         let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
             TypeMode::Owned
         } else {
@@ -2758,13 +2773,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         uwrite!(self.src, ") -> {wt}::Result<");
-        if task_exit {
-            self.src.push_str("(");
-        }
         self.print_result_ty(func.result, TypeMode::Owned);
-        if task_exit {
-            uwrite!(self.src, ", {wt}::component::TaskExit)");
-        }
         uwrite!(self.src, ">");
 
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
@@ -2823,19 +2832,12 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("};\n");
 
         self.src.push_str("let (");
-        if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            self.src.push_str("(");
-        }
         if func.result.is_some() {
             uwrite!(self.src, "ret0,");
         }
 
         if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            let task_exit = if task_exit { "task_exit" } else { "_" };
-            uwrite!(
-                self.src,
-                "), {task_exit}) = callee.call_concurrent(accessor, ("
-            );
+            uwrite!(self.src, ") = callee.call_concurrent(accessor, (");
         } else {
             uwrite!(
                 self.src,
@@ -2855,16 +2857,10 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, ")){instrument}{await_}?;");
 
         self.src.push_str("Ok(");
-        if task_exit {
-            self.src.push_str("(");
-        }
         if func.result.is_some() {
             self.src.push_str("ret0");
         } else {
             self.src.push_str("()");
-        }
-        if task_exit {
-            self.src.push_str(", task_exit)");
         }
         self.src.push_str(")\n");
 
@@ -3436,8 +3432,10 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
+            TypeDefKind::Map(k, v) => {
+                type_contains_lists(*k, resolve) || type_contains_lists(*v, resolve)
+            }
             TypeDefKind::FixedLengthList(..) => todo!(),
-            TypeDefKind::Map(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because

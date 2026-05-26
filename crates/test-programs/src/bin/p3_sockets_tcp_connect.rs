@@ -15,7 +15,10 @@ async fn test_tcp_connect_unspec(family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_unspecified(family), SOME_PORT);
     let sock = TcpSocket::create(family).unwrap();
 
-    assert_eq!(sock.connect(addr).await, Err(ErrorCode::InvalidArgument));
+    assert!(matches!(
+        sock.connect(addr).await,
+        Err(ErrorCode::InvalidArgument)
+    ));
 }
 
 /// 0 is not a valid remote port.
@@ -23,7 +26,10 @@ async fn test_tcp_connect_port_0(family: IpAddressFamily) {
     let addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let sock = TcpSocket::create(family).unwrap();
 
-    assert_eq!(sock.connect(addr).await, Err(ErrorCode::InvalidArgument));
+    assert!(matches!(
+        sock.connect(addr).await,
+        Err(ErrorCode::InvalidArgument)
+    ));
 }
 
 /// Connect should validate the address family.
@@ -36,10 +42,10 @@ async fn test_tcp_connect_wrong_family(family: IpAddressFamily) {
 
     let sock = TcpSocket::create(family).unwrap();
 
-    assert_eq!(
+    assert!(matches!(
         sock.connect(remote_addr).await,
         Err(ErrorCode::InvalidArgument)
-    );
+    ));
 }
 
 /// Can only connect to unicast addresses.
@@ -52,18 +58,18 @@ async fn test_tcp_connect_non_unicast() {
     let sock_v4 = TcpSocket::create(IpAddressFamily::Ipv4).unwrap();
     let sock_v6 = TcpSocket::create(IpAddressFamily::Ipv6).unwrap();
 
-    assert_eq!(
+    assert!(matches!(
         sock_v4.connect(ipv4_broadcast).await,
         Err(ErrorCode::InvalidArgument)
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         sock_v4.connect(ipv4_multicast).await,
         Err(ErrorCode::InvalidArgument)
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         sock_v6.connect(ipv6_multicast).await,
         Err(ErrorCode::InvalidArgument)
-    );
+    ));
 }
 
 async fn test_tcp_connect_dual_stack() {
@@ -83,15 +89,15 @@ async fn test_tcp_connect_dual_stack() {
     // Tests:
 
     // Connecting to an IPv4 address on an IPv6 socket should fail:
-    assert_eq!(
+    assert!(matches!(
         v6_client.connect(v4_listener_addr).await,
         Err(ErrorCode::InvalidArgument)
-    );
+    ));
     // Connecting to an IPv4-mapped-IPv6 address on an IPv6 socket should fail:
-    assert_eq!(
+    assert!(matches!(
         v6_client.connect(v6_listener_addr).await,
         Err(ErrorCode::InvalidArgument)
-    );
+    ));
 }
 
 /// Client sockets can be explicitly bound.

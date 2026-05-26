@@ -26,6 +26,7 @@ default = [
   'profiling',
   'wat',
   'wasi',
+  'wasi-http',
   'cache',
   'parallel-compilation',
   'async',
@@ -41,6 +42,7 @@ default = [
   'debug-builtins',
   'pooling-allocator',
   'component-model',
+  'component-model-async',
   'pulley',
   # 'all-arch', # intentionally off-by-default
   # ... if you add a line above this be sure to change the other locations
@@ -51,6 +53,7 @@ profiling = ["wasmtime-c-api/profiling"]
 cache = ["wasmtime-c-api/cache"]
 parallel-compilation = ['wasmtime-c-api/parallel-compilation']
 wasi = ['wasmtime-c-api/wasi']
+wasi-http = ['wasmtime-c-api/wasi-http']
 logging = ['wasmtime-c-api/logging']
 disable-logging = ["wasmtime-c-api/disable-logging"]
 coredump = ["wasmtime-c-api/coredump"]
@@ -61,11 +64,13 @@ threads = ["wasmtime-c-api/threads"]
 gc = ["wasmtime-c-api/gc"]
 gc-drc = ["wasmtime-c-api/gc-drc"]
 gc-null = ["wasmtime-c-api/gc-null"]
+gc-copying = ["wasmtime-c-api/gc-copying"]
 cranelift = ["wasmtime-c-api/cranelift"]
 winch = ["wasmtime-c-api/winch"]
 debug-builtins = ["wasmtime-c-api/debug-builtins"]
 pooling-allocator = ["wasmtime-c-api/pooling-allocator"]
 component-model = ["wasmtime-c-api/component-model"]
+component-model-async = ["wasmtime-c-api/component-model-async"]
 pulley = ["wasmtime-c-api/pulley"]
 all-arch = ["wasmtime-c-api/all-arch"]
 # ... if you add a line above this be sure to read the comment at the end of

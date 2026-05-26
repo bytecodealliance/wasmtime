@@ -55,7 +55,7 @@ impl CompiledModule {
         let mut ret = Self {
             unique_id: CompiledModuleId::new(),
             engine_code,
-            module: Arc::new(info.module),
+            module: try_new::<Arc<_>>(info.module)?,
             meta: info.meta,
             index,
             func_names: info.func_names,
@@ -260,6 +260,12 @@ impl CompiledModule {
     /// return `None`.
     pub fn has_address_map(&self) -> bool {
         !self.engine_code.address_map_data().is_empty()
+    }
+
+    /// Returns the original Wasm bytecode for this module, if it is available.
+    pub fn bytecode(&self) -> Option<&[u8]> {
+        self.engine_code
+            .wasm_bytecode_for_module(self.module.module_index)
     }
 }
 

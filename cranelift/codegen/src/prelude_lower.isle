@@ -136,11 +136,6 @@
 (decl put_in_regs_vec (ValueSlice) ValueRegsVec)
 (extern constructor put_in_regs_vec put_in_regs_vec)
 
-;; If the given reg is a real register, cause the value in reg to be in a virtual
-;; reg, by copying it into a new virtual reg.
-(decl ensure_in_vreg (Reg Type) Reg)
-(extern constructor ensure_in_vreg ensure_in_vreg)
-
 ;; Get the `n`th register inside a `ValueRegs`.
 (spec (value_regs_get arg i)
     (provide (= arg result) (= (widthof i) 1)))
@@ -183,11 +178,6 @@
 (decl multi_reg_to_single (MultiReg) InstOutput)
 (rule (multi_reg_to_single (MultiReg.One a))
       (value_reg a))
-
-;; Add a range fact to a register, when compiling with
-;; proof-carrying-code enabled.
-(decl add_range_fact (Reg u16 u64 u64) Reg)
-(extern constructor add_range_fact add_range_fact)
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -272,7 +262,7 @@
 (extern extractor first_result first_result)
 
 ;; Extract the `InstructionData` for an `Inst`.
-(decl inst_data_value (InstructionData) Inst)
+(decl inst_data_value (Type InstructionData) Inst)
 (extern extractor infallible inst_data_value inst_data_value)
 
 ;; Extract the type of the instruction's first result.
@@ -306,7 +296,7 @@
 (spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
-           (def_inst (iconst (u64_from_imm64 x))))
+           (def_inst (iconst _ (u64_from_imm64 x))))
 
 (decl i8_from_iconst (i8) Value)
 (extractor (i8_from_iconst x)
@@ -358,13 +348,13 @@
 (extractor (ne x y) (icmp (IntCC.NotEqual) x y))
 
 (decl ult (Value Value) Value)
-(extractor (ult x y) (icmp (IntCC.UnsignedLessThan) x y))
+(extractor (ult x y) (icmp _ (IntCC.UnsignedLessThan) x y))
 
 (decl ule (Value Value) Value)
 (extractor (ule x y) (icmp (IntCC.UnsignedLessThanOrEqual) x y))
 
 (decl ugt (Value Value) Value)
-(extractor (ugt x y) (icmp (IntCC.UnsignedGreaterThan) x y))
+(extractor (ugt x y) (icmp _ (IntCC.UnsignedGreaterThan) x y))
 
 (decl uge (Value Value) Value)
 (extractor (uge x y) (icmp (IntCC.UnsignedGreaterThanOrEqual) x y))

@@ -1,9 +1,10 @@
-use super::{ArrayInit, GcCompiler};
+use super::GcCompiler;
+use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
-use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
+use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
 use crate::trap::TranslateTrap;
-use crate::{Reachability, TRAP_INTERNAL_ASSERT};
+use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{BlockArg, ExceptionTableData, ExceptionTableItem};
 use cranelift_codegen::{
@@ -23,6 +24,18 @@ use wasmtime_environ::{
 mod drc;
 #[cfg(feature = "gc-null")]
 mod null;
+
+#[cfg(feature = "gc-copying")]
+mod copying;
+
+/// Flags to use for general-purpose GC loads/stores.
+///
+/// This is used for accesses to the GC heap which aren't expected to trap, but
+/// retain internal assertion metadata to report if such a trap happens. This
+/// is here to ensure that in the face of heap corruption that there's no
+/// possible UB within Cranelift and/or the runtime.
+const GC_MEMFLAGS: ir::MemFlagsData =
+    ir::MemFlagsData::new().with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT));
 
 /// Get the default GC compiler.
 pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
@@ -47,11 +60,19 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
              was disabled at compile time",
         )),
 
-        #[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+        #[cfg(feature = "gc-copying")]
+        Some(Collector::Copying) => Ok(Box::new(copying::CopyingCompiler::default())),
+        #[cfg(not(feature = "gc-copying"))]
+        Some(Collector::Copying) => Err(wasm_unsupported!(
+            "the copying collector is unavailable because the `gc-copying` feature \
+             was disabled at compile time",
+        )),
+
+        #[cfg(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying"))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled at configuration time"
         )),
-        #[cfg(not(any(feature = "gc-drc", feature = "gc-null")))]
+        #[cfg(not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")))]
         None => Err(wasm_unsupported!(
             "support for GC types disabled because no collector implementation \
              was selected at compile time; enable one of the `gc-drc` or \
@@ -61,14 +82,14 @@ pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcC
 }
 
 #[cfg_attr(
-    not(feature = "gc-drc"),
+    not(any(feature = "gc-drc", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
     ptr_to_gc_ref: ir::Value,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
 ) -> WasmResult<ir::Value> {
     debug_assert!(ty.is_vmgcref_type());
     let gc_ref = builder.ins().load(ir::types::I32, flags, ptr_to_gc_ref, 0);
@@ -79,7 +100,7 @@ fn unbarriered_load_gc_ref(
 }
 
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn unbarriered_store_gc_ref(
@@ -87,19 +108,94 @@ fn unbarriered_store_gc_ref(
     ty: WasmHeapType,
     dst: ir::Value,
     gc_ref: ir::Value,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
 ) -> WasmResult<()> {
     debug_assert!(ty.is_vmgcref_type());
     builder.ins().store(flags, gc_ref, dst, 0);
     Ok(())
 }
 
-/// Emit code to read a struct field or array element from its raw address in
-/// the GC heap.
+/// Emit CLIF to call the `gc_alloc_raw` libcall.
+#[cfg(any(feature = "gc-drc", feature = "gc-copying"))]
+fn emit_gc_raw_alloc(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    kind: VMGcKind,
+    ty: ModuleInternedTypeIndex,
+    size: ir::Value,
+    align: u32,
+) -> ir::Value {
+    let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
+    let vmctx = func_env.vmctx_val(&mut builder.cursor());
+
+    let kind = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(kind.as_u32()));
+
+    let ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
+
+    assert!(align.is_power_of_two());
+    let align = builder.ins().iconst(ir::types::I32, i64::from(align));
+
+    let call_inst = builder
+        .ins()
+        .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
+
+    let gc_ref = builder.func.dfg.first_result(call_inst);
+    builder.declare_value_needs_stack_map(gc_ref);
+    gc_ref
+}
+
+/// Emit inline CLIF code that asserts an object's `VMGcKind` matches the
+/// expected kind. Only emits code when `cfg(gc_zeal)` is enabled.
+///
+/// `gc_ref` must be a non-null, non-i31 GC reference (i32 heap index).
+fn emit_gc_kind_assert(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    gc_ref: ir::Value,
+    expected_kind: VMGcKind,
+) {
+    if !cfg!(gc_zeal) {
+        return;
+    }
+
+    func_env.trapz(builder, gc_ref, crate::TRAP_NULL_REFERENCE);
+
+    let kind_addr = func_env.prepare_gc_ref_access(
+        builder,
+        gc_ref,
+        BoundsCheck::StaticObjectField {
+            offset: wasmtime_environ::VM_GC_HEADER_KIND_OFFSET,
+            access_size: wasmtime_environ::VM_GC_KIND_SIZE,
+            object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
+        },
+    );
+    let kind_and_reserved_bits = builder
+        .ins()
+        .load(ir::types::I32, GC_MEMFLAGS, kind_addr, 0);
+    let kind_mask = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
+    let actual_kind = builder.ins().band(kind_and_reserved_bits, kind_mask);
+
+    let expected_kind = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
+
+    // NB: Do a subtype check rather than a strict equality check. See
+    // `VMGcKind::matches` for details.
+    let and = builder.ins().band(actual_kind, expected_kind);
+    let matches = builder.ins().icmp(IntCC::Equal, and, expected_kind);
+
+    builder.ins().trapz(matches, TRAP_INTERNAL_ASSERT);
+}
+
+/// Read a struct field or array element from its raw address in the GC heap.
 ///
 /// The given address MUST have already been bounds-checked via
 /// `prepare_gc_ref_access`.
-fn read_field_at_addr(
+pub fn read_field_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     ty: WasmStorageType,
@@ -113,7 +209,7 @@ fn read_field_at_addr(
     );
 
     // Data inside GC objects is always little endian.
-    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
     let value = match ty {
         WasmStorageType::I8 => builder.ins().load(ir::types::I8, flags, addr, 0),
@@ -165,9 +261,7 @@ fn read_field_at_addr(
                 }
                 WasmHeapTopType::Cont => {
                     // TODO(#10248) GC integration for stack switching
-                    return Err(wasmtime_environ::WasmError::Unsupported(
-                        "Stack switching feature not compatible with GC, yet".to_string(),
-                    ));
+                    return stack_switching_unsupported();
                 }
             },
         },
@@ -186,7 +280,7 @@ fn write_func_ref_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     ref_type: WasmRefType,
-    flags: ir::MemFlags,
+    flags: ir::MemFlagsData,
     field_addr: ir::Value,
     func_ref: ir::Value,
 ) -> WasmResult<()> {
@@ -226,7 +320,17 @@ fn write_func_ref_at_addr(
     Ok(())
 }
 
-fn write_field_at_addr(
+pub fn init_field_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    field_ty: WasmStorageType,
+    field_addr: ir::Value,
+    new_val: ir::Value,
+) -> WasmResult<()> {
+    gc_compiler(func_env)?.init_field(func_env, builder, field_ty, field_addr, new_val)
+}
+
+pub fn write_field_at_addr(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     field_ty: WasmStorageType,
@@ -234,7 +338,7 @@ fn write_field_at_addr(
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // Data inside GC objects is always little endian.
-    let flags = ir::MemFlags::trusted().with_endianness(ir::Endianness::Little);
+    let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
 
     match field_ty {
         WasmStorageType::I8 => {
@@ -243,13 +347,17 @@ fn write_field_at_addr(
         WasmStorageType::I16 => {
             builder.ins().istore16(flags, new_val, field_addr, 0);
         }
-        WasmStorageType::Val(WasmValType::Ref(r)) if r.heap_type.top() == WasmHeapTopType::Func => {
-            write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?;
-        }
-        WasmStorageType::Val(WasmValType::Ref(r)) => {
-            gc_compiler(func_env)?
-                .translate_write_gc_reference(func_env, builder, r, field_addr, new_val, flags)?;
-        }
+        WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
+            WasmHeapTopType::Func => {
+                write_func_ref_at_addr(func_env, builder, r, flags, field_addr, new_val)?
+            }
+            WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                gc_compiler(func_env)?.translate_write_gc_reference(
+                    func_env, builder, r, field_addr, new_val, flags,
+                )?;
+            }
+            WasmHeapTopType::Cont => return stack_switching_unsupported(),
+        },
         WasmStorageType::Val(_) => {
             assert_eq!(
                 builder.func.dfg.value_type(new_val).bytes(),
@@ -331,6 +439,8 @@ pub fn translate_struct_get(
     // type info from `wasmparser` and through to here is a bit funky.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
+    emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
+
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
@@ -377,6 +487,8 @@ pub fn translate_struct_set(
 
     // TODO: See comment in `translate_struct_get` about the `trapz`.
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
+
+    emit_gc_kind_assert(func_env, builder, struct_ref, VMGcKind::StructRef);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
@@ -530,11 +642,20 @@ pub fn translate_array_new(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new({array_type_index:?}, {elem:?}, {len:?})");
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
+    let zero = builder.ins().iconst(ir::types::I32, 0);
+    let ty = func_env.module.types[array_type_index].unwrap_module_type_index();
+    func_env.translate_entity_fill(
         builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
+        CheckedEntity::Array {
+            array: result,
+            ty,
+            initialized: false,
+        },
+        zero,
+        elem,
+        len,
     )?;
     log::trace!("translate_array_new(..) -> {result:?}");
     Ok(result)
@@ -550,14 +671,22 @@ pub fn translate_array_new_default(
 
     let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
-    let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
-    )?;
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     log::trace!("translate_array_new_default(..) -> {result:?}");
+    let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
+    let zero = builder.ins().iconst(ir::types::I32, 0);
+    func_env.translate_entity_fill(
+        builder,
+        CheckedEntity::Array {
+            array: result,
+            ty: interned_ty,
+            initialized: false,
+        },
+        zero,
+        elem,
+        len,
+    )?;
     Ok(result)
 }
 
@@ -568,249 +697,29 @@ pub fn translate_array_new_fixed(
     elems: &[ir::Value],
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_fixed({array_type_index:?}, {elems:?})");
-    let result = gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Elems(elems),
-    )?;
+    let len = builder
+        .ins()
+        .iconst(ir::types::I32, i64::try_from(elems.len()).unwrap());
+    let result =
+        gc_compiler(func_env)?.alloc_uninit_array(func_env, builder, array_type_index, len)?;
     log::trace!("translate_array_new_fixed(..) -> {result:?}");
+    let ty = func_env.module.types[array_type_index].unwrap_module_type_index();
+    let array_ty = func_env.types.unwrap_array(ty)?;
+
+    for (i, elem) in elems.iter().enumerate() {
+        let index = builder
+            .ins()
+            .iconst(ir::types::I32, i64::try_from(i).unwrap());
+        let addr = array_elem_addr(func_env, builder, ty, result, index)?;
+        gc_compiler(func_env)?.init_field(
+            func_env,
+            builder,
+            array_ty.0.element_type,
+            addr,
+            *elem,
+        )?;
+    }
     Ok(result)
-}
-
-impl ArrayInit<'_> {
-    /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
-    #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null")),
-        expect(dead_code, reason = "easier to define")
-    )]
-    fn len(self, pos: &mut FuncCursor) -> ir::Value {
-        match self {
-            ArrayInit::Fill { len, .. } => len,
-            ArrayInit::Elems(e) => {
-                let len = u32::try_from(e.len()).unwrap();
-                pos.ins().iconst(ir::types::I32, i64::from(len))
-            }
-        }
-    }
-
-    /// Initialize a newly-allocated array's elements.
-    #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-null")),
-        expect(dead_code, reason = "easier to define")
-    )]
-    fn initialize(
-        self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder<'_>,
-        interned_type_index: ModuleInternedTypeIndex,
-        base_size: u32,
-        size: ir::Value,
-        elems_addr: ir::Value,
-        mut init_field: impl FnMut(
-            &mut FuncEnvironment<'_>,
-            &mut FunctionBuilder<'_>,
-            WasmStorageType,
-            ir::Value,
-            ir::Value,
-        ) -> WasmResult<()>,
-    ) -> WasmResult<()> {
-        log::trace!(
-            "initialize_array({interned_type_index:?}, {base_size:?}, {size:?}, {elems_addr:?})"
-        );
-
-        assert!(!func_env.types[interned_type_index].composite_type.shared);
-        let array_ty = func_env.types[interned_type_index]
-            .composite_type
-            .inner
-            .unwrap_array();
-        let elem_ty = array_ty.0.element_type;
-        let elem_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&elem_ty);
-        let pointer_type = func_env.pointer_type();
-        let elem_size = builder.ins().iconst(pointer_type, i64::from(elem_size));
-        match self {
-            ArrayInit::Elems(elems) => {
-                let mut elem_addr = elems_addr;
-                for val in elems {
-                    init_field(func_env, builder, elem_ty, elem_addr, *val)?;
-                    elem_addr = builder.ins().iadd(elem_addr, elem_size);
-                }
-            }
-            ArrayInit::Fill { elem, len: _ } => {
-                // Compute the end address of the elements.
-                let base_size = builder.ins().iconst(pointer_type, i64::from(base_size));
-                let array_addr = builder.ins().isub(elems_addr, base_size);
-                let size = uextend_i32_to_pointer_type(builder, pointer_type, size);
-                let elems_end = builder.ins().iadd(array_addr, size);
-
-                emit_array_fill_impl(
-                    func_env,
-                    builder,
-                    elems_addr,
-                    elem_size,
-                    elems_end,
-                    |func_env, builder, elem_addr| {
-                        init_field(func_env, builder, elem_ty, elem_addr, elem)
-                    },
-                )?;
-            }
-        }
-        log::trace!("initialize_array: finished");
-        Ok(())
-    }
-}
-
-fn emit_array_fill_impl(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    elem_addr: ir::Value,
-    elem_size: ir::Value,
-    fill_end: ir::Value,
-    mut emit_elem_write: impl FnMut(
-        &mut FuncEnvironment<'_>,
-        &mut FunctionBuilder<'_>,
-        ir::Value,
-    ) -> WasmResult<()>,
-) -> WasmResult<()> {
-    log::trace!(
-        "emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})"
-    );
-
-    let pointer_ty = func_env.pointer_type();
-
-    assert_eq!(builder.func.dfg.value_type(elem_addr), pointer_ty);
-    assert_eq!(builder.func.dfg.value_type(elem_size), pointer_ty);
-    assert_eq!(builder.func.dfg.value_type(fill_end), pointer_ty);
-
-    // Loop to fill the elements, emitting the equivalent of the following
-    // pseudo-CLIF:
-    //
-    // current_block:
-    //     ...
-    //     jump loop_header_block(elem_addr)
-    //
-    // loop_header_block(elem_addr: i32):
-    //     done = icmp eq elem_addr, fill_end
-    //     brif done, continue_block, loop_body_block
-    //
-    // loop_body_block:
-    //     emit_elem_write()
-    //     next_elem_addr = iadd elem_addr, elem_size
-    //     jump loop_header_block(next_elem_addr)
-    //
-    // continue_block:
-    //     ...
-
-    let current_block = builder.current_block().unwrap();
-    let loop_header_block = builder.create_block();
-    let loop_body_block = builder.create_block();
-    let continue_block = builder.create_block();
-
-    builder.ensure_inserted_block();
-    builder.insert_block_after(loop_header_block, current_block);
-    builder.insert_block_after(loop_body_block, loop_header_block);
-    builder.insert_block_after(continue_block, loop_body_block);
-
-    // Current block: jump to the loop header block with the first element's
-    // address.
-    builder.ins().jump(loop_header_block, &[elem_addr.into()]);
-
-    // Loop header block: check if we're done, then jump to either the continue
-    // block or the loop body block.
-    builder.switch_to_block(loop_header_block);
-    builder.append_block_param(loop_header_block, pointer_ty);
-    log::trace!("emit_array_fill_impl: loop header");
-    func_env.translate_loop_header(builder)?;
-    let elem_addr = builder.block_params(loop_header_block)[0];
-    let done = builder.ins().icmp(IntCC::Equal, elem_addr, fill_end);
-    builder
-        .ins()
-        .brif(done, continue_block, &[], loop_body_block, &[]);
-
-    // Loop body block: write the value to the current element, compute the next
-    // element's address, and then jump back to the loop header block.
-    builder.switch_to_block(loop_body_block);
-    log::trace!("emit_array_fill_impl: loop body");
-    emit_elem_write(func_env, builder, elem_addr)?;
-    let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
-    builder
-        .ins()
-        .jump(loop_header_block, &[next_elem_addr.into()]);
-
-    // Continue...
-    builder.switch_to_block(continue_block);
-    log::trace!("emit_array_fill_impl: finished");
-    builder.seal_block(loop_header_block);
-    builder.seal_block(loop_body_block);
-    builder.seal_block(continue_block);
-    Ok(())
-}
-
-pub fn translate_array_fill(
-    func_env: &mut FuncEnvironment<'_>,
-    builder: &mut FunctionBuilder<'_>,
-    array_type_index: TypeIndex,
-    array_ref: ir::Value,
-    index: ir::Value,
-    value: ir::Value,
-    n: ir::Value,
-) -> WasmResult<()> {
-    log::trace!(
-        "translate_array_fill({array_type_index:?}, {array_ref:?}, {index:?}, {value:?}, {n:?})"
-    );
-
-    let len = translate_array_len(func_env, builder, array_ref)?;
-
-    // Check that the full range of elements we want to fill is within bounds.
-    let end_index = func_env.uadd_overflow_trap(builder, index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
-    let out_of_bounds = builder
-        .ins()
-        .icmp(IntCC::UnsignedGreaterThan, end_index, len);
-    func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
-
-    // Get the address of the first element we want to fill.
-    let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let ArraySizeInfo {
-        obj_size,
-        one_elem_size,
-        base_size,
-    } = emit_array_size_info(func_env, builder, interned_type_index, len);
-    let offset_in_elems = builder.ins().imul(index, one_elem_size);
-    let obj_offset = builder.ins().iadd(base_size, offset_in_elems);
-    let elem_addr = func_env.prepare_gc_ref_access(
-        builder,
-        array_ref,
-        BoundsCheck::DynamicObjectField {
-            offset: obj_offset,
-            object_size: obj_size,
-        },
-    );
-
-    // Calculate the end address, just after the filled region.
-    let fill_size = builder.ins().imul(n, one_elem_size);
-    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), fill_size);
-    let fill_end = builder.ins().iadd(elem_addr, fill_size);
-
-    let one_elem_size =
-        uextend_i32_to_pointer_type(builder, func_env.pointer_type(), one_elem_size);
-
-    let result = emit_array_fill_impl(
-        func_env,
-        builder,
-        elem_addr,
-        one_elem_size,
-        fill_end,
-        |func_env, builder, elem_addr| {
-            let elem_ty = func_env
-                .types
-                .unwrap_array(interned_type_index)?
-                .0
-                .element_type;
-            write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
-        },
-    );
-    log::trace!("translate_array_fill(..) -> {result:?}");
-    result
 }
 
 pub fn translate_array_len(
@@ -833,12 +742,9 @@ pub fn translate_array_len(
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
     );
-    let result = builder.ins().load(
-        ir::types::I32,
-        ir::MemFlags::trusted().with_readonly(),
-        len_field,
-        0,
-    );
+    let result = builder
+        .ins()
+        .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), len_field, 0);
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
 }
@@ -863,8 +769,8 @@ fn emit_array_size_info(
     array_type_index: ModuleInternedTypeIndex,
     // `i32` value containing the array's length.
     array_len: ir::Value,
-) -> ArraySizeInfo {
-    let array_layout = func_env.array_layout(array_type_index);
+) -> WasmResult<ArraySizeInfo> {
+    let array_layout = func_env.array_layout(array_type_index)?;
 
     // Note that we check for overflow below because we can't trust the array's
     // length: it came from inside the GC heap.
@@ -878,7 +784,7 @@ fn emit_array_size_info(
     let all_elems_size = builder.ins().imul(one_elem_size, array_len);
 
     let high_bits = builder.ins().ushr_imm(all_elems_size, 32);
-    builder.ins().trapnz(high_bits, TRAP_INTERNAL_ASSERT);
+    builder.ins().trapnz(high_bits, TRAP_GC_HEAP_CORRUPT);
 
     let all_elems_size = builder.ins().ireduce(ir::types::I32, all_elems_size);
     let base_size = builder
@@ -887,15 +793,15 @@ fn emit_array_size_info(
     let obj_size =
         builder
             .ins()
-            .uadd_overflow_trap(all_elems_size, base_size, TRAP_INTERNAL_ASSERT);
+            .uadd_overflow_trap(all_elems_size, base_size, TRAP_GC_HEAP_CORRUPT);
 
     let one_elem_size = builder.ins().ireduce(ir::types::I32, one_elem_size);
 
-    ArraySizeInfo {
+    Ok(ArraySizeInfo {
         obj_size,
         one_elem_size,
         base_size,
-    }
+    })
 }
 
 /// Get the bounds-checked address of an element in an array.
@@ -912,7 +818,7 @@ fn array_elem_addr(
     array_type_index: ModuleInternedTypeIndex,
     array_ref: ir::Value,
     index: ir::Value,
-) -> ir::Value {
+) -> WasmResult<ir::Value> {
     // First, assert that `index < array.length`.
     //
     // This check is visible at the Wasm-semantics level.
@@ -926,14 +832,14 @@ fn array_elem_addr(
     let len = translate_array_len(func_env, builder, array_ref).unwrap();
 
     let in_bounds = builder.ins().icmp(IntCC::UnsignedLessThan, index, len);
-    func_env.trapz(builder, in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapz(builder, in_bounds, TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Compute the size (in bytes) of the whole array object.
     let ArraySizeInfo {
         obj_size,
         one_elem_size,
         base_size,
-    } = emit_array_size_info(func_env, builder, array_type_index, len);
+    } = emit_array_size_info(func_env, builder, array_type_index, len)?;
 
     // Compute the offset of the `index`th element within the array object.
     //
@@ -959,14 +865,14 @@ fn array_elem_addr(
     // redundant bounds checks. But we should figure out how to do this in a way
     // that doesn't defeat the object-size bounds checking's deduplication
     // mentioned above.
-    func_env.prepare_gc_ref_access(
+    Ok(func_env.prepare_gc_ref_access(
         builder,
         array_ref,
         BoundsCheck::DynamicObjectField {
             offset: offset_in_array,
             object_size: obj_size,
         },
-    )
+    ))
 }
 
 pub fn translate_array_get(
@@ -979,8 +885,10 @@ pub fn translate_array_get(
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_get({array_type_index:?}, {array_ref:?}, {index:?})");
 
+    emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
+
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index)?;
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
@@ -1000,8 +908,10 @@ pub fn translate_array_set(
 ) -> WasmResult<()> {
     log::trace!("translate_array_set({array_type_index:?}, {array_ref:?}, {index:?}, {value:?})");
 
+    emit_gc_kind_assert(func_env, builder, array_ref, VMGcKind::ArrayRef);
+
     let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
-    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
+    let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index)?;
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
@@ -1145,12 +1055,10 @@ pub fn translate_ref_test(
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
             },
         );
-        let actual_kind = builder.ins().load(
-            ir::types::I32,
-            ir::MemFlags::trusted().with_readonly(),
-            kind_addr,
-            0,
-        );
+        let actual_kind =
+            builder
+                .ins()
+                .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), kind_addr, 0);
         let expected_kind = builder
             .ins()
             .iconst(ir::types::I32, i64::from(expected_kind.as_u32()));
@@ -1202,12 +1110,10 @@ pub fn translate_ref_test(
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
             );
-            let actual_shared_ty = builder.ins().load(
-                ir::types::I32,
-                ir::MemFlags::trusted().with_readonly(),
-                ty_addr,
-                0,
-            );
+            let actual_shared_ty =
+                builder
+                    .ins()
+                    .load(ir::types::I32, GC_MEMFLAGS.with_readonly(), ty_addr, 0);
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
@@ -1222,7 +1128,7 @@ pub fn translate_ref_test(
 
             let actual_shared_ty = func_env.load_funcref_type_index(
                 &mut builder.cursor(),
-                ir::MemFlags::trusted().with_readonly(),
+                GC_MEMFLAGS.with_readonly(),
                 val,
             );
 
@@ -1230,9 +1136,7 @@ pub fn translate_ref_test(
         }
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
-            return Err(wasmtime_environ::WasmError::Unsupported(
-                "Stack switching feature not compatible with GC, yet".to_string(),
-            ));
+            return stack_switching_unsupported();
         }
     };
     builder.ins().jump(continue_block, &[result.into()]);
@@ -1249,6 +1153,7 @@ pub fn translate_ref_test(
     Ok(result)
 }
 
+#[cfg(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying"))]
 fn uextend_i32_to_pointer_type(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
@@ -1267,7 +1172,7 @@ fn uextend_i32_to_pointer_type(
 ///
 /// Traps if the size overflows.
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn emit_array_size(
@@ -1315,7 +1220,7 @@ fn emit_array_size(
 /// Common helper for struct-field initialization that can be reused across
 /// collectors.
 #[cfg_attr(
-    not(any(feature = "gc-drc", feature = "gc-null")),
+    not(any(feature = "gc-drc", feature = "gc-null", feature = "gc-copying")),
     expect(dead_code, reason = "easier to define")
 )]
 fn initialize_struct_fields(
@@ -1324,13 +1229,6 @@ fn initialize_struct_fields(
     struct_ty: ModuleInternedTypeIndex,
     raw_ptr_to_struct: ir::Value,
     field_values: &[ir::Value],
-    mut init_field: impl FnMut(
-        &mut FuncEnvironment<'_>,
-        &mut FunctionBuilder<'_>,
-        WasmStorageType,
-        ir::Value,
-        ir::Value,
-    ) -> WasmResult<()>,
 ) -> WasmResult<()> {
     let struct_layout = func_env.struct_or_exn_layout(struct_ty);
     let struct_size = struct_layout.size;
@@ -1351,7 +1249,7 @@ fn initialize_struct_fields(
         let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
         assert!(offset + size_of_access <= struct_size);
         let field_addr = builder.ins().iadd_imm(raw_ptr_to_struct, i64::from(offset));
-        init_field(func_env, builder, ty.element_type, field_addr, *val)?;
+        gc_compiler(func_env)?.init_field(func_env, builder, ty.element_type, field_addr, *val)?;
     }
 
     Ok(())
@@ -1366,6 +1264,7 @@ impl FuncEnvironment<'_> {
                 .unwrap()
                 .layouts()
                 .gc_layout(ty)
+                .expect("gc_layout should not OOM at compile time")
                 .expect("should only call `FuncEnvironment::gc_layout` for GC types");
             self.ty_to_gc_layout.insert(type_index, layout);
         }
@@ -1374,8 +1273,11 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the `GcArrayLayout` for the array type at the given `type_index`.
-    fn array_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcArrayLayout {
-        self.gc_layout(type_index).unwrap_array()
+    pub(crate) fn array_layout(
+        &mut self,
+        type_index: ModuleInternedTypeIndex,
+    ) -> WasmResult<&GcArrayLayout> {
+        Ok(self.gc_layout(type_index).unwrap_array())
     }
 
     /// Get the `GcStructLayout` for the struct or exception type at the given `type_index`.
@@ -1393,11 +1295,13 @@ impl FuncEnvironment<'_> {
         let store_context_ptr = self.get_vmstore_context_ptr_global(func);
         let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
 
-        let mut flags = ir::MemFlags::trusted();
+        let mut flags = ir::MemFlagsData::trusted();
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
         if !self
             .tunables
             .gc_heap_memory_type()
-            .memory_may_move(self.tunables)
+            .memory_may_move(&memory_tunables)
         {
             flags.set_readonly();
             flags.set_can_move();
@@ -1415,10 +1319,12 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's base.
-    #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
-    fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+    pub(crate) fn get_gc_heap_base(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<ir::Value> {
         let global = self.get_gc_heap_base_global(&mut builder.func);
-        builder.ins().global_value(self.pointer_type(), global)
+        Ok(builder.ins().global_value(self.pointer_type(), global))
     }
 
     fn get_gc_heap_bound_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
@@ -1431,17 +1337,19 @@ impl FuncEnvironment<'_> {
             base: store_context_ptr,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlags::trusted(),
+            flags: ir::MemFlagsData::trusted(),
         });
         self.gc_heap_bound = Some(bound);
         bound
     }
 
     /// Get the GC heap's bound.
-    #[cfg(feature = "gc-null")]
-    fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+    pub(crate) fn get_gc_heap_bound(
+        &mut self,
+        builder: &mut FunctionBuilder,
+    ) -> WasmResult<ir::Value> {
         let global = self.get_gc_heap_bound_global(&mut builder.func);
-        builder.ins().global_value(self.pointer_type(), global)
+        Ok(builder.ins().global_value(self.pointer_type(), global))
     }
 
     /// Get or create the `Heap` for our GC heap.
@@ -1456,8 +1364,8 @@ impl FuncEnvironment<'_> {
         let heap = self.heaps.push(HeapData {
             base,
             bound,
-            pcc_memory_type: None,
             memory,
+            kind: MemoryKind::GcHeap,
         });
         self.gc_heap = Some(heap);
         heap
@@ -1495,7 +1403,7 @@ impl FuncEnvironment<'_> {
             &gc_heap,
             gc_ref,
             bounds_check,
-            crate::TRAP_INTERNAL_ASSERT,
+            crate::TRAP_GC_HEAP_CORRUPT,
         ) {
             Reachability::Reachable(v) => v,
             Reachability::Unreachable => {
@@ -1640,4 +1548,41 @@ impl FuncEnvironment<'_> {
 
         result
     }
+}
+
+fn stack_switching_unsupported<T>() -> WasmResult<T> {
+    Err(wasmtime_environ::WasmError::Unsupported(
+        "Stack switching feature not compatible with GC, yet".to_string(),
+    ))
+}
+
+pub fn translate_array_new_entity(
+    env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder,
+    array_type_index: TypeIndex,
+    entity: CheckedEntity,
+    entity_offset: ir::Value,
+    len: ir::Value,
+) -> WasmResult<ir::Value> {
+    // Before actually allocating this array first do a bounds-check on the
+    // passive entity itself.
+    let interned_type_index = env.module.types[array_type_index].unwrap_module_type_index();
+    env.translate_entity_bounds_check(builder, entity, entity_offset, len)?;
+
+    let array = gc_compiler(env)?.alloc_uninit_array(env, builder, array_type_index, len)?;
+    let dst = builder.ins().iconst(ir::types::I32, 0);
+    env.translate_entity_copy(
+        builder,
+        CheckedEntity::Array {
+            array,
+            ty: interned_type_index,
+            initialized: false,
+        },
+        entity,
+        dst,
+        entity_offset,
+        len,
+    )?;
+
+    Ok(array)
 }

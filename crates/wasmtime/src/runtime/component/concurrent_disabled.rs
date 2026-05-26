@@ -11,11 +11,11 @@ use wasmtime_environ::component::{CanonicalAbiInfo, InterfaceType};
 pub enum ConcurrentState {}
 
 impl ConcurrentState {
-    pub fn call_context(&mut self, _: u32) -> &mut CallContext {
+    pub fn call_context(&mut self, _: u32) -> Result<&mut CallContext> {
         match *self {}
     }
 
-    pub fn current_call_context_scope_id(&self) -> u32 {
+    pub fn current_call_context_scope_id(&self) -> Result<u32> {
         match *self {}
     }
 }
@@ -168,18 +168,22 @@ impl StoreOpaque {
         _callee_async: bool,
         _callee: RuntimeInstance,
     ) -> Result<()> {
-        Ok(self.enter_call_not_concurrent())
+        self.enter_call_not_concurrent()
     }
 
-    pub(crate) fn exit_guest_sync_call(&mut self, _guest_caller: bool) -> Result<()> {
+    pub(crate) fn exit_guest_sync_call(&mut self) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
 
-    pub(crate) fn enter_host_call(&mut self) -> Result<()> {
-        Ok(self.enter_call_not_concurrent())
+    pub(crate) fn host_task_create(&mut self) -> Result<()> {
+        self.enter_call_not_concurrent()
     }
 
-    pub(crate) fn exit_host_call(&mut self) -> Result<()> {
+    pub(crate) fn host_task_reenter_caller(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub(crate) fn host_task_delete(&mut self, (): ()) -> Result<()> {
         Ok(self.exit_call_not_concurrent())
     }
 
@@ -187,7 +191,7 @@ impl StoreOpaque {
         Ok(())
     }
 
-    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> bool {
-        !self.trapped()
+    pub(crate) fn may_enter(&mut self, _instance: RuntimeInstance) -> Result<bool> {
+        Ok(!self.trapped())
     }
 }

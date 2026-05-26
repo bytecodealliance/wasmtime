@@ -8,8 +8,10 @@ use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::ops::{Add, Range, Sub};
+use wasmtime_core::error::OutOfMemory;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::ModuleTypes;
+use wasmtime_environ::StaticModuleIndex;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
 
@@ -125,16 +127,20 @@ pub struct EngineCode {
 }
 
 impl EngineCode {
-    pub fn new(mmap: Arc<CodeMemory>, signatures: TypeCollection, types: Types) -> EngineCode {
+    pub fn new(
+        mmap: Arc<CodeMemory>,
+        signatures: TypeCollection,
+        types: Types,
+    ) -> Result<EngineCode, OutOfMemory> {
         // The corresponding unregister for this is below in `Drop for
         // EngineCode`.
-        crate::module::register_code(&mmap, mmap.raw_addr_range());
+        crate::module::register_code(&mmap, mmap.raw_addr_range())?;
 
-        EngineCode {
+        Ok(EngineCode {
             original_code: mmap,
             signatures,
             types,
-        }
+        })
     }
 
     #[cfg(feature = "component-model")]
@@ -225,6 +231,13 @@ impl EngineCode {
     #[inline]
     pub fn wasm_dwarf(&self) -> &[u8] {
         self.original_code.wasm_dwarf()
+    }
+
+    /// Returns the original Wasm bytecode section if preserved in the
+    /// compiled artifact.
+    #[inline]
+    pub fn wasm_bytecode_for_module(&self, module: StaticModuleIndex) -> Option<&[u8]> {
+        self.original_code.wasm_bytecode_for_module(module)
     }
 
     /// Returns the raw image as bytes (in our internal image format).
@@ -326,7 +339,10 @@ impl StoreCode {
             // this clones the whole image.
             let mut private_copy = engine_code.original_code.deep_clone(engine)?;
             private_copy.publish()?;
-            crate::module::register_code(&engine_code.original_code, private_copy.raw_addr_range());
+            crate::module::register_code(
+                &engine_code.original_code,
+                private_copy.raw_addr_range(),
+            )?;
             StoreCodeStorage::Private(Box::new(private_copy))
         } else {
             StoreCodeStorage::Shared(engine_code.original_code.clone())

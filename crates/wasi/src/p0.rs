@@ -70,6 +70,9 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
+    fn set_hostcall_fuel(&mut self, fuel: usize) {
+        Snapshot1::set_hostcall_fuel(self, fuel)
+    }
     fn args_get(
         &mut self,
         memory: &mut GuestMemory<'_>,

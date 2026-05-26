@@ -1,0 +1,98 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Boolean-context simplifications for ctz / clz: the result of the
+;; bit-counting instruction is only used to test "is it zero?", which
+;; reduces to a direct bit test on X.
+;;
+;;   ctz(X) == 0  iff  LSB of X set     iff  (X & 1) != 0
+;;   clz(X) == 0  iff  MSB of X set     iff  X is signed-negative
+
+;; ctz(X) == 0  →  (X & 1) != 0
+function %ctz_eq_zero_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = ctz v0
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    return v3
+}
+
+; function %ctz_eq_zero_i32(i32) -> i8 fast {
+; block0(v0: i32):
+;     v4 = iconst.i32 1
+;     v5 = band v0, v4  ; v4 = 1
+;     v2 = iconst.i32 0
+;     v6 = icmp ne v5, v2  ; v2 = 0
+;     return v6
+; }
+
+;; ctz(X) != 0  →  (X & 1) == 0
+function %ctz_ne_zero_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = ctz v0
+    v2 = iconst.i64 0
+    v3 = icmp ne v1, v2
+    return v3
+}
+
+; function %ctz_ne_zero_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v4 = iconst.i64 1
+;     v5 = band v0, v4  ; v4 = 1
+;     v2 = iconst.i64 0
+;     v6 = icmp eq v5, v2  ; v2 = 0
+;     return v6
+; }
+
+;; clz(X) == 0  →  X <signed 0  (sign-bit test)
+function %clz_eq_zero_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = clz v0
+    v2 = iconst.i32 0
+    v3 = icmp eq v1, v2
+    return v3
+}
+
+; function %clz_eq_zero_i32(i32) -> i8 fast {
+; block0(v0: i32):
+;     v2 = iconst.i32 0
+;     v4 = icmp slt v0, v2  ; v2 = 0
+;     return v4
+; }
+
+;; clz(X) != 0  →  X >=signed 0  (i64 case)
+function %clz_ne_zero_i64(i64) -> i8 {
+block0(v0: i64):
+    v1 = clz v0
+    v2 = iconst.i64 0
+    v3 = icmp ne v1, v2
+    return v3
+}
+
+; function %clz_ne_zero_i64(i64) -> i8 fast {
+; block0(v0: i64):
+;     v2 = iconst.i64 0
+;     v4 = icmp sge v0, v2  ; v2 = 0
+;     return v4
+; }
+
+;; Negative test: only the comparison-against-zero pattern fires.
+;; `ctz(X) == 4` is a numeric-value test on the count, not a boolean,
+;; and must be left alone.
+function %ctz_eq_nonzero_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = ctz v0
+    v2 = iconst.i32 4
+    v3 = icmp eq v1, v2
+    return v3
+}
+
+; function %ctz_eq_nonzero_i32(i32) -> i8 fast {
+; block0(v0: i32):
+;     v1 = ctz v0
+;     v2 = iconst.i32 4
+;     v3 = icmp eq v1, v2  ; v2 = 4
+;     return v3
+; }
+

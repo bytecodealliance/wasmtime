@@ -336,3 +336,10 @@
 (assert_return (invoke "2-byte-from-end" (i32.const 65534)))
 (assert_return (invoke "4-byte-from-end" (i32.const 65532)))
 (assert_return (invoke "8-byte-from-end" (i32.const 65528)))
+
+(module
+  (memory 1)
+  (func (export "test") (param i32) (result v128)
+    (f64x2.splat (f64.load (local.get 0)))))
+
+(assert_return (invoke "test" (i32.const 65528)) (v128.const f64x2 0 0))

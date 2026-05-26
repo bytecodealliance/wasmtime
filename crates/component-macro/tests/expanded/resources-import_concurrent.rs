@@ -258,11 +258,13 @@ const _: () = {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostWorldResourceWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostWorldResourceWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -367,7 +369,7 @@ const _: () = {
                     (wasmtime::component::Resource<WorldResource>,),
                 >::new_unchecked(self.some_world_func2)
             };
-            let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+            let (ret0,) = callee.call_concurrent(accessor, ()).await?;
             Ok(ret0)
         }
         pub fn foo_foo_uses_resource_transitively(
@@ -586,11 +588,13 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostBarWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostBarWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -600,11 +604,13 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostFallibleWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostFallibleWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -947,11 +953,13 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostAWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostAWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -1084,11 +1092,13 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostFooWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostFooWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -1181,7 +1191,7 @@ pub mod exports {
                                 (),
                             >::new_unchecked(self.handle)
                         };
-                        let ((), _) = callee.call_concurrent(accessor, (arg0,)).await?;
+                        let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }
                 }

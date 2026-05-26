@@ -1,0 +1,5 @@
+interface types {
+    resource error {
+        to-debug-string: func() -> string;
+    }
+}

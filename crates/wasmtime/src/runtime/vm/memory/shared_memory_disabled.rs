@@ -15,7 +15,7 @@ impl SharedMemory {
         bail!("support for shared memories was disabled at compile time");
     }
 
-    pub fn ty(&self) -> wasmtime_environ::Memory {
+    pub fn ty(&self) -> &wasmtime_environ::Memory {
         match *self {}
     }
 
@@ -50,10 +50,6 @@ impl SharedMemory {
         _expected: u64,
         _timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
-        match *self {}
-    }
-
-    pub(crate) fn page_size(&self) -> u64 {
         match *self {}
     }
 

@@ -231,6 +231,30 @@ block0(v0: i8, v1: i8):
 ; run: %rotr_i8_i8(0xe0, 65) == 0x70
 ; run: %rotr_i8_i8(0xe0, 66) == 0x38
 
+function %rotr_iconst_select_iconsts_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 1
+    v2 = iconst.i8 1
+    v3 = iconst.i8 2
+    v4 = select v0, v2, v3
+    v5 = rotr.i8 v1, v4
+    return v5
+}
+; run: %rotr_iconst_select_iconsts_i8(0) == 0x40
+; run: %rotr_iconst_select_iconsts_i8(1) == 0x80
+
+function %rotr_iconst_select_iconsts_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = iconst.i32 1
+    v3 = iconst.i32 2
+    v4 = select v0, v2, v3
+    v5 = rotr.i32 v1, v4
+    return v5
+}
+; run: %rotr_iconst_select_iconsts_i32(0) == 0x40000000
+; run: %rotr_iconst_select_iconsts_i32(1) == 0x80000000
+
 
 
 ;; This is a regression test for rotates on x64

@@ -150,7 +150,7 @@ function %f5() windows_fastcall {
         return
 }
 
-;; Out-of-bounds `exnN` paylaod
+;; Out-of-bounds `exnN` payload
 function %f5() {
     sig0 = () tail
     fn0 = %g() tail

@@ -10,9 +10,9 @@
 
 use crate::{
     FrameInstPos, FrameStackShape, FrameStateSlotOffset, FrameTableDescriptorIndex, FrameValType,
-    FuncKey, WasmHeapTopType, WasmValType, prelude::*,
+    FuncKey, ModulePC, WasmHeapTopType, WasmValType, prelude::*,
 };
-use object::{LittleEndian, U32Bytes};
+use object::{LittleEndian, U32};
 use std::collections::{HashMap, hash_map::Entry};
 
 /// Builder for a stackslot descriptor.
@@ -230,19 +230,19 @@ impl FrameStateSlotBuilder {
 pub struct FrameTableBuilder {
     /// (offset, length) pairs into `frame_descriptor_data`, indexed
     /// by frame descriptor number.
-    frame_descriptor_ranges: Vec<U32Bytes<LittleEndian>>,
+    frame_descriptor_ranges: Vec<U32<LittleEndian>>,
     frame_descriptor_data: Vec<u8>,
 
     /// Offset from frame slot up to FP for each frame descriptor.
-    frame_descriptor_fp_offsets: Vec<U32Bytes<LittleEndian>>,
+    frame_descriptor_fp_offsets: Vec<U32<LittleEndian>>,
 
-    progpoint_pcs: Vec<U32Bytes<LittleEndian>>,
-    progpoint_descriptor_offsets: Vec<U32Bytes<LittleEndian>>,
-    progpoint_descriptor_data: Vec<U32Bytes<LittleEndian>>,
+    progpoint_pcs: Vec<U32<LittleEndian>>,
+    progpoint_descriptor_offsets: Vec<U32<LittleEndian>>,
+    progpoint_descriptor_data: Vec<U32<LittleEndian>>,
 
-    breakpoint_pcs: Vec<U32Bytes<LittleEndian>>,
-    breakpoint_patch_offsets: Vec<U32Bytes<LittleEndian>>,
-    breakpoint_patch_data_ends: Vec<U32Bytes<LittleEndian>>,
+    breakpoint_pcs: Vec<U32<LittleEndian>>,
+    breakpoint_patch_offsets: Vec<U32<LittleEndian>>,
+    breakpoint_patch_data_ends: Vec<U32<LittleEndian>>,
 
     breakpoint_patch_data: Vec<u8>,
 }
@@ -264,11 +264,11 @@ impl FrameTableBuilder {
             u32::try_from(self.frame_descriptor_fp_offsets.len()).unwrap(),
         );
         self.frame_descriptor_fp_offsets
-            .push(U32Bytes::new(LittleEndian, slot_to_fp_offset));
+            .push(U32::new(LittleEndian, slot_to_fp_offset));
         self.frame_descriptor_ranges
-            .push(U32Bytes::new(LittleEndian, start));
+            .push(U32::new(LittleEndian, start));
         self.frame_descriptor_ranges
-            .push(U32Bytes::new(LittleEndian, end));
+            .push(U32::new(LittleEndian, end));
 
         index
     }
@@ -278,9 +278,9 @@ impl FrameTableBuilder {
         &mut self,
         native_pc: u32,
         pos: FrameInstPos,
-        // For each frame: Wasm PC, frame descriptor, stack shape
-        // within the frame descriptor.
-        frames: &[(u32, FrameTableDescriptorIndex, FrameStackShape)],
+        // For each frame: module-relative Wasm PC, frame descriptor,
+        // stack shape within the frame descriptor.
+        frames: &[(ModulePC, FrameTableDescriptorIndex, FrameStackShape)],
     ) {
         let pc_and_pos = FrameInstPos::encode(native_pc, pos);
         // If we already have a program point record at this PC,
@@ -295,34 +295,39 @@ impl FrameTableBuilder {
         }
 
         let start = u32::try_from(self.progpoint_descriptor_data.len()).unwrap();
-        self.progpoint_pcs
-            .push(U32Bytes::new(LittleEndian, pc_and_pos));
+        self.progpoint_pcs.push(U32::new(LittleEndian, pc_and_pos));
         self.progpoint_descriptor_offsets
-            .push(U32Bytes::new(LittleEndian, start));
+            .push(U32::new(LittleEndian, start));
 
         for (i, &(wasm_pc, frame_descriptor, stack_shape)) in frames.iter().enumerate() {
-            debug_assert!(wasm_pc < 0x8000_0000);
+            let wasm_pc_raw = wasm_pc.raw();
+            debug_assert!(wasm_pc_raw < 0x8000_0000);
             let not_last = i < (frames.len() - 1);
-            let wasm_pc = wasm_pc | if not_last { 0x8000_0000 } else { 0 };
+            let wasm_pc_raw = wasm_pc_raw | if not_last { 0x8000_0000 } else { 0 };
             self.progpoint_descriptor_data
-                .push(U32Bytes::new(LittleEndian, wasm_pc));
+                .push(U32::new(LittleEndian, wasm_pc_raw));
             self.progpoint_descriptor_data
-                .push(U32Bytes::new(LittleEndian, frame_descriptor.0));
+                .push(U32::new(LittleEndian, frame_descriptor.0));
             self.progpoint_descriptor_data
-                .push(U32Bytes::new(LittleEndian, stack_shape.0));
+                .push(U32::new(LittleEndian, stack_shape.0));
         }
     }
 
     /// Add one breakpoint patch.
-    pub fn add_breakpoint_patch(&mut self, wasm_pc: u32, patch_start_native_pc: u32, patch: &[u8]) {
+    pub fn add_breakpoint_patch(
+        &mut self,
+        wasm_pc: ModulePC,
+        patch_start_native_pc: u32,
+        patch: &[u8],
+    ) {
         self.breakpoint_pcs
-            .push(U32Bytes::new(LittleEndian, wasm_pc));
+            .push(U32::new(LittleEndian, wasm_pc.raw()));
         self.breakpoint_patch_offsets
-            .push(U32Bytes::new(LittleEndian, patch_start_native_pc));
+            .push(U32::new(LittleEndian, patch_start_native_pc));
         self.breakpoint_patch_data.extend(patch.iter().cloned());
         let end = u32::try_from(self.breakpoint_patch_data.len()).unwrap();
         self.breakpoint_patch_data_ends
-            .push(U32Bytes::new(LittleEndian, end));
+            .push(U32::new(LittleEndian, end));
     }
 
     /// Serialize the framd-table data section, taking a closure to

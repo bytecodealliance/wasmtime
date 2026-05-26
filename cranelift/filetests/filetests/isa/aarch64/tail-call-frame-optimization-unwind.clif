@@ -1,0 +1,37 @@
+test compile precise-output
+set unwind_info=true
+set preserve_frame_pointers=false
+target aarch64
+
+;; With unwind enabled, tail-only functions that do not need frame storage
+;; should still avoid FP/LR frame setup.
+function %tail_only_with_unwind() -> i64 tail {
+    fn0 = colocated %target_func() -> i64 tail
+
+block0:
+    return_call fn0()
+}
+
+; VCode:
+; block0:
+;   return_call TestCase(%target_func) new_stack_arg_size:0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   b #0 ; reloc_external Call %target_func 0
+
+function %target_func() -> i64 {
+block0:
+    v0 = iconst.i64 42
+    return v0
+}
+
+; VCode:
+; block0:
+;   movz x0, #42
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x0, #0x2a
+;   ret

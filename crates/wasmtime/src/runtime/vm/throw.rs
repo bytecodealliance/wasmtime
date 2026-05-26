@@ -1,9 +1,12 @@
 //! Exception-throw logic for Wasm exceptions.
 
-use super::{VMContext, VMStore};
-use crate::{store::AutoAssertNoGc, vm::Instance};
+use super::VMContext;
+use crate::{
+    store::{InstanceId, StoreOpaque},
+    vm::Instance,
+};
 use core::ptr::NonNull;
-use wasmtime_environ::TagIndex;
+use wasmtime_environ::{DefinedTagIndex, TagIndex};
 use wasmtime_unwinder::{Frame, Handler};
 
 /// Compute the target of the pending exception on the store.
@@ -12,18 +15,11 @@ use wasmtime_unwinder::{Frame, Handler};
 ///
 /// The stored last-exit state in `store` either must be valid, or
 /// must have a zeroed exit FP if no Wasm is on the stack.
-pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
-    let mut nogc = AutoAssertNoGc::new(store.store_opaque_mut());
-
-    // Get the tag identity relative to the store.
-
-    // Temporarily take, to avoid borrowing issues.
-    let exnref = nogc
-        .take_pending_exception()
-        .expect("Only invoked when an exception is pending");
-    let (throwing_tag_instance_id, throwing_tag_defined_tag_index) =
-        exnref.tag(&mut nogc).expect("cannot read tag");
-    nogc.set_pending_exception(exnref);
+pub unsafe fn compute_handler(
+    store: &mut StoreOpaque,
+    throwing_tag_instance_id: InstanceId,
+    throwing_tag_defined_tag_index: DefinedTagIndex,
+) -> Option<Handler> {
     log::trace!(
         "throwing: tag defined in instance {throwing_tag_instance_id:?} defined-tag {throwing_tag_defined_tag_index:?}"
     );
@@ -31,9 +27,9 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
     // Get the state needed for a stack walk.
     let (exit_pc, exit_fp, entry_fp) = unsafe {
         (
-            *nogc.vm_store_context().last_wasm_exit_pc.get(),
-            nogc.vm_store_context().last_wasm_exit_fp(),
-            *nogc.vm_store_context().last_wasm_entry_fp.get(),
+            *store.vm_store_context().last_wasm_exit_pc.get(),
+            store.vm_store_context().last_wasm_exit_fp(),
+            *store.vm_store_context().last_wasm_entry_fp.get(),
         )
     };
 
@@ -54,7 +50,7 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
             frame.fp(),
             frame.pc()
         );
-        let (module, rel_pc) = nogc.modules().module_and_code_by_pc(frame.pc())?;
+        let (module, rel_pc) = store.modules().module_and_code_by_pc(frame.pc())?;
         let et = module.module().exception_table();
         let (frame_offset, handlers) = et.lookup_pc(u32::try_from(rel_pc).unwrap());
         let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
@@ -92,7 +88,7 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
                     // other active borrows, and internally the borrow is scoped
                     // to this one block.
                     let (handler_tag_instance, handler_tag_index) = unsafe {
-                        let store_id = nogc.id();
+                        let store_id = store.id();
                         let instance = Instance::from_vmctx(frame_vmctx);
                         let tag = instance
                             .as_ref()
@@ -120,7 +116,7 @@ pub unsafe fn compute_handler(store: &mut dyn VMStore) -> Option<Handler> {
         }
         None
     };
-    let unwinder = nogc.unwinder();
+    let unwinder = store.unwinder();
     let action = unsafe { Handler::find(unwinder, handler_lookup, exit_pc, exit_fp, entry_fp) };
     log::trace!("throw action: {action:?}");
     action

@@ -139,7 +139,7 @@ unsafe extern "C" fn callback_run(event0: u32, event1: u32, event2: u32) -> u32 
             } => {
                 assert_eq!(event0, EVENT_NONE);
 
-                // First, call and cancel `yield_with_options::yield_tiems`
+                // First, call and cancel `yield_with_options::yield_times`
                 // with backpressure enabled.  Cancelling should not block since
                 // the call will not even have started.
 

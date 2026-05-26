@@ -95,8 +95,8 @@ block0:
     v4 = bor v1, v3
     return v4
     ; check: v6 = iconst.i32 13
-    ; check: v12 = uextend.i128 v6  ; v6 = 13
-    ; check: return v12
+    ; check: v11 = uextend.i128 v6  ; v6 = 13
+    ; check: return v11
 }
 
 ;; These are big enough that they overflow u64, so should not be collapsed

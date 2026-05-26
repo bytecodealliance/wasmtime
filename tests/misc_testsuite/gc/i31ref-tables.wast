@@ -1,4 +1,5 @@
 ;;! gc = true
+;;! bulk_memory = true
 
 (module $tables_of_i31ref
   (table $table 3 10 i31ref)

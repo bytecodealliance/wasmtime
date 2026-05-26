@@ -1,4 +1,3 @@
-use futures::join;
 use test_programs::p3::wasi::sockets::ip_name_lookup::{ErrorCode, resolve_addresses};
 use test_programs::p3::wasi::sockets::types::IpAddress;
 
@@ -14,16 +13,33 @@ async fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {
         .to_owned())
 }
 
+/// Attempts to resolve at least one of `domains`. Allows failure so long as one
+/// succeeds. Intended to help make this test less flaky while still also
+/// testing live services.
+async fn resolve_at_least_one_of(domains: &[&str]) {
+    for domain in domains {
+        match resolve_one(domain).await {
+            Ok(_) => return,
+            Err(e) => eprintln!("failed to resolve `{domain}`: {e}"),
+        }
+    }
+
+    panic!("should have been able to resolve at least one domain");
+}
+
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         // Valid domains
-        let (res0, res1) = join!(
-            resolve_addresses("localhost".into()),
-            resolve_addresses("example.com".into())
-        );
-        if res0.is_err() && res1.is_err() {
-            panic!("should have been able to resolve at least one domain");
-        }
+        resolve_one("localhost").await.unwrap();
+
+        resolve_at_least_one_of(&[
+            "example.com",
+            "api.github.com",
+            "docs.wasmtime.dev",
+            "bytecodealliance.org",
+            "www.rust-lang.org",
+        ])
+        .await;
 
         // NB: this is an actual real resolution, so it might time out, might cause
         // issues, etc. This result is ignored to prevent flaky failures in CI.
@@ -69,32 +85,32 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         );
 
         // Invalid inputs
-        assert_eq!(
+        assert!(matches!(
             resolve_addresses("".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses(" ".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("a.b<&>".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("127.0.0.1:80".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("[::]:80".into()).await.unwrap_err(),
             ErrorCode::InvalidArgument
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             resolve_addresses("http://example.com/".into())
                 .await
                 .unwrap_err(),
             ErrorCode::InvalidArgument
-        );
+        ));
         Ok(())
     }
 }

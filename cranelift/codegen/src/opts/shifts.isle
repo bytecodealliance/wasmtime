@@ -266,6 +266,10 @@
 (rule (simplify (rotl ty (rotr ty x y @ (value_type kty)) z @ (value_type kty)))
       (rotr ty x (isub_uextend y z)))
 
+(rule
+    (simplify (rotr ty (iconst ty p) (select ty x (iconst ty y) (iconst ty z))))
+    (select ty x (iconst ty (imm64_rotr ty p y)) (iconst ty (imm64_rotr ty p z))))
+
 ;; Convert shifts into rotates. We always normalize into a rotate left.
 ;;
 ;; (bor (ishl x k1) (ushr x k2)) == (rotl x k1) if k2 == ty_bits - k1
@@ -311,4 +315,3 @@
 (rule (simplify (iadd ty (ishl ty x z) (ishl ty y z))) (ishl ty (iadd ty x y) z))
 
 (rule (simplify (ushr ty (band ty (ishl ty x y) z) y)) (band ty x (ushr ty z y)))
-

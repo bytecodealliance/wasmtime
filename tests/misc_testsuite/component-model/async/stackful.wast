@@ -11,7 +11,7 @@
   )
   (core instance $i (instantiate $m))
 
-  (func (export "foo") (param "p1" u32) (result u32)
+  (func (export "foo") async (param "p1" u32) (result u32)
     (canon lift (core func $i "foo") async)
   )
 )
@@ -28,13 +28,13 @@
       (with "" (instance (export "task.return" (func $task-return))))
     ))
 
-    (func (export "foo") (param "p1" u32) (result u32)
+    (func (export "foo") async (param "p1" u32) (result u32)
       (canon lift (core func $i "foo") async)
     )
   )
 
   (component $lowerer
-    (import "a" (func $foo (param "p1" u32) (result u32)))
+    (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core module $libc (memory (export "memory") 1))
     (core instance $libc (instantiate $libc))
     (core func $foo (canon lower (func $foo) async (memory $libc "memory")))
@@ -76,13 +76,13 @@
       (with "" (instance (export "task.return" (func $task-return))))
     ))
 
-    (func (export "foo") (param "p1" u32) (result u32)
+    (func (export "foo") async (param "p1" u32) (result u32)
       (canon lift (core func $i "foo") async)
     )
   )
 
   (component $lowerer
-    (import "a" (func $foo (param "p1" u32) (result u32)))
+    (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core func $foo (canon lower (func $foo)))
     (core module $m
       (import "" "foo" (func $foo (param i32) (result i32)))
@@ -105,7 +105,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-(assert_return (invoke "run"))
+(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
 
 ;; waitable-set.wait
 (component

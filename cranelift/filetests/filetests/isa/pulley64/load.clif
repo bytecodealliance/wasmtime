@@ -9,7 +9,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 0
+;   xload8_u32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_s32_z x0, x0, 0
+;   xload8_s32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 0
+;   xload8_u32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 0
+;   xload16le_u32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -69,7 +69,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_s32_z x0, x0, 0
+;   xload16le_s32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -84,7 +84,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 0
+;   xload16le_u32_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -99,7 +99,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x0, x0, 0
+;   xload32le_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -114,7 +114,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 0
+;   xload32le_z x2, x0, 0 // trap=TrapCode(253)
 ;   sext32 x0, x2
 ;   ret
 ;
@@ -131,7 +131,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 0
+;   xload32le_z x2, x0, 0 // trap=TrapCode(253)
 ;   zext32 x0, x2
 ;   ret
 ;
@@ -148,7 +148,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 0
+;   xload64le_z x0, x0, 0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -163,7 +163,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 4
+;   xload8_u32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -178,7 +178,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_s32_z x0, x0, 4
+;   xload8_s32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -193,7 +193,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 4
+;   xload8_u32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -208,7 +208,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 4
+;   xload16le_u32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -223,7 +223,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_s32_z x0, x0, 4
+;   xload16le_s32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -238,7 +238,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 4
+;   xload16le_u32_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -253,7 +253,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x0, x0, 4
+;   xload32le_z x0, x0, 4 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -268,7 +268,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 4
+;   xload32le_z x2, x0, 4 // trap=TrapCode(253)
 ;   sext32 x0, x2
 ;   ret
 ;
@@ -285,7 +285,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 4
+;   xload32le_z x2, x0, 4 // trap=TrapCode(253)
 ;   zext32 x0, x2
 ;   ret
 ;
@@ -302,7 +302,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 65536
+;   xload64le_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -317,7 +317,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 65536
+;   xload8_u32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -332,7 +332,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_s32_z x0, x0, 65536
+;   xload8_s32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -347,7 +347,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload8_u32_z x0, x0, 65536
+;   xload8_u32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -362,7 +362,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 65536
+;   xload16le_u32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -377,7 +377,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_s32_z x0, x0, 65536
+;   xload16le_s32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -392,7 +392,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload16le_u32_z x0, x0, 65536
+;   xload16le_u32_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -407,7 +407,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x0, x0, 65536
+;   xload32le_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -422,7 +422,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 65536
+;   xload32le_z x2, x0, 65536 // trap=TrapCode(253)
 ;   sext32 x0, x2
 ;   ret
 ;
@@ -439,7 +439,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload32le_z x2, x0, 65536
+;   xload32le_z x2, x0, 65536 // trap=TrapCode(253)
 ;   zext32 x0, x2
 ;   ret
 ;
@@ -456,7 +456,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 65536
+;   xload64le_z x0, x0, 65536 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -472,10 +472,122 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xload64le_z x0, x0, 18
+;   xload64le_z x0, x0, 18 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
 ; xload64le_z x0, x0, 18
+; ret
+
+function %load_i8_be_custom_trap(i64) -> i8 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i8 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   xload8_u32_z x0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; xload8_u32_z x0, x0, 18
+; ret
+
+function %load_i16_be_custom_trap(i64) -> i16 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i16 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   xload16be_u32_z x0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; xload16be_u32_z x0, x0, 18
+; ret
+
+function %load_i32_be_custom_trap(i64) -> i32 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i32 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   xload32be_z x0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; xload32be_z x0, x0, 18
+; ret
+
+function %load_i64_be_custom_trap(i64) -> i64 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i64 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   xload64be_z x0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; xload64be_z x0, x0, 18
+; ret
+
+function %load_f32_be_custom_trap(i64) -> f32 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.f32 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   fload32be_z f0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; fload32be_z f0, x0, 18
+; ret
+
+function %load_f64_be_custom_trap(i64) -> f64 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.f64 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   fload64be_z f0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; fload64be_z f0, x0, 18
+; ret
+
+function %load_i64x2_be_custom_trap(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i64x2 big user12 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   vload128be_z v0, x0, 18 // trap=TrapCode(12)
+;   ret
+;
+; Disassembled:
+; vload128be_z v0, x0, 18
 ; ret
 

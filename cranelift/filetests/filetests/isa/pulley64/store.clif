@@ -9,7 +9,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32le_z x1, 0, x0
+;   xstore32le_z x1, 0, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64le_z x1, 0, x0
+;   xstore64le_z x1, 0, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore32le_z x1, 4, x0
+;   xstore32le_z x1, 4, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
@@ -54,10 +54,115 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   xstore64le_z x1, 8, x0
+;   xstore64le_z x1, 8, x0 // trap=TrapCode(253)
 ;   ret
 ;
 ; Disassembled:
 ; xstore64le_z x1, 8, x0
+; ret
+
+function %store_i8_be_custom(i8, i64) {
+block0(v0: i8, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   xstore8_z x1, 0, x0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; xstore8_z x1, 0, x0
+; ret
+
+function %store_i16_be_custom(i16, i64) {
+block0(v0: i16, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   xstore16be_z x1, 0, x0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; xstore16be_z x1, 0, x0
+; ret
+
+function %store_i32_be_custom(i32, i64) {
+block0(v0: i32, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   xstore32be_z x1, 0, x0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; xstore32be_z x1, 0, x0
+; ret
+
+function %store_i64_be_custom(i64, i64) {
+block0(v0: i64, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   xstore64be_z x1, 0, x0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; xstore64be_z x1, 0, x0
+; ret
+
+function %store_f32_be_custom(f32, i64) {
+block0(v0: f32, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   fstore32be_z x0, 0, f0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; fstore32be_z x0, 0, f0
+; ret
+
+function %store_f64_be_custom(f64, i64) {
+block0(v0: f64, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   fstore64be_z x0, 0, f0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; fstore64be_z x0, 0, f0
+; ret
+
+function %store_i64x2_be_custom(i64x2, i64) {
+block0(v0: i64x2, v1: i64):
+    store big user13 v0, v1
+    return
+}
+
+; VCode:
+; block0:
+;   vstore128be_z x0, 0, v0 // trap=TrapCode(13)
+;   ret
+;
+; Disassembled:
+; vstore128be_z x0, 0, v0
 ; ret
 

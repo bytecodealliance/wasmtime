@@ -43,13 +43,13 @@ use wasmparser::component_types::ComponentCoreModuleTypeId;
 #[derive(Default)]
 pub struct ComponentDfg {
     /// Same as `Component::import_types`
-    pub import_types: PrimaryMap<ImportIndex, (String, TypeDef)>,
+    pub import_types: PrimaryMap<ImportIndex, (String, ComponentExtern)>,
 
     /// Same as `Component::imports`
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
     /// Same as `Component::exports`
-    pub exports: IndexMap<String, Export>,
+    pub exports: IndexMap<String, (Export, ComponentExternData)>,
 
     /// All trampolines and their type signature which will need to get
     /// compiled by Cranelift.
@@ -254,7 +254,7 @@ pub enum Export {
     },
     Instance {
         ty: TypeComponentInstanceIndex,
-        exports: IndexMap<String, Export>,
+        exports: IndexMap<String, (Export, ComponentExternData)>,
     },
     Type(TypeDef),
 }
@@ -476,14 +476,6 @@ pub enum Trampoline {
     Trap,
     EnterSyncCall,
     ExitSyncCall,
-    ContextGet {
-        instance: RuntimeComponentInstanceIndex,
-        slot: u32,
-    },
-    ContextSet {
-        instance: RuntimeComponentInstanceIndex,
-        slot: u32,
-    },
     ThreadIndex,
     ThreadNewIndirect {
         instance: RuntimeComponentInstanceIndex,
@@ -647,10 +639,10 @@ impl ComponentDfg {
         // creating some lowered imports, perhaps some saved modules, etc.
         let mut export_items = PrimaryMap::new();
         let mut exports = NameMap::default();
-        for (name, export) in self.exports.iter() {
+        for (name, (export, data)) in self.exports.iter() {
             let export =
                 linearize.export(export, &mut export_items, wasmtime_types, wasmparser_types)?;
-            exports.insert(name, &mut NameMapNoIntern, false, export)?;
+            exports.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
         }
 
         // With all those pieces done the results of the dataflow-based
@@ -810,10 +802,10 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 exports: {
                     let mut map = NameMap::default();
-                    for (name, export) in exports {
+                    for (name, (export, data)) in exports {
                         let export =
                             self.export(export, items, wasmtime_types, wasmparser_types)?;
-                        map.insert(name, &mut NameMapNoIntern, false, export)?;
+                        map.insert(name, &mut NameMapNoIntern, false, (export, data.clone()))?;
                     }
                     map
                 },
@@ -1167,14 +1159,6 @@ impl LinearizeDfg<'_> {
             Trampoline::Trap => info::Trampoline::Trap,
             Trampoline::EnterSyncCall => info::Trampoline::EnterSyncCall,
             Trampoline::ExitSyncCall => info::Trampoline::ExitSyncCall,
-            Trampoline::ContextGet { instance, slot } => info::Trampoline::ContextGet {
-                instance: *instance,
-                slot: *slot,
-            },
-            Trampoline::ContextSet { instance, slot } => info::Trampoline::ContextSet {
-                instance: *instance,
-                slot: *slot,
-            },
             Trampoline::ThreadIndex => info::Trampoline::ThreadIndex,
             Trampoline::ThreadNewIndirect {
                 instance,

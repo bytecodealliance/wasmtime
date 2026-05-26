@@ -47,9 +47,9 @@ The emoji legend is:
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | 🚧[^9] | ✅  | 🚧[^10]|
+| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
-| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | 🚧[^7] | ✅  | ❌     |
+| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | ✅     | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 
@@ -60,23 +60,13 @@ The emoji legend is:
     GC proposal.
 [^6]: The implementation of Wasm GC is feature complete from a specification
     perspective, however a number of quality-of-implementation tasks
-    [remain](https://github.com/bytecodealliance/wasmtime/issues/5032), notably
-    a tracing collector that can reclaim garbage cycles.
-[^7]: The GC proposal is lightly fuzzed via `wasm-smith` and our usual
-    whole-module fuzz targets like `differential`, but we would like to
-    additionally [extend the `table_ops` fuzz target to exercise more of the GC
-    proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
+    [remain](https://github.com/bytecodealliance/wasmtime/issues/13216) that
+    we'd like to resolve before promoting Wasm GC to tier 1.
 [^8]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they
     aren't well integrated with resource-limiting features in `Store`.
     Additionally `shared` memories aren't supported in the pooling allocator.
-[^9]: The exception-handling proposal is fuzzed by our whole-module fuzzer,
-      but we do not have an exception-specific fuzzer that attempts to create
-      interesting throw/catch patterns or payloads.
-[^10]: The exception-handling proposal can be enabled for exceptions in the guest
-       via the C API, but exception objects have no C API to examine, clone,
-       rethrow, or drop exceptions that propagate to the host.
 
 [cm-capi-gaps]: https://github.com/bytecodealliance/wasmtime/issues?q=is%3Aissue%20state%3Aopen%20label%3Awasm-proposal%3Acomponent-model%20label%3Awasmtime%3Ac-api
 

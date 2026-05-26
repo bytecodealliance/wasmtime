@@ -78,7 +78,13 @@ pub fn check_stacks(stacks: Stacks) -> usize {
                 .get_memory(&mut store, "memory")
                 .expect("should have `memory` export");
 
-            let host_trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
+            let host_trace = match trap.downcast_ref::<WasmBacktrace>() {
+                Some(bt) => bt.frames(),
+                None => {
+                    assert!(stacks.limit.is_none());
+                    continue;
+                }
+            };
             let trap = trap.downcast_ref::<Trap>().unwrap();
             max_stack_depth = max_stack_depth.max(host_trace.len());
             assert_stack_matches(

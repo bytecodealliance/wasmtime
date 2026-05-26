@@ -276,7 +276,9 @@ pub mod foo {
                     wasmtime::component::ResourceType::host::<Y>(),
                     move |mut store, rep| -> wasmtime::Result<()> {
                         let resource = wasmtime::component::Resource::new_own(rep);
-                        HostY::drop(&mut host_getter(store.data_mut()), resource)
+                        wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                            HostY::drop(&mut host_getter(store.data_mut()), resource),
+                        )
                     },
                 )?;
                 Ok(())

@@ -16,35 +16,41 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
     //    sock.shutdown(ShutdownType::Both),
     //    Err(ErrorCode::InvalidState)
     //));
-    assert_eq!(sock.get_local_address(), Err(ErrorCode::InvalidState));
-    assert_eq!(sock.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(
+        sock.get_local_address(),
+        Err(ErrorCode::InvalidState)
+    ));
+    assert!(matches!(
+        sock.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
     assert!(!sock.get_is_listening());
     assert_eq!(sock.get_address_family(), family);
 
-    assert_eq!(sock.set_listen_backlog_size(32), Ok(()));
+    sock.set_listen_backlog_size(32).unwrap();
 
     assert!(sock.get_keep_alive_enabled().is_ok());
-    assert_eq!(sock.set_keep_alive_enabled(false), Ok(()));
-    assert_eq!(sock.get_keep_alive_enabled(), Ok(false));
+    sock.set_keep_alive_enabled(false).unwrap();
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), false);
 
     assert!(sock.get_keep_alive_idle_time().is_ok());
-    assert_eq!(sock.set_keep_alive_idle_time(1), Ok(()));
+    sock.set_keep_alive_idle_time(1).unwrap();
 
     assert!(sock.get_keep_alive_interval().is_ok());
-    assert_eq!(sock.set_keep_alive_interval(1), Ok(()));
+    sock.set_keep_alive_interval(1).unwrap();
 
     assert!(sock.get_keep_alive_count().is_ok());
-    assert_eq!(sock.set_keep_alive_count(1), Ok(()));
+    sock.set_keep_alive_count(1).unwrap();
 
     assert!(sock.get_hop_limit().is_ok());
-    assert_eq!(sock.set_hop_limit(255), Ok(()));
-    assert_eq!(sock.get_hop_limit(), Ok(255));
+    sock.set_hop_limit(255).unwrap();
+    assert_eq!(sock.get_hop_limit().unwrap(), 255);
 
     assert!(sock.get_receive_buffer_size().is_ok());
-    assert_eq!(sock.set_receive_buffer_size(16000), Ok(()));
+    sock.set_receive_buffer_size(16000).unwrap();
 
     assert!(sock.get_send_buffer_size().is_ok());
-    assert_eq!(sock.set_send_buffer_size(16000), Ok(()));
+    sock.set_send_buffer_size(16000).unwrap();
 }
 
 fn test_tcp_bound_state_invariants(family: IpAddressFamily) {
@@ -52,7 +58,10 @@ fn test_tcp_bound_state_invariants(family: IpAddressFamily) {
     let sock = TcpSocket::create(family).unwrap();
     sock.bind(bind_address).unwrap();
 
-    assert_eq!(sock.bind(bind_address), Err(ErrorCode::InvalidState));
+    assert!(matches!(
+        sock.bind(bind_address),
+        Err(ErrorCode::InvalidState)
+    ));
     // TODO: Test send and receive
     //assert!(matches!(
     //    sock.shutdown(ShutdownType::Both),
@@ -60,34 +69,37 @@ fn test_tcp_bound_state_invariants(family: IpAddressFamily) {
     //));
 
     assert!(sock.get_local_address().is_ok());
-    assert_eq!(sock.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(
+        sock.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
     assert!(!sock.get_is_listening());
     assert_eq!(sock.get_address_family(), family);
 
-    assert_eq!(sock.set_listen_backlog_size(32), Ok(()));
+    sock.set_listen_backlog_size(32).unwrap();
 
     assert!(sock.get_keep_alive_enabled().is_ok());
-    assert_eq!(sock.set_keep_alive_enabled(false), Ok(()));
-    assert_eq!(sock.get_keep_alive_enabled(), Ok(false));
+    sock.set_keep_alive_enabled(false).unwrap();
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), false);
 
     assert!(sock.get_keep_alive_idle_time().is_ok());
-    assert_eq!(sock.set_keep_alive_idle_time(1), Ok(()));
+    sock.set_keep_alive_idle_time(1).unwrap();
 
     assert!(sock.get_keep_alive_interval().is_ok());
-    assert_eq!(sock.set_keep_alive_interval(1), Ok(()));
+    sock.set_keep_alive_interval(1).unwrap();
 
     assert!(sock.get_keep_alive_count().is_ok());
-    assert_eq!(sock.set_keep_alive_count(1), Ok(()));
+    sock.set_keep_alive_count(1).unwrap();
 
     assert!(sock.get_hop_limit().is_ok());
-    assert_eq!(sock.set_hop_limit(255), Ok(()));
-    assert_eq!(sock.get_hop_limit(), Ok(255));
+    sock.set_hop_limit(255).unwrap();
+    assert_eq!(sock.get_hop_limit().unwrap(), 255);
 
     assert!(sock.get_receive_buffer_size().is_ok());
-    assert_eq!(sock.set_receive_buffer_size(16000), Ok(()));
+    sock.set_receive_buffer_size(16000).unwrap();
 
     assert!(sock.get_send_buffer_size().is_ok());
-    assert_eq!(sock.set_send_buffer_size(16000), Ok(()));
+    sock.set_send_buffer_size(16000).unwrap();
 }
 
 async fn test_tcp_listening_state_invariants(family: IpAddressFamily) {
@@ -96,12 +108,15 @@ async fn test_tcp_listening_state_invariants(family: IpAddressFamily) {
     sock.bind(bind_address).unwrap();
     sock.listen().unwrap();
 
-    assert_eq!(sock.bind(bind_address), Err(ErrorCode::InvalidState));
-    assert_eq!(
+    assert!(matches!(
+        sock.bind(bind_address),
+        Err(ErrorCode::InvalidState)
+    ));
+    assert!(matches!(
         sock.connect(IpSocketAddress::new(IpAddress::new_loopback(family), 1))
             .await,
         Err(ErrorCode::InvalidState)
-    );
+    ));
     assert!(matches!(sock.listen(), Err(ErrorCode::InvalidState)));
     // Skipping: tcp::accept
     // TODO: Test send and receive
@@ -111,7 +126,10 @@ async fn test_tcp_listening_state_invariants(family: IpAddressFamily) {
     //));
 
     assert!(sock.get_local_address().is_ok());
-    assert_eq!(sock.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(
+        sock.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
     assert!(sock.get_is_listening());
     assert_eq!(sock.get_address_family(), family);
 
@@ -121,27 +139,27 @@ async fn test_tcp_listening_state_invariants(family: IpAddressFamily) {
     ));
 
     assert!(sock.get_keep_alive_enabled().is_ok());
-    assert_eq!(sock.set_keep_alive_enabled(false), Ok(()));
-    assert_eq!(sock.get_keep_alive_enabled(), Ok(false));
+    sock.set_keep_alive_enabled(false).unwrap();
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), false);
 
     assert!(sock.get_keep_alive_idle_time().is_ok());
-    assert_eq!(sock.set_keep_alive_idle_time(1), Ok(()));
+    sock.set_keep_alive_idle_time(1).unwrap();
 
     assert!(sock.get_keep_alive_interval().is_ok());
-    assert_eq!(sock.set_keep_alive_interval(1), Ok(()));
+    sock.set_keep_alive_interval(1).unwrap();
 
     assert!(sock.get_keep_alive_count().is_ok());
-    assert_eq!(sock.set_keep_alive_count(1), Ok(()));
+    sock.set_keep_alive_count(1).unwrap();
 
     assert!(sock.get_hop_limit().is_ok());
-    assert_eq!(sock.set_hop_limit(255), Ok(()));
-    assert_eq!(sock.get_hop_limit(), Ok(255));
+    sock.set_hop_limit(255).unwrap();
+    assert_eq!(sock.get_hop_limit().unwrap(), 255);
 
     assert!(sock.get_receive_buffer_size().is_ok());
-    assert_eq!(sock.set_receive_buffer_size(16000), Ok(()));
+    sock.set_receive_buffer_size(16000).unwrap();
 
     assert!(sock.get_send_buffer_size().is_ok());
-    assert_eq!(sock.set_send_buffer_size(16000), Ok(()));
+    sock.set_send_buffer_size(16000).unwrap();
 }
 
 async fn test_tcp_connected_state_invariants(family: IpAddressFamily) {
@@ -160,11 +178,14 @@ async fn test_tcp_connected_state_invariants(family: IpAddressFamily) {
         }
     );
 
-    assert_eq!(sock.bind(bind_address), Err(ErrorCode::InvalidState));
-    assert_eq!(
+    assert!(matches!(
+        sock.bind(bind_address),
+        Err(ErrorCode::InvalidState)
+    ));
+    assert!(matches!(
         sock.connect(addr_listener).await,
         Err(ErrorCode::InvalidState)
-    );
+    ));
     assert!(matches!(sock.listen(), Err(ErrorCode::InvalidState)));
     // Skipping: tcp::shutdown
 
@@ -174,27 +195,27 @@ async fn test_tcp_connected_state_invariants(family: IpAddressFamily) {
     assert_eq!(sock.get_address_family(), family);
 
     assert!(sock.get_keep_alive_enabled().is_ok());
-    assert_eq!(sock.set_keep_alive_enabled(false), Ok(()));
-    assert_eq!(sock.get_keep_alive_enabled(), Ok(false));
+    sock.set_keep_alive_enabled(false).unwrap();
+    assert_eq!(sock.get_keep_alive_enabled().unwrap(), false);
 
     assert!(sock.get_keep_alive_idle_time().is_ok());
-    assert_eq!(sock.set_keep_alive_idle_time(1), Ok(()));
+    sock.set_keep_alive_idle_time(1).unwrap();
 
     assert!(sock.get_keep_alive_interval().is_ok());
-    assert_eq!(sock.set_keep_alive_interval(1), Ok(()));
+    sock.set_keep_alive_interval(1).unwrap();
 
     assert!(sock.get_keep_alive_count().is_ok());
-    assert_eq!(sock.set_keep_alive_count(1), Ok(()));
+    sock.set_keep_alive_count(1).unwrap();
 
     assert!(sock.get_hop_limit().is_ok());
-    assert_eq!(sock.set_hop_limit(255), Ok(()));
-    assert_eq!(sock.get_hop_limit(), Ok(255));
+    sock.set_hop_limit(255).unwrap();
+    assert_eq!(sock.get_hop_limit().unwrap(), 255);
 
     assert!(sock.get_receive_buffer_size().is_ok());
-    assert_eq!(sock.set_receive_buffer_size(16000), Ok(()));
+    sock.set_receive_buffer_size(16000).unwrap();
 
     assert!(sock.get_send_buffer_size().is_ok());
-    assert_eq!(sock.set_send_buffer_size(16000), Ok(()));
+    sock.set_send_buffer_size(16000).unwrap();
 }
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {

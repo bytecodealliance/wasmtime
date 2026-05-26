@@ -1544,16 +1544,18 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128RmwSeq {
-            op,
-            mem,
-            operand_low,
-            operand_high,
-            temp_low,
-            temp_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128RmwSeq { args } => {
+            let Atomic128RmwSeqArgs {
+                op,
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                temp_low,
+                temp_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let temp_low = *temp_low;
@@ -1564,13 +1566,14 @@ pub(crate) fn emit(
             debug_assert_eq!(temp_high.to_reg(), regs::rcx());
             debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
             debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
-            let mem = mem.finalize(state.frame_layout(), sink).clone();
+            let mem_low = mem_low.finalize(state.frame_layout(), sink).clone();
+            let mem_high = mem_high.finalize(state.frame_layout(), sink).clone();
 
             let again_label = sink.get_label();
 
             // Load the initial value.
-            asm::inst::movq_rm::new(dst_old_low, mem.clone()).emit(sink, info, state);
-            asm::inst::movq_rm::new(dst_old_high, mem.offset(8)).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_low, mem_low.clone()).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_high, mem_high).emit(sink, info, state);
 
             // again:
             sink.bind_label(again_label, state.ctrl_plane_mut());
@@ -1656,7 +1659,7 @@ pub(crate) fn emit(
                 PairedGpr::from(dst_old_high),
                 temp_low.to_reg(),
                 temp_high.to_reg(),
-                mem,
+                mem_low,
             )
             .emit(sink, info, state);
 
@@ -1664,13 +1667,15 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NZ, again_label);
         }
 
-        Inst::Atomic128XchgSeq {
-            mem,
-            operand_low,
-            operand_high,
-            dst_old_low,
-            dst_old_high,
-        } => {
+        Inst::Atomic128XchgSeq { args } => {
+            let Atomic128XchgSeqArgs {
+                mem_low,
+                mem_high,
+                operand_low,
+                operand_high,
+                dst_old_low,
+                dst_old_high,
+            } = &**args;
             let operand_low = *operand_low;
             let operand_high = *operand_high;
             let dst_old_low = *dst_old_low;
@@ -1679,13 +1684,14 @@ pub(crate) fn emit(
             debug_assert_eq!(operand_high, regs::rcx());
             debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
             debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
-            let mem = mem.finalize(state.frame_layout(), sink).clone();
+            let mem_low = mem_low.finalize(state.frame_layout(), sink).clone();
+            let mem_high = mem_high.finalize(state.frame_layout(), sink).clone();
 
             let again_label = sink.get_label();
 
             // Load the initial value.
-            asm::inst::movq_rm::new(dst_old_low, mem.clone()).emit(sink, info, state);
-            asm::inst::movq_rm::new(dst_old_high, mem.offset(8)).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_low, mem_low.clone()).emit(sink, info, state);
+            asm::inst::movq_rm::new(dst_old_high, mem_high).emit(sink, info, state);
 
             // again:
             sink.bind_label(again_label, state.ctrl_plane_mut());
@@ -1696,7 +1702,7 @@ pub(crate) fn emit(
                 PairedGpr::from(dst_old_high),
                 operand_low,
                 operand_high,
-                mem,
+                mem_low,
             )
             .emit(sink, info, state);
 
@@ -1908,7 +1914,7 @@ fn emit_return_call_common_sequence<T>(
     }
 }
 
-/// Conveniene trait to have an `emit` method on all `asm::inst::*` variants.
+/// Convenience trait to have an `emit` method on all `asm::inst::*` variants.
 trait ExternalEmit {
     fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState);
 }

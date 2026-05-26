@@ -372,12 +372,36 @@ impl Func {
     /// Panics if the given function type is not associated with this store's
     /// engine.
     pub fn new<T: 'static>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     ) -> Self {
+        Self::try_new_(store, ty, func).panic_on_oom()
+    }
+
+    /// Same as [`Func::new`] but returns an error instead of panicking on
+    /// allocation failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    pub fn try_new<T: 'static>(
+        store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    ) -> Result<Self> {
+        Ok(Self::try_new_(store, ty, func)?)
+    }
+
+    fn try_new_<T: 'static>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    ) -> Result<Self, OutOfMemory> {
         let store = store.as_context_mut().0;
-        let host = HostFunc::new(store.engine(), ty, func).panic_on_oom();
+        let host = HostFunc::new(store.engine(), ty, func)?;
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
@@ -425,7 +449,7 @@ impl Func {
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -516,7 +540,7 @@ impl Func {
 
         // SAFETY: the `T` used by `func` matches the `T` of the store we're
         // inserting into via this function's type signature.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Creates a new `Func` from a store and a funcref within that store.
@@ -783,19 +807,39 @@ impl Func {
     /// # }
     /// ```
     pub fn wrap<T, Params, Results>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Func
     where
         T: 'static,
     {
+        Self::try_wrap(store, func).expect(
+            "allocation failure during `Func::wrap` (use `Func::try_wrap` to handle such errors)",
+        )
+    }
+
+    /// Fallible version of [`Func::wrap`] that returns an error on
+    /// out-of-memory instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    pub fn try_wrap<T, Params, Results>(
+        mut store: impl AsContextMut<Data = T>,
+        func: impl IntoFunc<T, Params, Results>,
+    ) -> Result<Func>
+    where
+        T: 'static,
+    {
         let store = store.as_context_mut().0;
         let engine = store.engine();
-        let host = func.into_func(engine).panic_on_oom();
+        let host = func.into_func(engine)?;
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
-        unsafe { host.into_func(store) }
+        Ok(unsafe { host.into_func(store)? })
     }
 
     /// Same as [`Func::wrap`], except the closure asynchronously produces the
@@ -817,7 +861,7 @@ impl Func {
 
         // SAFETY: The `T` the closure takes is the same as the `T` of the store
         // we're inserting into via the type signature above.
-        unsafe { host.into_func(store) }
+        unsafe { host.into_func(store).panic_on_oom() }
     }
 
     /// Returns the underlying wasm type that this `Func` has.
@@ -910,6 +954,10 @@ impl Func {
     /// Panics if `store` does not own this function.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn call(
         &self,
         mut store: impl AsContextMut,
@@ -1025,7 +1073,11 @@ impl Func {
     /// This value is safe to pass to [`Func::from_raw`] so long as the same
     /// `store` is provided.
     pub fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.vm_func_ref(store.as_context_mut().0).as_ptr().cast()
+        self.to_raw_(store.as_context_mut().0)
+    }
+
+    pub(crate) fn to_raw_(&self, store: &mut StoreOpaque) -> *mut c_void {
+        self.vm_func_ref(store).as_ptr().cast()
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -1053,6 +1105,10 @@ impl Func {
     /// Panics if this is called on a function in a synchronous store. This
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn call_async(
         &self,
@@ -1129,7 +1185,7 @@ impl Func {
         let values_vec_size = params.len().max(ty.results().len());
         let mut values_vec = store.0.take_wasm_val_raw_storage();
         debug_assert!(values_vec.is_empty());
-        values_vec.resize_with(values_vec_size, || ValRaw::v128(0));
+        values_vec.resize_with(values_vec_size, || ValRaw::v128(0))?;
         for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
             *slot = arg.to_raw(&mut *store)?;
         }
@@ -1157,38 +1213,35 @@ impl Func {
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
-        unsafe {
-            let f = self.vm_func_ref(store);
-            VMFunctionImport {
-                // Note that this is a load-bearing `unwrap` here, but is
-                // never expected to trip at runtime. The general problem is
-                // that host functions do not have a `wasm_call` function so
-                // the `VMFuncRef` type has an optional pointer there. This is
-                // only able to be filled out when a function is "paired" with
-                // a module where trampolines are present to fill out
-                // `wasm_call` pointers.
-                //
-                // This pairing of modules doesn't happen explicitly but is
-                // instead managed lazily throughout Wasmtime. Specifically the
-                // way this works is one of:
-                //
-                // * When a host function is created the store's list of
-                //   modules are searched for a wasm trampoline. If not found
-                //   the `wasm_call` field is left blank.
-                //
-                // * When a module instantiation happens, which uses this
-                //   function, the module will be used to fill any outstanding
-                //   holes that it has trampolines for.
-                //
-                // This means that by the time we get to this point any
-                // relevant holes should be filled out. Thus if this panic
-                // actually triggers then it's indicative of a missing `fill`
-                // call somewhere else.
-                wasm_call: f.as_ref().wasm_call.unwrap(),
-                array_call: f.as_ref().array_call,
-                vmctx: f.as_ref().vmctx,
-            }
-        }
+        // Safety: it should be fine to dereference the funcref pointer while we
+        // borrow the store.
+        let func_ref = unsafe { self.vm_func_ref(store).as_ref() };
+
+        // Note that this is a load-bearing `unwrap` here, but is never expected
+        // to trip at runtime. The general problem is that host functions do not
+        // have a `wasm_call` function so the `VMFuncRef` type has an optional
+        // pointer there. This is only able to be filled out when a function is
+        // "paired" with a module where trampolines are present to fill out
+        // `wasm_call` pointers.
+        //
+        // This pairing of modules doesn't happen explicitly but is instead
+        // managed lazily throughout Wasmtime. Specifically the way this works
+        // is one of:
+        //
+        // * When a host function is created the store's list of modules are
+        //   searched for a wasm trampoline. If not found the `wasm_call` field
+        //   is left blank.
+        //
+        // * When a module instantiation happens, which uses this function, the
+        //   module will be used to fill any outstanding holes that it has
+        //   trampolines for.
+        //
+        // This means that by the time we get to this point any relevant holes
+        // should be filled out. Thus if this panic actually triggers then it's
+        // indicative of a missing `fill` call somewhere else.
+        let func_import = func_ref.as_vm_function_import().unwrap();
+
+        func_import.clone()
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
@@ -1516,9 +1569,12 @@ impl EntryStoreContext {
             //
             // After we've got the stack limit then we store it into the `stack_limit`
             // variable.
-            let wasm_stack_limit = stack_pointer
-                .checked_sub(store.engine().config().max_wasm_stack)
-                .unwrap();
+            //
+            // Also note that `saturating_sub` is used here since if the user
+            // said that the function gets nigh-infinite stack well then by
+            // golly it'll get nigh-infinite stack in which case the limit is 0.
+            let wasm_stack_limit =
+                stack_pointer.saturating_sub(store.engine().config().max_wasm_stack);
             let prev_stack = unsafe {
                 mem::replace(
                     &mut *store.0.vm_store_context().stack_limit.get(),
@@ -2089,15 +2145,23 @@ impl<T> Caller<'_, T> {
         self.store.gc(why)
     }
 
+    /// Returns the current capacity of the GC heap in bytes.
+    ///
+    /// Same as [`Store::gc_heap_capacity`](crate::Store::gc_heap_capacity).
+    #[cfg(feature = "gc")]
+    pub fn gc_heap_capacity(&self) -> usize {
+        self.store.0.gc_heap_capacity()
+    }
+
     /// Perform garbage collection asynchronously.
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).
     #[cfg(all(feature = "async", feature = "gc"))]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send + 'static,
     {
-        self.store.gc_async(why).await;
+        self.store.gc_async(why).await
     }
 
     /// Returns the remaining fuel in the store.
@@ -2158,7 +2222,7 @@ pub struct HostFunc {
     ctx: StoreBox<VMArrayCallHostFuncContext>,
 
     /// Whether or not this function was defined with an `async` host function,
-    /// meaning that it is only invokable when wasm is itself on a fiber to
+    /// meaning that it is only invocable when wasm is itself on a fiber to
     /// support suspension on `Poll::Pending`.
     ///
     /// This is used to propagate to an `InstancePre` and then eventually into a
@@ -2410,7 +2474,7 @@ impl HostFunc {
             Self::vmctx_sync(engine, ty.clone(), move |mut caller, values| {
                 // SAFETY: Wasmtime in general provides the guarantee that
                 // `values` matches `ty`, so this should be safe.
-                let mut vec = unsafe { Self::load_untyped_params(caller.store.0, &ty, values) };
+                let mut vec = unsafe { Self::load_untyped_params(caller.store.0, &ty, values)? };
                 let (params, results) = vec.split_at_mut(ty.params().len());
                 func(caller.sub_caller(), params, results)?;
                 Self::store_untyped_results(caller.store, &ty, vec, values)
@@ -2451,7 +2515,7 @@ impl HostFunc {
                         // SAFETY: Wasmtime in general provides the guarantee that
                         // `values` matches `ty`, so this should be safe.
                         let mut vec =
-                            unsafe { Self::load_untyped_params(caller.store.0, &ty, values) };
+                            unsafe { Self::load_untyped_params(caller.store.0, &ty, values)? };
                         let (params, results) = vec.split_at_mut(ty.params().len());
                         core::pin::Pin::from(func(caller.sub_caller(), params, results)).await?;
                         Self::store_untyped_results(caller.store, &ty, vec, values)
@@ -2474,18 +2538,22 @@ impl HostFunc {
         store: &mut StoreOpaque,
         ty: &FuncType,
         params: &mut [MaybeUninit<ValRaw>],
-    ) -> Vec<Val> {
-        let mut val_vec = store.take_hostcall_val_storage();
+    ) -> Result<Vec<Val>> {
+        let val_vec = store.take_hostcall_val_storage();
         debug_assert!(val_vec.is_empty());
+
+        let mut val_vec = TryVec::from(val_vec);
         let nparams = ty.params().len();
-        val_vec.reserve(nparams + ty.results().len());
+        let total = nparams + ty.results().len();
+        val_vec.reserve(total)?;
+
         let mut store = AutoAssertNoGc::new(store);
         for (i, ty) in ty.params().enumerate() {
-            val_vec.push(unsafe { Val::_from_raw(&mut store, params[i].assume_init(), &ty) })
+            val_vec.push(unsafe { Val::_from_raw(&mut store, params[i].assume_init(), &ty) })?;
         }
 
-        val_vec.extend((0..ty.results().len()).map(|_| Val::null_func_ref()));
-        val_vec
+        val_vec.try_extend((0..ty.results().len()).map(|_| Val::null_func_ref()))?;
+        Ok(val_vec.into())
     }
 
     /// Stores the results, at the end of `args_then_results` according to `ty`,
@@ -2625,13 +2693,13 @@ impl HostFunc {
     ///
     /// Can only be inserted into stores with a matching `T` relative to when
     /// this `HostFunc` was first created.
-    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
+    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Result<Func, OutOfMemory> {
         self.validate_store(store);
         let (funcrefs, modules) = store.func_refs_and_modules();
-        let funcref = funcrefs.push_arc_host(self.clone(), modules);
+        let funcref = funcrefs.push_arc_host(self.clone(), modules)?;
         // SAFETY: this funcref was just pushed within the store, so it's safe
         // to say this store owns it.
-        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
+        Ok(unsafe { Func::from_vm_func_ref(store.id(), funcref) })
     }
 
     /// Inserts this `HostFunc` into a `Store`, returning the `Func` pointing to
@@ -2685,7 +2753,7 @@ impl HostFunc {
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
-    unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
+    unsafe fn into_func(self, store: &mut StoreOpaque) -> Result<Func, OutOfMemory> {
         self.validate_store(store);
 
         // This function could be called by a guest at any time, and it requires
@@ -2693,10 +2761,10 @@ impl HostFunc {
         store.set_async_required(self.asyncness);
 
         let (funcrefs, modules) = store.func_refs_and_modules();
-        let funcref = funcrefs.push_box_host(Box::new(self), modules);
+        let funcref = funcrefs.push_box_host(try_new::<Box<_>>(self)?, modules)?;
         // SAFETY: this funcref was just pushed within `store`, so it's safe to
         // say it's owned by the store's id.
-        unsafe { Func::from_vm_func_ref(store.id(), funcref) }
+        Ok(unsafe { Func::from_vm_func_ref(store.id(), funcref) })
     }
 
     fn validate_store(&self, store: &mut StoreOpaque) {

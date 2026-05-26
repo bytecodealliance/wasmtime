@@ -717,21 +717,27 @@ fn fmt_debug_alternate() {
 Error {
     inner: DynError {
         error: ouch,
-        source: DynError {
-            error: yikes,
-            source: DynError {
-                error: TestError(
-                    42,
-                ),
-                source: DynError {
-                    error: ChainError {
-                        message: "whoops",
-                        source: Some(
-                            ChainError {
-                                message: "root cause",
-                                source: None,
-                            },
+        source: Error {
+            inner: DynError {
+                error: yikes,
+                source: Error {
+                    inner: DynError {
+                        error: TestError(
+                            42,
                         ),
+                        source: Error {
+                            inner: DynError {
+                                error: ChainError {
+                                    message: "whoops",
+                                    source: Some(
+                                        ChainError {
+                                            message: "root cause",
+                                            source: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -904,4 +910,129 @@ fn oom_requested_allocation_size() {
     // specific guarantees about that behavior.
     let oom = OutOfMemory::new(usize::MAX);
     assert!(oom.requested_allocation_size() <= usize::try_from(isize::MAX).unwrap());
+}
+
+#[test]
+#[cfg(feature = "anyhow")]
+fn anyhow_preserves_downcast() -> Result<()> {
+    {
+        let e: Error = TestError(1).into();
+        assert!(e.downcast_ref::<TestError>().is_some());
+        let e: anyhow::Error = e.into();
+        assert!(e.downcast_ref::<TestError>().is_some());
+    }
+    {
+        let e = Error::from(TestError(1)).context("hi");
+        assert!(e.downcast_ref::<TestError>().is_some());
+        assert!(e.downcast_ref::<&str>().is_some());
+        let e: anyhow::Error = e.into();
+        assert!(e.downcast_ref::<TestError>().is_some());
+        assert!(e.downcast_ref::<&str>().is_some());
+    }
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "anyhow")]
+fn anyhow_source_downcast() -> Result<()> {
+    let e: anyhow::Error = TestError(1).into();
+    assert!(e.downcast_ref::<TestError>().is_some());
+
+    let e: Error = Error::from_anyhow(e);
+    assert!(e.downcast_ref::<TestError>().is_some());
+
+    let e: anyhow::Error = e.into();
+    assert!(e.downcast_ref::<TestError>().is_some());
+    Ok(())
+}
+
+#[cfg(feature = "anyhow")]
+fn assert_chain<T, U>(actual: impl IntoIterator<Item = T>, expected: impl IntoIterator<Item = U>)
+where
+    T: PartialEq<U>,
+    T: fmt::Debug,
+    U: fmt::Debug,
+{
+    let mut actual = actual.into_iter();
+    let mut expected = expected.into_iter();
+    loop {
+        match (actual.next(), expected.next()) {
+            (None, None) => return,
+            (None, Some(x)) => {
+                panic!("expected {x:?} next in chain, but actual chain is exhausted")
+            }
+            (Some(x), None) => panic!("expected chain to be exhausted, but found {x:?}"),
+            (Some(x), Some(y)) => assert_eq!(x, y),
+        }
+    }
+}
+
+#[test]
+#[cfg(feature = "anyhow")]
+fn anyhow_wasmtime_anyhow_sandwich_chain() -> Result<()> {
+    let e: anyhow::Error = TestError(1).into();
+    let e = e.context(TestError(2));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        ["TestError(2)", "TestError(1)"],
+    );
+
+    let e: Error = Error::from_anyhow(e);
+    let e = e.context(TestError(3));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        ["TestError(3)", "TestError(2)", "TestError(1)"],
+    );
+
+    let e: anyhow::Error = e.into();
+    let e = e.context(TestError(4));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        [
+            "TestError(4)",
+            "TestError(3)",
+            "TestError(2)",
+            "TestError(1)",
+        ],
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(feature = "anyhow")]
+fn wasmtime_anyhow_wasmtime_sandwich_chain() -> Result<()> {
+    let e: Error = TestError(1).into();
+    let e = e.context(TestError(2));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        ["TestError(2)", "TestError(1)"],
+    );
+
+    let e: anyhow::Error = e.into();
+    let e = e.context(TestError(3));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        ["TestError(3)", "TestError(2)", "TestError(1)"],
+    );
+
+    let e: Error = Error::from_anyhow(e);
+    let e = e.context(TestError(4));
+
+    assert_chain(
+        e.chain().map(|e| e.to_string()),
+        [
+            "TestError(4)",
+            "TestError(3)",
+            "TestError(2)",
+            "TestError(1)",
+        ],
+    );
+
+    Ok(())
 }

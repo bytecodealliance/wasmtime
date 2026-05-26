@@ -47,7 +47,7 @@ unsafe extern "C" fn wasmtime_fiber_switch_(top_of_stack: *mut u8) {
 
 pub(crate) unsafe fn wasmtime_fiber_init(
     top_of_stack: *mut u8,
-    entry_point: extern "C" fn(*mut u8, *mut u8),
+    entry_point: extern "C" fn(*mut u8, *mut u8) -> *mut u8,
     entry_arg0: *mut u8,
 ) {
     // Our stack from top-to-bottom looks like:
@@ -84,6 +84,7 @@ pub(crate) unsafe fn wasmtime_fiber_init(
         let initial_stack = top_of_stack.cast::<InitialStack>().sub(1);
         initial_stack.write(InitialStack {
             ebp: entry_point as *mut u8,
+            esi: wasmtime_fiber_switch_ as *mut u8,
             return_address: wasmtime_fiber_start as *mut u8,
             arg1: entry_arg0,
             arg2: top_of_stack,
@@ -112,8 +113,15 @@ unsafe extern "C" fn wasmtime_fiber_start() -> ! {
         .cfi_rel_offset edi, -20
 
         // Our arguments and stack alignment are all prepped by
-        // `wasmtime_fiber_init`.
+        // `wasmtime_fiber_init`. After calling `entry_point` clean up the
+        // stack arguments.
         call ebp
+        pop edi
+        pop edi
+
+        // Call `wasmtime_fiber_switch_`, pushing its argument onto the stack.
+        push eax
+        call esi
         ud2
         .cfi_endproc
         ",

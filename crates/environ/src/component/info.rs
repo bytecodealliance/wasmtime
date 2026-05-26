@@ -76,7 +76,7 @@ pub struct Component {
     ///
     /// Note that each name is given an `ImportIndex` here for the next map to
     /// refer back to.
-    pub import_types: PrimaryMap<ImportIndex, (String, TypeDef)>,
+    pub import_types: PrimaryMap<ImportIndex, (String, ComponentExtern)>,
 
     /// A list of "flattened" imports that are used by this instance.
     ///
@@ -107,7 +107,7 @@ pub struct Component {
     pub imports: PrimaryMap<RuntimeImportIndex, (ImportIndex, Vec<String>)>,
 
     /// This component's own root exports from the component itself.
-    pub exports: NameMap<String, ExportIndex>,
+    pub exports: NameMap<TryString, (ExportIndex, ComponentExternData)>,
 
     /// All exports of this component and exported instances of this component.
     ///
@@ -459,7 +459,7 @@ pub enum ExportItem<T> {
 }
 
 /// Possible exports from a component.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Export {
     /// A lifted function being exported which is an adaptation of a core wasm
     /// function.
@@ -491,7 +491,7 @@ pub enum Export {
         /// Instance type index, if such is assigned
         ty: TypeComponentInstanceIndex,
         /// Instance export map
-        exports: NameMap<String, ExportIndex>,
+        exports: NameMap<TryString, (ExportIndex, ComponentExternData)>,
     },
     /// An exported type from a component or instance, currently only
     /// informational.
@@ -658,6 +658,15 @@ impl FixedEncoding {
             FixedEncoding::Utf8 => 1,
             FixedEncoding::Utf16 => 2,
             FixedEncoding::Latin1 => 1,
+        }
+    }
+
+    /// Returns the alignment of strings using this encoding.
+    pub fn align(&self) -> u8 {
+        match self {
+            FixedEncoding::Utf8 => 1,
+            FixedEncoding::Utf16 => 2,
+            FixedEncoding::Latin1 => 2,
         }
     }
 }
@@ -1109,28 +1118,6 @@ pub enum Trampoline {
     /// pushed by `EnterSyncCall`.
     ExitSyncCall,
 
-    /// Intrinsic used to implement the `context.get` component model builtin.
-    ///
-    /// The payload here represents that this is accessing the Nth slot of local
-    /// storage.
-    ContextGet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// Which slot to access.
-        slot: u32,
-    },
-
-    /// Intrinsic used to implement the `context.set` component model builtin.
-    ///
-    /// The payload here represents that this is accessing the Nth slot of local
-    /// storage.
-    ContextSet {
-        /// The specific component instance which is calling the intrinsic.
-        instance: RuntimeComponentInstanceIndex,
-        /// Which slot to update.
-        slot: u32,
-    },
-
     /// Intrinsic used to implement the `thread.index` component model builtin.
     ThreadIndex,
 
@@ -1247,8 +1234,6 @@ impl Trampoline {
             Trap => format!("trap"),
             EnterSyncCall => format!("enter-sync-call"),
             ExitSyncCall => format!("exit-sync-call"),
-            ContextGet { .. } => format!("context-get"),
-            ContextSet { .. } => format!("context-set"),
             ThreadIndex => format!("thread-index"),
             ThreadNewIndirect { .. } => format!("thread-new-indirect"),
             ThreadSuspendToSuspended { .. } => format!("thread-suspend-to-suspended"),

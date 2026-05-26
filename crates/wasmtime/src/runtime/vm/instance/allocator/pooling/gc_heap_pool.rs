@@ -4,6 +4,7 @@ use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Resu
 use crate::vm::{Memory, MemoryAllocationIndex};
 use crate::{Engine, prelude::*};
 use std::sync::Mutex;
+use wasmtime_environ::Tunables;
 
 enum HeapSlot {
     /// The is available for use, and we may or may not have lazily allocated
@@ -57,7 +58,26 @@ impl std::fmt::Debug for GcHeapPool {
 
 impl GcHeapPool {
     /// Create a new `GcHeapPool` with the given configuration.
-    pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
+    pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
+        // When using the pooling allocator, GC heaps and linear memories share
+        // the same underlying memory pool, so they must be configured the same.
+        debug_assert_eq!(
+            tunables.memory_reservation, tunables.gc_heap_reservation,
+            "pooling allocator requires memory_reservation == gc_heap_reservation"
+        );
+        debug_assert_eq!(
+            tunables.memory_guard_size, tunables.gc_heap_guard_size,
+            "pooling allocator requires memory_guard_size == gc_heap_guard_size"
+        );
+        debug_assert_eq!(
+            tunables.memory_reservation_for_growth, tunables.gc_heap_reservation_for_growth,
+            "pooling allocator requires memory_reservation_for_growth == gc_heap_reservation_for_growth"
+        );
+        debug_assert_eq!(
+            tunables.memory_may_move, tunables.gc_heap_may_move,
+            "pooling allocator requires memory_may_move == gc_heap_may_move"
+        );
+
         let index_allocator = SimpleIndexAllocator::new(config.limits.total_gc_heaps);
         let max_gc_heaps = usize::try_from(config.limits.total_gc_heaps).unwrap();
 

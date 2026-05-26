@@ -29,6 +29,8 @@ class Module {
   WASMTIME_CLONE_WRAPPER(Module, wasmtime_module);
 
 #ifdef WASMTIME_FEATURE_COMPILER
+
+#ifdef WASMTIME_FEATURE_WAT
   /**
    * \brief Compiles a module from the WebAssembly text format.
    *
@@ -43,6 +45,7 @@ class Module {
     auto bytes = wasm.ok();
     return compile(engine, bytes);
   }
+#endif // WASMTIME_FEATURE_WAT
 
   /**
    * \brief Compiles a module from the WebAssembly binary format.

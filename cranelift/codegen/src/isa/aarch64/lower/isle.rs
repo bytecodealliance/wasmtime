@@ -9,8 +9,8 @@ use super::{
     ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
     FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel, MemLabel,
     MoveWideConst, MoveWideOp, NZCV, Opcode, OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
-    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, lower_fp_condcode,
-    stack_reg, writable_link_reg, writable_zero_reg, zero_reg,
+    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, stack_reg,
+    writable_link_reg, writable_zero_reg, zero_reg,
 };
 use crate::ir::{ArgumentExtension, condcodes};
 use crate::isa;
@@ -20,7 +20,7 @@ use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlagsData, TrapCode, Value,
         ValueList, immediates::*, types::*,
     },
     isa::aarch64::abi::AArch64MachineDeps,
@@ -135,6 +135,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             dest,
             uses,
             key,
+            sign_return_address_all: self.backend.isa_flags.sign_return_address_all(),
             new_stack_arg_size,
         })
     }
@@ -157,6 +158,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             dest,
             uses,
             key,
+            sign_return_address_all: self.backend.isa_flags.sign_return_address_all(),
             new_stack_arg_size,
         })
     }
@@ -179,6 +181,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn use_fp16(&mut self) -> bool {
         self.backend.isa_flags.has_fp16()
+    }
+
+    fn use_csdb(&mut self) -> bool {
+        self.backend.isa_flags.use_csdb()
     }
 
     fn move_wide_const_from_u64(&mut self, ty: Type, n: u64) -> Option<MoveWideConst> {
@@ -381,10 +387,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             },
             size,
         });
-        if self.backend.flags.enable_pcc() {
-            self.lower_ctx
-                .add_range_fact(rd.to_reg(), 64, running_value, running_value);
-        }
 
         // Emit a `movk` instruction for each remaining slice of the desired
         // constant that does not match the initial value constructed above.
@@ -400,10 +402,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     size,
                 });
                 running_value = replace(running_value, bits, shift);
-                if self.backend.flags.enable_pcc() {
-                    self.lower_ctx
-                        .add_range_fact(rd.to_reg(), 64, running_value, running_value);
-                }
             }
         }
 
@@ -582,10 +580,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             &IntCC::SignedLessThan => VecMisc2::Cmgt0,
             _ => panic!(),
         }
-    }
-
-    fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
-        lower_fp_condcode(*cc)
     }
 
     fn cond_code(&mut self, cc: &condcodes::IntCC) -> Cond {

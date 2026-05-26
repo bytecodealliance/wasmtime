@@ -135,10 +135,6 @@ where
         MutPtr::new(self.ptr.cast())
     }
 
-    pub(crate) fn as_shared_ptr(&self) -> SharedPtr<'_, T> {
-        SharedPtr::new(self.ptr)
-    }
-
     /// # Safety
     ///
     /// It must be valid to call `NonNull::<T>::as_ref` on the underlying pointer.

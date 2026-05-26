@@ -36,6 +36,7 @@ impl core::error::Error for ResourceTableError {}
 pub struct ResourceTable {
     entries: Vec<Entry>,
     free_head: Option<usize>,
+    max_capacity: usize,
 }
 
 #[derive(Debug)]
@@ -65,6 +66,11 @@ struct Tombstone;
 // Change this to `true` to assist with handle debugging in development if
 // necessary.
 const DELETE_WITH_TOMBSTONE: bool = false;
+
+/// Default setting for `ResourceTable::max_capacity`, chosen to be high
+/// enough that it doesn't need changing all that often but low enough that
+/// exhausting it isn't a massive problem for the host.
+const DEFAULT_MAX_CAPACITY: usize = 1_000_000;
 
 /// This structure tracks parent and child relationships for a given table entry.
 ///
@@ -105,10 +111,7 @@ impl TableEntry {
 impl ResourceTable {
     /// Create an empty table
     pub fn new() -> Self {
-        ResourceTable {
-            entries: Vec::new(),
-            free_head: None,
-        }
+        ResourceTable::with_capacity(0)
     }
 
     /// Returns whether or not this table is empty.
@@ -122,11 +125,28 @@ impl ResourceTable {
         })
     }
 
+    /// Returns the maximum capacity of this table, in elements, before adding
+    /// any more will be refused.
+    pub fn max_capacity(&self) -> usize {
+        self.max_capacity
+    }
+
+    /// Configures the maximum number of entries that may be present within this
+    /// table.
+    ///
+    /// Note that this does not retroactively shrink the table nor evict
+    /// existing entries should the maximum be smaller than the current size of
+    /// the entry table.
+    pub fn set_max_capacity(&mut self, max: usize) {
+        self.max_capacity = max;
+    }
+
     /// Create an empty table with at least the specified capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         ResourceTable {
             entries: Vec::with_capacity(capacity),
             free_head: None,
+            max_capacity: DEFAULT_MAX_CAPACITY,
         }
     }
 
@@ -197,6 +217,9 @@ impl ResourceTable {
             self.entries[free] = Entry::Occupied { entry: e };
             Ok(free.try_into().unwrap())
         } else {
+            if self.entries.len() >= self.max_capacity {
+                return Err(ResourceTableError::Full);
+            }
             let ix = self
                 .entries
                 .len()
@@ -445,4 +468,35 @@ pub fn test_free_list() {
     // As the free list is empty, this entry will have a new id.
     let x = table.push(()).unwrap();
     assert_eq!(x.rep(), 2);
+}
+
+#[test]
+fn test_max_capacity() {
+    let mut table = ResourceTable::new();
+    assert_eq!(table.max_capacity(), DEFAULT_MAX_CAPACITY);
+
+    table.set_max_capacity(0);
+    assert_eq!(table.max_capacity(), 0);
+    assert!(table.push(()).is_err());
+
+    table.set_max_capacity(1);
+    assert_eq!(table.max_capacity(), 1);
+    let x = table.push(()).unwrap();
+    assert!(table.push(()).is_err());
+
+    table.set_max_capacity(0);
+    assert!(table.push(()).is_err());
+    table.delete(x).unwrap();
+    let x = table.push(()).unwrap();
+    table.delete(x).unwrap();
+
+    table.set_max_capacity(10);
+
+    let handles = (0..10).map(|_| table.push(()).unwrap()).collect::<Vec<_>>();
+    assert!(table.push(()).is_err());
+    for handle in handles {
+        table.delete(handle).unwrap();
+    }
+
+    table.push(()).unwrap();
 }

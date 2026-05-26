@@ -18,6 +18,7 @@ use wasmtime_environ::prelude::*;
 pub mod limits {
     pub const MEMORY_SIZE: usize = 805 << 16;
     pub const MEMORIES: u32 = 450;
+    pub const GC_HEAP_SIZE: usize = 10 << 16;
     pub const TABLES: u32 = 200;
     pub const MEMORIES_PER_MODULE: u32 = 9;
     pub const TABLES_PER_MODULE: u32 = 5;
@@ -25,7 +26,7 @@ pub mod limits {
     pub const CORE_INSTANCES: u32 = 900;
     pub const TABLE_ELEMENTS: usize = 1000;
     pub const CORE_INSTANCE_SIZE: usize = 64 * 1024;
-    pub const TOTAL_STACKS: u32 = 10;
+    pub const TOTAL_STACKS: u32 = 20;
 }
 
 /// Local all `*.wast` tests under `root` which should be the path to the root
@@ -93,6 +94,15 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, config: &FindConfig) -> Res
             continue;
         }
 
+        // These tests use `*.wast` directives not yet supported by Wasmtime, so
+        // wait for a `wasm-tools` update to ungate these.
+        if path.ends_with("spec_testsuite/custom/custom_annot.wast")
+            || path.ends_with("spec_testsuite/custom/branch_hint.wast")
+            || path.ends_with("spec_testsuite/custom/name_annot.wast")
+        {
+            continue;
+        }
+
         let contents =
             fs::read_to_string(&path).with_context(|| format!("failed to read test: {path:?}"))?;
         let config = match config {
@@ -112,6 +122,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, config: &FindConfig) -> Res
 fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
     ret.spec_test = Some(true);
+    ret.bulk_memory = Some(true);
     match spec_proposal_from_path(test) {
         Some("wide-arithmetic") => {
             ret.wide_arithmetic = Some(true);
@@ -124,6 +135,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.custom_page_sizes = Some(true);
             ret.multi_memory = Some(true);
             ret.memory64 = Some(true);
+            ret.reference_types = Some(true);
 
             // See commentary below in `wasm-3.0` case for why these "hog
             // memory"
@@ -191,7 +203,7 @@ fn component_test_config(test: &Path) -> TestConfig {
         {
             ret.component_model_async = Some(true);
             ret.component_model_async_stackful = Some(true);
-            ret.component_model_async_builtins = Some(true);
+            ret.component_model_more_async_builtins = Some(true);
             ret.component_model_threading = Some(true);
         }
         if parent.ends_with("wasm-tools") {
@@ -248,6 +260,7 @@ impl fmt::Debug for WastTest {
 macro_rules! foreach_config_option {
     ($m:ident) => {
         $m! {
+            bulk_memory
             memory64
             custom_page_sizes
             multi_memory
@@ -263,12 +276,14 @@ macro_rules! foreach_config_option {
             hogs_memory
             nan_canonicalization
             component_model_async
-            component_model_async_builtins
+            component_model_more_async_builtins
             component_model_async_stackful
             component_model_threading
             component_model_error_context
             component_model_gc
+            component_model_map
             component_model_fixed_length_lists
+            component_model_implements
             simd
             gc_types
             exceptions
@@ -366,7 +381,19 @@ impl Compiler {
     /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
-            Compiler::CraneliftNative => config.legacy_exceptions(),
+            Compiler::CraneliftNative => {
+                if config.legacy_exceptions() {
+                    return true;
+                }
+
+                // Stack-switching is only implemented on x86_64 for unix
+                // platforms right now.
+                if config.stack_switching() && !(cfg!(target_arch = "x86_64") && cfg!(unix)) {
+                    return true;
+                }
+
+                false
+            }
 
             Compiler::Winch => {
                 if config.gc()
@@ -385,9 +412,7 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return config.wide_arithmetic()
-                        || (config.simd() && !config.spec_test())
-                        || config.threads();
+                    return (config.simd() && !config.spec_test()) || config.threads();
                 }
 
                 !cfg!(target_arch = "x86_64")
@@ -420,6 +445,7 @@ pub enum Collector {
     Auto,
     Null,
     DeferredReferenceCounting,
+    Copying,
 }
 
 impl WastTest {
@@ -441,12 +467,14 @@ impl WastTest {
             return true;
         }
 
-        // These tests in the `component-model` submodule have not yet been
-        // updated to account for the recent threading-related intrinsic
-        // changes
         let unsupported = [
-            "test/async/same-component-stream-future.wast",
+            // These tests in the `component-model` submodule have not yet been
+            // updated to account for the recent threading-related intrinsic
+            // changes.
             "test/async/trap-if-block-and-sync.wast",
+            // Wasmtime doesn't expose the component-model `cm64` feature toggle
+            // yet, so this parser-only test can't be enabled here.
+            "test/wasm-tools/memory64.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
@@ -454,9 +482,11 @@ impl WastTest {
 
         // Some tests are known to fail with the pooling allocator
         if config.pooling {
+            // allocates too much memory for the pooling configuration here
+            if self.config.hogs_memory() {
+                return true;
+            }
             let unsupported = [
-                // allocates too much memory for the pooling configuration here
-                "misc_testsuite/memory64/more-than-4gb.wast",
                 // shared memories + pooling allocator aren't supported yet
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/threads/atomics-end-of-memory.wast",
@@ -473,6 +503,8 @@ impl WastTest {
                 "spec_testsuite/proposals/threads/atomic.wast",
                 "spec_testsuite/proposals/threads/exports.wast",
                 "spec_testsuite/proposals/threads/memory.wast",
+                "misc_testsuite/memory64/threads.wast",
+                "misc_testsuite/winch/rmw32_cmpxchg_u_wrap.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -501,20 +533,6 @@ impl WastTest {
                 "misc_testsuite/no-mixup-stack-maps.wast",
                 "misc_testsuite/no-panic.wast",
                 "misc_testsuite/simple_ref_is_null.wast",
-                "misc_testsuite/table_grow_with_funcref.wast",
-                "spec_testsuite/br_table.wast",
-                "spec_testsuite/global.wast",
-                "spec_testsuite/ref_func.wast",
-                "spec_testsuite/ref_is_null.wast",
-                "spec_testsuite/ref_null.wast",
-                "spec_testsuite/select.wast",
-                "spec_testsuite/table_fill.wast",
-                "spec_testsuite/table_get.wast",
-                "spec_testsuite/table_grow.wast",
-                "spec_testsuite/table_set.wast",
-                "spec_testsuite/table_size.wast",
-                "spec_testsuite/elem.wast",
-                "spec_testsuite/linking.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -616,16 +634,6 @@ impl WastTest {
 
             #[cfg(target_arch = "x86_64")]
             {
-                let unsupported = [
-                    // externref/reference-types related
-                    // simd-related failures
-                    "misc_testsuite/simd/canonicalize-nan.wast",
-                ];
-
-                if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                    return true;
-                }
-
                 // SIMD on Winch requires AVX instructions.
                 #[cfg(target_arch = "x86_64")]
                 if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2"))
@@ -636,6 +644,7 @@ impl WastTest {
                         "misc_testsuite/int-to-float-splat.wast",
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
+                        "misc_testsuite/simd/canonicalize-nan.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
                         "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
@@ -645,6 +654,7 @@ impl WastTest {
                         "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                         "misc_testsuite/winch/issue-10331.wast",
                         "misc_testsuite/winch/replace_lane.wast",
+                        "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
                         "spec_testsuite/simd_align.wast",
                         "spec_testsuite/simd_boolean.wast",
                         "spec_testsuite/simd_conversions.wast",

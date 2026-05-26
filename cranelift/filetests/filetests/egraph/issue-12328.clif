@@ -8,6 +8,9 @@ block0(v0: i32x4, v1: i32x4):
     v3 = icmp slt v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i32x4 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %slt_sgt_i32x4(i32x4, i32x4) -> i32x4 {
@@ -16,6 +19,9 @@ block0(v0: i32x4, v1: i32x4):
     v3 = icmp sgt v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i32x4 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %ugt_ult_i32x4(i32x4, i32x4) -> i32x4 {
@@ -24,6 +30,9 @@ block0(v0: i32x4, v1: i32x4):
     v3 = icmp ult v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i32x4 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %ult_ugt_i32x4(i32x4, i32x4) -> i32x4 {
@@ -32,6 +41,9 @@ block0(v0: i32x4, v1: i32x4):
     v3 = icmp ugt v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i32x4 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %sgt_slt_i64x2(i64x2, i64x2) -> i64x2 {
@@ -40,6 +52,9 @@ block0(v0: i64x2, v1: i64x2):
     v3 = icmp slt v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i64x2 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %slt_sgt_i16x8(i16x8, i16x8) -> i16x8 {
@@ -48,6 +63,9 @@ block0(v0: i16x8, v1: i16x8):
     v3 = icmp sgt v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i16x8 const0
+    ; check: return v7  ; v7 = const0
 }
 
 function %ugt_ult_i8x16(i8x16, i8x16) -> i8x16 {
@@ -56,4 +74,7 @@ block0(v0: i8x16, v1: i8x16):
     v3 = icmp ult v0, v1
     v4 = band v2, v3
     return v4
+    ; check: const0 = 0x00000000000000000000000000000000
+    ; check: v7 = vconst.i8x16 const0
+    ; check: return v7  ; v7 = const0
 }

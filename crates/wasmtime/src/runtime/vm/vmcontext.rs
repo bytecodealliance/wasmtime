@@ -4,6 +4,7 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
+use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
@@ -18,7 +19,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    DefinedTagIndex, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -68,31 +70,55 @@ pub struct VMArrayCallFunction(VMFunctionBody);
 pub struct VMWasmCallFunction(VMFunctionBody);
 
 /// An imported function.
-#[derive(Debug, Copy, Clone)]
+///
+/// Basically the same as `VMFuncRef`, except that `wasm_call` is not optional.
+#[derive(Debug, Clone)]
 #[repr(C)]
 pub struct VMFunctionImport {
-    /// Function pointer to use when calling this imported function from Wasm.
-    pub wasm_call: VmPtr<VMWasmCallFunction>,
-
-    /// Function pointer to use when calling this imported function with the
-    /// "array" calling convention that `Func::new` et al use.
+    /// Same as `VMFuncRef::array_call`.
     pub array_call: VmPtr<VMArrayCallFunction>,
 
-    /// The VM state associated with this function.
+    /// Same as `VMFuncRef::wasm_call`, except always non-null. Must be filled
+    /// in by the time Wasm is importing this function!
+    pub wasm_call: VmPtr<VMWasmCallFunction>,
+
+    /// Function signature's _actual_ type id.
     ///
-    /// For Wasm functions defined by core wasm instances this will be `*mut
-    /// VMContext`, but for lifted/lowered component model functions this will
-    /// be a `VMComponentContext`, and for a host function it will be a
-    /// `VMHostFuncContext`, etc.
+    /// This is the type that the function was defined with, not the type that
+    /// it was imported as. These two can be different in the face of subtyping
+    /// and we need the former for to correctly implement dynamic downcasts.
+    pub type_index: VMSharedTypeIndex,
+
+    /// Same as `VMFuncRef::vmctx`.
     pub vmctx: VmPtr<VMOpaqueContext>,
+    // If more elements are added here, remember to add offset_of tests below!
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
 unsafe impl VmSafe for VMFunctionImport {}
 
+impl VMFunctionImport {
+    /// Convert `&VMFunctionImport` into `&VMFuncRef`.
+    pub fn as_func_ref(&self) -> &VMFuncRef {
+        // Safety: `VMFunctionImport` and `VMFuncRef` have the same
+        // representation.
+        unsafe { Self::as_non_null_func_ref(NonNull::from(self)).as_ref() }
+    }
+
+    /// Convert `NonNull<VMFunctionImport>` into `NonNull<VMFuncRef>`.
+    pub fn as_non_null_func_ref(p: NonNull<VMFunctionImport>) -> NonNull<VMFuncRef> {
+        p.cast()
+    }
+
+    /// Convert `*mut VMFunctionImport` into `*mut VMFuncRef`.
+    pub fn as_func_ref_ptr(p: *mut VMFunctionImport) -> *mut VMFuncRef {
+        p.cast()
+    }
+}
+
 #[cfg(test)]
 mod test_vmfunction_import {
-    use super::VMFunctionImport;
+    use super::{VMFuncRef, VMFunctionImport};
     use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{HostPtr, Module, StaticModuleIndex, VMOffsets};
@@ -106,16 +132,41 @@ mod test_vmfunction_import {
             usize::from(offsets.size_of_vmfunction_import())
         );
         assert_eq!(
-            offset_of!(VMFunctionImport, wasm_call),
-            usize::from(offsets.vmfunction_import_wasm_call())
-        );
-        assert_eq!(
             offset_of!(VMFunctionImport, array_call),
             usize::from(offsets.vmfunction_import_array_call())
         );
         assert_eq!(
+            offset_of!(VMFunctionImport, wasm_call),
+            usize::from(offsets.vmfunction_import_wasm_call())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, type_index),
+            usize::from(offsets.vmfunction_import_type_index())
+        );
+        assert_eq!(
             offset_of!(VMFunctionImport, vmctx),
             usize::from(offsets.vmfunction_import_vmctx())
+        );
+    }
+
+    #[test]
+    fn vmfunction_import_and_vmfunc_ref_have_same_layout() {
+        assert_eq!(size_of::<VMFunctionImport>(), size_of::<VMFuncRef>());
+        assert_eq!(
+            offset_of!(VMFunctionImport, array_call),
+            offset_of!(VMFuncRef, array_call),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, wasm_call),
+            offset_of!(VMFuncRef, wasm_call),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, type_index),
+            offset_of!(VMFuncRef, type_index),
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, vmctx),
+            offset_of!(VMFuncRef, vmctx),
         );
     }
 }
@@ -570,17 +621,17 @@ impl VMGlobalDefinition {
                 WasmValType::Ref(r) => match r.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let r = VMGcRef::from_raw_u32(raw.get_externref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                     WasmHeapTopType::Any => {
                         let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                     WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
                     WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
                     WasmHeapTopType::Exn => {
                         let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                        global.init_gc_ref(store, r.as_ref())
+                        global.init_gc_ref(store, r.as_ref())?
                     }
                 },
             }
@@ -623,7 +674,7 @@ impl VMGlobalDefinition {
                         }
                     }),
                     WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                    WasmHeapTopType::Cont => bail_bug!("unimplemented"), // FIXME: #10248 stack switching support.
                 },
             })
         }
@@ -745,8 +796,20 @@ impl VMGlobalDefinition {
         ret
     }
 
+    /// Return a reference to the global value as a borrowed GC reference.
+    pub unsafe fn as_gc_ref_mut(&mut self) -> Option<&mut VMGcRef> {
+        let raw_ptr = self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>();
+        let ret = unsafe { (*raw_ptr).as_mut() };
+        assert!(cfg!(feature = "gc") || ret.is_none());
+        ret
+    }
+
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn init_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe {
             &mut *(self
                 .storage
@@ -759,7 +822,11 @@ impl VMGlobalDefinition {
     }
 
     /// Write a GC reference into this global value.
-    pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn write_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
         store.write_gc_ref(dest, gc_ref)
     }
@@ -968,6 +1035,16 @@ impl VMFuncRef {
             )
         }
     }
+
+    pub(crate) fn as_vm_function_import(&self) -> Option<&VMFunctionImport> {
+        if self.wasm_call.is_some() {
+            // Safety: `VMFuncRef` and `VMFunctionImport` have the same layout
+            // and `wasm_call` is non-null.
+            Some(unsafe { NonNull::from(self).cast::<VMFunctionImport>().as_ref() })
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1143,7 +1220,7 @@ pub struct VMStoreContext {
     pub stack_limit: UnsafeCell<usize>,
 
     /// The `VMMemoryDefinition` for this store's GC heap.
-    pub gc_heap: VMMemoryDefinition,
+    pub gc_heap: UnsafeCell<VMMemoryDefinition>,
 
     /// The value of the frame pointer register in the trampoline used
     /// to call from Wasm to the host.
@@ -1223,6 +1300,15 @@ pub struct VMStoreContext {
     /// situation while this field is read it'll never classify a fault as an
     /// guard page fault.
     pub async_guard_range: Range<*mut u8>,
+
+    /// The `context.{get,set}` values for the current thread in the component
+    /// model. This is only used for `component-model-async` and slot[1] is only
+    /// used for `component-model-threading`. Despite the conditional use nature
+    /// this is unconditionally present as it avoids the need to make logic in
+    /// `VMOffsets` conditional.
+    ///
+    /// This is saved/restored when threads are swapped in the component model.
+    pub component_context: [u32; NUM_COMPONENT_CONTEXT_SLOTS],
 }
 
 impl VMStoreContext {
@@ -1295,10 +1381,10 @@ impl Default for VMStoreContext {
             epoch_deadline: UnsafeCell::new(0),
             execution_version: 0,
             stack_limit: UnsafeCell::new(usize::max_value()),
-            gc_heap: VMMemoryDefinition {
+            gc_heap: UnsafeCell::new(VMMemoryDefinition {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
-            },
+            }),
             last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
@@ -1307,6 +1393,7 @@ impl Default for VMStoreContext {
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
             async_guard_range: ptr::null_mut()..ptr::null_mut(),
             store_data: VmPtr::dangling(),
+            component_context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
         }
     }
 }
@@ -1376,6 +1463,20 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, store_data),
             usize::from(offsets.ptr.vmstore_context_store_data())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, component_context),
+            usize::from(offsets.ptr.vmstore_context_component_context_slot(0))
+        );
+
+        // Make sure that the calculation for the size of a slot is also
+        // accurate.
+        let slot_width = offsets.ptr.vmstore_context_component_context_slot(1)
+            - offsets.ptr.vmstore_context_component_context_slot(0);
+        let default = VMStoreContext::default();
+        assert_eq!(
+            size_of_val(&default.component_context[0]),
+            usize::from(slot_width)
         );
     }
 }
@@ -1666,6 +1767,18 @@ impl ValRaw {
         ValRaw { exnref: r.to_le() }
     }
 
+    #[inline]
+    pub(crate) fn vmgcref(r: Option<VMGcRef>) -> ValRaw {
+        let raw = r.map_or(0, |r| r.as_raw_u32());
+
+        // NB: All `VMGcRef`-based `ValRaw`s are the same.
+        debug_assert_eq!(raw, ValRaw::anyref(raw).get_exnref());
+        debug_assert_eq!(raw, ValRaw::exnref(raw).get_externref());
+        debug_assert_eq!(raw, ValRaw::externref(raw).get_anyref());
+
+        ValRaw::anyref(raw)
+    }
+
     /// Gets the WebAssembly `i32` value
     #[inline]
     pub fn get_i32(&self) -> i32 {
@@ -1737,6 +1850,13 @@ impl ValRaw {
         let exnref = u32::from_le(unsafe { self.exnref });
         assert!(cfg!(feature = "gc") || exnref == 0);
         exnref
+    }
+
+    /// Get the inner `VMGcRef`.
+    pub(crate) fn get_vmgcref(&self) -> Option<crate::vm::VMGcRef> {
+        debug_assert_eq!(self.get_anyref(), self.get_exnref());
+        debug_assert_eq!(self.get_anyref(), self.get_externref());
+        VMGcRef::from_raw_u32(self.get_anyref())
     }
 }
 

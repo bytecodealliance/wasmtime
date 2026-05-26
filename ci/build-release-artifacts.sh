@@ -20,7 +20,7 @@ wrapper=""
 # have precise glibc requirements for Linux platforms for example.
 if [ "$DOCKER_IMAGE" != "" ]; then
   if [ -f "$DOCKER_IMAGE" ]; then
-    docker build --tag build-image --file $DOCKER_IMAGE ci/docker
+    docker buildx build -o type=docker --tag build-image --file $DOCKER_IMAGE ci/docker
     DOCKER_IMAGE=build-image
   fi
 
@@ -59,7 +59,7 @@ if [[ "$build" = *-min ]]; then
 else
   # For release builds the CLI is built a bit more feature-ful than the Cargo
   # defaults to provide artifacts that can do as much as possible.
-  bin_flags="--features all-arch,component-model"
+  bin_flags="--features all-arch,component-model,gdbstub"
 fi
 
 if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then

@@ -1,4 +1,3 @@
-use crate::component::RuntimeInstance;
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
@@ -90,6 +89,10 @@ impl Func {
     ///
     /// If the function does not actually take `Params` as its parameters or
     /// return `Return` then an error will be returned.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -223,6 +226,10 @@ impl Func {
     /// See [`TypedFunc::call`] for more information in addition to
     /// [`wasmtime::Func::call`](crate::Func::call).
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this function.
@@ -239,6 +246,12 @@ impl Func {
     }
 
     /// Exactly like [`Self::call`] except for use on async stores.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -305,9 +318,6 @@ impl Func {
     /// made using this method may run concurrently with other calls to the same
     /// instance.  In addition, the runtime will call the `post-return` function
     /// (if any) automatically when the guest task completes.
-    ///
-    /// This returns a [`TaskExit`] representing the completion of the guest
-    /// task and any transitive subtasks it might create.
     ///
     /// # Progress
     ///
@@ -396,7 +406,7 @@ impl Func {
         accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<TaskExit> {
+    ) -> Result<()> {
         self.call_concurrent_dynamic(accessor, params, results)
             .await
     }
@@ -408,19 +418,19 @@ impl Func {
         accessor: impl AsAccessor<Data: Send>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<TaskExit> {
+    ) -> Result<()> {
         let result = accessor.as_accessor().with(|mut store| {
             self.check_params_results(store.as_context_mut(), params, results)?;
             let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
             concurrent::queue_call(store.as_context_mut(), prepared)
         })?;
 
-        let (run_results, rx) = result.await?;
+        let run_results = result.await?;
         assert_eq!(run_results.len(), results.len());
         for (result, slot) in run_results.into_iter().zip(results) {
             *slot = result;
         }
-        Ok(TaskExit(rx))
+        Ok(())
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -594,12 +604,9 @@ impl Func {
     {
         let export = self.lifted_core_func(store.0);
         let (_options, _flags, _ty, raw_options) = self.abi_info(store.0);
-        let instance = RuntimeInstance {
-            instance: self.instance.id().instance(),
-            index: raw_options.instance,
-        };
+        let instance = self.instance.runtime_instance(raw_options.instance);
 
-        if !store.0.may_enter(instance) {
+        if !store.0.may_enter(instance)? {
             bail!(crate::Trap::CannotEnterComponent);
         }
 
@@ -651,6 +658,13 @@ impl Func {
                 .unwrap(),
             )?;
         }
+
+        // Validate that the task, after returning, has no more active borrows
+        // as they're required to have been dropped by this point.
+        store
+            .0
+            .component_resource_tables(Some(self.instance))
+            .validate_scope_exit()?;
 
         // SAFETY: We're relying on the correctness of the structure of
         // `LowerReturn` and the type-checking performed to acquire the
@@ -709,12 +723,7 @@ impl Func {
 
         unsafe {
             call_post_return(&mut store, post_return, arg, flags)?;
-
-            store
-                .0
-                .component_resource_tables(Some(self.instance))
-                .validate_scope_exit()?;
-            store.0.exit_guest_sync_call(false)?;
+            store.0.exit_guest_sync_call()?;
         }
         Ok(())
     }
@@ -772,15 +781,15 @@ impl Func {
         };
         if results_ty.abi.flat_count(max_flat).is_some() {
             let mut flat = src.iter();
-            Ok(Box::new(
+            Ok(try_new::<Box<_>>(
                 results_ty
                     .types
                     .iter()
                     .map(move |ty| Val::lift(cx, *ty, &mut flat)),
-            ))
+            )?)
         } else {
             let iter = Self::load_results(cx, results_ty, &mut src.iter())?;
-            Ok(Box::new(iter))
+            Ok(try_new::<Box<_>>(iter)?)
         }
     }
 
@@ -854,38 +863,6 @@ impl Func {
         let mut cx = LiftContext::new(store, options, self.instance);
         let ty = InterfaceType::Tuple(cx.types[ty].results);
         lift(&mut cx, ty)
-    }
-}
-
-/// Represents the completion of a task created using
-/// `[Typed]Func::call_concurrent`.
-///
-/// In general, a guest task may continue running after returning a value.
-/// Moreover, any given guest task may create its own subtasks before or after
-/// returning and may exit before some or all of those subtasks have finished
-/// running.  In that case, the still-running subtasks will be "reparented" to
-/// the nearest surviving caller, which may be the original host call.  The
-/// future returned by `TaskExit::block` will resolve once all transitive
-/// subtasks created directly or indirectly by the original call to
-/// `Instance::call_concurrent` have exited.
-#[cfg(feature = "component-model-async")]
-pub struct TaskExit(futures::channel::oneshot::Receiver<()>);
-
-#[cfg(feature = "component-model-async")]
-impl TaskExit {
-    /// Returns a future which will resolve once all transitive subtasks created
-    /// directly or indirectly by the original call to
-    /// `Instance::call_concurrent` have exited.
-    pub async fn block(self, accessor: impl AsAccessor<Data: Send>) {
-        // The current implementation makes no use of `accessor`, but future
-        // implementations might (e.g. by using a more efficient mechanism than
-        // a oneshot channel).
-        _ = accessor;
-
-        // We don't care whether the sender sent us a value or was dropped
-        // first; either one counts as a notification, so we ignore the result
-        // once the future resolves:
-        _ = self.0.await;
     }
 }
 

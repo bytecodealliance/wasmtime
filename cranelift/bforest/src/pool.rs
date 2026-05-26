@@ -7,6 +7,7 @@ use crate::entity::PrimaryMap;
 #[cfg(test)]
 use core::fmt;
 use core::ops::{Index, IndexMut};
+use wasmtime_core::error::OutOfMemory;
 
 /// A pool of nodes, including a free list.
 pub(super) struct NodePool<F: Forest> {
@@ -30,7 +31,7 @@ impl<F: Forest> NodePool<F> {
     }
 
     /// Allocate a new node containing `data`.
-    pub fn alloc_node(&mut self, data: NodeData<F>) -> Node {
+    pub fn alloc_node(&mut self, data: NodeData<F>) -> Result<Node, OutOfMemory> {
         debug_assert!(!data.is_free(), "can't allocate free node");
         match self.freelist {
             Some(node) => {
@@ -40,11 +41,12 @@ impl<F: Forest> NodePool<F> {
                     _ => panic!("Invalid {} on free list", node),
                 }
                 self.nodes[node] = data;
-                node
+                Ok(node)
             }
             None => {
                 // The free list is empty. Allocate a new node.
-                self.nodes.push(data)
+                self.nodes.try_reserve(1)?;
+                Ok(self.nodes.push(data))
             }
         }
     }

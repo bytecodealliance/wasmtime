@@ -28,7 +28,6 @@
 use crate::stackswitch::*;
 use crate::{Result, RunResult, RuntimeFiberStack};
 use alloc::boxed::Box;
-use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use core::ops::Range;
 use wasmtime_environ::prelude::*;
@@ -42,7 +41,7 @@ pub struct FiberStack {
     len: usize,
     /// Backing storage, if owned. Allocated once at startup and then
     /// not reallocated afterward.
-    storage: Vec<u8>,
+    storage: TryVec<u8>,
 }
 
 struct BasePtr(*mut u8);
@@ -66,10 +65,10 @@ impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
-        let mut storage = Vec::new();
-        storage.reserve_exact(size);
+        let mut storage = TryVec::new();
+        storage.reserve_exact(size)?;
         if zeroed {
-            storage.resize(size, 0);
+            storage.resize(size, 0)?;
         }
         let (base, len) = align_ptr(storage.as_mut_ptr(), size, STACK_ALIGN);
         Ok(FiberStack {
@@ -81,7 +80,7 @@ impl FiberStack {
 
     pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         Ok(FiberStack {
-            storage: vec![],
+            storage: TryVec::default(),
             base: BasePtr(unsafe { base.offset(isize::try_from(guard_size).unwrap()) }),
             len,
         })
@@ -115,14 +114,16 @@ pub struct Suspend {
     top_of_stack: *mut u8,
 }
 
-extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8)
+extern "C" fn fiber_start<F, A, B, C>(arg0: *mut u8, top_of_stack: *mut u8) -> *mut u8
 where
     F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
     unsafe {
         let inner = Suspend { top_of_stack };
         let initial = inner.take_resume::<A, B, C>();
-        super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()))
+        let inner =
+            super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()));
+        inner.top_of_stack
     }
 }
 
@@ -137,7 +138,7 @@ impl Fiber {
             bail!("fibers unsupported on this host architecture");
         }
         unsafe {
-            let data = Box::into_raw(Box::new(func)).cast();
+            let data = Box::into_raw(try_new::<Box<_>>(func)?).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
         }
 
@@ -176,9 +177,10 @@ impl Suspend {
         }
     }
 
-    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
-        self.switch(result);
-        unreachable!();
+    pub(crate) fn start_exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        unsafe {
+            (*self.result_location::<A, B, C>()).set(result);
+        }
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {

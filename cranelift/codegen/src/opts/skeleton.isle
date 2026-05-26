@@ -18,6 +18,20 @@
 (rule (simplify_skeleton (uadd_overflow_trap a @ (uextend ty _) b @ (uextend ty _) _))
       (iadd ty a b))
 
+;; Conditional branches with known-true condition.
+(rule (simplify_skeleton (brif (iconst_u _ (u64_when_non_zero)) then_dest _))
+      (jump then_dest))
+
+;; Conditional branches with known-false condition.
+(rule (simplify_skeleton (brif (iconst_u _ 0) _ else_dest))
+      (jump else_dest))
+
+;; Branch table with known index: resolve the destination from the
+;; jump table data and replace with an unconditional jump.
+(rule (simplify_skeleton (br_table (iconst_u _ idx) jt))
+      (if-let dest (resolve_jump_table_entry jt idx))
+      (jump dest))
+
 ;; TODO: We can't simplify into unconditional traps yet. See the comment in
 ;; `simplify_skeleton_inst` for more details.
 ;;

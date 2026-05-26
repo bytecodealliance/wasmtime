@@ -1,12 +1,7 @@
 //! Simple string interning.
 
-use crate::{
-    collections::{HashMap, String, Vec},
-    error::OutOfMemory,
-    prelude::*,
-};
+use crate::{error::OutOfMemory, prelude::*};
 use core::{fmt, mem, num::NonZeroU32};
-use wasmtime_core::alloc::TryClone;
 
 /// An interned string associated with a particular string in a `StringPool`.
 ///
@@ -33,11 +28,11 @@ pub struct Atom {
 pub struct StringPool {
     /// A map from each string in this pool (as an unsafe borrow from
     /// `self.strings`) to its `Atom`.
-    map: mem::ManuallyDrop<HashMap<&'static str, Atom>>,
+    map: mem::ManuallyDrop<TryHashMap<&'static str, Atom>>,
 
     /// Strings in this pool. These must never be mutated or reallocated once
     /// inserted.
-    strings: mem::ManuallyDrop<Vec<Box<str>>>,
+    strings: mem::ManuallyDrop<TryVec<Box<str>>>,
 }
 
 impl Drop for StringPool {
@@ -78,10 +73,20 @@ impl fmt::Debug for StringPool {
 
 impl TryClone for StringPool {
     fn try_clone(&self) -> Result<Self, OutOfMemory> {
-        Ok(StringPool {
-            map: self.map.try_clone()?,
-            strings: self.strings.try_clone()?,
-        })
+        let mut new_pool = StringPool::new();
+        // Re-intern strings in index order so that each Atom value is
+        // identical in the clone — callers that hold Atoms from the original
+        // can use them interchangeably with the clone.
+        //
+        // Directly cloning `self.map` would copy &'static str keys that point
+        // into the *original* pool's `strings` allocation. Those pointers
+        // become dangling once the original is dropped, leading to UB on any
+        // subsequent lookup. Re-interning ensures the cloned map's keys point
+        // into the clone's own `strings`.
+        for s in self.strings.iter() {
+            new_pool.insert(s)?;
+        }
+        Ok(new_pool)
     }
 }
 
@@ -149,7 +154,7 @@ impl<'de> serde::de::Deserialize<'de> for StringPool {
                         .map_err(|oom| A::Error::custom(oom))?;
                 }
 
-                while let Some(s) = seq.next_element::<String>()? {
+                while let Some(s) = seq.next_element::<TryString>()? {
                     debug_assert_eq!(s.len(), s.capacity());
                     let s = s.into_boxed_str().map_err(|oom| A::Error::custom(oom))?;
                     if !pool.map.contains_key(&*s) {
@@ -180,7 +185,7 @@ impl StringPool {
         self.map.reserve(1)?;
         self.strings.reserve(1)?;
 
-        let mut owned = String::new();
+        let mut owned = TryString::new();
         owned.reserve_exact(s.len())?;
         owned.push_str(s).expect("reserved capacity");
         let owned = owned
@@ -339,7 +344,7 @@ mod tests {
         let n = if cfg!(miri) { 100 } else { 10_000 };
 
         for _ in 0..2 {
-            let atoms: Vec<_> = (0..n).map(|i| pool.insert(&i.to_string())).try_collect()?;
+            let atoms: TryVec<_> = (0..n).map(|i| pool.insert(&i.to_string())).try_collect()?;
 
             for atom in atoms {
                 assert!(pool.contains(atom));

@@ -36,7 +36,7 @@ use crate::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{MemFlags, RelSourceLoc, SourceLoc},
+    ir::{MemFlagsData, RelSourceLoc, SourceLoc},
     isa::{
         unwind::UnwindInst,
         x64::{AtomicRmwSeqOp, args::CC, settings as x64_settings},
@@ -484,6 +484,31 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn add_uextend(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        from_size: OperandSize,
+        size: OperandSize,
+    ) -> Result<()> {
+        assert!(size == OperandSize::S64);
+        assert!(from_size == OperandSize::S32 || from_size == OperandSize::S64);
+
+        Self::ensure_two_argument_form(&dst.to_reg(), &lhs)?;
+        if from_size == OperandSize::S32 && size == OperandSize::S64 {
+            self.extend(
+                writable!(rhs),
+                rhs,
+                ExtendKind::Unsigned(Extend::I64Extend32),
+            )?;
+        }
+
+        self.asm.add_rr(rhs, dst, size);
+
+        Ok(())
+    }
+
     fn checked_uadd(
         &mut self,
         dst: WritableReg,
@@ -684,6 +709,70 @@ impl Masm for MacroAssembler {
     fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         self.asm.sqrt(src, dst, size);
         Ok(())
+    }
+
+    // NOTE: if a branchless version is needed, a single-lane variant of
+    // `maybe_canonicalize_v128_nan` could be used when AVX is available.
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        let done_label = self.asm.buffer_mut().get_label();
+
+        self.asm.ucomis(reg.to_reg(), reg.to_reg(), size);
+        self.asm.jmp_if(CC::NP, done_label);
+
+        let canonical_nan = match size {
+            OperandSize::S32 => crate::masm::CANONICAL_NAN_F32,
+            OperandSize::S64 => crate::masm::CANONICAL_NAN_F64,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+        self.asm.load_fp_const(reg, canonical_nan, size);
+
+        self.asm
+            .buffer_mut()
+            .bind_label(done_label, &mut Default::default());
+        Ok(())
+    }
+
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        reg: WritableReg,
+        lane_size: OperandSize,
+    ) -> Result<()> {
+        if !self.shared_flags.enable_nan_canonicalization() {
+            return Ok(());
+        }
+
+        self.ensure_has_avx()?;
+
+        self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+            // scratch = NaN mask (all-1s for NaN lanes)
+            masm.asm.xmm_vcmpp_rrr(
+                scratch.writable(),
+                reg.to_reg(),
+                reg.to_reg(),
+                lane_size,
+                VcmpKind::Unord,
+            );
+            // reg = ~mask & original (zero out NaN lanes, keep non-NaN)
+            masm.asm
+                .xmm_vandnp_rrr(scratch.inner(), reg.to_reg(), reg, lane_size);
+            // scratch = mask & splatted canonical NaN = canonical NaN in NaN lanes only
+            let canon_nan = match lane_size {
+                OperandSize::S32 => &crate::masm::CANONICAL_NAN_F32X4[..],
+                OperandSize::S64 => &crate::masm::CANONICAL_NAN_F64X2[..],
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            };
+            let addr = masm.asm.add_constant(canon_nan);
+            masm.asm
+                .xmm_vandp_rrm(scratch.inner(), &addr, scratch.writable(), lane_size);
+            // reg = non-NaN values | canonical NaN for NaN lanes
+            masm.asm
+                .xmm_vorp_rrr(scratch.inner(), reg.to_reg(), reg, lane_size);
+            Ok(())
+        })
     }
 
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
@@ -1425,8 +1514,13 @@ impl Masm for MacroAssembler {
                 RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
-                    self.asm
-                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S32, MemFlags::trusted());
+                    self.asm.xmm_vpshuf_mr(
+                        &src,
+                        dst,
+                        mask,
+                        OperandSize::S32,
+                        MemFlagsData::trusted(),
+                    );
                 }
             }
         } else {
@@ -1436,8 +1530,12 @@ impl Masm for MacroAssembler {
                 RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
-                    self.asm
-                        .xmm_vpbroadcast_mr(&src, dst, size.lane_size(), MemFlags::trusted());
+                    self.asm.xmm_vpbroadcast_mr(
+                        &src,
+                        dst,
+                        size.lane_size(),
+                        MemFlagsData::trusted(),
+                    );
                 }
             }
         }
@@ -1501,7 +1599,7 @@ impl Masm for MacroAssembler {
         addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         let res = match op {
@@ -1687,28 +1785,25 @@ impl Masm for MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         // `cmpxchg` expects `expected` to be in the `*a*` register.
         // reserve rax for the expected argument.
-        let rax = context.reg(regs::rax(), self)?;
 
-        let replacement = context.pop_to_reg(self, None)?;
+        let replacement =
+            context.without::<Result<TypedReg>, _, _>(&[regs::rax()], self, |cx, masm| {
+                cx.pop_to_reg(masm, None)
+            })??;
 
-        // mark `rax` as allocatable again.
-        context.free_reg(rax);
         let expected = context.pop_to_reg(self, Some(regs::rax()))?;
 
         self.asm
             .cmpxchg(addr, replacement.reg, writable!(expected.reg), size, flags);
 
         if let Some(extend) = extend {
-            // We don't need to zero-extend from 32 to 64bits.
-            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm
-                    .movzx_rr(expected.reg, writable!(expected.reg), extend);
-            }
+            self.asm
+                .movzx_rr(expected.reg, writable!(expected.reg), extend);
         }
 
         context.stack.push(expected.into());
@@ -2476,7 +2571,7 @@ impl Masm for MacroAssembler {
                             shift: 0,
                         },
                         tmp_xmm.writable(),
-                        MemFlags::trusted(),
+                        MemFlagsData::trusted(),
                     );
                 });
 
@@ -2505,7 +2600,7 @@ impl Masm for MacroAssembler {
                 let cst = this.asm.add_constant(&SIGN_MASK.to_le_bytes());
 
                 this.asm
-                    .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlags::trusted());
+                    .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlagsData::trusted());
                 this.asm.xmm_vpsrl_rrr(
                     tmp_xmm2,
                     tmp_xmm.inner(),
@@ -2998,7 +3093,7 @@ impl Masm for MacroAssembler {
                         &mask,
                         scratch.writable(),
                         OperandSize::S128,
-                        MemFlags::trusted(),
+                        MemFlagsData::trusted(),
                     );
                     masm.asm.xmm_vpmaddubsw_rrr(scratch.inner(), src, dst);
                 });
@@ -3106,7 +3201,7 @@ impl Masm for MacroAssembler {
                 0x0, 0x1, 0x1, 0x2, 0x1, 0x2, 0x2, 0x3, 0x1, 0x2, 0x2, 0x3, 0x2, 0x3, 0x3, 0x4,
             ]);
             masm.asm
-                .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlags::trusted());
+                .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlagsData::trusted());
             // Use the upper 4 bits as an index into the lookup table.
             masm.asm.xmm_vpshufb_rrr(reg, reg2.to_reg(), reg.to_reg());
             // Use the lower 4 bits as an index into the lookup table.
@@ -3272,7 +3367,7 @@ impl MacroAssembler {
         src: Address,
         dst: WritableReg,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) -> Result<()> {
         if dst.to_reg().is_int() {
             let ext = size.extend_to::<Zero>(OperandSize::S64);
@@ -3290,7 +3385,7 @@ impl MacroAssembler {
         src: RegImm,
         dst: Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) -> Result<()> {
         let _ = match src {
             RegImm::Imm(imm) => match imm {
@@ -3315,7 +3410,7 @@ impl MacroAssembler {
                             &addr,
                             float_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
@@ -3331,7 +3426,7 @@ impl MacroAssembler {
                             &addr,
                             float_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
@@ -3346,7 +3441,7 @@ impl MacroAssembler {
                             &addr,
                             vector_scratch.writable(),
                             size,
-                            MemFlags::trusted(),
+                            MemFlagsData::trusted(),
                         );
                         masm.asm
                             .xmm_mov_rm(vector_scratch.inner(), &dst, size, flags);

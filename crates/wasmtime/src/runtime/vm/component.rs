@@ -29,6 +29,7 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::*;
 use wasmtime_environ::error::OutOfMemory;
+use wasmtime_environ::prelude::TryPrimaryMap;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(
@@ -129,15 +130,15 @@ pub struct ComponentInstance {
 
     /// Contains state specific to each (sub-)component instance within this
     /// top-level instance.
-    instance_states: PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+    instance_states: TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
-    instances: PrimaryMap<RuntimeInstanceIndex, InstanceId>,
+    instances: TryPrimaryMap<RuntimeInstanceIndex, InstanceId>,
 
     /// Storage for the type information about resources within this component
     /// instance.
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
 
     /// Arguments that this instance used to be instantiated.
     ///
@@ -318,28 +319,30 @@ impl ComponentInstance {
     pub(crate) fn new(
         id: ComponentInstanceId,
         component: &Component,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
         imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) -> Result<OwnedComponentInstance, OutOfMemory> {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let num_instances = component.env_component().num_runtime_component_instances;
-        let mut instance_states = PrimaryMap::with_capacity(num_instances.try_into().unwrap());
+        let mut instance_states = TryPrimaryMap::with_capacity(num_instances.try_into().unwrap())?;
         for _ in 0..num_instances {
-            instance_states.push(InstanceState::default());
+            instance_states.push(InstanceState::default())?;
         }
+
+        let instances = TryPrimaryMap::with_capacity(
+            component
+                .env_component()
+                .num_runtime_instances
+                .try_into()
+                .unwrap(),
+        )?;
 
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
             instance_states,
-            instances: PrimaryMap::with_capacity(
-                component
-                    .env_component()
-                    .num_runtime_instances
-                    .try_into()
-                    .unwrap(),
-            ),
+            instances,
             component: component.clone(),
             resource_types,
             imports: imports.clone(),
@@ -823,14 +826,14 @@ impl ComponentInstance {
     }
 
     /// Returns a reference to the resource type information.
-    pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    pub fn resource_types(&self) -> &Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
     }
 
     /// Returns a mutable reference to the resource type information.
     pub fn resource_types_mut(
         self: Pin<&mut Self>,
-    ) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+    ) -> &mut Arc<TryPrimaryMap<ResourceIndex, ResourceType>> {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().resource_types }
@@ -860,7 +863,7 @@ impl ComponentInstance {
     pub fn instance_states(
         self: Pin<&mut Self>,
     ) -> (
-        &mut PrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
+        &mut TryPrimaryMap<RuntimeComponentInstanceIndex, InstanceState>,
         &ComponentTypes,
     ) {
         // safety: we've chosen the `pin` guarantee of `self` to not apply to
@@ -906,7 +909,10 @@ impl ComponentInstance {
 
     /// Pushes a new runtime instance that's been created into
     /// `self.instances`.
-    pub fn push_instance_id(self: Pin<&mut Self>, id: InstanceId) -> RuntimeInstanceIndex {
+    pub fn push_instance_id(
+        self: Pin<&mut Self>,
+        id: InstanceId,
+    ) -> Result<RuntimeInstanceIndex, OutOfMemory> {
         self.instances_mut().push(id)
     }
 
@@ -920,7 +926,7 @@ impl ComponentInstance {
         self.instances[idx]
     }
 
-    fn instances_mut(self: Pin<&mut Self>) -> &mut PrimaryMap<RuntimeInstanceIndex, InstanceId> {
+    fn instances_mut(self: Pin<&mut Self>) -> &mut TryPrimaryMap<RuntimeInstanceIndex, InstanceId> {
         // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().instances }

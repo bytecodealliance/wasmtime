@@ -2,12 +2,14 @@
 
 use clap::Parser;
 use serde::Deserialize;
+use std::num::NonZeroUsize;
 use std::{
     fmt, fs,
+    num::NonZeroU32,
     path::{Path, PathBuf},
     time::Duration,
 };
-use wasmtime::{Config, Result, bail, error::Context as _};
+use wasmtime::{Config, Result, WasmBacktraceDetails, bail, error::Context as _};
 
 pub mod opt;
 
@@ -66,6 +68,19 @@ wasmtime_option_group! {
 
         /// Size, in bytes, of guard pages for linear memories.
         pub memory_guard_size: Option<u64>,
+
+        /// Do not allow the GC heap to move in the host process's address
+        /// space.
+        pub gc_heap_may_move: Option<bool>,
+
+        /// Initial virtual memory allocation size for the GC heap.
+        pub gc_heap_reservation: Option<u64>,
+
+        /// Bytes to reserve at the end of the GC heap for growth into.
+        pub gc_heap_reservation_for_growth: Option<u64>,
+
+        /// Size, in bytes, of guard pages for the GC heap.
+        pub gc_heap_guard_size: Option<u64>,
 
         /// Indicates whether an unmapped region of memory is placed before all
         /// linear memories.
@@ -198,6 +213,10 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub pooling_pagemap_scan: Option<wasmtime::Enabled>,
+
+        /// XXX: For internal fuzzing and debugging use only!
+        #[doc(hidden)]
+        pub gc_zeal_alloc_counter: Option<NonZeroU32>,
     }
 
     enum Optimize {
@@ -216,12 +235,14 @@ wasmtime_option_group! {
         #[serde(default)]
         #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub compiler: Option<wasmtime::Strategy>,
-        /// Which garbage collector to use: `drc` or `null`.
+        /// Which garbage collector to use: `drc`, `null`, or `copying`.
         ///
         /// `drc` is the deferred reference-counting collector.
         ///
         /// `null` is the null garbage collector, which does not collect any
         /// garbage.
+        ///
+        /// `copying` is the copying garbage collector (not yet implemented).
         ///
         /// Note that not all builds of Wasmtime will have support for garbage
         /// collection included.
@@ -236,14 +257,21 @@ wasmtime_option_group! {
         pub cache_config: Option<String>,
         /// Whether or not to enable parallel compilation of modules.
         pub parallel_compilation: Option<bool>,
-        /// Whether to enable proof-carrying code (PCC)-based validation.
-        pub pcc: Option<bool>,
         /// Controls whether native unwind information is present in compiled
         /// object files.
         pub native_unwind_info: Option<bool>,
 
         /// Whether to perform function inlining during compilation.
-        pub inlining: Option<bool>,
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
+        pub inlining: Option<wasmtime::Inlining>,
+
+        /// Whether or not trap metadata is present for wasm internal assertions
+        /// in compiled code.
+        pub metadata_for_internal_asserts: Option<bool>,
+        /// Whether or not trap metadata is present for detection of gc
+        /// corruption in compiled code.
+        pub metadata_for_gc_heap_corruption: Option<bool>,
 
         #[prefixed = "cranelift"]
         #[serde(default)]
@@ -273,6 +301,24 @@ wasmtime_option_group! {
         pub log_to_files: Option<bool>,
         /// Enable coredump generation to this file after a WebAssembly trap.
         pub coredump: Option<String>,
+        /// Load the given debugger component and attach it to the
+        /// main module or component.
+        pub debugger: Option<PathBuf>,
+        /// Pass the given command-line arguments to the debugger
+        /// component. May be specified multiple times.
+        #[serde(default)]
+        pub arg: Vec<String>,
+        /// Allow the debugger component to inherit stdin.Off by
+        /// default.
+        pub inherit_stdin: Option<bool>,
+        /// Allow the debugger component to inherit stdout. Off by
+        /// default.
+        pub inherit_stdout: Option<bool>,
+        /// Allow the debugger component to inherit stderr. Off by
+        /// default.
+        pub inherit_stderr: Option<bool>,
+        /// Maximum number of frames to capture in backtraces.
+        pub max_backtrace: Option<usize>,
     }
 
     enum Debug {
@@ -380,7 +426,7 @@ wasmtime_option_group! {
         pub component_model_async: Option<bool>,
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚝 emoji in the component model specification.
-        pub component_model_async_builtins: Option<bool>,
+        pub component_model_more_async_builtins: Option<bool>,
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚟 emoji in the component model specification.
         pub component_model_async_stackful: Option<bool>,
@@ -393,6 +439,8 @@ wasmtime_option_group! {
         /// GC support in the component model: this corresponds to the 🛸 emoji
         /// in the component model specification.
         pub component_model_gc: Option<bool>,
+        /// Map support in the component model.
+        pub component_model_map: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the stack-switching proposal.
@@ -412,6 +460,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
+        /// Component model support for `(implements ...)`, corresponds to the
+        /// 🏷️ emoji in the upstream spec.
+        pub component_model_implements: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -489,6 +540,14 @@ wasmtime_option_group! {
         ///
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
+        /// Inherit stdin from the parent process. On by default.
+        pub inherit_stdin: Option<bool>,
+        /// Inherit stdout from the parent process. On by default.
+        pub inherit_stdout: Option<bool>,
+        /// Inherit stderr from the parent process. On by default.
+        pub inherit_stderr: Option<bool>,
+        /// Initial current working directory reported through `wasi:cli/environment`.
+        pub cwd: Option<String>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,
@@ -497,6 +556,18 @@ wasmtime_option_group! {
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
         /// Enable support for WASIp3 APIs.
         pub p3: Option<bool>,
+        /// Maximum resources the guest is allowed to create simultaneously.
+        pub max_resources: Option<usize>,
+        /// Fuel to use for all hostcalls to limit guest<->host data transfer.
+        pub hostcall_fuel: Option<usize>,
+        /// Maximum value, in bytes, for a wasi-random 0.2
+        /// `get{,-insecure}-random-bytes` `len` parameter. Calls with a value
+        /// exceeding this limit will trap.
+        pub max_random_size: Option<u64>,
+        /// Maximum value, in bytes, for the contents of a wasi-http 0.2
+        /// `fields` resource (aka `headers` and `trailers`). `fields` methods
+        /// which cause the contents to exceed this size limit will trap.
+        pub max_http_fields_size: Option<usize>,
     }
 
     enum Wasi {
@@ -577,7 +648,7 @@ pub struct CommonOptions {
     ///
     /// Generates a serialized trace of the Wasm module execution that captures all
     /// non-determinism observable by the module. This trace can subsequently be
-    /// re-executed in a determinstic, embedding-agnostic manner (see the `wasmtime replay` command).
+    /// re-executed in a deterministic, embedding-agnostic manner (see the `wasmtime replay` command).
     ///
     /// Note: Minimal configuration options for deterministic Wasm semantics will be
     /// enforced during recording by default (NaN canonicalization, deterministic relaxed SIMD).
@@ -622,7 +693,7 @@ pub struct CommonOptions {
 
     /// Use the specified TOML configuration file.
     /// This TOML configuration file can provide same configuration options as the
-    /// `--optimize`, `--codgen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
+    /// `--optimize`, `--codegen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
     ///
     /// Additional options specified on the command line will take precedent over options loaded from
     /// this TOML file.
@@ -781,11 +852,6 @@ impl CommonOptions {
             enable => config.cranelift_nan_canonicalization(enable),
             true => err,
         }
-        match_feature! {
-            ["cranelift" : self.codegen.pcc]
-            enable => config.cranelift_pcc(enable),
-            true => err,
-        }
 
         self.enable_wasm_features(&mut config)?;
 
@@ -862,8 +928,27 @@ impl CommonOptions {
         if let Some(enable) = self.opts.guard_before_linear_memory {
             config.guard_before_linear_memory(enable);
         }
+
+        if let Some(size) = self.opts.gc_heap_reservation {
+            config.gc_heap_reservation(size);
+        }
+        if let Some(enable) = self.opts.gc_heap_may_move {
+            config.gc_heap_may_move(enable);
+        }
+        if let Some(size) = self.opts.gc_heap_guard_size {
+            config.gc_heap_guard_size(size);
+        }
+        if let Some(size) = self.opts.gc_heap_reservation_for_growth {
+            config.gc_heap_reservation_for_growth(size);
+        }
         if let Some(enable) = self.opts.table_lazy_init {
             config.table_lazy_init(enable);
+        }
+
+        if let Some(n) = self.opts.gc_zeal_alloc_counter
+            && (cfg!(gc_zeal) || cfg!(fuzzing))
+        {
+            config.gc_zeal_alloc_counter(Some(n))?;
         }
 
         // If fuel has been configured, set the `consume fuel` flag on the config.
@@ -876,6 +961,16 @@ impl CommonOptions {
         }
         if let Some(enable) = self.debug.address_map {
             config.generate_address_map(enable);
+        }
+        if let Some(frames) = self.debug.max_backtrace {
+            match NonZeroUsize::new(frames) {
+                None => {
+                    config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
+                }
+                Some(amt) => {
+                    config.wasm_backtrace_max_frames(Some(amt));
+                }
+            }
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
@@ -891,6 +986,12 @@ impl CommonOptions {
         }
         if let Some(enable) = self.codegen.inlining {
             config.compiler_inlining(enable);
+        }
+        if let Some(enable) = self.codegen.metadata_for_internal_asserts {
+            config.metadata_for_internal_asserts(enable);
+        }
+        if let Some(enable) = self.codegen.metadata_for_gc_heap_corruption {
+            config.metadata_for_gc_heap_corruption(enable);
         }
 
         // async_stack_size enabled by either async or stack-switching, so
@@ -1121,11 +1222,13 @@ impl CommonOptions {
         handle_conditionally_compiled! {
             ("component-model", component_model, wasm_component_model)
             ("component-model-async", component_model_async, wasm_component_model_async)
-            ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
+            ("component-model-async", component_model_more_async_builtins, wasm_component_model_more_async_builtins)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("component-model-async", component_model_threading, wasm_component_model_threading)
             ("component-model", component_model_error_context, wasm_component_model_error_context)
+            ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
+            ("component-model", component_model_implements, wasm_component_model_implements)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
@@ -1258,6 +1361,7 @@ mod tests {
                 Some(wasmtime::Collector::DeferredReferenceCounting),
             ),
             ("\"null\"", Some(wasmtime::Collector::Null)),
+            ("\"copying\"", Some(wasmtime::Collector::Copying)),
             ("\"hello\"", None), // should fail
             ("5", None),         // should fail
             ("true", None),      // should fail

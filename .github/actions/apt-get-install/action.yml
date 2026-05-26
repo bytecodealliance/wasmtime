@@ -1,0 +1,40 @@
+name: "Run apt-get to install packages"
+description: "Helper to work around some common github actions issues"
+
+inputs:
+  packages:
+    description: "The packages to install with apt-get"
+    required: true
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # See https://github.com/actions/runner-images/issues/12949 and
+    # https://github.com/actions/runner-images/issues/7048 for some background,
+    # but the default mirrors can sometimes take up to 30+ minutes to install a
+    # package. Seems like the azure mirrors are heavily throttled occasionally.
+    # Ideally something like
+    # https://github.com/marketplace/actions/configure-fast-apt-mirror would be
+    # used to figure out the fastest mirror but in the interest of trying out
+    # something simple we instead just tweak some priorities.
+    #
+    # This is lifted from
+    # https://github.com/servo/servo/blob/main/.github/actions/apt-mirrors/action.yml
+    # which is in turn lifted from
+    # https://github.com/CrowdStrike/glide-core/pull/1113 apparently.
+    - name: Change Mirror Priorities
+      shell: bash
+      run: |
+        sudo sed -i '/archive.ubuntu.com\/ubuntu\/\tpriority/ s/priority:2/priority:0/' /etc/apt/apt-mirrors.txt
+        sudo sed -i '/azure.archive.ubuntu.com\/ubuntu\/\tpriority/ s/priority:0/priority:1/' /etc/apt/apt-mirrors.txt
+        sudo sed -i '/security.ubuntu.com\/ubuntu\/\tpriority/ s/priority:3/priority:2/' /etc/apt/apt-mirrors.txt
+        sudo cat /etc/apt/apt-mirrors.txt
+
+    - name: Update apt-get
+      shell: bash
+      run: sudo apt-get update
+
+    - name: Install packages
+      shell: bash
+      run: sudo apt-get install -y ${{ inputs.packages }}

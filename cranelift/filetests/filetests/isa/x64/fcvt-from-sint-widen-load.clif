@@ -1,0 +1,32 @@
+test compile precise-output
+target x86_64 sse41
+
+function %fcvt_from_sint_f64x2_widen_load(i64) -> f64x2 {
+block0(v0: i64):
+    v1 = load.i32x4 v0
+    v2 = swiden_low v1
+    v3 = fcvt_from_sint.f64x2 v2
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movdqu (%rdi), %xmm3
+;   cvtdq2pd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu (%rdi), %xmm3 ; trap: heap_oob
+;   cvtdq2pd %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

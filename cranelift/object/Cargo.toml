@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.130.0"
+version = "0.133.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -21,8 +21,15 @@ object = { workspace = true, features = ["write", "std"] }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
+gimli = { workspace = true, features = ["write"], optional = true }
+
+[features]
+default = ["unwind"]
+
+# Enables `.eh_frame` section emission via `ObjectBuilder::unwind_info`.
+unwind = ["dep:gimli", "cranelift-codegen/unwind"]
 
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["x86"] }
+cranelift-codegen = { workspace = true, features = ["x86", "arm64"] }

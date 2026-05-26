@@ -115,9 +115,9 @@
 //! time this may want to be revisited if too many adapter modules are being
 //! created.
 
-use crate::EntityType;
 use crate::component::translate::*;
 use crate::fact;
+use crate::{EntityType, Memory};
 use std::collections::HashSet;
 
 /// Metadata information about a fused adapter.
@@ -150,10 +150,8 @@ pub enum DataModel {
 
     /// Data is stored in a linear memory.
     LinearMemory {
-        /// An optional memory definition supplied.
-        memory: Option<dfg::CoreExport<MemoryIndex>>,
-        /// If `memory` is specified, whether it's a 64-bit memory.
-        memory64: bool,
+        /// An optional memory definition supplied, and its type.
+        memory: Option<(dfg::CoreExport<MemoryIndex>, Memory)>,
         /// An optional definition of `realloc` to used.
         realloc: Option<dfg::CoreDef>,
     },
@@ -416,12 +414,8 @@ impl PartitionAdapterModules {
             DataModel::Gc {} => {
                 // Nothing to do here yet.
             }
-            DataModel::LinearMemory {
-                memory,
-                memory64: _,
-                realloc,
-            } => {
-                if let Some(memory) = memory {
+            DataModel::LinearMemory { memory, realloc } => {
+                if let Some((memory, _ty)) = memory {
                     self.core_export(dfg, memory);
                 }
                 if let Some(def) = realloc {

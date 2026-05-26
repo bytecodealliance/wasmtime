@@ -13,7 +13,8 @@
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result,
 //! };
-//! use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
+//! use wasmtime_wasi_tls::{WasiTlsCtx, WasiTlsCtxBuilder, WasiTlsView, WasiTlsCtxView};
+//! use wasmtime_wasi_tls::p2::LinkOptions;
 //!
 //! struct Ctx {
 //!     table: ResourceTable,
@@ -27,6 +28,12 @@
 //!     }
 //! }
 //!
+//! impl WasiTlsView for Ctx {
+//!     fn tls(&mut self) -> WasiTlsCtxView<'_> {
+//!         WasiTlsCtxView { ctx: &mut self.wasi_tls_ctx, table: &mut self.table }
+//!     }
+//! }
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let ctx = Ctx {
@@ -37,8 +44,10 @@
 //!             .allow_ip_name_lookup(true)
 //!             .build(),
 //!         wasi_tls_ctx: WasiTlsCtxBuilder::new()
-//!             // Optionally, configure a different TLS provider:
-//!             // .provider(Box::new(wasmtime_wasi_tls_nativetls::NativeTlsProvider::default()))
+//!             // Optionally, configure a specific TLS provider:
+//!             // .provider(Box::new(wasmtime_wasi_tls::RustlsProvider::default()))
+//!             // .provider(Box::new(wasmtime_wasi_tls::NativeTlsProvider::default()))
+//!             // .provider(Box::new(wasmtime_wasi_tls::OpenSslProvider::default()))
 //!             .build(),
 //!     };
 //!
@@ -46,15 +55,13 @@
 //!
 //!     // Set up wasi-cli
 //!     let mut store = Store::new(&engine, ctx);
-//!     let mut linker = Linker::new(&engine);
+//!     let mut linker: Linker<Ctx> = Linker::new(&engine);
 //!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 //!
 //!     // Add wasi-tls types and turn on the feature in linker
 //!     let mut opts = LinkOptions::default();
 //!     opts.tls(true);
-//!     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-//!         WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
-//!     })?;
+//!     wasmtime_wasi_tls::p2::add_to_linker(&mut linker, &opts)?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
 //!     Ok(())
@@ -69,50 +76,28 @@
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
 use tokio::io::{AsyncRead, AsyncWrite};
+mod error;
+mod providers;
+
+/// WASIp2 (`wasi:tls@0.2.0-draft`) host implementation.
+#[cfg(feature = "p2")]
+pub mod p2;
+/// WASIp3 (`wasi:tls@0.3.0-draft`) host implementation.
+#[cfg(feature = "p3")]
+pub mod p3;
+
+pub use error::Error;
+pub use providers::*;
+
+#[cfg(any(feature = "p2", feature = "p3"))]
 use wasmtime::component::{HasData, ResourceTable};
 
-pub mod bindings;
-mod host;
-mod io;
-mod rustls;
-
-pub use bindings::types::LinkOptions;
-pub use host::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};
-pub use rustls::RustlsProvider;
-
-/// Capture the state necessary for use in the `wasi-tls` API implementation.
-pub struct WasiTls<'a> {
-    ctx: &'a WasiTlsCtx,
-    table: &'a mut ResourceTable,
-}
-
-impl<'a> WasiTls<'a> {
-    /// Create a new Wasi TLS context
-    pub fn new(ctx: &'a WasiTlsCtx, table: &'a mut ResourceTable) -> Self {
-        Self { ctx, table }
-    }
-}
-
-/// Add the `wasi-tls` world's types to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: Send + 'static>(
-    l: &mut wasmtime::component::Linker<T>,
-    opts: &mut LinkOptions,
-    f: fn(&mut T) -> WasiTls<'_>,
-) -> wasmtime::Result<()> {
-    bindings::types::add_to_linker::<_, HasWasiTls>(l, &opts, f)?;
-    Ok(())
-}
-
-struct HasWasiTls;
-impl HasData for HasWasiTls {
-    type Data<'a> = WasiTls<'a>;
-}
-
 /// Builder-style structure used to create a [`WasiTlsCtx`].
+#[cfg(any(feature = "p2", feature = "p3"))]
 pub struct WasiTlsCtxBuilder {
     provider: Box<dyn TlsProvider>,
 }
-
+#[cfg(any(feature = "p2", feature = "p3"))]
 impl WasiTlsCtxBuilder {
     /// Creates a builder for a new context with default parameters set.
     pub fn new() -> Self {
@@ -121,7 +106,10 @@ impl WasiTlsCtxBuilder {
 
     /// Configure the TLS provider to use for this context.
     ///
-    /// By default, this is set to the [`RustlsProvider`].
+    /// By default, this is set to the [`DefaultProvider`] which is picked at
+    /// compile time based on feature flags. If this crate is compiled with
+    /// multiple TLS providers, this method can be used to specify the provider
+    /// at runtime.
     pub fn provider(mut self, provider: Box<dyn TlsProvider>) -> Self {
         self.provider = provider;
         self
@@ -134,17 +122,44 @@ impl WasiTlsCtxBuilder {
         }
     }
 }
+#[cfg(any(feature = "p2", feature = "p3"))]
 impl Default for WasiTlsCtxBuilder {
     fn default() -> Self {
         Self {
-            provider: Box::new(RustlsProvider::default()),
+            provider: Box::new(DefaultProvider::default()),
         }
     }
 }
 
 /// Wasi TLS context needed for internal `wasi-tls` state.
+#[cfg(any(feature = "p2", feature = "p3"))]
 pub struct WasiTlsCtx {
     pub(crate) provider: Box<dyn TlsProvider>,
+}
+
+/// The type for which this crate implements the `wasi:tls` interfaces.
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub(crate) struct WasiTls;
+#[cfg(any(feature = "p2", feature = "p3"))]
+impl HasData for WasiTls {
+    type Data<'a> = WasiTlsCtxView<'a>;
+}
+
+/// View into [`WasiTlsCtx`] implementation and [`ResourceTable`].
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub struct WasiTlsCtxView<'a> {
+    /// Mutable reference to table used to manage resources.
+    pub table: &'a mut ResourceTable,
+
+    /// Mutable reference to the WASI TLS context.
+    pub ctx: &'a mut WasiTlsCtx,
+}
+
+/// A trait which provides internal WASI TLS state.
+#[cfg(any(feature = "p2", feature = "p3"))]
+pub trait WasiTlsView: Send {
+    /// Return a [`WasiTlsCtxView`] from mutable reference to self.
+    fn tls(&mut self) -> WasiTlsCtxView<'_>;
 }
 
 /// The data stream that carries the encrypted TLS data.
@@ -158,11 +173,8 @@ pub trait TlsStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 /// A TLS implementation.
 pub trait TlsProvider: Send + Sync + 'static {
     /// Set up a client TLS connection using the provided `server_name` and `transport`.
-    fn connect(
-        &self,
-        server_name: String,
-        transport: Box<dyn TlsTransport>,
-    ) -> BoxFuture<std::io::Result<Box<dyn TlsStream>>>;
+    fn connect(&self, server_name: String, transport: Box<dyn TlsTransport>) -> BoxFutureTlsStream;
 }
 
-pub(crate) type BoxFuture<T> = std::pin::Pin<Box<dyn Future<Output = T> + Send>>;
+pub(crate) type BoxFutureTlsStream =
+    std::pin::Pin<Box<dyn Future<Output = Result<Box<dyn TlsStream>, Error>> + Send>>;

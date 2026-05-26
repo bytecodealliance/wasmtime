@@ -159,7 +159,7 @@ impl NullHeap {
         let len = self.memory.as_ref().unwrap().byte_size();
         let len = u32::try_from(len).unwrap_or(u32::MAX);
         if end_of_object > len {
-            return Ok(Err(u64::try_from(layout.size()).unwrap()));
+            return Ok(Err(u64::try_from(layout.size())?));
         }
 
         // Update the bump pointer, write the header, and return the GC ref.
@@ -170,7 +170,7 @@ impl NullHeap {
 
         debug_assert_eq!(header.reserved_u26(), 0);
         header.set_reserved_u26(size);
-        *self.header_mut(&gc_ref) = header;
+        *self.header_mut(&gc_ref)? = header;
 
         Ok(Ok(gc_ref))
     }
@@ -243,12 +243,14 @@ unsafe impl GcHeap for NullHeap {
         _host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
-    ) {
+    ) -> Result<()> {
         *destination = source.map(|s| s.unchecked_copy());
+        Ok(())
     }
 
-    fn expose_gc_ref_to_wasm(&mut self, _gc_ref: VMGcRef) {
+    fn expose_gc_ref_to_wasm(&mut self, _gc_ref: VMGcRef) -> Result<()> {
         // Don't need to do anything special here.
+        Ok(())
     }
 
     fn alloc_externref(
@@ -259,26 +261,26 @@ unsafe impl GcHeap for NullHeap {
             Ok(r) => r,
             Err(bytes_needed) => return Ok(Err(bytes_needed)),
         };
-        self.index_mut::<VMNullExternRef>(gc_ref.as_typed_unchecked())
+        self.index_mut::<VMNullExternRef>(gc_ref.as_typed_unchecked())?
             .host_data = host_data;
         Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
-    fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId {
+    fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId> {
         let typed_ref = VMNullExternRef::typed_ref(self, externref);
-        self.index(typed_ref).host_data
+        Ok(self.index(typed_ref)?.host_data)
     }
 
-    fn object_size(&self, gc_ref: &VMGcRef) -> usize {
-        let size = self.header(gc_ref).reserved_u26();
-        usize::try_from(size).unwrap()
+    fn object_size(&self, gc_ref: &VMGcRef) -> Result<usize> {
+        let size = self.header(gc_ref)?.reserved_u26();
+        Ok(usize::try_from(size)?)
     }
 
-    fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader {
+    fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {
         self.index(gc_ref.as_typed_unchecked())
     }
 
-    fn header_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcHeader {
+    fn header_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcHeader> {
         self.index_mut(gc_ref.as_typed_unchecked())
     }
 
@@ -299,7 +301,9 @@ unsafe impl GcHeap for NullHeap {
         self.alloc(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())
     }
 
-    fn dealloc_uninit_struct_or_exn(&mut self, _struct_ref: VMGcRef) {}
+    fn dealloc_uninit_struct_or_exn(&mut self, _struct_ref: VMGcRef) -> Result<()> {
+        Ok(())
+    }
 
     fn alloc_uninit_array(
         &mut self,
@@ -307,24 +311,37 @@ unsafe impl GcHeap for NullHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
-        self.alloc(
+        let layout = layout
+            .layout(length)
+            .ok_or_else(|| format_err!("allocation size too large"))?;
+        let gc_ref = match self.alloc(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout.layout(length),
-        )
-        .map(|r| {
-            r.map(|r| {
-                self.index_mut::<VMNullArrayHeader>(r.as_typed_unchecked())
-                    .length = length;
-                r.into_arrayref_unchecked()
-            })
-        })
+            layout,
+        )? {
+            Ok(r) => r,
+            Err(bytes_needed) => return Ok(Err(bytes_needed)),
+        };
+        self.index_mut::<VMNullArrayHeader>(gc_ref.as_typed_unchecked())?
+            .length = length;
+        Ok(Ok(gc_ref.into_arrayref_unchecked()))
     }
 
-    fn dealloc_uninit_array(&mut self, _array_ref: VMArrayRef) {}
+    fn dealloc_uninit_array(&mut self, _array_ref: VMArrayRef) -> Result<()> {
+        Ok(())
+    }
 
-    fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
+    fn array_len(&self, arrayref: &VMArrayRef) -> Result<u32> {
         let arrayref = VMNullArrayHeader::typed_ref(self, arrayref);
-        self.index(arrayref).length
+        Ok(self.index(arrayref)?.length)
+    }
+
+    fn allocated_bytes(&self) -> usize {
+        // The null collector never frees, so everything from the start of
+        // the heap up to the bump pointer is allocated. Subtract 1 because
+        // the bump pointer starts at index 1 (index 0 is unused since
+        // `VMGcRef` uses `NonZeroU32`), not because any byte was allocated.
+        let next = unsafe { *self.next.get() };
+        usize::try_from(next.get()).unwrap() - 1
     }
 
     fn gc<'a>(
@@ -345,8 +362,8 @@ unsafe impl GcHeap for NullHeap {
 struct NullCollection {}
 
 impl<'a> GarbageCollection<'a> for NullCollection {
-    fn collect_increment(&mut self) -> GcProgress {
-        GcProgress::Complete
+    fn collect_increment(&mut self) -> Result<GcProgress> {
+        Ok(GcProgress::Complete)
     }
 }
 

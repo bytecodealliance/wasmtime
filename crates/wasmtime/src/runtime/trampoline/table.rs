@@ -32,7 +32,7 @@ pub async fn create_table(
     unsafe {
         let allocator =
             OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
-        let module = Arc::new(module);
+        let module = try_new::<Arc<_>>(module)?;
         store
             .allocate_instance(
                 limiter,

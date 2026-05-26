@@ -5,7 +5,7 @@ use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
 
-pub use crate::ir::{ExternalName, MemFlags, Type};
+pub use crate::ir::{ExternalName, MemFlagsData, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult, settings};
@@ -209,7 +209,7 @@ impl Inst {
     }
 
     /// Generic constructor for a load (zero-extending where appropriate).
-    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
+    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlagsData) -> Inst {
         if ty.is_vector() {
             Inst::VecLoad {
                 eew: VecElementWidth::from_type(ty),
@@ -230,7 +230,7 @@ impl Inst {
     }
 
     /// Generic constructor for a store.
-    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlagsData) -> Inst {
         if ty.is_vector() {
             Inst::VecStore {
                 eew: VecElementWidth::from_type(ty),
@@ -521,9 +521,9 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        Inst::TrapIf { rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
+        Inst::TrapIf { cmp, .. } => {
+            collector.reg_use(&mut cmp.rs1);
+            collector.reg_use(&mut cmp.rs2);
         }
         Inst::Unwind { .. } => {}
         Inst::DummyUse { reg } => {
@@ -857,6 +857,14 @@ impl MachInst for Inst {
     fn worst_case_size() -> CodeOffset {
         // Our worst case size is determined by the riscv64_worst_case_instruction_size test
         84
+    }
+
+    fn worst_case_island_growth() -> CodeOffset {
+        // Conservative upper bound on per-instruction additions to the
+        // buffer's pending-island state: several embedded constants, a
+        // deferred trap, and a handful of fixups whose worst-case veneers
+        // are 8 bytes apiece. Sized comfortably to cover real cases.
+        128
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -1381,15 +1389,10 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf {
-                rs1,
-                rs2,
-                cc,
-                trap_code,
-            } => {
-                let rs1 = format_reg(rs1);
-                let rs2 = format_reg(rs2);
-                format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
+            &MInst::TrapIf { cmp, trap_code } => {
+                let rs1 = format_reg(cmp.rs1);
+                let rs2 = format_reg(cmp.rs2);
+                format!("trap_if {trap_code}##({rs1} {cc} {rs2})", cc = cmp.kind)
             }
             &MInst::Jal { label } => {
                 format!("j {}", label.to_string())

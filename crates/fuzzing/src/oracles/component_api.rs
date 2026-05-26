@@ -31,9 +31,14 @@ const MAX_LIST_LENGTH: u32 = 10;
 const MAX_ITERS: usize = 1_000;
 
 /// Generate an arbitrary instance of the specified type.
-fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::Result<Val> {
+fn arbitrary_val(
+    ty: &component::Type,
+    fuel: &mut u32,
+    input: &mut Unstructured,
+) -> arbitrary::Result<Val> {
     use component::Type;
 
+    *fuel = fuel.saturating_sub(1);
     Ok(match ty {
         Type::Bool => Val::Bool(input.arbitrary()?),
         Type::S8 => Val::S8(input.arbitrary()?),
@@ -47,11 +52,22 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
         Type::Float32 => Val::Float32(input.arbitrary()?),
         Type::Float64 => Val::Float64(input.arbitrary()?),
         Type::Char => Val::Char(input.arbitrary()?),
-        Type::String => Val::String(input.arbitrary()?),
+        Type::String => {
+            let string = if *fuel == 0 {
+                String::new()
+            } else {
+                input.arbitrary()?
+            };
+            *fuel = fuel.saturating_sub(string.len() as u32);
+            Val::String(string)
+        }
         Type::List(list) => {
             let mut values = Vec::new();
             input.arbitrary_loop(Some(MIN_LIST_LENGTH), Some(MAX_LIST_LENGTH), |input| {
-                values.push(arbitrary_val(&list.ty(), input)?);
+                if *fuel == 0 {
+                    return Ok(ControlFlow::Break(()));
+                }
+                values.push(arbitrary_val(&list.ty(), fuel, input)?);
 
                 Ok(ControlFlow::Continue(()))
             })?;
@@ -61,20 +77,25 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
         Type::Record(record) => Val::Record(
             record
                 .fields()
-                .map(|field| Ok((field.name.to_string(), arbitrary_val(&field.ty, input)?)))
+                .map(|field| {
+                    Ok((
+                        field.name.to_string(),
+                        arbitrary_val(&field.ty, fuel, input)?,
+                    ))
+                })
                 .collect::<arbitrary::Result<_>>()?,
         ),
         Type::Tuple(tuple) => Val::Tuple(
             tuple
                 .types()
-                .map(|ty| arbitrary_val(&ty, input))
+                .map(|ty| arbitrary_val(&ty, fuel, input))
                 .collect::<arbitrary::Result<_>>()?,
         ),
         Type::Variant(variant) => {
             let cases = variant.cases().collect::<Vec<_>>();
             let case = input.choose(&cases)?;
             let payload = match &case.ty {
-                Some(ty) => Some(Box::new(arbitrary_val(ty, input)?)),
+                Some(ty) => Some(Box::new(arbitrary_val(ty, fuel, input)?)),
                 None => None,
             };
             Val::Variant(case.name.to_string(), payload)
@@ -88,7 +109,7 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
             let discriminant = input.int_in_range(0..=1)?;
             Val::Option(match discriminant {
                 0 => None,
-                1 => Some(Box::new(arbitrary_val(&option.ty(), input)?)),
+                1 => Some(Box::new(arbitrary_val(&option.ty(), fuel, input)?)),
                 _ => unreachable!(),
             })
         }
@@ -96,11 +117,11 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
             let discriminant = input.int_in_range(0..=1)?;
             Val::Result(match discriminant {
                 0 => Ok(match result.ok() {
-                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, fuel, input)?)),
                     None => None,
                 }),
                 1 => Err(match result.err() {
-                    Some(ty) => Some(Box::new(arbitrary_val(&ty, input)?)),
+                    Some(ty) => Some(Box::new(arbitrary_val(&ty, fuel, input)?)),
                     None => None,
                 }),
                 _ => unreachable!(),
@@ -118,6 +139,20 @@ fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrary::R
                 .collect::<arbitrary::Result<_>>()?,
         ),
 
+        Type::Map(map) => {
+            let mut pairs = Vec::new();
+            input.arbitrary_loop(Some(MIN_LIST_LENGTH), Some(MAX_LIST_LENGTH), |input| {
+                if *fuel == 0 {
+                    return Ok(ControlFlow::Break(()));
+                }
+                let key = arbitrary_val(&map.key(), fuel, input)?;
+                let value = arbitrary_val(&map.value(), fuel, input)?;
+                pairs.push((key, value));
+                Ok(ControlFlow::Continue(()))
+            })?;
+            Val::Map(pairs)
+        }
+
         // Resources, futures, streams, and error contexts aren't fuzzed at this time.
         Type::Own(_) | Type::Borrow(_) | Type::Future(_) | Type::Stream(_) | Type::ErrorContext => {
             unreachable!()
@@ -131,10 +166,12 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
     let mut config = input.arbitrary::<generators::Config>()?;
     config.enable_async(input)?;
     config.module_config.config.multi_value_enabled = true;
+    config.module_config.config.bulk_memory_enabled = true;
     config.module_config.config.reference_types_enabled = true;
     config.module_config.config.max_memories = 2;
     config.module_config.component_model_async = true;
     config.module_config.component_model_async_stackful = true;
+    config.module_config.component_model_map = true;
     if config.wasmtime.compiler_strategy == CompilerStrategy::Winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::CraneliftNative;
     }
@@ -173,6 +210,11 @@ fn store<T>(input: &mut Unstructured<'_>, val: T) -> arbitrary::Result<Store<T>>
         &mut config.wasmtime.memory_config.memory_reservation,
         10 << 20,
     );
+
+    // Re-enforce internal consistency after the adjustments above (e.g.
+    // memory_reservation may have been bumped without a corresponding bump
+    // to gc_heap_reservation).
+    config.wasmtime.make_internally_consistent();
 
     let engine = Engine::new(
         config
@@ -274,7 +316,7 @@ where
             log::trace!("passing in parameters {params:?}");
             let actual = if declarations.options.guest_caller_async {
                 store
-                    .run_concurrent(async |a| func.call_concurrent(a, params).await.unwrap().0)
+                    .run_concurrent(async |a| func.call_concurrent(a, params).await.unwrap())
                     .await
                     .unwrap()
             } else {
@@ -356,13 +398,14 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
 
         let mut iters = 0..MAX_ITERS;
         while iters.next().is_some() && input.arbitrary()? {
+            let mut fuel = 10_000;
             let params = ty
                 .params()
-                .map(|(_, ty)| arbitrary_val(&ty, input))
+                .map(|(_, ty)| arbitrary_val(&ty, &mut fuel, input))
                 .collect::<arbitrary::Result<Vec<_>>>()?;
             let results = ty
                 .results()
-                .map(|ty| arbitrary_val(&ty, input))
+                .map(|ty| arbitrary_val(&ty, &mut fuel, input))
                 .collect::<arbitrary::Result<Vec<_>>>()?;
 
             *store.data_mut() = (params.clone(), Some(results.clone()));

@@ -268,6 +268,30 @@ pub enum Type {
         /// The ISLE source position where this `enum` is defined.
         pos: Pos,
     },
+
+    /// A Rust struct.
+    ///
+    /// Pretty much the same as an enum with a single variant, but will emit a Rust `struct` at codegen time instead of
+    /// an enum.
+    Struct {
+        /// The name of this enum.
+        name: Sym,
+        /// This `enum`'s type id.
+        id: TypeId,
+        /// Is this `struct` defined in external Rust code?
+        ///
+        /// If so, ISLE will not emit a definition for it. If not, then it will
+        /// emit a Rust definition for it.
+        is_extern: bool,
+        /// Whether this type should *not* derive `Debug`.
+        ///
+        /// Incompatible with `is_extern`.
+        is_nodebug: bool,
+        /// The different variants for this struct.
+        fields: Fields,
+        /// The ISLE source position where this `enum` is defined.
+        pos: Pos,
+    },
 }
 
 impl Type {
@@ -275,7 +299,9 @@ impl Type {
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
             Self::Builtin(ty) => ty.name(),
-            Self::Primitive(_, name, _) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
+            Self::Primitive(_, name, _) | Self::Enum { name, .. } | Type::Struct { name, .. } => {
+                &tyenv.syms[name.index()]
+            }
         }
     }
 
@@ -283,7 +309,9 @@ impl Type {
     pub fn pos(&self) -> Option<Pos> {
         match self {
             Self::Builtin(..) => None,
-            Self::Primitive(_, _, pos) | Self::Enum { pos, .. } => Some(*pos),
+            Self::Primitive(_, _, pos) | Self::Enum { pos, .. } | Type::Struct { pos, .. } => {
+                Some(*pos)
+            }
         }
     }
 
@@ -315,14 +343,59 @@ pub struct Variant {
     pub id: VariantId,
 
     /// The data fields of this enum variant.
-    pub fields: Vec<Field>,
+    pub fields: Fields,
 }
 
-/// A field of a `Variant`.
+/// The fields of a struct or enum variant, formatted as a struct or tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Fields {
+    /// a struct or enum variant without fields
+    Unit,
+    /// Named fields
+    Struct(StructFields),
+    /// Unnamed fields like a tuple
+    Tuple(TupleFields),
+}
+
+impl Fields {
+    /// Vec of all field types
+    pub fn types(&self) -> Vec<TypeId> {
+        match self {
+            Fields::Unit => Vec::new(),
+            Fields::Struct(fields) => fields.fields.iter().map(|f| f.ty).collect(),
+            Fields::Tuple(fields) => fields.fields.iter().map(|f| f.ty).collect(),
+        }
+    }
+}
+
+/// A List of named fields of a struct.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructFields {
+    /// the fields
+    pub fields: Vec<StructField>,
+}
+
+/// One named field of a struct or enum variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Field {
+pub struct StructField {
     /// The name of this field.
     pub name: Sym,
+    /// This field's id.
+    pub id: FieldId,
+    /// The type of this field.
+    pub ty: TypeId,
+}
+
+/// A List of unnamed fields of a tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TupleFields {
+    /// the fields
+    pub fields: Vec<TupleField>,
+}
+
+/// One unnamed field of a tuple.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TupleField {
     /// This field's id.
     pub id: FieldId,
     /// The type of this field.
@@ -411,6 +484,8 @@ pub enum TermKind {
         /// `(A.A1 ...)` then the variant ID corresponds to `A1`.
         variant: VariantId,
     },
+    /// A struct constructor or extractor.
+    Struct,
     /// A term declared via a `(decl ...)` form.
     Decl {
         /// Flags from the term's declaration.
@@ -507,6 +582,11 @@ impl Term {
         matches!(self.kind, TermKind::EnumVariant { .. })
     }
 
+    /// Is this term a struct?
+    pub fn is_struct(&self) -> bool {
+        matches!(self.kind, TermKind::Struct { .. })
+    }
+
     /// Is this term partial?
     pub fn is_partial(&self) -> bool {
         matches!(
@@ -534,6 +614,7 @@ impl Term {
         matches!(
             self.kind,
             TermKind::EnumVariant { .. }
+                | TermKind::Struct
                 | TermKind::Decl {
                     constructor_kind: Some(_),
                     ..
@@ -546,6 +627,7 @@ impl Term {
         matches!(
             self.kind,
             TermKind::EnumVariant { .. }
+                | TermKind::Struct
                 | TermKind::Decl {
                     extractor_kind: Some(_),
                     ..
@@ -777,6 +859,15 @@ pub trait PatternVisitor {
         variant: VariantId,
     ) -> Vec<Self::PatternId>;
 
+    /// Extract the `input` struct into its fields. Returns an identifier for each field within the
+    /// struct. The length of the return list must equal the length of `arg_tys`.
+    fn add_extract_struct(
+        &mut self,
+        input: Self::PatternId,
+        input_ty: TypeId,
+        arg_tys: &[TypeId],
+    ) -> Vec<Self::PatternId>;
+
     /// Match if the given external extractor succeeds on `input`. Returns an identifier for each
     /// return value from the external extractor. The length of the return list must equal the
     /// length of `output_tys`.
@@ -839,6 +930,7 @@ impl Pattern {
                     TermKind::EnumVariant { variant } => {
                         visitor.add_match_variant(input, ty, &termdata.arg_tys, *variant)
                     }
+                    TermKind::Struct => visitor.add_extract_struct(input, ty, &termdata.arg_tys),
                     TermKind::Decl {
                         extractor_kind: None,
                         ..
@@ -907,6 +999,13 @@ pub trait ExprVisitor {
         variant: VariantId,
     ) -> Self::ExprId;
 
+    /// Construct a struct with the given `inputs` assigned to the struct's fields in order.
+    fn add_create_struct(
+        &mut self,
+        inputs: Vec<(Self::ExprId, TypeId)>,
+        ty: TypeId,
+    ) -> Self::ExprId;
+
     /// Call an external constructor with the given `inputs` as arguments.
     fn add_construct(
         &mut self,
@@ -969,6 +1068,7 @@ impl Expr {
                     TermKind::EnumVariant { variant } => {
                         visitor.add_create_variant(arg_values_tys, ty, *variant)
                     }
+                    TermKind::Struct => visitor.add_create_struct(arg_values_tys, ty),
                     TermKind::Decl {
                         constructor_kind: Some(_),
                         flags,
@@ -1253,38 +1353,7 @@ impl TypeEnv {
                         );
                         return None;
                     }
-                    let mut fields = vec![];
-                    for field in &variant.fields {
-                        let field_name = self.intern_mut(&field.name);
-                        if fields.iter().any(|f: &Field| f.name == field_name) {
-                            self.report_error(
-                                field.pos,
-                                format!(
-                                    "Duplicate field name '{}' in variant '{}' of type",
-                                    field.name.0, variant.name.0
-                                ),
-                            );
-                            return None;
-                        }
-                        let field_tid = match self.get_type_by_name(&field.ty) {
-                            Some(tid) => tid,
-                            None => {
-                                self.report_error(
-                                    field.ty.1,
-                                    format!(
-                                        "Unknown type '{}' for field '{}' in variant '{}'",
-                                        field.ty.0, field.name.0, variant.name.0
-                                    ),
-                                );
-                                return None;
-                            }
-                        };
-                        fields.push(Field {
-                            name: field_name,
-                            id: FieldId(fields.len()),
-                            ty: field_tid,
-                        });
-                    }
+                    let fields = self.fields_from_ast(&variant.fields, Some(&variant.name))?;
                     variants.push(Variant {
                         name,
                         fullname,
@@ -1301,7 +1370,114 @@ impl TypeEnv {
                     pos: ty.pos,
                 })
             }
+            &ast::TypeValue::Struct(ref fields, _) => {
+                if ty.is_extern && ty.is_nodebug {
+                    self.report_error(ty.pos, "external types cannot be marked `nodebug`");
+                    return None;
+                }
+                Some(Type::Struct {
+                    name,
+                    id: tid,
+                    is_extern: ty.is_extern,
+                    is_nodebug: ty.is_nodebug,
+                    fields: self.fields_from_ast(&fields, None)?,
+                    pos: ty.pos,
+                })
+            }
         }
+    }
+
+    fn fields_from_ast(
+        &mut self,
+        fields: &ast::Fields,
+        variant_name: Option<&ast::Ident>,
+    ) -> Option<Fields> {
+        match fields {
+            ast::Fields::Unit => Some(Fields::Unit),
+            ast::Fields::Struct(fields) => Some(Fields::Struct(
+                self.struct_fields_from_ast(fields, variant_name)?,
+            )),
+            ast::Fields::Tuple(fields) => Some(Fields::Tuple(
+                self.tuple_fields_from_ast(fields, variant_name)?,
+            )),
+        }
+    }
+
+    fn struct_fields_from_ast(
+        &mut self,
+        fields: &ast::StructFields,
+        variant_name: Option<&ast::Ident>,
+    ) -> Option<StructFields> {
+        let mut out = Vec::with_capacity(fields.fields.len());
+        for field in &fields.fields {
+            let field_name = self.intern_mut(&field.name);
+            if out.iter().any(|f: &StructField| f.name == field_name) {
+                let msg = if let Some(variant_name) = variant_name {
+                    format!(
+                        "Duplicate field name '{}' in variant '{}' of type",
+                        field.name.0, variant_name.0
+                    )
+                } else {
+                    format!("Duplicate field name '{}'", field.name.0)
+                };
+                self.report_error(field.pos, msg);
+                return None;
+            }
+            let field_tid = match self.get_type_by_name(&field.ty) {
+                Some(tid) => tid,
+                None => {
+                    let msg = if let Some(variant_name) = variant_name {
+                        format!(
+                            "Unknown type '{}' for field '{}' in variant '{}'",
+                            field.ty.0, field.name.0, variant_name.0
+                        )
+                    } else {
+                        format!("Unknown type '{}' for field '{}'", field.ty.0, field.name.0)
+                    };
+                    self.report_error(field.ty.1, msg);
+                    return None;
+                }
+            };
+            out.push(StructField {
+                name: field_name,
+                id: FieldId(out.len()),
+                ty: field_tid,
+            });
+        }
+        Some(StructFields { fields: out })
+    }
+
+    fn tuple_fields_from_ast(
+        &mut self,
+        fields: &ast::TupleFields,
+        variant_name: Option<&ast::Ident>,
+    ) -> Option<TupleFields> {
+        let mut out = Vec::with_capacity(fields.fields.len());
+        for field in &fields.fields {
+            let field_tid = match self.get_type_by_name(&field.ty) {
+                Some(tid) => tid,
+                None => {
+                    let msg = if let Some(variant_name) = variant_name {
+                        format!(
+                            "Unknown type '{}' for tuple field '{}' in variant '{}'",
+                            field.ty.0, field.index, variant_name.0
+                        )
+                    } else {
+                        format!(
+                            "Unknown type '{}' for tuple field '{}'",
+                            field.ty.0, field.index
+                        )
+                    };
+                    self.report_error(field.ty.1, msg);
+                    return None;
+                }
+            };
+            out.push(TupleField {
+                id: FieldId(out.len()),
+                ty: field_tid,
+            });
+        }
+        Some(TupleFields { fields: out })
     }
 
     fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
@@ -1518,7 +1694,7 @@ impl TermEnv {
                             continue 'types;
                         }
                         let tid = TermId(self.terms.len());
-                        let arg_tys = variant.fields.iter().map(|fld| fld.ty).collect::<Vec<_>>();
+                        let arg_tys = variant.fields.types();
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
@@ -1532,6 +1708,31 @@ impl TermEnv {
                         });
                         self.term_map.insert(variant.fullname, tid);
                     }
+                }
+                &Type::Struct {
+                    pos,
+                    id,
+                    name,
+                    ref fields,
+                    ..
+                } => {
+                    if self.term_map.contains_key(&name) {
+                        let name = tyenv.syms[name.index()].clone();
+                        tyenv.report_error(pos, format!("Duplicate struct constructor: '{name}'",));
+                        continue 'types;
+                    }
+                    let tid = TermId(self.terms.len());
+                    let arg_tys = fields.types();
+                    let ret_ty = id;
+                    self.terms.push(Term {
+                        id: tid,
+                        decl_pos: pos,
+                        name,
+                        arg_tys,
+                        ret_ty,
+                        kind: TermKind::Struct,
+                    });
+                    self.term_map.insert(name, tid);
                 }
                 _ => {}
             }
@@ -1594,6 +1795,14 @@ impl TermEnv {
                             );
                             continue;
                         }
+                        TermKind::Struct => {
+                            tyenv.report_error(
+                                pos,
+                                "Rule LHS root term is incorrect kind; cannot be struct"
+                                    .to_string(),
+                            );
+                            continue;
+                        }
                     }
                 }
                 _ => {}
@@ -1643,6 +1852,14 @@ impl TermEnv {
                             ext.pos,
                             "Extractor macro body defined on term of incorrect kind; cannot be an \
                              enum variant",
+                        );
+                        continue;
+                    }
+                    TermKind::Struct { .. } => {
+                        tyenv.report_error(
+                            ext.pos,
+                            "Extractor macro body defined on term of incorrect kind; cannot be a \
+                             struct",
                         );
                         continue;
                     }
@@ -1841,6 +2058,15 @@ impl TermEnv {
                                 ),
                             );
                         }
+                        TermKind::Struct { .. } => {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "External constructor cannot be defined on a struct: {}",
+                                    term.0,
+                                ),
+                            );
+                        }
                     }
                 }
                 &ast::Def::Extern(ast::Extern::Extractor {
@@ -1901,6 +2127,13 @@ impl TermEnv {
                             tyenv.report_error(
                                 pos,
                                 format!("Cannot define extractor for enum variant '{}'", term.0),
+                            );
+                            continue;
+                        }
+                        TermKind::Struct { .. } => {
+                            tyenv.report_error(
+                                pos,
+                                format!("Cannot define extractor for struct '{}'", term.0),
                             );
                             continue;
                         }
@@ -2255,7 +2488,7 @@ impl TermEnv {
                 // TODO: check that multi-extractors are only used in terms declared `multi`
 
                 match &termdata.kind {
-                    TermKind::EnumVariant { .. } => {}
+                    TermKind::EnumVariant { .. } | TermKind::Struct => {}
                     TermKind::Decl {
                         extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
                         ..
@@ -2702,28 +2935,32 @@ mod test {
                         name: sym_b,
                         fullname: sym_a_b,
                         id: VariantId(0),
-                        fields: vec![
-                            Field {
-                                name: sym_f1,
-                                id: FieldId(0),
-                                ty: TypeId::U32,
-                            },
-                            Field {
-                                name: sym_f2,
-                                id: FieldId(1),
-                                ty: TypeId::U32,
-                            },
-                        ],
+                        fields: Fields::Struct(StructFields {
+                            fields: vec![
+                                StructField {
+                                    name: sym_f1,
+                                    id: FieldId(0),
+                                    ty: TypeId::U32,
+                                },
+                                StructField {
+                                    name: sym_f2,
+                                    id: FieldId(1),
+                                    ty: TypeId::U32,
+                                },
+                            ],
+                        }),
                     },
                     Variant {
                         name: sym_c,
                         fullname: sym_a_c,
                         id: VariantId(1),
-                        fields: vec![Field {
-                            name: sym_f1,
-                            id: FieldId(0),
-                            ty: TypeId::U32,
-                        }],
+                        fields: Fields::Struct(StructFields {
+                            fields: vec![StructField {
+                                name: sym_f1,
+                                id: FieldId(0),
+                                ty: TypeId::U32,
+                            }],
+                        }),
                     },
                 ],
                 pos: Pos {

@@ -15,11 +15,11 @@ use wasmtime_core::alloc::TryClone;
 
 /// A wrapper type around [`hashbrown::hash_map::HashMap`] that only exposes
 /// fallible allocation.
-pub struct HashMap<K, V, S = DefaultHashBuilder> {
+pub struct TryHashMap<K, V, S = DefaultHashBuilder> {
     inner: inner::HashMap<K, V, S>,
 }
 
-impl<K, V, S> TryClone for HashMap<K, V, S>
+impl<K, V, S> TryClone for TryHashMap<K, V, S>
 where
     K: Eq + Hash + TryClone,
     V: TryClone,
@@ -35,7 +35,7 @@ where
     }
 }
 
-impl<K, V, S> Default for HashMap<K, V, S>
+impl<K, V, S> Default for TryHashMap<K, V, S>
 where
     S: Default,
 {
@@ -46,7 +46,7 @@ where
     }
 }
 
-impl<K, V, S> PartialEq for HashMap<K, V, S>
+impl<K, V, S> PartialEq for TryHashMap<K, V, S>
 where
     K: Eq + Hash,
     V: PartialEq,
@@ -57,7 +57,7 @@ where
     }
 }
 
-impl<K, V, S> Eq for HashMap<K, V, S>
+impl<K, V, S> Eq for TryHashMap<K, V, S>
 where
     K: Eq + Hash,
     V: Eq,
@@ -65,7 +65,7 @@ where
 {
 }
 
-impl<K, V, S> fmt::Debug for HashMap<K, V, S>
+impl<K, V, S> fmt::Debug for TryHashMap<K, V, S>
 where
     K: fmt::Debug,
     V: fmt::Debug,
@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<K, V> HashMap<K, V, DefaultHashBuilder> {
+impl<K, V> TryHashMap<K, V, DefaultHashBuilder> {
     /// Same as [`hashbrown::hash_map::HashMap::new`].
     pub fn new() -> Self {
         Self {
@@ -84,7 +84,7 @@ impl<K, V> HashMap<K, V, DefaultHashBuilder> {
     }
 }
 
-impl<K, V> HashMap<K, V, DefaultHashBuilder>
+impl<K, V> TryHashMap<K, V, DefaultHashBuilder>
 where
     K: Eq + Hash,
 {
@@ -97,7 +97,7 @@ where
     }
 }
 
-impl<K, V, S> HashMap<K, V, S> {
+impl<K, V, S> TryHashMap<K, V, S> {
     /// Same as [`hashbrown::hash_map::HashMap::with_hasher`].
     pub const fn with_hasher(hasher: S) -> Self {
         Self {
@@ -162,7 +162,7 @@ impl<K, V, S> HashMap<K, V, S> {
     }
 }
 
-impl<K, V, S> HashMap<K, V, S>
+impl<K, V, S> TryHashMap<K, V, S>
 where
     K: Eq + Hash,
     S: BuildHasher,
@@ -223,7 +223,7 @@ where
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
+impl<'a, K, V, S> IntoIterator for &'a TryHashMap<K, V, S> {
     type Item = (&'a K, &'a V);
 
     type IntoIter = inner::Iter<'a, K, V>;
@@ -233,7 +233,7 @@ impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a mut HashMap<K, V, S> {
+impl<'a, K, V, S> IntoIterator for &'a mut TryHashMap<K, V, S> {
     type Item = (&'a K, &'a mut V);
 
     type IntoIter = inner::IterMut<'a, K, V>;
@@ -243,12 +243,18 @@ impl<'a, K, V, S> IntoIterator for &'a mut HashMap<K, V, S> {
     }
 }
 
-impl<K, V, S> IntoIterator for HashMap<K, V, S> {
+impl<K, V, S> IntoIterator for TryHashMap<K, V, S> {
     type Item = (K, V);
 
     type IntoIter = inner::IntoIter<K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
+    }
+}
+
+impl<K, V, S> From<TryHashMap<K, V, S>> for inner::HashMap<K, V, S> {
+    fn from(map: TryHashMap<K, V, S>) -> Self {
+        map.inner
     }
 }

@@ -20,27 +20,27 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i64):
-;; @0024                               trapz v2, user15
+;; @0024                               trapz v2, user16
 ;; @0024                               v32 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0024                               v6 = load.i64 notrap aligned readonly can_move v32+32
 ;; @0024                               v5 = uextend.i64 v2
 ;; @0024                               v7 = iadd v6, v5
 ;; @0024                               v8 = iconst.i64 8
 ;; @0024                               v9 = iadd v7, v8  ; v8 = 8
-;; @0024                               v10 = load.i32 notrap aligned readonly v9
+;; @0024                               v10 = load.i32 user2 readonly v9
 ;; @0024                               v11 = icmp ult v3, v10
-;; @0024                               trapz v11, user16
+;; @0024                               trapz v11, user17
 ;; @0024                               v13 = uextend.i64 v10
 ;;                                     v34 = iconst.i64 3
 ;;                                     v35 = ishl v13, v34  ; v34 = 3
 ;;                                     v31 = iconst.i64 32
 ;; @0024                               v15 = ushr v35, v31  ; v31 = 32
-;; @0024                               trapnz v15, user1
+;; @0024                               trapnz v15, user2
 ;;                                     v44 = iconst.i32 3
 ;;                                     v45 = ishl v10, v44  ; v44 = 3
 ;; @0024                               v17 = iconst.i32 16
-;; @0024                               v18 = uadd_overflow_trap v45, v17, user1  ; v17 = 16
-;; @0024                               v22 = uadd_overflow_trap v2, v18, user1
+;; @0024                               v18 = uadd_overflow_trap v45, v17, user2  ; v17 = 16
+;; @0024                               v22 = uadd_overflow_trap v2, v18, user2
 ;; @0024                               v23 = uextend.i64 v22
 ;; @0024                               v25 = iadd v6, v23
 ;;                                     v51 = ishl v3, v44  ; v44 = 3
@@ -48,7 +48,7 @@
 ;; @0024                               v26 = isub v18, v21
 ;; @0024                               v27 = uextend.i64 v26
 ;; @0024                               v28 = isub v25, v27
-;; @0024                               store notrap aligned little v4, v28
+;; @0024                               store user2 little v4, v28
 ;; @0027                               jump block1
 ;;
 ;;                                 block1:

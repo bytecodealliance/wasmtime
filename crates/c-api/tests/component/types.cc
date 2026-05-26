@@ -2,6 +2,7 @@
 #include <wasmtime/component.hh>
 
 using namespace wasmtime::component;
+using wasmtime::Config;
 using wasmtime::Engine;
 using wasmtime::ExternType;
 using wasmtime::Result;
@@ -143,7 +144,7 @@ TEST(types, module_type) {
   EXPECT_EQ(export_ty->ref().name(), "x");
   auto export_item_ty = ExternType::from_export(export_ty->ref());
   auto global_ty = std::get<wasmtime::GlobalType::Ref>(export_item_ty);
-  EXPECT_EQ(global_ty.content().kind(), wasmtime::ValKind::I32);
+  EXPECT_EQ(global_ty.content(), wasmtime::ValType::i32());
   EXPECT_TRUE(global_ty.is_mutable());
 }
 
@@ -185,6 +186,22 @@ TEST(types, valtype_list) {
   EXPECT_TRUE(ty.is_list());
   auto elem = ty.list().element();
   EXPECT_TRUE(elem.is_u8());
+}
+
+TEST(types, valtype_map) {
+  Config config;
+  config.wasm_component_model_map(true);
+  Engine engine(std::move(config));
+  auto component =
+      Component::compile(
+          engine, "(component (import \"f\" (func (result (map u32 string)))))")
+          .unwrap();
+  auto ty =
+      *component.type().import_get(engine, "f")->component_func().result();
+  EXPECT_TRUE(ty.is_map());
+  auto map_ty = ty.map();
+  EXPECT_TRUE(map_ty.key().is_u32());
+  EXPECT_TRUE(map_ty.value().is_string());
 }
 
 TEST(types, valtype_record) {

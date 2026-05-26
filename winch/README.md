@@ -22,7 +22,7 @@
 Winch is a WebAssembly "baseline" or single-pass compiler designed for Wasmtime.
 
 Winch's primary goal is compilation performance, therefore only certain, very
-limited peephole optimations are applied.
+limited peephole optimizations are applied.
 
 For more details on the original motivation and goals, refer to the [Bytecode
 Alliance RFC for Baseline Compilation in Wasmtime.][rfc].

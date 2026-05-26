@@ -36,6 +36,12 @@
 (decl value_array_3_ctor (Value Value Value) ValueArray3)
 (extern constructor value_array_3_ctor value_array_3_ctor)
 
+;; Resolve a constant index into a jump table, returning the target
+;; BlockCall. If the index is in bounds, returns the indexed entry;
+;; otherwise returns the default block.
+(decl pure resolve_jump_table_entry (JumpTable u64) BlockCall)
+(extern constructor resolve_jump_table_entry resolve_jump_table_entry)
+
 (rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
 (rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
 (rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
@@ -86,7 +92,15 @@
         ;; The old instruction must define a single result value and `val` must
         ;; match its type. The new instruction need not define the same number
         ;; or types of results as the old instruction.
-        (ReplaceWithVal (inst Inst) (val Value))))
+        (ReplaceWithVal (inst Inst) (val Value))
+
+        ;; Narrow rewrite: replace the condition operand of a `brif`
+        ;; (argument 0) with the given value. The opcode and successor
+        ;; blocks stay the same, so the CFG is preserved. Use this to
+        ;; rewrite branch conditions whose producer simplifies in
+        ;; boolean-test context (e.g. `(brif (ctz x))` → branch on the
+        ;; LSB of x).
+        (ReplaceBranchCond (cond Value))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)
 (rule (inst_to_skeleton_inst_simplification inst)
@@ -101,6 +115,10 @@
 
 (decl pure replace_with_val (Inst Value) SkeletonInstSimplification)
 (rule (replace_with_val inst val) (SkeletonInstSimplification.ReplaceWithVal inst val))
+
+(decl pure replace_branch_cond (Value) SkeletonInstSimplification)
+(rule (replace_branch_cond new_cond)
+      (SkeletonInstSimplification.ReplaceBranchCond new_cond))
 
 (convert Inst SkeletonInstSimplification inst_to_skeleton_inst_simplification)
 (convert Value SkeletonInstSimplification value_to_skeleton_inst_simplification)
@@ -125,38 +143,51 @@
 (decl iconst_sextend_etor (Type i64) TypeAndInstructionData)
 (extern extractor iconst_sextend_etor iconst_sextend_etor)
 
-;; Construct an `iconst` from an `i64` or Extract an `i64` from an `iconst`
-;; by treating the constant as signed.
+;; Create a constant value represented by the `i64` provided which has the
+;; `Type` provided.
+;;
+;; For 8 to 64-bit scalar integers this will construct an `iconst` from an `i64`
+;; or Extract an `i64` from an `iconst` by treating the constant as signed.
 ;; When extracting, smaller types get their value sign-extended to 64-bits,
 ;; so that `iconst.i8 255` will give you a `-1_i64`.
+;;
+;; For 128-bit integer types this rule will create a 64-bit `iconst` and then
+;; `sextend` it to 128-bit bits.
+;;
+;; For vector types this will create a constant for the lane type and then splat
+;; that to all lanes of the vector type.
+;;
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.  If it fits, it'll be masked accordingly in the constant.
 ;;
-;; Recursion: may recurse at most once to reduce reduce 128-bit to 64-bit.
+;; Recursion: may recurse at most once to reduce reduce 128-bit to 64-bit or
+;; to create a scalar constant to splat into a vector type.
 (decl rec iconst_s (Type i64) Value)
 (extractor (iconst_s ty c) (inst_data_value_tupled (iconst_sextend_etor ty c)))
-(rule 0 (iconst_s ty c)
+(rule 0 (iconst_s (ty_int (fits_in_64 ty)) c)
     (if-let c_masked (u64_and (i64_cast_unsigned c)
                               (ty_umax ty)))
     (if-let c_reextended (i64_sextend_u64 ty c_masked))
     (if-let true (i64_eq c c_reextended))
     (iconst ty (imm64 c_masked)))
 (rule 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
+(rule 2 (iconst_s (ty_vec128 ty) c) (splat ty (iconst_s (lane_type ty) c)))
 
-;; Construct an `iconst` from a `u64` or Extract a `u64` from an `iconst`
-;; by treating the constant as unsigned.
+;; Same as `iconst_s`, but used for zero-extending constant values.
+;;
 ;; When extracting, smaller types get their value zero-extended to 64-bits,
 ;; so that `iconst.i8 255` will give you a `255_u64`.
 ;; When constructing, the rule will fail if the value cannot be represented in
 ;; the target type.
 ;;
-;; Recursion: may recurse at most once to reduce reduce 128-bit to 64-bit.
+;; Recursion: same as `iconst_s`, once for 128-bit integers or vectors.
 (decl rec iconst_u (Type u64) Value)
 (extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
-(rule 0 (iconst_u ty c)
+(rule 0 (iconst_u (ty_int (fits_in_64 ty)) c)
     (if-let true (u64_lt_eq c (ty_umax ty)))
     (iconst ty (imm64 c)))
 (rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
+(rule 2 (iconst_u (ty_vec128 ty) c) (splat ty (iconst_u (lane_type ty) c)))
 
 ;; These take `Value`, rather than going through `inst_data_value_tupled`,
 ;; because most of the time they want to return the original `Value`, and it
@@ -216,7 +247,7 @@
 (decl sge (Type Value Value) Value)
 (extractor (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
-;;;;;; Divison-By-Constant Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; Division-By-Constant Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure i64_is_negative_power_of_two (i64) bool)
 (rule (i64_is_negative_power_of_two x)

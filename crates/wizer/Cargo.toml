@@ -41,6 +41,7 @@ wat = { workspace = true }
 wasmtime = { workspace = true, features = ['default', 'anyhow'] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }
 tokio = { workspace = true, features = ['macros'] }
+test-programs-artifacts = { workspace = true }
 
 [features]
 default = ["rayon"]

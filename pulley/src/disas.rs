@@ -321,7 +321,7 @@ macro_rules! impl_disas {
         )*
     };
 
-    // Diassembling `br_table` is a bit special as it has trailing byte after
+    // Disassembling `br_table` is a bit special as it has trailing byte after
     // the opcode of the branch table itself.
     (
         @one br_table32 = BrTable32 $( {

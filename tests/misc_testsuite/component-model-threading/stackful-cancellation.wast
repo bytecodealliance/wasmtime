@@ -1,6 +1,6 @@
 ;;! component_model_async = true
 ;;! component_model_async_stackful = true
-;;! component_model_async_builtins = true
+;;! component_model_more_async_builtins = true
 ;;! component_model_threading = true
 ;;! reference_types = true
 

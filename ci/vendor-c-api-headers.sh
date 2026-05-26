@@ -2,7 +2,7 @@
 
 # Script to re-vendor the headers from the `wasm-c-api` proposal.
 
-rev="2ce1367c9d1271c83fb63bef26d896a2f290cd23"
+rev="9d6b93764ac96cdd9db51081c363e09d2d488b4d"
 files="wasm.h wasm.hh"
 
 set -ex

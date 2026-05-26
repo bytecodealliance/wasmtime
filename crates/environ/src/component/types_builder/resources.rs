@@ -247,7 +247,7 @@ impl ResourcesBuilder {
                 let ty = &types[id];
                 for (name, ty) in ty.exports.iter() {
                     path.push(name);
-                    self.register_component_entity_type_(types, *ty, path, register);
+                    self.register_component_entity_type_(types, ty.ty, path, register);
                     path.pop();
                 }
             }

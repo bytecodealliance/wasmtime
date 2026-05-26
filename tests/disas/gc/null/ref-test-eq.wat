@@ -33,7 +33,7 @@
 ;; @001b                               v11 = load.i64 notrap aligned readonly can_move v21+32
 ;; @001b                               v10 = uextend.i64 v2
 ;; @001b                               v12 = iadd v11, v10
-;; @001b                               v15 = load.i32 notrap aligned readonly v12
+;; @001b                               v15 = load.i32 user2 readonly v12
 ;; @001b                               v16 = iconst.i32 -1610612736
 ;; @001b                               v17 = band v15, v16  ; v16 = -1610612736
 ;; @001b                               v18 = icmp eq v17, v16  ; v16 = -1610612736

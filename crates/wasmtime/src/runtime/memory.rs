@@ -260,6 +260,12 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
         let (mut limiter, store) = store
             .as_context_mut()
@@ -276,6 +282,12 @@ impl Memory {
     ///
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn new_async(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
         let (mut limiter, store) = store.as_context_mut().0.resource_limiter_and_store_opaque();
@@ -330,6 +342,12 @@ impl Memory {
     /// If `offset + buffer.len()` exceed the current memory capacity, then the
     /// buffer is left untouched and a [`MemoryAccessError`] is returned.
     ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
@@ -354,6 +372,12 @@ impl Memory {
     /// If the `offset + buffer.len()` exceeds the current memory capacity, then
     /// none of the buffer is written to memory and a [`MemoryAccessError`] is
     /// returned.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     ///
     /// # Panics
     ///
@@ -582,6 +606,10 @@ impl Memory {
     /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
     /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
@@ -619,6 +647,12 @@ impl Memory {
     ///
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "async")]
     pub async fn grow_async(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let store = store.as_context_mut();
@@ -669,6 +703,15 @@ impl Memory {
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         store.id() == self.instance.store_id()
+    }
+
+    /// Returns a stable identifier for this memory within its store.
+    ///
+    /// This allows distinguishing memories when introspecting them
+    /// e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_store(&self) -> u64 {
+        u64::from(self.instance.instance().as_u32()) << 32 | u64::from(self.index.as_u32())
     }
 
     /// Get a stable hash key for this memory.
@@ -822,6 +865,12 @@ impl SharedMemory {
     /// Construct a [`SharedMemory`] by providing both the `minimum` and
     /// `maximum` number of 64K-sized pages. This call allocates the necessary
     /// pages on the system.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     #[cfg(feature = "threads")]
     pub fn new(engine: &Engine, ty: MemoryType) -> Result<Self> {
         if !ty.is_shared() {
@@ -914,6 +963,10 @@ impl SharedMemory {
     /// the maximum limits of this memory. A
     /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
     /// preventing a memory to grow.
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub fn grow(&self, delta: u64) -> Result<u64> {
         match self.vm.grow(delta)? {
             Some((old_size, _new_size)) => {
@@ -1058,10 +1111,13 @@ mod tests {
         let store = store.as_context();
         let tunables = store.engine().tunables();
         assert_eq!(tunables.memory_guard_size, 0);
-        assert!(
-            !mem.wasmtime_ty(store.0)
-                .can_elide_bounds_check(tunables, 12)
-        );
+        assert!(!mem.wasmtime_ty(store.0).can_elide_bounds_check(
+            &wasmtime_environ::MemoryTunables::new(
+                tunables,
+                wasmtime_environ::MemoryKind::LinearMemory,
+            ),
+            12,
+        ));
     }
 
     #[test]

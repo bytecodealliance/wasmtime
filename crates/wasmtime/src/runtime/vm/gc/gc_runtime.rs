@@ -1,9 +1,10 @@
 //! Traits for abstracting over our different garbage collectors.
 
+use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
-    VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef,
+    VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef, ValRaw,
 };
 use crate::store::Asyncness;
 use crate::vm::VMMemoryDefinition;
@@ -109,6 +110,18 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// any virtual memory mappings.
     fn detach(&mut self) -> crate::vm::Memory;
 
+    /// Eagerly ensure that tracing information is registered for the given GC
+    /// type.
+    ///
+    /// This is called during module instantiation for every GC type in the
+    /// module's type collection, and during `StructRefPre` and `ArrayRefPre`
+    /// construction for host-allocated types.
+    ///
+    /// The default implementation is a no-op, which is appropriate for
+    /// collectors that do not need per-type tracing info (e.g. the null
+    /// collector).
+    fn ensure_trace_info(&mut self, _ty: VMSharedTypeIndex) {}
+
     ////////////////////////////////////////////////////////////////////////////
     // `Any` methods
 
@@ -158,7 +171,18 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// The given `gc_ref` should not be used again.
     fn drop_gc_ref(&mut self, host_data_table: &mut ExternRefHostDataTable, gc_ref: VMGcRef) {
         let mut dest = Some(gc_ref);
-        self.write_gc_ref(host_data_table, &mut dest, None);
+
+        // Similar to `clone_gc_ref` not being fallible this method,
+        // `drop_gc_ref`, is also not fallible as it's seen as too painful to
+        // propagate this result. The consequence is that if the GC heap is
+        // corrupted at this point it'll get a ltitle more corrupted from this
+        // operation, but that's the tradeoff we're making ignoring the error
+        // here.
+        if let Err(e) = self.write_gc_ref(host_data_table, &mut dest, None) {
+            if cfg!(debug_assertions) {
+                panic!("heap corruption detected: {e}");
+            }
+        }
     }
 
     /// Write barrier called every time the runtime overwrites a GC reference.
@@ -178,7 +202,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
-    );
+    ) -> Result<()>;
 
     /// Read barrier called whenever a GC reference is passed from the runtime
     /// to Wasm: an argument to a host-to-Wasm call, or a return from a
@@ -187,7 +211,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// Callers should pass a valid `VMGcRef` that belongs to the given
     /// heap. Failure to do so is memory safe, but may result in general
     /// failures such as panics or incorrect results.
-    fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef);
+    fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> Result<()>;
 
     ////////////////////////////////////////////////////////////////////////////
     // `externref` Methods
@@ -218,23 +242,23 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// Callers should pass a valid `externref` that belongs to the given
     /// heap. Failure to do so is memory safe, but may result in general
     /// failures such as panics or incorrect results.
-    fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId;
+    fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId>;
 
     ////////////////////////////////////////////////////////////////////////////
     // Struct, array, and general GC object methods
 
     /// Get the header of the object that `gc_ref` points to.
-    fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader;
+    fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader>;
 
     /// Get the header of the object that `gc_ref` points to.
-    fn header_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcHeader;
+    fn header_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcHeader>;
 
     /// Get the size (in bytes) of the object referenced by `gc_ref`.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
-    fn object_size(&self, gc_ref: &VMGcRef) -> usize;
+    /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn object_size(&self, gc_ref: &VMGcRef) -> Result<usize>;
 
     /// Allocate a raw, uninitialized GC-managed object with the given header
     /// and layout.
@@ -302,7 +326,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// that the struct's allocation can be eagerly reclaimed, and so that the
     /// collector doesn't attempt to treat any of the uninitialized fields as
     /// valid GC references, or something like that.
-    fn dealloc_uninit_struct_or_exn(&mut self, structref: VMGcRef);
+    fn dealloc_uninit_struct_or_exn(&mut self, structref: VMGcRef) -> Result<()>;
 
     /// * `Ok(Ok(_))`: The allocation was successful.
     ///
@@ -328,19 +352,36 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// that the array's allocation can be eagerly reclaimed, and so that the
     /// collector doesn't attempt to treat any of the uninitialized fields as
     /// valid GC references, or something like that.
-    fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef);
+    fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) -> Result<()>;
 
     /// Get the length of the given array.
     ///
-    /// Panics on out-of-bounds accesses.
+    /// Returns an error on out-of-bounds accesses.
     ///
     /// The given `arrayref` should be valid and of the given size. Failure to
     /// do so is memory safe, but may result in general failures such as panics
     /// or incorrect results.
-    fn array_len(&self, arrayref: &VMArrayRef) -> u32;
+    fn array_len(&self, arrayref: &VMArrayRef) -> Result<u32>;
 
     ////////////////////////////////////////////////////////////////////////////
     // Garbage Collection Methods
+
+    /// Get the total number of bytes currently allocated (live or
+    /// dead-but-not-collected) in this heap.
+    ///
+    /// This is distinct from the heap capacity.
+    fn allocated_bytes(&self) -> usize;
+
+    /// Whether a GC should be performed before the next heap growth.
+    ///
+    /// Some collectors (e.g. the copying collector) need to perform a GC before
+    /// growing the heap in certain states, to ensure that the semi-spaces remain
+    /// properly balanced.
+    ///
+    /// Defaults to `false`.
+    fn needs_gc_before_next_growth(&self) -> bool {
+        false
+    }
 
     /// Start a new garbage collection process.
     ///
@@ -429,112 +470,103 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// Index into this heap and get a shared reference to the `T` that `gc_ref`
     /// points to.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
     #[inline]
-    fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> &T
+    fn index<T>(&self, gc_ref: &TypedGcRef<T>) -> Result<&T>
     where
         Self: Sized,
         T: GcHeapObject,
     {
         assert!(!mem::needs_drop::<T>());
         let gc_ref = gc_ref.as_untyped();
-        let start = gc_ref.as_heap_index().unwrap().get();
-        let start = usize::try_from(start).unwrap();
+        let start = gc_ref.heap_index()?.get();
+        let start = usize::try_from(start)?;
         let len = mem::size_of::<T>();
-        let slice = &self.heap_slice()[start..][..len];
-        unsafe { &*(slice.as_ptr().cast::<T>()) }
+        let slice = match self.heap_slice().get(start..).and_then(|s| s.get(..len)) {
+            Some(slice) => slice,
+            None => bail_bug!("gc object out-of-bounds"),
+        };
+        if slice.as_ptr().addr() % mem::align_of::<T>() != 0 {
+            bail_bug!("gc object and/or heap misaligned");
+        }
+        Ok(unsafe { &*(slice.as_ptr().cast::<T>()) })
     }
 
     /// Index into this heap and get an exclusive reference to the `T` that
     /// `gc_ref` points to.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
+    /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
     #[inline]
-    fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> &mut T
+    fn index_mut<T>(&mut self, gc_ref: &TypedGcRef<T>) -> Result<&mut T>
     where
         Self: Sized,
         T: GcHeapObject,
     {
         assert!(!mem::needs_drop::<T>());
         let gc_ref = gc_ref.as_untyped();
-        let start = gc_ref.as_heap_index().unwrap().get();
-        let start = usize::try_from(start).unwrap();
+        let start = gc_ref.heap_index()?.get();
+        let start = usize::try_from(start)?;
         let len = mem::size_of::<T>();
-        let slice = &mut self.heap_slice_mut()[start..][..len];
-        unsafe { &mut *(slice.as_mut_ptr().cast::<T>()) }
+        let slice = match self
+            .heap_slice_mut()
+            .get_mut(start..)
+            .and_then(|s| s.get_mut(..len))
+        {
+            Some(slice) => slice,
+            None => bail_bug!("gc object out-of-bounds"),
+        };
+        assert!(slice.as_ptr().addr() % mem::align_of::<T>() == 0);
+        Ok(unsafe { &mut *(slice.as_mut_ptr().cast::<T>()) })
     }
 
     /// Get the range of bytes that the given object occupies in the heap.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics on out of bounds or if the `gc_ref` is an `i31ref`.
-    fn object_range(&self, gc_ref: &VMGcRef) -> Range<usize> {
-        let start = gc_ref.as_heap_index().unwrap().get();
-        let start = usize::try_from(start).unwrap();
-        let size = self.object_size(gc_ref);
-        let end = start.checked_add(size).unwrap();
-        start..end
-    }
-
-    /// Get a mutable borrow of the given object's data.
-    ///
-    /// # Panics
-    ///
-    /// Panics on out-of-bounds accesses or if the `gc_ref` is an `i31ref`.
-    fn gc_object_data(&self, gc_ref: &VMGcRef) -> &VMGcObjectData {
-        let range = self.object_range(gc_ref);
-        let data = &self.heap_slice()[range];
-        data.into()
-    }
-
-    /// Get a mutable borrow of the given object's data.
-    ///
-    /// # Panics
-    ///
-    /// Panics on out-of-bounds accesses or if the `gc_ref` is an `i31ref`.
-    fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
-        let range = self.object_range(gc_ref);
-        let data = &mut self.heap_slice_mut()[range];
-        data.into()
-    }
-
-    /// Get a pair of mutable borrows of the given objects' data.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `a == b` or on out-of-bounds accesses or if either GC ref is
-    /// an `i31ref`.
-    fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
-        assert_ne!(a, b);
-
-        let a_range = self.object_range(a);
-        let b_range = self.object_range(b);
-
-        // Assert that the two objects do not overlap.
-        assert!(a_range.start <= a_range.end);
-        assert!(b_range.start <= b_range.end);
-        assert!(a_range.end <= b_range.start || b_range.end <= a_range.start);
-
-        let (a_data, b_data) = if a_range.start < b_range.start {
-            let (a_half, b_half) = self.heap_slice_mut().split_at_mut(b_range.start);
-            let b_len = b_range.end - b_range.start;
-            (&mut a_half[a_range], &mut b_half[..b_len])
-        } else {
-            let (b_half, a_half) = self.heap_slice_mut().split_at_mut(a_range.start);
-            let a_len = a_range.end - a_range.start;
-            (&mut a_half[..a_len], &mut b_half[b_range])
+    /// Returns an error on out of bounds or if the `gc_ref` is an `i31ref`.
+    fn object_range(&self, gc_ref: &VMGcRef) -> Result<Range<usize>> {
+        let start = gc_ref.heap_index()?.get();
+        let start = usize::try_from(start)?;
+        let size = self.object_size(gc_ref)?;
+        let end = match start.checked_add(size) {
+            Some(end) => end,
+            None => bail_bug!("object size overflow"),
         };
+        Ok(start..end)
+    }
 
-        (a_data.into(), b_data.into())
+    /// Get a mutable borrow of the given object's data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error on out-of-bounds accesses or if the `gc_ref` is an
+    /// `i31ref`.
+    fn gc_object_data(&self, gc_ref: &VMGcRef) -> Result<&VMGcObjectData> {
+        let range = self.object_range(gc_ref)?;
+        let data = match self.heap_slice().get(range) {
+            Some(data) => data,
+            None => bail_bug!("gc object out of bounds"),
+        };
+        Ok(data.into())
+    }
+
+    /// Get a mutable borrow of the given object's data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error on out-of-bounds accesses or if the `gc_ref` is an
+    /// `i31ref`.
+    fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
+        let range = self.object_range(gc_ref)?;
+        let data = match self.heap_slice_mut().get_mut(range) {
+            Some(data) => data,
+            None => bail_bug!("gc object out of bounds"),
+        };
+        Ok(data.into())
     }
 }
 
@@ -569,12 +601,18 @@ pub struct GcRootsList(Vec<RawGcRoot>);
 )]
 enum RawGcRoot {
     Stack(SendSyncPtr<u32>),
-    NonStack(SendSyncPtr<VMGcRef>),
+    VMGcRef(SendSyncPtr<VMGcRef>),
+    ValRaw(SendSyncPtr<ValRaw>),
 }
 
 #[cfg(feature = "gc")]
 impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid stack-map slot on the Wasm stack and must
+    /// remain valid while registered within this `GcRootsList`.
     #[inline]
     pub unsafe fn add_wasm_stack_root(&mut self, ptr_to_root: SendSyncPtr<u32>) {
         unsafe {
@@ -589,15 +627,37 @@ impl GcRootsList {
     }
 
     /// Add a GC root to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid `VMGcRef` and must remain valid while
+    /// registered within this `GcRootsList`.
     #[inline]
-    pub unsafe fn add_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
+    pub unsafe fn add_vmgcref_root(&mut self, ptr_to_root: SendSyncPtr<VMGcRef>, why: &str) {
         unsafe {
             log::trace!(
-                "Adding non-stack root: {why}: {:#p}",
+                "Adding VMGcRef root: {why}: {:#p}",
                 ptr_to_root.as_ref().unchecked_copy()
             );
         }
-        self.0.push(RawGcRoot::NonStack(ptr_to_root))
+        self.0.push(RawGcRoot::VMGcRef(ptr_to_root))
+    }
+
+    /// Add a GC root to this list.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be to a valid `ValRaw` that is a GC reference and must
+    /// remain valid while registered within this `GcRootsList`.
+    #[inline]
+    pub unsafe fn add_val_raw_root(&mut self, ptr_to_root: SendSyncPtr<ValRaw>, why: &str) {
+        unsafe {
+            log::trace!(
+                "Adding ValRaw root: {why}: {:#x}",
+                ptr_to_root.as_ref().get_anyref()
+            );
+        }
+        self.0.push(RawGcRoot::ValRaw(ptr_to_root))
     }
 
     /// Get an iterator over all roots in this list.
@@ -669,12 +729,22 @@ impl GcRoot<'_> {
     ///
     /// Does NOT run GC barriers.
     #[inline]
-    pub fn get(&self) -> VMGcRef {
+    pub fn get(&self) -> Result<VMGcRef> {
         match self.raw {
-            RawGcRoot::NonStack(ptr) => unsafe { ptr::read(ptr.as_ptr()) },
+            RawGcRoot::VMGcRef(ptr) => Ok(unsafe { ptr::read(ptr.as_ptr()) }),
             RawGcRoot::Stack(ptr) => unsafe {
                 let raw: u32 = ptr::read(ptr.as_ptr());
-                VMGcRef::from_raw_u32(raw).expect("non-null")
+                match VMGcRef::from_raw_u32(raw) {
+                    Some(r) => Ok(r),
+                    None => bail_bug!("stacked contained null gcref"),
+                }
+            },
+            RawGcRoot::ValRaw(ptr) => unsafe {
+                let val: ValRaw = ptr::read(ptr.as_ptr());
+                match val.get_vmgcref() {
+                    Some(r) => Ok(r),
+                    None => bail_bug!("val contained null gcref"),
+                }
             },
         }
     }
@@ -688,11 +758,15 @@ impl GcRoot<'_> {
     /// referencing.
     pub fn set(&mut self, new_ref: VMGcRef) {
         match self.raw {
-            RawGcRoot::NonStack(ptr) => unsafe {
+            RawGcRoot::VMGcRef(ptr) => unsafe {
                 ptr::write(ptr.as_ptr(), new_ref);
             },
             RawGcRoot::Stack(ptr) => unsafe {
                 ptr::write(ptr.as_ptr(), new_ref.as_raw_u32());
+            },
+            RawGcRoot::ValRaw(ptr) => unsafe {
+                let val = ValRaw::vmgcref(Some(new_ref));
+                ptr::write(ptr.as_ptr(), val);
             },
         }
     }
@@ -720,17 +794,17 @@ pub trait GarbageCollection<'a>: Send + Sync {
     ///
     /// The mutator does *not* run in between increments. This method exists
     /// solely to allow cooperative yielding
-    fn collect_increment(&mut self) -> GcProgress;
+    fn collect_increment(&mut self) -> Result<GcProgress>;
 
     /// Run this GC process to completion.
     ///
     /// Keeps calling `collect_increment` in a loop until the GC process is
     /// complete.
-    fn collect(&mut self) {
+    fn collect(&mut self) -> Result<()> {
         loop {
-            match self.collect_increment() {
+            match self.collect_increment()? {
                 GcProgress::Continue => continue,
-                GcProgress::Complete => return,
+                GcProgress::Complete => return Ok(()),
             }
         }
     }
@@ -749,16 +823,22 @@ pub enum GcProgress {
 pub async fn collect_async<'a>(
     mut collection: Box<dyn GarbageCollection<'a> + 'a>,
     asyncness: Asyncness,
-) {
+    yield_fn: impl AsyncFn(),
+) -> Result<()> {
+    #[cfg(not(feature = "async"))]
+    {
+        _ = yield_fn;
+    }
+
     loop {
-        match collection.collect_increment() {
+        match collection.collect_increment()? {
             GcProgress::Continue => {
                 if asyncness != Asyncness::No {
                     #[cfg(feature = "async")]
-                    crate::runtime::vm::Yield::new().await
+                    yield_fn().await
                 }
             }
-            GcProgress::Complete => return,
+            GcProgress::Complete => return Ok(()),
         }
     }
 }
@@ -772,7 +852,7 @@ mod collect_async_tests {
         fn _assert_send_sync<T: Send + Sync>(_: T) {}
 
         fn _foo<'a>(collection: Box<dyn GarbageCollection<'a>>) {
-            _assert_send_sync(collect_async(collection, Asyncness::Yes));
+            _assert_send_sync(collect_async(collection, Asyncness::Yes, async || ()));
         }
     }
 }

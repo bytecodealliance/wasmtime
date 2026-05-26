@@ -194,6 +194,16 @@ where
         Ok(())
     }
 
+    /// Get this map's underlying values as a slice.
+    pub fn as_values_slice(&self) -> &[V] {
+        &self.elems
+    }
+
+    /// Get this map's default value.
+    pub fn default_value(&self) -> &V {
+        &self.default
+    }
+
     /// Slow path for `index_mut` which resizes the vector.
     #[cold]
     fn resize_for_index_mut(&mut self, i: usize) -> &mut V {

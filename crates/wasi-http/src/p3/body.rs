@@ -1,11 +1,11 @@
-use crate::p3::bindings::http::types::{ErrorCode, Fields, Trailers};
+use crate::FieldMap;
+use crate::p3::bindings::http::types::{ErrorCode, Trailers};
 use crate::p3::{WasiHttp, WasiHttpCtxView};
 use bytes::Bytes;
 use core::iter;
 use core::num::NonZeroUsize;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
-use http::HeaderMap;
 use http_body::Body as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
@@ -74,17 +74,17 @@ impl Body {
         mut store: Access<'_, T, WasiHttp>,
         fut: FutureReader<Result<(), ErrorCode>>,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> (
+    ) -> wasmtime::Result<(
         StreamReader<u8>,
         FutureReader<Result<Option<Resource<Trailers>>, ErrorCode>>,
-    ) {
-        match self {
+    )> {
+        Ok(match self {
             Body::Guest {
                 contents_rx: Some(contents_rx),
                 trailers_rx,
                 result_tx,
             } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
                 (contents_rx, trailers_rx)
             }
             Body::Guest {
@@ -92,11 +92,11 @@ impl Body {
                 trailers_rx,
                 result_tx,
             } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
-                (StreamReader::new(&mut store, iter::empty()), trailers_rx)
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
+                (StreamReader::new(&mut store, iter::empty())?, trailers_rx)
             }
             Body::Host { body, result_tx } => {
-                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)));
+                fut.pipe(&mut store, BodyResultConsumer(Some(result_tx)))?;
                 let (trailers_tx, trailers_rx) = oneshot::channel();
                 (
                     StreamReader::new(
@@ -106,15 +106,15 @@ impl Body {
                             trailers: Some(trailers_tx),
                             getter,
                         },
-                    ),
-                    FutureReader::new(&mut store, trailers_rx),
+                    )?,
+                    FutureReader::new(&mut store, trailers_rx)?,
                 )
             }
-        }
+        })
     }
 
     /// Implementation of `drop` shared between requests and responses
-    pub(crate) fn drop(self, mut store: impl AsContextMut) {
+    pub(crate) fn drop(self, mut store: impl AsContextMut) -> wasmtime::Result<()> {
         if let Body::Guest {
             contents_rx,
             mut trailers_rx,
@@ -122,10 +122,11 @@ impl Body {
         } = self
         {
             if let Some(mut contents_rx) = contents_rx {
-                contents_rx.close(&mut store);
+                contents_rx.close(&mut store)?;
             }
-            trailers_rx.close(store);
+            trailers_rx.close(store)?;
         }
+        Ok(())
     }
 }
 
@@ -258,7 +259,7 @@ impl<D> StreamConsumer<D> for UnlimitedGuestBodyConsumer {
 /// [http_body::Body] implementation for bodies originating in the guest.
 pub(crate) struct GuestBody {
     contents_rx: Option<mpsc::Receiver<Result<Bytes, ErrorCode>>>,
-    trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<http::HeaderMap>>, ErrorCode>>>,
+    trailers_rx: Option<oneshot::Receiver<Result<Option<Arc<FieldMap>>, ErrorCode>>>,
     content_length: Option<u64>,
 }
 
@@ -273,7 +274,7 @@ impl GuestBody {
         content_length: Option<u64>,
         make_error: fn(Option<u64>) -> ErrorCode,
         getter: fn(&mut T) -> WasiHttpCtxView<'_>,
-    ) -> Self {
+    ) -> wasmtime::Result<Self> {
         let (trailers_http_tx, trailers_http_rx) = oneshot::channel();
         trailers_rx.pipe(
             &mut store,
@@ -281,7 +282,7 @@ impl GuestBody {
                 tx: Some(trailers_http_tx),
                 getter,
             },
-        );
+        )?;
 
         let contents_rx = if let Some(rx) = contents_rx {
             let (http_tx, http_rx) = mpsc::channel(1);
@@ -304,21 +305,21 @@ impl GuestBody {
                         sent: 0,
                         closed: false,
                     },
-                );
+                )?;
             } else {
                 _ = result_tx.send(Box::new(result_fut));
-                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx));
+                rx.pipe(store, UnlimitedGuestBodyConsumer(contents_tx))?;
             };
             Some(http_rx)
         } else {
             _ = result_tx.send(Box::new(result_fut));
             None
         };
-        Self {
+        Ok(Self {
             trailers_rx: Some(trailers_http_rx),
             contents_rx,
             content_length,
-        }
+        })
     }
 }
 
@@ -363,7 +364,7 @@ impl http_body::Body for GuestBody {
         self.trailers_rx = None;
         match res {
             Ok(Ok(Some(trailers))) => Poll::Ready(Some(Ok(http_body::Frame::trailers(
-                Arc::unwrap_or_clone(trailers),
+                Arc::unwrap_or_clone(trailers).into(),
             )))),
             Ok(Ok(None)) => Poll::Ready(None),
             Ok(Err(err)) => Poll::Ready(Some(Err(err))),
@@ -403,7 +404,7 @@ impl http_body::Body for GuestBody {
 
 /// [FutureConsumer] implementation for trailers originating in the guest.
 struct GuestTrailerConsumer<T> {
-    tx: Option<oneshot::Sender<Result<Option<Arc<HeaderMap>>, ErrorCode>>>,
+    tx: Option<oneshot::Sender<Result<Option<Arc<FieldMap>>, ErrorCode>>>,
     getter: fn(&mut T) -> WasiHttpCtxView<'_>,
 }
 
@@ -483,55 +484,67 @@ where
                     if self.body.is_end_stream() {
                         break 'result Ok(None);
                     } else {
-                        return Poll::Ready(Ok(StreamResult::Completed));
+                        // Destination has zero capacity but the body could still have data. Cannot return
+                        // `Completed` (nothing was produced — violates the StreamProducer contract). Fall
+                        // through to poll the body with `cap = None` so it buffers the frame.
+                        None
                     }
                 }
                 None => None,
             };
-            match Pin::new(&mut self.body).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    match frame.into_data().map_err(http_body::Frame::into_trailers) {
-                        Ok(mut frame) => {
-                            // Libraries like `Reqwest` generate a 0-length frame after sensing end-of-stream,
-                            // so we have to check for the body's end-of-stream indicator here too
-                            if frame.len() == 0 && self.body.is_end_stream() {
-                                break 'result Ok(None);
-                            }
-
-                            if let Some(cap) = cap {
-                                let n = frame.len();
-                                let cap = cap.into();
-                                if n > cap {
-                                    // data frame does not fit in destination, fill it and buffer the rest
-                                    dst.set_buffer(Cursor::new(frame.split_off(cap)));
-                                    let mut dst = dst.as_direct(store, cap);
-                                    dst.remaining().copy_from_slice(&frame);
-                                    dst.mark_written(cap);
-                                } else {
-                                    // copy the whole frame into the destination
-                                    let mut dst = dst.as_direct(store, n);
-                                    dst.remaining()[..n].copy_from_slice(&frame);
-                                    dst.mark_written(n);
+            loop {
+                match Pin::new(&mut self.body).poll_frame(cx) {
+                    Poll::Ready(Some(Ok(frame))) => {
+                        match frame.into_data().map_err(http_body::Frame::into_trailers) {
+                            Ok(mut frame) => {
+                                if frame.len() == 0 {
+                                    // Zero-length data frames are valid per the http_body::Body
+                                    // trait contract and RFC 9113 §6.1 — skip and re-poll
+                                    // directly rather than using `wake_by_ref()` + Pending, which
+                                    // would just re-enter this function via the task queue
+                                    if self.body.is_end_stream() {
+                                        break 'result Ok(None);
+                                    }
+                                    continue;
                                 }
-                            } else {
-                                dst.set_buffer(Cursor::new(frame));
+
+                                if let Some(cap) = cap {
+                                    let n = frame.len();
+                                    let cap = cap.into();
+                                    if n > cap {
+                                        // data frame does not fit in destination, fill it and buffer the rest
+                                        dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                        let mut dst = dst.as_direct(store, cap);
+                                        dst.remaining().copy_from_slice(&frame);
+                                        dst.mark_written(cap);
+                                    } else {
+                                        // copy the whole frame into the destination
+                                        let mut dst = dst.as_direct(store, n);
+                                        dst.remaining()[..n].copy_from_slice(&frame);
+                                        dst.mark_written(n);
+                                    }
+                                } else {
+                                    dst.set_buffer(Cursor::new(frame));
+                                }
+                                return Poll::Ready(Ok(StreamResult::Completed));
                             }
-                            return Poll::Ready(Ok(StreamResult::Completed));
+                            Err(Ok(trailers)) => {
+                                let view = (self.getter)(store.data_mut());
+                                let trailers = FieldMap::new_immutable(trailers);
+                                let trailers = view
+                                    .table
+                                    .push(trailers)
+                                    .context("failed to push trailers to table")?;
+                                break 'result Ok(Some(trailers));
+                            }
+                            Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                         }
-                        Err(Ok(trailers)) => {
-                            let trailers = (self.getter)(store.data_mut())
-                                .table
-                                .push(Fields::new_mutable(trailers))
-                                .context("failed to push trailers to table")?;
-                            break 'result Ok(Some(trailers));
-                        }
-                        Err(Err(..)) => break 'result Err(ErrorCode::HttpProtocolError),
                     }
+                    Poll::Ready(Some(Err(err))) => break 'result Err(err),
+                    Poll::Ready(None) => break 'result Ok(None),
+                    Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
+                    Poll::Pending => return Poll::Pending,
                 }
-                Poll::Ready(Some(Err(err))) => break 'result Err(err),
-                Poll::Ready(None) => break 'result Ok(None),
-                Poll::Pending if finish => return Poll::Ready(Ok(StreamResult::Cancelled)),
-                Poll::Pending => return Poll::Pending,
             }
         };
         self.close(res);

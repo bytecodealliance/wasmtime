@@ -1,5 +1,5 @@
 // Wasmtime-vendored copy of this header file as present in upstream:
-// <https://github.com/WebAssembly/wasm-c-api/blob/2ce1367c9d1271c83fb63bef26d896a2f290cd23/include/wasm.hh>
+// <https://github.com/WebAssembly/wasm-c-api/blob/9d6b93764ac96cdd9db51081c363e09d2d488b4d/include/wasm.hh>
 //
 // Wasmtime maintainers can update this vendored copy in-tree with the
 // ./ci/vendor-c-api-headers.sh shell script.
@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <limits>
 #include <string>
 
@@ -299,13 +300,14 @@ public:
 // External Types
 
 enum class ExternKind : uint8_t {
-  FUNC, GLOBAL, TABLE, MEMORY
+  FUNC, GLOBAL, TABLE, MEMORY, TAG
 };
 
 class FuncType;
 class GlobalType;
 class TableType;
 class MemoryType;
+class TagType;
 
 class WASM_API_EXTERN ExternType {
   friend class destroyer;
@@ -324,11 +326,13 @@ public:
   auto global() -> GlobalType*;
   auto table() -> TableType*;
   auto memory() -> MemoryType*;
+  auto tag() -> TagType*;
 
   auto func() const -> const FuncType*;
   auto global() const -> const GlobalType*;
   auto table() const -> const TableType*;
   auto memory() const -> const MemoryType*;
+  auto tag() const -> const TagType*;
 };
 
 
@@ -408,6 +412,24 @@ public:
   auto copy() const -> own<MemoryType>;
 
   auto limits() const -> const Limits&;
+};
+
+
+// Tag Types
+
+class WASM_API_EXTERN TagType : public ExternType {
+  friend class destroyer;
+  void destroy();
+
+protected:
+  TagType() = default;
+  ~TagType() = default;
+
+public:
+  static auto make(own<FuncType>&&) -> own<TagType>;
+  auto copy() const -> own<TagType>;
+
+  auto functype() const -> const FuncType*;
 };
 
 

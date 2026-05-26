@@ -1,0 +1,79 @@
+test interpret
+test run
+set opt_level=speed
+set enable_multi_ret_implicit_sret
+target aarch64
+target s390x
+target x86_64
+target x86_64 skylake
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+function %uge_band_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+; run: %uge_band_i32x4([1 2 3 4], [5 6 7 8]) == [-1 -1 -1 -1]
+; run: %uge_band_i32x4([0 0 0 0], [0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF]) == [-1 -1 -1 -1]
+
+function %uge_band_commuted_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v1, v0
+    v3 = icmp uge v0, v2
+    return v3
+}
+; run: %uge_band_commuted_i32x4([1 2 3 4], [5 6 7 8]) == [-1 -1 -1 -1]
+
+function %ule_band_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+; run: %ule_band_i32x4([1 2 3 4], [5 6 7 8]) == [-1 -1 -1 -1]
+
+function %ule_bor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bor v0, v1
+    v3 = icmp ule v0, v2
+    return v3
+}
+; run: %ule_bor_i32x4([1 2 3 4], [5 6 7 8]) == [-1 -1 -1 -1]
+
+function %uge_bor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bor v0, v1
+    v3 = icmp uge v2, v0
+    return v3
+}
+; run: %uge_bor_i32x4([1 2 3 4], [5 6 7 8]) == [-1 -1 -1 -1]
+
+function %uge_band_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = band v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+; run: %uge_band_i16x8([1 2 3 4 5 6 7 8], [9 10 11 12 13 14 15 16]) == [-1 -1 -1 -1 -1 -1 -1 -1]
+
+function %uge_band_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = band v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+; run: %uge_band_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]) == [-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1]
+
+function %uge_band_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = band v0, v1
+    v3 = icmp uge v0, v2
+    return v3
+}
+; run: %uge_band_i64x2([1 2], [3 4]) == [-1 -1]

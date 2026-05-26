@@ -214,12 +214,12 @@ block0():
 
 ; function %issue_10929_no_crash_on_icmp_vectors() -> i32x4 fast {
 ;     const0 = 0x40ad3fb47cb16076c8cb1fdd8189d40f
+;     const1 = 0xffffffffffffffffffffffffffffffff
 ;
 ; block0:
 ;     v1 = vconst.i32x4 const0
-;     v4 = bnot v1  ; v1 = const0
-;     v2 = bxor v1, v4  ; v1 = const0
-;     v3 = icmp ne v1, v2  ; v1 = const0
+;     v7 = vconst.i32x4 const1
+;     v3 = icmp ne v1, v7  ; v1 = const0, v7 = const1
 ;     return v3
 ; }
 
@@ -420,4 +420,3 @@ block0(v0: i32, v1: i32):
 ;     v6 = icmp ult v0, v1
 ;     return v6
 ; }
-

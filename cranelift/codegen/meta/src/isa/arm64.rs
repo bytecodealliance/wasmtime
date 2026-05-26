@@ -54,6 +54,12 @@ pub(crate) fn define() -> TargetIsa {
         "",
         false,
     );
+    settings.add_bool(
+        "use_csdb",
+        "Use the `csdb` instruction when spectre mitigations are enabled",
+        "",
+        false,
+    );
 
     TargetIsa::new("arm64", settings.build())
 }

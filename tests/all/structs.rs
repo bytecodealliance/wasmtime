@@ -752,6 +752,130 @@ fn struct_ref_struct_in_same_rec_group_in_global() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn structref_to_anyref_rooted() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty);
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(10)])?;
+
+    // Rooted<StructRef>::to_anyref upcast
+    let any: Rooted<AnyRef> = s.to_anyref();
+    assert!(any.is_struct(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn structref_to_eqref_rooted() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty);
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(10)])?;
+
+    // Rooted<StructRef>::to_eqref upcast
+    let eq: Rooted<EqRef> = s.to_eqref();
+    assert!(eq.is_struct(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn structref_owned_to_anyref() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty);
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(5)])?;
+    let owned = s.to_owned_rooted(&mut store)?;
+
+    // OwnedRooted<StructRef>::to_anyref upcast
+    let any_owned: OwnedRooted<AnyRef> = owned.to_anyref();
+    let any = any_owned.to_rooted(&mut store);
+    assert!(any.is_struct(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn structref_owned_to_eqref() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty);
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(5)])?;
+    let owned = s.to_owned_rooted(&mut store)?;
+
+    // OwnedRooted<StructRef>::to_eqref upcast
+    let eq_owned: OwnedRooted<EqRef> = owned.to_eqref();
+    let eq = eq_owned.to_rooted(&mut store);
+    assert!(eq.is_struct(&store)?);
+
+    Ok(())
+}
+
+#[test]
+fn structref_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty.clone());
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(99)])?;
+
+    let ty = s.ty(&store)?;
+    assert!(ty.matches(&struct_ty));
+
+    Ok(())
+}
+
+#[test]
+fn structref_matches_ty() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [FieldType::new(Mutability::Const, ValType::I32.into())],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty.clone());
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(0)])?;
+
+    assert!(s.matches_ty(&store, &struct_ty)?);
+
+    Ok(())
+}
+
+#[test]
+fn structref_fields() -> Result<()> {
+    let mut store = gc_store()?;
+    let struct_ty = StructType::new(
+        store.engine(),
+        [
+            FieldType::new(Mutability::Const, ValType::I32.into()),
+            FieldType::new(Mutability::Const, ValType::I64.into()),
+        ],
+    )?;
+    let pre = StructRefPre::new(&mut store, struct_ty);
+    let s = StructRef::new(&mut store, &pre, &[Val::I32(11), Val::I64(22)])?;
+
+    let fields: Vec<Val> = s.fields(&mut store)?.collect();
+    assert_eq!(fields.len(), 2);
+    assert_eq!(fields[0].unwrap_i32(), 11);
+    assert_eq!(fields[1].unwrap_i64(), 22);
+
+    Ok(())
+}
+
 #[wasmtime_test(wasm_features(function_references, gc))]
 #[cfg_attr(miri, ignore)]
 fn issue_9714(config: &mut Config) -> Result<()> {
@@ -782,6 +906,51 @@ fn issue_9714(config: &mut Config) -> Result<()> {
             .unwrap_concrete_struct()
             .clone();
         let _ = StructRefPre::new(&mut store, struct_ty);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn host_structref_has_trace_info_for_gc() -> Result<()> {
+    for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
+        println!("Using GC collector: {collector:?}");
+
+        let mut config = Config::new();
+        config.wasm_exceptions(true).wasm_gc(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        // Create a store and allocate the GC store by instantiating a module
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"(module
+              (global (export "g") (mut structref) (ref.null struct))
+              (table 1 anyref)
+            )"#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let g = instance.get_global(&mut store, "g").unwrap();
+
+        // Allocate a host structref object in a nested scope and put it into the
+        // module that was just allocated.
+        let struct_ty = StructType::new(
+            &engine,
+            [FieldType::new(Mutability::Const, StorageType::I8)],
+        )?;
+        let structpre = StructRefPre::new(&mut store, struct_ty.clone());
+        {
+            let mut scope = RootScope::new(&mut store);
+            let s = StructRef::new(&mut scope, &structpre, &[Val::I32(29)])?;
+            g.set(&mut scope, Val::AnyRef(Some(s.into())))?;
+        }
+
+        // The structref should stay alive and be traced properly...
+        store.gc(None)?;
+
+        assert!(matches!(g.get(&mut store), Val::AnyRef(Some(_))));
     }
 
     Ok(())

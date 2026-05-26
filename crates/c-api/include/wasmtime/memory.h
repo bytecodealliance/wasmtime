@@ -95,7 +95,7 @@ wasmtime_memory_type(const wasmtime_context_t *store,
 /**
  * \brief Returns the base pointer in memory where the linear memory starts.
  */
-WASM_API_EXTERN uint8_t *wasmtime_memory_data(const wasmtime_context_t *store,
+WASM_API_EXTERN uint8_t *wasmtime_memory_data(wasmtime_context_t *store,
                                               const wasmtime_memory_t *memory);
 
 /**

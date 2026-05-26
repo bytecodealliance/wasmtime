@@ -844,7 +844,7 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
     if concurrent {
         store
             .run_concurrent(async move |accessor| {
-                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?.0)
+                wasmtime::error::Ok(run.call_concurrent(accessor, ()).await?)
             })
             .await??;
     } else {
@@ -1213,6 +1213,49 @@ fn use_types_across_component_boundaries() -> Result<()> {
     let my_func = instance.get_func(&mut store, "my-func").unwrap();
     // Call the exported function with the return values of the call to the previous component's exported function
     my_func.call(&mut store, &results, &mut [])?;
+
+    Ok(())
+}
+
+#[test]
+fn hostcall_fuel_limits_val() -> Result<()> {
+    let engine = super::engine();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (import "hi" (func $hi (param "x" (list u8))))
+            (core module $libc
+                (memory (export "memory") 10)
+            )
+            (core module $m
+                (import "libc" "memory" (memory 1))
+                (import "" "hi" (func $hi (param i32 i32)))
+
+                (func (export "run")
+                    i32.const 0
+                    memory.size
+                    i32.const 65536
+                    i32.mul
+                    call $hi)
+            )
+            (core instance $libc (instantiate $libc))
+            (core func $hi (canon lower (func $hi) (memory $libc "memory")))
+            (core instance $i (instantiate $m
+                (with "libc" (instance $libc))
+                (with "" (instance (export "hi" (func $hi))))
+            ))
+            (func (export "run") (canon lift (core func $i "run")))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let mut linker = Linker::new(&engine);
+    linker.root().func_new("hi", |_, _, _, _| Ok(()))?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+    run.call(&mut store, &[], &mut [])?;
+
+    store.set_hostcall_fuel(100);
+    assert!(run.call(&mut store, &[], &mut []).is_err());
 
     Ok(())
 }

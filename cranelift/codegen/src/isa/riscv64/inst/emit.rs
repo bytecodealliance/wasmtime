@@ -900,7 +900,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -1542,7 +1542,7 @@ impl Inst {
                 amo,
             } => {
                 // TODO: get flags from original CLIF atomic instruction
-                let flags = MemFlags::new();
+                let flags = MemFlagsData::new();
                 if let Some(trap_code) = flags.trap_code() {
                     sink.add_trap(trap_code);
                 }
@@ -1824,7 +1824,9 @@ impl Inst {
                     amo: AMO::SeqCst,
                 }
                 .emit(sink, emit_info, state);
-                //
+                // For sub-word ops the merge step needs the original full word.
+                // Stash it in spilltmp2 before `extract` clobbers `dst`; reusing
+                // the value avoids a second LR that would cancel the reservation.
 
                 let store_value: Reg = match op {
                     crate::ir::AtomicRmwOp::Add
@@ -1832,6 +1834,8 @@ impl Inst {
                     | crate::ir::AtomicRmwOp::And
                     | crate::ir::AtomicRmwOp::Or
                     | crate::ir::AtomicRmwOp::Xor => {
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(sink, emit_info, state));
@@ -1849,14 +1853,6 @@ impl Inst {
                             rs2: x,
                         }
                         .emit(sink, emit_info, state);
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1870,6 +1866,8 @@ impl Inst {
                     }
                     crate::ir::AtomicRmwOp::Nand => {
                         if ty.bits() < 32 {
+                            Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                                .emit(sink, emit_info, state);
                             AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                                 .iter()
                                 .for_each(|i| i.emit(sink, emit_info, state));
@@ -1883,14 +1881,6 @@ impl Inst {
                         .emit(sink, emit_info, state);
                         Inst::construct_bit_not(t0, t0.to_reg()).emit(sink, emit_info, state);
                         if ty.bits() < 32 {
-                            Inst::Atomic {
-                                op: AtomicOP::load_op(ty),
-                                rd: writable_spilltmp_reg2(),
-                                addr: p,
-                                src: zero_reg(),
-                                amo: AMO::SeqCst,
-                            }
-                            .emit(sink, emit_info, state);
                             AtomicOP::merge(
                                 writable_spilltmp_reg2(),
                                 writable_spilltmp_reg(),
@@ -1912,6 +1902,8 @@ impl Inst {
                     | crate::ir::AtomicRmwOp::Smax => {
                         let label_select_dst = sink.get_label();
                         let label_select_done = sink.get_label();
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         if op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax
                         {
                             AtomicOP::extract(dst, offset, dst.to_reg(), ty)
@@ -1943,14 +1935,6 @@ impl Inst {
                         sink.bind_label(label_select_dst, &mut state.ctrl_plane);
                         Inst::gen_move(t0, dst.to_reg(), I64).emit(sink, emit_info, state);
                         sink.bind_label(label_select_done, &mut state.ctrl_plane);
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -1963,17 +1947,11 @@ impl Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Xchg => {
+                        Inst::gen_move(writable_spilltmp_reg2(), dst.to_reg(), I64)
+                            .emit(sink, emit_info, state);
                         AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(sink, emit_info, state));
-                        Inst::Atomic {
-                            op: AtomicOP::load_op(ty),
-                            rd: writable_spilltmp_reg2(),
-                            addr: p,
-                            src: zero_reg(),
-                            amo: AMO::SeqCst,
-                        }
-                        .emit(sink, emit_info, state);
                         AtomicOP::merge(
                             writable_spilltmp_reg2(),
                             writable_spilltmp_reg(),
@@ -2038,7 +2016,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                     from: AMode::RegOffset(rd.to_reg(), 0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
@@ -2067,7 +2045,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                     from: AMode::Label(label_data),
                 }
                 .emit(sink, emit_info, state);
@@ -2180,20 +2158,14 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
-            &Inst::TrapIf {
-                rs1,
-                rs2,
-                cc,
-                trap_code,
-            } => {
+            &Inst::TrapIf { cmp, trap_code } => {
                 let label_end = sink.get_label();
-                let cond = IntegerCompare { kind: cc, rs1, rs2 };
 
                 // Jump over the trap if we the condition is false.
                 Inst::CondBr {
                     taken: CondBrTarget::Label(label_end),
                     not_taken: CondBrTarget::Fallthrough,
-                    kind: cond.inverse(),
+                    kind: cmp.inverse(),
                 }
                 .emit(sink, emit_info, state);
                 Inst::Udf { trap_code }.emit(sink, emit_info, state);
@@ -2215,7 +2187,7 @@ impl Inst {
                 Inst::Load {
                     rd,
                     op: LoadOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     from: AMode::RegOffset(p, 0),
                 }
                 .emit(sink, emit_info, state);
@@ -2234,7 +2206,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(p, 0),
                     op: StoreOP::from_type(ty),
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     src,
                 }
                 .emit(sink, emit_info, state);
@@ -2582,7 +2554,7 @@ impl Inst {
                 Inst::Store {
                     to: AMode::RegOffset(spilltmp_reg2(), 0),
                     op: StoreOP::Sb,
-                    flags: MemFlags::new(),
+                    flags: MemFlagsData::new(),
                     src: zero_reg(),
                 }
                 .emit(sink, emit_info, state);
@@ -2845,7 +2817,7 @@ fn return_call_emit_impl<T>(
             reg.map(Reg::from),
             AMode::SPOffset(clobber_offset),
             ty,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
 
@@ -2859,7 +2831,7 @@ fn return_call_emit_impl<T>(
             writable_link_reg(),
             AMode::SPOffset(sp_to_fp_offset + 8),
             I64,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
 
@@ -2867,7 +2839,7 @@ fn return_call_emit_impl<T>(
             writable_fp_reg(),
             AMode::SPOffset(sp_to_fp_offset),
             I64,
-            MemFlags::trusted(),
+            MemFlagsData::trusted(),
         )
         .emit(sink, emit_info, state);
     }

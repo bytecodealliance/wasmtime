@@ -40,6 +40,8 @@ class Component {
   WASMTIME_CLONE_WRAPPER(Component, wasmtime_component);
 
 #ifdef WASMTIME_FEATURE_COMPILER
+
+#ifdef WASMTIME_FEATURE_WAT
   /**
    * \brief Compiles a component from the WebAssembly text format.
    *
@@ -54,6 +56,7 @@ class Component {
     auto bytes = wasm.ok();
     return compile(engine, bytes);
   }
+#endif // WASMTIME_FEATURE_WAT
 
   /**
    * \brief Compiles a component from the WebAssembly binary format.
@@ -150,8 +153,8 @@ class Component {
    * The `instance` argument is an optionally provided index which is the
    * instance under which the `name` should be looked up.
    */
-  std::optional<ExportIndex> export_index(ExportIndex *instance,
-                                          std::string_view name) {
+  std::optional<ExportIndex> export_index(const ExportIndex *instance,
+                                          std::string_view name) const {
     auto ret = wasmtime_component_get_export_index(
         capi(), instance ? instance->capi() : nullptr, name.data(),
         name.size());

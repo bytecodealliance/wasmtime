@@ -81,7 +81,7 @@ pub(crate) fn wasm_sig<A: ABI>(ty: &WasmFuncType) -> Result<ABISig> {
     params.extend_from_slice(&vmctx_types::<A>());
     params.extend_from_slice(ty.params());
 
-    A::sig_from(&params, ty.returns(), &CallingConvention::Default)
+    A::sig_from(&params, ty.results(), &CallingConvention::Default)
 }
 
 /// Returns the callee and caller [VMContext] types.
@@ -112,7 +112,7 @@ pub(crate) trait ABI {
     /// function type.
     #[cfg(test)]
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> Result<ABISig> {
-        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
+        Self::sig_from(wasm_sig.params(), wasm_sig.results(), call_conv)
     }
 
     /// Construct an ABI signature from WasmType params and returns.

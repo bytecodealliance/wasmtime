@@ -1,8 +1,8 @@
 //! Working with GC `eqref`s.
-
+#![cfg(feature = "gc")]
 use crate::{
     AnyRef, ArrayRef, ArrayType, AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, I31,
-    OwnedRooted, RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, bail_bug,
     prelude::*,
     runtime::vm::VMGcRef,
     store::{AutoAssertNoGc, StoreOpaque},
@@ -168,6 +168,7 @@ impl EqRef {
                 || store
                     .unwrap_gc_store()
                     .header(&gc_ref)
+                    .unwrap()
                     .kind()
                     .matches(VMGcKind::EqRef)
         );
@@ -198,22 +199,26 @@ impl EqRef {
             return Ok(HeapType::I31);
         }
 
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
+        let ty = match header.ty() {
+            Some(ty) => ty,
+            None => bail_bug!("ty should be present"),
+        };
 
         if header.kind().matches(VMGcKind::StructRef) {
             return Ok(HeapType::ConcreteStruct(
-                StructType::from_shared_type_index(store.engine(), header.ty().unwrap()),
+                StructType::from_shared_type_index(store.engine(), ty),
             ));
         }
 
         if header.kind().matches(VMGcKind::ArrayRef) {
             return Ok(HeapType::ConcreteArray(ArrayType::from_shared_type_index(
                 store.engine(),
-                header.ty().unwrap(),
+                ty,
             )));
         }
 
-        unreachable!("no other kinds of `eqref`s")
+        bail_bug!("no other kinds of `eqref`s")
     }
 
     /// Does this `eqref` match the given type?
@@ -350,7 +355,7 @@ impl EqRef {
         Ok(!gc_ref.is_i31()
             && store
                 .require_gc_store()?
-                .kind(gc_ref)
+                .kind(gc_ref)?
                 .matches(VMGcKind::StructRef))
     }
 
@@ -418,7 +423,7 @@ impl EqRef {
         Ok(!gc_ref.is_i31()
             && store
                 .require_gc_store()?
-                .kind(gc_ref)
+                .kind(gc_ref)?
                 .matches(VMGcKind::ArrayRef))
     }
 

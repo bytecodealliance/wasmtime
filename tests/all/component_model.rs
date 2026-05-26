@@ -5,7 +5,7 @@ use wasmtime::component::{
 };
 use wasmtime::{Config, Result, Store};
 use wasmtime_component_util::REALLOC_AND_FREE;
-use wasmtime_test_util::component::{async_engine, config, engine};
+use wasmtime_test_util::component::{async_engine, config, engine, map_engine};
 
 mod aot;
 mod r#async;
@@ -77,8 +77,7 @@ impl ApiStyle {
             }
             ApiStyle::Concurrent => Ok(store
                 .run_concurrent(async |access| func.call_concurrent(access, params).await)
-                .await??
-                .0),
+                .await??),
         }
     }
 

@@ -22,7 +22,7 @@ use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
     CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
-    TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
+    StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
 };
 #[cfg(feature = "gc")]
 use wasmtime_unwinder::ExceptionTable;
@@ -404,6 +404,12 @@ impl Module {
     /// those defined by any version of wasmtime. (this means that if you cache
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let code = engine.load_code_bytes(bytes.as_ref(), ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
@@ -523,8 +529,8 @@ impl Module {
 
         // Package up all our data into an `EngineCode` and delegate to the final
         // step of module compilation.
-        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into()));
-        let index = Arc::new(index);
+        let code = try_new::<Arc<_>>(EngineCode::new(code_memory, signatures, types.into())?)?;
+        let index = try_new::<Arc<_>>(index)?;
         Module::from_parts_raw(engine, code, info, index, true)
     }
 
@@ -547,7 +553,7 @@ impl Module {
         let _ = serializable;
 
         Ok(Self {
-            inner: Arc::new(ModuleInner {
+            inner: try_new::<Arc<_>>(ModuleInner {
                 engine: engine.clone(),
                 code,
                 memory_images: OnceLock::new(),
@@ -556,7 +562,7 @@ impl Module {
                 serializable,
                 offsets,
                 checksum,
-            }),
+            })?,
         })
     }
 
@@ -655,7 +661,6 @@ impl Module {
         self.inner.code.module_types()
     }
 
-    #[cfg(any(feature = "component-model", feature = "gc-drc"))]
     pub(crate) fn signatures(&self) -> &crate::type_registry::TypeCollection {
         self.inner.code.signatures()
     }
@@ -686,6 +691,18 @@ impl Module {
         let module = self.compiled_module().module();
         let name = module.name?;
         Some(&module.strings[name])
+    }
+
+    /// Returns the original Wasm bytecode for this module, if it is
+    /// available.
+    ///
+    /// Bytecode is only retained when the [`Engine`] was configured with
+    /// `guest-debug` support enabled (see [`Config::guest_debug`]). Returns
+    /// `None` when the module was compiled without that option.
+    ///
+    /// [`Config::guest_debug`]: crate::Config::guest_debug
+    pub fn debug_bytecode(&self) -> Option<&[u8]> {
+        self.compiled_module().bytecode()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -743,14 +760,10 @@ impl Module {
         let module = self.compiled_module().module();
         let types = self.types();
         let engine = self.engine();
-        module
-            .imports()
-            .map(move |(imp_mod, imp_field, ty)| {
-                debug_assert!(ty.is_canonicalized_for_runtime_usage());
-                ImportType::new(imp_mod, imp_field, ty, types, engine)
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
+        module.imports().map(move |(imp_mod, imp_field, ty)| {
+            debug_assert!(ty.is_canonicalized_for_runtime_usage());
+            ImportType::new(imp_mod, imp_field, ty, types, engine)
+        })
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
@@ -1081,10 +1094,12 @@ impl Module {
     /// Results are yielded in a ModuleFunction struct.
     pub fn functions<'a>(&'a self) -> impl ExactSizeIterator<Item = ModuleFunction> + 'a {
         let module = self.compiled_module();
-        self.env_module().defined_func_indices().map(|idx| {
+        let module_index = self.env_module().module_index;
+        self.env_module().defined_func_indices().map(move |idx| {
             let loc = module.func_loc(idx);
             let idx = module.module().func_index(idx);
             ModuleFunction {
+                module: module_index,
                 index: idx,
                 name: module.func_name(idx).map(|n| n.to_string()),
                 offset: loc.start as usize,
@@ -1099,6 +1114,15 @@ impl Module {
 
     pub(crate) fn offsets(&self) -> &VMOffsets<HostPtr> {
         &self.inner.offsets
+    }
+
+    /// Return the unique-within-Engine ID for this module.
+    ///
+    /// Allows distinguishing module identities when introspecting
+    /// modules, e.g. via debug APIs.
+    #[cfg(feature = "debug")]
+    pub fn debug_index_in_engine(&self) -> u64 {
+        self.id().as_u64()
     }
 
     /// Return the address, in memory, of the trampoline that allows Wasm to
@@ -1196,9 +1220,15 @@ impl Module {
 
 /// Describes a function for a given module.
 pub struct ModuleFunction {
+    /// The static module index this function belongs to.
+    pub module: StaticModuleIndex,
+    /// The function index within the module.
     pub index: wasmtime_environ::FuncIndex,
+    /// The display name of the function, if available.
     pub name: Option<String>,
+    /// The byte offset of this function in the text section.
     pub offset: usize,
+    /// The byte length of this function in the text section.
     pub len: usize,
 }
 

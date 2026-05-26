@@ -1170,7 +1170,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             while copied < buf.len() {
                 let len = (buf.len() - copied).min(MAX_SHARED_BUFFER_SIZE as u32);
                 let mut tmp = vec![0; len as usize];
-                self.random.lock().unwrap().try_fill_bytes(&mut tmp)?;
+                self.random.lock().unwrap().fill_bytes(&mut tmp);
                 let dest = buf.get_range(copied..copied + len).unwrap();
                 memory.copy_from_slice(&tmp, dest)?;
                 copied += len;
@@ -1179,7 +1179,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             // If the Wasm memory is non-shared, copy directly into the linear
             // memory.
             let mem = &mut memory.as_slice_mut(buf)?.unwrap();
-            self.random.lock().unwrap().try_fill_bytes(mem)?;
+            self.random.lock().unwrap().fill_bytes(mem);
         }
         Ok(())
     }

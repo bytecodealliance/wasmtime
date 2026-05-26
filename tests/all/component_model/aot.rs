@@ -1,7 +1,7 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, Type};
-use wasmtime::{Engine, Module, Precompiled, Store};
+use wasmtime::{Config, Engine, Module, Precompiled, Store};
 
 #[test]
 fn module_component_mismatch() -> Result<()> {
@@ -152,11 +152,11 @@ fn reflect_resource_import() -> Result<()> {
     let mut imports = ty.imports(&engine);
     let (_, x) = imports.next().unwrap();
     let (_, y) = imports.next().unwrap();
-    let x = match x {
+    let x = match x.ty {
         ComponentItem::Resource(t) => t,
         _ => unreachable!(),
     };
-    let y = match y {
+    let y = match y.ty {
         ComponentItem::ComponentFunc(t) => t,
         _ => unreachable!(),
     };
@@ -205,6 +205,33 @@ fn truncated_component_binaries_dont_panic() -> Result<()> {
     for i in 1..binary.len() - 1 {
         let _ = Component::from_binary(&engine, &binary[0..i]);
     }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn implements_shows_up() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "a" (implements "a1:b1/c1") (instance $a))
+                (export "b" (implements "a2:b2/c2") (instance $a))
+            )
+        "#,
+    )?;
+
+    let ty = component.component_type();
+    let mut imports = ty.imports(&engine);
+    let (_, a) = imports.next().unwrap();
+    assert_eq!(a.implements.as_deref(), Some("a1:b1/c1"));
+    let mut exports = ty.exports(&engine);
+    let (_, b) = exports.next().unwrap();
+    assert_eq!(b.implements.as_deref(), Some("a2:b2/c2"));
 
     Ok(())
 }

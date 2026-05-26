@@ -26,6 +26,13 @@
 // situation should be pretty rare though.
 #![warn(clippy::cast_possible_truncation)]
 
+use crate::prelude::*;
+use core::marker;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+
+mod bug;
+
 #[macro_use]
 pub(crate) mod func;
 
@@ -33,7 +40,6 @@ pub(crate) mod code;
 pub(crate) mod code_memory;
 #[cfg(feature = "debug")]
 pub(crate) mod debug;
-#[cfg(feature = "gc")]
 pub(crate) mod exception;
 pub(crate) mod externals;
 #[cfg(feature = "async")]
@@ -74,10 +80,11 @@ cfg_if::cfg_if! {
     }
 }
 
+pub use bug::WasmtimeBug;
+pub(crate) use bug::{bail_bug, bug};
 pub use code_memory::CodeMemory;
 #[cfg(feature = "debug")]
 pub use debug::*;
-#[cfg(feature = "gc")]
 pub use exception::*;
 pub use externals::*;
 pub use func::*;
@@ -87,7 +94,7 @@ pub use instantiate::CompiledModule;
 pub use limits::*;
 pub use linker::*;
 pub use memory::*;
-pub use module::{Module, ModuleExport};
+pub use module::{Module, ModuleExport, ModuleFunction};
 pub use resources::*;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use store::CallHookHandler;
@@ -119,6 +126,43 @@ pub use coredump::*;
 
 #[cfg(feature = "wave")]
 mod wave;
+
+/// Helper method to create a future trait object from the future `F` provided.
+///
+/// This requires that the output of `F` is a result where the error can be
+/// created from `OutOfMemory`. This will handle OOM when allocation of `F` on
+/// the heap fails.
+fn box_future<'a, F, T, E>(future: F) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>
+where
+    F: Future<Output = Result<T, E>> + Send + 'a,
+    T: 'a,
+    E: From<OutOfMemory> + 'a,
+{
+    if let Ok(future) = try_new::<Box<F>>(future) {
+        return Pin::from(future);
+    }
+
+    // Use a custom guaranteed-zero-size struct to implement a future that
+    // returns an OOM error which satisfies the type signature of this function.
+    struct OomFuture<F, T, E>(marker::PhantomData<fn() -> (T, F, E)>);
+
+    impl<F, T, E> Future for OomFuture<F, T, E>
+    where
+        E: From<OutOfMemory>,
+    {
+        type Output = Result<T, E>;
+
+        fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+            Poll::Ready(Err(OutOfMemory::new(size_of::<F>()).into()))
+        }
+    }
+
+    // Zero-size allocations don't actually allocate memory with a `Box`, so
+    // it's ok to use the standard `Box::pin` here and not worry about OOM.
+    let future = OomFuture::<F, T, E>(marker::PhantomData);
+    assert_eq!(size_of_val(&future), 0);
+    Box::pin(future)
+}
 
 fn _assertions_runtime() {
     use crate::_assert_send_and_sync;

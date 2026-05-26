@@ -135,11 +135,6 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
-            self.lower_ctx.ensure_in_vreg(reg, ty)
-        }
-
-        #[inline]
         fn value_regs_get(&mut self, regs: ValueRegs, i: usize) -> Reg {
             regs.regs()[i]
         }
@@ -203,8 +198,13 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn inst_data_value(&mut self, inst: Inst) -> InstructionData {
-            self.lower_ctx.dfg().insts[inst]
+        fn inst_data_value(&mut self, inst: Inst) -> (Type, InstructionData) {
+            let ty = match self.first_result(inst) {
+                Some(v) => self.value_type(v),
+                None => types::INVALID,
+            };
+            let data = self.lower_ctx.dfg().insts[inst];
+            (ty, data)
         }
 
         #[inline]
@@ -772,11 +772,6 @@ macro_rules! isle_lower_prelude_methods {
 
         fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
             targets.len() as u32
-        }
-
-        fn add_range_fact(&mut self, reg: Reg, bits: u16, min: u64, max: u64) -> Reg {
-            self.lower_ctx.add_range_fact(reg, bits, min, max);
-            reg
         }
 
         fn value_is_unused(&mut self, val: Value) -> bool {

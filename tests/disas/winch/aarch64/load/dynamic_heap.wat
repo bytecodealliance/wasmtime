@@ -46,7 +46,7 @@
 ;;   5c: cmp     x2, x1, uxtx
 ;;       b.hi    #0x158
 ;;   64: ldur    x3, [x9, #0x38]
-;;       add     x3, x3, x0, uxtx
+;;       add     x3, x3, w0, uxtw
 ;;       mov     x4, #0
 ;;       cmp     x2, x1, uxtx
 ;;       csel    x3, x4, x3, hi
@@ -59,7 +59,7 @@
 ;;   90: cmp     x3, x2, uxtx
 ;;       b.hi    #0x160
 ;;   98: ldur    x4, [x9, #0x38]
-;;       add     x4, x4, x1, uxtx
+;;       add     x4, x4, w1, uxtw
 ;;       add     x4, x4, #4
 ;;       mov     x5, #0
 ;;       cmp     x3, x2, uxtx
@@ -75,7 +75,7 @@
 ;;   d0: cmp     x4, x3, uxtx
 ;;       b.hi    #0x168
 ;;   d8: ldur    x5, [x9, #0x38]
-;;       add     x5, x5, x2, uxtx
+;;       add     x5, x5, w2, uxtw
 ;;       orr     x16, xzr, #0xfffff
 ;;       add     x5, x5, x16, uxtx
 ;;       mov     x6, #0

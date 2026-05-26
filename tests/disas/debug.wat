@@ -22,21 +22,21 @@
 ;;       jb      0x62
 ;;   29: movq    %rdi, (%rsp)
 ;;       nopl    (%rax, %rax)
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 36, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
-;;       ╰─╼ breakpoint patch: wasm PC 36, patch bytes [232, 184, 1, 0, 0]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x24, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
+;;       ╰─╼ breakpoint patch: wasm PC 0x24, patch bytes [232, 184, 1, 0, 0]
 ;;       movl    %edx, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 38, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 38, patch bytes [232, 175, 1, 0, 0]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x26, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
+;;       ╰─╼ breakpoint patch: wasm PC 0x26, patch bytes [232, 175, 1, 0, 0]
 ;;       movl    %ecx, 0x14(%rsp)
 ;;       nopl    (%rax, %rax)
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 40, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10, I32 @ slot+0x14
-;;       ╰─╼ breakpoint patch: wasm PC 40, patch bytes [232, 166, 1, 0, 0]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x28, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10, I32 @ slot+0x14
+;;       ╰─╼ breakpoint patch: wasm PC 0x28, patch bytes [232, 166, 1, 0, 0]
 ;;       leal    (%rdx, %rcx), %eax
 ;;       movl    %eax, 0x10(%rsp)
 ;;       nopl    (%rax, %rax)
-;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 41, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
-;;       ╰─╼ breakpoint patch: wasm PC 41, patch bytes [232, 154, 1, 0, 0]
+;;       ├─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x29, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack I32 @ slot+0x10
+;;       ╰─╼ breakpoint patch: wasm PC 0x29, patch bytes [232, 154, 1, 0, 0]
 ;;       movl    %eax, 0x10(%rsp)
 ;;       movq    0x20(%rsp), %r12
 ;;       addq    $0x30, %rsp
@@ -48,6 +48,7 @@
 ;;   67: callq   0x18c
 ;;   6c: movq    %r12, %rdi
 ;;   6f: callq   0x1bd
+;;       ╰─╼ debug frame state (after previous inst): func key DefinedWasmFunction(StaticModuleIndex(0), DefinedFuncIndex(0)), wasm PC 0x23, slot at FP-0x30, locals I32 @ slot+0x8, I32 @ slot+0xc, stack 
 ;;   74: ud2
 ;;
 ;; wasm[0]::array_to_wasm_trampoline[0]:
@@ -127,7 +128,7 @@
 ;;       popq    %rbp
 ;;       retq
 ;;  17a: movq    0x10(%rbx), %rax
-;;  17e: movq    0x198(%rax), %rax
+;;  17e: movq    0x148(%rax), %rax
 ;;  185: movq    %rbx, %rdi
 ;;  188: callq   *%rax
 ;;  18a: ud2
@@ -142,7 +143,7 @@
 ;;       movq    8(%r10), %r11
 ;;       movq    %r11, 0x38(%r9)
 ;;       movq    0x10(%rdi), %r11
-;;       movq    0x190(%r11), %r11
+;;       movq    0x140(%r11), %r11
 ;;       movzbq  %sil, %rsi
 ;;       callq   *%r11
 ;;       movq    %rbp, %rsp
@@ -159,7 +160,7 @@
 ;;       movq    8(%r9), %r9
 ;;       movq    %r9, 0x38(%r8)
 ;;       movq    0x10(%rdi), %r9
-;;       movq    0x198(%r9), %r9
+;;       movq    0x148(%r9), %r9
 ;;       callq   *%r9
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
@@ -202,7 +203,7 @@
 ;;       movq    8(%r11), %rax
 ;;       movq    %rax, 0x38(%r10)
 ;;       movq    0x10(%rdi), %rax
-;;       movq    0x1c8(%rax), %rcx
+;;       movq    0x170(%rax), %rcx
 ;;       movq    %rdi, %rbx
 ;;       callq   *%rcx
 ;;       testb   %al, %al
@@ -238,7 +239,7 @@
 ;;       popq    %rbp
 ;;       retq
 ;;  3af: movq    0x10(%rbx), %rax
-;;  3b3: movq    0x198(%rax), %rax
+;;  3b3: movq    0x148(%rax), %rax
 ;;  3ba: movq    %rbx, %rdi
 ;;  3bd: callq   *%rax
 ;;  3bf: ud2

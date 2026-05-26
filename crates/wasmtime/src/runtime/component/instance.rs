@@ -182,6 +182,10 @@ impl Instance {
     /// Returns an error if `name` isn't a function export or if the export's
     /// type did not match `Params` or `Results`
     ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
@@ -565,6 +569,13 @@ impl Instance {
             (&*component, store)
         }
     }
+
+    pub(crate) fn runtime_instance(&self, index: RuntimeComponentInstanceIndex) -> RuntimeInstance {
+        RuntimeInstance {
+            instance: self.id.instance(),
+            index,
+        }
+    }
 }
 
 /// Translates a `CoreDef`, a definition of a core wasm item, to an
@@ -670,11 +681,11 @@ where
 
 impl InstanceExportLookup for str {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        component
+        let (index, _) = component
             .env_component()
             .exports
-            .get(self, &NameMapNoIntern)
-            .copied()
+            .get(self, &NameMapNoIntern)?;
+        Some(*index)
     }
 }
 
@@ -715,7 +726,7 @@ pub(crate) enum RuntimeImport {
     },
 }
 
-pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
+pub type ImportedResources = TryPrimaryMap<ResourceIndex, ResourceType>;
 
 impl<'a> Instantiator<'a> {
     fn new(
@@ -724,19 +735,19 @@ impl<'a> Instantiator<'a> {
         imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Result<Instantiator<'a>> {
         let env_component = component.env_component();
-        let (modules, engine) = store.modules_and_engine_mut();
-        modules.register_component(component, engine)?;
+        let (modules, engine, breakpoints) = store.modules_and_engine_and_breakpoints_mut();
+        modules.register_component(component, engine, breakpoints)?;
         let imported_resources: ImportedResources =
-            PrimaryMap::with_capacity(env_component.imported_resources.len());
+            TryPrimaryMap::with_capacity(env_component.imported_resources.len())?;
 
         let instance = ComponentInstance::new(
             store.store_data().components.next_component_instance_id(),
             component,
-            Arc::new(imported_resources),
+            try_new::<Arc<_>>(imported_resources)?,
             imports,
             store.traitobj(),
         )?;
-        let id = store.store_data_mut().push_component_instance(instance);
+        let id = store.store_data_mut().push_component_instance(instance)?;
 
         Ok(Instantiator {
             component,
@@ -763,7 +774,7 @@ impl<'a> Instantiator<'a> {
                 } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
             };
-            let i = self.instance_resource_types_mut(store.0).push(ty);
+            let i = self.instance_resource_types_mut(store.0).push(ty)?;
             assert_eq!(i, idx);
             self.instance_mut(store.0)
                 .set_resource_destructor(idx, Some(func_ref));
@@ -823,7 +834,7 @@ impl<'a> Instantiator<'a> {
                         // `args` list is already in the right order.
                         InstantiateModule::Static(idx, args) => {
                             module = self.component.static_module(*idx);
-                            self.build_imports(store.0, module, args.iter())
+                            self.build_imports(store.0, module, args.iter())?
                         }
 
                         // With imports, unlike upvars, we need to do runtime
@@ -842,7 +853,7 @@ impl<'a> Instantiator<'a> {
                             let args = module
                                 .imports()
                                 .map(|import| &args[import.module()][import.name()]);
-                            self.build_imports(store.0, module, args)
+                            self.build_imports(store.0, module, args)?
                         }
                     };
 
@@ -875,10 +886,10 @@ impl<'a> Instantiator<'a> {
                     };
 
                     if exit {
-                        store.0.exit_guest_sync_call(false)?;
+                        store.0.exit_guest_sync_call()?;
                     }
 
-                    self.instance_mut(store.0).push_instance_id(i.id());
+                    self.instance_mut(store.0).push_instance_id(i.id())?;
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {
@@ -906,13 +917,13 @@ impl<'a> Instantiator<'a> {
                     self.extract_post_return(store.0, post_return)
                 }
 
-                GlobalInitializer::Resource(r) => self.resource(store.0, r),
+                GlobalInitializer::Resource(r) => self.resource(store.0, r)?,
             }
         }
         Ok(())
     }
 
-    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) -> Result<()> {
         let dtor = resource
             .dtor
             .as_ref()
@@ -929,8 +940,9 @@ impl<'a> Instantiator<'a> {
         let ty = ResourceType::guest(store.id(), instance, resource.index);
         self.instance_mut(store)
             .set_resource_destructor(index, dtor);
-        let i = self.instance_resource_types_mut(store).push(ty);
+        let i = self.instance_resource_types_mut(store).push(ty)?;
         debug_assert_eq!(i, index);
+        Ok(())
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
@@ -985,9 +997,9 @@ impl<'a> Instantiator<'a> {
         store: &mut StoreOpaque,
         module: &Module,
         args: impl Iterator<Item = &'b CoreDef>,
-    ) -> &OwnedImports {
+    ) -> Result<&OwnedImports, OutOfMemory> {
         self.core_imports.clear();
-        self.core_imports.reserve(module);
+        self.core_imports.reserve(module)?;
         let mut imports = module.compiled_module().module().imports();
 
         for arg in args {
@@ -1005,11 +1017,11 @@ impl<'a> Instantiator<'a> {
             // directly from an instance which should only give us valid export
             // items.
             let export = lookup_vmdef(store, self.id, arg);
-            self.core_imports.push_export(store, &export);
+            self.core_imports.push_export(store, &export)?;
         }
         debug_assert!(imports.next().is_none());
 
-        &self.core_imports
+        Ok(&self.core_imports)
     }
 
     fn assert_type_matches(
@@ -1046,7 +1058,7 @@ impl<'a> Instantiator<'a> {
             return;
         }
 
-        let val = crate::Extern::from_wasmtime_export(export, store);
+        let val = crate::Extern::from_wasmtime_export(export, store.engine());
         let ty = DefinitionType::from(store, &val);
         crate::types::matching::MatchCx::new(module.engine())
             .definition(&expected, &ty)
@@ -1088,7 +1100,7 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+    resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
     asyncness: Asyncness,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -1116,7 +1128,7 @@ impl<T: 'static> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
-        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        resource_types: Arc<TryPrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
         let mut asyncness = Asyncness::No;
         for (_, import) in imports.iter() {
@@ -1148,7 +1160,7 @@ impl<T: 'static> InstancePre<T> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         InstanceType {
             types: &self.component.types(),
-            resources: &self.resource_types,
+            resources: Some(&self.resource_types),
         }
     }
 
@@ -1158,6 +1170,12 @@ impl<T: 'static> InstancePre<T> {
     }
 
     /// Performs the instantiation process into the store specified.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
@@ -1174,6 +1192,12 @@ impl<T: 'static> InstancePre<T> {
     /// Performs the instantiation process into the store specified.
     ///
     /// Exactly like [`Self::instantiate`] except for use on async stores.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
     //
     // TODO: needs more docs
     #[cfg(feature = "async")]
@@ -1186,23 +1210,46 @@ impl<T: 'static> InstancePre<T> {
         mut store: impl AsContextMut<Data = T>,
         asyncness: Asyncness,
     ) -> Result<Instance> {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         store.0.set_async_required(self.asyncness);
         store
             .engine()
             .allocator()
             .increment_component_instance_count()?;
-        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports)?;
-        instantiator.run(&mut store, asyncness).await.map_err(|e| {
-            store
-                .engine()
-                .allocator()
-                .decrement_component_instance_count();
-            e
-        })?;
 
-        let instance = Instance::from_wasmtime(store.0, instantiator.id);
-        store.0.push_component_instance(instance);
-        Ok(instance)
+        // Helper structure to pair the above increment with a decrement should
+        // anything fail below.
+        let mut decrement = DecrementComponentInstanceCountOnDrop {
+            store,
+            enabled: true,
+        };
+
+        let mut instantiator =
+            Instantiator::new(&self.component, decrement.store.0, &self.imports)?;
+        instantiator.run(&mut decrement.store, asyncness).await?;
+
+        let instance = Instance::from_wasmtime(decrement.store.0, instantiator.id);
+        decrement.store.0.push_component_instance(instance);
+
+        // Everything has passed, don't decrement the instance count and let the
+        // destructor for the `Store` handle that at this point.
+        decrement.enabled = false;
+        return Ok(instance);
+
+        struct DecrementComponentInstanceCountOnDrop<'a, T: 'static> {
+            store: StoreContextMut<'a, T>,
+            enabled: bool,
+        }
+
+        impl<T> Drop for DecrementComponentInstanceCountOnDrop<'_, T> {
+            fn drop(&mut self) {
+                if self.enabled {
+                    self.store
+                        .engine()
+                        .allocator()
+                        .decrement_component_instance_count();
+                }
+            }
+        }
     }
 }

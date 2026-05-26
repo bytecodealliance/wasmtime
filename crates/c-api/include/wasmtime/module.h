@@ -60,7 +60,8 @@ WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);
  * \brief Creates a shallow clone of the specified module, increasing the
  * internal reference count.
  */
-WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
+WASM_API_EXTERN wasmtime_module_t *
+wasmtime_module_clone(const wasmtime_module_t *m);
 
 /**
  * \brief Same as #wasm_module_imports, but for #wasmtime_module_t.
@@ -106,7 +107,8 @@ wasmtime_module_validate(wasm_engine_t *engine, const uint8_t *wasm,
  * expected to deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
 WASM_API_EXTERN wasmtime_error_t *
-wasmtime_module_serialize(wasmtime_module_t *module, wasm_byte_vec_t *ret);
+wasmtime_module_serialize(const wasmtime_module_t *module,
+                          wasm_byte_vec_t *ret);
 
 #endif // WASMTIME_FEATURE_COMPILER
 

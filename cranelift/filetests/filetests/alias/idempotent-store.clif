@@ -1,0 +1,139 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Same block: idempotent store after load should be removed.
+function %idempotent_store_after_load(i64) {
+block0(v0: i64):
+    v1 = load.i32 heap v0+8
+    store.i32 heap v1, v0+8
+    return
+}
+
+; function %idempotent_store_after_load(i64) fast {
+; block0(v0: i64):
+;     v1 = load.i32 heap v0+8
+;     return
+; }
+
+;; Same block: idempotent store after store should be removed.
+function %idempotent_store_after_store(i64, i32) {
+block0(v0: i64, v1: i32):
+    store.i32 heap v1, v0+8
+    store.i32 heap v1, v0+8
+    return
+}
+
+; function %idempotent_store_after_store(i64, i32) fast {
+; block0(v0: i64, v1: i32):
+;     store heap v1, v0+8
+;     return
+; }
+
+;; Same block: non-idempotent store (different value) should NOT be removed.
+function %non_idempotent_store(i64, i32, i32) {
+block0(v0: i64, v1: i32, v2: i32):
+    store.i32 heap v1, v0+8
+    store.i32 heap v2, v0+8
+    return
+}
+
+; function %non_idempotent_store(i64, i32, i32) fast {
+; block0(v0: i64, v1: i32, v2: i32):
+;     store heap v1, v0+8
+;     store heap v2, v0+8
+;     return
+; }
+
+;; Cross block: idempotent store in dominated block should be removed.
+function %cross_block_dominated(i64) {
+block0(v0: i64):
+    v1 = load.i32 heap v0+8
+    jump block1
+
+block1:
+    store.i32 heap v1, v0+8
+    return
+}
+
+; function %cross_block_dominated(i64) fast {
+; block0(v0: i64):
+;     v1 = load.i32 heap v0+8
+;     jump block1
+;
+; block1:
+;     return
+; }
+
+;; Cross block: store in a block that has another in-edge besides the block with
+;; the original store should NOT be removed. block2 stores and branches to
+;; block4, but block4 also has an in-edge from block3, so the store in block4 is
+;; not dominated by the store in block2 and must be kept.
+function %cross_block_not_dominated(i64, i32) {
+block0(v0: i64, v1: i32):
+    brif v1, block2, block3
+
+block2:
+    store.i32 heap v1, v0+8
+    jump block4
+
+block3:
+    jump block4
+
+block4:
+    store.i32 heap v1, v0+8
+    return
+}
+
+; function %cross_block_not_dominated(i64, i32) fast {
+; block0(v0: i64, v1: i32):
+;     brif v1, block2, block3
+;
+; block2:
+;     store.i32 heap v1, v0+8
+;     jump block4
+;
+; block3:
+;     jump block4
+;
+; block4:
+;     store.i32 heap v1, v0+8
+;     return
+; }
+
+;; Function call between load and store breaks the optimization.
+function %call_barrier(i64) {
+    fn0 = %g(i64)
+block0(v0: i64):
+    v1 = load.i32 heap v0+8
+    call fn0(v0)
+    store.i32 heap v1, v0+8
+    return
+}
+
+; function %call_barrier(i64) fast {
+;     sig0 = (i64) fast
+;     fn0 = %g sig0
+;
+; block0(v0: i64):
+;     v1 = load.i32 heap v0+8
+;     call fn0(v0)
+;     store heap v1, v0+8
+;     return
+; }
+
+;; Removing an idempotent store should preserve RLE for subsequent loads.
+function %idempotent_store_then_load(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 heap v0+8
+    store.i32 heap v1, v0+8
+    v2 = load.i32 heap v0+8
+    return v2
+}
+
+; function %idempotent_store_then_load(i64) -> i32 fast {
+; block0(v0: i64):
+;     v1 = load.i32 heap v0+8
+;     return v1
+; }
+

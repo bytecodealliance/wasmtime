@@ -19,6 +19,8 @@ enum class Strategy {
   Auto = WASMTIME_STRATEGY_AUTO,
   /// Requires Cranelift to be used for compilation
   Cranelift = WASMTIME_STRATEGY_CRANELIFT,
+  /// Use winch for compilation
+  Winch = WASMTIME_STRATEGY_WINCH,
 };
 
 /// \brief Values passed to `Config::cranelift_opt_level`
@@ -41,6 +43,30 @@ enum class ProfilingStrategy {
   Vtune = WASMTIME_PROFILING_STRATEGY_VTUNE,
   /// Profiling hooks via perfmap
   Perfmap = WASMTIME_PROFILING_STRATEGY_PERFMAP,
+};
+
+/// \brief Values passed to `Config::cranelift_regalloc_algorithm`
+enum RegallocAlgorithm {
+  /// Generates the fastest possible code, but may take longer.
+  ///
+  /// This algorithm performs “backtracking”, which means that it may undo its
+  /// earlier work
+  /// and retry as it discovers conflicts. This results in better register
+  /// utilization,
+  /// producing fewer spills and moves, but can cause super-linear compile
+  /// runtime.
+  Backtracking = WASMTIME_REGALLOC_BACKTRACKING,
+  /// Generates acceptable code very quickly.
+  ///
+  /// This algorithm performs a single pass through the code, guaranteed to work
+  /// in linear time.
+  /// (Note that the rest of Cranelift is not necessarily guaranteed to run in
+  /// linear time, however.)
+  /// It cannot undo earlier decisions, however, and it cannot foresee
+  /// constraints or issues that may
+  /// occur further ahead in the code, so the code may have more spills and
+  /// moves as a result.
+  SinglePass = WASMTIME_REGALLOC_SINGLE_PASS,
 };
 
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
@@ -303,6 +329,7 @@ class Config {
     wasmtime_config_wasm_tail_call_set(ptr.get(), enable);
   }
 
+#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly reference types proposal is
   /// enabled
   ///
@@ -310,6 +337,7 @@ class Config {
   void wasm_reference_types(bool enable) {
     wasmtime_config_wasm_reference_types_set(ptr.get(), enable);
   }
+#endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly simd proposal is enabled
   ///
@@ -361,12 +389,15 @@ class Config {
     wasmtime_config_wasm_memory64_set(ptr.get(), enable);
   }
 
+#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly Garbage Collection proposal will
   /// be enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_gc
   void wasm_gc(bool enable) { wasmtime_config_wasm_gc_set(ptr.get(), enable); }
+#endif // WASMTIME_FEATURE_GC
 
+#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly function references proposal
   /// will be enabled
   ///
@@ -374,6 +405,7 @@ class Config {
   void wasm_function_references(bool enable) {
     wasmtime_config_wasm_function_references_set(ptr.get(), enable);
   }
+#endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly wide arithmetic proposal will be
   /// enabled
@@ -383,6 +415,7 @@ class Config {
     wasmtime_config_wasm_wide_arithmetic_set(ptr.get(), enable);
   }
 
+#ifdef WASMTIME_FEATURE_GC
   /// \brief Configures whether the WebAssembly exceptions proposal will be
   /// enabled
   ///
@@ -390,6 +423,7 @@ class Config {
   void wasm_exceptions(bool enable) {
     wasmtime_config_wasm_exceptions_set(ptr.get(), enable);
   }
+#endif // WASMTIME_FEATURE_GC
 
   /// \brief Configures whether the WebAssembly custom-page-sizes proposal will
   /// be enabled
@@ -406,6 +440,14 @@ class Config {
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model
   void wasm_component_model(bool enable) {
     wasmtime_config_wasm_component_model_set(ptr.get(), enable);
+  }
+
+  /// \brief Configures whether the WebAssembly component model map type will be
+  /// enabled
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_map
+  void wasm_component_model_map(bool enable) {
+    wasmtime_config_wasm_component_model_map_set(ptr.get(), enable);
   }
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
@@ -463,6 +505,14 @@ class Config {
   void cranelift_flag_set(const std::string &flag, const std::string &value) {
     wasmtime_config_cranelift_flag_set(ptr.get(), flag.c_str(), value.c_str());
   }
+
+  /// \brief Configures cranelift's register allocation mode
+  ///
+  /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.cranelift_regalloc_algorithm
+  void cranelift_regalloc_algorithm(RegallocAlgorithm algo) {
+    wasmtime_config_cranelift_regalloc_algorithm_set(
+        ptr.get(), static_cast<wasmtime_regalloc_algorithm_t>(algo));
+  }
 #endif // WASMTIME_FEATURE_COMPILER
 
   /// \brief Configures an active wasm profiler
@@ -476,7 +526,7 @@ class Config {
   /// \brief Configures the size of the initial linear memory allocation.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation
-  void memory_reservation(size_t size) {
+  void memory_reservation(uint64_t size) {
     wasmtime_config_memory_reservation_set(ptr.get(), size);
   }
 
@@ -484,14 +534,14 @@ class Config {
   /// linear memory to grow into.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation_for_growth
-  void memory_reservation_for_growth(size_t size) {
+  void memory_reservation_for_growth(uint64_t size) {
     wasmtime_config_memory_reservation_for_growth_set(ptr.get(), size);
   }
 
   /// \brief Configures the size of memory's guard region
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_guard_size
-  void memory_guard_size(size_t size) {
+  void memory_guard_size(uint64_t size) {
     wasmtime_config_memory_guard_size_set(ptr.get(), size);
   }
 
@@ -619,6 +669,51 @@ public:
     wasmtime_pooling_allocation_strategy_set(ptr.get(), config.capi());
   }
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
+  /**
+   * \brief Specifies whether support for concurrent execution of WebAssembly is
+   * supported within this store.
+   *
+   * For more information see the Rust documentation at
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.concurrency_support.
+   */
+  void concurrency_support(bool enable) {
+    wasmtime_config_concurrency_support_set(ptr.get(), enable);
+  }
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+  /**
+   * \brief Configures whether component-model async support is enabled.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async
+   */
+  void wasm_component_model_async(bool enable) {
+    wasmtime_config_wasm_component_model_async_set(ptr.get(), enable);
+  }
+
+  /**
+   * \brief Configures whether async built-in intrinsics are enabled for the
+   * component model.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_more_async_builtins
+   */
+  void wasm_component_model_more_async_builtins(bool enable) {
+    wasmtime_config_wasm_component_model_more_async_builtins_set(ptr.get(),
+                                                                 enable);
+  }
+
+  /**
+   * \brief Configures whether stackful coroutine support is enabled for async
+   * components.
+   *
+   * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_stackful
+   */
+  void wasm_component_model_async_stackful(bool enable) {
+    wasmtime_config_wasm_component_model_async_stackful_set(ptr.get(), enable);
+  }
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 };
 
 } // namespace wasmtime

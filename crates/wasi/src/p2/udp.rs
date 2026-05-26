@@ -20,4 +20,8 @@ pub struct OutgoingDatagramStream {
 
     /// The check of allowed addresses
     pub(crate) socket_addr_check: Option<SocketAddrCheck>,
+
+    /// Remaining number of datagrams permitted by most recent `check-send`
+    /// call.
+    pub(crate) check_send_permit_count: usize,
 }

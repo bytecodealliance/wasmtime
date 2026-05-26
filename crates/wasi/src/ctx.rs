@@ -4,8 +4,8 @@ use crate::filesystem::{Dir, WasiFilesystemCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
 use crate::{DirPerms, FilePerms, OpenMode};
-use cap_rand::RngCore;
 use cap_std::ambient_authority;
+use rand::Rng;
 use std::future::Future;
 use std::mem;
 use std::net::SocketAddr;
@@ -242,6 +242,15 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Configures the initial current working directory reported to the guest.
+    ///
+    /// By default no initial current working directory is configured and
+    /// `wasi:cli/environment.initial-cwd` returns `none`.
+    pub fn initial_cwd(&mut self, path: impl AsRef<str>) -> &mut Self {
+        self.cli.initial_cwd = Some(path.as_ref().to_owned());
+        self
+    }
+
     /// Configures a "preopened directory" to be available to WebAssembly.
     ///
     /// By default WebAssembly does not have access to the filesystem because
@@ -326,7 +335,7 @@ impl WasiCtxBuilder {
     /// unpredictable random data in order to maintain its security invariants,
     /// and ideally should use the insecure random API otherwise, so using any
     /// prerecorded or otherwise predictable data may compromise security.
-    pub fn secure_random(&mut self, random: impl RngCore + Send + 'static) -> &mut Self {
+    pub fn secure_random(&mut self, random: impl Rng + Send + 'static) -> &mut Self {
         self.random.random = Box::new(random);
         self
     }
@@ -335,7 +344,7 @@ impl WasiCtxBuilder {
     ///
     /// The `insecure_random` generator provided will be used for all randomness
     /// requested by the `wasi:random/insecure` interface.
-    pub fn insecure_random(&mut self, insecure_random: impl RngCore + Send + 'static) -> &mut Self {
+    pub fn insecure_random(&mut self, insecure_random: impl Rng + Send + 'static) -> &mut Self {
         self.random.insecure_random = Box::new(insecure_random);
         self
     }
@@ -346,6 +355,20 @@ impl WasiCtxBuilder {
     /// By default this number is randomly generated when a builder is created.
     pub fn insecure_random_seed(&mut self, insecure_random_seed: u128) -> &mut Self {
         self.random.insecure_random_seed = insecure_random_seed;
+        self
+    }
+
+    /// Configures the maximum len accepted by
+    /// `wasi:random/random.get-random-bytes` and
+    /// `wasi:random/insecure.get-insecure-random-bytes`. Calls with a len
+    /// larger than this limit will trap.
+    ///
+    /// Limited to 64M by default. This limit protects the host implementation
+    /// from memory exhaustion from untrusted guest input. A limit of `u64::MAX`
+    /// is equivalent to no limit, but note that this enables a guest to also
+    /// force the host to attempt an allocation of that size.
+    pub fn max_random_size(&mut self, max_size: u64) -> &mut Self {
+        self.random.max_size = max_size;
         self
     }
 

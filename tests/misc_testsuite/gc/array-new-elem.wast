@@ -1,4 +1,5 @@
 ;;! gc = true
+;;! bulk_memory = true
 
 (module
   (type $arr (array i31ref))

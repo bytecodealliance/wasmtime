@@ -36,6 +36,13 @@ macro_rules! gentest {
                     imports: { default: store },
                 });
             }
+            mod with_anyhow {
+                wasmtime::component::bindgen!({
+                    path: $path,
+                    anyhow: true,
+                    imports: { default: trappable },
+                });
+            }
         }
     };
 }
@@ -784,4 +791,32 @@ mod import_async_interface {
             imports: { default: async },
         });
     }
+}
+
+mod anyhow_with_custom_error {
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            interface i {
+                enum error {
+                    a,
+                    b,
+                    c
+                }
+                x: func() -> result<_, error>;
+            }
+
+            world foo {
+                import i;
+            }
+        ",
+        anyhow: true,
+        imports: { default: trappable },
+        trappable_error_type: {
+            "foo:foo/i.error" => MyCustomError,
+        },
+    });
+
+    struct MyCustomError;
 }

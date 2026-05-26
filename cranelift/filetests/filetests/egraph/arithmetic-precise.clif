@@ -1,0 +1,564 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %fold_iadd_iadd_ineg_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = ineg v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %fold_iadd_iadd_ineg_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v0
+; }
+
+;; (x | y) - (x & y)  ==>  (x ^ y)
+function %test_isub_bor_band_to_bxor(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+
+; function %test_isub_bor_band_to_bxor(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bxor v1, v0
+;     return v6
+; }
+
+function %fold_isub_iadd_band_to_bor_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = band v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+
+; function %fold_isub_iadd_band_to_bor_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = bor v1, v0
+;     return v6
+; }
+
+function %fold_isub_bor_bxor_to_band_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bxor v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+
+; function %fold_isub_bor_bxor_to_band_i32(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = band v1, v0
+;     return v6
+; }
+
+function %fold_iadd_bnot_x_to_allones_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iadd v1, v0
+    return v2
+}
+
+; function %fold_iadd_bnot_x_to_allones_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v3 = iconst.i32 -1
+;     return v3  ; v3 = -1
+; }
+
+function %fold_iadd_bnot_x_to_allones_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    v2 = iadd v1, v0
+    return v2
+}
+
+; function %fold_iadd_bnot_x_to_allones_i128(i128) -> i128 fast {
+; block0(v0: i128):
+;     v3 = iconst.i64 -1
+;     v4 = sextend.i128 v3  ; v3 = -1
+;     return v4
+; }
+
+;; ((x + y) - (x + z)) --> (y - z)
+function %test_isub_iadd_iadd_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v1
+    v4 = iadd v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_iadd_iadd_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v1, v2
+;     return v6
+; }
+
+;; ((x - z) - (y - z)) --> (x - y)
+function %test_isub_isub_isub_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v2
+    v4 = isub v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_isub_isub_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v0, v1
+;     return v6
+; }
+
+;; ((x - y) - (x - z)) --> (z - y)
+function %test_isub_isub_isub_swap_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = isub v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_isub_isub_swap_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v2, v1
+;     return v6
+; }
+
+;; umin(x, y) + umax(x, y) --> x + y
+function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+;; smin(x, y) + smax(x, y) --> x + y
+function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v6 = iadd v1, v0
+;     return v6
+; }
+
+;; ((x + z) - (y + z)) --> (x - y)
+function %test_isub_iadd_iadd_common_rhs(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v2
+    v4 = iadd v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; function %test_isub_iadd_iadd_common_rhs(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = isub v0, v1
+;     return v6
+; }
+
+;; ((x - y) + (y + z)) --> (x + z)
+function %test_iadd_isub_iadd_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = iadd v1, v2
+    v5 = iadd v3, v4
+    return v5
+}
+
+; function %test_iadd_isub_iadd_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = iadd v0, v2
+;     return v6
+; }
+
+;; (x - (x + y)) --> -y
+function %test_isub_iadd_to_ineg(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+
+; function %test_isub_iadd_to_ineg(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = ineg v1
+;     return v4
+; }
+
+;; (x + (y + (z - x))) --> (y + z)
+function %test_iadd_iadd_isub_cancel(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v2, v0
+    v4 = iadd v1, v3
+    v5 = iadd v0, v4
+    return v5
+}
+
+; function %test_iadd_iadd_isub_cancel(i32, i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32, v2: i32):
+;     v6 = iadd v1, v2
+;     return v6
+; }
+
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = iconst.i8 1
+;     return v5  ; v5 = 1
+; }
+
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_vector_icmp_eq_iadd_commute(i32x4, i32x4) -> i32x4 fast {
+block0(v0: i32x4, v1: i32x4):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %simplify_vector_icmp_eq_iadd_commute(i32x4, i32x4) -> i32x4 fast {
+;     const0 = 0xffffffffffffffffffffffffffffffff
+;
+; block0(v0: i32x4, v1: i32x4):
+;     v9 = icmp eq v0, v0
+;     return v9
+; }
+
+;; (x - y) != x --> y != 0
+function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; (x - y) == x --> y == 0
+function %test_eq_isub_same(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; function %test_eq_isub_same(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp eq v1, v4  ; v4 = 0
+;     return v5
+; }
+
+;; (x + y) == y --> x == 0
+function %test_eq_iadd_same_rhs(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+
+; function %test_eq_iadd_same_rhs(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp eq v0, v4  ; v4 = 0
+;     return v5
+; }
+
+;; -x == -y --> x == y
+function %test_eq_ineg_ineg(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; function %test_eq_ineg_ineg(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = ineg v0
+;     v3 = ineg v1
+;     v4 = icmp eq v2, v3
+;     return v4
+; }
+
+;; -((-y) * x) --> x * y
+function %test_ineg_imul_ineg_lhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v2, v0
+    v4 = ineg v3
+    return v4
+}
+
+; function %test_ineg_imul_ineg_lhs(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = imul v0, v1
+;     return v5
+; }
+
+function %test_ineg_imul_ineg_rhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v0, v2
+    v4 = ineg v3
+    return v4
+}
+
+; function %test_ineg_imul_ineg_rhs(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v5 = imul v0, v1
+;     return v5
+; }
+
+;; smax(x, y) >= x --> true
+function %test_sge_smax_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sge v2, v0
+    return v3
+}
+
+; function %test_sge_smax_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = smax v0, v1
+;     v3 = icmp sge v2, v0
+;     return v3
+; }
+
+;; x <=_u umax(x, y) --> true
+function %test_ule_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ule v0, v2
+    return v3
+}
+
+; function %test_ule_x_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = umax v0, v1
+;     v3 = icmp ule v0, v2
+;     return v3
+; }
+
+;; x >= smin(x, y) --> true
+function %test_sge_x_smin(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = icmp sge v0, v2
+    return v3
+}
+
+; function %test_sge_x_smin(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = smin v0, v1
+;     v3 = icmp sge v0, v2
+;     return v3
+; }
+
+;; umin(x, y) <=_u x --> true
+function %test_ule_umin_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; function %test_ule_umin_x(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = umin v0, v1
+;     v3 = icmp ule v2, v0
+;     return v3
+; }
+
+;; umin(x, x) --> x
+function %test_umin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umin v0, v0
+    return v1
+}
+
+; function %test_umin_same(i32) -> i32 fast {
+; block0(v0: i32):
+;     return v0
+; }
+
+;; smin(x, x) --> x
+function %test_smin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smin v0, v0
+    return v1
+}
+
+; function %test_smin_same(i32) -> i32 fast {
+; block0(v0: i32):
+;     return v0
+; }
+
+;; umax(x, x) --> x
+function %test_umax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umax v0, v0
+    return v1
+}
+
+; function %test_umax_same(i32) -> i32 fast {
+; block0(v0: i32):
+;     return v0
+; }
+
+;; smax(x, x) --> x
+function %test_smax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smax v0, v0
+    return v1
+}
+
+; function %test_smax_same(i32) -> i32 fast {
+; block0(v0: i32):
+;     return v0
+; }
+
+;; smax(smax(x, y), x) --> smax(x, y)
+function %test_smax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smax v2, v0
+    return v3
+}
+
+; function %test_smax_nested_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = smax v0, v1
+;     return v2
+; }
+
+;; umax(umax(x, y), x) --> umax(x, y)
+function %test_umax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = umax v2, v0
+    return v3
+}
+
+; function %test_umax_nested_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = umax v0, v1
+;     return v2
+; }
+
+;; smin(smin(x, y), x) --> smin(x, y)
+function %test_smin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smin v2, v0
+    return v3
+}
+
+; function %test_smin_nested_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = smin v0, v1
+;     return v2
+; }
+
+;; umin(umin(x, y), x) --> umin(x, y)
+function %test_umin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umin v2, v0
+    return v3
+}
+
+; function %test_umin_nested_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = umin v0, v1
+;     return v2
+; }
+
+;; smin(smax(x, y), y) --> y
+function %test_smin_smax_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smin v2, v1
+    return v3
+}
+
+; function %test_smin_smax_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v1
+; }
+
+;; umax(umin(x, y), y) --> y
+function %test_umax_umin_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v2, v1
+    return v3
+}
+
+; function %test_umax_umin_absorb(i32, i32) -> i32 fast {
+; block0(v0: i32, v1: i32):
+;     return v1
+; }
+
+;; x > smax(x, y) --> false
+function %test_sgt_x_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sgt v0, v2
+    return v3
+}
+
+; function %test_sgt_x_smax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = smax v0, v1
+;     v3 = icmp sgt v0, v2
+;     return v3
+; }
+
+;; x >_u umax(x, y) --> false
+function %test_ugt_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+
+; function %test_ugt_x_umax(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = umax v0, v1
+;     v3 = icmp ugt v0, v2
+;     return v3
+; }
+

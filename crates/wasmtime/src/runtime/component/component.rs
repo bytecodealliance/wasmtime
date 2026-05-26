@@ -206,6 +206,12 @@ impl Component {
     ///
     /// For more information see the [`Module::deserialize`] method.
     ///
+    /// # Errors
+    ///
+    /// This function will return an [`OutOfMemory`][crate::OutOfMemory] error when
+    /// memory allocation fails. See the `OutOfMemory` type's documentation for
+    /// details on Wasmtime's out-of-memory handling.
+    ///
     /// # Unsafety
     ///
     /// The unsafety of this method is the same as that of the
@@ -288,14 +294,16 @@ impl Component {
     ///     (component (import "x" (type (sub resource))))
     /// "#)?;
     ///
-    /// let (_, a_ty) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, b_ty) = b.component_type().imports(&engine).next().unwrap();
+    /// let aty = a.component_type();
+    /// let bty = b.component_type();
+    /// let (_, a_ty) = aty.imports(&engine).next().unwrap();
+    /// let (_, b_ty) = bty.imports(&engine).next().unwrap();
     ///
-    /// let a_ty = match a_ty {
+    /// let a_ty = match a_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let b_ty = match b_ty {
+    /// let b_ty = match b_ty.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -323,14 +331,15 @@ impl Component {
     ///     )
     /// "#)?;
     ///
-    /// let (_, import) = a.component_type().imports(&engine).next().unwrap();
-    /// let (_, export) = a.component_type().exports(&engine).next().unwrap();
+    /// let ty = a.component_type();
+    /// let (_, import) = ty.imports(&engine).next().unwrap();
+    /// let (_, export) = ty.exports(&engine).next().unwrap();
     ///
-    /// let import = match import {
+    /// let import = match import.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
-    /// let export = match export {
+    /// let export = match export.ty {
     ///     ComponentItem::Resource(ty) => ty,
     ///     _ => unreachable!(),
     /// };
@@ -388,10 +397,9 @@ impl Component {
     }
 
     fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
-        let resources = Arc::new(PrimaryMap::new());
         f(&InstanceType {
             types: self.types(),
-            resources: &resources,
+            resources: None,
         })
     }
 
@@ -437,7 +445,7 @@ impl Component {
         // Assemble the `EngineCode` artifact which is shared by all core wasm
         // modules as well as the final component.
         let types = Arc::new(types);
-        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into()));
+        let code = Arc::new(EngineCode::new(code_memory, signatures, types.into())?);
 
         // Convert all information about static core wasm modules into actual
         // `Module` instances by converting each `CompiledModuleInfo`, the
@@ -482,7 +490,7 @@ impl Component {
         &self.inner.static_modules[idx]
     }
 
-    #[cfg(feature = "profiling")]
+    #[cfg(any(feature = "profiling", feature = "debug"))]
     pub(crate) fn static_modules(&self) -> impl Iterator<Item = &Module> {
         self.inner.static_modules.values()
     }
@@ -558,6 +566,31 @@ impl Component {
         &self.inner.code
     }
 
+    /// Get this component's code object's `.text` section, containing its
+    /// compiled executable code.
+    pub fn text(&self) -> &[u8] {
+        self.engine_code().text()
+    }
+
+    /// Get information about functions in this component's `.text` section:
+    /// their module index, function index, name, and offset+length.
+    pub fn functions(&self) -> impl Iterator<Item = crate::ModuleFunction> + '_ {
+        self.inner
+            .static_modules
+            .values()
+            .flat_map(|m| m.functions())
+    }
+
+    /// Get the address map for this component's `.text` section.
+    ///
+    /// See [`Module::address_map`] for more details.
+    pub fn address_map(&self) -> Option<impl Iterator<Item = (usize, Option<u32>)> + '_> {
+        Some(
+            wasmtime_environ::iterate_address_map(self.engine_code().address_map_data())?
+                .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
+        )
+    }
+
     /// Same as [`Module::serialize`], except for a component.
     ///
     /// Note that the artifact produced here must be passed to
@@ -567,7 +600,11 @@ impl Component {
     /// [`Module::serialize`]: crate::Module::serialize
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        Ok(self.engine_code().image().to_vec())
+        let image = self.engine_code().image();
+        let mut v = TryVec::new();
+        v.reserve(image.len())?;
+        v.try_extend(image.iter().copied())?;
+        Ok(v.into())
     }
 
     /// Creates a new `VMFuncRef` with all fields filled out for the destructor
@@ -856,7 +893,7 @@ impl Component {
             }
             None => &info.exports,
         };
-        exports.get(name, &NameMapNoIntern).copied()
+        exports.get(name, &NameMapNoIntern).map(|pair| pair.0)
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {

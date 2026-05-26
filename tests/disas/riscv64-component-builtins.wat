@@ -15,15 +15,15 @@
 ;;     sig1 = (i64 sext vmctx) system_v
 ;;
 ;; block0(v0: i64, v1: i64, v2: i32):
-;;     v3 = load.i64 notrap aligned v0+16
 ;;     v4 = get_frame_pointer.i64 
+;;     v3 = load.i64 notrap aligned readonly can_move vmctx v1+8
 ;;     store notrap aligned v4, v3+48
 ;;     v5 = get_return_address.i64 
 ;;     store notrap aligned v5, v3+56
 ;;     v6 = load.i32 notrap aligned v0+32
 ;;     v17 = iconst.i32 1
 ;;     v7 = band v6, v17  ; v17 = 1
-;;     trapz v7, user25
+;;     trapz v7, user26
 ;;     v10 = load.i64 notrap aligned readonly v0+8
 ;;     v11 = load.i64 notrap aligned readonly v10+16
 ;;     v8 = iconst.i32 0
@@ -34,7 +34,7 @@
 ;;
 ;; block1 cold:
 ;;     v15 = load.i64 notrap aligned readonly v1+16
-;;     v16 = load.i64 notrap aligned readonly v15+408
+;;     v16 = load.i64 notrap aligned readonly v15+328
 ;;     call_indirect sig1, v16(v1)
 ;;     trap user1
 ;;

@@ -1,7 +1,7 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{ExternalName, Type, types};
+use crate::ir::{ExternalName, MemFlagsData, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
@@ -239,6 +239,10 @@ impl Inst {
             | Inst::CondBreak { .. }
             | Inst::Unwind { .. }
             | Inst::ElfTlsGetOffset { .. } => InstructionSet::Base,
+
+            Inst::LoadIndexedAddr { .. } | Inst::LoadLogicalIndexedAddr { .. } => {
+                InstructionSet::MIE4
+            }
 
             // These depend on the opcode
             Inst::AluRRR { alu_op, .. } => match alu_op {
@@ -1030,6 +1034,20 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
+        Inst::LoadIndexedAddr {
+            rd, base, index, ..
+        } => {
+            collector.reg_def(rd);
+            collector.reg_use(base);
+            collector.reg_use(index);
+        }
+        Inst::LoadLogicalIndexedAddr {
+            rd, base, index, ..
+        } => {
+            collector.reg_def(rd);
+            collector.reg_use(base);
+            collector.reg_use(index);
+        }
         Inst::StackProbeLoop { probe_count, .. } => {
             collector.reg_early_def(probe_count);
         }
@@ -1247,6 +1265,10 @@ impl MachInst for Inst {
         44
     }
 
+    fn worst_case_island_growth() -> CodeOffset {
+        0
+    }
+
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::Int
     }
@@ -1296,7 +1318,9 @@ impl Inst {
                     ALUOp::SubLogical32 => ("slrk", true),
                     ALUOp::SubLogical64 => ("slgrk", true),
                     ALUOp::Mul32 => ("msrkc", true),
+                    ALUOp::Mul32CC => ("msrkc", false),
                     ALUOp::Mul64 => ("msgrkc", true),
+                    ALUOp::Mul64CC => ("msgrkc", false),
                     ALUOp::And32 => ("nrk", true),
                     ALUOp::And64 => ("ngrk", true),
                     ALUOp::Orr32 => ("ork", true),
@@ -2511,11 +2535,13 @@ impl Inst {
                     VecBinaryOp::Add32x4 => "vaf",
                     VecBinaryOp::Add64x2 => "vag",
                     VecBinaryOp::Add128 => "vaq",
+                    VecBinaryOp::Add128Cout => "vaccq",
                     VecBinaryOp::Sub8x16 => "vsb",
                     VecBinaryOp::Sub16x8 => "vsh",
                     VecBinaryOp::Sub32x4 => "vsf",
                     VecBinaryOp::Sub64x2 => "vsg",
                     VecBinaryOp::Sub128 => "vsq",
+                    VecBinaryOp::Sub128Cout => "vscbiq",
                     VecBinaryOp::Mul8x16 => "vmlb",
                     VecBinaryOp::Mul16x8 => "vmlhw",
                     VecBinaryOp::Mul32x4 => "vmlf",
@@ -3506,6 +3532,56 @@ impl Inst {
                 let mem = mem.pretty_print_default();
 
                 format!("{mem_str}{op} {rd}, {mem}")
+            }
+            &Inst::LoadIndexedAddr {
+                rd,
+                base,
+                index,
+                offset,
+                size,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                let op = match size {
+                    1 => "lxah",
+                    2 => "lxaf",
+                    3 => "lxag",
+                    4 => "lxaq",
+                    _ => unreachable!(),
+                };
+                let flags = MemFlagsData::trusted();
+                let mem = MemArg::BXD20 {
+                    base,
+                    index,
+                    disp: offset,
+                    flags,
+                };
+                let mem = mem.pretty_print_default();
+                format!("{op} {rd}, {mem}")
+            }
+            &Inst::LoadLogicalIndexedAddr {
+                rd,
+                base,
+                index,
+                offset,
+                size,
+            } => {
+                let rd = pretty_print_reg(rd.to_reg());
+                let op = match size {
+                    1 => "llxah",
+                    2 => "llxaf",
+                    3 => "llxag",
+                    4 => "llxaq",
+                    _ => unreachable!(),
+                };
+                let flags = MemFlagsData::trusted();
+                let mem = MemArg::BXD20 {
+                    base,
+                    index,
+                    disp: offset,
+                    flags,
+                };
+                let mem = mem.pretty_print_default();
+                format!("{op} {rd}, {mem}")
             }
             &Inst::StackProbeLoop {
                 probe_count,

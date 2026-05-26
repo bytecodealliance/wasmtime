@@ -182,7 +182,7 @@ impl<T> VMHostArray<T> {
 pub type VMPayloads = VMHostArray<u128>;
 
 /// Type for a list of handlers, represented by the handled tag. Thus, the
-/// stored data is actually `*mut VMTagDefinition`, but we don't havr access to
+/// stored data is actually `*mut VMTagDefinition`, but we don't have access to
 /// that here.
 pub type VMHandlerList = VMHostArray<*mut u8>;
 

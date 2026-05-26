@@ -20,26 +20,35 @@ fn test_udp_connect_disconnect_reconnect(family: IpAddressFamily) {
 
     let client = UdpSocket::create(family).unwrap();
 
-    assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(client.disconnect(), Err(ErrorCode::InvalidState)));
+    assert!(matches!(
+        client.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
 
-    assert_eq!(client.disconnect(), Err(ErrorCode::InvalidState));
-    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(client.disconnect(), Err(ErrorCode::InvalidState)));
+    assert!(matches!(
+        client.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.get_remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address().unwrap(), remote1);
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.get_remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address().unwrap(), remote1);
 
     _ = client.connect(remote2).unwrap();
-    assert_eq!(client.get_remote_address(), Ok(remote2));
+    assert_eq!(client.get_remote_address().unwrap(), remote2);
 
     _ = client.disconnect().unwrap();
-    assert_eq!(client.get_remote_address(), Err(ErrorCode::InvalidState));
+    assert!(matches!(
+        client.get_remote_address(),
+        Err(ErrorCode::InvalidState)
+    ));
 
     _ = client.connect(remote1).unwrap();
-    assert_eq!(client.get_remote_address(), Ok(remote1));
+    assert_eq!(client.get_remote_address().unwrap(), remote1);
 }
 
 /// `0.0.0.0` / `::` is not a valid remote address in WASI.
@@ -175,9 +184,9 @@ async fn test_udp_connect_and_send(family: IpAddressFamily) {
     client.bind(unspecified_port).unwrap();
 
     client.connect(remote).unwrap();
-    assert_eq!(client.get_remote_address(), Ok(remote));
+    assert_eq!(client.get_remote_address().unwrap(), remote);
 
-    assert_eq!(client.send(b"hello".into(), None).await, Ok(()));
+    client.send(b"hello".into(), None).await.unwrap();
 }
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {

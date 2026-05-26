@@ -13,11 +13,11 @@ use hashbrown::{DefaultHashBuilder, hash_set as inner};
 
 /// A wrapper type around [`hashbrown::hash_set::HashSet`] that only exposes
 /// fallible allocation.
-pub struct HashSet<T, S = DefaultHashBuilder> {
+pub struct TryHashSet<T, S = DefaultHashBuilder> {
     inner: inner::HashSet<T, S>,
 }
 
-impl<T, S> Default for HashSet<T, S>
+impl<T, S> Default for TryHashSet<T, S>
 where
     S: Default,
 {
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<T, S> PartialEq for HashSet<T, S>
+impl<T, S> PartialEq for TryHashSet<T, S>
 where
     T: Eq + Hash,
     S: BuildHasher,
@@ -38,14 +38,14 @@ where
     }
 }
 
-impl<T, S> Eq for HashSet<T, S>
+impl<T, S> Eq for TryHashSet<T, S>
 where
     T: Eq + Hash,
     S: BuildHasher,
 {
 }
 
-impl<T, S> fmt::Debug for HashSet<T, S>
+impl<T, S> fmt::Debug for TryHashSet<T, S>
 where
     T: fmt::Debug,
 {
@@ -54,7 +54,7 @@ where
     }
 }
 
-impl<T> HashSet<T, DefaultHashBuilder> {
+impl<T> TryHashSet<T, DefaultHashBuilder> {
     /// Same as [`hashbrown::hash_set::HashSet::new`].
     pub fn new() -> Self {
         Self {
@@ -63,7 +63,7 @@ impl<T> HashSet<T, DefaultHashBuilder> {
     }
 }
 
-impl<T> HashSet<T, DefaultHashBuilder>
+impl<T> TryHashSet<T, DefaultHashBuilder>
 where
     T: Eq + Hash,
 {
@@ -76,7 +76,7 @@ where
     }
 }
 
-impl<T, S> HashSet<T, S> {
+impl<T, S> TryHashSet<T, S> {
     /// Same as [`hashbrown::hash_set::HashSet::with_hasher`].
     pub const fn with_hasher(hasher: S) -> Self {
         Self {
@@ -131,7 +131,7 @@ impl<T, S> HashSet<T, S> {
     }
 }
 
-impl<T, S> HashSet<T, S>
+impl<T, S> TryHashSet<T, S>
 where
     T: Eq + Hash,
     S: BuildHasher,

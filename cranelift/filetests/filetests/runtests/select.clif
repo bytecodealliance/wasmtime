@@ -462,3 +462,106 @@ block0(v0: i32, v1: i32):
 
 ; run: %test_ugt_select_ult_min(234234, 5544) == 0
 
+function %select_eq_xy_xy_to_y_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = select v2, v0, v1
+  return v3
+}
+; run: %select_eq_xy_xy_to_y_rt(42, 35) == 35
+; run: %select_eq_xy_xy_to_y_rt(42, 42) == 42
+
+function %select_bor_ne_to_y_rt(i8, i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = icmp ne v1, v2
+  v4 = bor v0, v3
+  v5 = select v4, v1, v2
+  return v5
+}
+; run: %select_bor_ne_to_y_rt(0, 7, 7) == 7
+; run: %select_bor_ne_to_y_rt(0, 7, 9) == 7
+; run: %select_bor_ne_to_y_rt(1, 7, 7) == 7
+
+function %select_eq_xy_x_borxy_to_borxy_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  v3 = bor v0, v1
+  v4 = select v2, v0, v3
+  return v4
+}
+; run: %select_eq_xy_x_borxy_to_borxy_rt(7, 7) == 7
+; run: %select_eq_xy_x_borxy_to_borxy_rt(6, 10) == 14
+; run: %select_eq_xy_x_borxy_to_borxy_rt(0, 5) == 5
+
+function %select_ne_xy_bandxy_y_to_bandxy_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+  v2 = icmp ne v0, v1
+  v3 = band v0, v1
+  v4 = select v2, v3, v1
+  return v4
+}
+; run: %select_ne_xy_bandxy_y_to_bandxy_rt(6, 10) == 2
+; run: %select_ne_xy_bandxy_y_to_bandxy_rt(7, 7) == 7
+; run: %select_ne_xy_bandxy_y_to_bandxy_rt(0, 5) == 0
+
+function %select_ult_one_eq_to_ule_rt(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+  v2 = icmp ult v0, v1
+  v3 = iconst.i8 1
+  v4 = icmp eq v0, v1
+  v5 = select v2, v3, v4
+  return v5
+}
+; run: %select_ult_one_eq_to_ule_rt(1, 2) == 1
+; run: %select_ult_one_eq_to_ule_rt(2, 2) == 1
+; run: %select_ult_one_eq_to_ule_rt(3, 2) == 0
+
+function %select_slt_one_sgt_to_ne_rt(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+  v2 = icmp slt v0, v1
+  v3 = iconst.i8 1
+  v4 = icmp sgt v0, v1
+  v5 = select v2, v3, v4
+  return v5
+}
+; run: %select_slt_one_sgt_to_ne_rt(1, 2) == 1
+; run: %select_slt_one_sgt_to_ne_rt(2, 1) == 1
+; run: %select_slt_one_sgt_to_ne_rt(2, 2) == 0
+
+function %select_x_one_borxy_to_select_x_one_y_rt(i8, i8) -> i8 fast {
+block0(v0: i8, v1: i8):
+  v2 = iconst.i8 1
+  v3 = bor v0, v1
+  v4 = select v0, v2, v3
+  return v4
+}
+; run: %select_x_one_borxy_to_select_x_one_y_rt(0, 5) == 5
+; run: %select_x_one_borxy_to_select_x_one_y_rt(1, 5) == 1
+; run: %select_x_one_borxy_to_select_x_one_y_rt(2, 5) == 1
+
+function %select_eq_xn_yminusn_yminusx_to_yminusx_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 7
+  v3 = icmp eq v0, v2
+  v4 = isub v1, v2
+  v5 = isub v1, v0
+  v6 = select v3, v4, v5
+  return v6
+}
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(7, 10) == 3
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(3, 10) == 7
+; run: %select_eq_xn_yminusn_yminusx_to_yminusx_rt(0, 10) == 10
+
+function %select_eq_eq_to_eq_select_rt(i8, i32, i32) -> i8 fast {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = icmp eq v2, v1
+  v4 = iconst.i32 7
+  v5 = icmp eq v4, v1
+  v6 = select v0, v3, v5
+  return v6
+}
+; run: %select_eq_eq_to_eq_select_rt(0, 5, 5) == 0
+; run: %select_eq_eq_to_eq_select_rt(0, 7, 5) == 1
+; run: %select_eq_eq_to_eq_select_rt(1, 5, 5) == 1
+; run: %select_eq_eq_to_eq_select_rt(1, 5, 7) == 0
+

@@ -3,7 +3,6 @@
 use cranelift_entity::EntitySet;
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::timing;
 use crate::{ir, trace};
@@ -12,12 +11,10 @@ use crate::{ir, trace};
 ///
 /// This pass deletes whole blocks that can't be reached from the entry block. It does not delete
 /// individual instructions whose results are unused.
-///
-/// The reachability analysis is performed by the dominator tree analysis.
 pub fn eliminate_unreachable_code(
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    domtree: &DominatorTree,
+    is_reachable: impl Fn(ir::Block) -> bool,
 ) {
     let _tt = timing::unreachable_code();
     let mut pos = FuncCursor::new(func);
@@ -25,7 +22,7 @@ pub fn eliminate_unreachable_code(
     let mut used_exception_tables =
         EntitySet::with_capacity(pos.func.stencil.dfg.exception_tables.len());
     while let Some(block) = pos.next_block() {
-        if domtree.is_reachable(block) {
+        if is_reachable(block) {
             let inst = pos.func.layout.last_inst(block).unwrap();
             match pos.func.dfg.insts[inst] {
                 ir::InstructionData::BranchTable { table, .. } => {

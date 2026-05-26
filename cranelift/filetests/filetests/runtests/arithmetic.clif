@@ -632,3 +632,436 @@ block0(v0: i32):
 
 ; run: %ne_mul_odd(6) == 0
 ; run: %ne_mul_odd(7) == 1
+
+function %fold_iadd_iadd_ineg_i32_rt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = ineg v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %fold_iadd_iadd_ineg_i32_rt(42, 5) == 42
+; run: %fold_iadd_iadd_ineg_i32_rt(-7, 9) == -7
+; run: %fold_iadd_iadd_ineg_i32_rt(0x7fffffff, 0x80000000) == 0x7fffffff
+
+function %test_isub_bor_band_to_bxor_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = band v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %test_isub_bor_band_to_bxor_rt(4, 5) == 1
+; run: %test_isub_bor_band_to_bxor_rt(7, 7) == 0
+; run: %test_isub_bor_band_to_bxor_rt(-1, 1) == -2
+
+function %fold_isub_iadd_band_to_bor_i32_rt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = band v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %fold_isub_iadd_band_to_bor_i32_rt(4, 5) == 5
+; run: %fold_isub_iadd_band_to_bor_i32_rt(7, 7) == 7
+; run: %fold_isub_iadd_band_to_bor_i32_rt(-1, 1) == -1
+
+function %fold_isub_bor_bxor_to_band_i32_rt(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    v3 = bxor v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %fold_isub_bor_bxor_to_band_i32_rt(4, 5) == 4
+; run: %fold_isub_bor_bxor_to_band_i32_rt(7, 7) == 7
+; run: %fold_isub_bor_bxor_to_band_i32_rt(-1, 1) == 1
+
+function %fold_iadd_bnot_x_to_allones_i32_rt(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iadd v1, v0
+    return v2
+}
+; run: %fold_iadd_bnot_x_to_allones_i32_rt(0) == -1
+; run: %fold_iadd_bnot_x_to_allones_i32_rt(1) == -1
+; run: %fold_iadd_bnot_x_to_allones_i32_rt(0x12345678) == -1
+
+function %test_isub_iadd_iadd_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v1
+    v4 = iadd v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_iadd_iadd_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_iadd_iadd_cancel_rt(5, 7, 3) == 4
+; run: %test_isub_iadd_iadd_cancel_rt(10, 1, 9) == -8
+
+function %test_isub_isub_isub_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v2
+    v4 = isub v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_isub_isub_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_isub_isub_cancel_rt(7, 3, 1) == 4
+; run: %test_isub_isub_isub_cancel_rt(3, 7, 1) == -4
+
+function %test_isub_isub_isub_swap_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = isub v0, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_isub_isub_swap_cancel_rt(0, 0, 0) == 0
+; run: %test_isub_isub_isub_swap_cancel_rt(7, 3, 1) == -2
+; run: %test_isub_isub_isub_swap_cancel_rt(7, 1, 3) == 2
+
+function %test_iadd_umin_umax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %test_iadd_umin_umax(1, 2) == 3
+; run: %test_iadd_umin_umax(2, 1) == 3
+; run: %test_iadd_umin_umax(7, 7) == 14
+; run: %test_iadd_umin_umax(-1, 1) == 0
+
+function %test_iadd_smin_smax(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smax v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+
+; run: %test_iadd_smin_smax(1, 2) == 3
+; run: %test_iadd_smin_smax(2, 1) == 3
+; run: %test_iadd_smin_smax(7, 7) == 14
+; run: %test_iadd_smin_smax(-1, 1) == 0
+
+function %test_isub_iadd_iadd_common_rhs_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v2
+    v4 = iadd v1, v2
+    v5 = isub v3, v4
+    return v5
+}
+
+; run: %test_isub_iadd_iadd_common_rhs_rt(0, 0, 0) == 0
+; run: %test_isub_iadd_iadd_common_rhs_rt(7, 3, 1) == 4
+; run: %test_isub_iadd_iadd_common_rhs_rt(3, 7, 1) == -4
+
+function %test_iadd_isub_iadd_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = iadd v1, v2
+    v5 = iadd v3, v4
+    return v5
+}
+
+; run: %test_iadd_isub_iadd_cancel_rt(0, 0, 0) == 0
+; run: %test_iadd_isub_iadd_cancel_rt(7, 3, 1) == 8
+; run: %test_iadd_isub_iadd_cancel_rt(7, 1, 3) == 10
+
+function %test_isub_iadd_to_ineg_rt(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = isub v0, v2
+    return v3
+}
+
+; run: %test_isub_iadd_to_ineg_rt(0, 0) == 0
+; run: %test_isub_iadd_to_ineg_rt(7, 3) == -3
+; run: %test_isub_iadd_to_ineg_rt(7, -3) == 3
+
+function %test_iadd_iadd_isub_cancel_rt(i32, i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v2, v0
+    v4 = iadd v1, v3
+    v5 = iadd v0, v4
+    return v5
+}
+
+; run: %test_iadd_iadd_isub_cancel_rt(0, 0, 0) == 0
+; run: %test_iadd_iadd_isub_cancel_rt(7, 3, 1) == 4
+; run: %test_iadd_iadd_isub_cancel_rt(7, 1, 3) == 4
+; run: %test_iadd_iadd_isub_cancel_rt(-4, 6, 2) == 8
+; run: %test_iadd_iadd_isub_cancel_rt(0x1234, 0x34, 0x10) == 0x44
+
+;; (eq ty (iadd cty x y) (iadd cty y x)) -> 1
+function %simplify_icmp_eq_iadd_commute(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = iadd v1, v0
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %simplify_icmp_eq_iadd_commute(0, 0) == 1
+; run: %simplify_icmp_eq_iadd_commute(1, 2) == 1
+; run: %simplify_icmp_eq_iadd_commute(-1, 1) == 1
+
+;; (x - y) != x --> y != 0
+function %simplify_icmp_ne_isub_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp ne v2, v0
+    return v3
+}
+
+; run: %simplify_icmp_ne_isub_x(0, 0) == 0
+; run: %simplify_icmp_ne_isub_x(1, 0) == 0
+; run: %simplify_icmp_ne_isub_x(1, 1) == 1
+
+function %test_eq_isub_same(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    v3 = icmp eq v2, v0
+    return v3
+}
+
+; run: %test_eq_isub_same(0, 0) == 1
+; run: %test_eq_isub_same(1, 0) == 1
+
+function %test_eq_iadd_same_rhs(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    v3 = icmp eq v2, v1
+    return v3
+}
+
+; run: %test_eq_iadd_same_rhs(0, 0) == 1
+; run: %test_eq_iadd_same_rhs(0, 7) == 1
+; run: %test_eq_iadd_same_rhs(1, 0) == 0
+
+function %test_eq_ineg_ineg(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = icmp eq v2, v3
+    return v4
+}
+
+; run: %test_eq_ineg_ineg(0, 0) == 1
+; run: %test_eq_ineg_ineg(1, 1) == 1
+; run: %test_eq_ineg_ineg(1, 2) == 0
+
+function %test_ineg_imul_ineg_lhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v2, v0
+    v4 = ineg v3
+    return v4
+}
+
+; run: %test_ineg_imul_ineg_lhs(0, 0) == 0
+; run: %test_ineg_imul_ineg_lhs(1, 2) == 2
+; run: %test_ineg_imul_ineg_lhs(-3, 4) == -12
+; run: %test_ineg_imul_ineg_lhs(7, -5) == -35
+; run: %test_ineg_imul_ineg_lhs(0x1234, 0x10) == 0x12340
+
+function %test_ineg_imul_ineg_rhs(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = ineg v1
+    v3 = imul v0, v2
+    v4 = ineg v3
+    return v4
+}
+
+; run: %test_ineg_imul_ineg_rhs(0, 0) == 0
+; run: %test_ineg_imul_ineg_rhs(1, 2) == 2
+
+function %test_sge_smax_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sge v2, v0
+    return v3
+}
+
+; run: %test_sge_smax_x(0, 0) == 1
+; run: %test_sge_smax_x(1, 2) == 1
+
+function %test_ule_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ule v0, v2
+    return v3
+}
+
+; run: %test_ule_x_umax(0, 0) == 1
+; run: %test_ule_x_umax(1, 2) == 1
+
+function %test_sge_x_smin(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = icmp sge v0, v2
+    return v3
+}
+
+; run: %test_sge_x_smin(0, 0) == 1
+; run: %test_sge_x_smin(1, 2) == 1
+
+function %test_ule_umin_x(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = icmp ule v2, v0
+    return v3
+}
+
+; run: %test_ule_umin_x(0, 0) == 1
+; run: %test_ule_umin_x(1, 2) == 1
+; run: %test_ule_umin_x(2, 1) == 1
+
+function %test_umin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umin v0, v0
+    return v1
+}
+
+; run: %test_umin_same(0) == 0
+; run: %test_umin_same(1) == 1
+
+function %test_smin_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smin v0, v0
+    return v1
+}
+
+; run: %test_smin_same(0) == 0
+; run: %test_smin_same(1) == 1
+
+function %test_umax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = umax v0, v0
+    return v1
+}
+
+; run: %test_umax_same(0) == 0
+; run: %test_umax_same(1) == 1
+
+function %test_smax_same(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = smax v0, v0
+    return v1
+}
+
+; run: %test_smax_same(0) == 0
+; run: %test_smax_same(1) == 1
+
+function %test_smax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smax v2, v0
+    return v3
+}
+
+; run: %test_smax_nested_absorb(0, 0) == 0
+; run: %test_smax_nested_absorb(1, 2) == 2
+; run: %test_smax_nested_absorb(2, 1) == 2
+
+function %test_umax_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = umax v2, v0
+    return v3
+}
+
+; run: %test_umax_nested_absorb(0, 0) == 0
+; run: %test_umax_nested_absorb(1, 2) == 2
+
+function %test_smin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smin v0, v1
+    v3 = smin v2, v0
+    return v3
+}
+
+; run: %test_smin_nested_absorb(0, 0) == 0
+; run: %test_smin_nested_absorb(1, 2) == 1
+; run: %test_smin_nested_absorb(2, 1) == 1
+
+function %test_umin_nested_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umin v2, v0
+    return v3
+}
+
+; run: %test_umin_nested_absorb(0, 0) == 0
+; run: %test_umin_nested_absorb(1, 2) == 1
+; run: %test_umin_nested_absorb(2, 1) == 1
+
+function %test_smin_smax_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = smin v2, v1
+    return v3
+}
+
+; run: %test_smin_smax_absorb(0, 0) == 0
+; run: %test_smin_smax_absorb(1, 2) == 2
+
+function %test_umax_umin_absorb(i32, i32) -> i32 fast {
+block0(v0: i32, v1: i32):
+    v2 = umin v0, v1
+    v3 = umax v2, v1
+    return v3
+}
+
+; run: %test_umax_umin_absorb(0, 0) == 0
+; run: %test_umax_umin_absorb(1, 2) == 2
+
+function %test_sgt_x_smax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = smax v0, v1
+    v3 = icmp sgt v0, v2
+    return v3
+}
+
+; run: %test_sgt_x_smax(0, 0) == 0
+; run: %test_sgt_x_smax(1, 2) == 0
+function %test_ugt_x_umax(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = umax v0, v1
+    v3 = icmp ugt v0, v2
+    return v3
+}
+
+; run: %test_ugt_x_umax(0, 0) == 0
+; run: %test_ugt_x_umax(1, 2) == 0
+
+function %fold_bnot_iadd_const_i32_rt(i32) -> i32 fast {
+block0(v0: i32):
+    v1 = iconst.i32 5
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; run: %fold_bnot_iadd_const_i32_rt(0) == -6
+; run: %fold_bnot_iadd_const_i32_rt(7) == -13
+; run: %fold_bnot_iadd_const_i32_rt(-5) == -1
+; run: %fold_bnot_iadd_const_i32_rt(0x7fffffff) == 0x7ffffffb
+
+function %fold_bnot_iadd_neg_const_i64_rt(i64) -> i64 fast {
+block0(v0: i64):
+    v1 = iconst.i64 -7
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; run: %fold_bnot_iadd_neg_const_i64_rt(0) == 6
+; run: %fold_bnot_iadd_neg_const_i64_rt(7) == -1
+; run: %fold_bnot_iadd_neg_const_i64_rt(-1) == 7
+; run: %fold_bnot_iadd_neg_const_i64_rt(0x80000000_00000000) == 0x80000000_00000006

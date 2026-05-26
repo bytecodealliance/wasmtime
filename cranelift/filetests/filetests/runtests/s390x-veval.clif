@@ -1,0 +1,495 @@
+test interpret
+test run
+target pulley64
+target s390x arch15
+
+function %band_band_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; run: %band_band_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x01
+
+function %band_band_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = band.i64x2 v2, v3
+  return v4
+}
+
+; run: %band_band_rev_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x01
+
+function %band_band_nota_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v0
+  v4 = band.i64x2 v3, v1
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; run: %band_band_nota_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x02
+
+function %band_band_notb_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v1
+  v4 = band.i64x2 v0, v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; run: %band_band_notb_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x04
+
+function %band_band_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v2
+  v4 = band.i64x2 v0, v1
+  v5 = band.i64x2 v4, v3
+  return v5
+}
+
+; run: %band_band_notc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x10
+
+function %band_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v0, v1
+  v4 = bnot v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; run: %band_bnandab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x0e
+
+function %band_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band.i64x2 v1, v2
+  v4 = bnot v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; run: %band_bnandbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x54
+
+function %band_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; run: %band_borab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x07
+
+function %band_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v1, v2
+  v4 = band.i64x2 v0, v3
+  return v4
+}
+
+; run: %band_borbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x15
+
+function %band_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v0, v1
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; run: %band_bnorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x08
+
+function %band_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor.i64x2 v1, v2
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; run: %band_bnorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x40
+
+function %band_bxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v0, v1
+  v4 = band.i64x2 v3, v2
+  return v4
+}
+
+; run: %band_bxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x06
+
+function %band_bxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v1, v2
+  v4 = band.i64x2 v0, v3
+  return v4
+}
+
+; run: %band_bxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x14
+
+function %band_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v0, v1
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v4, v2
+  return v5
+}
+
+; run: %band_bnxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x09
+
+function %band_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor.i64x2 v1, v2
+  v4 = bnot.i64x2 v3
+  v5 = band.i64x2 v0, v4
+  return v5
+}
+
+; run: %band_bnxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x41
+
+function %bor_bor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; run: %bor_bor_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x7f
+
+function %bor_bor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v2, v3
+  return v4
+}
+
+; run: %bor_bor_rev_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x7f
+
+function %bor_bor_nota_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v0
+  v4 = bor v3, v1
+  v5 = bor v4, v2
+  return v5
+}
+
+; run: %bor_bor_nota_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffbf
+
+function %bor_bor_notb_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v1
+  v4 = bor v0, v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; run: %bor_bor_notb_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffdf
+
+function %bor_bor_notc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bnot v2
+  v4 = bor.i64x2 v0, v1
+  v5 = bor.i64x2 v4, v3
+  return v5
+}
+
+; run: %bor_bor_notc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xfffffffffffffffffffffffffffffff7
+
+function %bor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; run: %bor_bnandab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffef
+
+function %bor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; run: %bor_bnandbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xfffffffffffffffffffffffffffffffd
+
+function %bor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; run: %bor_borab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x7f
+
+function %bor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bor v0, v3
+  return v4
+}
+
+; run: %bor_borbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x7f
+
+function %bor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; run: %bor_bnorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff8f
+
+function %bor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; run: %bor_bnorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffd5
+
+function %bor_bxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bor v3, v2
+  return v4
+}
+
+; run: %bor_bxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x6f
+
+function %bor_bxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bor v0, v3
+  return v4
+}
+
+; run: %bor_bxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x7d
+
+function %bor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bor v4, v2
+  return v5
+}
+
+; run: %bor_bnxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff9f
+
+function %bor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bor v0, v4
+  return v5
+}
+
+; run: %bor_bnxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffd7
+
+function %bxor_bxor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v3, v2
+  return v4
+}
+
+; run: %bxor_bxor_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x69
+
+function %bxor_bxor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v2, v3
+  return v4
+}
+
+; run: %bxor_bxor_rev_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x69
+
+function %bxor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; run: %bxor_bnandab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffe1
+
+function %bxor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; run: %bxor_bnandbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffffa9
+
+function %bxor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bxor v3, v2
+  return v4
+}
+
+; run: %bxor_borab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x78
+
+function %bxor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bxor v0, v3
+  return v4
+}
+
+; run: %bxor_borbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x6a
+
+function %bxor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; run: %bxor_bnorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff87
+
+function %bxor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; run: %bxor_bnorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff95
+
+function %bxor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  return v5
+}
+
+; run: %bxor_bnxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff96
+
+function %bxor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  return v5
+}
+
+; run: %bxor_bnxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff96
+
+function %bnxor_bxor_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v3, v2
+  v5 = bnot v4
+  return v5
+}
+
+; run: %bnxor_bxor_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff96
+
+function %bnxor_bxor_rev_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bxor v2, v3
+  v5 = bnot v4
+  return v5
+}
+
+; run: %bnxor_bxor_rev_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff96
+
+function %bnxor_bnandab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnandab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x1e
+
+function %bnxor_bnandbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = band v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnandbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x56
+
+function %bnxor_borab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bxor v3, v2
+  v5 = bnot v4
+  return v5
+}
+
+; run: %bnxor_borab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff87
+
+function %bnxor_borbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bxor v0, v3
+  v5 = bnot v4
+  return v5
+}
+
+; run: %bnxor_borbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0xffffffffffffffffffffffffffffff95
+
+function %bnxor_bnorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x78
+
+function %bnxor_bnorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x6a
+
+function %bnxor_bnxorab_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v0, v1
+  v4 = bnot v3
+  v5 = bxor v4, v2
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnxorab_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x69
+
+function %bnxor_bnxorbc_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+  v3 = bxor v1, v2
+  v4 = bnot v3
+  v5 = bxor v0, v4
+  v6 = bnot v5
+  return v6
+}
+
+; run: %bnxor_bnxorbc_i64x2([0x55 0], [0x33 0], [0x0f 0]) == 0x69
+

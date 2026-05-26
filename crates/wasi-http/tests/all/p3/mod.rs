@@ -22,17 +22,17 @@ use wasmtime_wasi::{TrappableError, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiVi
 use wasmtime_wasi_http::p3::bindings::Service;
 use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
 use wasmtime_wasi_http::p3::{
-    self, Request, RequestOptions, WasiHttpCtx, WasiHttpCtxView, WasiHttpView,
+    self, Request, RequestOptions, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
-use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
+use wasmtime_wasi_http::{DEFAULT_FORBIDDEN_HEADERS, WasiHttpCtx};
 
 foreach_p3_http!(assert_test_exists);
 
-struct TestHttpCtx {
+struct TestHooks {
     request_body_tx: Option<oneshot::Sender<UnsyncBoxBody<Bytes, ErrorCode>>>,
 }
 
-impl WasiHttpCtx for TestHttpCtx {
+impl WasiHttpHooks for TestHooks {
     fn is_forbidden_header(&mut self, name: &http::header::HeaderName) -> bool {
         name.as_str() == "custom-forbidden-header" || DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
@@ -83,7 +83,8 @@ impl WasiHttpCtx for TestHttpCtx {
 struct Ctx {
     table: ResourceTable,
     wasi: WasiCtx,
-    http: TestHttpCtx,
+    http: WasiHttpCtx,
+    hooks: TestHooks,
 }
 
 impl Ctx {
@@ -91,7 +92,8 @@ impl Ctx {
         Self {
             table: ResourceTable::default(),
             wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-            http: TestHttpCtx {
+            http: WasiHttpCtx::new(),
+            hooks: TestHooks {
                 request_body_tx: Some(request_body_tx),
             },
         }
@@ -112,6 +114,7 @@ impl WasiHttpView for Ctx {
         WasiHttpCtxView {
             ctx: &mut self.http,
             table: &mut self.table,
+            hooks: &mut self.hooks,
         }
     }
 }
@@ -143,7 +146,6 @@ async fn run_cli(path: &str, server: &Server) -> wasmtime::Result<()> {
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
-        .0
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
@@ -168,36 +170,24 @@ async fn run_http<E: Into<ErrorCode> + 'static>(
         .context("failed to link `wasi:http@0.3.x`")?;
     let service = Service::instantiate_async(&mut store, &component, &linker).await?;
     let (req, io) = Request::from_http(req);
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let ((handle_result, ()), res) = try_join!(
-        async move {
-            store
-                .run_concurrent(async |store| {
-                    try_join!(
-                        async {
-                            let (res, task) = match service.handle(store, req).await? {
-                                Ok(pair) => pair,
-                                Err(err) => return Ok(Err(Some(err))),
-                            };
-                            _ = tx
-                                .send(store.with(|store| res.into_http(store, async { Ok(()) }))?);
-                            task.block(store).await;
-                            Ok(Ok(()))
-                        },
-                        async { io.await.context("failed to consume request body") }
-                    )
-                })
-                .await?
-        },
-        async move {
-            let res = rx.await?;
-            let (parts, body) = res.into_parts();
-            let body = body.collect().await.context("failed to collect body")?;
-            wasmtime::error::Ok(http::Response::from_parts(parts, body))
-        }
-    )?;
-
-    Ok(handle_result.map(|()| res))
+    store
+        .run_concurrent(async |store| {
+            let (res, ()) = try_join!(
+                async {
+                    let res = match service.handle(store, req).await? {
+                        Ok(res) => res,
+                        Err(err) => return Ok(Err(Some(err))),
+                    };
+                    let res = store.with(|store| res.into_http(store, async { Ok(()) }))?;
+                    let (parts, body) = res.into_parts();
+                    let body = body.collect().await.context("failed to collect body")?;
+                    wasmtime::error::Ok(Ok(http::Response::from_parts(parts, body)))
+                },
+                async { io.await.context("failed to consume request body") }
+            )?;
+            Ok(res)
+        })
+        .await?
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -332,7 +322,8 @@ async fn p3_http_middleware() -> Result<()> {
 async fn p3_http_middleware_host_to_host() {
     let error = format!("{:?}", test_http_middleware(true).await.unwrap_err());
 
-    let expected = "cannot read from and write to intra-component future with non-numeric payload";
+    let expected =
+        "cannot read from and write to intra-component future/stream with non-numeric payload";
 
     assert!(
         error.contains(expected),
@@ -414,7 +405,7 @@ async fn test_http_middleware_with_chain(host_to_host: bool) -> Result<()> {
                         "local:local/chain-http".to_owned(),
                         InstantiationArg {
                             instance: "local:local/chain-http".into(),
-                            export: Some("wasi:http/handler@0.3.0-rc-2026-02-09".into()),
+                            export: Some("wasi:http/handler@0.3.0-rc-2026-03-15".into()),
                         },
                     )]
                     .into_iter()
@@ -738,5 +729,95 @@ async fn p3_http_data_frame_at_end_of_stream() -> Result<()> {
     let collected_body = collected_body.to_bytes();
     let expected = [body.as_slice(), final_data.as_slice()].concat();
     assert_eq!(collected_body, expected.as_slice());
+    Ok(())
+}
+
+/// Body wrapper that interleaves zero-length data frames with real data.
+///
+/// Zero-length data frames are valid per the `http_body::Body` trait contract and
+/// RFC 9113 §6.1. This wrapper injects `empty_per_frame` empty frames before each
+/// real frame from the inner body, testing that `HostBodyStreamProducer` tolerates them.
+struct BodyWithEmptyFrames {
+    inner: http_body_util::StreamBody<
+        futures::channel::mpsc::Receiver<Result<http_body::Frame<Bytes>, ErrorCode>>,
+    >,
+    /// Number of empty frames to inject before each real frame
+    empty_per_frame: usize,
+    /// Number of empty frames left to inject before the next real frame
+    empty_remaining: usize,
+}
+
+impl http_body::Body for BodyWithEmptyFrames {
+    type Data = Bytes;
+    type Error = ErrorCode;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        if self.empty_remaining > 0 {
+            self.empty_remaining -= 1;
+            return Poll::Ready(Some(Ok(http_body::Frame::data(Bytes::new()))));
+        }
+        let this = &mut *self;
+        let result = Pin::new(&mut this.inner).poll_frame(cx);
+        if matches!(&result, Poll::Ready(Some(Ok(_)))) {
+            // Reset counter so empty frames are injected before the next real frame
+            this.empty_remaining = this.empty_per_frame;
+        }
+        result
+    }
+
+    fn is_end_stream(&self) -> bool {
+        false
+    }
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_http_empty_frames_interleaved() -> Result<()> {
+    _ = env_logger::try_init();
+
+    // Verifies that zero-length data frames interleaved with real data do not cause
+    // poll_produce to return Completed with 0 items produced.
+    // Pattern: empty, empty, data("hello "), empty, empty, data("world")
+
+    let (mut body_tx, body_rx) = futures::channel::mpsc::channel::<Result<_, ErrorCode>>(2);
+
+    let wrapped_body = BodyWithEmptyFrames {
+        inner: http_body_util::StreamBody::new(body_rx),
+        empty_per_frame: 2,
+        empty_remaining: 2,
+    };
+
+    let request = http::Request::builder()
+        .uri("http://localhost/")
+        .method(http::Method::GET);
+
+    let response = futures::join!(
+        run_http(
+            P3_HTTP_ECHO_COMPONENT,
+            request.body(wrapped_body)?,
+            oneshot::channel().0
+        ),
+        async {
+            body_tx
+                .send(Ok(http_body::Frame::data(Bytes::from_static(b"hello "))))
+                .await
+                .unwrap();
+            body_tx
+                .send(Ok(http_body::Frame::data(Bytes::from_static(b"world"))))
+                .await
+                .unwrap();
+            drop(body_tx);
+        }
+    )
+    .0?
+    .unwrap();
+
+    assert_eq!(response.status().as_u16(), 200);
+
+    let (_, collected_body) = response.into_parts();
+    let collected_body = collected_body.to_bytes();
+    assert_eq!(collected_body, b"hello world".as_slice());
     Ok(())
 }

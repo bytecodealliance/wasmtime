@@ -28,20 +28,22 @@ class ImportType {
     const wasm_importtype_t *ptr;
 
     // TODO: can this circle be broken another way?
-    const wasm_externtype_t *raw_type() { return wasm_importtype_type(ptr); }
+    const wasm_externtype_t *raw_type() const {
+      return wasm_importtype_type(ptr);
+    }
 
   public:
     /// Creates a new reference from the raw underlying C API representation.
     Ref(const wasm_importtype_t *ptr) : ptr(ptr) {}
 
     /// Returns the module name associated with this import.
-    std::string_view module() {
+    std::string_view module() const {
       const auto *name = wasm_importtype_module(ptr);
       return std::string_view(name->data, name->size);
     }
 
     /// Returns the field name associated with this import.
-    std::string_view name() {
+    std::string_view name() const {
       const auto *name = wasm_importtype_name(ptr);
       return std::string_view(name->data, name->size);
     }

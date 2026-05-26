@@ -5,7 +5,7 @@ use object::endian::{BigEndian, Endian, Endianness, LittleEndian};
 use object::read::elf::{FileHeader, SectionHeader};
 use object::{
     File, NativeEndian as NE, Object, ObjectSection, ObjectSymbol, RelocationEncoding,
-    RelocationKind, RelocationTarget, U64Bytes,
+    RelocationKind, RelocationTarget, U64,
 };
 use wasmtime_environ::obj;
 
@@ -67,7 +67,7 @@ fn relocate_dwarf_sections(bytes: &mut [u8], code_region: (*const u8, usize)) ->
         let (loc, _) = offset
             .try_into()
             .ok()
-            .and_then(|offset| object::from_bytes_mut::<U64Bytes<NE>>(&mut bytes[offset..]).ok())
+            .and_then(|offset| object::from_bytes_mut::<U64<NE>>(&mut bytes[offset..]).ok())
             .ok_or_else(|| format_err!("invalid dwarf relocations"))?;
         loc.set(NE, value);
     }

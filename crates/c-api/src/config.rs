@@ -7,8 +7,8 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
-    Config, InstanceAllocationStrategy, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy,
-    Result, Strategy,
+    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, RegallocAlgorithm, Result,
+    Strategy,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -27,6 +27,7 @@ wasmtime_c_api_macros::declare_own!(wasm_config_t);
 pub enum wasmtime_strategy_t {
     WASMTIME_STRATEGY_AUTO,
     WASMTIME_STRATEGY_CRANELIFT,
+    WASMTIME_STRATEGY_WINCH,
 }
 
 #[repr(u8)]
@@ -44,6 +45,13 @@ pub enum wasmtime_profiling_strategy_t {
     WASMTIME_PROFILING_STRATEGY_JITDUMP,
     WASMTIME_PROFILING_STRATEGY_VTUNE,
     WASMTIME_PROFILING_STRATEGY_PERFMAP,
+}
+
+#[repr(u8)]
+#[derive(Clone)]
+pub enum wasmtime_regalloc_algorithm_t {
+    WASMTIME_REGALLOC_BACKTRACKING,
+    WASMTIME_REGALLOC_SINGLE_PASS,
 }
 
 #[unsafe(no_mangle)]
@@ -90,11 +98,13 @@ pub extern "C" fn wasmtime_config_wasm_tail_call_set(c: &mut wasm_config_t, enab
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_reference_types_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_reference_types(enable);
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_function_references_set(
     c: &mut wasm_config_t,
     enable: bool,
@@ -103,6 +113,7 @@ pub extern "C" fn wasmtime_config_wasm_function_references_set(
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_gc_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_gc(enable);
 }
@@ -165,6 +176,7 @@ pub extern "C" fn wasmtime_config_strategy_set(
     c.config.strategy(match strategy {
         WASMTIME_STRATEGY_AUTO => Strategy::Auto,
         WASMTIME_STRATEGY_CRANELIFT => Strategy::Cranelift,
+        WASMTIME_STRATEGY_WINCH => Strategy::Winch,
     });
 }
 
@@ -203,6 +215,19 @@ pub extern "C" fn wasmtime_config_cranelift_opt_level_set(
         WASMTIME_OPT_LEVEL_NONE => OptLevel::None,
         WASMTIME_OPT_LEVEL_SPEED => OptLevel::Speed,
         WASMTIME_OPT_LEVEL_SPEED_AND_SIZE => OptLevel::SpeedAndSize,
+    });
+}
+
+#[unsafe(no_mangle)]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+pub extern "C" fn wasmtime_config_cranelift_regalloc_algorithm_set(
+    c: &mut wasm_config_t,
+    algo: wasmtime_regalloc_algorithm_t,
+) {
+    use wasmtime_regalloc_algorithm_t::*;
+    c.config.cranelift_regalloc_algorithm(match algo {
+        WASMTIME_REGALLOC_BACKTRACKING => RegallocAlgorithm::Backtracking,
+        WASMTIME_REGALLOC_SINGLE_PASS => RegallocAlgorithm::SinglePass,
     });
 }
 
@@ -476,6 +501,7 @@ pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_exceptions_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_exceptions(enable);
 }
@@ -695,5 +721,12 @@ pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
     pc: &wasmtime_pooling_allocation_config_t,
 ) {
     c.config
-        .allocation_strategy(InstanceAllocationStrategy::Pooling(pc.config.clone()));
+        .allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(
+            pc.config.clone(),
+        ));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_concurrency_support_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.concurrency_support(enable);
 }

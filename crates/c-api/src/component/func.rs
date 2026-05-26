@@ -26,6 +26,37 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
     })
 }
 
+#[unsafe(no_mangle)]
+#[cfg(feature = "component-model-async")]
+pub unsafe extern "C" fn wasmtime_component_func_call_async<'a>(
+    func: &'a Func,
+    mut context: WasmtimeStoreContextMut<'a>,
+    args: *const wasmtime_component_val_t,
+    args_len: usize,
+    results: *mut wasmtime_component_val_t,
+    results_len: usize,
+    err_ret: &'a mut *mut wasmtime_error_t,
+) -> Box<crate::wasmtime_call_future_t<'a>> {
+    let c_args = unsafe { crate::slice_from_raw_parts(args, args_len) };
+    let c_results = unsafe { crate::slice_from_raw_parts_mut(results, results_len) };
+    let fut = Box::pin(async move {
+        let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
+        let mut results = vec![Val::Bool(false); c_results.len()];
+
+        match func.call_async(&mut context, &args, &mut results).await {
+            Ok(()) => {
+                for (c_val, rust_val) in std::iter::zip(c_results.iter_mut(), results) {
+                    *c_val = wasmtime_component_val_t::from(&rust_val);
+                }
+            }
+            Err(err) => {
+                *err_ret = Box::into_raw(Box::new(wasmtime_error_t::from(err)));
+            }
+        }
+    });
+    Box::new(crate::wasmtime_call_future_t::new(fut))
+}
+
 #[deprecated(note = "no longer has any effect")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_func_post_return(

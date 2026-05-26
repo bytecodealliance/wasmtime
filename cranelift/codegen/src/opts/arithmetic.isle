@@ -47,7 +47,7 @@
       (subsume inner))
 
 ;; x-x == 0.
-(rule (simplify (isub (ty_int ty) x x)) (subsume (iconst_u ty 0)))
+(rule (simplify (isub ty x x)) (subsume (iconst_u ty 0)))
 
 ;; x*1 == x.
 (rule (simplify (imul ty
@@ -226,10 +226,10 @@
 ;; or(x, C) + (-C)  -->  and(x, ~C)
 (rule
   (simplify (iadd ty
-              (bor ty x (iconst_s ty n))
-              (iconst_s ty m)))
-  (if-let m (i64_checked_neg n))
-  (band ty x (iconst ty (imm64_masked ty (i64_cast_unsigned (i64_not n))))))
+              (bor ty x (iconst ty n))
+              (iconst ty m)))
+  (if-let m (imm64_neg ty n))
+  (band ty x (iconst ty (imm64_not ty n))))
 
 ;; (x + y) - (x | y) --> x & y
 (rule (simplify (isub ty (iadd ty x y) (bor ty x y))) (band ty x y))
@@ -291,3 +291,282 @@
   (if-let 0 (u64_checked_rem z x))
   (if-let 1 (u64_rem x 2))
   (eq ty y (iconst ty1 (imm64 (u64_div z x)))))
+
+;; (x + y) + (-y) ==> x
+;; and equivalent operand-order variants.
+(rule (simplify (iadd ty (iadd ty x y) (ineg ty y))) x)
+(rule (simplify (iadd ty (ineg ty y) (iadd ty x y))) x)
+(rule (simplify (iadd ty (iadd ty y x) (ineg ty y))) x)
+(rule (simplify (iadd ty (ineg ty y) (iadd ty y x))) x)
+
+;; (x | y) - (x & y)  ==>  (x ^ y)
+(rule (simplify (isub ty (bor ty x y) (band ty x y))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty x y) (band ty y x))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty y x) (band ty x y))) (bxor ty x y))
+(rule (simplify (isub ty (bor ty y x) (band ty y x))) (bxor ty x y))
+
+;; (x + y) - (x & y)  ==>  (x | y)
+(rule (simplify (isub ty (iadd ty x y) (band ty x y))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty x y) (band ty y x))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty y x) (band ty x y))) (bor ty x y))
+(rule (simplify (isub ty (iadd ty y x) (band ty y x))) (bor ty x y))
+
+;; (x | y) - (x ^ y)  ==>  (x & y)
+(rule (simplify (isub ty (bor ty x y) (bxor ty x y))) (band ty x y))
+(rule (simplify (isub ty (bor ty x y) (bxor ty y x))) (band ty x y))
+(rule (simplify (isub ty (bor ty y x) (bxor ty x y))) (band ty x y))
+(rule (simplify (isub ty (bor ty y x) (bxor ty y x))) (band ty x y))
+
+;; (~x) + x == -1
+(rule (simplify (iadd ty (bnot ty x) x)) (iconst_s ty -1))
+(rule (simplify (iadd ty x (bnot ty x))) (iconst_s ty -1))
+
+;; ((x + y) - (x + z)) --> (y - z)
+(rule (simplify (isub ty (iadd ty x y) (iadd ty x z))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty x y) (iadd ty z x))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty y x) (iadd ty x z))) (isub ty y z))
+(rule (simplify (isub ty (iadd ty y x) (iadd ty z x))) (isub ty y z))
+
+;; ((x - z) - (y - z)) --> (x - y)
+(rule (simplify (isub ty (isub ty x z) (isub ty y z))) (isub ty x y))
+
+;; ((x - y) - (x - z)) --> (z - y)
+(rule (simplify (isub ty (isub ty x y) (isub ty x z))) (isub ty z y))
+
+;; umin(x, y) + umax(x, y) --> x + y
+(rule (simplify (iadd ty (umin ty x y) (umax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty x y) (umin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty x y) (umax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty y x) (umin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty y x) (umax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty x y) (umin ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umin ty y x) (umax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (umax ty y x) (umin ty y x))) (iadd ty x y))
+
+;; smin(x, y) + smax(x, y) --> x + y
+(rule (simplify (iadd ty (smin ty x y) (smax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty x y) (smin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty x y) (smax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty y x) (smin ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty y x) (smax ty x y))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty x y) (smin ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smin ty y x) (smax ty y x))) (iadd ty x y))
+(rule (simplify (iadd ty (smax ty y x) (smin ty y x))) (iadd ty x y))
+
+;; ((x + z) - (y + z)) --> (x - y)
+(rule (simplify (isub ty (iadd ty x z) (iadd ty y z))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty x z) (iadd ty z y))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty z x) (iadd ty y z))) (isub ty x y))
+(rule (simplify (isub ty (iadd ty z x) (iadd ty z y))) (isub ty x y))
+
+;; ((x - y) + (y + z)) --> (x + z)
+(rule (simplify (iadd ty (isub ty x y) (iadd ty y z))) (iadd ty x z))
+(rule (simplify (iadd ty (iadd ty y z) (isub ty x y))) (iadd ty x z))
+(rule (simplify (iadd ty (isub ty x y) (iadd ty z y))) (iadd ty x z))
+(rule (simplify (iadd ty (iadd ty z y) (isub ty x y))) (iadd ty x z))
+
+;; (x - (x + y)) --> -y
+(rule (simplify (isub ty x (iadd ty x y))) (ineg ty y))
+(rule (simplify (isub ty x (iadd ty y x))) (ineg ty y))
+
+;; (x + (y + (z - x))) --> (y + z)
+(rule (simplify (iadd ty x (iadd ty y (isub ty z x)))) (iadd ty y z))
+(rule (simplify (iadd ty (iadd ty y (isub ty z x)) x)) (iadd ty y z))
+(rule (simplify (iadd ty x (iadd ty (isub ty z x) y))) (iadd ty y z))
+(rule (simplify (iadd ty (iadd ty (isub ty z x) y) x)) (iadd ty y z))
+
+;; Helper to create a "true" value for a comparison. For scalar integers this is
+;; a value of 1 but for vectors this is -1 since each lane is filled with all
+;; 1s. We use `(iconst_u ty 0)` for falses for both integers and vector. This is
+;; because of the Cranelift semantics:
+;; When comparing scalars, the result is 1 if the condition holds, or 0 otherwise.
+;; When comparing vectors, the result is -1 (all-ones) if the condition holds, or 0 otherwise.
+(decl cmp_true (Type) Value)
+(rule 0 (cmp_true (ty_int ty)) (iconst_u ty 1))
+(rule 1 (cmp_true (ty_vec128 ty)) (iconst_s ty -1))
+
+;; (x + y) == (y + x) --> true
+(rule (simplify (eq ty (iadd cty x y) (iadd cty y x))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty x y) (iadd cty x y))) (cmp_true ty))
+(rule (simplify (eq ty (iadd cty y x) (iadd cty y x))) (cmp_true ty))
+
+;; (x - y) != x --> y != 0
+(rule (simplify (ne cty (isub ty x y) x)) (ne cty y (iconst_u ty 0)))
+(rule (simplify (ne cty x (isub ty x y))) (ne cty y (iconst_u ty 0)))
+
+;; (x - y) == x --> y == 0
+(rule (simplify (eq cty (isub ty x y) x)) (eq cty y (iconst_u ty 0)))
+(rule (simplify (eq cty x (isub ty x y))) (eq cty y (iconst_u ty 0)))
+
+;; (x + y) == y --> x == 0
+(rule (simplify (eq cty (iadd ty x y) y)) (eq cty x (iconst_u ty 0)))
+(rule (simplify (eq cty (iadd ty y x) y)) (eq cty x (iconst_u ty 0)))
+(rule (simplify (eq cty y (iadd ty x y))) (eq cty x (iconst_u ty 0)))
+(rule (simplify (eq cty y (iadd ty y x))) (eq cty x (iconst_u ty 0)))
+
+;; -x == -y --> x == y
+(rule (simplify (eq ty (ineg ty x) (ineg ty y))) (eq ty x y))
+
+;; -((-y) * x) --> x * y
+(rule (simplify (ineg ty (imul ty (ineg ty y) x))) (imul ty x y))
+(rule (simplify (ineg ty (imul ty x (ineg ty y)))) (imul ty x y))
+
+;; max(x, y) >= x
+(rule (simplify (sge ty (smax ty x y) x)) (cmp_true ty))
+(rule (simplify (sge ty (smax ty y x) x)) (cmp_true ty))
+(rule (simplify (sle ty x (smax ty x y))) (cmp_true ty))
+(rule (simplify (sle ty x (smax ty y x))) (cmp_true ty))
+(rule (simplify (uge ty (umax ty x y) x)) (cmp_true ty))
+(rule (simplify (uge ty (umax ty y x) x)) (cmp_true ty))
+(rule (simplify (ule ty x (umax ty x y))) (cmp_true ty))
+(rule (simplify (ule ty x (umax ty y x))) (cmp_true ty))
+
+;; x >= min(x, y)
+(rule (simplify (sge ty x (smin ty x y))) (cmp_true ty))
+(rule (simplify (sge ty x (smin ty y x))) (cmp_true ty))
+(rule (simplify (sle ty (smin ty x y) x)) (cmp_true ty))
+(rule (simplify (sle ty (smin ty y x) x)) (cmp_true ty))
+(rule (simplify (uge ty x (umin ty x y))) (cmp_true ty))
+(rule (simplify (uge ty x (umin ty y x))) (cmp_true ty))
+(rule (simplify (ule ty (umin ty x y) x)) (cmp_true ty))
+(rule (simplify (ule ty (umin ty y x) x)) (cmp_true ty))
+
+;; min/max(x,x) --> x
+(rule (simplify (umin ty x x)) x)
+(rule (simplify (smin ty x x)) x)
+(rule (simplify (umax ty x x)) x)
+(rule (simplify (smax ty x x)) x)
+
+;; max(max(x, y), x) --> max(x, y)
+(rule (simplify (smax ty (smax ty x y) x)) (smax ty x y))
+(rule (simplify (smax ty (smax ty y x) x)) (smax ty x y))
+(rule (simplify (smax ty x (smax ty x y))) (smax ty x y))
+(rule (simplify (smax ty x (smax ty y x))) (smax ty x y))
+(rule (simplify (umax ty (umax ty x y) x)) (umax ty x y))
+(rule (simplify (umax ty (umax ty y x) x)) (umax ty x y))
+(rule (simplify (umax ty x (umax ty x y))) (umax ty x y))
+(rule (simplify (umax ty x (umax ty y x))) (umax ty x y))
+
+;; min(min(x, y), x) --> min(x, y)
+(rule (simplify (smin ty (smin ty x y) x)) (smin ty x y))
+(rule (simplify (smin ty (smin ty y x) x)) (smin ty x y))
+(rule (simplify (smin ty x (smin ty x y))) (smin ty x y))
+(rule (simplify (smin ty x (smin ty y x))) (smin ty x y))
+(rule (simplify (umin ty (umin ty x y) x)) (umin ty x y))
+(rule (simplify (umin ty (umin ty y x) x)) (umin ty x y))
+(rule (simplify (umin ty x (umin ty x y))) (umin ty x y))
+(rule (simplify (umin ty x (umin ty y x))) (umin ty x y))
+
+;; min(max(x, y), y) --> y ; max(min(x, y), y) --> y
+(rule (simplify (smin ty (smax ty x y) y)) y)
+(rule (simplify (smin ty (smax ty y x) y)) y)
+(rule (simplify (smin ty y (smax ty x y))) y)
+(rule (simplify (smin ty y (smax ty y x))) y)
+(rule (simplify (umin ty (umax ty x y) y)) y)
+(rule (simplify (umin ty (umax ty y x) y)) y)
+(rule (simplify (umin ty y (umax ty x y))) y)
+(rule (simplify (umin ty y (umax ty y x))) y)
+(rule (simplify (smax ty (smin ty x y) y)) y)
+(rule (simplify (smax ty (smin ty y x) y)) y)
+(rule (simplify (smax ty y (smin ty x y))) y)
+(rule (simplify (smax ty y (smin ty y x))) y)
+(rule (simplify (umax ty (umin ty x y) y)) y)
+(rule (simplify (umax ty (umin ty y x) y)) y)
+(rule (simplify (umax ty y (umin ty x y))) y)
+(rule (simplify (umax ty y (umin ty y x))) y)
+
+;; min(min(x, y), max(x, y)) --> min(x,y)
+(rule (simplify (smin ty (smax ty x y) (smin ty x y))) (smin ty x y))
+(rule (simplify (smin ty (smax ty x y) (smin ty y x))) (smin ty x y))
+(rule (simplify (smin ty (smax ty x y) (umin ty x y))) (umin ty x y))
+(rule (simplify (smin ty (smax ty x y) (umin ty y x))) (umin ty x y))
+
+(rule (simplify (smin ty (smin ty x y) (smax ty x y))) (smin ty x y))
+(rule (simplify (smin ty (smin ty x y) (smax ty y x))) (smin ty x y))
+(rule (simplify (smin ty (smin ty x y) (umax ty x y))) (smin ty x y))
+(rule (simplify (smin ty (smin ty x y) (umax ty y x))) (smin ty x y))
+
+(rule (simplify (smin ty (umax ty x y) (smin ty x y))) (smin ty x y))
+(rule (simplify (smin ty (umax ty x y) (smin ty y x))) (smin ty x y))
+(rule (simplify (smin ty (umax ty x y) (umin ty x y))) (smin ty x y))
+(rule (simplify (smin ty (umax ty x y) (umin ty y x))) (smin ty x y))
+
+(rule (simplify (smin ty (umin ty x y) (smax ty x y))) (umin ty x y))
+(rule (simplify (smin ty (umin ty x y) (smax ty y x))) (umin ty x y))
+(rule (simplify (smin ty (umin ty x y) (umax ty x y))) (smin ty x y))
+(rule (simplify (smin ty (umin ty x y) (umax ty y x))) (smin ty x y))
+
+(rule (simplify (umin ty (smax ty x y) (smin ty x y))) (umin ty x y))
+(rule (simplify (umin ty (smax ty x y) (smin ty y x))) (umin ty x y))
+(rule (simplify (umin ty (smax ty x y) (umin ty x y))) (umin ty x y))
+(rule (simplify (umin ty (smax ty x y) (umin ty y x))) (umin ty x y))
+
+(rule (simplify (umin ty (smin ty x y) (smax ty x y))) (umin ty x y))
+(rule (simplify (umin ty (smin ty x y) (smax ty y x))) (umin ty x y))
+(rule (simplify (umin ty (smin ty x y) (umax ty x y))) (smin ty x y))
+(rule (simplify (umin ty (smin ty x y) (umax ty y x))) (smin ty x y))
+
+(rule (simplify (umin ty (umax ty x y) (smin ty x y))) (smin ty x y))
+(rule (simplify (umin ty (umax ty x y) (smin ty y x))) (smin ty x y))
+(rule (simplify (umin ty (umax ty x y) (umin ty x y))) (umin ty x y))
+(rule (simplify (umin ty (umax ty x y) (umin ty y x))) (umin ty x y))
+
+(rule (simplify (umin ty (umin ty x y) (smax ty x y))) (umin ty x y))
+(rule (simplify (umin ty (umin ty x y) (smax ty y x))) (umin ty x y))
+(rule (simplify (umin ty (umin ty x y) (umax ty x y))) (umin ty x y))
+(rule (simplify (umin ty (umin ty x y) (umax ty y x))) (umin ty x y))
+
+;; max(min(x, y), max(x, y)) --> max(x, y)
+(rule (simplify (smax ty (smax ty x y) (smin ty x y))) (smax ty x y))
+(rule (simplify (smax ty (smax ty x y) (smin ty y x))) (smax ty x y))
+(rule (simplify (smax ty (smax ty x y) (umin ty x y))) (smax ty x y))
+(rule (simplify (smax ty (smax ty x y) (umin ty y x))) (smax ty x y))
+
+(rule (simplify (smax ty (smin ty x y) (smax ty x y))) (smax ty x y))
+(rule (simplify (smax ty (smin ty x y) (smax ty y x))) (smax ty x y))
+(rule (simplify (smax ty (smin ty x y) (umax ty x y))) (umax ty x y))
+(rule (simplify (smax ty (smin ty x y) (umax ty y x))) (umax ty x y))
+
+(rule (simplify (smax ty (umax ty x y) (smin ty x y))) (umax ty x y))
+(rule (simplify (smax ty (umax ty x y) (smin ty y x))) (umax ty x y))
+(rule (simplify (smax ty (umax ty x y) (umin ty x y))) (smax ty x y))
+(rule (simplify (smax ty (umax ty x y) (umin ty y x))) (smax ty x y))
+
+(rule (simplify (smax ty (umin ty x y) (smax ty x y))) (smax ty x y))
+(rule (simplify (smax ty (umin ty x y) (smax ty y x))) (smax ty x y))
+(rule (simplify (smax ty (umin ty x y) (umax ty x y))) (smax ty x y))
+(rule (simplify (smax ty (umin ty x y) (umax ty y x))) (smax ty x y))
+
+(rule (simplify (umax ty (smax ty x y) (smin ty x y))) (umax ty x y))
+(rule (simplify (umax ty (smax ty x y) (smin ty y x))) (umax ty x y))
+(rule (simplify (umax ty (smax ty x y) (umin ty x y))) (smax ty x y))
+(rule (simplify (umax ty (smax ty x y) (umin ty y x))) (smax ty x y))
+
+(rule (simplify (umax ty (smin ty x y) (smax ty x y))) (umax ty x y))
+(rule (simplify (umax ty (smin ty x y) (smax ty y x))) (umax ty x y))
+(rule (simplify (umax ty (smin ty x y) (umax ty x y))) (umax ty x y))
+(rule (simplify (umax ty (smin ty x y) (umax ty y x))) (umax ty x y))
+
+(rule (simplify (umax ty (umax ty x y) (smin ty x y))) (umax ty x y))
+(rule (simplify (umax ty (umax ty x y) (smin ty y x))) (umax ty x y))
+(rule (simplify (umax ty (umax ty x y) (umin ty x y))) (umax ty x y))
+(rule (simplify (umax ty (umax ty x y) (umin ty y x))) (umax ty x y))
+
+(rule (simplify (umax ty (umin ty x y) (smax ty x y))) (smax ty x y))
+(rule (simplify (umax ty (umin ty x y) (smax ty y x))) (smax ty x y))
+(rule (simplify (umax ty (umin ty x y) (umax ty x y))) (umax ty x y))
+(rule (simplify (umax ty (umin ty x y) (umax ty y x))) (umax ty x y))
+
+;; x > max(x, y) --> 0
+(rule (simplify (sgt ty x (smax ty x y))) (iconst_u ty 0))
+(rule (simplify (sgt ty x (smax ty y x))) (iconst_u ty 0))
+(rule (simplify (slt ty (smax ty x y) x)) (iconst_u ty 0))
+(rule (simplify (slt ty (smax ty y x) x)) (iconst_u ty 0))
+(rule (simplify (ugt ty x (umax ty x y))) (iconst_u ty 0))
+(rule (simplify (ugt ty x (umax ty y x))) (iconst_u ty 0))
+(rule (simplify (ult ty (umax ty x y) x)) (iconst_u ty 0))
+(rule (simplify (ult ty (umax ty y x) x)) (iconst_u ty 0))
+
+;; (-X) * C = X * (-C)
+(rule (simplify (imul (fits_in_64 ty) (ineg ty x) (iconst ty y))) (imul ty x (iconst ty (imm64_neg ty y))))

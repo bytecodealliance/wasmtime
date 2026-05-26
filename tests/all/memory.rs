@@ -1,5 +1,7 @@
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst};
+use std::thread;
 use std::time::Duration;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
@@ -678,6 +680,66 @@ fn shared_memory_wait_notify() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[cfg_attr(miri, ignore)]
+fn custom_1byte_page_cant_grow() -> Result<()> {
+    let mut config = Config::new();
+    config.shared_memory(true);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // unshared too big
+    Memory::new(
+        &mut store,
+        MemoryTypeBuilder::new()
+            .min(0xffff_ffff)
+            .max(Some(0xffff_ffff))
+            .page_size_log2(0)
+            .build()?,
+    )
+    .unwrap_err();
+
+    // shared too big
+    SharedMemory::new(
+        &engine,
+        MemoryTypeBuilder::new()
+            .min(0xffff_ffff)
+            .max(Some(0xffff_ffff))
+            .shared(true)
+            .page_size_log2(0)
+            .build()?,
+    )
+    .unwrap_err();
+
+    if cfg!(target_pointer_width = "64") {
+        // unshared growth too big
+        let memory = Memory::new(
+            &mut store,
+            MemoryTypeBuilder::new()
+                .min(0xffff_fffe)
+                .max(Some(0xffff_ffff))
+                .page_size_log2(0)
+                .build()?,
+        )?;
+        assert!(memory.grow(&mut store, 1).is_err());
+
+        // shared growth too big
+        let memory = SharedMemory::new(
+            &engine,
+            MemoryTypeBuilder::new()
+                .min(0xffff_fffe)
+                .max(Some(0xffff_ffff))
+                .shared(true)
+                .page_size_log2(0)
+                .build()?,
+        )?;
+        assert!(memory.grow(1).is_err());
+    }
+
+    Ok(())
+}
+
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
 #[cfg(target_pointer_width = "64")] // requires large VM reservation
@@ -774,6 +836,42 @@ fn configure_zero(config: &mut Config) -> Result<()> {
     let ty = MemoryType::new(0, None);
     let memory = Memory::new(&mut store, ty)?;
     assert_eq!(memory.data_size(&store), 0);
+
+    Ok(())
+}
+
+#[test]
+fn atomic_wait_massive_timeout() -> Result<()> {
+    let mut config = Config::new();
+    config.shared_memory(true);
+    let engine = Engine::new(&config)?;
+
+    let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
+    let result = memory.atomic_wait32(0, 1, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Mismatch));
+    let result = memory.atomic_wait64(0, 1, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Mismatch));
+
+    let done = Arc::new(AtomicBool::new(false));
+    let t = thread::spawn({
+        let memory = memory.clone();
+        let done = done.clone();
+        move || {
+            while !done.load(SeqCst) {
+                memory.atomic_notify(0, 1).unwrap();
+                memory.atomic_notify(8, 1).unwrap();
+            }
+        }
+    });
+
+    let result = memory.atomic_wait32(0, 0, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Ok));
+    let result = memory.atomic_wait64(8, 0, Some(Duration::MAX));
+    assert_eq!(result, Ok(WaitResult::Ok));
+
+    done.store(true, SeqCst);
+
+    t.join().unwrap();
 
     Ok(())
 }

@@ -1,5 +1,5 @@
 //! Assembler library implementation for Aarch64.
-use super::{address::Address, regs};
+use super::regs;
 use crate::CallingConvention;
 use crate::aarch64::regs::zero;
 use crate::masm::{
@@ -12,7 +12,7 @@ use crate::{
     reg::{Reg, WritableReg, writable},
 };
 
-use cranelift_codegen::PatchRegion;
+use cranelift_codegen::isa::aarch64;
 use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
 use cranelift_codegen::isa::aarch64::inst::{
     ASIMDFPModImm, FpuToIntOp, MoveWideConst, NZCV, UImm5,
@@ -20,7 +20,7 @@ use cranelift_codegen::isa::aarch64::inst::{
 use cranelift_codegen::{
     Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
-    ir::{ExternalName, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
+    ir::{ExternalName, MemFlagsData, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self, ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp,
         FPULeftShiftImm, FPUOp1, FPUOp2,
@@ -31,6 +31,7 @@ use cranelift_codegen::{
     },
     settings,
 };
+use cranelift_codegen::{PatchRegion, VCodeConstant};
 use regalloc2::RegClass;
 use wasmtime_core::math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
@@ -112,11 +113,11 @@ pub(crate) struct Assembler {
 
 impl Assembler {
     /// Create a new Aarch64 assembler.
-    pub fn new(shared_flags: settings::Flags) -> Self {
+    pub fn new(shared_flags: settings::Flags, isa_flags: aarch64::settings::Flags) -> Self {
         Self {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
-            emit_info: EmitInfo::new(shared_flags),
+            emit_info: EmitInfo::new(shared_flags, isa_flags),
             pool: ConstantPool::new(),
         }
     }
@@ -151,26 +152,23 @@ impl Assembler {
     }
 
     /// Adds a constant to the constant pool, returning its address.
-    pub fn add_constant(&mut self, constant: &[u8]) -> Address {
+    pub fn add_constant(&mut self, constant: &[u8]) -> VCodeConstant {
         let handle = self.pool.register(constant, &mut self.buffer);
-        Address::constant(handle)
+        handle
     }
 
     /// Store a pair of registers.
-    pub fn stp(&mut self, xt1: Reg, xt2: Reg, addr: Address) {
-        let mem: PairAMode = addr.try_into().unwrap();
+    pub fn stp(&mut self, xt1: Reg, xt2: Reg, mem: PairAMode) {
         self.emit(Inst::StoreP64 {
             rt: xt1.into(),
             rt2: xt2.into(),
             mem,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         });
     }
 
     /// Store a register.
-    pub fn str(&mut self, reg: Reg, addr: Address, size: OperandSize, flags: MemFlags) {
-        let mem: AMode = addr.try_into().unwrap();
-
+    pub fn str(&mut self, reg: Reg, mem: AMode, size: OperandSize, flags: MemFlagsData) {
         use OperandSize::*;
         let inst = match (reg.is_int(), size) {
             (_, S8) => Inst::Store8 {
@@ -214,27 +212,26 @@ impl Assembler {
     }
 
     /// Load a signed register.
-    pub fn sload(&mut self, addr: Address, rd: WritableReg, size: OperandSize, flags: MemFlags) {
-        self.ldr(addr, rd, size, true, flags);
+    pub fn sload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlagsData) {
+        self.ldr(mem, rd, size, true, flags);
     }
 
     /// Load an unsigned register.
-    pub fn uload(&mut self, addr: Address, rd: WritableReg, size: OperandSize, flags: MemFlags) {
-        self.ldr(addr, rd, size, false, flags);
+    pub fn uload(&mut self, mem: AMode, rd: WritableReg, size: OperandSize, flags: MemFlagsData) {
+        self.ldr(mem, rd, size, false, flags);
     }
 
     /// Load address into a register.
     fn ldr(
         &mut self,
-        addr: Address,
+        mem: AMode,
         rd: WritableReg,
         size: OperandSize,
         signed: bool,
-        flags: MemFlags,
+        flags: MemFlagsData,
     ) {
         use OperandSize::*;
         let writable_reg = rd.map(Into::into);
-        let mem: AMode = addr.try_into().unwrap();
 
         let inst = match (rd.to_reg().is_int(), signed, size) {
             (_, false, S8) => Inst::ULoad8 {
@@ -293,16 +290,15 @@ impl Assembler {
     }
 
     /// Load a pair of registers.
-    pub fn ldp(&mut self, xt1: Reg, xt2: Reg, addr: Address) {
+    pub fn ldp(&mut self, xt1: Reg, xt2: Reg, mem: PairAMode) {
         let writable_xt1 = Writable::from_reg(xt1.into());
         let writable_xt2 = Writable::from_reg(xt2.into());
-        let mem = addr.try_into().unwrap();
 
         self.emit(Inst::LoadP64 {
             rt: writable_xt1,
             rt2: writable_xt2,
             mem,
-            flags: MemFlags::trusted(),
+            flags: MemFlagsData::trusted(),
         });
     }
 
@@ -326,7 +322,8 @@ impl Assembler {
                         });
                     }
                     _ => {
-                        let addr = self.add_constant(&imm.to_bytes());
+                        let constant = self.add_constant(&imm.to_bytes());
+                        let addr = AMode::Const { addr: constant };
                         self.uload(addr, rd, size, TRUSTED_FLAGS);
                     }
                 }
@@ -393,12 +390,29 @@ impl Assembler {
 
     /// Add with three registers.
     pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size, ExtendOp::UXTX);
+    }
+
+    /// Add with three registers and explicit extend operation.
+    pub fn add_rrr_with_extend(
+        &mut self,
+        rm: Reg,
+        rn: Reg,
+        rd: WritableReg,
+        size: OperandSize,
+        extendop: ExtendOp,
+    ) {
+        self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size, extendop);
     }
 
     /// Add with three registers, setting overflow flags.
     pub fn adds_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::AddS, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::AddS, rm, rn, rd, size, ExtendOp::UXTX);
+    }
+
+    /// Add with carry, three registers.
+    pub fn adc_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr(ALUOp::Adc, rm, rn, rd, size);
     }
 
     /// Add across Vector.
@@ -423,17 +437,32 @@ impl Assembler {
 
     /// Subtract with three registers.
     pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size);
+        self.alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size, ExtendOp::UXTX);
     }
 
     /// Subtract with three registers, setting flags.
-    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
-        self.alu_rrr_extend(ALUOp::SubS, rm, rn, writable!(regs::zero()), size);
+    pub fn subs_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr_extend(ALUOp::SubS, rm, rn, rd, size, ExtendOp::UXTX);
+    }
+
+    /// Subtract with carry, three registers.
+    pub fn sbc_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr(ALUOp::Sbc, rm, rn, rd, size);
     }
 
     /// Multiply with three registers.
     pub fn mul_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
         self.alu_rrrr(ALUOp3::MAdd, rm, rn, rd, regs::zero(), size);
+    }
+
+    /// Unsigned multiply, writing the high 64 bits of the 128-bit result.
+    pub fn umulh_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg) {
+        self.alu_rrr(ALUOp::UMulH, rm, rn, rd, OperandSize::S64);
+    }
+
+    /// Signed multiply, writing the high 64 bits of the 128-bit result.
+    pub fn smulh_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg) {
+        self.alu_rrr(ALUOp::SMulH, rm, rn, rd, OperandSize::S64);
     }
 
     /// Signed/unsigned division with three registers.
@@ -996,14 +1025,22 @@ impl Assembler {
         });
     }
 
-    fn alu_rrr_extend(&mut self, op: ALUOp, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+    fn alu_rrr_extend(
+        &mut self,
+        op: ALUOp,
+        rm: Reg,
+        rn: Reg,
+        rd: WritableReg,
+        size: OperandSize,
+        extendop: ExtendOp,
+    ) {
         self.emit(Inst::AluRRRExtend {
             alu_op: op,
             size: size.into(),
             rd: rd.map(Into::into),
             rn: rn.into(),
             rm: rm.into(),
-            extendop: ExtendOp::UXTX,
+            extendop,
         });
     }
 

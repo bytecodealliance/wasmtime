@@ -34,6 +34,13 @@ enum wasmtime_strategy_enum { // Strategy
   /// Indicates that Wasmtime will unconditionally use Cranelift to compile
   /// WebAssembly code.
   WASMTIME_STRATEGY_CRANELIFT,
+
+  /// Indicates that Wasmtime will unconditionally use Winch to compile
+  /// WebAssembly code.
+  //
+  /// For more details regarding ISA support and Wasm proposals support
+  /// see <https://docs.wasmtime.dev/stability-tiers.html#current-tier-status>
+  WASMTIME_STRATEGY_WINCH,
 };
 
 /**
@@ -85,6 +92,39 @@ enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   /// run under `perf` necessary calls will be made to profile generated JIT
   /// code.
   WASMTIME_PROFILING_STRATEGY_PERFMAP,
+};
+
+/**
+ * \brief Different ways Cranelift can allocate registers
+ *
+ * See #wasmtime_regalloc_algorithm_enum for possible values.
+ */
+typedef uint8_t wasmtime_regalloc_algorithm_t;
+
+/**
+ * \brief Different ways to allocate registers.
+ *
+ * The default is #WASMTIME_REGALLOC_BACKTRACKING.
+ */
+enum wasmtime_regalloc_algorithm_enum { // RegallocAlgorithm
+  /// Generates the fastest possible code, but may take longer.
+  ///
+  /// This algorithm performs “backtracking”, which means that it may undo
+  /// its earlier work and retry as it discovers conflicts. This results
+  /// in better register utilization,  producing fewer spills and moves,
+  /// but can cause super-linear compile runtime.
+  WASMTIME_REGALLOC_BACKTRACKING,
+  /// Generates acceptable code very quickly.
+  ///
+  /// This algorithm performs a single pass through the code, guaranteed to work
+  /// in linear time.
+  /// (Note that the rest of Cranelift is not necessarily guaranteed to run in
+  /// linear time, however.)
+  /// It cannot undo earlier decisions, however, and it cannot foresee
+  /// constraints or issues that may
+  /// occur further ahead in the code, so the code may have more spills and
+  /// moves as a result.
+  WASMTIME_REGALLOC_SINGLE_PASS,
 };
 
 #define WASMTIME_CONFIG_PROP(ret, name, ty)                                    \
@@ -166,6 +206,8 @@ WASMTIME_CONFIG_PROP(void, shared_memory, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_tail_call, bool)
 
+#ifdef WASMTIME_FEATURE_GC
+
 /**
  * \brief Configures whether the WebAssembly reference types proposal is
  * enabled.
@@ -188,6 +230,8 @@ WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
  * This setting is `false` by default.
  */
 WASMTIME_CONFIG_PROP(void, wasm_gc, bool)
+
+#endif // WASMTIME_FEATURE_GC
 
 /**
  * \brief Enables or disables GC support in Wasmtime entirely.
@@ -261,12 +305,16 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 
+#ifdef WASMTIME_FEATURE_GC
+
 /**
  * \brief Configures whether the WebAssembly exceptions proposal is enabled.
  *
  * This setting is `false` by default.
  */
 WASMTIME_CONFIG_PROP(void, wasm_exceptions, bool)
+
+#endif // WASMTIME_FEATURE_GC
 
 /**
  * \brief Configures whether the WebAssembly custom-page-sizes proposal is
@@ -341,6 +389,15 @@ WASMTIME_CONFIG_PROP(void, cranelift_nan_canonicalization, bool)
  * This setting in #WASMTIME_OPT_LEVEL_SPEED by default.
  */
 WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
+
+/**
+ * \brief Configures the regalloc algorithm used by the Cranelift code
+ * generator.
+ *
+ * This setting in #WASMTIME_REGALLOC_BACKTRACKING by default.
+ */
+WASMTIME_CONFIG_PROP(void, cranelift_regalloc_algorithm,
+                     wasmtime_regalloc_algorithm_t)
 
 #endif // WASMTIME_FEATURE_COMPILER
 
@@ -824,7 +881,56 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
  */
 WASMTIME_CONFIG_PROP(void, wasm_component_model, bool)
 
+/**
+ * \brief Specifies whether support for concurrent execution of WebAssembly is
+ * supported within this store.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.concurrency_support.
+ */
+WASMTIME_CONFIG_PROP(void, concurrency_support, bool)
+
+/**
+ * \brief Configures whether the WebAssembly component-model map type will be
+ * enabled for compilation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_map.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_map, bool)
+
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
+
+/**
+ * \brief Configures whether the WebAssembly component-model async support will
+ * be enabled.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_async, bool)
+
+/**
+ * \brief Configures whether async built-in intrinsics are enabled for the
+ * component model.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_more_async_builtins.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_more_async_builtins, bool)
+
+/**
+ * \brief Configures whether stackful coroutine support is enabled for async
+ * components.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model_async_stackful.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_component_model_async_stackful, bool)
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL_ASYNC
 
 #ifdef __cplusplus
 } // extern "C"

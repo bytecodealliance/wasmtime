@@ -142,9 +142,17 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         assert_eq!(accepted_client.keep_alive_interval().unwrap(), 42 * SECOND);
         assert_eq!(accepted_client.keep_alive_count().unwrap(), 42);
         assert_eq!(accepted_client.hop_limit().unwrap(), 42);
-        assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
-        assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
+        // Buffer sizes: the OS may adjust the actual value (per the WASI spec:
+        // "the value read back from this setting may differ from the value that
+        // was set"). We only assert that they're at least what we requested.
+        assert!(accepted_client.receive_buffer_size().unwrap() >= 0x10000);
+        assert!(accepted_client.send_buffer_size().unwrap() >= 0x10000);
     }
+
+    // Snapshot accepted socket's buffer sizes before changing the listener,
+    // so we can verify the accepted socket is independent of listener changes.
+    let accepted_recv_buf = accepted_client.receive_buffer_size().unwrap();
+    let accepted_send_buf = accepted_client.send_buffer_size().unwrap();
 
     // Update options on listener to something else:
     {
@@ -157,7 +165,8 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         listener.set_send_buffer_size(0x20000).unwrap();
     }
 
-    // Verify that the already accepted socket was not affected:
+    // Verify that the already accepted socket was not affected by the
+    // listener's option changes.
     {
         assert_eq!(
             accepted_client.keep_alive_enabled().unwrap(),
@@ -167,8 +176,14 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         assert_eq!(accepted_client.keep_alive_interval().unwrap(), 42 * SECOND);
         assert_eq!(accepted_client.keep_alive_count().unwrap(), 42);
         assert_eq!(accepted_client.hop_limit().unwrap(), 42);
-        assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
-        assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
+        assert_eq!(
+            accepted_client.receive_buffer_size().unwrap(),
+            accepted_recv_buf
+        );
+        assert_eq!(
+            accepted_client.send_buffer_size().unwrap(),
+            accepted_send_buf
+        );
     }
 }
 

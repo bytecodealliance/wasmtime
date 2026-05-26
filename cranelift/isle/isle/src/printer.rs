@@ -400,6 +400,11 @@ impl ToSExpr for TypeValue {
                 parts.extend(variants.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
+            TypeValue::Struct(fields, _) => {
+                let mut parts = vec![SExpr::atom("struct")];
+                parts.extend(fields.to_sexpr_iter());
+                SExpr::List(parts)
+            }
         }
     }
 }
@@ -412,15 +417,43 @@ impl ToSExpr for Variant {
             pos: _,
         } = self;
         let mut parts = vec![name.to_sexpr()];
-        parts.extend(fields.iter().map(ToSExpr::to_sexpr));
+        parts.extend(fields.to_sexpr_iter());
         SExpr::List(parts)
     }
 }
 
-impl ToSExpr for Field {
+impl Fields {
+    fn to_sexpr_iter(&self) -> Vec<SExpr> {
+        match self {
+            Fields::Unit => Vec::new(),
+            Fields::Struct(f) => f.to_sexpr_iter(),
+            Fields::Tuple(f) => f.to_sexpr_iter(),
+        }
+    }
+}
+
+impl StructFields {
+    fn to_sexpr_iter(&self) -> Vec<SExpr> {
+        self.fields.iter().map(ToSExpr::to_sexpr).collect()
+    }
+}
+
+impl ToSExpr for StructField {
     fn to_sexpr(&self) -> SExpr {
-        let Field { name, ty, pos: _ } = self;
+        let StructField { name, ty, pos: _ } = self;
         SExpr::List(vec![name.to_sexpr(), ty.to_sexpr()])
+    }
+}
+
+impl TupleFields {
+    fn to_sexpr_iter(&self) -> Vec<SExpr> {
+        self.fields.iter().map(ToSExpr::to_sexpr).collect()
+    }
+}
+
+impl ToSExpr for TupleField {
+    fn to_sexpr(&self) -> SExpr {
+        self.ty.to_sexpr()
     }
 }
 

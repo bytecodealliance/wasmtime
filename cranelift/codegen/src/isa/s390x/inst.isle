@@ -1008,6 +1008,22 @@
       (rd WritableReg)
       (mem MemArg))
 
+    ;; Load address referenced by `mem` into `rd`.
+    (LoadIndexedAddr
+      (rd WritableReg)
+      (base Reg)
+      (index Reg)
+      (offset SImm20)
+      (size u8))
+
+    ;; Load address referenced by `mem` into `rd`.
+    (LoadLogicalIndexedAddr
+      (rd WritableReg)
+      (base Reg)
+      (index Reg)
+      (offset SImm20)
+      (size u8))
+
     ;; Meta-instruction to emit a loop around a sequence of instructions.
     ;; This control flow is not visible to the compiler core, in particular
     ;; the register allocator.  Therefore, instructions in the loop may not
@@ -1099,8 +1115,10 @@
     (SubLogical64)
     (SubLogical64Ext32)
     (Mul32)
+    (Mul32CC)
     (Mul32Ext16)
     (Mul64)
+    (Mul64CC)
     (Mul64Ext16)
     (Mul64Ext32)
     (And32)
@@ -1189,11 +1207,13 @@
     (Add32x4)
     (Add64x2)
     (Add128)
+    (Add128Cout)
     (Sub8x16)
     (Sub16x8)
     (Sub32x4)
     (Sub64x2)
     (Sub128)
+    (Sub128Cout)
     ;; Multiplication
     (Mul8x16)
     (Mul16x8)
@@ -1401,14 +1421,14 @@
     (UCmpHi128)
 ))
 
-;; An integer vector element comparion operation.
+;; An integer vector element comparison operation.
 (type VecIntEltCmpOp
   (enum
     (SCmp128)
     (UCmp128)
 ));
 
-;; A floatint-point vector comparison operation.
+;; A floating-point vector comparison operation.
 (type VecFloatCmpOp
   (enum
     (CmpEq32x4)
@@ -1560,23 +1580,15 @@
 
 ;; Helpers for querying enabled ISA extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl mie3_enabled () Type)
-(extern extractor mie3_enabled mie3_enabled)
-(decl mie3_disabled () Type)
-(extern extractor mie3_disabled mie3_disabled)
-(decl mie4_enabled () Type)
-(extern extractor mie4_enabled mie4_enabled)
-(decl mie4_disabled () Type)
-(extern extractor mie4_disabled mie4_disabled)
+(decl pure has_mie3 () bool)
+(extern constructor has_mie3 has_mie3)
+(decl pure has_mie4 () bool)
+(extern constructor has_mie4 has_mie4)
 
-(decl vxrs_ext2_enabled () Type)
-(extern extractor vxrs_ext2_enabled vxrs_ext2_enabled)
-(decl vxrs_ext2_disabled () Type)
-(extern extractor vxrs_ext2_disabled vxrs_ext2_disabled)
-(decl vxrs_ext3_enabled () Type)
-(extern extractor vxrs_ext3_enabled vxrs_ext3_enabled)
-(decl vxrs_ext3_disabled () Type)
-(extern extractor vxrs_ext3_disabled vxrs_ext3_disabled)
+(decl pure has_vxrs_ext2 () bool)
+(extern constructor has_vxrs_ext2 has_vxrs_ext2)
+(decl pure has_vxrs_ext3 () bool)
+(extern constructor has_vxrs_ext3 has_vxrs_ext3)
 
 ;; Helpers for SIMD lane number operations ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1615,7 +1627,7 @@
 (rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) true)
 
 ;; Return lane order matching memory byte order.
-(decl pure lane_order_from_memflags (MemFlags) LaneOrder)
+(decl pure lane_order_from_memflags (MemFlagsData) LaneOrder)
 (rule 0 (lane_order_from_memflags (littleendian)) (LaneOrder.LittleEndian))
 (rule 1 (lane_order_from_memflags (bigendian)) (LaneOrder.BigEndian))
 
@@ -1774,6 +1786,9 @@
 (decl uimm16shifted_from_value (UImm16Shifted) Value)
 (extern extractor uimm16shifted_from_value uimm16shifted_from_value)
 
+(decl simm20_from_value (SImm20) Value)
+(extern extractor simm20_from_value simm20_from_value)
+
 (decl uimm32shifted_from_value (UImm32Shifted) Value)
 (extern extractor uimm32shifted_from_value uimm32shifted_from_value)
 
@@ -1860,31 +1875,31 @@
 (decl pure partial memarg_imm_from_offset_plus_bias (Offset32 u8) SImm20)
 (extern constructor memarg_imm_from_offset_plus_bias memarg_imm_from_offset_plus_bias)
 
-;; Accessors for `MemFlags`.
+;; Accessors for `MemFlagsData`.
 
-(decl littleendian () MemFlags)
+(decl littleendian () MemFlagsData)
 (extern extractor littleendian littleendian)
 
-(decl bigendian () MemFlags)
+(decl bigendian () MemFlagsData)
 (extern extractor bigendian bigendian)
 
-(decl memflags_trusted () MemFlags)
+(decl memflags_trusted () MemFlagsData)
 (extern constructor memflags_trusted memflags_trusted)
 
 ;; Accessors for `MemArg`.
 
 (type MemArg extern (enum))
 
-(decl memarg_reg_plus_reg_plus_off (Reg Reg SImm20 MemFlags) MemArg)
+(decl memarg_reg_plus_reg_plus_off (Reg Reg SImm20 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_reg_plus_off memarg_reg_plus_reg_plus_off)
 
-(decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
+(decl memarg_reg_plus_reg (Reg Reg u8 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
-(decl memarg_reg_plus_off (Reg i64 u8 MemFlags) MemArg)
+(decl memarg_reg_plus_off (Reg i64 u8 MemFlagsData) MemArg)
 (extern constructor memarg_reg_plus_off memarg_reg_plus_off)
 
-(decl memarg_symbol (ExternalName i32 MemFlags) MemArg)
+(decl memarg_symbol (ExternalName i32 MemFlagsData) MemArg)
 (extern constructor memarg_symbol memarg_symbol)
 
 (decl memarg_got () MemArg)
@@ -1913,29 +1928,56 @@
 
 ;; Lower an address into a `MemArg`.
 
-(decl lower_address (MemFlags Value Offset32) MemArg)
+(decl lower_address (MemFlagsData Value Offset32) MemArg)
 
 (rule (lower_address flags addr @ (value_type (ty_addr64 _)) (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
 
-(rule 1 (lower_address flags (has_type (ty_addr64 _) (iadd x y)) (memarg_imm_from_offset z))
+(rule 1 (lower_address flags (iadd (ty_addr64 _) x y) (memarg_imm_from_offset z))
       (memarg_reg_plus_reg_plus_off x y z flags))
 
 (rule 1 (lower_address flags
-                     (symbol_value (symbol_value_data name (RelocDistance.Near) sym_offset))
-                     (i64_from_offset offset))
+          (symbol_value _ (symbol_value_data name (RelocDistance.Near) sym_offset))
+          (i64_from_offset offset))
       (if-let final_offset (memarg_symbol_offset_sum offset sym_offset))
       (memarg_symbol name final_offset flags))
 
+(rule 2 (lower_address flags
+          (iadd $I64 (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
+                       (u8_from_value shift)) y)
+          (i64_from_offset offset))
+      (if-let true (has_mie4))
+      (memarg_reg_plus_off (load_logical_indexed_addr x y z shift) offset 0 flags))
+
+(rule 3 (lower_address flags
+          (iadd $I64 y (ishl $I64 (uextend $I64 (iadd $I32 x (simm20_from_value z)))
+                         (u8_from_value shift)))
+          (i64_from_offset offset))
+      (if-let true (has_mie4))
+      (memarg_reg_plus_off (load_logical_indexed_addr y x z shift) offset 0 flags))
+
+(rule 4 (lower_address flags
+          (iadd $I64 (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z)))
+                       (u8_from_value shift)) y)
+          (i64_from_offset offset))
+      (if-let true (has_mie4))
+      (memarg_reg_plus_off (load_indexed_addr x y z shift) offset 0 flags))
+
+(rule 5 (lower_address flags
+          (iadd $I64 y (ishl $I64 (sextend $I64 (iadd $I32 x (simm20_from_value z)))
+                         (u8_from_value shift)))
+          (i64_from_offset offset))
+      (if-let true (has_mie4))
+      (memarg_reg_plus_off (load_indexed_addr y x z shift) offset 0 flags))
 
 ;; Lower an address plus a small bias into a `MemArg`.
 
-(decl lower_address_bias (MemFlags Value Offset32 u8) MemArg)
+(decl lower_address_bias (MemFlagsData Value Offset32 u8) MemArg)
 
 (rule (lower_address_bias flags addr @ (value_type $I64) (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
 
-(rule 1 (lower_address_bias flags (has_type $I64 (iadd x y)) z bias)
+(rule 1 (lower_address_bias flags (iadd $I64 x y) z bias)
       (if-let final_offset (memarg_imm_from_offset_plus_bias z bias))
       (memarg_reg_plus_reg_plus_off x y final_offset flags))
 
@@ -1944,7 +1986,7 @@
 
 (decl pure partial load_sym (Inst) Inst)
 (rule (load_sym inst)
-      (if-let (load _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
+      (if-let (load _ _ (symbol_value _ (symbol_value_data _ (RelocDistance.Near) sym_offset))
                     (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
@@ -1952,7 +1994,7 @@
 
 (decl pure partial uload16_sym (Inst) Inst)
 (rule (uload16_sym inst)
-      (if-let (uload16 _ (symbol_value (symbol_value_data _ (RelocDistance.Near) sym_offset))
+      (if-let (uload16 _ _ (symbol_value _ (symbol_value_data _ (RelocDistance.Near) sym_offset))
                        (i64_from_offset load_offset))
           inst)
       (if (memarg_symbol_offset_sum sym_offset load_offset))
@@ -1972,11 +2014,11 @@
 
 ;; A value that is the result of a sign-extend from a 32-bit value.
 (decl sext32_value (Value) Value)
-(extractor (sext32_value x) (sextend (and x (value_type $I32))))
+(extractor (sext32_value x) (sextend _ (and x (value_type $I32))))
 
 ;; A value that is the result of a zero-extend from a 32-bit value.
 (decl zext32_value (Value) Value)
-(extractor (zext32_value x) (uextend (and x (value_type $I32))))
+(extractor (zext32_value x) (uextend _ (and x (value_type $I32))))
 
 
 ;; Helpers for sinkable loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1988,7 +2030,7 @@
 ;; Sinkable big-endian load instruction.
 (decl sinkable_load (Inst) Value)
 (extractor (sinkable_load inst)
-           (sinkable_inst (and inst (load (bigendian) _addr _offset))))
+           (sinkable_inst (and inst (load _ (bigendian) _addr _offset))))
 
 ;; Sinkable big-endian load instruction (32/64-bit types only).
 (decl sinkable_load_32_64 (Inst) Value)
@@ -2003,60 +2045,60 @@
 ;; Sinkable little-endian load instruction.
 (decl sinkable_load_little (Inst) Value)
 (extractor (sinkable_load_little inst)
-           (sinkable_inst (and inst (load (littleendian) _addr _offset))))
+           (sinkable_inst (and inst (load _ (littleendian) _addr _offset))))
 
 ;; Sinkable big-endian sload16 instruction.
 (decl sinkable_sload16 (Inst) Value)
 (extractor (sinkable_sload16 inst)
-           (sinkable_inst (and inst (sload16 (bigendian) _addr _offset))))
+           (sinkable_inst (and inst (sload16 _ (bigendian) _addr _offset))))
 
 ;; Sinkable big-endian sload32 instruction.
 (decl sinkable_sload32 (Inst) Value)
 (extractor (sinkable_sload32 inst)
-           (sinkable_inst (and inst (sload32 (bigendian) _addr _offset))))
+           (sinkable_inst (and inst (sload32 _ (bigendian) _addr _offset))))
 
 ;; Sinkable big-endian uload16 instruction.
 (decl sinkable_uload16 (Inst) Value)
 (extractor (sinkable_uload16 inst)
-           (sinkable_inst (and inst (uload16 (bigendian) _addr _offset))))
+           (sinkable_inst (and inst (uload16 _ (bigendian) _addr _offset))))
 
 ;; Sinkable big-endian uload32 instruction.
 (decl sinkable_uload32 (Inst) Value)
 (extractor (sinkable_uload32 inst)
-           (sinkable_inst (and inst (uload32 (bigendian) _addr _offset))))
+           (sinkable_inst (and inst (uload32 _ (bigendian) _addr _offset))))
 
 ;; Sink a load instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_load (Inst) MemArg)
-(rule (sink_load inst @ (load flags addr offset))
+(rule (sink_load inst @ (load _ flags addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a sload16 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_sload16 (Inst) MemArg)
-(rule (sink_sload16 inst @ (sload16 flags addr offset))
+(rule (sink_sload16 inst @ (sload16 _ flags addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a sload32 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_sload32 (Inst) MemArg)
-(rule (sink_sload32 inst @ (sload32 flags addr offset))
+(rule (sink_sload32 inst @ (sload32 _ flags addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a uload16 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_uload16 (Inst) MemArg)
-(rule (sink_uload16 inst @ (uload16 flags addr offset))
+(rule (sink_uload16 inst @ (uload16 _ flags addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
 ;; Sink a uload32 instruction, returning its address as `MemArg`.
 ;; This is a side-effectful operation, see `sink_inst`.
 (decl sink_uload32 (Inst) MemArg)
-(rule (sink_uload32 inst @ (uload32 flags addr offset))
+(rule (sink_uload32 inst @ (uload32 _ flags addr offset))
       (let ((_ Unit (sink_inst inst)))
         (lower_address flags addr offset)))
 
@@ -2817,6 +2859,20 @@
             (_ Unit (emit (MInst.LoadAddr dst mem))))
         dst))
 
+;; Helper for emitting `MInst.LoadIndexedAddr` instructions.
+(decl load_indexed_addr (Reg Reg SImm20 u8) Reg)
+(rule (load_indexed_addr base index offset size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadIndexedAddr dst base index offset size))))
+        dst))
+
+;; Helper for emitting `MInst.LoadLogicalIndexedAddr` instructions.
+(decl load_logical_indexed_addr (Reg Reg SImm20 u8) Reg)
+(rule (load_logical_indexed_addr base index offset size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadLogicalIndexedAddr dst base index offset size))))
+        dst))
+
 ;; Helper for emitting `MInst.Call` instructions.
 (decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
 (rule (call_impl reg info)
@@ -3431,7 +3487,7 @@
 ;; be written if the memory location still holds the old value in %r0.
 ;; The result should be passed to "casloop_result" or (in the case of
 ;; subword loops) to "casloop_rotate_result".
-(decl casloop_emit (VecMInstBuilder Type MemFlags Reg Reg) PReg)
+(decl casloop_emit (VecMInstBuilder Type MemFlagsData Reg Reg) PReg)
 (rule (casloop_emit ib ty flags aligned_addr val)
       (let (
             ;; Construct a memory argument for the aligned word.
@@ -3454,14 +3510,14 @@
 ;; In the big-endian case, the value is already correct, but may need to be
 ;; copied out of the hard register.  In the little-endian case, we need to
 ;; byte-swap since the compare-and-swap instruction is always big-endian.
-(decl casloop_result (Type MemFlags PReg) Reg)
+(decl casloop_result (Type MemFlagsData PReg) Reg)
 (rule 1 (casloop_result (ty_32_or_64 ty) (bigendian) result)
       (mov_preg result))
 (rule (casloop_result (ty_32_or_64 ty) (littleendian) result)
       (bswap_reg ty (preg_to_reg result)))
 
 ;; Emit a fullword compare-and-swap loop, returning the previous memory value.
-(decl casloop (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop ib ty flags aligned_addr val)
       (casloop_result ty flags (casloop_emit ib ty flags aligned_addr val)))
 
@@ -3491,7 +3547,7 @@
 ;; (This is somewhat arbitrary but chosen to allow the most efficient
 ;; sequences to compute the various atomic operations.)
 ;; Note that $I8 accesses always use the big-endian case.
-(decl casloop_rotate_in (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_in (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_in ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 bitshift))
 (rule 1 (casloop_rotate_in ib $I16 (bigendian) bitshift val)
@@ -3504,7 +3560,7 @@
 ;; optimization, we note that in the $I16 case the shift count can only
 ;; take the values 0 or 16, both of which negate to themselves (mod 32),
 ;; so the explicit negation operation can be omitted here.
-(decl casloop_rotate_out (VecMInstBuilder Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_out (VecMInstBuilder Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_out ib $I8 _ bitshift val)
       (push_rot_imm_reg ib $I32 (casloop_tmp_reg) val 0 (neg_reg $I32 bitshift)))
 (rule 1 (casloop_rotate_out ib $I16 (bigendian) bitshift val)
@@ -3519,7 +3575,7 @@
 ;; endian case, we also need to byte-swap the result.  Since we only have
 ;; a 32-bit byte-swap instruction, we load the value to the high bytes in
 ;; this case before performing the 32-bit byte-swap.
-(decl casloop_rotate_result (Type MemFlags Reg Reg) Reg)
+(decl casloop_rotate_result (Type MemFlagsData Reg Reg) Reg)
 (rule (casloop_rotate_result $I8 _ bitshift result)
       (rot_imm_reg $I32 result 8 bitshift))
 (rule 1 (casloop_rotate_result $I16 (bigendian) bitshift result)
@@ -3528,7 +3584,7 @@
       (bswap_reg $I32 (rot_reg $I32 result bitshift)))
 
 ;; Emit a subword compare-and-swap loop, returning the previous memory value.
-(decl casloop_subword (VecMInstBuilder Type MemFlags Reg Reg Reg) Reg)
+(decl casloop_subword (VecMInstBuilder Type MemFlagsData Reg Reg Reg) Reg)
 (rule (casloop_subword ib ty flags aligned_addr bitshift val)
       (casloop_rotate_result ty flags bitshift
         (casloop_emit ib ty flags aligned_addr val)))
@@ -3822,6 +3878,31 @@
                     (intcc_as_cond (IntCC.SignedLessThan)))))
         (select_bool_reg $I64 l_cond l_bound ub)))
 
+;; Helpers for generating integer arithmetic instructions with overflow outputs ;;;
+
+;; For fit-in-16 bit integers, we shift them into the most significant positions of their
+;; 32-bit registers, use the codition codes for the overflow, and shift back into the
+;; expected least-significant position to generate the result
+(decl type_shift_up (Type) u8)
+(rule (type_shift_up $I8) 24)
+(rule (type_shift_up $I16) 16)
+
+(decl overflow_and_result_from_shifted (Type ALUOp Reg Reg Cond) InstOutput)
+(rule (overflow_and_result_from_shifted (fits_in_16 ty) op x y cond)
+      (let ((x_shifted Reg (lshl_imm $I32 x (type_shift_up ty)))
+            (y_shifted Reg (lshl_imm $I32 y (type_shift_up ty)))
+            (producer ProducesFlags (alu_rrr_with_flags_paired ty op x_shifted y_shifted))
+            (overflow Reg (lower_bool $I8 (bool (produces_flags_ignore producer) cond)))
+            (out Reg (lshr_imm $I32 (produces_flags_get_reg producer) (type_shift_up ty))))
+        (output_pair out overflow)))
+
+;; Generate the paired overflow result from the generated condition codes
+(decl overflow_and_result_from_producer (ProducesFlags Cond) InstOutput)
+(rule (overflow_and_result_from_producer producer cond)
+      (output_pair
+        (produces_flags_get_reg producer)
+        (lower_bool $I8 (bool (produces_flags_ignore producer) cond))))
+
 
 ;; Helpers for generating `add` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3841,6 +3922,10 @@
 
 (decl add_reg (Type Reg Reg) Reg)
 (rule (add_reg ty x y) (alu_rrr ty (aluop_add ty) x y))
+
+(decl add_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (add_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_add ty) x y))
 
 (decl add_reg_sext32 (Type Reg Reg) Reg)
 (rule (add_reg_sext32 ty x y) (alu_rr ty (aluop_add_sext32 ty) x y))
@@ -3915,6 +4000,11 @@
 (rule (add_logical_mem_zext32_with_flags_paired ty x y)
       (alu_rx_with_flags_paired ty (aluop_add_logical_zext32 ty) x y))
 
+(decl vecop_add_logical_cout (Type) VecBinaryOp)
+(rule (vecop_add_logical_cout $I128) (VecBinaryOp.Add128Cout))
+
+(decl vec_add_logical_cout (Type Reg Reg) Reg)
+(rule (vec_add_logical_cout ty x y) (vec_rrr ty (vecop_add_logical_cout ty) x y))
 
 ;; Helpers for generating `sub` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3934,6 +4024,10 @@
 
 (decl sub_reg (Type Reg Reg) Reg)
 (rule (sub_reg ty x y) (alu_rrr ty (aluop_sub ty) x y))
+
+(decl sub_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub ty) x y))
 
 (decl sub_reg_sext32 (Type Reg Reg) Reg)
 (rule (sub_reg_sext32 ty x y) (alu_rr ty (aluop_sub_sext32 ty) x y))
@@ -3970,6 +4064,10 @@
 (decl sub_logical_reg (Type Reg Reg) Reg)
 (rule (sub_logical_reg ty x y) (alu_rrr ty (aluop_sub_logical ty) x y))
 
+(decl sub_logical_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (sub_logical_reg_with_flags_paired ty x y)
+      (alu_rrr_with_flags_paired ty (aluop_sub_logical ty) x y))
+
 (decl sub_logical_reg_zext32 (Type Reg Reg) Reg)
 (rule (sub_logical_reg_zext32 ty x y) (alu_rr ty (aluop_sub_logical_zext32 ty) x y))
 
@@ -3982,6 +4080,11 @@
 (decl sub_logical_mem_zext32 (Type Reg MemArg) Reg)
 (rule (sub_logical_mem_zext32 ty x y) (alu_rx ty (aluop_sub_logical ty) x y))
 
+(decl vecop_sub_logical_cout (Type) VecBinaryOp)
+(rule (vecop_sub_logical_cout $I128) (VecBinaryOp.Sub128Cout))
+
+(decl vec_sub_logical_cout (Type Reg Reg) Reg)
+(rule (vec_sub_logical_cout ty x y) (vec_rrr ty (vecop_sub_logical_cout ty) x y))
 
 ;; Helpers for generating `mul` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3990,6 +4093,10 @@
 (rule (aluop_mul $I16) (ALUOp.Mul32))
 (rule (aluop_mul $I32) (ALUOp.Mul32))
 (rule (aluop_mul $I64) (ALUOp.Mul64))
+
+(decl aluop_mul_cc (Type) ALUOp)
+(rule (aluop_mul_cc $I32) (ALUOp.Mul32CC))
+(rule (aluop_mul_cc $I64) (ALUOp.Mul64CC))
 
 (decl aluop_mul_sext16 (Type) ALUOp)
 (rule (aluop_mul_sext16 $I16) (ALUOp.Mul32Ext16))
@@ -4001,6 +4108,10 @@
 
 (decl mul_reg (Type Reg Reg) Reg)
 (rule (mul_reg ty x y) (alu_rrr ty (aluop_mul ty) x y))
+
+(decl mul_reg_with_flags_paired (Type Reg Reg) ProducesFlags)
+(rule (mul_reg_with_flags_paired ty x y)
+     (alu_rrr_with_flags_paired ty (aluop_mul_cc ty) x y))
 
 (decl mul_reg_sext32 (Type Reg Reg) Reg)
 (rule (mul_reg_sext32 ty x y) (alu_rr ty (aluop_mul_sext32 ty) x y))
@@ -4861,13 +4972,17 @@
 ;; Helpers for generating `fcvt_to_[us]int` instructions ;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl fcvt_flt_ty (Type Type) Type)
-(rule 1 (fcvt_flt_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $F32)
+(rule 1 (fcvt_flt_ty (fits_in_32 ty) $F32)
+      (if-let true (has_vxrs_ext2))
+      $F32)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F32) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F64) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F128) $F128)
 
 (decl fcvt_int_ty (Type Type) Type)
-(rule 1 (fcvt_int_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $I32)
+(rule 1 (fcvt_int_ty (fits_in_32 ty) $F32)
+      (if-let true (has_vxrs_ext2))
+      $I32)
 (rule (fcvt_int_ty (fits_in_64 ty) $F32) $I64)
 (rule (fcvt_int_ty (fits_in_64 ty) $F64) $I64)
 (rule 1 (fcvt_int_ty (fits_in_32 ty) $F128) $I32)

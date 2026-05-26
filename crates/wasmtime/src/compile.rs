@@ -30,7 +30,7 @@ use std::{any::Any, borrow::Cow, collections::BTreeMap, mem, ops::Range};
 use wasmtime_environ::{
     Abi, CompiledFunctionBody, CompiledFunctionsTable, CompiledFunctionsTableBuilder,
     CompiledModuleInfo, Compiler, DefinedFuncIndex, FilePos, FinishedObject, FuncKey,
-    FunctionBodyData, InliningCompiler, IntraModuleInlining, ModuleEnvironment, ModuleTranslation,
+    FunctionBodyData, Inlining, InliningCompiler, ModuleEnvironment, ModuleTranslation,
     ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, StaticModuleIndex, Tunables,
     graphs::{EntityGraph, Graph as _},
 };
@@ -119,6 +119,10 @@ pub(crate) fn build_module_artifacts<T: FinishedObject>(
         dwarf_package,
     )?;
 
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(std::iter::once(wasm));
+    }
+
     let (info, index) = compilation_artifacts.unwrap_as_module_info();
     let types = types.finish();
     object.serialize_info(&(&info, &index, &types));
@@ -181,6 +185,16 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         t.module.needs_gc_heap |= needs_gc_heap
     }
 
+    // Collect bytecode slices here before moving `module_translations` below.
+    let module_wasms = if tunables.debug_guest {
+        module_translations
+            .values()
+            .map(|t| t.wasm)
+            .collect::<Vec<_>>()
+    } else {
+        vec![]
+    };
+
     let mut object = compiler.object(ObjectKind::Component)?;
     engine.append_compiler_info(&mut object)?;
     engine.append_bti(&mut object);
@@ -192,6 +206,11 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
         module_translations,
         None, // TODO: Support dwarf packages for components.
     )?;
+
+    if tunables.debug_guest {
+        object.append_wasm_bytecode(module_wasms);
+    }
+
     let (types, ty) = types.finish(&component.component);
 
     let info = CompiledComponentInfo {
@@ -541,7 +560,7 @@ the use case.
         }
 
         let mut raw_outputs = if let Some(inlining_compiler) = compiler.inlining_compiler() {
-            if engine.tunables().inlining {
+            if engine.tunables().inlining != Inlining::No {
                 self.compile_with_inlining(engine, compiler, inlining_compiler)?
             } else {
                 // Inlining compiler but inlining is disabled: compile each
@@ -784,7 +803,7 @@ the use case.
         );
 
         debug_assert!(
-            tunables.inlining,
+            tunables.inlining != Inlining::No,
             "shouldn't even call this method if we aren't configured for inlining"
         );
         debug_assert_ne!(caller_key, callee_key, "we never inline recursion");
@@ -822,29 +841,30 @@ the use case.
             (
                 FuncKey::DefinedWasmFunction(caller_module, _),
                 FuncKey::DefinedWasmFunction(callee_module, _),
-            ) => {
-                if caller_module == callee_module {
-                    match tunables.inlining_intra_module {
-                        IntraModuleInlining::Yes => {}
+            ) => match tunables.inlining {
+                Inlining::Yes => {}
 
-                        IntraModuleInlining::WhenUsingGc
-                            if caller_needs_gc_heap || callee_needs_gc_heap => {}
-
-                        IntraModuleInlining::WhenUsingGc => {
-                            log::trace!(
-                                "  --> not inlining: intra-module call that does not use GC"
-                            );
-                            return false;
-                        }
-
-                        IntraModuleInlining::No => {
-                            log::trace!("  --> not inlining: intra-module call");
-                            return false;
-                        }
+                Inlining::InterModuleAndIntraGc => {
+                    if caller_module == callee_module && !caller_needs_gc_heap {
+                        log::trace!("  --> not inlining: intra-module call where GC is not used");
+                        return false;
                     }
                 }
-            }
 
+                Inlining::InterModule => {
+                    if caller_module == callee_module {
+                        log::trace!("  --> not inlining: only inter-module calls inlined");
+                        return false;
+                    }
+                }
+
+                Inlining::Intrinsics => {
+                    log::trace!("  --> not inlining: only inlining intrinsics");
+                    return false;
+                }
+
+                Inlining::No => unreachable!(),
+            },
             _ => {}
         }
 

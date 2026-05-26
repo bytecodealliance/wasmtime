@@ -228,7 +228,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         let func_name = &func.sig.ident;
         match &func.sig.output {
             ReturnType::Default => {
-                return Err(syn::Error::new(func_name.span(), "Expected `Restult<()>`"));
+                return Err(syn::Error::new(func_name.span(), "Expected `Result<()>`"));
             }
             ReturnType::Type(..) => {}
         };

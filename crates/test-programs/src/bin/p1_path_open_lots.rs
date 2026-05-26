@@ -1,29 +1,47 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::{create_file, open_scratch_directory};
+use test_programs::preview1::{BlockingMode, create_file, open_scratch_directory};
 
-unsafe fn test_path_open_lots(dir_fd: wasip1::Fd) {
+unsafe fn test_path_open_lots(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     create_file(dir_fd, "file");
 
     for _ in 0..2000 {
-        let f_readonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
-            .expect("open file readonly");
+        let f_readonly = wasip1::path_open(
+            dir_fd,
+            0,
+            "file",
+            0,
+            wasip1::RIGHTS_FD_READ,
+            0,
+            blocking_mode.fd_flags(),
+        )
+        .expect("open file readonly");
 
         let buffer = &mut [0u8; 100];
         let iovec = wasip1::Iovec {
             buf: buffer.as_mut_ptr(),
             buf_len: buffer.len(),
         };
-        let nread = wasip1::fd_read(f_readonly, &[iovec]).expect("reading readonly file");
+        let nread = blocking_mode
+            .read(f_readonly, &[iovec])
+            .expect("reading readonly file");
         assert_eq!(nread, 0, "readonly file is empty");
 
         wasip1::fd_close(f_readonly).expect("close readonly");
     }
 
     for _ in 0..2000 {
-        let f_readonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
-            .expect("open file readonly");
+        let f_readonly = wasip1::path_open(
+            dir_fd,
+            0,
+            "file",
+            0,
+            wasip1::RIGHTS_FD_READ,
+            0,
+            blocking_mode.fd_flags(),
+        )
+        .expect("open file readonly");
 
         let buffer = &mut [0u8; 100];
         let iovec = wasip1::Iovec {
@@ -44,7 +62,7 @@ unsafe fn test_path_open_lots(dir_fd: wasip1::Fd) {
             0,
             wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
-            0,
+            blocking_mode.fd_flags(),
         )
         .unwrap();
 
@@ -53,7 +71,7 @@ unsafe fn test_path_open_lots(dir_fd: wasip1::Fd) {
             buf: buffer.as_ptr(),
             buf_len: buffer.len(),
         };
-        let nwritten = wasip1::fd_write(f, &[ciovec]).expect("write failed");
+        let nwritten = blocking_mode.write(f, &[ciovec]).expect("write failed");
         assert_eq!(nwritten, 100);
 
         wasip1::fd_close(f).unwrap();
@@ -67,7 +85,7 @@ unsafe fn test_path_open_lots(dir_fd: wasip1::Fd) {
             0,
             wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
-            0,
+            blocking_mode.fd_flags(),
         )
         .unwrap();
 
@@ -105,5 +123,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_path_open_lots(dir_fd) }
+    unsafe {
+        test_path_open_lots(dir_fd, BlockingMode::Blocking);
+        test_path_open_lots(dir_fd, BlockingMode::NonBlocking);
+    }
 }

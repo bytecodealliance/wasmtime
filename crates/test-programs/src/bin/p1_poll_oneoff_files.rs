@@ -1,7 +1,7 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, mem::MaybeUninit, process};
-use test_programs::preview1::{assert_errno, open_scratch_directory};
+use test_programs::preview1::{BlockingMode, assert_errno, open_scratch_directory};
 
 const CLOCK_ID: wasip1::Userdata = 0x0123_45678;
 
@@ -189,7 +189,7 @@ unsafe fn test_fd_readwrite(
     );
 }
 
-unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd) {
+unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     // Create a file in the scratch directory.
     let nonempty_file = wasip1::path_open(
         dir_fd,
@@ -198,7 +198,7 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd) {
         wasip1::OFLAGS_CREAT,
         wasip1::RIGHTS_FD_WRITE,
         0,
-        0,
+        blocking_mode.fd_flags(),
     )
     .expect("create writable file");
     // Write to file
@@ -207,7 +207,9 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd) {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    wasip1::fd_write(nonempty_file, &[ciovec]).expect("write");
+    blocking_mode
+        .write(nonempty_file, &[ciovec])
+        .expect("write");
     wasip1::fd_close(nonempty_file).expect("close");
 
     // Now open the file for reading
@@ -271,11 +273,11 @@ unsafe fn test_fd_readwrite_invalid_fd() {
     assert_eq!(err, wasip1::ERRNO_BADF)
 }
 
-unsafe fn test_poll_oneoff(dir_fd: wasip1::Fd) {
+unsafe fn test_poll_oneoff(dir_fd: wasip1::Fd, blocking_mode: BlockingMode) {
     test_timeout();
     test_sleep();
     test_empty_poll();
-    test_fd_readwrite_valid_fd(dir_fd);
+    test_fd_readwrite_valid_fd(dir_fd, blocking_mode);
     test_fd_readwrite_invalid_fd();
 }
 fn main() {
@@ -298,5 +300,8 @@ fn main() {
     };
 
     // Run the tests.
-    unsafe { test_poll_oneoff(dir_fd) }
+    unsafe {
+        test_poll_oneoff(dir_fd, BlockingMode::Blocking);
+        test_poll_oneoff(dir_fd, BlockingMode::NonBlocking);
+    }
 }

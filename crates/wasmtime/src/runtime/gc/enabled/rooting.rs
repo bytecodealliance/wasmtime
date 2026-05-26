@@ -452,7 +452,7 @@ impl RootSet {
         log::trace!("Begin trace user LIFO roots");
         for root in &mut self.lifo_roots {
             unsafe {
-                gc_roots_list.add_root((&mut root.gc_ref).into(), "user LIFO root");
+                gc_roots_list.add_vmgcref_root((&mut root.gc_ref).into(), "user LIFO root");
             }
         }
         log::trace!("End trace user LIFO roots");
@@ -460,7 +460,7 @@ impl RootSet {
         log::trace!("Begin trace user owned roots");
         for (_id, root) in self.owned_rooted.iter_mut() {
             unsafe {
-                gc_roots_list.add_root(root.into(), "user owned root");
+                gc_roots_list.add_vmgcref_root(root.into(), "user owned root");
             }
         }
         log::trace!("End trace user owned roots");
@@ -1213,7 +1213,7 @@ impl<T: GcRef> Rooted<T> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
 
         let raw = match store.optional_gc_store_mut() {
-            Some(s) => s.expose_gc_ref_to_wasm(gc_ref),
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
             None => {
                 // NB: do not force the allocation of a GC heap just because the
                 // program is using `i31ref`s.
@@ -1276,6 +1276,14 @@ impl<T: GcRef> Rooted<T> {
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref)?;
         let gc_ref = store.clone_gc_ref(&gc_ref);
         Some(from_cloned_gc_ref(store, gc_ref))
+    }
+
+    pub(crate) fn try_gc_ref<'a>(&self, store: &'a StoreOpaque) -> Result<&'a VMGcRef> {
+        <Self as RootedGcRefImpl<_>>::try_gc_ref(self, store)
+    }
+
+    pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
+        <Self as RootedGcRefImpl<_>>::try_clone_gc_ref(self, store)
     }
 }
 
@@ -1829,7 +1837,7 @@ where
         let gc_ref = self.try_clone_gc_ref(store)?;
 
         let raw = match store.optional_gc_store_mut() {
-            Some(s) => s.expose_gc_ref_to_wasm(gc_ref),
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
             None => {
                 debug_assert!(gc_ref.is_i31());
                 gc_ref.as_raw_non_zero_u32()

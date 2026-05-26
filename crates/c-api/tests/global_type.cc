@@ -5,11 +5,11 @@
 using namespace wasmtime;
 
 TEST(GlobalType, Simple) {
-  GlobalType ty(ValKind::I32, false);
+  GlobalType ty(ValType::i32(), false);
   EXPECT_FALSE(ty->is_mutable());
-  EXPECT_EQ(ty->content().kind(), ValKind::I32);
+  EXPECT_EQ(ty->content(), ValType::i32());
 
-  ty = GlobalType(ValKind::V128, true);
+  ty = GlobalType(ValType::v128(), true);
   EXPECT_TRUE(ty->is_mutable());
-  EXPECT_EQ(ty->content().kind(), ValKind::V128);
+  EXPECT_EQ(ty->content(), ValType::v128());
 }

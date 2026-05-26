@@ -75,8 +75,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
     "wasmtime-wasi-tls",
-    "wasmtime-wasi-tls-nativetls",
-    "wasmtime-wasi-tls-openssl",
     "wasmtime-wast",
     "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
@@ -84,6 +82,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cli-flags",
     "wasmtime-internal-explorer",
     "wasmtime-internal-debugger",
+    "wasmtime-internal-gdbstub-component-artifact",
     "wasmtime-cli",
 ];
 
@@ -98,8 +97,6 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi-io",
     "wasmtime-wasi",
     "wasmtime-wasi-tls",
-    "wasmtime-wasi-tls-nativetls",
-    "wasmtime-wasi-tls-openssl",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",

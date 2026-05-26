@@ -365,12 +365,6 @@
 //!   with the same overhead as the `call-hook` feature where entries/exits into
 //!   WebAssembly will have more overhead than before.
 //!
-//! * `signals-based-traps` - Enabled by default, this enables support for using
-//!   host signal handlers to implement WebAssembly traps. For example virtual
-//!   memory is used to catch out-of-bounds accesses in WebAssembly that result
-//!   in segfaults. This is implicitly enabled by the `std` feature and is the
-//!   best way to get high-performance WebAssembly.
-//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!
@@ -516,18 +510,17 @@ mod sync_nostd;
 use sync_nostd as sync;
 
 pub use wasmtime_environ::OperatorCost;
+pub use wasmtime_environ::ToWasmtimeResult;
 #[doc(inline)]
 pub use wasmtime_environ::error;
-
-#[cfg(feature = "anyhow")]
-pub use wasmtime_environ::ToWasmtimeResult;
+pub use wasmtime_environ::{FuncIndex, StaticModuleIndex};
 
 // Only for use in `bindgen!`-generated code.
 #[doc(hidden)]
 #[cfg(feature = "anyhow")]
 pub use wasmtime_environ::anyhow;
 
-pub use self::error::{Error, Result, bail, ensure, format_err};
+pub use self::error::{Error, OutOfMemory, Result, bail, ensure, format_err};
 
 /// A re-exported instance of Wasmtime's `wasmparser` dependency.
 ///

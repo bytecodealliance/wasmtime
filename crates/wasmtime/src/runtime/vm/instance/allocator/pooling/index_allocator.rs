@@ -535,6 +535,7 @@ impl List {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::RngExt;
     use wasmtime_environ::EntityRef;
 
     #[test]
@@ -637,7 +638,6 @@ mod test {
 
     #[test]
     fn test_affinity_allocation_strategy_random() {
-        use rand::Rng;
         let mut rng = rand::rng();
 
         let ids = std::iter::repeat_with(|| {

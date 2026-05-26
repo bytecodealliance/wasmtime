@@ -116,14 +116,17 @@ fn generate_func(
 
     let body = quote! {
         let export = caller.get_export("memory");
+        let fuel = wiggle::wasmtime_crate::AsContextMut::as_context_mut(&mut caller).hostcall_fuel();
         let (mut mem, ctx) = match &export {
             Some(wiggle::wasmtime_crate::Extern::Memory(m)) => {
                 let (mem, ctx) = m.data_and_store_mut(&mut caller);
                 let ctx = get_cx(ctx);
+                ctx.set_hostcall_fuel(fuel);
                 (wiggle::GuestMemory::Unshared(mem), ctx)
             }
             Some(wiggle::wasmtime_crate::Extern::SharedMemory(m)) => {
                 let ctx = get_cx(caller.data_mut());
+                ctx.set_hostcall_fuel(fuel);
                 (wiggle::GuestMemory::Shared(m.data()), ctx)
             }
             _ => wiggle::error::bail!("missing required memory export"),

@@ -131,7 +131,7 @@ initialization function. Then we record the Wasm instance's state:
 * What are the values of its globals?
 * What regions of memory are non-zero?
 
-Then we rewrite the Wasm binary by intializing its globals directly to their
+Then we rewrite the Wasm binary by initializing its globals directly to their
 recorded state, and removing the module's old data segments and replacing them
 with data segments for each of the non-zero regions of memory we recorded.
 

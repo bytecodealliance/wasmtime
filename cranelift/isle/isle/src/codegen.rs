@@ -2,11 +2,13 @@
 
 use crate::files::Files;
 use crate::sema::{
-    BuiltinType, ExternalSig, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv, TypeId,
+    BuiltinType, ExternalSig, Fields, IntType, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv,
+    TypeId,
 };
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::stablemapset::StableSet;
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
+use std::borrow::Cow;
 use std::fmt::Write;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -20,7 +22,7 @@ pub struct CodegenOptions {
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
 
-    /// Prefixes to remove when printing file names in generaed files. This
+    /// Prefixes to remove when printing file names in generated files. This
     /// helps keep codegen deterministic.
     pub prefixes: Vec<Prefix>,
 
@@ -411,7 +413,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
                     // Generate the `derive`s.
                     let debug_derive = if is_nodebug { "" } else { ", Debug" };
-                    if variants.iter().all(|v| v.fields.is_empty()) {
+                    if variants.iter().all(|v| v.fields == Fields::Unit) {
                         writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
                             .unwrap();
                     } else {
@@ -421,22 +423,82 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     writeln!(code, "pub enum {name} {{").unwrap();
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];
-                        if variant.fields.is_empty() {
-                            writeln!(code, "    {name},").unwrap();
-                        } else {
-                            writeln!(code, "    {name} {{").unwrap();
-                            for field in &variant.fields {
-                                let name = &self.typeenv.syms[field.name.index()];
-                                let ty_name =
-                                    self.typeenv.types[field.ty.index()].name(self.typeenv);
-                                writeln!(code, "        {name}: {ty_name},").unwrap();
-                            }
-                            writeln!(code, "    }},").unwrap();
-                        }
+                        write!(code, "    {name}").unwrap();
+                        self.generate_fields(&mut *code, &variant.fields, "    ", false)
+                            .unwrap();
+                        writeln!(code, ",").unwrap();
                     }
                     writeln!(code, "}}").unwrap();
                 }
+                &Type::Struct {
+                    name,
+                    is_extern,
+                    is_nodebug,
+                    ref fields,
+                    pos,
+                    ..
+                } if !is_extern => {
+                    let name = &self.typeenv.syms[name.index()];
+                    writeln!(
+                        code,
+                        "\n/// Internal type {}: defined at {}.",
+                        name,
+                        pos.pretty_print_line(&self.files)
+                    )
+                    .unwrap();
+
+                    // Generate the `derive`s.
+                    let debug_derive = if is_nodebug { "" } else { ", Debug" };
+                    match fields {
+                        Fields::Unit => {
+                            writeln!(code, "#[derive(Copy, Clone, PartialEq, Eq{debug_derive})]")
+                                .unwrap();
+                            writeln!(code, "pub struct {name};").unwrap();
+                        }
+                        Fields::Tuple(_) | Fields::Struct(_) => {
+                            writeln!(code, "#[derive(Clone{debug_derive})]").unwrap();
+                            write!(code, "pub struct {name}").unwrap();
+                            self.generate_fields(&mut *code, &fields, "", true).unwrap();
+                            if matches!(fields, Fields::Tuple(_)) {
+                                write!(code, ";").unwrap();
+                            }
+                        }
+                    }
+                }
                 _ => {}
+            }
+        }
+    }
+
+    fn generate_fields(
+        &self,
+        code: &mut String,
+        fields: &Fields,
+        pad: &str,
+        allow_pub: bool,
+    ) -> std::fmt::Result {
+        let _pub = if allow_pub { "pub " } else { "" };
+        match fields {
+            Fields::Unit => Ok(()),
+            Fields::Struct(fields) => {
+                writeln!(code, " {{")?;
+                for field in &fields.fields {
+                    let name = &self.typeenv.syms[field.name.index()];
+                    let ty_name = self.typeenv.types[field.ty.index()].name(self.typeenv);
+                    writeln!(code, "{pad}    {_pub}{name}: {ty_name},")?;
+                }
+                write!(code, "{pad}}}")
+            }
+            Fields::Tuple(fields) => {
+                write!(code, "(")?;
+                for (i, field) in fields.fields.iter().enumerate() {
+                    let ty_name = self.typeenv.types[field.ty.index()].name(self.typeenv);
+                    write!(code, "{_pub}{ty_name}")?;
+                    if i < fields.fields.len() - 1 {
+                        write!(code, ", ")?;
+                    }
+                }
+                write!(code, ")")
             }
         }
     }
@@ -445,7 +507,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         match self.typeenv.types[typeid.index()] {
             Type::Builtin(bt) => String::from(bt.name()),
             Type::Primitive(_, sym, _) => self.typeenv.syms[sym.index()].clone(),
-            Type::Enum { name, .. } => {
+            Type::Enum { name, .. } | Type::Struct { name, .. } => {
                 let r = if by_ref { "&" } else { "" };
                 format!("{}{}", r, self.typeenv.syms[name.index()])
             }
@@ -550,7 +612,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         let name = ty.name(self.typeenv);
         let is_ref = match ty {
             Type::Builtin(_) | Type::Primitive(..) => false,
-            Type::Enum { .. } => true,
+            Type::Enum { .. } | Type::Struct { .. } => true,
         };
         (is_ref, String::from(name))
     }
@@ -688,7 +750,9 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                                     write!(ctx.out, " == ")?;
                                     self.emit_constraint(ctx, *source, arm)?;
                                 }
-                                Constraint::Variant { .. } | Constraint::Some => {
+                                Constraint::Variant { .. }
+                                | Constraint::Struct { .. }
+                                | Constraint::Some => {
                                     write!(ctx.out, "{}if let ", &ctx.indent)?;
                                     self.emit_constraint(ctx, *source, arm)?;
                                     write!(ctx.out, " = ")?;
@@ -854,51 +918,79 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
         let binding = &ctx.ruleset.bindings[result.index()];
 
-        let mut call =
-            |term: TermId,
-             parameters: &[BindingId],
+        let call = |ctx: &mut BodyContext<W>,
+                    term: TermId,
+                    parameters: &[BindingId],
+                    get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
+            let termdata = &self.termenv.terms[term.index()];
+            let sig = get_sig(termdata, self.typeenv).unwrap();
+            if let &[ret_ty] = &sig.ret_tys[..] {
+                let (is_ref, _) = self.ty(ret_ty);
+                if is_ref {
+                    ctx.set_ref(result, true);
+                    write!(ctx.out, "&")?;
+                }
+            }
+            write!(ctx.out, "{}(ctx", sig.full_name)?;
+            debug_assert_eq!(parameters.len(), sig.param_tys.len());
+            for (&parameter, &arg_ty) in parameters.iter().zip(sig.param_tys.iter()) {
+                let (is_ref, _) = self.ty(arg_ty);
+                write!(ctx.out, ", ")?;
+                let (before, after) = match (is_ref, ctx.is_ref.contains(&parameter)) {
+                    (false, true) => ("", ".clone()"),
+                    (true, false) => ("&", ""),
+                    _ => ("", ""),
+                };
+                write!(ctx.out, "{before}")?;
+                self.emit_expr(ctx, parameter)?;
+                write!(ctx.out, "{after}")?;
+            }
+            if let ReturnKind::Iterator = sig.ret_kind {
+                write!(ctx.out, ", &mut v{}", result.index())?;
+            }
+            write!(ctx.out, ")")
+        };
 
-             get_sig: fn(&Term, &TypeEnv) -> Option<ExternalSig>| {
-                let termdata = &self.termenv.terms[term.index()];
-                let sig = get_sig(termdata, self.typeenv).unwrap();
-                if let &[ret_ty] = &sig.ret_tys[..] {
-                    let (is_ref, _) = self.ty(ret_ty);
-                    if is_ref {
-                        ctx.set_ref(result, true);
-                        write!(ctx.out, "&")?;
-                    }
-                }
-                write!(ctx.out, "{}(ctx", sig.full_name)?;
-                debug_assert_eq!(parameters.len(), sig.param_tys.len());
-                for (&parameter, &arg_ty) in parameters.iter().zip(sig.param_tys.iter()) {
-                    let (is_ref, _) = self.ty(arg_ty);
-                    write!(ctx.out, ", ")?;
-                    let (before, after) = match (is_ref, ctx.is_ref.contains(&parameter)) {
-                        (false, true) => ("", ".clone()"),
-                        (true, false) => ("&", ""),
-                        _ => ("", ""),
+        let extract_fields = |ctx: &mut BodyContext<W>,
+                              field_bindings: &[BindingId],
+                              fields: &Fields|
+         -> std::fmt::Result {
+            if !field_bindings.is_empty() {
+                ctx.begin_block()?;
+                for (i, value) in field_bindings.iter().enumerate() {
+                    let field_name = match fields {
+                        Fields::Unit => panic!(),
+                        Fields::Struct(fields) => {
+                            Cow::Borrowed(&self.typeenv.syms[fields.fields[i].name.index()])
+                        }
+                        Fields::Tuple(_) => Cow::Owned(format!("{i}")),
                     };
-                    write!(ctx.out, "{before}")?;
-                    self.emit_expr(ctx, parameter)?;
-                    write!(ctx.out, "{after}")?;
+                    write!(ctx.out, "{}{field_name}: ", &ctx.indent)?;
+                    self.emit_expr(ctx, *value)?;
+                    if ctx.is_ref.contains(value) {
+                        write!(ctx.out, ".clone()")?;
+                    }
+                    writeln!(ctx.out, ",")?;
                 }
-                if let ReturnKind::Iterator = sig.ret_kind {
-                    write!(ctx.out, ", &mut v{}", result.index())?;
-                }
-                write!(ctx.out, ")")
-            };
+                ctx.end_block_without_newline()?;
+            }
+            Ok(())
+        };
 
         match binding {
             &Binding::ConstBool { val, .. } => self.emit_bool(ctx, val),
             &Binding::ConstInt { val, ty } => self.emit_int(ctx, val, ty),
             Binding::ConstPrim { val } => write!(ctx.out, "{}", &self.typeenv.syms[val.index()]),
             Binding::Argument { index } => write!(ctx.out, "arg{}", index.index()),
-            Binding::Extractor { term, parameter } => {
-                call(*term, std::slice::from_ref(parameter), Term::extractor_sig)
-            }
+            Binding::Extractor { term, parameter } => call(
+                ctx,
+                *term,
+                std::slice::from_ref(parameter),
+                Term::extractor_sig,
+            ),
             Binding::Constructor {
                 term, parameters, ..
-            } => call(*term, &parameters[..], Term::constructor_sig),
+            } => call(ctx, *term, &parameters[..], Term::constructor_sig),
 
             Binding::MakeVariant {
                 ty,
@@ -907,7 +999,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
             } => {
                 let (name, variants) = match &self.typeenv.types[ty.index()] {
                     Type::Enum { name, variants, .. } => (name, variants),
-                    _ => unreachable!("MakeVariant with primitive type"),
+                    _ => unreachable!("MakeVariant with non-enum type"),
                 };
                 let variant = &variants[variant.index()];
                 write!(
@@ -916,24 +1008,15 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     &self.typeenv.syms[name.index()],
                     &self.typeenv.syms[variant.name.index()]
                 )?;
-                if !fields.is_empty() {
-                    ctx.begin_block()?;
-                    for (field, value) in variant.fields.iter().zip(fields.iter()) {
-                        write!(
-                            ctx.out,
-                            "{}{}: ",
-                            &ctx.indent,
-                            &self.typeenv.syms[field.name.index()],
-                        )?;
-                        self.emit_expr(ctx, *value)?;
-                        if ctx.is_ref.contains(value) {
-                            write!(ctx.out, ".clone()")?;
-                        }
-                        writeln!(ctx.out, ",")?;
-                    }
-                    ctx.end_block_without_newline()?;
-                }
-                Ok(())
+                extract_fields(ctx, fields, &variant.fields)
+            }
+            Binding::MakeStruct { ty, fields } => {
+                let (name, type_fields) = match &self.typeenv.types[ty.index()] {
+                    Type::Struct { name, fields, .. } => (name, fields),
+                    _ => unreachable!("MakeStruct with non-struct type"),
+                };
+                write!(ctx.out, "{}", &self.typeenv.syms[name.index()],)?;
+                extract_fields(ctx, fields, type_fields)
             }
 
             &Binding::MakeSome { inner } => {
@@ -952,7 +1035,8 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
 
             // These are not supposed to happen. If they do, make the generated code fail to compile
             // so this is easier to debug than if we panic during codegen.
-            &Binding::MatchVariant { source, field, .. } => {
+            &Binding::MatchVariant { source, field, .. }
+            | &Binding::ExtractStruct { source, field, .. } => {
                 self.emit_expr(ctx, source)?;
                 write!(ctx.out, ".{} /*FIXME*/", field.index())
             }
@@ -969,7 +1053,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         source: BindingId,
         constraint: Constraint,
     ) -> std::fmt::Result {
-        if let Constraint::Variant { .. } = constraint {
+        if let Constraint::Variant { .. } | Constraint::Struct { .. } = constraint {
             if !ctx.is_ref.contains(&source) {
                 write!(ctx.out, "&")?;
             }
@@ -1002,7 +1086,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
             Constraint::Variant { ty, variant, .. } => {
                 let (name, variants) = match &self.typeenv.types[ty.index()] {
                     Type::Enum { name, variants, .. } => (name, variants),
-                    _ => unreachable!("Variant constraint on primitive type"),
+                    _ => unreachable!("Variant constraint on non-enum type"),
                 };
                 let variant = &variants[variant.index()];
                 write!(
@@ -1011,32 +1095,16 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     &self.typeenv.syms[name.index()],
                     &self.typeenv.syms[variant.name.index()]
                 )?;
-                if !bindings.is_empty() {
-                    ctx.begin_block()?;
-                    let mut skipped_some = false;
-                    for (&binding, field) in bindings.iter().zip(variant.fields.iter()) {
-                        if let Some(binding) = binding {
-                            write!(
-                                ctx.out,
-                                "{}{}: ",
-                                &ctx.indent,
-                                &self.typeenv.syms[field.name.index()]
-                            )?;
-                            let (is_ref, _) = self.ty(field.ty);
-                            if is_ref {
-                                ctx.set_ref(binding, true);
-                                write!(ctx.out, "ref ")?;
-                            }
-                            writeln!(ctx.out, "v{},", binding.index())?;
-                        } else {
-                            skipped_some = true;
-                        }
-                    }
-                    if skipped_some {
-                        writeln!(ctx.out, "{}..", &ctx.indent)?;
-                    }
-                    ctx.end_block_without_newline()?;
-                }
+                self.emit_fields(ctx, bindings, &variant.fields)?;
+                Ok(())
+            }
+            Constraint::Struct { ty, .. } => {
+                let (name, fields) = match &self.typeenv.types[ty.index()] {
+                    Type::Struct { name, fields, .. } => (name, fields),
+                    _ => unreachable!("Struct constraint on non-struct type"),
+                };
+                write!(ctx.out, "&{}", &self.typeenv.syms[name.index()],)?;
+                self.emit_fields(ctx, bindings, &fields)?;
                 Ok(())
             }
             Constraint::Some => {
@@ -1050,6 +1118,45 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                 write!(ctx.out, ")")
             }
         }
+    }
+
+    fn emit_fields<W: Write>(
+        &self,
+        ctx: &mut BodyContext<W>,
+        bindings: &[Option<BindingId>],
+        fields: &Fields,
+    ) -> std::fmt::Result {
+        if !bindings.is_empty() {
+            ctx.begin_block()?;
+            let mut skipped_some = false;
+            for (i, &binding) in bindings.iter().enumerate() {
+                if let Some(binding) = binding {
+                    let (field_name, field_ty) = match fields {
+                        Fields::Unit => panic!(),
+                        Fields::Struct(fields) => {
+                            let field = &fields.fields[i];
+                            let name = &self.typeenv.syms[field.name.index()];
+                            (Cow::Borrowed(name), field.ty)
+                        }
+                        Fields::Tuple(fields) => (Cow::Owned(format!("{i}")), fields.fields[i].ty),
+                    };
+                    write!(ctx.out, "{}{field_name}: ", &ctx.indent)?;
+                    let (is_ref, _) = self.ty(field_ty);
+                    if is_ref {
+                        ctx.set_ref(binding, true);
+                        write!(ctx.out, "ref ")?;
+                    }
+                    writeln!(ctx.out, "v{},", binding.index())?;
+                } else {
+                    skipped_some = true;
+                }
+            }
+            if skipped_some {
+                writeln!(ctx.out, "{}..", &ctx.indent)?;
+            }
+            ctx.end_block_without_newline()?;
+        }
+        Ok(())
     }
 
     fn emit_bool<W: Write>(
@@ -1068,9 +1175,55 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
     ) -> Result<(), std::fmt::Error> {
         let ty_data = &self.typeenv.types[ty.index()];
         match ty_data {
-            Type::Builtin(BuiltinType::Int(ty)) if ty.is_signed() => write!(ctx.out, "{val}_{ty}"),
-            Type::Builtin(BuiltinType::Int(ty)) => write!(ctx.out, "{val:#x}_{ty}"),
+            Type::Builtin(BuiltinType::Int(ty)) => {
+                write!(ctx.out, "{}", rust_int_literal(*ty, val))
+            }
             _ => write!(ctx.out, "{val:#x}"),
         }
+    }
+}
+
+fn rust_int_literal(ty: IntType, val: i128) -> String {
+    match ty {
+        IntType::U8 => format!("{:#x}_u8", val as u8),
+        IntType::U16 => format!("{:#x}_u16", val as u16),
+        IntType::U32 => format!("{:#x}_u32", val as u32),
+        IntType::U64 => format!("{:#x}_u64", val as u64),
+        IntType::U128 => format!("{:#x}_u128", val as u128),
+        IntType::USize => format!("{val:#x}_usize"),
+        IntType::I8 => format!("{}_i8", val as i8),
+        IntType::I16 => format!("{}_i16", val as i16),
+        IntType::I32 => format!("{}_i32", val as i32),
+        IntType::I64 => format!("{}_i64", val as i64),
+        IntType::I128 => format!("{val}_i128"),
+        IntType::ISize => format!("{val}_isize"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rust_int_literal;
+    use crate::sema::IntType;
+
+    #[test]
+    fn formats_wrapped_unsigned_literals() {
+        assert_eq!(rust_int_literal(IntType::U8, -2), "0xfe_u8");
+        assert_eq!(rust_int_literal(IntType::U64, -1), "0xffffffffffffffff_u64");
+        assert_eq!(
+            rust_int_literal(IntType::U128, -1),
+            "0xffffffffffffffffffffffffffffffff_u128"
+        );
+    }
+
+    #[test]
+    fn formats_wrapped_signed_literals() {
+        assert_eq!(rust_int_literal(IntType::I8, 255), "-1_i8");
+        assert_eq!(rust_int_literal(IntType::I64, -1), "-1_i64");
+        assert_eq!(rust_int_literal(IntType::I16, 65535), "-1_i16");
+    }
+
+    #[test]
+    fn preserves_positive_unsigned_literals() {
+        assert_eq!(rust_int_literal(IntType::U64, 5), "0x5_u64");
     }
 }

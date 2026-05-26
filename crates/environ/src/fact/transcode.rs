@@ -56,9 +56,10 @@ impl Transcoder {
 
             // Transcoding to utf8 as a smaller format takes all the parameters
             // and returns the amount of space consumed in the src/destination
-            Transcode::Utf16ToUtf8 | Transcode::Latin1ToUtf8 => {
-                types.function(&[from_ptr, from_ptr, to_ptr, to_ptr], &[from_ptr, to_ptr])
-            }
+            Transcode::Utf16ToUtf8 | Transcode::Latin1ToUtf8 => types.function(
+                &[from_ptr, from_ptr, to_ptr, to_ptr, ValType::I32],
+                &[from_ptr, to_ptr],
+            ),
 
             // The return type is a tagged length which indicates which was
             // used

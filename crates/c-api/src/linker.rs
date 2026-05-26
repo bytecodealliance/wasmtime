@@ -204,11 +204,11 @@ pub unsafe extern "C" fn wasmtime_linker_get(
         Err(_) => return false,
     };
     match linker.get(store, module, name) {
-        Some(which) => {
+        Ok(which) => {
             crate::initialize(item_ptr, which.into());
             true
         }
-        None => false,
+        Err(_) => false,
     }
 }
 

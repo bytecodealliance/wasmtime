@@ -22,6 +22,12 @@ macro_rules! indices {
         #[repr(transparent)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
+        impl TryClone for $name {
+            #[inline]
+            fn try_clone(&self) -> Result<Self, OutOfMemory> {
+                Ok(*self)
+            }
+        }
     )*);
 }
 
@@ -89,6 +95,8 @@ indices! {
     pub struct TypeResultIndex(u32);
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
+    /// Index pointing to a map type in the component model.
+    pub struct TypeMapIndex(u32);
     /// Index pointing to a fixed size list type in the component model.
     pub struct TypeFixedLengthListIndex(u32);
     /// Index pointing to a future type in the component model.
@@ -283,6 +291,7 @@ pub struct ComponentTypes {
     pub(super) component_instances: PrimaryMap<TypeComponentInstanceIndex, TypeComponentInstance>,
     pub(super) functions: PrimaryMap<TypeFuncIndex, TypeFunc>,
     pub(super) lists: PrimaryMap<TypeListIndex, TypeList>,
+    pub(super) maps: PrimaryMap<TypeMapIndex, TypeMap>,
     pub(super) records: PrimaryMap<TypeRecordIndex, TypeRecord>,
     pub(super) variants: PrimaryMap<TypeVariantIndex, TypeVariant>,
     pub(super) tuples: PrimaryMap<TypeTupleIndex, TypeTuple>,
@@ -363,7 +372,9 @@ impl ComponentTypes {
                 &CanonicalAbiInfo::SCALAR8
             }
 
-            InterfaceType::String | InterfaceType::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
+            InterfaceType::String | InterfaceType::List(_) | InterfaceType::Map(_) => {
+                &CanonicalAbiInfo::POINTER_PAIR
+            }
 
             InterfaceType::Record(i) => &self[*i].abi,
             InterfaceType::Variant(i) => &self[*i].abi,
@@ -416,6 +427,7 @@ impl_index! {
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
+    impl Index<TypeMapIndex> for ComponentTypes { TypeMap => maps }
     impl Index<TypeResourceTableIndex> for ComponentTypes { TypeResourceTable => resource_tables }
     impl Index<TypeFutureIndex> for ComponentTypes { TypeFuture => futures }
     impl Index<TypeStreamIndex> for ComponentTypes { TypeStream => streams }
@@ -435,6 +447,22 @@ where
     fn index(&self, idx: T) -> &Self::Output {
         self.module_types.as_ref().unwrap().index(idx)
     }
+}
+
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentExtern {
+    /// TODO
+    pub data: ComponentExternData,
+    /// TODO
+    pub ty: TypeDef,
+}
+
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentExternData {
+    /// TODO
+    pub implements: Option<String>,
 }
 
 /// Types of imports and exports in the component model.
@@ -537,9 +565,9 @@ impl TypeTrace for TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, TypeDef>,
+    pub imports: IndexMap<String, ComponentExtern>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, ComponentExtern>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -549,7 +577,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, ComponentExtern>,
 }
 
 /// A component function type in the component model.
@@ -591,6 +619,7 @@ pub enum InterfaceType {
     Variant(TypeVariantIndex),
     List(TypeListIndex),
     Tuple(TypeTupleIndex),
+    Map(TypeMapIndex),
     Flags(TypeFlagsIndex),
     Enum(TypeEnumIndex),
     Option(TypeOptionIndex),
@@ -1179,6 +1208,23 @@ impl TypeResourceTable {
 pub struct TypeList {
     /// The element type of the list.
     pub element: InterfaceType,
+}
+
+/// Shape of a "map" interface type.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeMap {
+    /// The key type of the map.
+    pub key: InterfaceType,
+    /// The value type of the map.
+    pub value: InterfaceType,
+    /// Byte information for each map entry represented as `tuple<key, value>`.
+    pub entry_abi: CanonicalAbiInfo,
+    /// Offset in bytes from the start of the entry tuple to the value field in
+    /// memory32.
+    pub value_offset32: u32,
+    /// Offset in bytes from the start of the entry tuple to the value field in
+    /// memory64.
+    pub value_offset64: u32,
 }
 
 /// Shape of a "fixed size list" interface type.

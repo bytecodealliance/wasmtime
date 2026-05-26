@@ -1,4 +1,4 @@
-use super::{TryClone, TryNew, Vec, try_alloc};
+use super::{TryClone, TryNew, TryVec, try_alloc};
 use crate::{alloc::str_ptr_from_slice_ptr, error::OutOfMemory};
 use core::{
     alloc::Layout,
@@ -114,18 +114,18 @@ use boxed_slice_builder::BoxedSliceBuilder;
 mod boxed_slice_builder {
     use super::*;
 
-    /// Builder for constructing and initalizing a boxed slice.
+    /// Builder for constructing and initializing a boxed slice.
     ///
     /// Also acts as an RAII guard to handle dropping the already-initialized
     /// elements when we get too few items or an iterator panics during
     /// construction.
     pub struct BoxedSliceBuilder<T> {
-        vec: Vec<T>,
+        vec: TryVec<T>,
     }
 
     impl<T> BoxedSliceBuilder<T> {
         pub fn new(len: usize) -> Result<Self, OutOfMemory> {
-            let mut vec = Vec::new();
+            let mut vec = TryVec::new();
             vec.reserve_exact(len)?;
             Ok(Self { vec })
         }
@@ -136,7 +136,7 @@ mod boxed_slice_builder {
             let ptr = ptr.cast::<T>();
             // Safety: the pointer was allocated by the global allocator and is
             // valid for `[T; len]` since it was a boxed slice.
-            let vec = unsafe { Vec::from_raw_parts(ptr, 0, len) };
+            let vec = unsafe { TryVec::from_raw_parts(ptr, 0, len) };
             Self { vec }
         }
 
@@ -197,7 +197,7 @@ mod boxed_slice_builder {
                     debug_assert!(!ptr.is_null());
                     debug_assert!(ptr.is_aligned());
                     // Safety: T's dangling pointer is always non-null and aligned.
-                    self.vec = unsafe { Vec::from_raw_parts(ptr, len, len) };
+                    self.vec = unsafe { TryVec::from_raw_parts(ptr, len, len) };
                 }
                 debug_assert_eq!(self.capacity(), self.init_len());
                 return Ok(());
@@ -221,14 +221,14 @@ mod boxed_slice_builder {
             if new_ptr.is_null() {
                 // Safety: The allocation failed so we retain ownership of `ptr`,
                 // which was a valid vec and we can safely make it a vec again.
-                self.vec = unsafe { Vec::from_raw_parts(ptr, len, cap) };
+                self.vec = unsafe { TryVec::from_raw_parts(ptr, len, cap) };
                 Err(OutOfMemory::new(new_layout.size()))
             } else {
                 let new_ptr = new_ptr.cast::<T>();
                 // Safety: The allocation succeeded, `new_ptr` was reallocated by
                 // the global allocator and points to a valid boxed slice of length
                 // `len`.
-                self.vec = unsafe { Vec::from_raw_parts(new_ptr, len, len) };
+                self.vec = unsafe { TryVec::from_raw_parts(new_ptr, len, len) };
                 debug_assert_eq!(self.capacity(), self.init_len());
                 Ok(())
             }

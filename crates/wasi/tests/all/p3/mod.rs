@@ -1,9 +1,10 @@
 use crate::store::{Ctx, MyWasiCtx};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use test_programs_artifacts::*;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Result, error::Context as _, format_err};
 use wasmtime_wasi::p3::bindings::Command;
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder};
 
 async fn run(path: &str) -> Result<()> {
     run_allow_blocking_current_thread(path, false).await
@@ -12,6 +13,14 @@ async fn run(path: &str) -> Result<()> {
 async fn run_allow_blocking_current_thread(
     path: &str,
     allow_blocking_current_thread: bool,
+) -> Result<()> {
+    run_with_builder(path, allow_blocking_current_thread, |_| {}).await
+}
+
+async fn run_with_builder(
+    path: &str,
+    allow_blocking_current_thread: bool,
+    configure: impl FnOnce(&mut WasiCtxBuilder),
 ) -> Result<()> {
     let path = Path::new(path);
     let name = path.file_stem().unwrap().to_str().unwrap();
@@ -24,11 +33,13 @@ async fn run_allow_blocking_current_thread(
         .context("failed to link `wasi:cli@0.2.x`")?;
     wasmtime_wasi::p3::add_to_linker(&mut linker).context("failed to link `wasi:cli@0.3.x`")?;
 
-    let (mut store, _td) = Ctx::new(&engine, name, |builder| MyWasiCtx {
-        wasi: builder
-            .allow_blocking_current_thread(allow_blocking_current_thread)
-            .build(),
-        table: Default::default(),
+    let (mut store, _td) = Ctx::new(&engine, name, |builder| {
+        configure(builder);
+        MyWasiCtx::new(
+            builder
+                .allow_blocking_current_thread(allow_blocking_current_thread)
+                .build(),
+        )
     })?;
     let component = Component::from_file(&engine, path)?;
     let command = Command::instantiate_async(&mut store, &component, &linker)
@@ -39,11 +50,15 @@ async fn run_allow_blocking_current_thread(
         .await
         .context("failed to call `wasi:cli/run#run`")?
         .context("guest trapped")?
-        .0
         .map_err(|()| format_err!("`wasi:cli/run#run` failed"))
 }
 
 foreach_p3!(assert_test_exists);
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_big_random_buf() -> wasmtime::Result<()> {
+    run(P3_BIG_RANDOM_BUF_COMPONENT).await
+}
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_cli() -> wasmtime::Result<()> {
@@ -111,6 +126,11 @@ async fn p3_sockets_tcp_streams() -> wasmtime::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_sockets_tcp_busy_poll() -> wasmtime::Result<()> {
+    run(P3_SOCKETS_TCP_BUSY_POLL_COMPONENT).await
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn p3_sockets_udp_bind() -> wasmtime::Result<()> {
     run(P3_SOCKETS_UDP_BIND_COMPONENT).await
 }
@@ -165,32 +185,32 @@ async fn p3_file_write_blocking() -> wasmtime::Result<()> {
     run_allow_blocking_current_thread(P3_FILE_WRITE_COMPONENT, true).await
 }
 
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_hello_stdout() {}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p3_file_truncation_readonly() -> wasmtime::Result<()> {
+    let prefix = "wasi_components_p3_truncation_readonly_ro_";
+    let tempdir = tempfile::Builder::new()
+        .prefix(prefix)
+        .tempdir()
+        .expect("create readonly tempdir");
+    const FILENAME: &str = "test.txt";
+    const EXPECTED_CONTENTS: &[u8] = b"truncation test file\n";
+    let mut file = PathBuf::from(tempdir.path());
+    file.push(FILENAME);
+    std::fs::write(&file, EXPECTED_CONTENTS).expect("write truncation test file");
 
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_hello_stdout_post_return() {}
+    run_with_builder(P3_FILE_TRUNCATION_READONLY_COMPONENT, false, |builder| {
+        builder
+            .preopened_dir(
+                tempdir.path(),
+                "readonly",
+                DirPerms::READ | DirPerms::MUTATE,
+                FilePerms::READ,
+            )
+            .unwrap();
+    })
+    .await?;
 
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_much_stdout() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_serve_hello_world() {}
-
-#[expect(
-    dead_code,
-    reason = "tested in the wasi-cli crate, satisfying foreach_api! macro"
-)]
-fn p3_cli_serve_sleep() {}
+    let contents = std::fs::read(&file).expect("read truncation test file");
+    assert_eq!(EXPECTED_CONTENTS, contents);
+    Ok(())
+}

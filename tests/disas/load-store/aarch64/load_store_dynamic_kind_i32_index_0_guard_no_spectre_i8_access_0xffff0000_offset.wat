@@ -21,41 +21,37 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       mov     w12, w4
-;;       mov     w13, #-0xffff
-;;       adds    x12, x12, x13
-;;       b.hs    #0x44
-;;   18: ldr     x13, [x2, #0x40]
-;;       cmp     x12, x13
-;;       cset    x14, hi
-;;       uxtb    w14, w14
-;;       cbnz    x14, #0x48
-;;   2c: ldr     x15, [x2, #0x38]
-;;       add     x15, x15, w4, uxtw
-;;       mov     x0, #0xffff0000
-;;       strb    w5, [x15, x0]
+;;       mov     w10, w4
+;;       mov     w11, #-0xffff
+;;       adds    x10, x10, x11
+;;       b.hs    #0x3c
+;;   18: ldr     x11, [x2, #0x40]
+;;       cmp     x10, x11
+;;       b.hi    #0x40
+;;   24: ldr     x13, [x2, #0x38]
+;;       add     x13, x13, w4, uxtw
+;;       mov     x14, #0xffff0000
+;;       strb    w5, [x13, x14]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   44: .byte   0x1f, 0xc1, 0x00, 0x00
-;;   48: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   3c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   40: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       mov     w12, w4
-;;       mov     w13, #-0xffff
-;;       adds    x12, x12, x13
-;;       b.hs    #0xa4
-;;   78: ldr     x13, [x2, #0x40]
-;;       cmp     x12, x13
-;;       cset    x14, hi
-;;       uxtb    w14, w14
-;;       cbnz    x14, #0xa8
-;;   8c: ldr     x15, [x2, #0x38]
-;;       add     x15, x15, w4, uxtw
-;;       mov     x0, #0xffff0000
-;;       ldrb    w2, [x15, x0]
+;;       mov     w10, w4
+;;       mov     w11, #-0xffff
+;;       adds    x10, x10, x11
+;;       b.hs    #0x9c
+;;   78: ldr     x11, [x2, #0x40]
+;;       cmp     x10, x11
+;;       b.hi    #0xa0
+;;   84: ldr     x13, [x2, #0x38]
+;;       add     x13, x13, w4, uxtw
+;;       mov     x14, #0xffff0000
+;;       ldrb    w2, [x13, x14]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   a4: .byte   0x1f, 0xc1, 0x00, 0x00
-;;   a8: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   9c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   a0: .byte   0x1f, 0xc1, 0x00, 0x00

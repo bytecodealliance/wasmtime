@@ -25,6 +25,4 @@ impl LowerBackend for S390xBackend {
     ) -> Option<()> {
         isle::lower_branch(ctx, self, ir_inst, targets)
     }
-
-    type FactFlowState = ();
 }

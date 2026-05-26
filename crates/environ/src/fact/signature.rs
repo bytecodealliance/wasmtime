@@ -33,7 +33,7 @@ impl ComponentTypesBuilder {
             .unwrap_func();
         Signature {
             params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
-            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
+            results: f.results().iter().map(|ty| self.val_type(ty)).collect(),
         }
     }
 
@@ -215,7 +215,7 @@ impl ComponentTypesBuilder {
     // seems like it would be best to intern this in some sort of map somewhere.
     pub(super) fn size_align(&self, opts: &LinearMemoryOptions, ty: &InterfaceType) -> (u32, u32) {
         let abi = self.canonical_abi(ty);
-        if opts.memory64 {
+        if opts.memory64() {
             (abi.size64, abi.align64)
         } else {
             (abi.size32, abi.align32)

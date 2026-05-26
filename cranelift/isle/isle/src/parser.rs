@@ -294,6 +294,10 @@ impl<'a> Parser<'a> {
             }
             self.expect_rparen()?;
             Ok(TypeValue::Enum(variants, pos))
+        } else if self.eat_sym_str("struct")? {
+            let fields = self.parse_fields()?;
+            self.expect_rparen()?;
+            Ok(TypeValue::Struct(fields, pos))
         } else {
             Err(self.error(pos, "Unknown type definition".to_string()))
         }
@@ -305,29 +309,60 @@ impl<'a> Parser<'a> {
             let name = self.parse_ident()?;
             Ok(Variant {
                 name,
-                fields: vec![],
+                fields: Fields::Unit,
                 pos,
             })
         } else {
             let pos = self.pos();
             self.expect_lparen()?;
             let name = self.parse_ident()?;
-            let mut fields = vec![];
-            while !self.is_rparen() {
-                fields.push(self.parse_type_field()?);
-            }
+            let fields = self.parse_fields()?;
             self.expect_rparen()?;
             Ok(Variant { name, fields, pos })
         }
     }
 
-    fn parse_type_field(&mut self) -> Result<Field> {
+    fn parse_fields(&mut self) -> Result<Fields> {
+        if self.is_rparen() {
+            Ok(Fields::Unit)
+        } else if self.is_lparen() {
+            Ok(Fields::Struct(self.parse_struct_fields()?))
+        } else {
+            Ok(Fields::Tuple(self.parse_tuple_fields()?))
+        }
+    }
+
+    fn parse_struct_fields(&mut self) -> Result<StructFields> {
+        let pos = self.pos();
+        let mut fields = vec![];
+        while !self.is_rparen() {
+            fields.push(self.parse_struct_field()?);
+        }
+        Ok(StructFields { fields, pos })
+    }
+
+    fn parse_struct_field(&mut self) -> Result<StructField> {
         let pos = self.pos();
         self.expect_lparen()?;
         let name = self.parse_ident()?;
         let ty = self.parse_ident()?;
         self.expect_rparen()?;
-        Ok(Field { name, ty, pos })
+        Ok(StructField { name, ty, pos })
+    }
+
+    fn parse_tuple_fields(&mut self) -> Result<TupleFields> {
+        let pos = self.pos();
+        let mut fields = vec![];
+        while !self.is_rparen() {
+            fields.push(self.parse_tuple_field(fields.len())?);
+        }
+        Ok(TupleFields { fields, pos })
+    }
+
+    fn parse_tuple_field(&mut self, index: usize) -> Result<TupleField> {
+        let pos = self.pos();
+        let ty = self.parse_ident()?;
+        Ok(TupleField { index, ty, pos })
     }
 
     fn parse_decl(&mut self) -> Result<Decl> {

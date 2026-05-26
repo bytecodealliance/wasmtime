@@ -14,7 +14,7 @@ use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedFuncIndex, FuncIndex, FuncKey, GlobalIndex, IndexType, Memory,
     MemoryIndex, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex,
-    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType,
+    TypeConvert, TypeIndex, VMOffsets, WasmHeapType, WasmValType, collections::TryClone as _,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -41,6 +41,17 @@ pub struct TableData {
     pub(crate) element_size: OperandSize,
     /// The size of the current elements field.
     pub(crate) current_elements_size: OperandSize,
+    /// The type of this table.
+    pub ty: Table,
+}
+
+impl TableData {
+    pub fn index_type(&self) -> WasmValType {
+        match self.ty.idx_type {
+            IndexType::I32 => WasmValType::I32,
+            IndexType::I64 => WasmValType::I64,
+        }
+    }
 }
 
 /// Heap metadata.
@@ -194,7 +205,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)]
                     .unwrap_module_type_index();
                 let sig = self.types[sig_index].unwrap_func();
-                BlockSig::new(control::BlockType::func(sig.clone()))
+                BlockSig::new(control::BlockType::func(sig.clone_panic_on_oom()))
             }
         })
     }
@@ -246,6 +257,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     current_elements_size: OperandSize::from_bytes(
                         self.vmoffsets.size_of_vmtable_definition_current_elements(),
                     ),
+                    ty: self.translation.module.tables[index],
                 })
             }
         }

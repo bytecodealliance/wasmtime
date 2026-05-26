@@ -60,8 +60,8 @@ pub struct DataDescription {
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
-    /// Object file section
-    pub custom_segment_section: Option<(String, String)>,
+    /// Object file segment, section and Mach-O flags.
+    pub custom_segment_section: Option<(String, String, u32)>,
     /// Alignment in bytes. `None` means that the default alignment of the
     /// respective module should be used.
     pub align: Option<u64>,
@@ -112,8 +112,8 @@ impl DataDescription {
     }
 
     /// Override the segment/section for data, only supported on Object backend
-    pub fn set_segment_section(&mut self, seg: &str, sec: &str) {
-        self.custom_segment_section = Some((seg.to_owned(), sec.to_owned()))
+    pub fn set_segment_section(&mut self, seg: &str, sec: &str, macho_flags: u32) {
+        self.custom_segment_section = Some((seg.to_owned(), sec.to_owned(), macho_flags))
     }
 
     /// Set the alignment for data. The alignment must be a power of two.

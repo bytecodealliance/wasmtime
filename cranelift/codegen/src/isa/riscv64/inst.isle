@@ -85,13 +85,13 @@
     (Load
       (rd WritableReg)
       (op LoadOP)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (from AMode))
     ;; An Store
     (Store
       (to AMode)
       (op StoreOP)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (src Reg))
 
     ;; A pseudo-instruction that captures register arguments in vregs.
@@ -125,9 +125,7 @@
 
     ;; Emits a trap with the given trap code if the comparison succeeds
     (TrapIf
-      (rs1 Reg)
-      (rs2 Reg)
-      (cc IntCC)
+      (cmp IntegerCompare)
       (trap_code TrapCode))
 
     (Jal
@@ -346,7 +344,7 @@
       (eew VecElementWidth)
       (to WritableReg)
       (from VecAMode)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -354,7 +352,7 @@
       (eew VecElementWidth)
       (to VecAMode)
       (from Reg)
-      (flags MemFlags)
+      (flags MemFlagsData)
       (mask VecOpMasking)
       (vstate VState))
 
@@ -1983,7 +1981,7 @@
 ;; value (first sign-extending to handle narrow widths).
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule
-  (imm12_from_negated_value (has_type ty (iconst n)))
+  (imm12_from_negated_value (has_type ty (iconst _ n)))
   (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_wrapping_neg (i64_sextend_imm64 ty n))))
   imm)
 
@@ -2020,9 +2018,15 @@
 (decl imm5_from_i64 (Imm5) i64)
 (extern extractor imm5_from_i64 imm5_from_i64)
 
-;; Construct a Imm5 from an i8
+;; Construct a Imm5 from an iNN
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
+(decl pure partial i16_to_imm5 (i16) Imm5)
+(rule (i16_to_imm5 (i8_from_i16 n)) (i8_to_imm5 n))
+(decl pure partial i32_to_imm5 (i32) Imm5)
+(rule (i32_to_imm5 (i8_from_i32 n)) (i8_to_imm5 n))
+(decl pure partial i64_to_imm5 (i64) Imm5)
+(rule (i64_to_imm5 (i8_from_i64 n)) (i8_to_imm5 n))
 
 ;; Helper to go directly from a `Value` to an `Imm5`.
 (decl imm5_from_value (Imm5) Value)
@@ -2030,31 +2034,49 @@
 
 ;; Like imm5_from_value, but first negates the `Value`.
 (decl pure partial imm5_from_negated_value (Value) Imm5)
-(rule (imm5_from_negated_value (has_type ty (iconst n)))
+(rule (imm5_from_negated_value (has_type ty (iconst _ n)))
   (if-let (imm5_from_i64 imm) (i64_wrapping_neg (i64_sextend_imm64 ty n)))
   imm)
 
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 (decl pure partial replicated_imm5 (Value) Imm5)
-(rule (replicated_imm5 (splat (imm5_from_value n))) n)
-(rule (replicated_imm5 (vconst (u128_from_constant n128)))
+(rule (replicated_imm5 (splat _ (imm5_from_value n))) n)
+(rule (replicated_imm5 (vconst (multi_lane 64 _) (u128_from_constant n128)))
   (if-let (u128_replicated_u64 n64) n128)
-  (if-let (u64_replicated_u32 n32) n64)
-  (if-let (u32_replicated_u16 n16) n32)
-  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i64_to_imm5 (u64_cast_signed n64)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 32 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u32 n32) n128)
+  (if-let n (i32_to_imm5 (u32_cast_signed n32)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 16 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u16 n16) n128)
+  (if-let n (i16_to_imm5 (u16_cast_signed n16)))
+  n)
+(rule (replicated_imm5 (vconst (multi_lane 8 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u8 n8) n128)
   (if-let n (i8_to_imm5 (u8_cast_signed n8)))
   n)
 
 ;; Like replicated_imm5, but first negates the `Value`.
 (decl pure partial negated_replicated_imm5 (Value) Imm5)
-(rule (negated_replicated_imm5 (splat n))
+(rule (negated_replicated_imm5 (splat _ n))
   (if-let imm5 (imm5_from_negated_value n))
   imm5)
-(rule (negated_replicated_imm5 (vconst (u128_from_constant n128)))
+(rule (negated_replicated_imm5 (vconst (multi_lane 64 _) (u128_from_constant n128)))
   (if-let (u128_replicated_u64 n64) n128)
-  (if-let (u64_replicated_u32 n32) n64)
-  (if-let (u32_replicated_u16 n16) n32)
-  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i64_to_imm5 (i64_wrapping_neg (u64_cast_signed n64))))
+  n)
+(rule (negated_replicated_imm5 (vconst (multi_lane 32 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u32 n32) n128)
+  (if-let n (i32_to_imm5 (i32_wrapping_neg (u32_cast_signed n32))))
+  n)
+(rule (negated_replicated_imm5 (vconst (multi_lane 16 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u16 n16) n128)
+  (if-let n (i16_to_imm5 (i16_wrapping_neg (u16_cast_signed n16))))
+  n)
+(rule (negated_replicated_imm5 (vconst (multi_lane 8 _) (u128_from_constant n128)))
+  (if-let (u128_replicated_u8 n8) n128)
   (if-let n (i8_to_imm5 (i8_wrapping_neg (u8_cast_signed n8))))
   n)
 
@@ -2062,8 +2084,8 @@
 
 ;; Constructor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
 (decl pure partial replicated_uimm5 (Value) UImm5)
-(rule (replicated_uimm5 (splat (uimm5_from_value n))) n)
-(rule 1 (replicated_uimm5 (vconst (u128_from_constant n128)))
+(rule (replicated_uimm5 (splat _ (uimm5_from_value n))) n)
+(rule 1 (replicated_uimm5 (vconst _ (u128_from_constant n128)))
   (if-let (u128_replicated_u64 n64) n128)
   (if-let (u64_replicated_u32 n32) n64)
   (if-let (u32_replicated_u16 n16) n32)
@@ -2074,7 +2096,7 @@
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `UImm5`.
 (decl uimm5_from_value (UImm5) Value)
 (extractor (uimm5_from_value n)
-  (iconst (u64_from_imm64 (uimm5_from_u64 n))))
+  (iconst _ (u64_from_imm64 (uimm5_from_u64 n))))
 
 ;; Extract a `UImm5` from an `u8`.
 (decl pure partial uimm5_from_u8 (UImm5) u8)
@@ -2309,24 +2331,24 @@
 
 ;; When extending our backend always extends to the full register width, so
 ;; there's no need to extend-an-extend.
-(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _)) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _)) true)
+(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _ _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _ _)) true)
 
 ;; The result of `icmp`/`fcmp` is zero or one, meaning that it's already sign
 ;; extended to the full register width.
-(rule 1 (val_already_extended _ (icmp _ _ _)) true)
-(rule 1 (val_already_extended _ (fcmp _ _ _)) true)
+(rule 1 (val_already_extended _ (icmp _ _ _ _)) true)
+(rule 1 (val_already_extended _ (fcmp _ _ _ _)) true)
 
 ;; The lowering for these operations always sign-extend their results due to the
 ;; use of the `*w` instructions in RV64I. Note that this requires that the
 ;; extension is from 32 to 64, 16/8-bit operations are explicitly excluded here.
 ;; There are no native instructions for the 16/8 bit operations so they must
 ;; fall through to actual sign extension above.
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _ _))) true)
 
 (type ExtendOp
   (enum
@@ -2418,10 +2440,10 @@
 ;;
 ;; We can't recurse into `amode` again since that could cause stack overflows.
 ;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
-(rule 1 (amode (iadd addr (i32_from_iconst y)) offset)
+(rule 1 (amode (iadd _ addr (i32_from_iconst y)) offset)
   (if-let new_offset (i32_checked_add y offset))
   (amode_inner addr new_offset))
-(rule 2 (amode (iadd (i32_from_iconst x) addr) offset)
+(rule 2 (amode (iadd _ (i32_from_iconst x) addr) offset)
   (if-let new_offset (i32_checked_add x offset))
   (amode_inner addr new_offset))
 
@@ -2434,15 +2456,15 @@
   (gen_reg_offset_amode r offset))
 
 ;; If the value is a `get_frame_pointer`, we can just use the offset from that.
-(rule 1 (amode_inner (get_frame_pointer) offset)
+(rule 1 (amode_inner (get_frame_pointer _) offset)
   (gen_fp_offset_amode offset))
 
 ;; If the value is a `get_stack_pointer`, we can just use the offset from that.
-(rule 1 (amode_inner (get_stack_pointer) offset)
+(rule 1 (amode_inner (get_stack_pointer _) offset)
   (gen_sp_offset_amode offset))
 
 ;; Similarly if the value is a `stack_addr` we can also turn that into an sp offset.
-(rule 1 (amode_inner (stack_addr ss ss_offset) amode_offset)
+(rule 1 (amode_inner (stack_addr _ ss ss_offset) amode_offset)
   (if-let combined_offset (i32_checked_add ss_offset amode_offset))
   (gen_stack_slot_amode ss combined_offset))
 
@@ -2459,10 +2481,10 @@
 (extern extractor sinkable_inst sinkable_inst)
 
 ;; Matches a sinkable load.
-(decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
+(decl sinkable_load (Inst Type MemFlagsData Value Offset32) Value)
 (extractor (sinkable_load inst ty flags addr offset)
            (and
-              (load (little_or_native_endian flags) addr offset)
+              (load _ (little_or_native_endian flags) addr offset)
               (sinkable_inst (has_type ty inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
@@ -2476,7 +2498,7 @@
 ;;
 ;; Recursion: recursive rule can only match once, since it matches on
 ;; `LoadOP.Flh` and emits `LoadOP.Lh`.
-(decl rec gen_load (AMode LoadOP MemFlags) Reg)
+(decl rec gen_load (AMode LoadOP MemFlagsData) Reg)
 (rule (gen_load amode op flags)
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
@@ -2489,7 +2511,7 @@
 ;;
 ;; This is only useful for load op's that perform some additional computation
 ;; such as extending the loaded value.
-(decl gen_sunk_load (Inst AMode LoadOP MemFlags) Reg)
+(decl gen_sunk_load (Inst AMode LoadOP MemFlagsData) Reg)
 (rule (gen_sunk_load inst amode op flags)
   (let ((_ Unit (sink_inst inst)))
         (gen_load amode op flags)))
@@ -2500,7 +2522,7 @@
 ;; This helper contains a special-case for zero constants stored to memory to
 ;; directly store the `zero` register to memory. See #7162 for some discussion
 ;; on why this doesn't just fall out.
-(decl gen_store (AMode MemFlags Value) InstOutput)
+(decl gen_store (AMode MemFlagsData Value) InstOutput)
 (rule 2 (gen_store amode flags val @ (value_type $F16))
   (if-let false (has_zfhmin))
   (rv_store amode (StoreOP.Sh) flags (gen_bitcast val $F16 $I16)))
@@ -2514,7 +2536,7 @@
 ;;
 ;; Note that the `src` operand must have the correct type for the `op`
 ;; specified.
-(decl rv_store (AMode StoreOP MemFlags Reg) InstOutput)
+(decl rv_store (AMode StoreOP MemFlagsData Reg) InstOutput)
 (rule (rv_store amode op flags src)
   (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
 
@@ -2859,6 +2881,10 @@
 (decl int_compare (IntCC XReg XReg) IntegerCompare)
 (extern constructor int_compare int_compare)
 
+;; Invert an `IntegerCompare`
+(decl int_compare_inverse (IntegerCompare) IntegerCompare)
+(extern constructor int_compare_inverse int_compare_inverse)
+
 ;; Extract the components of an `IntegerCompare`
 (decl int_compare_decompose (IntCC XReg XReg) IntegerCompare)
 (extern extractor infallible int_compare_decompose int_compare_decompose)
@@ -2933,9 +2959,9 @@
 ;; If the input value is itself an `icmp` or `fcmp` we can avoid generating the
 ;; result of the comparison and instead move the comparison directly into the
 ;; `IntegerCompare` that's returned.
-(rule 2 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 _)))))
+(rule 2 (is_nonzero_cmp (maybe_uextend (icmp _ cc a b @ (value_type (fits_in_64 _)))))
   (icmp_to_int_compare cc a b))
-(rule 2 (is_nonzero_cmp (maybe_uextend (fcmp cc a @ (value_type ty) b)))
+(rule 2 (is_nonzero_cmp (maybe_uextend (fcmp _ cc a @ (value_type ty) b)))
   (fcmp_to_float_compare cc ty a b))
 
 ;; Creates an `IntegerCompare` from an `icmp` node's parts. This will extend
@@ -3070,37 +3096,9 @@
 
 
 ;; Builds an instruction sequence that traps if the comparison succeeds.
-(decl gen_trapif (IntCC XReg XReg TrapCode) InstOutput)
-(rule (gen_trapif cc a b trap_code)
-  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf a b cc trap_code))))
-
-;; Builds an instruction sequence that traps if the input is non-zero.
-(decl gen_trapnz (XReg TrapCode) InstOutput)
-(rule (gen_trapnz test trap_code)
-  (gen_trapif (IntCC.NotEqual) test (zero_reg) trap_code))
-
-;; Builds an instruction sequence that traps if the input is zero.
-(decl gen_trapz (XReg TrapCode) InstOutput)
-(rule (gen_trapz test trap_code)
-  (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
-
-;; Converts bool to the corresponding {in,}equality condition
-(type ZeroCond
-      (enum
-       Zero
-       NonZero))
-
-(decl zero_cond_to_cc (ZeroCond) IntCC)
-(rule (zero_cond_to_cc (ZeroCond.Zero)) (IntCC.Equal))
-(rule (zero_cond_to_cc (ZeroCond.NonZero)) (IntCC.NotEqual))
-
-;; Builds an instruction sequence for wide trapz/nz
-(decl gen_trapif_val_i128 (ZeroCond ValueRegs TrapCode) InstOutput)
-(rule (gen_trapif_val_i128 zero_cond value trap_code)
-  (let ((lo XReg (value_regs_get value 0))
-        (hi XReg (value_regs_get value 1))
-        (test XReg (rv_or hi lo)))
-      (gen_trapif (zero_cond_to_cc zero_cond) test (zero_reg) trap_code)))
+(decl gen_trapif (IntegerCompare TrapCode) InstOutput)
+(rule (gen_trapif cond trap_code)
+  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf cond trap_code))))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3163,8 +3161,8 @@
 ;; be omitted because the result of the icmp or fcmp is a 0 or 1 directly. This
 ;; means we can go straight to the `neg` instruction to produce the final
 ;; result.
-(rule 2 (gen_bmask val @ (maybe_uextend (icmp _ _ _))) (rv_neg val))
-(rule 2 (gen_bmask val @ (maybe_uextend (fcmp _ _ _))) (rv_neg val))
+(rule 2 (gen_bmask val @ (maybe_uextend (icmp _ _ _ _))) (rv_neg val))
+(rule 2 (gen_bmask val @ (maybe_uextend (fcmp _ _ _ _))) (rv_neg val))
 
 (decl lower_bmask (Value Type) ValueRegs)
 (rule 0 (lower_bmask val (fits_in_64 _))

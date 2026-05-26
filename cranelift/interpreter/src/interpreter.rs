@@ -12,7 +12,7 @@ use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, Type,
+    GlobalValueData, LibCall, MemFlagsData, StackSlot, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -322,7 +322,7 @@ impl<'a> State<'a> for InterpreterState<'a> {
         &self,
         addr: Address,
         ty: Type,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     ) -> Result<DataValue, MemoryError> {
         let load_size = ty.bytes() as usize;
         let addr_start = addr.offset as usize;
@@ -358,7 +358,7 @@ impl<'a> State<'a> for InterpreterState<'a> {
         &mut self,
         addr: Address,
         v: DataValue,
-        mem_flags: MemFlags,
+        mem_flags: MemFlagsData,
     ) -> Result<(), MemoryError> {
         let store_size = v.ty().bytes() as usize;
         let addr_start = addr.offset as usize;
@@ -537,7 +537,7 @@ impl<'a> State<'a> for InterpreterState<'a> {
                     global_type,
                 }) => {
                     let mut addr = Address::try_from(current_val)?;
-                    let mem_flags = MemFlags::trusted();
+                    let mem_flags = MemFlagsData::trusted();
                     // We can forego bounds checking here since its performed in `checked_load`
                     addr.offset += offset as u64;
                     current_val = self.checked_load(addr, global_type, mem_flags)?;

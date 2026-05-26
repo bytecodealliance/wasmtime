@@ -75,14 +75,16 @@ impl Inst<'_> {
                 },
                 (name, ty) => Operand::Normal { name, ty },
             })
-            .chain(if self.name.contains("Trap") {
-                Some(Operand::TrapCode {
-                    name: "code",
-                    ty: "TrapCode",
-                })
-            } else {
-                None
-            })
+            .chain(
+                if self.name.contains("Trap") || self.fields.iter().any(|(_, ty)| *ty == "AddrZ") {
+                    Some(Operand::TrapCode {
+                        name: "code",
+                        ty: "TrapCode",
+                    })
+                } else {
+                    None
+                },
+            )
     }
 
     fn skip(&self) -> bool {

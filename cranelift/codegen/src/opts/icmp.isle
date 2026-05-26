@@ -84,9 +84,6 @@
 (rule (simplify
        (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
       (select ty c x y))
-(rule (simplify
-       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
-      (select ty c x y))
 
 ;; Masking the result of a comparison with 1 always results in the comparison
 ;; itself. Note that comparisons in wasm may sometimes be hidden behind
@@ -104,7 +101,7 @@
 
 ;; Comparisons against largest/smallest signed/unsigned values:
 ;; ult(x, 0) == false.
-(rule (simplify (ult (fits_in_64 (ty_int bty)) x zero @ (iconst_u _ 0)))
+(rule (simplify (ult bty x zero @ (iconst_u _ 0)))
       (subsume (iconst_u bty 0)))
 
 ;; ule(x, 0) == eq(x, 0)
@@ -116,8 +113,8 @@
       (ne bty x zero))
 
 ;; uge(x, 0) == true.
-(rule (simplify (uge (fits_in_64 (ty_int bty)) x zero @ (iconst_u _ 0)))
-      (subsume (iconst_u bty 1)))
+(rule (simplify (uge bty x zero @ (iconst_u _ 0)))
+      (subsume (cmp_true bty)))
 
 ;; ult(x, UMAX) == ne(x, UMAX).
 (rule (simplify (ult (fits_in_64 (ty_int bty)) x umax @ (iconst_u cty y)))
@@ -320,10 +317,10 @@
 (rule (simplify (bxor ty (ult ty x y) (ult ty y x))) (ne ty x y))
 
 ;; a < b && a > b = false
-(rule (simplify (band (fits_in_64 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
-(rule (simplify (band (fits_in_64 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (ty_int_vec128 ty) (sgt ty x y) (slt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (ty_int_vec128 ty) (slt ty x y) (sgt ty x y))) (iconst_u ty 0))
+(rule (simplify (band (ty_int_vec128 ty) (ugt ty x y) (ult ty x y))) (iconst_u ty 0))
+(rule (simplify (band (ty_int_vec128 ty) (ult ty x y) (ugt ty x y))) (iconst_u ty 0))
 (rule
   (simplify (band ty (sgt ty x (iconst_s _ y)) (ult ty x (iconst_s _ y))))
   (if-let true (i64_gt_eq y 0))
@@ -417,3 +414,63 @@
   (iconst_u _ k2)))
   (if-let false (u64_eq k1 k2))
   (ne select_ty inner_cond (iconst_u inner_ty 0)))
+
+;;;;; Boolean-context simplifications for `ctz` and `clz` ;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; When a count-trailing/leading-zeros instruction's result is fed into a
+;; comparison against zero (the consumer cares whether the count is zero,
+;; not its numeric value), rewrite to test the corresponding bit of X
+;; directly:
+;;
+;;   ctz(X) == 0  iff  LSB of X is set     iff  (X & 1) != 0
+;;   clz(X) == 0  iff  MSB of X is set     iff  X is signed-negative
+;;
+;; LZCNT/TZCNT/BSF/BSR each cost ~3 cycles on Intel and write a GPR (creating
+;; a false dependency); the rewritten forms emit a single-cycle `test` whose
+;; result lives only in flags. JIT-less interpreters benefit even more — their
+;; bit-counting paths are typically loops.
+;;
+;; The matching wasm-side fold is in WebAssembly/binaryen#8562 (LSB→ctz under
+;; `-Os`). With these mid-end rules in place, that fold becomes cycle-neutral
+;; on cranelift JITs even when produced unconditionally.
+
+;; ctz(X) == 0  iff  the LSB of X is 1, i.e.  (X & 1) != 0.
+(rule (simplify (eq result_ty (ctz x_ty X) (iconst_u _ 0)))
+      (ne result_ty (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0)))
+
+;; ctz(X) != 0  iff  the LSB of X is 0, i.e.  (X & 1) == 0.
+(rule (simplify (ne result_ty (ctz x_ty X) (iconst_u _ 0)))
+      (eq result_ty (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0)))
+
+;; clz(X) == 0  iff  the MSB of X is 1, i.e.  X is signed-negative.
+;; Lowers to `test X, X; js` on x86_64 — single-instruction sign-bit test.
+(rule (simplify (eq result_ty (clz x_ty X) (iconst_u _ 0)))
+      (slt result_ty X (iconst_u x_ty 0)))
+
+;; clz(X) != 0  iff  the MSB of X is 0, i.e.  X is signed-non-negative.
+(rule (simplify (ne result_ty (clz x_ty X) (iconst_u _ 0)))
+      (sge result_ty X (iconst_u x_ty 0)))
+
+;;;;; Same simplifications applied directly when the count-leading /
+;;;;; trailing-zeros value is consumed as a `brif` condition (the 2-op
+;;;;; wasm pattern `i32.ctz; br_if`, with no `i32.eqz` interposed for the
+;;;;; rules above to hinge on). We rewrite only the condition operand in
+;;;;; place; the brif's successors are unchanged so the CFG is preserved.
+
+;; `brif (ctz X) bt be` branches when `ctz(X) != 0`, i.e. LSB(X) == 0.
+(rule (simplify_skeleton (brif (ctz x_ty X) _ _))
+      (replace_branch_cond
+        (eq $I8 (band x_ty X (iconst_u x_ty 1)) (iconst_u x_ty 0))))
+
+;; `brif (clz X) bt be` branches when `clz(X) != 0`, i.e. MSB(X) == 0.
+(rule (simplify_skeleton (brif (clz x_ty X) _ _))
+      (replace_branch_cond (sge $I8 X (iconst_u x_ty 0))))
+
+;; Same when an `ireduce` (truncation) sits between the count and the
+;; brif. The count is in [0, bitwidth] so the truncation is lossless.
+(rule (simplify_skeleton (brif (ireduce _ (ctz x_ty x)) _ _))
+      (replace_branch_cond
+        (eq $I8 (band x_ty x (iconst_u x_ty 1)) (iconst_u x_ty 0))))
+
+(rule (simplify_skeleton (brif (ireduce _ (clz x_ty x)) _ _))
+      (replace_branch_cond (sge $I8 x (iconst_u x_ty 0))))

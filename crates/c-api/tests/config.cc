@@ -56,6 +56,7 @@ TEST(Config, Smoke) {
   config.strategy(Strategy::Auto);
   config.cranelift_debug_verifier(false);
   config.cranelift_opt_level(OptLevel::Speed);
+  config.cranelift_regalloc_algorithm(RegallocAlgorithm::Backtracking);
   config.cranelift_nan_canonicalization(false);
   config.profiler(ProfilingStrategy::None);
   config.memory_reservation(0);
@@ -69,6 +70,7 @@ TEST(Config, Smoke) {
   config.cranelift_flag_set("foo", "bar");
   EXPECT_TRUE(config.cache_load_default());
   EXPECT_FALSE(config.cache_load("nonexistent"));
+  config.concurrency_support(false);
 
   PoolAllocationConfig pooling_config;
   config.pooling_allocation_strategy(pooling_config);

@@ -1,5 +1,5 @@
 // Wasmtime-vendored copy of this header file as present in upstream:
-// <https://github.com/WebAssembly/wasm-c-api/blob/2ce1367c9d1271c83fb63bef26d896a2f290cd23/include/wasm.h>
+// <https://github.com/WebAssembly/wasm-c-api/blob/9d6b93764ac96cdd9db51081c363e09d2d488b4d/include/wasm.h>
 //
 // Wasmtime maintainers can update this vendored copy in-tree with the
 // ./ci/vendor-c-api-headers.sh shell script.
@@ -106,7 +106,7 @@ typedef wasm_byte_vec_t wasm_name_t;
 #define wasm_name wasm_byte_vec
 #define wasm_name_new wasm_byte_vec_new
 #define wasm_name_new_empty wasm_byte_vec_new_empty
-#define wasm_name_new_new_uninitialized wasm_byte_vec_new_uninitialized
+#define wasm_name_new_uninitialized wasm_byte_vec_new_uninitialized
 #define wasm_name_copy wasm_byte_vec_copy
 #define wasm_name_delete wasm_byte_vec_delete
 
@@ -253,6 +253,15 @@ WASM_API_EXTERN own wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t*)
 WASM_API_EXTERN const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t*);
 
 
+// Tag Types
+
+WASM_DECLARE_TYPE(tagtype)
+
+WASM_API_EXTERN own wasm_tagtype_t* wasm_tagtype_new(own wasm_functype_t*);
+
+WASM_API_EXTERN const wasm_functype_t* wasm_tagtype_functype(const wasm_tagtype_t*);
+
+
 // Extern Types
 
 WASM_DECLARE_TYPE(externtype)
@@ -263,6 +272,7 @@ enum wasm_externkind_enum {
   WASM_EXTERN_GLOBAL,
   WASM_EXTERN_TABLE,
   WASM_EXTERN_MEMORY,
+  WASM_EXTERN_TAG,
 };
 
 WASM_API_EXTERN wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t*);
@@ -271,21 +281,25 @@ WASM_API_EXTERN wasm_externtype_t* wasm_functype_as_externtype(wasm_functype_t*)
 WASM_API_EXTERN wasm_externtype_t* wasm_globaltype_as_externtype(wasm_globaltype_t*);
 WASM_API_EXTERN wasm_externtype_t* wasm_tabletype_as_externtype(wasm_tabletype_t*);
 WASM_API_EXTERN wasm_externtype_t* wasm_memorytype_as_externtype(wasm_memorytype_t*);
+WASM_API_EXTERN wasm_externtype_t* wasm_tagtype_as_externtype(wasm_tagtype_t*);
 
 WASM_API_EXTERN wasm_functype_t* wasm_externtype_as_functype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_globaltype_t* wasm_externtype_as_globaltype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_tabletype_t* wasm_externtype_as_tabletype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_memorytype_t* wasm_externtype_as_memorytype(wasm_externtype_t*);
+WASM_API_EXTERN wasm_tagtype_t* wasm_externtype_as_tagtype(wasm_externtype_t*);
 
 WASM_API_EXTERN const wasm_externtype_t* wasm_functype_as_externtype_const(const wasm_functype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_globaltype_as_externtype_const(const wasm_globaltype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_tabletype_as_externtype_const(const wasm_tabletype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_memorytype_as_externtype_const(const wasm_memorytype_t*);
+WASM_API_EXTERN const wasm_externtype_t* wasm_tagtype_as_externtype_const(const wasm_tagtype_t*);
 
 WASM_API_EXTERN const wasm_functype_t* wasm_externtype_as_functype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_globaltype_t* wasm_externtype_as_globaltype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_tabletype_t* wasm_externtype_as_tabletype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_memorytype_t* wasm_externtype_as_memorytype_const(const wasm_externtype_t*);
+WASM_API_EXTERN const wasm_tagtype_t* wasm_externtype_as_tagtype_const(const wasm_externtype_t*);
 
 
 // Import Types

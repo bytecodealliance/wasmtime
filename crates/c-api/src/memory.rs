@@ -104,8 +104,11 @@ pub extern "C" fn wasmtime_memory_type(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wasmtime_memory_data(store: WasmtimeStoreContext<'_>, mem: &Memory) -> *const u8 {
-    mem.data(store).as_ptr()
+pub extern "C" fn wasmtime_memory_data(
+    store: WasmtimeStoreContextMut<'_>,
+    mem: &Memory,
+) -> *const u8 {
+    mem.data_mut(store).as_ptr()
 }
 
 #[unsafe(no_mangle)]

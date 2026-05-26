@@ -257,6 +257,7 @@ fn parse_function_body(
         builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
 
         let op = reader.read()?;
+        environ.next_srcloc = cur_srcloc(&reader.get_binary_reader());
         let operand_types =
             validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
 

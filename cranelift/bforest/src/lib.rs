@@ -32,7 +32,7 @@ mod path;
 mod pool;
 mod set;
 
-pub use self::map::{Map, MapCursor, MapForest, MapIter};
+pub use self::map::{Map, MapCursor, MapCursorMut, MapForest, MapIntoIter, MapIter, MapRange};
 pub use self::set::{Set, SetCursor, SetForest, SetIter};
 
 use self::node::NodeData;

@@ -3,7 +3,7 @@
 (type Type (primitive Type))
 (type Inst (primitive Inst))
 (type Unit (primitive Unit))
-(type MemFlags (primitive MemFlags))
+(type MemFlagsData (primitive MemFlagsData))
 (type Gpr (primitive Gpr))
 (type Imm64 (primitive Imm64))
 
@@ -57,7 +57,7 @@
 (extern constructor gpr_new gpr_new)
 (convert Reg Gpr gpr_new)
 
-;; To make this case study specific to Wasm, contrain to 32 or 64
+;; To make this case study specific to Wasm, constrain to 32 or 64
 (spec (uextend arg) 
   (provide (= result (zero_ext (widthof result) arg)))
   (require 
@@ -111,14 +111,14 @@
              ;; Immediate sign-extended and a register
              (ImmReg (simm32 u32)
                      (base Reg)
-                     (flags MemFlags))
+                     (flags MemFlagsData))
                      
              ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
              (ImmRegRegShift (simm32 u32)
                              (base Gpr)
                              (index Gpr)
                              (shift u8)
-                             (flags MemFlags))
+                             (flags MemFlagsData))
             )
 )
 

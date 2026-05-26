@@ -143,14 +143,14 @@ pub async fn async_closed_streams() -> Result<()> {
             let (mut input_tx, input_rx) = mpsc::channel(1);
             let (output_tx, mut output_rx) = mpsc::channel(1);
             let reader = if direct_producer {
-                StreamReader::new(&mut store, DirectPipeProducer(input_rx))
+                StreamReader::new(&mut store, DirectPipeProducer(input_rx))?
             } else {
-                StreamReader::new(&mut store, PipeProducer::new(input_rx))
+                StreamReader::new(&mut store, PipeProducer::new(input_rx))?
             };
             if direct_consumer {
-                reader.pipe(&mut store, DirectPipeConsumer(output_tx));
+                reader.pipe(&mut store, DirectPipeConsumer(output_tx))?;
             } else {
-                reader.pipe(&mut store, PipeConsumer::new(output_tx));
+                reader.pipe(&mut store, PipeConsumer::new(output_tx))?;
             }
 
             store
@@ -183,8 +183,8 @@ pub async fn async_closed_streams() -> Result<()> {
     {
         let (input_tx, input_rx) = oneshot::channel();
         let (output_tx, output_rx) = oneshot::channel();
-        FutureReader::new(&mut store, OneshotProducer::new(input_rx))
-            .pipe(&mut store, OneshotConsumer::new(output_tx));
+        FutureReader::new(&mut store, OneshotProducer::new(input_rx))?
+            .pipe(&mut store, OneshotConsumer::new(output_tx))?;
 
         store
             .run_concurrent(async |_| {
@@ -198,7 +198,7 @@ pub async fn async_closed_streams() -> Result<()> {
     // Next, test stream host->guest
     {
         let (mut tx, rx) = mpsc::channel(1);
-        let rx = StreamReader::new(&mut store, PipeProducer::new(rx));
+        let rx = StreamReader::new(&mut store, PipeProducer::new(rx))?;
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
@@ -230,9 +230,9 @@ pub async fn async_closed_streams() -> Result<()> {
     // Next, test futures host->guest
     {
         let (tx, rx) = oneshot::channel();
-        let rx = FutureReader::new(&mut store, OneshotProducer::new(rx));
+        let rx = FutureReader::new(&mut store, OneshotProducer::new(rx))?;
         let (_, rx_ignored) = oneshot::channel();
-        let rx_ignored = FutureReader::new(&mut store, OneshotProducer::new(rx_ignored));
+        let rx_ignored = FutureReader::new(&mut store, OneshotProducer::new(rx_ignored))?;
 
         let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
 
@@ -255,6 +255,13 @@ mod closed_stream {
         path: "wit",
         world: "closed-stream-guest",
         exports: { default: store | async },
+    });
+}
+
+mod cross_instance_source {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "cross-instance-source",
     });
 }
 
@@ -288,12 +295,75 @@ pub async fn async_closed_stream() -> Result<()> {
             let stream = guest.local_local_closed_stream().call_get(accessor).await?;
 
             let (tx, mut rx) = mpsc::channel(1);
-            accessor.with(move |store| stream.pipe(store, PipeConsumer::new(tx)));
+            accessor.with(move |store| stream.pipe(store, PipeConsumer::new(tx)))?;
             assert!(rx.next().await.is_none());
 
             Ok(())
         })
         .await?
+}
+
+#[tokio::test]
+pub async fn async_cross_instance_source() -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let source_component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CROSS_INSTANCE_SOURCE_COMPONENT],
+    )
+    .await?;
+    let sink_component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CLOSED_STREAMS_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+        },
+    );
+
+    let source_instance = linker
+        .instantiate_async(&mut store, &source_component)
+        .await?;
+    let sink_instance = linker
+        .instantiate_async(&mut store, &sink_component)
+        .await?;
+
+    let source = cross_instance_source::CrossInstanceSource::new(&mut store, &source_instance)?;
+    let sink = closed_streams::bindings::ClosedStreams::new(&mut store, &sink_instance)?;
+
+    let stream_expected = vec![2_u8, 4, 6, 8, 9];
+    let future_expected = 10_u8;
+    let (_, ignored_future_rx) = oneshot::channel();
+    let ignored_future = FutureReader::new(&mut store, OneshotProducer::new(ignored_future_rx))?;
+
+    store
+        .run_concurrent(async move |accessor| {
+            let (stream, future) = source
+                .local_local_cross_instance()
+                .call_make(accessor)
+                .await?;
+
+            let closed = sink.local_local_closed();
+            let read_stream = closed.call_read_stream(accessor, stream, stream_expected);
+            let read_future =
+                closed.call_read_future(accessor, future, future_expected, ignored_future);
+
+            future::try_join(read_stream, read_future).await?;
+            wasmtime::error::Ok(())
+        })
+        .await??;
+
+    Ok(())
 }
 
 struct VecProducer<T> {
@@ -377,7 +447,7 @@ mod short_reads {
     wasmtime::component::bindgen!({
         path: "wit",
         world: "short-reads-guest",
-        exports: { default: async | task_exit },
+        exports: { default: async },
     });
 }
 
@@ -429,9 +499,9 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
         .run_concurrent(async |store| {
             let count = things.len();
             let stream =
-                store.with(|store| StreamReader::new(store, VecProducer::new(things, delay)));
+                store.with(|store| StreamReader::new(store, VecProducer::new(things, delay)))?;
 
-            let (stream, task) = guest
+            let stream = guest
                 .local_local_short_reads()
                 .call_short_reads(store, stream)
                 .await?;
@@ -439,16 +509,22 @@ async fn test_async_short_reads(delay: bool) -> Result<()> {
             let received_things = Arc::new(Mutex::new(Vec::<Thing>::with_capacity(count)));
             // Read just one item at a time from the guest, forcing it to
             // re-take ownership of any unwritten items.
-            store.with(|store| stream.pipe(store, OneAtATime::new(received_things.clone(), delay)));
+            store.with(|store| {
+                stream.pipe(store, OneAtATime::new(received_things.clone(), delay))
+            })?;
 
-            task.block(store).await;
-
-            assert_eq!(count, received_things.lock().unwrap().len());
+            for i in 0.. {
+                assert!(i < 1000);
+                if count == received_things.lock().unwrap().len() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
 
             let mut received_strings = Vec::with_capacity(strings.len());
             let received_things = mem::take(received_things.lock().unwrap().deref_mut());
             for it in received_things {
-                received_strings.push(thing.call_get(store, it).await?.0);
+                received_strings.push(thing.call_get(store, it).await?);
             }
 
             assert_eq!(

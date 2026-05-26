@@ -25,7 +25,7 @@ enum ModRmStyle {
     },
 
     /// Same as `RegMem` above except that this is also used for VEX-encoded
-    /// instructios with "/is4" which indicates that the 4th register operand
+    /// instructions with "/is4" which indicates that the 4th register operand
     /// is encoded in a byte after the ModR/M byte.
     RegMemIs4 {
         reg: ModRmReg,

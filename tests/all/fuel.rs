@@ -24,7 +24,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
     }
 }
 
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(bulk_memory, reference_types, gc))]
 #[cfg_attr(miri, ignore)]
 fn run(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
@@ -57,9 +57,11 @@ fn fuel_consumed(config: &Config, wasm: &[u8]) -> Result<u64> {
     Ok(u64::MAX - store.get_fuel()?)
 }
 
-#[wasmtime_test(wasm_features(gc, function_references))]
+#[wasmtime_test(wasm_features(gc, function_references, bulk_memory))]
 #[cfg_attr(miri, ignore)]
 fn iloop(config: &mut Config) -> Result<()> {
+    let _ = env_logger::try_init();
+
     config.consume_fuel(true);
     iloop_aborts(
         &config,
@@ -171,6 +173,129 @@ fn iloop(config: &mut Config) -> Result<()> {
             )
         "#,
     )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (memory 1)
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 0
+                    i32.const 65536
+                    memory.copy
+                )
+            )
+        "#,
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (memory 1)
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 0
+                    i32.const 65536
+                    memory.fill
+                )
+            )
+        "#,
+    )?;
+
+    let data = "a".repeat(65536);
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (memory 1)
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 0
+                    i32.const 65536
+                    memory.init $d
+                )
+
+                (data $d "{data}")
+            )
+            "#
+        ),
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (table 20000 funcref)
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 0
+                    i32.const 20000
+                    table.copy
+                )
+            )
+        "#,
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (table 20000 funcref)
+                (start 0)
+                (func
+                    i32.const 0
+                    ref.null func
+                    i32.const 20000
+                    table.fill
+                )
+            )
+        "#,
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (table 0 funcref)
+                (start 0)
+                (func
+                    ref.null func
+                    i32.const 20000
+                    table.grow
+                    drop
+                )
+            )
+        "#,
+    )?;
+
+    let elems = "$f ".repeat(20000);
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (table 20000 funcref)
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 0
+                    i32.const 20000
+                    table.init $e
+                )
+                (func $f)
+                (elem $e func {elems})
+            )
+            "#
+        ),
+    )?;
+
     iloop_aborts(
         &config,
         r#"
@@ -178,7 +303,7 @@ fn iloop(config: &mut Config) -> Result<()> {
                 (type $a (array i8))
                 (start 0)
                 (func
-                    i32.const 0x400_0000
+                    i32.const 2_0000
                     array.new_default $a
                     drop
                 )
@@ -186,7 +311,146 @@ fn iloop(config: &mut Config) -> Result<()> {
         "#,
     )?;
 
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (type $a (array (mut i8)))
+                (start 0)
+                (global $a (ref $a) i32.const 20000 array.new_default $a)
+                (global $b (ref $a) i32.const 20000 array.new_default $a)
+                (func
+                    global.get $a
+                    i32.const 0
+                    global.get $b
+                    i32.const 0
+                    i32.const 20000
+                    array.copy $a $a
+                )
+            )
+        "#,
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (type $a (array (mut i8)))
+                (start 0)
+                (global $a (ref $a) i32.const 20000 array.new_default $a)
+                (func
+                    global.get $a
+                    i32.const 0
+                    i32.const 0
+                    i32.const 20000
+                    array.fill $a
+                )
+            )
+        "#,
+    )?;
+
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (type $a (array (mut i8)))
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 65536
+                    array.new_data $a $d
+                    drop
+                )
+
+                (data $d "{data}")
+            )
+            "#
+        ),
+    )?;
+
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (type $a (array (mut i8)))
+                (start 0)
+                (global $a (ref $a) i32.const 20000 array.new_default $a)
+                (func
+                    global.get $a
+                    i32.const 0
+                    i32.const 0
+                    i32.const 20000
+                    array.init_data $a $d
+                )
+
+                (data $d "{data}")
+            )
+            "#
+        ),
+    )?;
+
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (type $a (array (mut funcref)))
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 20000
+                    array.new_elem $a $e
+                    drop
+                )
+                (func $f)
+                (elem $e func {elems})
+            )
+            "#
+        ),
+    )?;
+
+    iloop_aborts(
+        &config,
+        &format!(
+            r#"
+            (module
+                (type $a (array (mut funcref)))
+                (start 0)
+                (global $a (ref $a) i32.const 20000 array.new_default $a)
+                (func
+                    global.get $a
+                    i32.const 0
+                    i32.const 0
+                    i32.const 20000
+                    array.init_elem $a $e
+                )
+                (func $f)
+                (elem $e func {elems})
+            )
+            "#
+        ),
+    )?;
+
+    iloop_aborts(
+        &config,
+        r#"
+            (module
+                (type $a (array (mut i8)))
+                (start 0)
+                (func
+                    i32.const 0
+                    i32.const 20000
+                    array.new $a
+                    drop
+                )
+            )
+        "#,
+    )?;
+
     fn iloop_aborts(config: &Config, wat: &str) -> Result<()> {
+        log::debug!("Testing infinite loop:\n{wat}");
         let engine = Engine::new(&config)?;
         let module = Module::new(&engine, wat)?;
         let mut store = Store::new(&engine, ());

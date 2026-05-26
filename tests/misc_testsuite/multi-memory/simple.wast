@@ -1,4 +1,5 @@
 ;;! multi_memory = true
+;;! bulk_memory = true
 
 (module
   (memory $m1 1)

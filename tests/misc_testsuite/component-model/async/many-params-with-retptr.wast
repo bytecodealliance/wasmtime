@@ -2,6 +2,7 @@
 ;;! reference_types = true
 ;;! gc_types = true
 ;;! multi_memory = true
+;;! bulk_memory = true
 
 ;; This test (which was generated during fuzzing) composes a sync lower with an
 ;; async lift such that the maximum number of flat parameters _and_ a return

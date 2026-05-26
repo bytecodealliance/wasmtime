@@ -2,7 +2,7 @@
 
 use crate::CodegenResult;
 use crate::ir;
-use crate::ir::MemFlags;
+use crate::ir::MemFlagsData;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::{ExternalName, LibCall, Signature, dynamic_to_fixed};
@@ -38,7 +38,10 @@ impl From<StackAMode> for AMode {
 
 // Returns the size of stack space needed to store the
 // `clobbered_callee_saved` registers.
-fn compute_clobber_size(clobbered_callee_saves: &[Writable<RealReg>]) -> u32 {
+fn compute_clobber_size(
+    call_conv: isa::CallConv,
+    clobbered_callee_saves: &[Writable<RealReg>],
+) -> u32 {
     let mut int_regs = 0;
     let mut vec_regs = 0;
     for &reg in clobbered_callee_saves {
@@ -55,16 +58,22 @@ fn compute_clobber_size(clobbered_callee_saves: &[Writable<RealReg>]) -> u32 {
 
     // Round up to multiple of 2, to keep 16-byte stack alignment.
     let int_save_bytes = (int_regs + (int_regs & 1)) * 8;
-    // The Procedure Call Standard for the Arm 64-bit Architecture
-    // (AAPCS64, including several related ABIs such as the one used by
-    // Windows) mandates saving only the bottom 8 bytes of the vector
-    // registers, so we round up the number of registers to ensure
-    // proper stack alignment (similarly to the situation with
-    // `int_reg`).
-    let vec_reg_size = 8;
-    let vec_save_padding = vec_regs & 1;
-    // FIXME: SVE: ABI is different to Neon, so do we treat all vec regs as Z-regs?
-    let vec_save_bytes = (vec_regs + vec_save_padding) * vec_reg_size;
+    let vec_save_bytes = if call_conv == isa::CallConv::PreserveAll {
+        // In the PreserveAll ABI, we save the entire vector register,
+        // i.e., all 128 bits.
+        vec_regs * 16
+    } else {
+        // The Procedure Call Standard for the Arm 64-bit Architecture
+        // (AAPCS64, including several related ABIs such as the one used by
+        // Windows) mandates saving only the bottom 8 bytes of the vector
+        // registers, so we round up the number of registers to ensure
+        // proper stack alignment (similarly to the situation with
+        // `int_reg`).
+        let vec_reg_size = 8;
+        let vec_save_padding = vec_regs & 1;
+        // FIXME: SVE: ABI is different to Neon, so do we treat all vec regs as Z-regs?
+        (vec_regs + vec_save_padding) * vec_reg_size
+    };
 
     int_save_bytes + vec_save_bytes
 }
@@ -338,15 +347,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;
 
-            let size = if is_apple_cc || is_winch_return {
-                // MacOS and Winch aarch64 allows stack slots with
-                // sizes less than 8 bytes. They still need to be
-                // properly aligned on their natural data alignment,
-                // though.
+            // MacOS and Winch aarch64 allows stack slots with sizes less than 8
+            // bytes. They still need to be properly aligned on their natural
+            // data alignment, though, and this additionally is only applicable
+            // for arguments or when there's no argument extension in play.
+            // Stack slots for return values with argument extension get their
+            // full machine-word-width loaded or stored.
+            //
+            // Otherwise every arg takes a minimum slot of 8 bytes. (16-byte
+            // stack alignment happens separately after all args.)
+            let size = if (is_apple_cc || is_winch_return)
+                && (args_or_rets == ArgsOrRets::Args
+                    || param.extension == ir::ArgumentExtension::None)
+            {
                 size
             } else {
-                // Every arg takes a minimum slot of 8 bytes. (16-byte stack
-                // alignment happens separately after all args.)
                 core::cmp::max(size, 8)
             };
 
@@ -398,11 +413,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
-        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem.into(), ty, MemFlagsData::trusted())
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Inst {
-        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem.into(), from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -503,7 +518,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             rn: base,
             off: offset as i64,
         };
-        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
+        Inst::gen_load(into_reg, mem, ty, MemFlagsData::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
@@ -511,7 +526,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             rn: base,
             off: offset as i64,
         };
-        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
+        Inst::gen_store(mem, from_reg, ty, MemFlagsData::trusted())
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
@@ -602,7 +617,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPreIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -651,7 +666,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPostIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -714,7 +729,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_clobber_save(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
@@ -745,7 +760,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     mem: AMode::SPOffset {
                         off: i64::from(incoming_args_diff),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 });
 
                 // Store the frame pointer and link register again at the new SP
@@ -756,7 +771,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         reg: regs::stack_reg(),
                         simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
                     },
-                    flags: MemFlags::trusted(),
+                    flags: MemFlagsData::trusted(),
                 });
 
                 // Keep the frame pointer in sync
@@ -806,7 +821,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPreIndexed {
                     simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -837,7 +852,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPreIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
 
             if flags.unwind_info() {
@@ -857,74 +872,91 @@ impl ABIMachineSpec for AArch64MachineDeps {
             }
         }
 
-        let store_vec_reg = |rd| Inst::FpuStore64 {
-            rd,
-            mem: AMode::SPPreIndexed {
-                simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
-            },
-            flags: MemFlags::trusted(),
-        };
-        let iter = clobbered_vec.chunks_exact(2);
-
-        if let [rd] = iter.remainder() {
-            let rd: Reg = rd.to_reg().into();
-
-            debug_assert_eq!(rd.class(), RegClass::Float);
-            insts.push(store_vec_reg(rd));
-
-            if flags.unwind_info() {
-                clobber_offset -= clobber_offset_change as u32;
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::SaveReg {
-                        clobber_offset,
-                        reg: rd.to_real_reg().unwrap(),
+        if call_conv == isa::CallConv::PreserveAll {
+            // Store full vector registers in PreserveAll convention.
+            for reg in clobbered_vec.iter().rev() {
+                let inst = Inst::FpuStore128 {
+                    rd: reg.to_reg().into(),
+                    mem: AMode::SPPreIndexed {
+                        simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                     },
-                });
+                    flags: MemFlagsData::trusted(),
+                };
+                insts.push(inst);
+                // N.B.: no unwind info: we don't have a way to
+                // represent "full register" anyway.
             }
-        }
-
-        let store_vec_reg_pair = |rt, rt2| {
-            let clobber_offset_change = 16;
-
-            (
-                Inst::FpuStoreP64 {
-                    rt,
-                    rt2,
-                    mem: PairAMode::SPPreIndexed {
-                        simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64).unwrap(),
-                    },
-                    flags: MemFlags::trusted(),
+        } else {
+            let store_vec_reg_half = |rd| Inst::FpuStore64 {
+                rd,
+                mem: AMode::SPPreIndexed {
+                    simm9: SImm9::maybe_from_i64(-clobber_offset_change).unwrap(),
                 },
-                clobber_offset_change as u32,
-            )
-        };
-        let mut iter = iter.rev();
+                flags: MemFlagsData::trusted(),
+            };
+            let iter = clobbered_vec.chunks_exact(2);
 
-        while let Some([rt, rt2]) = iter.next() {
-            let rt: Reg = rt.to_reg().into();
-            let rt2: Reg = rt2.to_reg().into();
+            if let [rd] = iter.remainder() {
+                let rd: Reg = rd.to_reg().into();
 
-            debug_assert_eq!(rt.class(), RegClass::Float);
-            debug_assert_eq!(rt2.class(), RegClass::Float);
+                debug_assert_eq!(rd.class(), RegClass::Float);
+                insts.push(store_vec_reg_half(rd));
 
-            let (inst, clobber_offset_change) = store_vec_reg_pair(rt, rt2);
+                if flags.unwind_info() {
+                    clobber_offset -= clobber_offset_change as u32;
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::SaveReg {
+                            clobber_offset,
+                            reg: rd.to_real_reg().unwrap(),
+                        },
+                    });
+                }
+            }
 
-            insts.push(inst);
+            let store_vec_reg_half_pair = |rt, rt2| {
+                let clobber_offset_change = 16;
 
-            if flags.unwind_info() {
-                clobber_offset -= clobber_offset_change;
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::SaveReg {
-                        clobber_offset,
-                        reg: rt.to_real_reg().unwrap(),
+                (
+                    Inst::FpuStoreP64 {
+                        rt,
+                        rt2,
+                        mem: PairAMode::SPPreIndexed {
+                            simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64)
+                                .unwrap(),
+                        },
+                        flags: MemFlagsData::trusted(),
                     },
-                });
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::SaveReg {
-                        clobber_offset: clobber_offset + clobber_offset_change / 2,
-                        reg: rt2.to_real_reg().unwrap(),
-                    },
-                });
+                    clobber_offset_change as u32,
+                )
+            };
+            let mut iter = iter.rev();
+
+            while let Some([rt, rt2]) = iter.next() {
+                let rt: Reg = rt.to_reg().into();
+                let rt2: Reg = rt2.to_reg().into();
+
+                debug_assert_eq!(rt.class(), RegClass::Float);
+                debug_assert_eq!(rt2.class(), RegClass::Float);
+
+                let (inst, clobber_offset_change) = store_vec_reg_half_pair(rt, rt2);
+
+                insts.push(inst);
+
+                if flags.unwind_info() {
+                    clobber_offset -= clobber_offset_change;
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::SaveReg {
+                            clobber_offset,
+                            reg: rt.to_real_reg().unwrap(),
+                        },
+                    });
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::SaveReg {
+                            clobber_offset: clobber_offset + clobber_offset_change / 2,
+                            reg: rt2.to_real_reg().unwrap(),
+                        },
+                    });
+                }
             }
         }
 
@@ -943,7 +975,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_clobber_restore(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         _flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
@@ -956,40 +988,55 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
         }
 
-        let load_vec_reg = |rd| Inst::FpuLoad64 {
-            rd,
-            mem: AMode::SPPostIndexed {
-                simm9: SImm9::maybe_from_i64(16).unwrap(),
-            },
-            flags: MemFlags::trusted(),
-        };
-        let load_vec_reg_pair = |rt, rt2| Inst::FpuLoadP64 {
-            rt,
-            rt2,
-            mem: PairAMode::SPPostIndexed {
-                simm7: SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
-            },
-            flags: MemFlags::trusted(),
-        };
+        if call_conv == isa::CallConv::PreserveAll {
+            for reg in clobbered_vec.iter() {
+                let inst = Inst::FpuLoad128 {
+                    rd: reg.map(|r| r.into()),
+                    mem: AMode::SPPostIndexed {
+                        simm9: SImm9::maybe_from_i64(16).unwrap(),
+                    },
+                    flags: MemFlagsData::trusted(),
+                };
+                insts.push(inst);
+                // N.B.: no unwind info; we don't have a way to
+                // represent "full vector register saved" anyway.
+            }
+        } else {
+            let load_vec_reg_half = |rd| Inst::FpuLoad64 {
+                rd,
+                mem: AMode::SPPostIndexed {
+                    simm9: SImm9::maybe_from_i64(16).unwrap(),
+                },
+                flags: MemFlagsData::trusted(),
+            };
+            let load_vec_reg_half_pair = |rt, rt2| Inst::FpuLoadP64 {
+                rt,
+                rt2,
+                mem: PairAMode::SPPostIndexed {
+                    simm7: SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
+                },
+                flags: MemFlagsData::trusted(),
+            };
 
-        let mut iter = clobbered_vec.chunks_exact(2);
+            let mut iter = clobbered_vec.chunks_exact(2);
 
-        while let Some([rt, rt2]) = iter.next() {
-            let rt: Writable<Reg> = rt.map(|r| r.into());
-            let rt2: Writable<Reg> = rt2.map(|r| r.into());
+            while let Some([rt, rt2]) = iter.next() {
+                let rt: Writable<Reg> = rt.map(|r| r.into());
+                let rt2: Writable<Reg> = rt2.map(|r| r.into());
 
-            debug_assert_eq!(rt.to_reg().class(), RegClass::Float);
-            debug_assert_eq!(rt2.to_reg().class(), RegClass::Float);
-            insts.push(load_vec_reg_pair(rt, rt2));
-        }
+                debug_assert_eq!(rt.to_reg().class(), RegClass::Float);
+                debug_assert_eq!(rt2.to_reg().class(), RegClass::Float);
+                insts.push(load_vec_reg_half_pair(rt, rt2));
+            }
 
-        debug_assert!(iter.remainder().len() <= 1);
+            debug_assert!(iter.remainder().len() <= 1);
 
-        if let [rd] = iter.remainder() {
-            let rd: Writable<Reg> = rd.map(|r| r.into());
+            if let [rd] = iter.remainder() {
+                let rd: Writable<Reg> = rd.map(|r| r.into());
 
-            debug_assert_eq!(rd.to_reg().class(), RegClass::Float);
-            insts.push(load_vec_reg(rd));
+                debug_assert_eq!(rd.to_reg().class(), RegClass::Float);
+                insts.push(load_vec_reg_half(rd));
+            }
         }
 
         let mut iter = clobbered_int.chunks_exact(2);
@@ -1007,7 +1054,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: PairAMode::SPPostIndexed {
                     simm7: SImm7Scaled::maybe_from_i64(16, I64).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -1023,7 +1070,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 mem: AMode::SPPostIndexed {
                     simm9: SImm9::maybe_from_i64(16).unwrap(),
                 },
-                flags: MemFlags::trusted(),
+                flags: MemFlagsData::trusted(),
             });
         }
 
@@ -1150,17 +1197,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         regs.sort_unstable();
 
         // Compute clobber size.
-        let clobber_size = compute_clobber_size(&regs);
+        let clobber_size = compute_clobber_size(call_conv, &regs);
+
+        let needs_linkage_frame = flags.preserve_frame_pointers()
+                // The function arguments that are passed on the stack are addressed
+                // relative to the Frame Pointer.
+                || incoming_args_size > 0
+                || tail_args_size > incoming_args_size
+                || clobber_size > 0
+                || fixed_frame_storage_size > 0
+                || outgoing_args_size > 0;
 
         // Compute linkage frame size.
-        let setup_area_size = if flags.preserve_frame_pointers()
-            || function_calls != FunctionCalls::None
-            // The function arguments that are passed on the stack are addressed
-            // relative to the Frame Pointer.
-            || incoming_args_size > 0
-            || clobber_size > 0
-            || fixed_frame_storage_size > 0
-        {
+        let setup_area_size = if needs_linkage_frame || function_calls == FunctionCalls::Regular {
             16 // FP, LR
         } else {
             0
@@ -1214,7 +1263,7 @@ impl AArch64MachineDeps {
                 AMode::SPOffset { off: 0 },
                 zero_reg(),
                 I32,
-                MemFlags::trusted(),
+                MemFlagsData::trusted(),
             ));
         }
 

@@ -244,72 +244,70 @@ fn test_x64_emit() {
     ));
 
     // Atomic128RmwSeq
+    let rmw_args = Atomic128RmwSeqArgs {
+        op: Atomic128RmwSeqOp::Or,
+        mem_low: am3.clone(),
+        mem_high: am3.offset(8).unwrap(),
+        operand_low: Gpr::unwrap_new(r10),
+        operand_high: Gpr::unwrap_new(r11),
+        temp_low: w_rbx.map(Gpr::unwrap_new),
+        temp_high: w_rcx.map(Gpr::unwrap_new),
+        dst_old_low: w_rax.map(Gpr::unwrap_new),
+        dst_old_high: w_rdx.map(Gpr::unwrap_new),
+    };
     insns.push((
         Inst::Atomic128RmwSeq {
-            op: Atomic128RmwSeqOp::Or,
-            mem: Box::new(am3.clone()),
-            operand_low: Gpr::unwrap_new(r10),
-            operand_high: Gpr::unwrap_new(r11),
-            temp_low: w_rbx.map(Gpr::unwrap_new),
-            temp_high: w_rcx.map(Gpr::unwrap_new),
-            dst_old_low: w_rax.map(Gpr::unwrap_new),
-            dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            args: Box::new(Atomic128RmwSeqArgs {
+                op: Atomic128RmwSeqOp::Or,
+                ..rmw_args.clone()
+            }),
         },
         "498B01498B51084889C34889D1490BDA490BCBF0490FC7090F85E9FFFFFF",
-        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Or %r11:%r10; 0(%r9) = %rcx:%rbx }",
+        "atomically { %rdx:%rax = 0(%r9):8(%r9); %rcx:%rbx = %rdx:%rax Or %r11:%r10; 0(%r9):8(%r9) = %rcx:%rbx }"
     ));
     insns.push((
         Inst::Atomic128RmwSeq {
-            op: Atomic128RmwSeqOp::And,
-            mem: Box::new(am3.clone()),
-            operand_low: Gpr::unwrap_new(r10),
-            operand_high: Gpr::unwrap_new(r11),
-            temp_low: w_rbx.map(Gpr::unwrap_new),
-            temp_high: w_rcx.map(Gpr::unwrap_new),
-            dst_old_low: w_rax.map(Gpr::unwrap_new),
-            dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            args: Box::new(Atomic128RmwSeqArgs {
+                op: Atomic128RmwSeqOp::And,
+                ..rmw_args.clone()
+            }),
         },
         "498B01498B51084889C34889D14923DA4923CBF0490FC7090F85E9FFFFFF",
-        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax And %r11:%r10; 0(%r9) = %rcx:%rbx }"
+        "atomically { %rdx:%rax = 0(%r9):8(%r9); %rcx:%rbx = %rdx:%rax And %r11:%r10; 0(%r9):8(%r9) = %rcx:%rbx }"
     ));
     insns.push((
         Inst::Atomic128RmwSeq {
-            op: Atomic128RmwSeqOp::Umin,
-            mem: Box::new(am3.clone()),
-            operand_low: Gpr::unwrap_new(r10),
-            operand_high: Gpr::unwrap_new(r11),
-            temp_low: w_rbx.map(Gpr::unwrap_new),
-            temp_high: w_rcx.map(Gpr::unwrap_new),
-            dst_old_low: w_rax.map(Gpr::unwrap_new),
-            dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            args: Box::new(Atomic128RmwSeqArgs {
+                op: Atomic128RmwSeqOp::Umin,
+                ..rmw_args.clone()
+            }),
         },
         "498B01498B51084889C34889D14C39D3491BCB4889D1490F43DA490F43CBF0490FC7090F85DEFFFFFF",
-        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Umin %r11:%r10; 0(%r9) = %rcx:%rbx }"
+        "atomically { %rdx:%rax = 0(%r9):8(%r9); %rcx:%rbx = %rdx:%rax Umin %r11:%r10; 0(%r9):8(%r9) = %rcx:%rbx }"
     ));
     insns.push((
         Inst::Atomic128RmwSeq {
-            op: Atomic128RmwSeqOp::Add,
-            mem: Box::new(am3.clone()),
-            operand_low: Gpr::unwrap_new(r10),
-            operand_high: Gpr::unwrap_new(r11),
-            temp_low: w_rbx.map(Gpr::unwrap_new),
-            temp_high: w_rcx.map(Gpr::unwrap_new),
-            dst_old_low: w_rax.map(Gpr::unwrap_new),
-            dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            args: Box::new(Atomic128RmwSeqArgs {
+                op: Atomic128RmwSeqOp::Add,
+                ..rmw_args.clone()
+            }),
         },
         "498B01498B51084889C34889D14903DA4913CBF0490FC7090F85E9FFFFFF",
-        "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Add %r11:%r10; 0(%r9) = %rcx:%rbx }"
+        "atomically { %rdx:%rax = 0(%r9):8(%r9); %rcx:%rbx = %rdx:%rax Add %r11:%r10; 0(%r9):8(%r9) = %rcx:%rbx }",
     ));
     insns.push((
         Inst::Atomic128XchgSeq {
-            mem: am3.clone(),
-            operand_low: Gpr::unwrap_new(rbx),
-            operand_high: Gpr::unwrap_new(rcx),
-            dst_old_low: w_rax.map(Gpr::unwrap_new),
-            dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            args: Box::new(Atomic128XchgSeqArgs {
+                mem_low: am3.clone(),
+                mem_high: am3.offset(8).unwrap(),
+                operand_low: Gpr::unwrap_new(rbx),
+                operand_high: Gpr::unwrap_new(rcx),
+                dst_old_low: w_rax.map(Gpr::unwrap_new),
+                dst_old_high: w_rdx.map(Gpr::unwrap_new),
+            }),
         },
         "498B01498B5108F0490FC7090F85F5FFFFFF",
-        "atomically { %rdx:%rax = 0(%r9); 0(%r9) = %rcx:%rbx }",
+        "atomically { %rdx:%rax = 0(%r9):8(%r9); 0(%r9):8(%r9) = %rcx:%rbx }",
     ));
 
     // ========================================================

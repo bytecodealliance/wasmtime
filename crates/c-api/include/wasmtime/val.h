@@ -9,12 +9,46 @@
 
 #include <stdalign.h>
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/extern.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/// \brief Discriminant stored in #wasmtime_val::kind
+typedef uint8_t wasmtime_valkind_t;
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i32
+#define WASMTIME_I32 0
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i64
+#define WASMTIME_I64 1
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a f32
+#define WASMTIME_F32 2
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a f64
+#define WASMTIME_F64 3
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a v128
+#define WASMTIME_V128 4
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a
+/// funcref
+#define WASMTIME_FUNCREF 5
+
+#ifdef WASMTIME_FEATURE_GC
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
+/// externref
+#define WASMTIME_EXTERNREF 6
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
+/// anyref
+#define WASMTIME_ANYREF 7
+/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
+/// exnref
+#define WASMTIME_EXNREF 8
+#endif // WASMTIME_FEATURE_GC
+
+/// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
+/// stored in little-endian order.
+typedef uint8_t wasmtime_v128[16];
+
+#ifdef WASMTIME_FEATURE_GC
 /**
  * \typedef wasmtime_anyref_t
  * \brief Convenience alias for #wasmtime_anyref
@@ -30,7 +64,7 @@ extern "C" {
  * referencing the internal data requires using a `wasmtime_context_t`.
  *
  * Anyref values are required to be explicitly unrooted via
- * #wasmtime_anyref_unroot to enable them to be garbage-collected.
+ * `wasmtime_anyref_unroot` to enable them to be garbage-collected.
  *
  * If you do not unroot the value, *even if you free the corresponding
  * Store*, there will be some memory leaked, because GC roots use a
@@ -52,107 +86,31 @@ typedef struct wasmtime_anyref {
   void *__private3;
 } wasmtime_anyref_t;
 
-/// \brief Helper function to initialize the `ref` provided to a null anyref
-/// value.
-static inline void wasmtime_anyref_set_null(wasmtime_anyref_t *ref) {
-  ref->store_id = 0;
-}
-
-/// \brief Helper function to return whether the provided `ref` points to a null
-/// `anyref` value.
-///
-/// Note that `ref` itself should not be null as null is represented internally
-/// within a #wasmtime_anyref_t value.
-static inline bool wasmtime_anyref_is_null(const wasmtime_anyref_t *ref) {
-  return ref->store_id == 0;
-}
-
 /**
- * \brief Creates a new reference pointing to the same data that `anyref`
- * points to (depending on the configured collector this might increase a
- * reference count or create a new GC root).
+ * \typedef wasmtime_exnref_t
+ * \brief Convenience alias for #wasmtime_exnref
  *
- * The returned reference is stored in `out`.
+ * \struct wasmtime_exnref
+ * \brief A WebAssembly exception reference value.
+ *
+ * This structure represents an `exnref` value, which is a reference to a
+ * WebAssembly exception object. Like other GC reference types, it must be
+ * explicitly unrooted via #wasmtime_exnref_unroot to enable garbage
+ * collection.
+ *
+ * Null exnref values are represented with `store_id == 0`.
  */
-WASM_API_EXTERN void wasmtime_anyref_clone(const wasmtime_anyref_t *anyref,
-                                           wasmtime_anyref_t *out);
-
-/**
- * \brief Unroots the `ref` provided within the `context`.
- *
- * This API is required to enable the `ref` value provided to be
- * garbage-collected. This API itself does not necessarily garbage-collect the
- * value, but it's possible to collect it in the future after this.
- *
- * This may modify `ref` and the contents of `ref` are left in an undefined
- * state after this API is called and it should no longer be used.
- *
- * Note that null or i32 anyref values do not need to be unrooted but are still
- * valid to pass to this function.
- */
-WASM_API_EXTERN void wasmtime_anyref_unroot(wasmtime_anyref_t *ref);
-
-/**
- * \brief Converts a raw `anyref` value coming from #wasmtime_val_raw_t into
- * a #wasmtime_anyref_t.
- *
- * The provided `out` pointer is filled in with a reference converted from
- * `raw`.
- */
-WASM_API_EXTERN void wasmtime_anyref_from_raw(wasmtime_context_t *context,
-                                              uint32_t raw,
-                                              wasmtime_anyref_t *out);
-
-/**
- * \brief Converts a #wasmtime_anyref_t to a raw value suitable for storing
- * into a #wasmtime_val_raw_t.
- *
- * Note that the returned underlying value is not tracked by Wasmtime's garbage
- * collector until it enters WebAssembly. This means that a GC may release the
- * context's reference to the raw value, making the raw value invalid within the
- * context of the store. Do not perform a GC between calling this function and
- * passing it to WebAssembly.
- */
-WASM_API_EXTERN uint32_t wasmtime_anyref_to_raw(wasmtime_context_t *context,
-                                                const wasmtime_anyref_t *ref);
-
-/**
- * \brief Create a new `i31ref` value.
- *
- * Creates a new `i31ref` value (which is a subtype of `anyref`) and returns a
- * pointer to it.
- *
- * If `i31val` does not fit in 31 bits, it is wrapped.
- */
-WASM_API_EXTERN void wasmtime_anyref_from_i31(wasmtime_context_t *context,
-                                              uint32_t i31val,
-                                              wasmtime_anyref_t *out);
-
-/**
- * \brief Get the `anyref`'s underlying `i31ref` value, zero extended, if any.
- *
- * If the given `anyref` is an instance of `i31ref`, then its value is zero
- * extended to 32 bits, written to `dst`, and `true` is returned.
- *
- * If the given `anyref` is not an instance of `i31ref`, then `false` is
- * returned and `dst` is left unmodified.
- */
-WASM_API_EXTERN bool wasmtime_anyref_i31_get_u(wasmtime_context_t *context,
-                                               const wasmtime_anyref_t *anyref,
-                                               uint32_t *dst);
-
-/**
- * \brief Get the `anyref`'s underlying `i31ref` value, sign extended, if any.
- *
- * If the given `anyref` is an instance of `i31ref`, then its value is sign
- * extended to 32 bits, written to `dst`, and `true` is returned.
- *
- * If the given `anyref` is not an instance of `i31ref`, then `false` is
- * returned and `dst` is left unmodified.
- */
-WASM_API_EXTERN bool wasmtime_anyref_i31_get_s(wasmtime_context_t *context,
-                                               const wasmtime_anyref_t *anyref,
-                                               int32_t *dst);
+typedef struct wasmtime_exnref {
+  /// Internal metadata tracking within the store, embedders should not
+  /// configure or modify these fields.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_exnref_t;
 
 /**
  * \typedef wasmtime_externref_t
@@ -187,132 +145,80 @@ typedef struct wasmtime_externref {
   void *__private3;
 } wasmtime_externref_t;
 
-/// \brief Helper function to initialize the `ref` provided to a null externref
-/// value.
-static inline void wasmtime_externref_set_null(wasmtime_externref_t *ref) {
-  ref->store_id = 0;
-}
-
-/// \brief Helper function to return whether the provided `ref` points to a null
-/// `externref` value.
-///
-/// Note that `ref` itself should not be null as null is represented internally
-/// within a #wasmtime_externref_t value.
-static inline bool wasmtime_externref_is_null(const wasmtime_externref_t *ref) {
-  return ref->store_id == 0;
-}
+/**
+ * \typedef wasmtime_eqref_t
+ * \brief Convenience alias for #wasmtime_eqref
+ *
+ * \struct wasmtime_eqref
+ * \brief A WebAssembly `eqref` value.
+ *
+ * This structure represents a reference to a GC object that can be tested for
+ * equality. The subtypes of `eqref` include `structref`, `arrayref`, and
+ * `i31ref`.
+ *
+ * This type has the same representation and ownership semantics as
+ * #wasmtime_anyref_t. Values must be explicitly unrooted via
+ * #wasmtime_eqref_unroot to enable garbage collection.
+ */
+typedef struct wasmtime_eqref {
+  /// Internal metadata tracking within the store, embedders should not
+  /// configure or modify these fields.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_eqref_t;
 
 /**
- * \brief Create a new `externref` value.
+ * \typedef wasmtime_structref_t
+ * \brief Convenience alias for #wasmtime_structref
  *
- * Creates a new `externref` value wrapping the provided data, returning whether
- * it was created or not.
+ * \struct wasmtime_structref
+ * \brief A WebAssembly `structref` value.
  *
- * \param context the store context to allocate this externref within
- * \param data the host-specific data to wrap
- * \param finalizer an optional finalizer for `data`
- * \param out where to store the created value.
+ * This structure represents a reference to a GC struct. It is a subtype of
+ * `eqref` and `anyref`.
  *
- * When the reference is reclaimed, the wrapped data is cleaned up with the
- * provided `finalizer`.
- *
- * If `true` is returned then `out` has been filled in and must be unrooted
- * in the future with #wasmtime_externref_unroot. If `false` is returned then
- * the host wasn't able to create more GC values at this time. Performing a GC
- * may free up enough space to try again.
- *
- * If you do not unroot the value, *even if you free the corresponding
- * Store*, there will be some memory leaked, because GC roots use a
- * separate allocation to track liveness.
+ * Values must be explicitly unrooted via #wasmtime_structref_unroot.
  */
-WASM_API_EXTERN bool wasmtime_externref_new(wasmtime_context_t *context,
-                                            void *data,
-                                            void (*finalizer)(void *),
-                                            wasmtime_externref_t *out);
+typedef struct wasmtime_structref {
+  /// Internal metadata.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_structref_t;
 
 /**
- * \brief Get an `externref`'s wrapped data
+ * \typedef wasmtime_arrayref_t
+ * \brief Convenience alias for #wasmtime_arrayref
  *
- * Returns the original `data` passed to #wasmtime_externref_new. It is required
- * that `data` is not `NULL`.
+ * \struct wasmtime_arrayref
+ * \brief A WebAssembly `arrayref` value.
+ *
+ * This structure represents a reference to a GC array. It is a subtype of
+ * `eqref` and `anyref`.
+ *
+ * Values must be explicitly unrooted via #wasmtime_arrayref_unroot.
  */
-WASM_API_EXTERN void *wasmtime_externref_data(wasmtime_context_t *context,
-                                              const wasmtime_externref_t *data);
+typedef struct wasmtime_arrayref {
+  /// Internal metadata.
+  uint64_t store_id;
+  /// Internal to Wasmtime.
+  uint32_t __private1;
+  /// Internal to Wasmtime.
+  uint32_t __private2;
+  /// Internal to Wasmtime.
+  void *__private3;
+} wasmtime_arrayref_t;
 
-/**
- * \brief Creates a new reference pointing to the same data that `ref` points
- * to (depending on the configured collector this might increase a reference
- * count or create a new GC root).
- *
- * The `out` parameter stores the cloned reference. This reference must
- * eventually be unrooted with #wasmtime_externref_unroot in the future to
- * enable GC'ing it.
- */
-WASM_API_EXTERN void wasmtime_externref_clone(const wasmtime_externref_t *ref,
-                                              wasmtime_externref_t *out);
-
-/**
- * \brief Unroots the pointer `ref` from the `context` provided.
- *
- * This function will enable future garbage collection of the value pointed to
- * by `ref` once there are no more references. The `ref` value may be mutated in
- * place by this function and its contents are undefined after this function
- * returns. It should not be used until after re-initializing it.
- *
- * Note that null externref values do not need to be unrooted but are still
- * valid to pass to this function.
- */
-WASM_API_EXTERN void wasmtime_externref_unroot(wasmtime_externref_t *ref);
-
-/**
- * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
- * a #wasmtime_externref_t.
- *
- * The `out` reference is filled in with the non-raw version of this externref.
- * It must eventually be unrooted with #wasmtime_externref_unroot.
- */
-WASM_API_EXTERN void wasmtime_externref_from_raw(wasmtime_context_t *context,
-                                                 uint32_t raw,
-                                                 wasmtime_externref_t *out);
-
-/**
- * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
- * into a #wasmtime_val_raw_t.
- *
- * Note that the returned underlying value is not tracked by Wasmtime's garbage
- * collector until it enters WebAssembly. This means that a GC may release the
- * context's reference to the raw value, making the raw value invalid within the
- * context of the store. Do not perform a GC between calling this function and
- * passing it to WebAssembly.
- */
-WASM_API_EXTERN uint32_t wasmtime_externref_to_raw(
-    wasmtime_context_t *context, const wasmtime_externref_t *ref);
-
-/// \brief Discriminant stored in #wasmtime_val::kind
-typedef uint8_t wasmtime_valkind_t;
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i32
-#define WASMTIME_I32 0
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i64
-#define WASMTIME_I64 1
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a f32
-#define WASMTIME_F32 2
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a f64
-#define WASMTIME_F64 3
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a v128
-#define WASMTIME_V128 4
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is a
-/// funcref
-#define WASMTIME_FUNCREF 5
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
-/// externref
-#define WASMTIME_EXTERNREF 6
-/// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an
-/// anyref
-#define WASMTIME_ANYREF 7
-
-/// \brief A 128-bit value representing the WebAssembly `v128` type. Bytes are
-/// stored in little-endian order.
-typedef uint8_t wasmtime_v128[16];
+#endif // WASMTIME_FEATURE_GC
 
 /**
  * \typedef wasmtime_valunion_t
@@ -333,10 +239,14 @@ typedef union wasmtime_valunion {
   float32_t f32;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
   float64_t f64;
+#ifdef WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_ANYREF
   wasmtime_anyref_t anyref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
   wasmtime_externref_t externref;
+  /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXNREF
+  wasmtime_exnref_t exnref;
+#endif // WASMTIME_FEATURE_GC
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
   ///
   /// Use `wasmtime_funcref_is_null` to test whether this is a null function
@@ -398,6 +308,7 @@ typedef union wasmtime_val_raw {
   ///
   /// Note that this field is always stored in a little-endian format.
   wasmtime_v128 v128;
+#ifdef WASMTIME_FEATURE_GC
   /// Field for when this val is a WebAssembly `anyref` value.
   ///
   /// If this is set to 0 then it's a null anyref, otherwise this must be
@@ -414,6 +325,15 @@ typedef union wasmtime_val_raw {
   ///
   /// Note that this field is always stored in a little-endian format.
   uint32_t externref;
+  /// Field for when this val is a WebAssembly `exnref` value.
+  ///
+  /// If this is set to 0 then it's a null exnref, otherwise this must be
+  /// passed to `wasmtime_exnref_from_raw` to determine the
+  /// `wasmtime_exnref_t`.
+  ///
+  /// Note that this field is always stored in a little-endian format.
+  uint32_t exnref;
+#endif // WASMTIME_FEATURE_GC
   /// Field for when this val is a WebAssembly `funcref` value.
   ///
   /// If this is set to 0 then it's a null funcref, otherwise this must be
@@ -464,7 +384,8 @@ typedef struct wasmtime_val {
  * \brief Unroot the value contained by `val`.
  *
  * This function will unroot any GC references that `val` points to, for
- * example if it has the `WASMTIME_EXTERNREF` or `WASMTIME_ANYREF` kinds. This
+ * example if it has the `WASMTIME_EXTERNREF`, `WASMTIME_ANYREF`, or
+ * `WASMTIME_EXNREF` kinds. This
  * function leaves `val` in an undefined state and it should not be used again
  * without re-initializing.
  *

@@ -1,7 +1,7 @@
 //! Global values.
 
 use crate::ir::immediates::{Imm64, Offset32};
-use crate::ir::{ExternalName, GlobalValue, MemFlags, Type};
+use crate::ir::{ExternalName, GlobalValue, MemFlagsData, Type};
 use crate::isa::TargetIsa;
 use core::fmt;
 
@@ -32,7 +32,7 @@ pub enum GlobalValueData {
         global_type: Type,
 
         /// Specifies the memory flags to be used by the load. Guaranteed to be notrap and aligned.
-        flags: MemFlags,
+        flags: MemFlagsData,
     },
 
     /// Value is an offset from another global value.

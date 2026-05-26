@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
-fn interruptable_store() -> Store<()> {
+fn interruptible_store() -> Store<()> {
     let engine = Engine::new(Config::new().epoch_interruption(true)).unwrap();
     let mut store = Store::new(&engine, ());
     store.set_epoch_deadline(1);
@@ -27,8 +27,8 @@ fn hugely_recursive_module(engine: &Engine) -> wasmtime::Result<Module> {
 }
 
 #[test]
-fn loops_interruptable() -> wasmtime::Result<()> {
-    let mut store = interruptable_store();
+fn loops_interruptible() -> wasmtime::Result<()> {
+    let mut store = interruptible_store();
     let module = Module::new(store.engine(), r#"(func (export "loop") (loop br 0))"#)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let iloop = instance.get_typed_func::<(), ()>(&mut store, "loop")?;
@@ -39,8 +39,8 @@ fn loops_interruptable() -> wasmtime::Result<()> {
 }
 
 #[test]
-fn functions_interruptable() -> wasmtime::Result<()> {
-    let mut store = interruptable_store();
+fn functions_interruptible() -> wasmtime::Result<()> {
+    let mut store = interruptible_store();
     let module = hugely_recursive_module(store.engine())?;
     let func = Func::wrap(&mut store, || {});
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
@@ -60,7 +60,7 @@ fn loop_interrupt_from_afar() -> wasmtime::Result<()> {
     // far.
     static HITS: AtomicUsize = AtomicUsize::new(0);
     static STOP: AtomicBool = AtomicBool::new(false);
-    let mut store = interruptable_store();
+    let mut store = interruptible_store();
     let module = Module::new(
         store.engine(),
         r#"
@@ -108,7 +108,7 @@ fn function_interrupt_from_afar() -> wasmtime::Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
     static STOP: AtomicBool = AtomicBool::new(false);
 
-    let mut store = interruptable_store();
+    let mut store = interruptible_store();
     let module = hugely_recursive_module(store.engine())?;
     let func = Func::wrap(&mut store, || {
         HITS.fetch_add(1, SeqCst);

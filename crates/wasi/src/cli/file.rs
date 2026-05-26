@@ -124,7 +124,7 @@ impl Pollable for InputFile {
 
 impl InputStream for InputFile {
     fn read(&mut self, size: usize) -> StreamResult<Bytes> {
-        let mut buf = bytes::BytesMut::zeroed(size);
+        let mut buf = bytes::BytesMut::zeroed(size.min(crate::MAX_READ_SIZE_ALLOC));
         let bytes_read = self
             .file
             .read(&mut buf)

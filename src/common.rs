@@ -19,6 +19,7 @@ use wasmtime::component::Component;
 /// future.
 pub const P3_DEFAULT: bool = cfg!(feature = "component-model-async") && false;
 
+#[derive(Clone)]
 pub enum RunTarget {
     Core(Module),
 
@@ -99,6 +100,16 @@ pub struct RunCommon {
     /// cause the environment variable `FOO` to be inherited.
     #[arg(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
     pub vars: Vec<(String, Option<String>)>,
+
+    /// Attach the built-in gdbstub debugger component, listening on
+    /// the given TCP address. Accepts a port number (e.g. `1234`) or
+    /// a full `address:port`. A bare port number will bind on
+    /// localhost only (`127.0.0.1`). A debugger (e.g. LLDB) can then
+    /// connect via `process connect --plugin=wasm
+    /// connect://<ADDR>:<PORT>`.
+    #[cfg(feature = "gdbstub")]
+    #[arg(short = 'g', long = "gdbstub", value_name = "[ADDR:]PORT")]
+    pub gdbstub: Option<String>,
 }
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
@@ -117,6 +128,28 @@ fn parse_dirs(s: &str) -> Result<(String, String)> {
         None => host,
     };
     Ok((host.into(), guest.into()))
+}
+
+impl std::fmt::Display for RunCommon {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.common)?;
+        if self.allow_precompiled {
+            write!(f, "--allow-precompiled ")?;
+        }
+        if let Some(profile) = &self.profile {
+            write!(f, "--profile={profile} ")?;
+        }
+        for (host, guest) in &self.dirs {
+            write!(f, "--dir={host}::{guest} ")?;
+        }
+        for (key, value) in &self.vars {
+            match value {
+                Some(val) => write!(f, "--env={key}={val} ")?,
+                None => write!(f, "--env={key} ")?,
+            }
+        }
+        Ok(())
+    }
 }
 
 impl RunCommon {
@@ -161,53 +194,69 @@ impl RunCommon {
         Ok(())
     }
 
-    pub fn load_module(&self, engine: &Engine, path: &Path) -> Result<RunTarget> {
+    pub fn load_module(
+        &self,
+        engine: &Engine,
+        path: &Path,
+        preloaded_bytes: Option<&[u8]>,
+    ) -> Result<RunTarget> {
         let path = match path.to_str() {
             #[cfg(unix)]
             Some("-") => "/dev/stdin".as_ref(),
             _ => path,
         };
-        let file =
-            File::open(path).with_context(|| format!("failed to open wasm module {path:?}"))?;
-
-        // First attempt to load the module as an mmap. If this succeeds then
-        // detection can be done with the contents of the mmap and if a
-        // precompiled module is detected then `deserialize_file` can be used
-        // which is a slightly more optimal version than `deserialize` since we
-        // can leave most of the bytes on disk until they're referenced.
-        //
-        // If the mmap fails, for example if stdin is a pipe, then fall back to
-        // `std::fs::read` to load the contents. At that point precompiled
-        // modules must go through the `deserialize` functions.
-        //
-        // Note that this has the unfortunate side effect for precompiled
-        // modules on disk that they're opened once to detect what they are and
-        // then again internally in Wasmtime as part of the `deserialize_file`
-        // API. Currently there's no way to pass the `MmapVec` here through to
-        // Wasmtime itself (that'd require making `MmapVec` a public type, both
-        // which isn't ready to happen at this time). It's hoped though that
-        // opening a file twice isn't too bad in the grand scheme of things with
-        // respect to the CLI.
-        match wasmtime::_internal::MmapVec::from_file(file) {
-            Ok(map) => self.load_module_contents(
+        if let Some(bytes) = preloaded_bytes {
+            self.load_module_contents(
                 engine,
                 path,
-                &map,
-                || unsafe { Module::deserialize_file(engine, path) },
+                &bytes,
+                || unsafe { Module::deserialize(engine, &bytes) },
                 #[cfg(feature = "component-model")]
-                || unsafe { Component::deserialize_file(engine, path) },
-            ),
-            Err(_) => {
-                let bytes = std::fs::read(path)
-                    .with_context(|| format!("failed to read file: {}", path.display()))?;
-                self.load_module_contents(
+                || unsafe { Component::deserialize(engine, &bytes) },
+            )
+        } else {
+            let file =
+                File::open(path).with_context(|| format!("failed to open wasm module {path:?}"))?;
+
+            // First attempt to load the module as an mmap. If this succeeds then
+            // detection can be done with the contents of the mmap and if a
+            // precompiled module is detected then `deserialize_file` can be used
+            // which is a slightly more optimal version than `deserialize` since we
+            // can leave most of the bytes on disk until they're referenced.
+            //
+            // If the mmap fails, for example if stdin is a pipe, then fall back to
+            // `std::fs::read` to load the contents. At that point precompiled
+            // modules must go through the `deserialize` functions.
+            //
+            // Note that this has the unfortunate side effect for precompiled
+            // modules on disk that they're opened once to detect what they are and
+            // then again internally in Wasmtime as part of the `deserialize_file`
+            // API. Currently there's no way to pass the `MmapVec` here through to
+            // Wasmtime itself (that'd require making `MmapVec` a public type, both
+            // which isn't ready to happen at this time). It's hoped though that
+            // opening a file twice isn't too bad in the grand scheme of things with
+            // respect to the CLI.
+            match wasmtime::_internal::MmapVec::from_file(file) {
+                Ok(map) => self.load_module_contents(
                     engine,
                     path,
-                    &bytes,
-                    || unsafe { Module::deserialize(engine, &bytes) },
+                    &map,
+                    || unsafe { Module::deserialize_file(engine, path) },
                     #[cfg(feature = "component-model")]
-                    || unsafe { Component::deserialize(engine, &bytes) },
-                )
+                    || unsafe { Component::deserialize_file(engine, path) },
+                ),
+                Err(_) => {
+                    let bytes = std::fs::read(path)
+                        .with_context(|| format!("failed to read file: {}", path.display()))?;
+                    self.load_module_contents(
+                        engine,
+                        path,
+                        &bytes,
+                        || unsafe { Module::deserialize(engine, &bytes) },
+                        #[cfg(feature = "component-model")]
+                        || unsafe { Component::deserialize(engine, &bytes) },
+                    )
+                }
             }
         }
     }
@@ -305,6 +354,9 @@ impl RunCommon {
                 wasmtime_wasi::FilePerms::all(),
             )?;
         }
+        if let Some(cwd) = &self.common.wasi.cwd {
+            builder.initial_cwd(cwd);
+        }
 
         if self.common.wasi.listenfd == Some(true) {
             bail!("components do not support --listenfd");
@@ -325,8 +377,36 @@ impl RunCommon {
         if let Some(enable) = self.common.wasi.udp {
             builder.allow_udp(enable);
         }
+        if let Some(max_size) = self.common.wasi.max_random_size {
+            builder.max_random_size(max_size);
+        }
 
         Ok(())
+    }
+
+    #[cfg(feature = "wasi-http")]
+    pub fn wasi_http_ctx(&self) -> Result<wasmtime_wasi_http::WasiHttpCtx> {
+        let mut http = wasmtime_wasi_http::WasiHttpCtx::new();
+        if let Some(limit) = self.common.wasi.max_http_fields_size {
+            http.set_field_size_limit(limit);
+        }
+        Ok(http)
+    }
+
+    #[cfg(feature = "wasi-http")]
+    pub fn wasi_http_hooks(&self) -> HttpHooks {
+        HttpHooks {
+            p2_outgoing_body_buffer_chunks: self
+                .common
+                .wasi
+                .http_outgoing_body_buffer_chunks
+                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS),
+            p2_outgoing_body_chunk_size: self
+                .common
+                .wasi
+                .http_outgoing_body_chunk_size
+                .unwrap_or_else(|| wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE),
+        }
     }
 
     pub fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
@@ -406,6 +486,24 @@ pub enum Profile {
     Guest { path: String, interval: Duration },
 }
 
+impl std::fmt::Display for Profile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Profile::Native(strategy) => match strategy {
+                wasmtime::ProfilingStrategy::PerfMap => write!(f, "perfmap"),
+                wasmtime::ProfilingStrategy::JitDump => write!(f, "jitdump"),
+                wasmtime::ProfilingStrategy::VTune => write!(f, "vtune"),
+                wasmtime::ProfilingStrategy::Pulley => write!(f, "pulley"),
+                other => write!(f, "{other:?}"),
+            },
+            Profile::Guest { path, interval } => {
+                write!(f, "guest,{path},{}", interval.as_millis())?;
+                Ok(())
+            }
+        }
+    }
+}
+
 impl Profile {
     /// Parse the `profile` argument to either the `run` or `serve` commands.
     pub fn parse(s: &str) -> Result<Profile> {
@@ -432,8 +530,34 @@ impl Profile {
     }
 }
 
-#[derive(Default, Clone)]
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-pub struct DefaultP3Ctx;
-#[cfg(all(feature = "wasi-http", feature = "component-model-async"))]
-impl wasmtime_wasi_http::p3::WasiHttpCtx for DefaultP3Ctx {}
+#[derive(Copy, Clone, Debug)]
+#[cfg(feature = "wasi-http")]
+pub struct HttpHooks {
+    p2_outgoing_body_buffer_chunks: usize,
+    p2_outgoing_body_chunk_size: usize,
+}
+
+#[cfg(feature = "wasi-http")]
+impl Default for HttpHooks {
+    fn default() -> Self {
+        Self {
+            p2_outgoing_body_buffer_chunks:
+                wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
+            p2_outgoing_body_chunk_size: wasmtime_wasi_http::p2::DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+        }
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+impl wasmtime_wasi_http::p2::WasiHttpHooks for HttpHooks {
+    fn outgoing_body_buffer_chunks(&mut self) -> usize {
+        self.p2_outgoing_body_buffer_chunks
+    }
+
+    fn outgoing_body_chunk_size(&mut self) -> usize {
+        self.p2_outgoing_body_chunk_size
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+impl wasmtime_wasi_http::p3::WasiHttpHooks for HttpHooks {}

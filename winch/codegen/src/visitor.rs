@@ -19,15 +19,16 @@ use crate::masm::{
 };
 use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
-use crate::{Result, bail, ensure, format_err};
+use crate::{Result, bail, format_err};
 use regalloc2::RegClass;
 use smallvec::{SmallVec, smallvec};
 use wasmparser::{
-    BlockType, BrTable, Ieee32, Ieee64, MemArg, V128, VisitOperator, VisitSimdOperator,
+    BlockType, BrTable, HeapType, Ieee32, Ieee64, MemArg, V128, ValType, VisitOperator,
+    VisitSimdOperator,
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    FUNCREF_INIT_BIT, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
     WasmValType,
 };
 
@@ -203,6 +204,10 @@ macro_rules! def_unsupported {
     (emit GlobalGet $($rest:tt)*) => {};
     (emit GlobalSet $($rest:tt)*) => {};
     (emit Select $($rest:tt)*) => {};
+    (emit TypedSelect $($rest:tt)*) => {};
+    (emit RefNull $($rest:tt)*) => {};
+    (emit RefIsNull $($rest:tt)*) => {};
+    (emit RefFunc $($rest:tt)*) => {};
     (emit Drop $($rest:tt)*) => {};
     (emit BrTable $($rest:tt)*) => {};
     (emit CallIndirect $($rest:tt)*) => {};
@@ -594,6 +599,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -605,6 +611,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -616,6 +623,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -627,6 +635,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -638,6 +647,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -649,6 +659,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -660,6 +671,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -671,6 +683,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -682,6 +695,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -693,6 +707,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -704,6 +719,7 @@ where
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -715,6 +731,7 @@ where
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size)?;
+                masm.maybe_canonicalize_nan(writable!(dst), size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -780,7 +797,12 @@ where
                 let builtin = env.builtins.floor_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_floor(&mut self) -> Self::Output {
@@ -793,7 +815,12 @@ where
                 let builtin = env.builtins.floor_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_ceil(&mut self) -> Self::Output {
@@ -806,7 +833,12 @@ where
                 let builtin = env.builtins.ceil_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_ceil(&mut self) -> Self::Output {
@@ -819,7 +851,12 @@ where
                 let builtin = env.builtins.ceil_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_nearest(&mut self) -> Self::Output {
@@ -832,7 +869,12 @@ where
                 let builtin = env.builtins.nearest_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_nearest(&mut self) -> Self::Output {
@@ -845,7 +887,12 @@ where
                 let builtin = env.builtins.nearest_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_trunc(&mut self) -> Self::Output {
@@ -858,7 +905,12 @@ where
                 let builtin = env.builtins.trunc_f32::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64_trunc(&mut self) -> Self::Output {
@@ -871,12 +923,18 @@ where
                 let builtin = env.builtins.trunc_f64::<M::ABI>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        )
+        )?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S32)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
@@ -884,6 +942,7 @@ where
     fn visit_f64_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S64)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
     }
@@ -1097,6 +1156,7 @@ where
     fn visit_f32_demote_f64(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.demote(writable!(reg), reg)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
@@ -1104,6 +1164,7 @@ where
     fn visit_f64_promote_f32(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.promote(writable!(reg), reg)?;
+            masm.maybe_canonicalize_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
     }
@@ -1623,7 +1684,7 @@ where
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Output {
-        // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
+        // Spill now because `emit_table_get` and the `FnCall::emit`
         // invocations will both trigger spills since they both call functions.
         // However, the machine instructions for the spill emitted by
         // `emit_lazy_funcref` will be jumped over if the funcref was previously
@@ -1634,10 +1695,10 @@ where
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
 
-        self.emit_lazy_init_funcref(table_index)?;
+        self.emit_table_get(table_index)?;
 
         // Perform the indirect call.
-        // This code assumes that [`Self::emit_lazy_init_funcref`] will
+        // This code assumes that [`Self::emit_table_get`] will
         // push the funcref to the value stack.
         let funcref_ptr = self
             .context
@@ -1655,74 +1716,21 @@ where
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-
-        self.context
-            .stack
-            .insert_many(at, &[table.try_into()?, elem.try_into()?]);
-
-        let builtin = self.env.builtins.table_init::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_table_init(ElemIndex::from_u32(elem), TableIndex::from_u32(table))
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-        self.context
-            .stack
-            .insert_many(at, &[dst.try_into()?, src.try_into()?]);
-
-        let builtin = self.env.builtins.table_copy::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_table_copy(TableIndex::from_u32(dst), TableIndex::from_u32(src))
     }
 
     fn visit_table_get(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
-        let table = self.env.table(table_index);
-        let heap_type = table.ref_type.heap_type;
-
-        match heap_type {
-            WasmHeapType::Func => self.emit_lazy_init_funcref(table_index),
-            _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
-        }
+        self.emit_table_get(table_index)
     }
 
     fn visit_table_grow(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
-        let table_ty = self.env.table(table_index);
-        let builtin = match table_ty.ref_type.heap_type {
-            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI>()?,
-            _ => bail!(CodeGenError::unsupported_wasm_type()),
-        };
-
-        let len = self.context.stack.len();
-        // table.grow` requires at least 2 elements on the value stack.
-        let at = self.context.stack.ensure_index_at(2)?;
-
-        // The table_grow builtin expects the parameters in a different
-        // order.
-        // The value stack at this point should contain:
-        // [ init_value | delta ] (stack top)
-        // but the builtin function expects the init value as the last
-        // argument.
-        self.context.stack.inner_mut().swap(len - 1, len - 2);
-
-        let builtin = self.prepare_builtin_defined_table_arg(table_index, at, builtin)?;
-
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
-
-        Ok(())
+        self.emit_table_grow(table_index)
     }
 
     fn visit_table_size(&mut self, table: u32) -> Self::Output {
@@ -1733,123 +1741,32 @@ where
 
     fn visit_table_fill(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
-        let table_ty = self.env.table(table_index);
-
-        ensure!(
-            table_ty.ref_type.heap_type == WasmHeapType::Func,
-            CodeGenError::unsupported_wasm_type()
-        );
-
-        let builtin = self.env.builtins.table_fill_func_ref::<M::ABI>()?;
-
-        let at = self.context.stack.ensure_index_at(3)?;
-
-        self.context.stack.insert_many(at, &[table.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin.clone()),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_table_fill(table_index)
     }
 
     fn visit_table_set(&mut self, table: u32) -> Self::Output {
-        let ptr_type = self.env.ptr_type();
         let table_index = TableIndex::from_u32(table);
-        let table_data = self.env.resolve_table_data(table_index);
-        let table = self.env.table(table_index);
-        match table.ref_type.heap_type {
-            WasmHeapType::Func => {
-                ensure!(
-                    self.tunables.table_lazy_init,
-                    CodeGenError::unsupported_table_eager_init()
-                );
-                let value = self.context.pop_to_reg(self.masm, None)?;
-                let index = self.context.pop_to_reg(self.masm, None)?;
-                let base = self.context.any_gpr(self.masm)?;
-                let elem_addr =
-                    self.emit_compute_table_elem_addr(index.into(), base, &table_data)?;
-                // Set the initialized bit.
-                self.masm.or(
-                    writable!(value.into()),
-                    value.into(),
-                    RegImm::i64(FUNCREF_INIT_BIT as i64),
-                    ptr_type.try_into()?,
-                )?;
-
-                self.masm.store_ptr(value.into(), elem_addr)?;
-
-                self.context.free_reg(value);
-                self.context.free_reg(index);
-                self.context.free_reg(base);
-                Ok(())
-            }
-            _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
-        }
+        self.emit_table_set(table_index)
     }
 
     fn visit_elem_drop(&mut self, index: u32) -> Self::Output {
-        let elem_drop = self.env.builtins.elem_drop::<M::ABI>()?;
-        self.context.stack.extend([index.try_into()?]);
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(elem_drop),
-        )?;
-        self.context.pop_and_free(self.masm)
+        let index = ElemIndex::from_u32(index);
+        self.emit_elem_drop(index)
     }
 
     fn visit_memory_init(&mut self, data_index: u32, mem: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-        self.context
-            .stack
-            .insert_many(at, &[mem.try_into()?, data_index.try_into()?]);
-        let builtin = self.env.builtins.memory_init::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_init(DataIndex::from_u32(data_index), MemoryIndex::from_u32(mem))
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) -> Self::Output {
-        // At this point, the stack is expected to contain:
-        //     [ dst_offset, src_offset, len ]
-        // The following code inserts the missing params, so that stack contains:
-        //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
-        // Which is the order expected by the builtin function.
-        let _ = self.context.stack.ensure_index_at(3)?;
-        let at = self.context.stack.ensure_index_at(2)?;
-        self.context.stack.insert_many(at, &[src_mem.try_into()?]);
-
-        // One element was inserted above, so instead of 3, we use 4.
-        let at = self.context.stack.ensure_index_at(4)?;
-        self.context.stack.insert_many(at, &[dst_mem.try_into()?]);
-
-        let builtin = self.env.builtins.memory_copy::<M::ABI>()?;
-
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_copy(
+            MemoryIndex::from_u32(dst_mem),
+            MemoryIndex::from_u32(src_mem),
+        )
     }
 
     fn visit_memory_fill(&mut self, mem: u32) -> Self::Output {
-        let at = self.context.stack.ensure_index_at(3)?;
-        let mem = MemoryIndex::from_u32(mem);
-
-        let builtin = self.env.builtins.memory_fill::<M::ABI>()?;
-        let builtin = self.prepare_builtin_defined_memory_arg(mem, at, builtin)?;
-
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, builtin)?;
-        self.context.pop_and_free(self.masm)
+        self.emit_memory_fill(MemoryIndex::from_u32(mem))
     }
 
     fn visit_memory_size(&mut self, mem: u32) -> Self::Output {
@@ -1887,16 +1804,7 @@ where
     }
 
     fn visit_data_drop(&mut self, data_index: u32) -> Self::Output {
-        self.context.stack.extend([data_index.try_into()?]);
-
-        let builtin = self.env.builtins.data_drop::<M::ABI>()?;
-        FnCall::emit::<M>(
-            &mut self.env,
-            self.masm,
-            &mut self.context,
-            Callee::Builtin(builtin),
-        )?;
-        self.context.pop_and_free(self.masm)
+        self.emit_data_drop(DataIndex::from_u32(data_index))
     }
 
     fn visit_nop(&mut self) -> Self::Output {
@@ -2205,6 +2113,48 @@ where
         self.context.free_reg(cond);
 
         Ok(())
+    }
+
+    fn visit_typed_select(&mut self, _ty: ValType) -> Self::Output {
+        self.visit_select()
+    }
+
+    fn visit_ref_null(&mut self, hty: HeapType) -> Self::Output {
+        match hty {
+            HeapType::FUNC => {
+                let ptr_type = self.env.ptr_type();
+                match ptr_type {
+                    WasmValType::I64 => self.context.stack.push(Val::i64(0)),
+                    WasmValType::I32 => self.context.stack.push(Val::i32(0)),
+                    _ => bail!(CodeGenError::unsupported_wasm_type()),
+                }
+                Ok(())
+            }
+            _ => Err(format_err!(CodeGenError::unsupported_wasm_type())),
+        }
+    }
+
+    fn visit_ref_is_null(&mut self) -> Self::Output {
+        let (zero, size) = match self.env.ptr_type() {
+            WasmValType::I64 => (RegImm::i64(0), OperandSize::S64),
+            WasmValType::I32 => (RegImm::i32(0), OperandSize::S32),
+            _ => bail!(CodeGenError::unsupported_wasm_type()),
+        };
+        self.context.unop(self.masm, |masm, reg| {
+            masm.cmp_with_set(writable!(reg), zero, IntCmpKind::Eq, size)?;
+            Ok(TypedReg::i32(reg))
+        })
+    }
+
+    fn visit_ref_func(&mut self, function_index: u32) -> Self::Output {
+        let ref_func = self.env.builtins.ref_func::<M::ABI>()?;
+        self.context.stack.extend([function_index.try_into()?]);
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(ref_func),
+        )
     }
 
     fn visit_i32_load(&mut self, memarg: MemArg) -> Self::Output {
@@ -3724,6 +3674,7 @@ where
     fn visit_f32x4_demote_f64x2_zero(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_demote(reg, writable!(reg))?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -3731,6 +3682,7 @@ where
     fn visit_f64x2_promote_low_f32x4(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_promote(reg, writable!(reg))?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4381,6 +4333,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_add(dst, src, writable!(dst), V128AddKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4389,6 +4342,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_add(dst, src, writable!(dst), V128AddKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4397,6 +4351,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_sub(dst, src, writable!(dst), V128SubKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4405,22 +4360,34 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_sub(dst, src, writable!(dst), V128SubKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
 
     fn visit_f32x4_mul(&mut self) -> Self::Output {
-        self.masm.v128_mul(&mut self.context, V128MulKind::F32x4)
+        self.masm.v128_mul(&mut self.context, V128MulKind::F32x4)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64x2_mul(&mut self) -> Self::Output {
-        self.masm.v128_mul(&mut self.context, V128MulKind::F64x2)
+        self.masm.v128_mul(&mut self.context, V128MulKind::F64x2)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f32x4_div(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
                 masm.v128_div(dst, src, writable!(dst), size)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4429,6 +4396,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
                 masm.v128_div(dst, src, writable!(dst), size)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4443,6 +4411,7 @@ where
     fn visit_f32x4_ceil(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_ceil(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4457,6 +4426,7 @@ where
     fn visit_f64x2_ceil(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_ceil(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4464,6 +4434,7 @@ where
     fn visit_f32x4_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_sqrt(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4471,6 +4442,7 @@ where
     fn visit_f32x4_floor(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_floor(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4478,6 +4450,7 @@ where
     fn visit_f64x2_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_sqrt(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4485,6 +4458,7 @@ where
     fn visit_f64x2_floor(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_floor(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4492,6 +4466,7 @@ where
     fn visit_f32x4_nearest(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_nearest(reg, writable!(reg), OperandSize::S32)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4499,18 +4474,29 @@ where
     fn visit_f64x2_nearest(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_nearest(reg, writable!(reg), OperandSize::S64)?;
+            masm.maybe_canonicalize_v128_nan(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
 
     fn visit_f32x4_trunc(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc(&mut self.context, V128TruncKind::F32x4)
+            .v128_trunc(&mut self.context, V128TruncKind::F32x4)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S32)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_f64x2_trunc(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc(&mut self.context, V128TruncKind::F64x2)
+            .v128_trunc(&mut self.context, V128TruncKind::F64x2)?;
+        let result = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .maybe_canonicalize_v128_nan(writable!(result.into()), OperandSize::S64)?;
+        self.context.stack.push(result.into());
+        Ok(())
     }
 
     fn visit_v128_load32_zero(&mut self, memarg: MemArg) -> Self::Output {
@@ -4565,6 +4551,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_min(dst, src, writable!(dst), V128MinKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4573,6 +4560,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_min(dst, src, writable!(dst), V128MinKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4581,6 +4569,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
                 masm.v128_max(dst, src, writable!(dst), V128MaxKind::F32x4)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S32)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4589,6 +4578,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
                 masm.v128_max(dst, src, writable!(dst), V128MaxKind::F64x2)?;
+                masm.maybe_canonicalize_v128_nan(writable!(dst), OperandSize::S64)?;
                 Ok(TypedReg::v128(dst))
             })
     }

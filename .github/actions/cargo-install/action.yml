@@ -1,0 +1,42 @@
+name: 'Run `cargo install`'
+description: 'Run `cargo install`'
+
+inputs:
+  crate:
+    description: 'Crate to install'
+    required: true
+  version:
+    description: 'Version to install'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v5
+      id: cache-restore
+      with:
+        path: ${{ runner.tool_cache }}/${{ inputs.crate }}
+        key: ${{ inputs.crate }}-bin-${{ inputs.version }}
+
+    - name: Add installation destination to PATH
+      shell: bash
+      run: echo "${{ runner.tool_cache }}/${{ inputs.crate }}/bin" >> $GITHUB_PATH
+
+    - name: Run cargo install
+      shell: bash
+      run: |
+        cargo install \
+          --root ${{ runner.tool_cache }}/${{ inputs.crate }} \
+          --version ${{ inputs.version }} \
+          --locked \
+          ${{ inputs.crate }}
+
+    # Avoid polluting caches related to merge queue branches or PRs since our
+    # cache space is at a premium with our CI. Only save these caches for the
+    # main branch and for release branches.
+    - name: Save Github Actions cache
+      uses: actions/cache/save@v5
+      if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')
+      with:
+        path: ${{ runner.tool_cache }}/${{ inputs.crate }}
+        key: ${{ steps.cache-restore.outputs.cache-primary-key }}

@@ -2,11 +2,13 @@
 //! with `bincode` as part of a module's compilation process.
 
 use crate::prelude::*;
-use crate::{FilePos, FuncIndex, FuncKey, FuncKeyIndex, FuncKeyKind, FuncKeyNamespace, Module};
+use crate::{
+    EntityRef, FilePos, FuncIndex, FuncKey, FuncKeyIndex, FuncKeyKind, FuncKeyNamespace, Module,
+    PanicOnOom as _,
+};
 use core::ops::Range;
 use core::{fmt, u32};
 use core::{iter, str};
-use cranelift_entity::{EntityRef, PrimaryMap};
 use serde_derive::{Deserialize, Serialize};
 #[cfg(feature = "rr")]
 use sha2::{Digest, Sha256};
@@ -76,13 +78,13 @@ impl CompiledFunctionsTableBuilder {
     pub fn new() -> Self {
         Self {
             inner: CompiledFunctionsTable {
-                namespaces: PrimaryMap::new(),
-                func_loc_starts: PrimaryMap::new(),
-                sparse_starts: PrimaryMap::new(),
-                src_loc_starts: PrimaryMap::new(),
-                sparse_indices: PrimaryMap::new(),
-                func_locs: PrimaryMap::new(),
-                src_locs: PrimaryMap::new(),
+                namespaces: TryPrimaryMap::new(),
+                func_loc_starts: TryPrimaryMap::new(),
+                sparse_starts: TryPrimaryMap::new(),
+                src_loc_starts: TryPrimaryMap::new(),
+                sparse_indices: TryPrimaryMap::new(),
+                func_locs: TryPrimaryMap::new(),
+                src_locs: TryPrimaryMap::new(),
             },
         }
     }
@@ -158,16 +160,18 @@ impl CompiledFunctionsTableBuilder {
             })
             .unwrap_or_else(|| {
                 let start = self.inner.func_locs.next_key();
-                let ns_idx = self.inner.namespaces.push(key_ns);
-                let ns_idx2 = self.inner.func_loc_starts.push(start);
+                let ns_idx = self.inner.namespaces.push(key_ns).panic_on_oom();
+                let ns_idx2 = self.inner.func_loc_starts.push(start).panic_on_oom();
                 let ns_idx3 = self
                     .inner
                     .sparse_starts
-                    .push(self.inner.sparse_indices.next_key());
+                    .push(self.inner.sparse_indices.next_key())
+                    .panic_on_oom();
                 let ns_idx4 = self
                     .inner
                     .src_loc_starts
-                    .push(self.inner.src_locs.next_key());
+                    .push(self.inner.src_locs.next_key())
+                    .panic_on_oom();
                 debug_assert_eq!(ns_idx, ns_idx2);
                 debug_assert_eq!(ns_idx, ns_idx3);
                 debug_assert_eq!(ns_idx, ns_idx4);
@@ -197,26 +201,28 @@ impl CompiledFunctionsTableBuilder {
             let gap = index.index() - self.inner.func_locs.len();
             self.inner
                 .func_locs
-                .extend(iter::repeat(null_func_loc).take(gap));
+                .try_extend(iter::repeat(null_func_loc).take(gap))
+                .panic_on_oom();
             debug_assert_eq!(index, self.inner.func_locs.next_key());
 
             if CompiledFunctionsTable::has_src_locs(key_ns.kind()) {
                 self.inner
                     .src_locs
-                    .extend(iter::repeat(FilePos::none()).take(gap));
+                    .try_extend(iter::repeat(FilePos::none()).take(gap))
+                    .panic_on_oom();
             }
         } else {
             debug_assert!(
                 src_loc.is_none(),
                 "sparse keys do not have source locations"
             );
-            self.inner.sparse_indices.push(key_index);
+            self.inner.sparse_indices.push(key_index).panic_on_oom();
         }
 
         // And finally, we push this entry.
-        self.inner.func_locs.push(func_loc);
+        self.inner.func_locs.push(func_loc).panic_on_oom();
         if CompiledFunctionsTable::has_src_locs(key_ns.kind()) {
-            self.inner.src_locs.push(src_loc);
+            self.inner.src_locs.push(src_loc).panic_on_oom();
         } else {
             debug_assert!(src_loc.is_none());
         }
@@ -283,7 +289,7 @@ pub struct CompiledFunctionsTable {
     /// their associated `NamespaceIndex`. That `NamespaceIndex` can then be
     /// used to find the range of other entity indices that are specific to that
     /// namespace.
-    namespaces: PrimaryMap<NamespaceIndex, FuncKeyNamespace>,
+    namespaces: TryPrimaryMap<NamespaceIndex, FuncKeyNamespace>,
 
     /// `self.func_loc_starts[i]..self.func_loc_starts[i+1]` describes the range
     /// within `self.func_locs` whose entries are associated with the namespace
@@ -291,7 +297,7 @@ pub struct CompiledFunctionsTable {
     ///
     /// When `self.func_loc_starts[i+1]` is out of bounds, then the range is to
     /// the end of `self.func_locs`.
-    func_loc_starts: PrimaryMap<NamespaceIndex, FuncLocIndex>,
+    func_loc_starts: TryPrimaryMap<NamespaceIndex, FuncLocIndex>,
 
     /// `self.sparse_starts[i]..self.sparse_starts[i+1]` describes the range
     /// within `self.sparse_indices` whose entries are associated with the
@@ -301,7 +307,7 @@ pub struct CompiledFunctionsTable {
     /// the end of `self.sparse_indices`.
     ///
     /// Entries are only valid for sparse, non-dense namespaces.
-    sparse_starts: PrimaryMap<NamespaceIndex, SparseIndex>,
+    sparse_starts: TryPrimaryMap<NamespaceIndex, SparseIndex>,
 
     /// `self.src_loc_starts[i]..self.src_loc_starts[i+1]` describes the range
     /// within `self.src_loc_indices` whose entries are associated with the
@@ -312,7 +318,7 @@ pub struct CompiledFunctionsTable {
     ///
     /// Entries are only valid for namespaces whose functions have source
     /// locations.
-    src_loc_starts: PrimaryMap<NamespaceIndex, SrcLocIndex>,
+    src_loc_starts: TryPrimaryMap<NamespaceIndex, SrcLocIndex>,
 
     /// `self.sparse_indices[i]` contains the index part of
     /// `FuncKey::from_parts(ns, index)` where `ns` is determined by
@@ -321,7 +327,7 @@ pub struct CompiledFunctionsTable {
     /// the namespace's start index.)
     ///
     /// This is sorted to allow for binary searches.
-    sparse_indices: PrimaryMap<SparseIndex, FuncKeyIndex>,
+    sparse_indices: TryPrimaryMap<SparseIndex, FuncKeyIndex>,
 
     /// `self.func_locs[i]` contains the location within the text section of
     /// `FuncKey::from_parts(self.namespaces[ns], i - start)`'s function, where
@@ -332,14 +338,14 @@ pub struct CompiledFunctionsTable {
     ///
     /// The absence of a function location (for gaps in dense namespaces) is
     /// represented with `FunctionLoc::none()`.
-    func_locs: PrimaryMap<FuncLocIndex, FunctionLoc>,
+    func_locs: TryPrimaryMap<FuncLocIndex, FunctionLoc>,
 
     /// `self.src_locs[i]` contains the initial source location of
     /// `FuncKey::from_parts(self.namespaces[ns], i - start)`'s function, where
     /// `ns` and `start` are determined by `self.src_loc_starts`.
     ///
     /// The absence of a source location is represented by `FilePos::none()`.
-    src_locs: PrimaryMap<SrcLocIndex, FilePos>,
+    src_locs: TryPrimaryMap<SrcLocIndex, FilePos>,
 }
 
 impl CompiledFunctionsTable {

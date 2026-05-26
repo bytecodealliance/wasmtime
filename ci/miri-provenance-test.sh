@@ -12,14 +12,14 @@
 set -ex
 
 compile() {
-  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async,debug \
+  cargo run --no-default-features --features compile,pulley,wat,gc-copying,component-model,component-model-async,debug \
     compile --target pulley64 $1 \
     -o ${1%.wat}.cwasm \
     -O memory-reservation=$((1 << 20)) \
     -O memory-guard-size=0 \
     -O signals-based-traps=n \
     -D guest-debug=y \
-    -W function-references,component-model-async,component-model-async-stackful,component-model-async-builtins,component-model-error-context
+    -W function-references,component-model-async,component-model-async-stackful,component-model-more-async-builtins,component-model-error-context
 }
 
 compile ./tests/all/pulley_provenance_test.wat

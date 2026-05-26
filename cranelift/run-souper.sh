@@ -36,6 +36,12 @@ function run_one {
     local rhs="$lhs".result
 
     if [[ -f "$rhs" ]]; then
+        if grep -q "^result " "$rhs"; then
+            echo "success"
+        else
+            echo "warning: existing result file for $lhs has no RHS; counting as failed" >&2
+            echo "failed"
+        fi
         return
     fi
 
@@ -49,9 +55,15 @@ function run_one {
 
     case "$exit_code" in
         "0")
-            # Success! Copy the RHS to its final destination.
-            cp $lhs $rhs
-            cat "$temp" >> "$rhs"
+            if grep -q "^result " "$temp"; then
+                # Success! Copy the RHS to its final destination.
+                cp $lhs $rhs
+                cat "$temp" >> "$rhs"
+                echo "success"
+            else
+                echo "warning: Souper did not infer an RHS for $lhs; skipping" >&2
+                echo "failed"
+            fi
             ;;
 
         # SIGINT. Exit this whole script.
@@ -61,17 +73,23 @@ function run_one {
 
         # Timeout (regular).
         "124")
+            echo "timed out: $lhs" >&2
+            echo "timeout"
             return
             ;;
 
         # Timeout (with SIGKILL).
         "137")
+            echo "timed out: $lhs" >&2
+            echo "timeout"
             return
             ;;
 
         # Something else.
         *)
-            exit 1
+            echo "warning: Souper failed on $lhs with exit code $exit_code; skipping" >&2
+            echo "failed"
+            return
     esac
 
 }
@@ -87,6 +105,9 @@ function main {
     cd "$lhs_dir"
 
     local i=0;
+    local succeeded=0;
+    local timed_out=0;
+    local failed=0;
     for lhs in $(ls -1S $lhs_dir); do
         # Ignore '.result' files.
         if $(echo "$lhs" | grep -q result); then
@@ -99,10 +120,28 @@ function main {
             echo "$i / $lhs_count ($percent%)"
         fi
 
-        run_one "$souper" "$lhs"
+        local result=$(run_one "$souper" "$lhs")
+        case "$result" in
+            "success")
+                succeeded=$(( $succeeded + 1 ))
+                ;;
+            "timeout")
+                timed_out=$(( $timed_out + 1 ))
+                ;;
+            "failed")
+                failed=$(( $failed + 1 ))
+                ;;
+            *)
+                echo "warning: unexpected result from $lhs: $result" >&2
+                failed=$(( $failed + 1 ))
+                ;;
+        esac
     done
 
     echo "Done!"
+    echo "Succeeded: $succeeded / $lhs_count"
+    echo "Timed out: $timed_out / $lhs_count"
+    echo "Failed: $failed / $lhs_count"
 }
 
 # Kick everything off!

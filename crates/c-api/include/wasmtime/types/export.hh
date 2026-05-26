@@ -28,14 +28,16 @@ class ExportType {
 
     const wasm_exporttype_t *ptr;
 
-    const wasm_externtype_t *raw_type() { return wasm_exporttype_type(ptr); }
+    const wasm_externtype_t *raw_type() const {
+      return wasm_exporttype_type(ptr);
+    }
 
   public:
     /// Creates a new reference from the raw underlying C API representation.
     Ref(const wasm_exporttype_t *ptr) : ptr(ptr) {}
 
     /// Returns the name of this export.
-    std::string_view name() {
+    std::string_view name() const {
       const auto *name = wasm_exporttype_name(ptr);
       return std::string_view(name->data, name->size);
     }

@@ -10,7 +10,7 @@
 //! One never tracks which piece a concrete address belongs to at
 //! runtime; this is a purely static concept. Instead, all
 //! memory-accessing instructions (loads and stores) are labeled with
-//! one of these four categories in the `MemFlags`. It is forbidden
+//! one of these four categories in the `MemFlagsData`. It is forbidden
 //! for a load or store to access memory under one category and a
 //! later load or store to access the same memory under a different
 //! category. This is ensured to be true by construction during
@@ -173,6 +173,16 @@ struct MemoryLoc {
     extending_opcode: Option<Opcode>,
 }
 
+/// The result of processing an instruction through alias analysis.
+pub enum OptResult {
+    /// No optimization applied.
+    None,
+    /// A redundant load; alias its result to this value.
+    AliasedLoad(Value),
+    /// An idempotent store; remove it.
+    IdempotentStore,
+}
+
 /// An alias-analysis pass.
 pub struct AliasAnalysis<'a> {
     /// The domtree for the function.
@@ -260,14 +270,12 @@ impl<'a> AliasAnalysis<'a> {
     /// Process one instruction. Meant to be invoked in program order
     /// within a block, and ideally in RPO or at least some domtree
     /// preorder for maximal reuse.
-    ///
-    /// Returns `true` if instruction was removed.
     pub fn process_inst(
         &mut self,
         func: &mut Function,
         state: &mut LastStores,
         inst: Inst,
-    ) -> Option<Value> {
+    ) -> OptResult {
         trace!(
             "alias analysis: scanning at inst{} with state {:?} ({:?})",
             inst.index(),
@@ -275,14 +283,39 @@ impl<'a> AliasAnalysis<'a> {
             func.dfg.insts[inst],
         );
 
-        let replacing_value = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst)
-        {
+        let result = if let Some((address, offset, ty)) = inst_addr_offset_type(func, inst) {
             let address = func.dfg.resolve_aliases(address);
             let opcode = func.dfg.insts[inst].opcode();
 
             if opcode.can_store() {
                 let store_data = inst_store_data(func, inst).unwrap();
                 let store_data = func.dfg.resolve_aliases(store_data);
+
+                // Check for idempotent stores, where we are storing the exact
+                // same value back to a location that already has that value.
+                let last_store = state.get_last_store(func, inst);
+                let check_loc = MemoryLoc {
+                    last_store,
+                    address,
+                    offset,
+                    ty,
+                    extending_opcode: get_ext_opcode(opcode),
+                };
+                if let Some((def_inst, known_value)) = self.mem_values.get(&check_loc).cloned() {
+                    if known_value == store_data
+                        && self.domtree.dominates(def_inst, inst, &func.layout)
+                    {
+                        trace!(
+                            "alias analysis: at inst{}: idempotent store of v{} to loc {:?}",
+                            inst.index(),
+                            store_data.index(),
+                            check_loc
+                        );
+                        return OptResult::IdempotentStore;
+                    }
+                }
+
+                // Otherwise, update our state to reflect this store.
                 let mem_loc = MemoryLoc {
                     last_store: inst.into(),
                     address,
@@ -298,7 +331,7 @@ impl<'a> AliasAnalysis<'a> {
                 );
                 self.mem_values.insert(mem_loc, (inst, store_data));
 
-                None
+                OptResult::None
             } else if opcode.can_load() {
                 let last_store = state.get_last_store(func, inst);
                 let load_result = func.dfg.inst_results(inst)[0];
@@ -358,17 +391,20 @@ impl<'a> AliasAnalysis<'a> {
                     self.mem_values.insert(mem_loc, (inst, load_result));
                 }
 
-                aliased
+                match aliased {
+                    Some(value) => OptResult::AliasedLoad(value),
+                    None => OptResult::None,
+                }
             } else {
-                None
+                OptResult::None
             }
         } else {
-            None
+            OptResult::None
         };
 
         state.update(func, inst);
 
-        replacing_value
+        result
     }
 
     /// Make a pass and update known-redundant loads to aliased
@@ -382,11 +418,17 @@ impl<'a> AliasAnalysis<'a> {
         while let Some(block) = pos.next_block() {
             let mut state = self.block_starting_state(block);
             while let Some(inst) = pos.next_inst() {
-                if let Some(replaced_result) = self.process_inst(pos.func, &mut state, inst) {
-                    let result = pos.func.dfg.inst_results(inst)[0];
-                    pos.func.dfg.clear_results(inst);
-                    pos.func.dfg.change_to_alias(result, replaced_result);
-                    pos.remove_inst_and_step_back();
+                match self.process_inst(pos.func, &mut state, inst) {
+                    OptResult::None => {}
+                    OptResult::AliasedLoad(replaced_result) => {
+                        let result = pos.func.dfg.inst_results(inst)[0];
+                        pos.func.dfg.clear_results(inst);
+                        pos.func.dfg.change_to_alias(result, replaced_result);
+                        pos.remove_inst_and_step_back();
+                    }
+                    OptResult::IdempotentStore => {
+                        pos.remove_inst_and_step_back();
+                    }
                 }
             }
         }

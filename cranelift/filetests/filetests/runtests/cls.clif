@@ -1,11 +1,13 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
+target x86_64
 target riscv64
 target riscv64 has_zbb
 target riscv64 has_c has_zcb
+set enable_multi_ret_implicit_sret
 target s390x
-; not implemented on `x86_64`
 
 function %cls_i8(i8) -> i8 {
 block0(v0: i8):
@@ -46,3 +48,22 @@ block0(v0: i64):
 ; run: %cls_i64(0x4000000000000000) == 0
 ; run: %cls_i64(-1) == 63
 ; run: %cls_i64(0) == 63
+
+function %cls_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = cls v0
+    return v1
+}
+; run: %cls_i128(1) == 126
+; run: %cls_i128(0x40000000_00000000_00000000_00000000) == 0
+; run: %cls_i128(0) == 127
+; run: %cls_i128(0x00000000_00000000_00000000_00000000) == 127
+; run: %cls_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 63
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 63
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 127
+; run: %cls_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 0
+; run: %cls_i128(0x3FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == 1
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF_7FFFFFFF_FFFFFFFF) == 63
+; run: %cls_i128(0xC0000000_00000000_80000000_00000000) == 1
+; run: %cls_i128(0xC0000000_00000000_00000000_00000000) == 1
+; run: %cls_i128(0x80000000_00000000_80000000_00000000) == 0

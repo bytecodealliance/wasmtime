@@ -96,7 +96,9 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     let engine = linker.engine().clone();
     linker
         .root()
-        .func_wrap("host-echo-u32", |_, v: (u32,)| Ok(v))?;
+        .func_wrap_concurrent("host-echo-u32", |_, (v,): (u32,)| {
+            Box::pin(async move { Ok((v,)) })
+        })?;
     linker
         .root()
         .func_wrap("host-return-two", |_, _: ()| Ok((2u32,)))?;
@@ -197,5 +199,27 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Ok(())
         },
     )?;
+    i.func_wrap_concurrent("never-return", |_, _: ()| {
+        Box::pin(async move { std::future::pending::<Result<()>>().await })
+    })?;
+    i.func_wrap_concurrent("return-two-slowly", |_, _: ()| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok((2,))
+        })
+    })?;
+    i.func_wrap_concurrent("echo-slowly", |_, (a,): (u32,)| {
+        Box::pin(async move {
+            tokio::task::yield_now().await;
+            Ok((a,))
+        })
+    })?;
+    i.func_wrap_concurrent(
+        "[method]resource1.never-return",
+        |_, (_,): (Resource<Resource1>,)| {
+            Box::pin(async move { std::future::pending::<Result<()>>().await })
+        },
+    )?;
+    i.func_wrap("return-hi", |_cx, (): ()| Ok(("hi".to_string(),)))?;
     Ok(())
 }

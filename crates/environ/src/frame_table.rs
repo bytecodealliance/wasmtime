@@ -4,9 +4,9 @@
 //! section in a compiled artifact as produced by
 //! [`crate::compile::FrameTableBuilder`].
 
-use crate::FuncKey;
+use crate::{FuncKey, ModulePC};
 use alloc::vec::Vec;
-use object::{Bytes, LittleEndian, U32Bytes};
+use object::{Bytes, LittleEndian, U32};
 
 /// An index into the table of stack shapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -44,18 +44,18 @@ impl FrameTableDescriptorIndex {
 /// cheap to construct: it reads some header fields but does not
 /// interpret or validate content data until queried.
 pub struct FrameTable<'a> {
-    frame_descriptor_ranges: &'a [U32Bytes<LittleEndian>],
+    frame_descriptor_ranges: &'a [U32<LittleEndian>],
     frame_descriptor_data: &'a [u8],
 
-    frame_descriptor_fp_offsets: &'a [U32Bytes<LittleEndian>],
+    frame_descriptor_fp_offsets: &'a [U32<LittleEndian>],
 
-    progpoint_pcs: &'a [U32Bytes<LittleEndian>],
-    progpoint_descriptor_offsets: &'a [U32Bytes<LittleEndian>],
-    progpoint_descriptor_data: &'a [U32Bytes<LittleEndian>],
+    progpoint_pcs: &'a [U32<LittleEndian>],
+    progpoint_descriptor_offsets: &'a [U32<LittleEndian>],
+    progpoint_descriptor_data: &'a [U32<LittleEndian>],
 
-    breakpoint_pcs: &'a [U32Bytes<LittleEndian>],
-    breakpoint_patch_offsets: &'a [U32Bytes<LittleEndian>],
-    breakpoint_patch_data_ends: &'a [U32Bytes<LittleEndian>],
+    breakpoint_pcs: &'a [U32<LittleEndian>],
+    breakpoint_patch_offsets: &'a [U32<LittleEndian>],
+    breakpoint_patch_data_ends: &'a [U32<LittleEndian>],
     breakpoint_patch_data: &'a [u8],
 
     original_text: &'a [u8],
@@ -67,67 +67,65 @@ impl<'a> FrameTable<'a> {
     pub fn parse(data: &'a [u8], original_text: &'a [u8]) -> anyhow::Result<FrameTable<'a>> {
         let mut data = Bytes(data);
         let num_frame_descriptors = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read frame descriptor count prefix"))?;
         let num_frame_descriptors = usize::try_from(num_frame_descriptors.get(LittleEndian))?;
         let num_progpoint_descriptors = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor count prefix"))?;
         let num_progpoint_descriptors =
             usize::try_from(num_progpoint_descriptors.get(LittleEndian))?;
         let num_breakpoints = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read breakpoint count prefix"))?;
         let num_breakpoints = usize::try_from(num_breakpoints.get(LittleEndian))?;
 
         let frame_descriptor_pool_length = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read frame descriptor pool length"))?;
         let frame_descriptor_pool_length =
             usize::try_from(frame_descriptor_pool_length.get(LittleEndian))?;
         let progpoint_descriptor_pool_length = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor pool length"))?;
         let progpoint_descriptor_pool_length =
             usize::try_from(progpoint_descriptor_pool_length.get(LittleEndian))?;
         let breakpoint_patch_pool_length = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch pool length"))?;
         let breakpoint_patch_pool_length =
             usize::try_from(breakpoint_patch_pool_length.get(LittleEndian))?;
 
         let (frame_descriptor_ranges, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data.0, 2 * num_frame_descriptors)
+            object::slice_from_bytes::<U32<LittleEndian>>(data.0, 2 * num_frame_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read frame descriptor ranges slice"))?;
         let (frame_descriptor_fp_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_frame_descriptors)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_frame_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read frame descriptor FP offset slice"))?;
 
         let (progpoint_pcs, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_progpoint_descriptors)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_progpoint_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read progpoint PC slice"))?;
         let (progpoint_descriptor_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_progpoint_descriptors)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_progpoint_descriptors)
                 .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor offset slice"))?;
         let (breakpoint_pcs, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
                 .map_err(|_| anyhow::anyhow!("Unable to read breakpoint PC slice"))?;
         let (breakpoint_patch_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
                 .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch offsets slice"))?;
         let (breakpoint_patch_data_ends, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_breakpoints)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_breakpoints)
                 .map_err(|_| anyhow::anyhow!("Unable to read breakpoint patch data ends slice"))?;
 
         let (frame_descriptor_data, data) = data
             .split_at_checked(frame_descriptor_pool_length)
             .ok_or_else(|| anyhow::anyhow!("Unable to read frame descriptor pool"))?;
 
-        let (progpoint_descriptor_data, data) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(
-            data,
-            progpoint_descriptor_pool_length,
-        )
-        .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor pool"))?;
+        let (progpoint_descriptor_data, data) =
+            object::slice_from_bytes::<U32<LittleEndian>>(data, progpoint_descriptor_pool_length)
+                .map_err(|_| anyhow::anyhow!("Unable to read progpoint descriptor pool"))?;
 
         let (breakpoint_patch_data, _) = data
             .split_at_checked(breakpoint_patch_pool_length)
@@ -181,7 +179,7 @@ impl<'a> FrameTable<'a> {
         &self,
         search_pc: u32,
         search_pos: FrameInstPos,
-    ) -> Option<impl Iterator<Item = (u32, FrameTableDescriptorIndex, FrameStackShape)>> {
+    ) -> Option<impl Iterator<Item = (ModulePC, FrameTableDescriptorIndex, FrameStackShape)>> {
         let key = FrameInstPos::encode(search_pc, search_pos);
         let index = match self
             .progpoint_pcs
@@ -203,7 +201,7 @@ impl<'a> FrameTable<'a> {
         Item = (
             u32,
             FrameInstPos,
-            Vec<(u32, FrameTableDescriptorIndex, FrameStackShape)>,
+            Vec<(ModulePC, FrameTableDescriptorIndex, FrameStackShape)>,
         ),
     > + 'a {
         self.progpoint_pcs.iter().enumerate().map(move |(i, pc)| {
@@ -220,7 +218,7 @@ impl<'a> FrameTable<'a> {
     fn program_point_frame_iter(
         &self,
         index: usize,
-    ) -> impl Iterator<Item = (u32, FrameTableDescriptorIndex, FrameStackShape)> {
+    ) -> impl Iterator<Item = (ModulePC, FrameTableDescriptorIndex, FrameStackShape)> {
         let offset =
             usize::try_from(self.progpoint_descriptor_offsets[index].get(LittleEndian)).unwrap();
         let mut data = &self.progpoint_descriptor_data[offset..];
@@ -229,12 +227,12 @@ impl<'a> FrameTable<'a> {
             if data.len() < 3 {
                 return None;
             }
-            let wasm_pc = data[0].get(LittleEndian);
+            let wasm_pc_raw = data[0].get(LittleEndian);
             let frame_descriptor = FrameTableDescriptorIndex(data[1].get(LittleEndian));
             let stack_shape = FrameStackShape(data[2].get(LittleEndian));
             data = &data[3..];
-            let not_last = wasm_pc & 0x8000_0000 != 0;
-            let wasm_pc = wasm_pc & 0x7fff_ffff;
+            let not_last = wasm_pc_raw & 0x8000_0000 != 0;
+            let wasm_pc = ModulePC::new(wasm_pc_raw & 0x7fff_ffff);
             if !not_last {
                 data = &[];
             }
@@ -267,24 +265,25 @@ impl<'a> FrameTable<'a> {
     /// Find a list of breakpoint patches for a given Wasm PC.
     pub fn lookup_breakpoint_patches_by_pc(
         &self,
-        pc: u32,
+        pc: ModulePC,
     ) -> impl Iterator<Item = FrameTableBreakpointData<'_>> + '_ {
         // Find *some* entry with a matching Wasm PC. Note that there
         // may be multiple entries for one PC.
+        let pc_raw = pc.raw();
         let range = match self
             .breakpoint_pcs
-            .binary_search_by_key(&pc, |p| p.get(LittleEndian))
+            .binary_search_by_key(&pc_raw, |p| p.get(LittleEndian))
         {
             Ok(mut i) => {
                 // Scan backward to first index with this PC.
-                while i > 0 && self.breakpoint_pcs[i - 1].get(LittleEndian) == pc {
+                while i > 0 && self.breakpoint_pcs[i - 1].get(LittleEndian) == pc_raw {
                     i -= 1;
                 }
 
                 // Scan forward to find the end of the range.
                 let mut end = i;
                 while end < self.breakpoint_pcs.len()
-                    && self.breakpoint_pcs[end].get(LittleEndian) == pc
+                    && self.breakpoint_pcs[end].get(LittleEndian) == pc_raw
                 {
                     end += 1;
                 }
@@ -297,14 +296,31 @@ impl<'a> FrameTable<'a> {
         range.map(|i| self.breakpoint_patch(i))
     }
 
+    /// Find the nearest breakpoint PC at or after the given PC.
+    pub fn nearest_breakpoint(&self, pc: ModulePC) -> Option<ModulePC> {
+        match self
+            .breakpoint_pcs
+            .binary_search_by_key(&pc.raw(), |p| p.get(LittleEndian))
+        {
+            Ok(_) => Some(pc),
+            Err(i) => {
+                if i < self.breakpoint_pcs.len() {
+                    Some(ModulePC::new(self.breakpoint_pcs[i].get(LittleEndian)))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     /// Return an iterator over all breakpoint patches.
     ///
-    /// Returned tuples are (Wasm PC, breakpoint data).
+    /// Returned tuples are (module-relative Wasm PC, breakpoint data).
     pub fn breakpoint_patches(
         &self,
-    ) -> impl Iterator<Item = (u32, FrameTableBreakpointData<'_>)> + '_ {
+    ) -> impl Iterator<Item = (ModulePC, FrameTableBreakpointData<'_>)> + '_ {
         self.breakpoint_pcs.iter().enumerate().map(|(i, wasm_pc)| {
-            let wasm_pc = wasm_pc.get(LittleEndian);
+            let wasm_pc = ModulePC::new(wasm_pc.get(LittleEndian));
             let data = self.breakpoint_patch(i);
             (wasm_pc, data)
         })
@@ -480,9 +496,9 @@ impl TryFrom<u8> for FrameValType {
 /// and for the stack given a stack shape.
 pub struct FrameStateSlot<'a> {
     func_key: FuncKey,
-    local_offsets: &'a [U32Bytes<LittleEndian>],
-    stack_shape_parents: &'a [U32Bytes<LittleEndian>],
-    stack_shape_offsets: &'a [U32Bytes<LittleEndian>],
+    local_offsets: &'a [U32<LittleEndian>],
+    stack_shape_parents: &'a [U32<LittleEndian>],
+    stack_shape_offsets: &'a [U32<LittleEndian>],
     local_types: &'a [u8],
     stack_shape_types: &'a [u8],
 }
@@ -495,34 +511,34 @@ impl<'a> FrameStateSlot<'a> {
     pub fn parse(descriptor: &'a [u8]) -> anyhow::Result<FrameStateSlot<'a>> {
         let mut data = Bytes(descriptor);
         let func_key_namespace = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read func key namespace"))?
             .get(LittleEndian);
         let func_key_index = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read func key index"))?
             .get(LittleEndian);
         let func_key = FuncKey::from_raw_parts(func_key_namespace, func_key_index);
 
         let num_locals = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read num_locals"))?
             .get(LittleEndian);
         let num_locals = usize::try_from(num_locals)?;
         let num_stack_shapes = data
-            .read::<U32Bytes<LittleEndian>>()
+            .read::<U32<LittleEndian>>()
             .map_err(|_| anyhow::anyhow!("Unable to read num_stack_shapes"))?
             .get(LittleEndian);
         let num_stack_shapes = usize::try_from(num_stack_shapes)?;
 
         let (local_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data.0, num_locals)
+            object::slice_from_bytes::<U32<LittleEndian>>(data.0, num_locals)
                 .map_err(|_| anyhow::anyhow!("Unable to read local_offsets slice"))?;
         let (stack_shape_parents, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_stack_shapes)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_stack_shapes)
                 .map_err(|_| anyhow::anyhow!("Unable to read stack_shape_parents slice"))?;
         let (stack_shape_offsets, data) =
-            object::slice_from_bytes::<U32Bytes<LittleEndian>>(data, num_stack_shapes)
+            object::slice_from_bytes::<U32<LittleEndian>>(data, num_stack_shapes)
                 .map_err(|_| anyhow::anyhow!("Unable to read stack_shape_offsets slice"))?;
         let (local_types, data) = data
             .split_at_checked(num_locals)

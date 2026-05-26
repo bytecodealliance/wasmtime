@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -239,6 +241,233 @@ fn gc_with_exnref_global(config: &mut Config) -> Result<()> {
     global.set(&mut store, Val::ExnRef(Some(exn)))?;
 
     store.gc(None)?;
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn thrown_exception_without_throwing(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (import "" "" (func))
+
+            (func (export "run") call 0)
+        )
+        "#,
+    )?;
+
+    let func = Func::wrap(&mut store, || -> Result<()> { Err(ThrownException.into()) });
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let err = func.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.is::<ThrownException>());
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn wasm_exceptions_have_backtraces(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (tag $t0)
+
+            (func (export "run") throw $t0)
+        )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let err = func.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.is::<ThrownException>());
+    assert!(err.is::<WasmBacktrace>());
+
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+#[cfg_attr(miri, ignore)]
+fn store_pending_exnref_is_cloned(config: &mut Config) -> wasmtime::Result<()> {
+    config.collector(Collector::DeferredReferenceCounting);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "h" "t1" (tag $t1 (param i32)))
+          (import "h" "throw_t1" (func $throw_t1))
+          (func (export "run") (result i32)
+            (block $h (result i32)
+              (try_table (result i32) (catch $t1 $h)
+                call $throw_t1
+                unreachable
+              )
+            )
+          )
+        )
+        "#,
+    )?;
+
+    let functy = FuncType::new(&engine, [ValType::I32], []);
+    let tagty = TagType::new(functy);
+    let t1 = Tag::new(&mut store, &tagty)?;
+    let exnty = ExnType::from_tag_type(&tagty)?;
+    let exnpre_for_t1 = ExnRefPre::new(&mut store, exnty);
+
+    let throw_t1 = Func::wrap(
+        &mut store,
+        move |mut caller: Caller<'_, ()>| -> Result<()> {
+            let err = {
+                let mut scope = RootScope::new(&mut caller);
+                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &t1, &[Val::I32(0x1111_1111)])?;
+                scope.as_context_mut().throw::<()>(exn)
+            };
+            caller.as_context_mut().gc(None)?;
+            err
+        },
+    );
+
+    let instance = Instance::new(
+        &mut store,
+        &module,
+        &[Extern::Tag(t1), Extern::Func(throw_t1)],
+    )?;
+    let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+    let result = run.call(&mut store, ())?;
+    assert_eq!(result, 0x1111_1111);
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(exceptions, reference_types))]
+#[cfg_attr(miri, ignore)]
+fn store_pending_exnref_is_exposed(config: &mut Config) -> wasmtime::Result<()> {
+    config.collector(Collector::DeferredReferenceCounting);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+          (import "h" "t1" (tag $t1 (param i32)))
+          (import "h" "throw_t1" (func $throw_t1))
+          (import "" "gc" (func $gc))
+
+          (func (export "run") (result i32 (ref exn))
+            (block $h (result i32 (ref exn))
+              (try_table (result i32) (catch_ref $t1 $h)
+                call $throw_t1
+                unreachable
+              )
+              unreachable
+            )
+            call $gc
+          )
+        )
+        "#,
+    )?;
+
+    let functy = FuncType::new(&engine, [ValType::I32], []);
+    let tagty = TagType::new(functy);
+    let t1 = Tag::new(&mut store, &tagty)?;
+    let exnty = ExnType::from_tag_type(&tagty)?;
+    let exnpre_for_t1 = ExnRefPre::new(&mut store, exnty);
+
+    let throw_t1 = Func::wrap(
+        &mut store,
+        move |mut caller: Caller<'_, ()>| -> Result<()> {
+            let err = {
+                let mut scope = RootScope::new(&mut caller);
+                let exn = ExnRef::new(&mut scope, &exnpre_for_t1, &t1, &[Val::I32(0x1111_1111)])?;
+                scope.as_context_mut().throw::<()>(exn)
+            };
+            caller.as_context_mut().gc(None)?;
+            err
+        },
+    );
+    let gc = Func::wrap(
+        &mut store,
+        move |mut caller: Caller<'_, ()>| -> Result<()> {
+            caller.gc(None)?;
+            Ok(())
+        },
+    );
+
+    let instance = Instance::new(
+        &mut store,
+        &module,
+        &[t1.into(), throw_t1.into(), gc.into()],
+    )?;
+    let run = instance.get_typed_func::<(), (i32, Rooted<ExnRef>)>(&mut store, "run")?;
+    let (result, exnref) = run.call(&mut store, ())?;
+    assert_eq!(result, 0x1111_1111);
+
+    store.gc(None)?;
+
+    assert_eq!(exnref.field(&mut store, 0)?.unwrap_i32(), 0x1111_1111);
+    Ok(())
+}
+
+struct SetFlagOnDrop(Arc<AtomicBool>);
+
+impl Drop for SetFlagOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Relaxed);
+    }
+}
+
+#[wasmtime_test(wasm_features(exceptions))]
+fn store_pending_exnref_has_write_barrier(config: &mut Config) -> wasmtime::Result<()> {
+    config.collector(Collector::DeferredReferenceCounting);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let functy = FuncType::new(&engine, [ValType::EXTERNREF], []);
+    let tagty = TagType::new(functy);
+    let tag = Tag::new(&mut store, &tagty)?;
+    let exnty = ExnType::from_tag_type(&tagty)?;
+    let exnpre = ExnRefPre::new(&mut store, exnty);
+
+    let dropped = Arc::new(AtomicBool::new(false));
+
+    eprintln!("a1");
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let r = ExternRef::new(&mut scope, SetFlagOnDrop(dropped.clone()))?;
+        let exn1 = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::ExternRef(Some(r))])?;
+        let _ = scope.as_context_mut().throw::<()>(exn1);
+    }
+    eprintln!("a2");
+
+    store.gc(None)?;
+    eprintln!("a5");
+    assert!(!dropped.load(Relaxed));
+
+    {
+        let mut scope = RootScope::new(&mut store);
+        let exn2 = ExnRef::new(&mut scope, &exnpre, &tag, &[Val::ExternRef(None)])?;
+        let _ = scope.as_context_mut().throw::<()>(exn2);
+    }
+    eprintln!("a3");
+
+    store.gc(None)?;
+    eprintln!("a4");
+    assert!(dropped.load(Relaxed));
 
     Ok(())
 }

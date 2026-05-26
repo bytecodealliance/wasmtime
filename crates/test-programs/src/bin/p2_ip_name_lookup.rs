@@ -5,7 +5,13 @@ fn main() {
     // Valid domains
     resolve("localhost").unwrap();
 
-    resolve_at_least_one_of(&["example.com", "api.github.com"]);
+    resolve_at_least_one_of(&[
+        "example.com",
+        "api.github.com",
+        "docs.wasmtime.dev",
+        "bytecodealliance.org",
+        "www.rust-lang.org",
+    ]);
 
     // NB: this is an actual real resolution, so it might time out, might cause
     // issues, etc. This result is ignored to prevent flaky failures in CI.

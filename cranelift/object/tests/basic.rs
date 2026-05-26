@@ -258,3 +258,304 @@ fn reject_nul_byte_symbol_for_data() {
         )
         .unwrap();
 }
+
+#[test]
+fn aarch64_colocated_data_symbol_reloc() {
+    let flag_builder = settings::builder();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("aarch64-unknown-linux-gnu").unwrap();
+    let isa = isa_builder
+        .finish(settings::Flags::new(flag_builder))
+        .unwrap();
+    let mut module =
+        ObjectModule::new(ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap());
+
+    let data_id = module
+        .declare_data("my_data", Linkage::Local, true, false)
+        .unwrap();
+
+    let mut data_desc = DataDescription::new();
+    data_desc.define_zeroinit(64);
+    module.define_data(data_id, &data_desc).unwrap();
+
+    let sig = Signature {
+        params: vec![],
+        returns: vec![AbiParam::new(types::I64)],
+        call_conv: CallConv::SystemV,
+    };
+
+    let func_id = module
+        .declare_function("load_data_addr", Linkage::Local, &sig)
+        .unwrap();
+
+    let mut ctx = Context::new();
+    ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
+    let mut func_ctx = FunctionBuilderContext::new();
+    {
+        let mut bcx: FunctionBuilder = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+        let block = bcx.create_block();
+        bcx.switch_to_block(block);
+
+        let gv = module.declare_data_in_func(data_id, &mut bcx.func);
+        let ptr = module.target_config().pointer_type();
+        let addr = bcx.ins().global_value(ptr, gv);
+        bcx.ins().return_(&[addr]);
+
+        bcx.seal_all_blocks();
+        bcx.finalize();
+    }
+
+    module.define_function(func_id, &mut ctx).unwrap();
+
+    let product = module.finish();
+    product.emit().expect("emit object file");
+}
+
+// ---------- `.eh_frame` emission tests ----------
+
+#[cfg(feature = "unwind")]
+mod eh_frame {
+    use super::*;
+    use cranelift_codegen::settings::Configurable as _;
+    use gimli::UnwindSection as _;
+    use object::Object as _;
+    use object::ObjectSection as _;
+
+    /// Build an `ObjectModule` for `triple` with the unwind-info builder flag
+    /// set to `unwind_info`. Frame pointers are forced on so cranelift emits
+    /// a non-trivial prologue (and therefore unwind info) for every function.
+    fn module_for(triple: &str, unwind_info: bool) -> ObjectModule {
+        let mut flag_builder = settings::builder();
+        flag_builder.set("preserve_frame_pointers", "true").unwrap();
+        let isa = cranelift_codegen::isa::lookup_by_name(triple)
+            .unwrap()
+            .finish(settings::Flags::new(flag_builder))
+            .unwrap();
+        let mut builder = ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap();
+        builder.unwind_info(unwind_info);
+        ObjectModule::new(builder)
+    }
+
+    /// Define a leaf function that just returns. With `preserve_frame_pointers`
+    /// on, this is enough to make cranelift emit a System V FDE for it.
+    fn define_leaf(module: &mut ObjectModule, name: &str) -> FuncId {
+        let sig = Signature {
+            params: vec![],
+            returns: vec![],
+            call_conv: CallConv::SystemV,
+        };
+        let func_id = module.declare_function(name, Linkage::Local, &sig).unwrap();
+        let mut ctx = Context::new();
+        ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
+        let mut func_ctx = FunctionBuilderContext::new();
+        {
+            let mut bcx = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+            let block = bcx.create_block();
+            bcx.switch_to_block(block);
+            bcx.ins().return_(&[]);
+            bcx.seal_all_blocks();
+            bcx.finalize();
+        }
+        module.define_function(func_id, &mut ctx).unwrap();
+        func_id
+    }
+
+    /// Iterate the entries in `.eh_frame` bytes, returning `(cie_count, fde_count)`.
+    fn count_entries(data: &[u8]) -> (usize, usize) {
+        let mut eh_frame = gimli::EhFrame::new(data, gimli::LittleEndian);
+        eh_frame.set_address_size(8);
+        let bases = gimli::BaseAddresses::default();
+        let mut entries = eh_frame.entries(&bases);
+        let (mut cies, mut fdes) = (0, 0);
+        while let Some(entry) = entries.next().expect("walk eh_frame entries") {
+            match entry {
+                gimli::CieOrFde::Cie(_) => cies += 1,
+                gimli::CieOrFde::Fde(_) => fdes += 1,
+            }
+        }
+        (cies, fdes)
+    }
+
+    #[test]
+    fn emits_eh_frame_for_x86_64_systemv_target() {
+        let mut module = module_for("x86_64-unknown-linux-gnu", true);
+        define_leaf(&mut module, "leaf");
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        let section = file
+            .section_by_name(".eh_frame")
+            .expect(".eh_frame section is present");
+        let data = section.data().expect("read .eh_frame data");
+        assert!(!data.is_empty(), ".eh_frame must not be empty");
+
+        let (cies, fdes) = count_entries(data);
+        assert_eq!(cies, 1, "expected exactly one CIE");
+        assert_eq!(fdes, 1, "expected exactly one FDE");
+
+        let relocations: Vec<_> = section.relocations().collect();
+        assert!(
+            !relocations.is_empty(),
+            ".eh_frame must carry symbol relocations"
+        );
+    }
+
+    #[test]
+    fn emits_eh_frame_for_aarch64_target() {
+        let mut module = module_for("aarch64-unknown-linux-gnu", true);
+        define_leaf(&mut module, "leaf");
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        let data = file
+            .section_by_name(".eh_frame")
+            .expect(".eh_frame section is present")
+            .data()
+            .expect("read .eh_frame data");
+
+        let (cies, fdes) = count_entries(data);
+        assert_eq!(cies, 1, "expected exactly one CIE");
+        assert_eq!(fdes, 1, "expected exactly one FDE");
+    }
+
+    #[test]
+    fn unwind_info_disabled_by_default_emits_no_eh_frame() {
+        let flag_builder = settings::builder();
+        let isa = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu")
+            .unwrap()
+            .finish(settings::Flags::new(flag_builder))
+            .unwrap();
+        let mut module =
+            ObjectModule::new(ObjectBuilder::new(isa, "no_eh", default_libcall_names()).unwrap());
+        define_simple_function(&mut module);
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        assert!(
+            file.section_by_name(".eh_frame").is_none(),
+            "no .eh_frame section should be emitted when unwind_info is off"
+        );
+    }
+
+    #[test]
+    fn cie_is_shared_across_multiple_functions() {
+        let mut module = module_for("x86_64-unknown-linux-gnu", true);
+        define_leaf(&mut module, "leaf_a");
+        define_leaf(&mut module, "leaf_b");
+        define_leaf(&mut module, "leaf_c");
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        let data = file
+            .section_by_name(".eh_frame")
+            .expect(".eh_frame section is present")
+            .data()
+            .expect("read .eh_frame data");
+
+        let (cies, fdes) = count_entries(data);
+        assert_eq!(cies, 1, "all functions must share a single CIE, got {cies}");
+        assert_eq!(fdes, 3, "expected one FDE per function, got {fdes}");
+    }
+
+    #[test]
+    fn fde_relocations_target_function_symbols() {
+        use object::ObjectSymbol as _;
+
+        let mut module = module_for("x86_64-unknown-linux-gnu", true);
+        define_leaf(&mut module, "leaf");
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        let section = file
+            .section_by_name(".eh_frame")
+            .expect(".eh_frame section is present");
+
+        let leaf_symbol_index = file
+            .symbols()
+            .find(|s| s.name() == Ok("leaf"))
+            .expect("function symbol present in object")
+            .index();
+
+        let (_, reloc) = section
+            .relocations()
+            .next()
+            .expect(".eh_frame must carry at least one relocation");
+        let object::read::RelocationTarget::Symbol(target_index) = reloc.target() else {
+            panic!(
+                "expected symbol-targeted relocation, got {:?}",
+                reloc.target()
+            );
+        };
+        assert_eq!(
+            target_index, leaf_symbol_index,
+            "FDE relocation must target the function's text symbol"
+        );
+    }
+
+    #[test]
+    fn per_function_section_combines_with_unwind_info() {
+        // With every function in its own subsection, the FDE relocations must
+        // still resolve because they target function symbols rather than the
+        // shared `.text` section. Just walking the entries should succeed and
+        // produce one FDE per function.
+        let mut flag_builder = settings::builder();
+        flag_builder.set("preserve_frame_pointers", "true").unwrap();
+        let isa = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu")
+            .unwrap()
+            .finish(settings::Flags::new(flag_builder))
+            .unwrap();
+        let mut builder = ObjectBuilder::new(isa, "test", default_libcall_names()).unwrap();
+        builder.unwind_info(true);
+        builder.per_function_section(true);
+        let mut module = ObjectModule::new(builder);
+        define_leaf(&mut module, "leaf_a");
+        define_leaf(&mut module, "leaf_b");
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        let data = file
+            .section_by_name(".eh_frame")
+            .expect(".eh_frame section is present")
+            .data()
+            .expect("read .eh_frame data");
+        let (cies, fdes) = count_entries(data);
+        assert_eq!(cies, 1);
+        assert_eq!(fdes, 2);
+    }
+
+    #[test]
+    fn no_eh_frame_emitted_for_windows_target() {
+        // On Windows targets cranelift produces `UnwindInfo::WindowsX64`
+        // rather than System V info, and the unwind builder ignores those
+        // variants. With no FDE ever added, no `.eh_frame` section should
+        // appear in the resulting object even though `unwind_info(true)` was
+        // set on the builder.
+        let mut module = module_for("x86_64-pc-windows-msvc", true);
+        let sig = Signature {
+            params: vec![],
+            returns: vec![],
+            call_conv: CallConv::WindowsFastcall,
+        };
+        let func_id = module
+            .declare_function("leaf", Linkage::Local, &sig)
+            .unwrap();
+        let mut ctx = Context::new();
+        ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
+        let mut func_ctx = FunctionBuilderContext::new();
+        {
+            let mut bcx = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
+            let block = bcx.create_block();
+            bcx.switch_to_block(block);
+            bcx.ins().return_(&[]);
+            bcx.seal_all_blocks();
+            bcx.finalize();
+        }
+        module.define_function(func_id, &mut ctx).unwrap();
+
+        let bytes = module.finish().emit().expect("emit object file");
+        let file = object::File::parse(&*bytes).expect("parse emitted object");
+        assert!(
+            file.section_by_name(".eh_frame").is_none(),
+            "no .eh_frame should be emitted for Windows targets"
+        );
+    }
+}

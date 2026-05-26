@@ -2,7 +2,7 @@ use crate::prelude::*;
 use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
-use core::num::NonZeroUsize;
+use core::num::{NonZeroU32, NonZeroUsize};
 use core::str::FromStr;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use std::path::Path;
@@ -31,6 +31,7 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
+pub use wasmtime_environ::Inlining;
 
 pub(crate) const DEFAULT_WASM_BACKTRACE_MAX_FRAMES: NonZeroUsize = NonZeroUsize::new(20).unwrap();
 
@@ -50,6 +51,12 @@ pub enum InstanceAllocationStrategy {
     /// A pool of resources is created in advance and module instantiation reuses resources
     /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
     /// is dropped.
+    ///
+    /// When GC is enabled, the pooling allocator requires that the GC heap
+    /// configuration matches the linear memory configuration (i.e.,
+    /// `gc_heap_reservation` must equal `memory_reservation`, etc.). By
+    /// default, if no `gc_heap_*` tunables are explicitly configured, they
+    /// automatically inherit the `memory_*` values.
     #[cfg(feature = "pooling-allocator")]
     Pooling(PoolingAllocationConfig),
 }
@@ -728,6 +735,24 @@ impl Config {
         self
     }
 
+    /// XXX: For internal fuzzing and debugging use only!
+    #[doc(hidden)]
+    pub fn gc_zeal_alloc_counter(&mut self, counter: Option<NonZeroU32>) -> Result<&mut Self> {
+        #[cfg(not(gc_zeal))]
+        {
+            let _ = counter;
+            bail!(
+                "cannot set `gc_zeal_alloc_counter` because Wasmtime was not built with `cfg(gc_zeal)`"
+            );
+        }
+
+        #[cfg(gc_zeal)]
+        {
+            self.tunables.gc_zeal_alloc_counter = Some(counter);
+            Ok(self)
+        }
+    }
+
     /// Configures the maximum amount of stack space available for
     /// executing WebAssembly code.
     ///
@@ -1212,8 +1237,8 @@ impl Config {
     /// [proposal]:
     ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Concurrency.md
     #[cfg(feature = "component-model-async")]
-    pub fn wasm_component_model_async_builtins(&mut self, enable: bool) -> &mut Self {
-        self.wasm_features(WasmFeatures::CM_ASYNC_BUILTINS, enable);
+    pub fn wasm_component_model_more_async_builtins(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_MORE_ASYNC_BUILTINS, enable);
         self
     }
 
@@ -1269,6 +1294,16 @@ impl Config {
         self
     }
 
+    /// Configures whether the component model map type is enabled or not.
+    ///
+    /// This is part of the component model specification and enables the
+    /// `map<k, v>` type in WIT and the component binary format.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_map(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_MAP, enable);
+        self
+    }
+
     /// This corresponds to the 🔧 emoji in the component model specification.
     ///
     /// Please note that Wasmtime's support for this feature is _very_
@@ -1276,6 +1311,16 @@ impl Config {
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_fixed_length_lists(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_FIXED_LENGTH_LISTS, enable);
+        self
+    }
+
+    /// This corresponds to the 🏷️ emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_implements(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_IMPLEMENTS, enable);
         self
     }
 
@@ -1452,32 +1497,6 @@ impl Config {
         self.compiler_config_mut()
             .settings
             .insert("enable_nan_canonicalization".to_string(), val.to_string());
-        self
-    }
-
-    /// Controls whether proof-carrying code (PCC) is used to validate
-    /// lowering of Wasm sandbox checks.
-    ///
-    /// Proof-carrying code carries "facts" about program values from
-    /// the IR all the way to machine code, and checks those facts
-    /// against known machine-instruction semantics. This guards
-    /// against bugs in instruction lowering that might create holes
-    /// in the Wasm sandbox.
-    ///
-    /// PCC is designed to be fast: it does not require complex
-    /// solvers or logic engines to verify, but only a linear pass
-    /// over a trail of "breadcrumbs" or facts at each intermediate
-    /// value. Thus, it is appropriate to enable in production.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this configuration's compiler was [disabled][Config::enable_compiler].
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub fn cranelift_pcc(&mut self, enable: bool) -> &mut Self {
-        let val = if enable { "true" } else { "false" };
-        self.compiler_config_mut()
-            .settings
-            .insert("enable_pcc".to_string(), val.to_string());
         self
     }
 
@@ -1945,6 +1964,75 @@ impl Config {
         self
     }
 
+    /// Configures the initial size, in bytes, to be allocated for GC heaps.
+    ///
+    /// This is similar to [`Config::memory_reservation`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details
+    /// on what "reservation" means and the implications of this setting.
+    ///
+    /// ## Default
+    ///
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this property depends on the host platform: for
+    /// 64-bit platforms this defaults to 4GiB, and for 32-bit platforms this
+    /// defaults to 10MiB.
+    pub fn gc_heap_reservation(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_reservation = Some(bytes);
+        self
+    }
+
+    /// Configures the size, in bytes, of the guard page region for GC heaps.
+    ///
+    /// This is similar to [`Config::memory_guard_size`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details on
+    /// what guard pages are and the implications of this setting.
+    ///
+    /// ## Default
+    ///
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this property is 32MiB on 64-bit platforms and
+    /// 64KiB on 32-bit platforms.
+    pub fn gc_heap_guard_size(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_guard_size = Some(bytes);
+        self
+    }
+
+    /// Configures the size, in bytes, of the extra virtual memory space
+    /// reserved after a GC heap is relocated.
+    ///
+    /// This is similar to [`Config::memory_reservation_for_growth`] but applies
+    /// to the GC heap rather than to linear memories. See that method for more
+    /// details.
+    ///
+    /// ## Default
+    ///
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// for 64-bit platforms this defaults to 2GiB, and for 32-bit platforms
+    /// this defaults to 1MiB.
+    pub fn gc_heap_reservation_for_growth(&mut self, bytes: u64) -> &mut Self {
+        self.tunables.gc_heap_reservation_for_growth = Some(bytes);
+        self
+    }
+
+    /// Indicates whether GC heaps are allowed to be reallocated after initial
+    /// allocation at runtime.
+    ///
+    /// This is similar to [`Config::memory_may_move`] but applies to the GC
+    /// heap rather than to linear memories. See that method for more details.
+    ///
+    /// ## Default
+    ///
+    /// If none of the `gc_heap_*` tunables are explicitly configured, they
+    /// default to the same values as their `memory_*` counterparts. Otherwise,
+    /// the default value for this option is `true`.
+    pub fn gc_heap_may_move(&mut self, enable: bool) -> &mut Self {
+        self.tunables.gc_heap_may_move = Some(enable);
+        self
+    }
+
     /// Indicates whether a guard region is present before allocations of
     /// linear memory.
     ///
@@ -2185,9 +2273,8 @@ impl Config {
     /// when using a compilation strategy that does not support inlining, like
     /// Winch.
     ///
-    /// Note that inlining is still somewhat experimental at the moment (as of
-    /// the Wasmtime version 36).
-    pub fn compiler_inlining(&mut self, inlining: bool) -> &mut Self {
+    /// The default value for this is `Inlining::No`.
+    pub fn compiler_inlining(&mut self, inlining: Inlining) -> &mut Self {
         self.tunables.inlining = Some(inlining);
         self
     }
@@ -2244,11 +2331,13 @@ impl Config {
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::CM_ASYNC
             | WasmFeatures::CM_ASYNC_STACKFUL
-            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_MORE_ASYNC_BUILTINS
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
-            | WasmFeatures::CM_FIXED_LENGTH_LISTS;
+            | WasmFeatures::CM_MAP
+            | WasmFeatures::CM_FIXED_LENGTH_LISTS
+            | WasmFeatures::CM_IMPLEMENTS;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
@@ -2298,7 +2387,6 @@ impl Config {
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::THREADS;
-                        unsupported |= WasmFeatures::WIDE_ARITHMETIC;
                     }
 
                     // Winch doesn't support other non-x64 architectures at this
@@ -2380,6 +2468,15 @@ impl Config {
         target_lexicon::Triple::host()
     }
 
+    /// Returns `true` if any of the `gc_heap_*` tunables have been explicitly
+    /// configured.
+    fn any_gc_heap_tunables_configured(&self) -> bool {
+        self.tunables.gc_heap_reservation.is_some()
+            || self.tunables.gc_heap_guard_size.is_some()
+            || self.tunables.gc_heap_reservation_for_growth.is_some()
+            || self.tunables.gc_heap_may_move.is_some()
+    }
+
     pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
         let features = self.features();
 
@@ -2453,6 +2550,7 @@ impl Config {
             if !cfg!(has_native_signals) {
                 tunables.signals_based_traps = cfg!(has_native_signals);
                 tunables.memory_guard_size = 0;
+                tunables.gc_heap_guard_size = 0;
             }
 
             // When virtual memory is not available use slightly different
@@ -2462,6 +2560,8 @@ impl Config {
                 tunables.memory_reservation = 0;
                 tunables.memory_reservation_for_growth = 1 << 20; // 1MB
                 tunables.memory_init_cow = false;
+                tunables.gc_heap_reservation = 0;
+                tunables.gc_heap_reservation_for_growth = 1 << 20; // 1MB
             }
         }
 
@@ -2474,7 +2574,28 @@ impl Config {
             tunables.signals_based_traps = false;
         }
 
+        // Inlining currently falls over with the `stack_switch` instruction.
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        if features.contains(WasmFeatures::STACK_SWITCHING) {
+            if let Some(inlining) = self.tunables.inlining
+                && inlining != Inlining::No
+            {
+                bail!("cannot enable compiler inlining when stack switching is enabled");
+            }
+            tunables.inlining = Inlining::No;
+        }
+
         self.tunables.configure(&mut tunables);
+
+        // If no GC heap tunables are explicitly configured, copy the memory
+        // tunables' configured values so that GC heaps default to the same
+        // configuration as linear memories.
+        if !self.any_gc_heap_tunables_configured() {
+            tunables.gc_heap_reservation = tunables.memory_reservation;
+            tunables.gc_heap_guard_size = tunables.memory_guard_size;
+            tunables.gc_heap_reservation_for_growth = tunables.memory_reservation_for_growth;
+            tunables.gc_heap_may_move = tunables.memory_may_move;
+        }
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -2492,6 +2613,7 @@ impl Config {
                 Some(match self.collector.try_not_auto()? {
                     Collector::DeferredReferenceCounting => EnvCollector::DeferredReferenceCounting,
                     Collector::Null => EnvCollector::Null,
+                    Collector::Copying => EnvCollector::Copying,
                     Collector::Auto => unreachable!(),
                 })
             }
@@ -2514,7 +2636,7 @@ impl Config {
 
         // Concurrency support is required for some component model features.
         let requires_concurrency = WasmFeatures::CM_ASYNC
-            | WasmFeatures::CM_ASYNC_BUILTINS
+            | WasmFeatures::CM_MORE_ASYNC_BUILTINS
             | WasmFeatures::CM_ASYNC_STACKFUL
             | WasmFeatures::CM_THREADING
             | WasmFeatures::CM_ERROR_CONTEXT;
@@ -2529,6 +2651,50 @@ impl Config {
                 "concurrency support must be enabled to use the component \
                  model async or threading features"
             )
+        }
+
+        // If the pooling allocator is used and GC is enabled, check that
+        // memories and the GC heap are configured identically, since the
+        // pooling allocator can't support differently-configured heaps.
+        #[cfg(feature = "pooling-allocator")]
+        if matches!(
+            &self.allocation_strategy,
+            InstanceAllocationStrategy::Pooling(_)
+        ) && tunables.collector.is_some()
+        {
+            if tunables.memory_reservation != tunables.gc_heap_reservation {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_reservation` ({}) \
+                     and `gc_heap_reservation` ({}) must be the same",
+                    tunables.memory_reservation,
+                    tunables.gc_heap_reservation,
+                );
+            }
+            if tunables.memory_guard_size != tunables.gc_heap_guard_size {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_guard_size` ({}) \
+                     and `gc_heap_guard_size` ({}) must be the same",
+                    tunables.memory_guard_size,
+                    tunables.gc_heap_guard_size,
+                );
+            }
+            if tunables.memory_reservation_for_growth != tunables.gc_heap_reservation_for_growth {
+                bail!(
+                    "when using the pooling allocator with GC, \
+                     `memory_reservation_for_growth` ({}) and \
+                     `gc_heap_reservation_for_growth` ({}) must be the same",
+                    tunables.memory_reservation_for_growth,
+                    tunables.gc_heap_reservation_for_growth,
+                );
+            }
+            if tunables.memory_may_move != tunables.gc_heap_may_move {
+                bail!(
+                    "when using the pooling allocator with GC, `memory_may_move` ({}) \
+                     and `gc_heap_may_move` ({}) must be the same",
+                    tunables.memory_may_move,
+                    tunables.gc_heap_may_move,
+                );
+            }
         }
 
         Ok((tunables, features))
@@ -2584,7 +2750,7 @@ impl Config {
 
         #[cfg(feature = "gc")]
         #[cfg_attr(
-            not(any(feature = "gc-null", feature = "gc-drc")),
+            not(any(feature = "gc-null", feature = "gc-drc", feature = "gc-copying")),
             expect(unreachable_code, reason = "definitions known to be dummy")
         )]
         {
@@ -2602,6 +2768,13 @@ impl Config {
                 }
                 #[cfg(not(feature = "gc-null"))]
                 Collector::Null => unreachable!(),
+
+                #[cfg(feature = "gc-copying")]
+                Collector::Copying => {
+                    try_new::<Arc<_>>(crate::runtime::vm::CopyingCollector::default())? as _
+                }
+                #[cfg(not(feature = "gc-copying"))]
+                Collector::Copying => unreachable!(),
 
                 Collector::Auto => unreachable!(),
             }))
@@ -3004,7 +3177,7 @@ impl Config {
     /// The WebAssembly threads proposal, configured by [`Config::wasm_threads`]
     /// is on-by-default but there are enough deficiencies in Wasmtime's
     /// implementation and API integration that creation of a shared memory is
-    /// disabled by default. This cofiguration knob can be used to enable this.
+    /// disabled by default. This configuration knob can be used to enable this.
     ///
     /// When enabling this method be aware that wasm threads are, at this time,
     /// a [tier 2
@@ -3091,6 +3264,44 @@ impl Config {
     #[inline]
     pub fn rr(&mut self, cfg: RRConfig) -> &mut Self {
         self.rr_config = cfg;
+        self
+    }
+
+    /// Whether or not trap metadata is generated in compiled wasms for internal
+    /// asserts in the compiled code itself.
+    ///
+    /// Wasmtime inserts metadata within compiled artifacts which contain a
+    /// table of known trap codes for all instructions. If a trap via a signal
+    /// happens, and it's not listed in these tables, then that's considered a
+    /// fatal bug that crashes the process. This option controls whether trap
+    /// codes are inserted into metadata for internal asserts as part of
+    /// Wasmtime's translation process. These internal asserts should never be
+    /// triggered, but if they are then the process dies with a signal.
+    ///
+    /// Inserting trap metadata into compiled artifacts can take extra space in
+    /// the final artifact. The trap tables for the artifact will be larger as
+    /// they contain more trap codes to contain.
+    ///
+    /// This is intended as a debugging option and is set to `false` by
+    /// default.
+    pub fn metadata_for_internal_asserts(&mut self, enable: bool) -> &mut Self {
+        self.tunables.metadata_for_internal_asserts = Some(enable);
+        self
+    }
+
+    /// Whether or not trap metadata is generated in compiled wasms for
+    /// detection of corruption in the GC heap.
+    ///
+    /// For more information about what metadata is in this scenario, see
+    /// [`Config::metadata_for_internal_asserts`]. Note, though, that this
+    /// option is enabled by default unlike internal asserts. This is intended
+    /// as a defense-in-depth option for generated code in the face of GC heap
+    /// corruption. If the GC heap is corrupted and is detected then the
+    /// trapping instruction will be gracefully handled and delivered to the
+    /// embedder. Otherwise if this option were set to `false` then the process
+    /// would be aborted due to a signal.
+    pub fn metadata_for_gc_heap_corruption(&mut self, enable: bool) -> &mut Self {
+        self.tunables.metadata_for_gc_heap_corruption = Some(enable);
         self
     }
 }
@@ -3181,10 +3392,11 @@ impl Strategy {
 /// The properties of Wasmtime's available collectors are summarized in the
 /// following table:
 ///
-/// | Collector                   | Collects Garbage[^1] | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
-/// |-----------------------------|----------------------|-------------|----------------|----------------------|----------------------|
-/// | `DeferredReferenceCounting` | Yes, but not cycles  | 🙂         | 🙁             | 😐                   | 😐                  |
-/// | `Null`                      | No                   | 🙂         | 🙂             | 🙂                   | 🙂                  |
+/// | Collector                   | Collects Garbage[^1]  | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
+/// |-----------------------------|-----------------------|-------------|----------------|----------------------|----------------------|
+/// | `Copying`                   | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
+/// | `DeferredReferenceCounting` | Yes, but not cycles   | 🙂         | 🙁             | 😐                   | 😐                  |
+/// | `Null`                      | No                    | 🙂         | 🙂             | 🙂                   | 🙂                  |
 ///
 /// [^1]: Whether or not the collector is capable of collecting garbage and cyclic garbage.
 ///
@@ -3212,10 +3424,10 @@ pub enum Collector {
     ///
     /// This is generally what you want for most projects and indicates that the
     /// `wasmtime` crate itself should make the decision about what the best
-    /// collector for a wasm module is.
+    /// collector to use is.
     ///
-    /// Currently this always defaults to the deferred reference-counting
-    /// collector, but the default value may change over time.
+    /// Currently this always defaults to the copying collector, but the default
+    /// value may change over time.
     Auto,
 
     /// The deferred reference-counting collector.
@@ -3249,6 +3461,20 @@ pub enum Collector {
     /// collectors, as this collector imposes as close to zero throughput and
     /// latency overhead as possible.
     Null,
+
+    /// The copying collector.
+    ///
+    /// A tracing collector that splits the GC heap in half, bump-allocates
+    /// objects in one half until it fills up, and then does a GC and copies
+    /// live objects into the other half, and repeats the process. It has fast
+    /// allocation, collects cyclic garbage, and good collection throughput,
+    /// however it suffers from poor latency due to its stop-the-world
+    /// collections and poor heap utilization due to only using half the GC
+    /// heap's full capacity at any given time.
+    ///
+    /// Note that this collector is still under construction and is not yet
+    /// functional.
+    Copying,
 }
 
 impl Default for Collector {
@@ -3262,7 +3488,9 @@ impl Collector {
     fn not_auto(&self) -> Option<Collector> {
         match self {
             Collector::Auto => {
-                if cfg!(feature = "gc-drc") {
+                if cfg!(feature = "gc-copying") {
+                    Some(Collector::Copying)
+                } else if cfg!(feature = "gc-drc") {
                     Some(Collector::DeferredReferenceCounting)
                 } else if cfg!(feature = "gc-null") {
                     Some(Collector::Null)
@@ -3293,12 +3521,20 @@ impl Collector {
                  the `gc-null` feature was not enabled at compile time",
             ),
 
+            #[cfg(feature = "gc-copying")]
+            Some(c @ Collector::Copying) => Ok(c),
+            #[cfg(not(feature = "gc-copying"))]
+            Some(Collector::Copying) => bail!(
+                "cannot create an engine using the copying collector because \
+                 the `gc-copying` feature was not enabled at compile time",
+            ),
+
             Some(Collector::Auto) => unreachable!(),
 
             None => bail!(
                 "cannot create an engine with GC support when none of the \
                  collectors are available; enable one of the following \
-                 features: `gc-drc`, `gc-null`",
+                 features: `gc-drc`, `gc-null`, `gc-copying`",
             ),
         }
     }
@@ -3639,7 +3875,8 @@ impl PoolingAllocationConfig {
     }
 
     /// The maximum size, in bytes, allocated for a component instance's
-    /// `VMComponentContext` metadata.
+    /// `VMComponentContext` metadata as well as the aggregate size of this
+    /// component's core instances `VMContext` metadata.
     ///
     /// The [`wasmtime::component::Instance`][crate::component::Instance] type
     /// has a static size but its internal `VMComponentContext` is dynamically
@@ -3656,10 +3893,17 @@ impl PoolingAllocationConfig {
     /// module will fail at runtime with an error indicating how many bytes were
     /// needed.
     ///
+    /// In addition to the memory in the runtime for the component itself,
+    /// components contain one or more core module instances. Each of these
+    /// require some memory in the runtime as described in
+    /// [`PoolingAllocationConfig::max_core_instance_size`]. The limit here
+    /// applies against the sum of all of these individual allocations.
+    ///
     /// The default value for this is 1MiB.
     ///
-    /// This provides an upper-bound on the total size of component
-    /// metadata-related allocations, along with
+    /// This provides an upper-bound on the total size of all component's
+    /// metadata-related allocations (for both the component and its embedded
+    /// core module instances), along with
     /// [`PoolingAllocationConfig::total_component_instances`]. The upper bound is
     ///
     /// ```text

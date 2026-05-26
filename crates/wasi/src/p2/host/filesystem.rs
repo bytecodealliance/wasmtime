@@ -1,3 +1,4 @@
+use crate::filesystem::sys;
 use crate::filesystem::{Descriptor, WasiFilesystemCtxView};
 use crate::p2::bindings::clocks::wall_clock;
 use crate::p2::bindings::filesystem::preopens;
@@ -105,9 +106,6 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         len: types::Filesize,
         offset: types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
-        use std::io::IoSliceMut;
-        use system_interface::fs::FileIoExt;
-
         let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
@@ -115,8 +113,13 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
 
         let (mut buffer, r) = f
             .run_blocking(move |f| {
-                let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-                let r = f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset);
+                let mut buffer = vec![
+                    0;
+                    len.try_into()
+                        .unwrap_or(usize::MAX)
+                        .min(crate::MAX_READ_SIZE_ALLOC)
+                ];
+                let r = sys::read_at_cursor_unspecified(f, &mut buffer, offset);
                 (buffer, r)
             })
             .await;
@@ -137,16 +140,13 @@ impl HostDescriptor for WasiFilesystemCtxView<'_> {
         buf: Vec<u8>,
         offset: types::Filesize,
     ) -> FsResult<types::Filesize> {
-        use std::io::IoSlice;
-        use system_interface::fs::FileIoExt;
-
         let f = self.table.get(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             return Err(ErrorCode::NotPermitted.into());
         }
 
         let bytes_written = f
-            .run_blocking(move |f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
+            .run_blocking(move |f| sys::write_at_cursor_unspecified(f, &buf, offset))
             .await?;
 
         Ok(types::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
@@ -476,7 +476,7 @@ impl HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
     }
 }
 
-impl From<types::Advice> for system_interface::fs::Advice {
+impl From<types::Advice> for crate::filesystem::Advice {
     fn from(advice: types::Advice) -> Self {
         match advice {
             types::Advice::Normal => Self::Normal,
@@ -708,13 +708,6 @@ impl<'a> From<&'a std::io::Error> for ErrorCode {
                 }
             }
         }
-    }
-}
-
-impl From<cap_rand::Error> for ErrorCode {
-    fn from(err: cap_rand::Error) -> ErrorCode {
-        // I picked Error::Io as a 'reasonable default', FIXME dan is this ok?
-        from_raw_os_error(err.raw_os_error()).unwrap_or(ErrorCode::Io)
     }
 }
 

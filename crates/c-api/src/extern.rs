@@ -3,7 +3,7 @@ use crate::{
     wasm_global_t, wasm_memory_t, wasm_table_t,
 };
 use std::mem::ManuallyDrop;
-use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table};
+use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table, Tag};
 
 #[derive(Clone)]
 pub struct wasm_extern_t {
@@ -23,7 +23,7 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         Extern::SharedMemory(_) => panic!(
             "Shared Memory no implemented for wasm_* types. Please use wasmtime_* types instead"
         ),
-        Extern::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
+        Extern::Tag(_) => crate::types::WASMTIME_EXTERNTYPE_TAG,
     }
 }
 
@@ -86,6 +86,7 @@ pub const WASMTIME_EXTERN_GLOBAL: wasmtime_extern_kind_t = 1;
 pub const WASMTIME_EXTERN_TABLE: wasmtime_extern_kind_t = 2;
 pub const WASMTIME_EXTERN_MEMORY: wasmtime_extern_kind_t = 3;
 pub const WASMTIME_EXTERN_SHAREDMEMORY: wasmtime_extern_kind_t = 4;
+pub const WASMTIME_EXTERN_TAG: wasmtime_extern_kind_t = 5;
 
 #[repr(C)]
 pub union wasmtime_extern_union {
@@ -94,6 +95,7 @@ pub union wasmtime_extern_union {
     pub global: Global,
     pub memory: Memory,
     pub sharedmemory: ManuallyDrop<Box<SharedMemory>>,
+    pub tag: Tag,
 }
 
 impl Drop for wasmtime_extern_t {
@@ -114,6 +116,7 @@ impl wasmtime_extern_t {
             WASMTIME_EXTERN_TABLE => Extern::Table(self.of.table),
             WASMTIME_EXTERN_MEMORY => Extern::Memory(self.of.memory),
             WASMTIME_EXTERN_SHAREDMEMORY => Extern::SharedMemory((**self.of.sharedmemory).clone()),
+            WASMTIME_EXTERN_TAG => Extern::Tag(self.of.tag),
             other => panic!("unknown wasmtime_extern_kind_t: {other}"),
         }
     }
@@ -144,7 +147,10 @@ impl From<Extern> for wasmtime_extern_t {
                     sharedmemory: ManuallyDrop::new(Box::new(sharedmemory)),
                 },
             },
-            Extern::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
+            Extern::Tag(tag) => wasmtime_extern_t {
+                kind: WASMTIME_EXTERN_TAG,
+                of: wasmtime_extern_union { tag },
+            },
         }
     }
 }

@@ -15,7 +15,7 @@ mod generated {
             "wasi:http/types.[static]response.new": store | trappable | tracing,
             default: trappable | tracing,
         },
-        exports: { default: async | store | task_exit },
+        exports: { default: async | store },
         with: {
             "wasi:http/types.fields": with::Fields,
             "wasi:http/types.request": crate::p3::Request,
@@ -30,7 +30,7 @@ mod generated {
     });
 
     mod with {
-        pub type Fields = crate::p3::MaybeMutable<http::HeaderMap>;
+        pub type Fields = crate::FieldMap;
         pub type RequestOptions = crate::p3::MaybeMutable<crate::p3::RequestOptions>;
     }
 }

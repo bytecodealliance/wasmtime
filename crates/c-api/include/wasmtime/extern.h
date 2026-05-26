@@ -10,6 +10,7 @@
 #include <wasmtime/module.h>
 #include <wasmtime/sharedmemory.h>
 #include <wasmtime/store.h>
+#include <wasmtime/tag.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -105,6 +106,9 @@ typedef uint8_t wasmtime_extern_kind_t;
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
 /// shared memory
 #define WASMTIME_EXTERN_SHAREDMEMORY 4
+/// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
+/// tag
+#define WASMTIME_EXTERN_TAG 5
 
 /**
  * \typedef wasmtime_extern_union_t
@@ -127,6 +131,8 @@ typedef union wasmtime_extern_union {
   wasmtime_memory_t memory;
   /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_SHAREDMEMORY
   struct wasmtime_sharedmemory *sharedmemory;
+  /// Field used if #wasmtime_extern_t::kind is #WASMTIME_EXTERN_TAG
+  wasmtime_tag_t tag;
 } wasmtime_extern_union_t;
 
 /**
@@ -150,15 +156,15 @@ typedef struct wasmtime_extern {
 } wasmtime_extern_t;
 
 /// \brief Deletes a #wasmtime_extern_t.
-void wasmtime_extern_delete(wasmtime_extern_t *val);
+WASM_API_EXTERN void wasmtime_extern_delete(wasmtime_extern_t *val);
 
 /// \brief Returns the type of the #wasmtime_extern_t defined within the given
 /// store.
 ///
 /// Does not take ownership of `context` or `val`, but the returned
 /// #wasm_externtype_t is an owned value that needs to be deleted.
-wasm_externtype_t *wasmtime_extern_type(wasmtime_context_t *context,
-                                        wasmtime_extern_t *val);
+WASM_API_EXTERN wasm_externtype_t *
+wasmtime_extern_type(wasmtime_context_t *context, const wasmtime_extern_t *val);
 
 #ifdef __cplusplus
 } // extern "C"

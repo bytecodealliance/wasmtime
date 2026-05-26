@@ -268,11 +268,13 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, rep| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
-                            HostYWithStore::drop(
-                                    accessor,
-                                    wasmtime::component::Resource::new_own(rep),
-                                )
-                                .await
+                            wasmtime::ToWasmtimeResult::to_wasmtime_result(
+                                HostYWithStore::drop(
+                                        accessor,
+                                        wasmtime::component::Resource::new_own(rep),
+                                    )
+                                    .await,
+                            )
                         })
                     },
                 )?;
@@ -398,7 +400,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_static_a<_T, _D>(
@@ -415,7 +417,7 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_method_a<_T, _D>(
@@ -433,9 +435,7 @@ pub mod exports {
                                 (u32,),
                             >::new_unchecked(self.funcs.method_a_method_a)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                 }
@@ -559,9 +559,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                     pub async fn call_static_a<_T, _D>(
@@ -578,7 +576,7 @@ pub mod exports {
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.static_a_static_a)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                     pub async fn call_method_a<_T, _D>(
@@ -600,7 +598,7 @@ pub mod exports {
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.method_a_method_a)
                         };
-                        let ((ret0,), _) = callee
+                        let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;
                         Ok(ret0)
@@ -697,7 +695,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
                         };
-                        let ((ret0,), _) = callee.call_concurrent(accessor, ()).await?;
+                        let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
                 }
@@ -794,9 +792,7 @@ pub mod exports {
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_b_constructor)
                         };
-                        let ((ret0,), _) = callee
-                            .call_concurrent(accessor, (arg0,))
-                            .await?;
+                        let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
                 }

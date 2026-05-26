@@ -8,10 +8,32 @@ use crate::isa::{
 use cranelift_codegen::{
     Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
-    ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
+    ir::{Endianness, MemFlagsData, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
+
+pub(crate) const CANONICAL_NAN_F32: &[u8] = &0x7FC00000u32.to_le_bytes();
+pub(crate) const CANONICAL_NAN_F64: &[u8] = &0x7FF8000000000000u64.to_le_bytes();
+
+const NAN32: [u8; 4] = 0x7FC00000u32.to_le_bytes();
+const NAN64: [u8; 8] = 0x7FF8000000000000u64.to_le_bytes();
+
+pub(crate) const CANONICAL_NAN_F32X4: [u8; 16] = {
+    let n = NAN32;
+    [
+        n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3], n[0], n[1], n[2], n[3], n[0], n[1], n[2],
+        n[3],
+    ]
+};
+
+pub(crate) const CANONICAL_NAN_F64X2: [u8; 16] = {
+    let n = NAN64;
+    [
+        n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[0], n[1], n[2], n[3], n[4], n[5], n[6],
+        n[7],
+    ]
+};
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
@@ -1350,12 +1372,12 @@ pub enum RoundingMode {
 }
 
 /// Memory flags for trusted loads/stores.
-pub const TRUSTED_FLAGS: MemFlags = MemFlags::trusted();
+pub const TRUSTED_FLAGS: MemFlagsData = MemFlagsData::trusted();
 
 /// Flags used for WebAssembly loads / stores.
 /// Untrusted by default so we don't set `no_trap`.
 /// We also ensure that the endianness is the right one for WebAssembly.
-pub const UNTRUSTED_FLAGS: MemFlags = MemFlags::new().with_endianness(Endianness::Little);
+pub const UNTRUSTED_FLAGS: MemFlagsData = MemFlagsData::new().with_endianness(Endianness::Little);
 
 /// Generic MacroAssembler interface used by the code generation.
 ///
@@ -1624,8 +1646,21 @@ pub(crate) trait MacroAssembler {
     /// Perform add operation.
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()>;
 
+    /// Perform add with unsigned extension.
+    fn add_uextend(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        from_size: OperandSize,
+        size: OperandSize,
+    ) -> Result<()>;
+
     /// Perform a checked unsigned integer addition, emitting the provided trap
     /// if the addition overflows.
+    ///
+    /// Note: This only accepts immediate operands. For register operands with
+    /// proper extension, use add_uextend with manual overflow checking.
     fn checked_uadd(
         &mut self,
         dst: WritableReg,
@@ -1691,6 +1726,17 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a floating point square root operation.
     fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()>;
+
+    /// Canonicalize NaN values in `reg` if the setting is enabled.
+    fn maybe_canonicalize_nan(&mut self, reg: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Canonicalize NaN lanes in a v128 register if the setting is enabled.
+    /// `lane_size` is S32 for f32x4 or S64 for f64x2.
+    fn maybe_canonicalize_v128_nan(
+        &mut self,
+        reg: WritableReg,
+        lane_size: OperandSize,
+    ) -> Result<()>;
 
     /// Perform logical and operation.
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()>;
@@ -2048,7 +2094,7 @@ pub(crate) trait MacroAssembler {
         addr: Self::Address,
         size: OperandSize,
         op: RmwOp,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()>;
 
@@ -2082,7 +2128,7 @@ pub(crate) trait MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
         size: OperandSize,
-        flags: MemFlags,
+        flags: MemFlagsData,
         extend: Option<Extend<Zero>>,
     ) -> Result<()>;
 

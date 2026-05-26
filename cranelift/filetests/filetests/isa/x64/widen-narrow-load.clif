@@ -1,0 +1,240 @@
+test compile precise-output
+set opt_level=speed
+target x86_64 has_bmi1
+
+function %andn_i8_load(i64, i8) -> i8 {
+block0(v0: i64, v1: i8):
+    v2 = load.i8 v0
+    v3 = band_not v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movzbq (%rdi), %rdi
+;   andnl %edi, %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq (%rdi), %rdi ; trap: heap_oob
+;   andnl %edi, %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %andn_i16_load(i64, i16) -> i16 {
+block0(v0: i64, v1: i16):
+    v2 = load.i16 v0
+    v3 = band_not v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movzwq (%rdi), %rdi
+;   andnl %edi, %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzwq (%rdi), %rdi ; trap: heap_oob
+;   andnl %edi, %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %andn_i32_load(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+    v2 = load.i32 v0
+    v3 = band_not v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andnl (%rdi), %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   andnl (%rdi), %esi, %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %andn_i64_load(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = load.i64 v0
+    v3 = band_not v2, v1
+    return v3
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   andnq (%rdi), %rsi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   andnq (%rdi), %rsi, %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+;; ---- `select` via `cmove` ---------------------------------------------
+
+;; The consequent (`a` in `select cond a b`) flows to the `c` slot of `cmove`.
+
+function %select_i8_load(i32, i64, i8) -> i8 {
+block0(v0: i32, v1: i64, v2: i8):
+    v3 = load.i8 v1
+    v4 = select.i8 v0, v3, v2
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movzbq (%rsi), %rsi
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzbq (%rsi), %rsi ; trap: heap_oob
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %select_i16_load(i32, i64, i16) -> i16 {
+block0(v0: i32, v1: i64, v2: i16):
+    v3 = load.i16 v1
+    v4 = select.i16 v0, v3, v2
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   movzwq (%rsi), %rsi
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movzwq (%rsi), %rsi ; trap: heap_oob
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %select_i32_load(i32, i64, i32) -> i32 {
+block0(v0: i32, v1: i64, v2: i32):
+    v3 = load.i32 v1
+    v4 = select.i32 v0, v3, v2
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel (%rsi), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovnel (%rsi), %eax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %select_i64_load(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+    v3 = load.i64 v1
+    v4 = select.i64 v0, v3, v2
+    return v4
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovneq (%rsi), %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   testl %edi, %edi
+;   movq %rdx, %rax
+;   cmovneq (%rsi), %rax ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

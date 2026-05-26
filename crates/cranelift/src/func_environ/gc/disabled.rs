@@ -1,11 +1,14 @@
 //! `GcCompiler` implementation when GC support is disabled.
 
 use super::GcCompiler;
-use crate::func_environ::{Extension, FuncEnvironment};
+use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
-use wasmtime_environ::{TagIndex, TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
+use wasmtime_environ::{
+    GcArrayLayout, ModuleInternedTypeIndex, TagIndex, TypeIndex, WasmRefType, WasmResult,
+    WasmStorageType, wasm_unsupported,
+};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
@@ -112,18 +115,6 @@ pub fn translate_array_new_fixed(
     disabled()
 }
 
-pub fn translate_array_fill(
-    _func_env: &mut FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder<'_>,
-    _array_type_index: TypeIndex,
-    _array_ref: ir::Value,
-    _index: ir::Value,
-    _value: ir::Value,
-    _n: ir::Value,
-) -> WasmResult<()> {
-    disabled()
-}
-
 pub fn translate_array_len(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder,
@@ -162,4 +153,68 @@ pub fn translate_ref_test(
     _val_ty: WasmRefType,
 ) -> WasmResult<ir::Value> {
     disabled()
+}
+
+pub fn translate_array_new_entity(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder,
+    _array_type_index: TypeIndex,
+    _entity: CheckedEntity,
+    _data_offset: ir::Value,
+    _len: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn read_field_at_addr(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _ty: WasmStorageType,
+    _addr: ir::Value,
+    _extension: Option<Extension>,
+) -> WasmResult<ir::Value> {
+    disabled()
+}
+
+pub fn write_field_at_addr(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _field_ty: WasmStorageType,
+    _field_addr: ir::Value,
+    _new_val: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+pub fn init_field_at_addr(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _field_ty: WasmStorageType,
+    _field_addr: ir::Value,
+    _new_val: ir::Value,
+) -> WasmResult<()> {
+    disabled()
+}
+
+impl FuncEnvironment<'_> {
+    pub(crate) fn array_layout(
+        &mut self,
+        _type_index: ModuleInternedTypeIndex,
+    ) -> WasmResult<&GcArrayLayout> {
+        disabled()
+    }
+
+    pub(crate) fn get_gc_heap_base(
+        &mut self,
+        _builder: &mut FunctionBuilder<'_>,
+    ) -> WasmResult<ir::Value> {
+        disabled()
+    }
+
+    pub(crate) fn get_gc_heap_bound(
+        &mut self,
+        _builder: &mut FunctionBuilder<'_>,
+    ) -> WasmResult<ir::Value> {
+        disabled()
+    }
 }
