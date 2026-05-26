@@ -7,8 +7,11 @@ use wasmtime::*;
 pub fn make_api_calls(api: ApiCalls) {
     // The generator always starts with StoreNew; use its config to build the
     // shared engine that all stores in this sequence will use.
-    let engine = match api.calls.first() {
-        Some(ApiCall::StoreNew { config, .. }) => Engine::new(&config.to_wasmtime()).unwrap(),
+    let (engine, gc_enabled) = match api.calls.first() {
+        Some(ApiCall::StoreNew { config, .. }) => (
+            Engine::new(&config.to_wasmtime()).unwrap(),
+            config.module_config.config.gc_enabled,
+        ),
         _ => return,
     };
 
@@ -691,6 +694,9 @@ pub fn make_api_calls(api: ApiCalls) {
                     Some(s) => s,
                     None => continue,
                 };
+                if !gc_enabled {
+                    continue;
+                }
                 match Tag::new(&mut *st, &tt) {
                     Ok(t) => {
                         tags.insert(id, (t, store));
@@ -755,6 +761,65 @@ pub fn make_api_calls(api: ApiCalls) {
             ApiCall::TagDrop { id } => {
                 log::trace!("dropping tag {id}");
                 tags.remove(&id);
+            }
+
+            ApiCall::ModuleImports { module } => {
+                log::trace!("iterating imports of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                for _ in m.imports() {}
+            }
+
+            ApiCall::ModuleExports { module } => {
+                log::trace!("iterating exports of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                for _ in m.exports() {}
+            }
+
+            ApiCall::ModuleGetExport { module, ref name } => {
+                log::trace!("getting export {name:?} of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let _ = m.get_export(name);
+            }
+
+            ApiCall::ModuleName { module } => {
+                log::trace!("getting name of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let _ = m.name();
+            }
+
+            ApiCall::ModuleValidate { ref wasm } => {
+                log::trace!("validating {} bytes of wasm", wasm.len());
+                let _ = Module::validate(&engine, wasm);
+            }
+
+            ApiCall::ModuleSerializeDeserialize { src_id, dst_id } => {
+                log::trace!("serializing module {src_id} and deserializing as {dst_id}");
+                let src = match modules.get(&src_id) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let bytes = match src.serialize() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                match unsafe { Module::deserialize(&engine, &bytes) } {
+                    Ok(m) => {
+                        modules.insert(dst_id, m);
+                    }
+                    Err(_) => continue,
+                }
             }
         }
     }
