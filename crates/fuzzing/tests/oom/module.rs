@@ -17,9 +17,11 @@ fn module_deserialize() -> Result<()> {
 
                     (memory (export "memory") 1)
                     (data (i32.const 0) "a")
+                    (data "a")
 
                     (table (export "table") 1 funcref)
                     (elem (i32.const 0) func 1)
+                    (elem func 1)
 
                     (func (export "func") (param i32) (result i32)
                         (call 0 (local.get 0))

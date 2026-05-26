@@ -696,7 +696,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         DataKind::Passive => {
                             let range = mk_range(&mut self.result.total_passive_data)?;
                             self.result.passive_data.push(data);
-                            Some(self.result.module.passive_data.push(range))
+                            Some(self.result.module.passive_data.push(range)?)
                         }
                     };
                     self.result

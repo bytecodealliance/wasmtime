@@ -326,7 +326,7 @@ pub struct Module {
     pub passive_elements: TryPrimaryMap<PassiveElemIndex, TableSegmentElements>,
 
     /// Where passive data segments are located in the module's image.
-    pub passive_data: PrimaryMap<PassiveDataIndex, Range<u32>>,
+    pub passive_data: TryPrimaryMap<PassiveDataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
     pub types: TryPrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
