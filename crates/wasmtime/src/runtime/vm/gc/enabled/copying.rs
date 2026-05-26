@@ -951,7 +951,7 @@ unsafe impl GcHeap for CopyingHeap {
             roots: Some(roots),
             host_data_table,
             heap: self,
-            phase: CopyingCollectionPhase::Collect,
+            phase: CopyingCollectionPhase::ProcessRoots,
         })
     }
 
@@ -1009,6 +1009,8 @@ unsafe impl GcHeap for CopyingHeap {
     }
 }
 
+const OBJECTS_PER_INCREMENT: usize = 16_384;
+
 struct CopyingCollection<'a> {
     roots: Option<GcRootsIter<'a>>,
     host_data_table: &'a mut ExternRefHostDataTable,
@@ -1017,7 +1019,9 @@ struct CopyingCollection<'a> {
 }
 
 enum CopyingCollectionPhase {
-    Collect,
+    ProcessRoots,
+    ProcessWorklist,
+    SweepExternRefs,
     Done,
 }
 
@@ -1040,17 +1044,56 @@ impl CopyingCollection<'_> {
         Ok(())
     }
 
-    /// Scan all grey objects until the worklist is empty.
-    fn process_worklist(&mut self) -> Result<()> {
-        log::trace!("Begin processing worklist");
+    /// Handle the `ProcessRoots` phase: flip semi-spaces, initialize the
+    /// worklist, forward all roots, then transition to `ProcessWorklist`.
+    fn begin_collection(&mut self) -> Result<GcProgress> {
+        log::trace!("Begin copying collection: processing roots");
+
+        assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+        assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
+        assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
+        assert!(
+            self.heap.active_space_end() <= self.heap.idle_space_start
+                || self.heap.idle_space_end <= self.heap.active_space_start
+        );
+
+        self.heap.flip();
+        self.heap.initialize_worklist();
+
+        self.process_roots()?;
+
+        self.phase = CopyingCollectionPhase::ProcessWorklist;
+        Ok(GcProgress::Continue)
+    }
+
+    /// Scan up to `OBJECTS_PER_INCREMENT` grey objects from the worklist.
+    ///
+    /// When the worklist is fully drained, transitions to `SweepExternRefs`.
+    /// Always returns `GcProgress::Continue` so the caller yields after each
+    /// increment regardless of whether the worklist still has items.
+    fn process_worklist_increment(&mut self) -> Result<GcProgress> {
+        log::trace!("Begin processing worklist increment");
         let trace_infos = mem::take(&mut self.heap.trace_infos);
-        while let Some(gc_ref) = self.heap.worklist_pop()? {
-            debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
-            self.heap.scan(&gc_ref, &trace_infos)?;
-        }
+        let mut count = 0;
+        let has_more = loop {
+            if count >= OBJECTS_PER_INCREMENT {
+                break true;
+            }
+            match self.heap.worklist_pop()? {
+                Some(gc_ref) => {
+                    debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
+                    self.heap.scan(&gc_ref, &trace_infos)?;
+                    count += 1;
+                }
+                None => break false,
+            }
+        };
         self.heap.trace_infos = trace_infos;
-        log::trace!("End processing worklist");
-        Ok(())
+        if !has_more {
+            self.phase = CopyingCollectionPhase::SweepExternRefs;
+        }
+        log::trace!("End processing worklist increment (has_more={has_more})");
+        Ok(GcProgress::Continue)
     }
 
     /// Clean up dead externrefs by iterating the idle semi-space's externref
@@ -1077,57 +1120,47 @@ impl CopyingCollection<'_> {
         log::trace!("End sweeping `externref`s");
         Ok(())
     }
+
+    /// Handle the `SweepExternRefs` phase: sweep dead externrefs, resize
+    /// semi-spaces, and transition to `Done`.
+    fn finish_collection(&mut self) -> Result<GcProgress> {
+        log::trace!("Copying collection: sweeping externrefs");
+
+        assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+        assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
+        assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
+        assert!(
+            self.heap.active_space_end() <= self.heap.idle_space_start
+                || self.heap.idle_space_end <= self.heap.active_space_start
+        );
+
+        self.sweep_extern_refs()?;
+        self.heap.resize_semi_spaces();
+
+        debug_assert_eq!(
+            self.heap.active_space_end() - self.heap.active_space_start,
+            self.heap.idle_space_end - self.heap.idle_space_start,
+            "the active and idle spaces should be the same size"
+        );
+
+        if cfg!(gc_zeal) {
+            let idle_start = usize::try_from(self.heap.idle_space_start).unwrap();
+            let idle_end = usize::try_from(self.heap.idle_space_end).unwrap();
+            self.heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
+        }
+
+        log::trace!("End copying collection");
+        self.phase = CopyingCollectionPhase::Done;
+        Ok(GcProgress::Complete)
+    }
 }
 
 impl GarbageCollection<'_> for CopyingCollection<'_> {
     fn collect_increment(&mut self) -> Result<GcProgress> {
         match self.phase {
-            CopyingCollectionPhase::Collect => {
-                log::trace!("Begin copying collection");
-
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
-                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
-                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
-                assert!(
-                    self.heap.active_space_end() <= self.heap.idle_space_start
-                        || self.heap.idle_space_end <= self.heap.active_space_start
-                );
-
-                // Flip the semi-spaces.
-                self.heap.flip();
-                self.heap.initialize_worklist();
-
-                self.process_roots()?;
-                self.process_worklist()?;
-
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
-                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
-                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
-                assert!(
-                    self.heap.active_space_end() <= self.heap.idle_space_start
-                        || self.heap.idle_space_end <= self.heap.active_space_start
-                );
-
-                self.sweep_extern_refs()?;
-                self.heap.resize_semi_spaces();
-
-                debug_assert_eq!(
-                    self.heap.active_space_end() - self.heap.active_space_start,
-                    self.heap.idle_space_end - self.heap.idle_space_start,
-                    "the active and idle spaces should be the same size"
-                );
-
-                // Poison the idle space so stale accesses are detectable.
-                if cfg!(gc_zeal) {
-                    let idle_start = usize::try_from(self.heap.idle_space_start).unwrap();
-                    let idle_end = usize::try_from(self.heap.idle_space_end).unwrap();
-                    self.heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
-                }
-
-                log::trace!("End copying collection");
-                self.phase = CopyingCollectionPhase::Done;
-                Ok(GcProgress::Complete)
-            }
+            CopyingCollectionPhase::ProcessRoots => self.begin_collection(),
+            CopyingCollectionPhase::ProcessWorklist => self.process_worklist_increment(),
+            CopyingCollectionPhase::SweepExternRefs => self.finish_collection(),
             CopyingCollectionPhase::Done => Ok(GcProgress::Complete),
         }
     }
