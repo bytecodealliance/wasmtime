@@ -1332,6 +1332,135 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     Ok(())
 }
 
+// Regression test for a stack-map bug in `translate_per_element_copy` (used by
+// `array.copy` on arrays whose elements are GC references).
+//
+// The per-element loop derived raw `src_elem_addr` / `dst_elem_addr` pointers
+// once and used only those raw pointers inside the loop body. The source and
+// destination array gc-refs themselves were dead in CLIF inside the loop, so
+// they were absent from the stack maps at safe points there. Once the DRC
+// collector started firing `force_gc` from inside the read barrier (when the
+// over-approximated-stack-roots list grew past 1024 entries), a GC could run
+// mid-copy with neither array marked from any frame's stack map. Sweep could
+// then drop the arrays from OASR, freeing them and cascading dec-refs through
+// their elements, after which the rest of the copy read from freed memory.
+//
+// The fix passes the source and destination array gc-refs as block params
+// through the forward and backward iteration blocks so they stay live across
+// the per-element loop.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn drc_array_copy_keeps_arrays_alive_across_in_loop_gc() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+    // Keep the GC heap small so allocations cycle back through the free
+    // list quickly. This dramatically increases the chance that any slot
+    // freed mid-copy will be reused before the test's verify pass reads
+    // from it, making the bug observable.
+    config.gc_heap_reservation(128 * 1024);
+    config.gc_heap_reservation_for_growth(0);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "wasmtime" "gc" (func $gc))
+                (type $box (struct (field i32)))
+                (type $arr (array (mut (ref null $box))))
+
+                ;; Put the `array.copy` in a helper function so the source
+                ;; and destination gc-refs are visibly dead in CLIF inside
+                ;; the per-element loop -- they are function parameters
+                ;; that are only used at the top of the function to compute
+                ;; the initial address.
+                (func $do_copy
+                    (param $src (ref null $arr))
+                    (param $dst (ref null $arr))
+                    (param $len i32)
+                    (array.copy $arr $arr
+                        (local.get $dst) (i32.const 0)
+                        (local.get $src) (i32.const 0)
+                        (local.get $len)))
+
+                (func (export "test") (result i32)
+                    (local $src (ref null $arr))
+                    (local $dst (ref null $arr))
+                    (local $i i32)
+                    (local $sum i32)
+
+                    ;; N=2048 > 1024 so the per-element read barrier
+                    ;; definitely fires `force_gc` during the copy.
+                    (local.set $src (array.new $arr (ref.null $box) (i32.const 2048)))
+                    (local.set $i (i32.const 0))
+                    (loop $fill
+                        (array.set $arr (local.get $src) (local.get $i)
+                            (struct.new $box (local.get $i)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $fill (i32.lt_s (local.get $i) (i32.const 2048))))
+
+                    (local.set $dst (array.new $arr (ref.null $box) (i32.const 2048)))
+
+                    (call $gc)
+
+                    (call $do_copy (local.get $src) (local.get $dst) (i32.const 2048))
+
+                    ;; Drop the source local and force a GC so any
+                    ;; cascade-freed elements that should still be alive
+                    ;; via $dst would surface as either a trap (cast
+                    ;; failure / out-of-bounds) or wrong $dst contents.
+                    (local.set $src (ref.null $arr))
+                    (call $gc)
+
+                    ;; Heavily allocate to reuse any freed slots. Each
+                    ;; iteration allocates a $box with sentinel value -1;
+                    ;; if any element of $dst was a stale reference to a
+                    ;; cascade-freed $box, its slot gets reused here and
+                    ;; reading it back will see -1 rather than its
+                    ;; original index.
+                    (local.set $i (i32.const 0))
+                    (loop $churn
+                        (drop (struct.new $box (i32.const -1)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $churn (i32.lt_s (local.get $i) (i32.const 4096))))
+
+                    (call $gc)
+
+                    (local.set $i (i32.const 0))
+                    (local.set $sum (i32.const 0))
+                    (loop $verify
+                        (local.set $sum
+                            (i32.add (local.get $sum)
+                                (struct.get $box 0
+                                    (array.get $arr (local.get $dst) (local.get $i)))))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $verify (i32.lt_s (local.get $i) (i32.const 2048))))
+
+                    (local.get $sum)))
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("wasmtime", "gc", |mut caller: Caller<_>| -> Result<()> {
+        caller.gc(None)?;
+        Ok(())
+    })?;
+    let instance = linker.instantiate(&mut store, &module)?;
+    let test = instance.get_typed_func::<(), i32>(&mut store, "test")?;
+    let result = test.call(&mut store, ())?;
+
+    // Sum of 0..2048 = 2048 * 2047 / 2.
+    assert_eq!(result, 2_096_128);
+
+    Ok(())
+}
+
 // Test that we can completely fill the GC heap until we get an OOM. This
 // exercises growing the GC heap and that we configure compilation tunables and
 // runtime memories backing GC heaps correctly.
