@@ -933,6 +933,10 @@ impl Component {
             _ => unreachable!(),
         }
     }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.inner.index
+    }
 }
 
 /// A value which represents a known export of a component.

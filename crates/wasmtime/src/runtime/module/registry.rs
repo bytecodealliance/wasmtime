@@ -12,7 +12,10 @@ use alloc::sync::Arc;
 use core::marker::PhantomData;
 use core::ops::Range;
 use core::ptr::NonNull;
-use wasmtime_environ::{VMSharedTypeIndex, collections::btree_map::Entry};
+use wasmtime_environ::{
+    CompiledFunctionsTable, FuncKey, StaticModuleIndex, VMSharedTypeIndex,
+    collections::btree_map::Entry,
+};
 
 /// Used for registering modules with a store.
 ///
@@ -79,8 +82,19 @@ struct LoadedCode {
     /// The StoreCode in this range.
     code: StoreCode,
 
-    /// Map by starting text offset of Modules in this code region.
-    modules: TryBTreeMap<usize, RegisteredModuleId>,
+    /// The index of compiled functions in `code`.
+    ///
+    /// This index is used to map from program counters back to a `FuncKey`.
+    /// Primarily used in [`ModuleRegistry::lookup_frame_info`] at this time
+    /// below.
+    index: Arc<CompiledFunctionsTable>,
+
+    /// A mapping from the [`StaticModuleIndex`] values returned by the `index`
+    /// field above to a module within this registry.
+    ///
+    /// This is lazily populated as modules are registered and instantiated from
+    /// a component.
+    modules: TrySecondaryMap<StaticModuleIndex, Option<RegisteredModuleId>>,
 }
 
 /// An identifier of a module that has previously been inserted into a
@@ -119,6 +133,12 @@ impl<'a> RegisterBreakpointState<'a> {
     }
 }
 
+enum ModuleOrComponent<'a> {
+    Module(&'a Module),
+    #[cfg(feature = "component-model")]
+    Component(&'a Component),
+}
+
 impl ModuleRegistry {
     /// Get a previously-registered module by id.
     pub fn module_by_id(&self, id: RegisteredModuleId) -> Option<&Module> {
@@ -130,17 +150,29 @@ impl ModuleRegistry {
         self.modules.get(RegisteredModuleId(id))
     }
 
-    /// Fetches a registered StoreCode and module and an offset within
-    /// it given a program counter value.
-    pub fn module_and_code_by_pc<'a>(&'a self, pc: usize) -> Option<(ModuleWithCode<'a>, usize)> {
+    /// Looks up `pc`, an absolute program counter address, to see if it
+    /// corresponds to any loaded code within this [`ModuleRegistry`].
+    ///
+    /// Returns `None` if nothing is found, and otherwise returns the
+    /// corresponding [`LoadedCode`] as well as a relative pc from the start of
+    /// the code's text section if found.
+    fn loaded_code_by_pc(&self, pc: usize) -> Option<(&LoadedCode, usize)> {
         let (_, code) = self
             .loaded_code
             .range(..=StoreCodePC::from_raw(pc))
             .next_back()?;
         let offset = StoreCodePC::offset_of(code.code.text_range(), pc)?;
-        let (_, module_id) = code.modules.range(..=offset).next_back()?;
-        let module = self.modules.get(*module_id)?;
-        Some((ModuleWithCode::from_raw(module, &code.code), offset))
+        Some((code, offset))
+    }
+
+    /// Consults this [`ModuleRegistry`] to see if `pc` corrseponds to any
+    /// previously-registered block of code.
+    ///
+    /// Upon success returns the [`StoreCode`] as well as a relative pc from the
+    /// start of the text section.
+    pub fn store_code_by_pc(&self, pc: usize) -> Option<(&StoreCode, usize)> {
+        let (code, pc) = self.loaded_code_by_pc(pc)?;
+        Some((&code.code, pc))
     }
 
     /// Fetches the `StoreCode` for a given `EngineCode`.
@@ -190,14 +222,8 @@ impl ModuleRegistry {
         engine: &Engine,
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<RegisteredModuleId> {
-        self.register(
-            module.id(),
-            module.engine_code(),
-            Some(module),
-            engine,
-            breakpoint_state,
-        )
-        .map(|id| id.unwrap())
+        self.register(ModuleOrComponent::Module(module), engine, breakpoint_state)
+            .map(|id| id.unwrap())
     }
 
     #[cfg(feature = "component-model")]
@@ -208,9 +234,7 @@ impl ModuleRegistry {
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<()> {
         self.register(
-            component.id(),
-            component.engine_code(),
-            None,
+            ModuleOrComponent::Component(component),
             engine,
             breakpoint_state,
         )?;
@@ -220,19 +244,29 @@ impl ModuleRegistry {
     /// Registers a new module with the registry.
     fn register(
         &mut self,
-        compiled_id: CompiledModuleId,
-        code: &Arc<EngineCode>,
-        module: Option<&Module>,
+        module_or_component: ModuleOrComponent<'_>,
         engine: &Engine,
         breakpoint_state: RegisterBreakpointState,
     ) -> Result<Option<RegisteredModuleId>> {
+        let compiled_id = match module_or_component {
+            ModuleOrComponent::Module(module) => module.id(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(component) => component.id(),
+        };
+        let code = match module_or_component {
+            ModuleOrComponent::Module(module) => module.engine_code(),
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(component) => component.engine_code(),
+        };
         // Register the module, if any.
-        let id = if let Some(module) = module {
-            let id = RegisteredModuleId(compiled_id);
-            self.modules.entry(id).or_insert_with(|| module.clone())?;
-            Some(id)
-        } else {
-            None
+        let id = match module_or_component {
+            ModuleOrComponent::Module(module) => {
+                let id = RegisteredModuleId(compiled_id);
+                self.modules.entry(id).or_insert_with(|| module.clone())?;
+                Some(id)
+            }
+            #[cfg(feature = "component-model")]
+            ModuleOrComponent::Component(_) => None,
         };
 
         // Create a StoreCode if one does not already exist.
@@ -241,11 +275,17 @@ impl ModuleRegistry {
                 let store_code = StoreCode::new(engine, code)?;
                 let store_code_pc = store_code.text_range().start;
                 assert_no_overlap(&self.loaded_code, store_code.text_range());
+                let index = match module_or_component {
+                    ModuleOrComponent::Module(module) => module.index(),
+                    #[cfg(feature = "component-model")]
+                    ModuleOrComponent::Component(component) => component.index(),
+                };
                 self.loaded_code.insert(
                     store_code_pc,
                     LoadedCode {
                         code: store_code,
-                        modules: TryBTreeMap::default(),
+                        index: index.clone(),
+                        modules: Default::default(),
                     },
                 )?;
                 *v.insert(store_code_pc)?
@@ -254,15 +294,15 @@ impl ModuleRegistry {
         };
 
         // Add this module to the LoadedCode if not present.
-        if let (Some(module), Some(id)) = (module, id) {
-            if let Some((_, range)) = module.compiled_module().finished_function_ranges().next() {
-                let loaded_code = self
-                    .loaded_code
-                    .get_mut(store_code_pc)
-                    .expect("loaded_code must have entry for StoreCodePC");
-                loaded_code.modules.insert(range.start, id)?;
-                breakpoint_state.update(&mut loaded_code.code, module)?;
-            }
+        if let (ModuleOrComponent::Module(module), Some(id)) = (module_or_component, id) {
+            let loaded_code = self
+                .loaded_code
+                .get_mut(store_code_pc)
+                .expect("loaded_code must have entry for StoreCodePC");
+            loaded_code
+                .modules
+                .insert(module.env_module().module_index, Some(id))?;
+            breakpoint_state.update(&mut loaded_code.code, module)?;
         }
 
         Ok(id)
@@ -280,15 +320,18 @@ impl ModuleRegistry {
         &'a self,
         pc: usize,
     ) -> Option<(FrameInfo, ModuleWithCode<'a>)> {
-        let (_, code) = self
-            .loaded_code
-            .range(..=StoreCodePC::from_raw(pc))
-            .next_back()?;
-        let text_offset = StoreCodePC::offset_of(code.code.text_range(), pc)?;
-        let (_, module_id) = code.modules.range(..=text_offset).next_back()?;
+        let (code, text_offset) = self.loaded_code_by_pc(pc)?;
+        let module_index = match code
+            .index
+            .func_by_text_offset(u32::try_from(text_offset).ok()?)?
+        {
+            FuncKey::DefinedWasmFunction(module, _) => module,
+            _ => return None,
+        };
+        let module_id = (*code.modules.get(module_index)?)?;
         let module = self
             .modules
-            .get(*module_id)
+            .get(module_id)
             .expect("referenced module ID not found");
         let info = FrameInfo::new(module.clone(), text_offset)?;
         let module_with_code = ModuleWithCode::from_raw(module, &code.code);

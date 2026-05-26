@@ -633,6 +633,22 @@ impl CodeMemory {
         let mmap = self.mmap.deep_clone()?;
         Self::new(engine, mmap)
     }
+
+    /// Obtain a frame-table parser on this module's frame state slot
+    /// (debug instrumentation) metadata.
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table(&self) -> Option<wasmtime_environ::FrameTable<'_>> {
+        let data = self.frame_tables();
+        if data.is_empty() {
+            None
+        } else {
+            let orig_text = self.text();
+            Some(
+                wasmtime_environ::FrameTable::parse(data, orig_text)
+                    .expect("Frame tables were validated on module load"),
+            )
+        }
+    }
 }
 
 fn section_name<'a>(
