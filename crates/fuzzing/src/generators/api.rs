@@ -45,6 +45,7 @@ impl FuzzValType {
 struct Swarm {
     store_new: bool,
     store_drop: bool,
+    store_gc: bool,
     module_new: bool,
     module_drop: bool,
     instance_new: bool,
@@ -146,6 +147,9 @@ pub enum ApiCall {
         config: Config,
     },
     StoreDrop {
+        id: usize,
+    },
+    StoreGc {
         id: usize,
     },
     ModuleNew {
@@ -666,6 +670,13 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.exn_ref_pres.retain(|_, store_id| *store_id != id);
                     scope.exn_refs.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
+                });
+            }
+            if swarm.store_gc && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let id = **input.choose(&stores)?;
+                    Ok(StoreGc { id })
                 });
             }
             if swarm.module_new {

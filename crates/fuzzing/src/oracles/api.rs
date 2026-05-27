@@ -65,6 +65,15 @@ pub fn make_api_calls(api: ApiCalls) {
                 stores.remove(&id);
             }
 
+            ApiCall::StoreGc { id } => {
+                log::trace!("collecting garbage in store {id}");
+                let st = match stores.get_mut(&id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = st.gc(None);
+            }
+
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {id}");
                 log_wasm(&wasm);
