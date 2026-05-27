@@ -93,6 +93,7 @@ fn stack_switching_disallows_inlining() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
     let mut config = Config::new();
     config.strategy(Strategy::Winch);
