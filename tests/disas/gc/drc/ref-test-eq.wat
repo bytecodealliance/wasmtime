@@ -8,6 +8,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
+;;     ss0 = explicit_slot 4, align = 4
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -18,6 +19,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
+;;                                     v24 = stack_addr.i64 ss0
+;;                                     store notrap v2, v24
 ;;                                     v23 = iconst.i32 0
 ;; @001b                               v4 = icmp eq v2, v23  ; v23 = 0
 ;; @001b                               v5 = uextend.i32 v4

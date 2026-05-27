@@ -12,6 +12,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
+;;     ss0 = explicit_slot 4, align = 4
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -30,6 +31,8 @@
 ;; @0021                               v6 = iconst.i32 40
 ;; @0021                               v12 = iconst.i32 8
 ;; @0021                               v13 = call fn0(v0, v8, v11, v6, v12)  ; v8 = -1342177280, v6 = 40, v12 = 8
+;;                                     v48 = stack_addr.i64 ss0
+;;                                     store notrap v13, v48
 ;; @0021                               v3 = f32const 0.0
 ;; @0021                               v46 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0021                               v14 = load.i64 notrap aligned readonly can_move v46+32
@@ -45,10 +48,10 @@
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     v65 = iconst.i32 0
+;;                                     v66 = iconst.i32 0
 ;;                                     v43 = iconst.i64 32
 ;; @0021                               v19 = iadd.i64 v16, v43  ; v43 = 32
-;; @0021                               store user2 little v65, v19  ; v65 = 0
+;; @0021                               store user2 little v66, v19  ; v66 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

@@ -70,6 +70,8 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32) tail {
+;;     ss0 = explicit_slot 4, align = 4
+;;     ss1 = explicit_slot 4, align = 4
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -82,14 +84,18 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
+;;                                     v62 = stack_addr.i64 ss1
+;;                                     store notrap v3, v62
 ;; @004a                               trapz v2, user16
-;; @004a                               v59 = load.i64 notrap aligned readonly can_move v0+8
-;; @004a                               v5 = load.i64 notrap aligned readonly can_move v59+32
+;; @004a                               v60 = load.i64 notrap aligned readonly can_move v0+8
+;; @004a                               v5 = load.i64 notrap aligned readonly can_move v60+32
 ;; @004a                               v4 = uextend.i64 v2
 ;; @004a                               v6 = iadd v5, v4
 ;; @004a                               v7 = iconst.i64 32
 ;; @004a                               v8 = iadd v6, v7  ; v7 = 32
 ;; @004a                               v9 = load.i32 user2 little v8
+;;                                     v59 = stack_addr.i64 ss0
+;;                                     store notrap v9, v59
 ;;                                     v58 = iconst.i32 1
 ;; @004a                               v10 = band v3, v58  ; v58 = 1
 ;;                                     v57 = iconst.i32 0
@@ -110,25 +116,25 @@
 ;; @004a                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v73 = iadd.i64 v6, v7  ; v7 = 32
-;; @004a                               store.i32 user2 little v3, v73
-;;                                     v74 = iconst.i32 1
-;;                                     v75 = band.i32 v9, v74  ; v74 = 1
-;;                                     v76 = iconst.i32 0
-;;                                     v77 = icmp.i32 eq v9, v76  ; v76 = 0
-;; @004a                               v28 = uextend.i32 v77
-;; @004a                               v29 = bor v75, v28
+;;                                     v75 = iadd.i64 v6, v7  ; v7 = 32
+;; @004a                               store.i32 user2 little v3, v75
+;;                                     v76 = iconst.i32 1
+;;                                     v77 = band.i32 v9, v76  ; v76 = 1
+;;                                     v78 = iconst.i32 0
+;;                                     v79 = icmp.i32 eq v9, v78  ; v78 = 0
+;; @004a                               v28 = uextend.i32 v79
+;; @004a                               v29 = bor v77, v28
 ;; @004a                               brif v29, block7, block4
 ;;
 ;;                                 block4:
 ;; @004a                               v30 = uextend.i64 v9
 ;; @004a                               v32 = iadd.i64 v5, v30
-;;                                     v78 = iconst.i64 8
-;; @004a                               v34 = iadd v32, v78  ; v78 = 8
+;;                                     v80 = iconst.i64 8
+;; @004a                               v34 = iadd v32, v80  ; v80 = 8
 ;; @004a                               v35 = load.i64 user2 v34
-;;                                     v79 = iconst.i64 1
-;;                                     v71 = icmp eq v35, v79  ; v79 = 1
-;; @004a                               brif v71, block5, block6
+;;                                     v81 = iconst.i64 1
+;;                                     v73 = icmp eq v35, v81  ; v81 = 1
+;; @004a                               brif v73, block5, block6
 ;;
 ;;                                 block5 cold:
 ;; @004a                               call fn0(v0, v9)
@@ -137,8 +143,8 @@
 ;;                                 block6:
 ;;                                     v47 = iconst.i64 -1
 ;; @004a                               v36 = iadd.i64 v35, v47  ; v47 = -1
-;;                                     v80 = iadd.i64 v32, v78  ; v78 = 8
-;; @004a                               store user2 v36, v80
+;;                                     v82 = iadd.i64 v32, v80  ; v80 = 8
+;; @004a                               store user2 v36, v82
 ;; @004a                               jump block7
 ;;
 ;;                                 block7:
