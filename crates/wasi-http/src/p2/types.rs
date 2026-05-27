@@ -146,9 +146,9 @@ impl WasiHttpCtxView<'_> {
 
 /// The concrete type behind a `wasi:http/types.response-outparam` resource.
 pub struct HostResponseOutparam {
-    /// The sender for sending a response.
-    pub result:
-        tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
+    /// The callback sending a response.
+    pub send:
+        Box<dyn FnOnce(Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>) + Send + Sync>,
 }
 
 impl WasiHttpCtxView<'_> {
@@ -159,7 +159,29 @@ impl WasiHttpCtxView<'_> {
             Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
-        let id = self.table.push(HostResponseOutparam { result })?;
+        let id = self.table.push(HostResponseOutparam {
+            send: Box::new(move |value| {
+                // Giving the API doesn't return any error, it's probably
+                // better to ignore the error than trap the guest, in case of
+                // host timeout and dropped the receiver side of the channel.
+                // See also: #10784
+                _ = result.send(value)
+            }),
+        })?;
+        Ok(id)
+    }
+
+    /// Create a new outgoing response from an `FnOnce`.
+    pub fn new_response_outparam_from_callback(
+        &mut self,
+        callback: impl FnOnce(Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>)
+        + Send
+        + Sync
+        + 'static,
+    ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
+        let id = self.table.push(HostResponseOutparam {
+            send: Box::new(callback),
+        })?;
         Ok(id)
     }
 }
