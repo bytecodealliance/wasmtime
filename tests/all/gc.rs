@@ -1,4 +1,4 @@
-use super::{gc_store, ref_types_module};
+use super::{async_functions::CountPending, gc_store, ref_types_module};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -3442,6 +3442,71 @@ fn miri_gc_smoke_test() -> Result<()> {
         let e_val = e.field(&mut store, 0)?;
         assert_eq!(e_val.unwrap_i32(), 7);
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn copying_collector_async_gc_yields() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    if crate::no_hog_memory() {
+        return Ok(());
+    }
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::Copying);
+
+    let engine = Engine::new(&config)?;
+
+    const NUM_OBJECTS: usize = 100_000;
+    const OBJECTS_PER_INCREMENT: usize = 16_384;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $node (struct (field i32) (field (ref null $node))))
+                (global $list (export "list") (mut (ref null $node)) (ref.null $node))
+
+                (func (export "build") (param $n i32)
+                    (local $i i32)
+                    (local.set $i (i32.const 0))
+                    (block $done
+                        (loop $loop
+                            (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+                            (global.set $list
+                                (struct.new $node
+                                    (local.get $i)
+                                    (global.get $list)
+                                )
+                            )
+                            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                            (br $loop)
+                        )
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let build = instance.get_typed_func::<i32, ()>(&mut store, "build")?;
+    build.call(&mut store, NUM_OBJECTS as i32)?;
+
+    let gc_future = store.gc_async(None);
+    let (result, pending_count) = CountPending::new(Box::pin(gc_future)).await;
+    result?;
+
+    let min_expected = NUM_OBJECTS / OBJECTS_PER_INCREMENT;
+    assert!(
+        pending_count >= min_expected,
+        "expected at least {min_expected} yields but got {pending_count}",
+    );
 
     Ok(())
 }
