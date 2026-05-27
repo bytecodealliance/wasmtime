@@ -4456,12 +4456,13 @@ impl FuncEnvironment<'_> {
         src_addr: ir::Value,
         bytes: u64,
     ) {
-        // `trusted()` (notrap + aligned) is sound even though the chunks may be
-        // unaligned: each load feeds only its paired store, never an instruction
-        // operand that requires alignment, so the backend selects unaligned
-        // moves regardless of the `aligned` flag. The range was already
-        // bounds-checked, so `notrap` is fine too.
-        let flags = ir::MemFlagsData::trusted();
+        // `trusted()` (notrap + aligned) is sound: the range is already
+        // bounds-checked, and each load feeds only its paired store, so the
+        // backend selects unaligned moves regardless of the `aligned` flag.
+        // Endianness is pinned to `Little` because Pulley's `v128` load/store
+        // only encode the little-endian variant, and matching load/store
+        // endianness preserves the destination bytes either way.
+        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
         const WIDTHS: &[(u64, ir::Type)] = &[
             (16, ir::types::I8X16),
             (8, ir::types::I64),
