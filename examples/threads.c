@@ -2,9 +2,11 @@
 Example of instantiating of the WebAssembly module and invoking its exported
 function in a separate thread.
 
-You can build using cmake:
+You can build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-threads
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-threads
+  ./build/wasmtime-threads
 */
 
 #ifndef _WIN32
