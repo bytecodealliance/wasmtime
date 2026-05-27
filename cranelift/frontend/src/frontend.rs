@@ -424,18 +424,18 @@ impl<'a> FunctionBuilder<'a> {
     /// the stack and it being reloading again, the stack can be updated to
     /// facilitate moving GCs.
     ///
-    /// This does not affect any pre-existing uses of the variable.
+    /// This must be called before any definition of the variable.
     ///
     /// # Panics
     ///
-    /// Panics if the variable's type is larger than 16 bytes or if this
-    /// variable has not been declared yet.
+    /// Panics if the variable's type is larger than 16 bytes, if this
+    /// variable has not been declared yet, or if it has already been defined.
     pub fn declare_var_needs_stack_map(&mut self, var: Variable) {
         log::trace!("declare_var_needs_stack_map({var:?})");
         let ty = self.func_ctx.variables[var];
         assert!(ty != types::INVALID);
         assert!(ty.bytes() <= 16);
-        self.func_ctx.ssa.stack_map_vars_mut().insert(var);
+        self.func_ctx.ssa.mark_var_needs_stack_map(var);
     }
 
     /// Returns the Cranelift IR necessary to use a previously defined user

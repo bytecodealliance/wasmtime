@@ -219,9 +219,15 @@ impl SSABuilder {
         self.record_stack_map_binding(var, val);
     }
 
-    /// Mutable view of the variables whose bindings must be tracked for stack maps.
-    pub fn stack_map_vars_mut(&mut self) -> &mut EntitySet<Variable> {
-        &mut self.stack_map_vars
+    /// Mark `var` as needing its bindings tracked for stack maps.
+    pub fn mark_var_needs_stack_map(&mut self, var: Variable) {
+        assert!(
+            self.variables[var].values().all(|v| v.is_none()),
+            "declare_var_needs_stack_map({var:?}) must be called before any \
+             definition of the variable; otherwise earlier definitions are \
+             silently omitted from stack maps"
+        );
+        self.stack_map_vars.insert(var);
     }
 
     /// SSA values that must be included in stack maps.
