@@ -11,9 +11,7 @@ use super::{MergeableLoadSize, is_int_or_ref_ty, is_mergeable_load, lower_to_amo
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
 use crate::ir::types::*;
-use crate::ir::{
-    BlockCall, Inst, InstructionData, LibCall, MemFlagsData, Opcode, TrapCode, Value, ValueList,
-};
+use crate::ir::{BlockCall, Inst, InstructionData, LibCall, Opcode, TrapCode, Value, ValueList};
 use crate::isa::x64::X64Backend;
 use crate::isa::x64::inst::{ReturnCallInfo, args::*, regs};
 use crate::isa::x64::lower::{InsnInput, emit_vm_call};

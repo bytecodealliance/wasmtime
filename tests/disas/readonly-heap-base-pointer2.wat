@@ -8,6 +8,7 @@
     (i32.load (local.get 0)))
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -26,7 +27,7 @@
 ;; @0022                               v7 = load.i64 notrap aligned readonly can_move v12
 ;; @0022                               v8 = iadd v7, v4
 ;; @0022                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
-;; @0022                               v11 = load.i32 little heap v10
+;; @0022                               v11 = load.i32 little region0 v10
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:

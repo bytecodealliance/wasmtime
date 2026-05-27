@@ -232,6 +232,15 @@ pub struct FuncEnvironment<'module_environment> {
     /// nonlinear control flow). This is useful in cases where we need
     /// to e.g. record the return-address of a callsite for debuginfo.
     pub(crate) next_srcloc: ir::SourceLoc,
+
+    /// Cached alias regions for alias analysis.
+    heap_alias_region: Option<ir::AliasRegion>,
+    table_alias_region: Option<ir::AliasRegion>,
+    #[allow(
+        dead_code,
+        reason = "included for completeness, will be used in follow up commits"
+    )]
+    vmctx_alias_region: Option<ir::AliasRegion>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -294,6 +303,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
             wasm_module_offset: translation.wasm_module_offset,
+            heap_alias_region: None,
+            table_alias_region: None,
+            vmctx_alias_region: None,
         }
     }
 
@@ -306,6 +318,37 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             self.vmctx = Some(vmctx);
             vmctx
+        })
+    }
+
+    pub(crate) fn get_heap_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.heap_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 0,
+                description: "heap".into(),
+            })
+        })
+    }
+
+    pub(crate) fn get_table_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.table_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 1,
+                description: "table".into(),
+            })
+        })
+    }
+
+    #[allow(
+        dead_code,
+        reason = "included for completeness, will be used in follow up commits"
+    )]
+    pub(crate) fn get_vmctx_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.vmctx_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 2,
+                description: "vmctx".into(),
+            })
         })
     }
 
@@ -330,11 +373,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (vmctx, offset)
         } else {
             let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
+            let global_flags = func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                .unwrap();
             let global = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                flags: MemFlagsData::trusted().with_readonly().with_can_move(),
+                flags: global_flags,
             });
             (global, 0)
         }
@@ -349,11 +397,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let offset = self.offsets.ptr.vmctx_store_context();
         let base = self.vmctx(func);
+        let ptr_flags = func
+            .dfg
+            .mem_flags
+            .insert(ir::MemFlagsData::trusted().with_readonly().with_can_move())
+            .unwrap();
         let ptr = func.create_global_value(ir::GlobalValueData::Load {
             base,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            flags: ptr_flags,
         });
         self.vm_store_context = Some(ptr);
         ptr
@@ -961,6 +1014,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         offset: u32,
         flags: ir::MemFlagsData,
     ) -> ir::GlobalValue {
+        let flags = func.dfg.mem_flags.insert(flags).unwrap();
         func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
@@ -1578,11 +1632,12 @@ impl FuncEnvironment<'_> {
             }
         };
 
+        let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
         let bound = func.create_global_value(ir::GlobalValueData::Load {
             base: base_ptr,
             offset: Offset32::new(current_length_offset),
             global_type: pointer_type,
-            flags: MemFlagsData::trusted(),
+            flags: bound_flags,
         });
 
         let base = self.make_heap_base(func, memory, base_ptr, base_offset);
@@ -1610,11 +1665,12 @@ impl FuncEnvironment<'_> {
             flags.set_readonly();
         }
 
+        let heap_base_flags = func.dfg.mem_flags.insert(flags).unwrap();
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(offset),
             global_type: pointer_type,
-            flags,
+            flags: heap_base_flags,
         });
         heap_base
     }
@@ -1635,11 +1691,16 @@ impl FuncEnvironment<'_> {
                 (vmctx, base_offset, current_elements_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmtable_from(index);
+                let table_flags = func
+                    .dfg
+                    .mem_flags
+                    .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                    .unwrap();
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    flags: MemFlagsData::trusted().with_readonly().with_can_move(),
+                    flags: table_flags,
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -1656,17 +1717,20 @@ impl FuncEnvironment<'_> {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
 
+        let base_flags = if Some(table.limits.min) == table.limits.max {
+            func.dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                .unwrap()
+        } else {
+            func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap()
+        };
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: if Some(table.limits.min) == table.limits.max {
-                // A fixed-size table can't be resized so its base address won't
-                // change.
-                MemFlagsData::trusted().with_readonly().with_can_move()
-            } else {
-                MemFlagsData::trusted()
-            },
+            // A fixed-size table can't be resized so its base address won't change.
+            flags: base_flags,
         });
 
         let bound = if Some(table.limits.min) == table.limits.max {
@@ -1674,6 +1738,7 @@ impl FuncEnvironment<'_> {
                 bound: table.limits.min,
             }
         } else {
+            let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
             TableSize::Dynamic {
                 bound_gv: func.create_global_value(ir::GlobalValueData::Load {
                     base: ptr,
@@ -1682,7 +1747,7 @@ impl FuncEnvironment<'_> {
                         u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
                     )
                     .unwrap(),
-                    flags: MemFlagsData::trusted(),
+                    flags: bound_flags,
                 }),
             }
         };
@@ -3063,7 +3128,8 @@ impl FuncEnvironment<'_> {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 Ok(builder.ins().load(ty, flags, addr, offset))
             }
             GlobalVariable::Custom => {
@@ -3111,7 +3177,8 @@ impl FuncEnvironment<'_> {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                 builder.ins().store(flags, val, addr, offset);
                 self.update_global(builder, global_index, val);

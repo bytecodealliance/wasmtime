@@ -31,6 +31,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -40,7 +41,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @003d                               v3 = load.i64 notrap aligned readonly can_move v0+48
-;; @003d                               v4 = load.i32 notrap aligned table v3
+;; @003d                               v4 = load.i32 notrap aligned region0 v3
 ;; @003f                               jump block1
 ;;
 ;;                                 block1:
@@ -48,6 +49,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -57,7 +59,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0042                               v3 = load.i64 notrap aligned readonly can_move v0+72
-;; @0042                               v4 = load.i32 notrap aligned table v3
+;; @0042                               v4 = load.i32 notrap aligned region0 v3
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
@@ -79,6 +81,7 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -86,7 +89,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @004c                               v4 = load.i32 notrap aligned table v0+112
+;; @004c                               v4 = load.i32 notrap aligned region0 v0+112
 ;; @004e                               jump block1
 ;;
 ;;                                 block1:

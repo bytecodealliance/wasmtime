@@ -20,8 +20,8 @@ use cranelift_codegen::ir::{DebugTag, types::*};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
-    Function, GlobalValue, GlobalValueData, JumpTableData, MemFlagsData, Opcode, SigRef, Signature,
-    StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value, types,
+    Function, GlobalValue, GlobalValueData, JumpTableData, MemFlagsData, MemFlagsSet, Opcode,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value, types,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -328,6 +328,21 @@ impl Context {
         } else {
             Ok(())
         }
+    }
+
+    // Allocate an alias region.
+    fn add_alias_region(
+        &mut self,
+        ar: ir::AliasRegion,
+        data: ir::AliasRegionData,
+        loc: Location,
+    ) -> ParseResult<()> {
+        // Ensure regions are defined in order (region0, region1, ...).
+        if self.function.dfg.alias_regions.len() != ar.index() {
+            return err!(loc, "duplicate alias region {}", ar);
+        }
+        self.function.dfg.alias_regions.push(data);
+        Ok(())
     }
 
     // Allocate a new signature.
@@ -886,13 +901,24 @@ impl<'a> Parser<'a> {
     // Match and a consume a possibly empty sequence of memory operation flags.
     fn optional_memflags(&mut self) -> ParseResult<MemFlagsData> {
         let mut flags = MemFlagsData::new();
-        while let Some(Token::Identifier(text)) = self.token() {
-            match flags.set_by_name(text) {
-                Ok(true) => {
+        loop {
+            match self.token() {
+                Some(Token::Identifier(text)) => match flags.set_by_name(text) {
+                    Ok(true) => {
+                        self.consume();
+                    }
+                    Ok(false) => break,
+                    Err(msg) => return err!(self.loc, msg),
+                },
+                Some(Token::AliasRegion(n)) => {
+                    if flags.alias_region().is_some() {
+                        return err!(self.loc, "cannot set more than one alias region");
+                    }
+                    let region = ir::AliasRegion::new(n as usize);
+                    flags.set_alias_region(Some(region));
                     self.consume();
                 }
-                Ok(false) => break,
-                Err(msg) => return err!(self.loc, msg),
+                _ => break,
             }
         }
         Ok(flags)
@@ -1464,7 +1490,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::GlobalValue(..)) => {
                     self.start_gathering_comments();
-                    self.parse_global_value_decl()
+                    self.parse_global_value_decl(&mut ctx.function.dfg.mem_flags)
                         .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
                 Some(Token::SigRef(..)) => {
@@ -1487,6 +1513,11 @@ impl<'a> Parser<'a> {
                     self.start_gathering_comments();
                     self.parse_stack_limit_decl()
                         .and_then(|gv| ctx.add_stack_limit(gv, self.loc))
+                }
+                Some(Token::AliasRegion(..)) => {
+                    self.start_gathering_comments();
+                    self.parse_alias_region_decl()
+                        .and_then(|(ar, dat)| ctx.add_alias_region(ar, dat, self.loc))
                 }
                 // More to come..
                 _ => return Ok(()),
@@ -1605,7 +1636,10 @@ impl<'a> Parser<'a> {
     //                   | "symbol" ["colocated"] name + imm64
     //                   | "dyn_scale_target_const" "." type
     //
-    fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
+    fn parse_global_value_decl(
+        &mut self,
+        mem_flags: &mut MemFlagsSet,
+    ) -> ParseResult<(GlobalValue, GlobalValueData)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
 
         self.match_token(Token::Equal, "expected '=' in global value declaration")?;
@@ -1618,13 +1652,14 @@ impl<'a> Parser<'a> {
                     "expected '.' followed by type in load global value decl",
                 )?;
                 let global_type = self.match_type("expected load type")?;
-                let flags = self.optional_memflags()?;
+                let flags_data = self.optional_memflags()?;
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
 
-                if !(flags.notrap() && flags.aligned()) {
+                if !(flags_data.notrap() && flags_data.aligned()) {
                     return err!(self.loc, "global-value load must be notrap and aligned");
                 }
+                let flags = mem_flags.insert(flags_data).unwrap();
                 GlobalValueData::Load {
                     base,
                     offset,
@@ -1900,6 +1935,44 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(name);
 
         Ok((name, data))
+    }
+
+    // Parse an alias region decl
+    //
+    // alias-region-decl ::= * AliasRegion(region) "=" Integer String
+    fn parse_alias_region_decl(&mut self) -> ParseResult<(ir::AliasRegion, ir::AliasRegionData)> {
+        let ar_num = match self.token() {
+            Some(Token::AliasRegion(n)) => n,
+            _ => return err!(self.loc, "expected alias region number"),
+        };
+        self.consume();
+        let ar = ir::AliasRegion::new(usize::try_from(ar_num).unwrap());
+
+        self.match_token(Token::Equal, "expected '=' in alias region decl")?;
+
+        let user_id = match self.token() {
+            Some(Token::Integer(s)) => u32::from_str_radix(s, 10)
+                .map_err(|_| self.error("expected integer user_id for alias region"))?,
+            _ => return err!(self.loc, "expected integer user_id for alias region"),
+        };
+        self.consume();
+
+        let description = match self.token() {
+            Some(Token::String(s)) => s.to_owned(),
+            _ => return err!(self.loc, "expected string description for alias region"),
+        };
+        self.consume();
+
+        let data = ir::AliasRegionData {
+            user_id,
+            description: std::borrow::Cow::Owned(description),
+        };
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(ir::AliasRegion::new(usize::try_from(ar_num).unwrap()));
+
+        Ok((ar, data))
     }
 
     // Parse a stack limit decl
@@ -2911,6 +2984,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::Load => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
@@ -2922,6 +2996,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::Store => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
@@ -2945,6 +3020,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::AtomicCas => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let expected = self.match_value("expected SSA value address")?;
@@ -2958,6 +3034,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::AtomicRmw => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let op = self.match_enum("expected AtomicRmwOp")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -2971,6 +3048,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::LoadNoOffset => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let addr = self.match_value("expected SSA value address")?;
                 InstructionData::LoadNoOffset {
                     opcode,
@@ -2980,6 +3058,7 @@ impl<'a> Parser<'a> {
             }
             InstructionFormat::StoreNoOffset => {
                 let flags = self.optional_memflags()?;
+                let flags = ctx.function.dfg.mem_flags.insert(flags).unwrap();
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;

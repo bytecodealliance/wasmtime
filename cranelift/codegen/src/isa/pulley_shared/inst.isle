@@ -270,9 +270,10 @@
 (type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
 (decl pure partial sinkable_load (Value) SinkableLoad)
 (rule (sinkable_load value @ (value_type ty))
-  (if-let inst @ (load _ flags addr (offset32 offset)) (is_sinkable_inst value))
-  (if-let true (is_native_endianness (endianness flags)))
-  (if-let true (memflags_nontrapping flags))
+  (if-let inst @ (load _ (mem_flags_data flags_data) addr (offset32 offset))
+          (is_sinkable_inst value))
+  (if-let true (is_native_endianness (endianness flags_data)))
+  (if-let true (memflags_nontrapping flags_data))
   (if-let offset8 (i32_try_into_u8 offset))
   (SinkableLoad.Load inst ty addr offset8))
 

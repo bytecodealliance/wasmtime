@@ -34,6 +34,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -63,7 +64,7 @@
 ;; @0039                               v16 = iadd.i64 v15, v12
 ;;                                     v25 = iconst.i64 0
 ;;                                     v26 = select_spectre_guard v24, v25, v16  ; v25 = 0
-;; @0039                               store little heap v22, v26  ; v22 = 0
+;; @0039                               store little region0 v22, v26  ; v22 = 0
 ;;                                     v27 = iconst.i32 1
 ;;                                     v28 = iadd v9, v27  ; v27 = 1
 ;; @0043                               jump block2(v28)

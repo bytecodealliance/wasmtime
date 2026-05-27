@@ -153,8 +153,9 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
+            let vmctx_region = func_env.get_vmctx_alias_region(&mut builder.func);
             builder.ins().store(
-                ir::MemFlagsData::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
+                ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                 end_of_object,
                 ptr_to_heap_data,
                 i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),

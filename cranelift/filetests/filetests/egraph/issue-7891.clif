@@ -41,6 +41,8 @@ target x86_64
 ; https://github.com/bytecodealliance/wasmtime/pull/7891
 
 function %bad_param_reuse(i32) -> i8 {
+    region0 = 0 "heap"
+
 block0(v0: i32): 
     v1 = iconst.i32 0
     brif v0, block1, block2(v0)
@@ -74,11 +76,13 @@ block3:
 ; check:     return v7
 
 function %bad_effect_reuse(i64) -> i8 {
+    region0 = 0 "heap"
+
 block0(v0: i64):
     brif v0, block1, block2
 
 block1:
-    v1 = load.i64 heap v0
+    v1 = load.i64 region0 v0
     v2 = isub v1, v1
     ; v2 simplifies to `iconst 0`, which is equivalent to v4
     v3 = icmp eq v0, v2
@@ -93,7 +97,7 @@ block2:
 }
 
 ; check: block1:
-; check:     v1 = load.i64 heap v0
+; check:     v1 = load.i64 region0 v0
 ; check:     v6 = iconst.i64 0
 ; check:     v7 = icmp.i64 eq v0, v6  ; v6 = 0
 ; check:     return v7

@@ -64,7 +64,7 @@
 ;; For more details on this see the `emit.rs` logic to emit
 ;; `LoadEffectiveAddress`.
 (rule iadd_base_case_32_or_64_lea -5 (lower (has_type (ty_32_or_64 ty) (iadd _ x y)))
-      (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
+      (x64_lea ty (to_amode_add (mem_flags_trusted_data) x y (zero_offset))))
 
 ;; Higher-priority cases than the previous two where a load can be sunk into
 ;; the add instruction itself. Note that both operands are tested for
@@ -663,7 +663,7 @@
                               base_mask_addr
                               mask_offset
                               0
-                              (mem_flags_trusted))))
+                              (mem_flags_trusted_data))))
 
 (rule (ishl_i8x16_mask (RegMemImm.Mem amt))
       (ishl_i8x16_mask (RegMemImm.Reg (x64_movq_rm amt))))
@@ -767,7 +767,7 @@
                               base_mask_addr
                               mask_offset
                               0
-                              (mem_flags_trusted))))
+                              (mem_flags_trusted_data))))
 
 (rule (ushr_i8x16_mask (RegMemImm.Mem amt))
       (ushr_i8x16_mask (RegMemImm.Reg (x64_movq_rm amt))))
@@ -3302,7 +3302,7 @@
               (has_type (ty_32_or_64 ty)
                         (iadd _ (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))
+                               (load _ (mem_flags_data flags) addr offset))
                               src2))
               addr
               offset))
@@ -3317,7 +3317,7 @@
                         (iadd _ src2
                               (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))))
+                               (load _ (mem_flags_data flags) addr offset))))
               addr
               offset))
       (let ((_ RegMemImm sink))
@@ -3330,7 +3330,7 @@
               (has_type (ty_32_or_64 ty)
                         (isub _ (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))
+                               (load _ (mem_flags_data flags) addr offset))
                               src2))
               addr
               offset))
@@ -3344,7 +3344,7 @@
               (has_type (ty_32_or_64 ty)
                         (band _ (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))
+                               (load _ (mem_flags_data flags) addr offset))
                               src2))
               addr
               offset))
@@ -3359,7 +3359,7 @@
                         (band _ src2
                               (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))))
+                               (load _ (mem_flags_data flags) addr offset))))
               addr
               offset))
       (let ((_ RegMemImm sink))
@@ -3372,7 +3372,7 @@
               (has_type (ty_32_or_64 ty)
                         (bor _ (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))
+                               (load _ (mem_flags_data flags) addr offset))
                               src2))
               addr
               offset))
@@ -3387,7 +3387,7 @@
                         (bor _ src2
                               (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))))
+                               (load _ (mem_flags_data flags) addr offset))))
               addr
               offset))
       (let ((_ RegMemImm sink))
@@ -3400,7 +3400,7 @@
               (has_type (ty_32_or_64 ty)
                         (bxor _ (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))
+                               (load _ (mem_flags_data flags) addr offset))
                               src2))
               addr
               offset))
@@ -3415,7 +3415,7 @@
                         (bxor _ src2
                               (and
                                (sinkable_load sink)
-                               (load _ flags addr offset))))
+                               (load _ (mem_flags_data flags) addr offset))))
               addr
               offset))
       (let ((_ RegMemImm sink))
@@ -3474,7 +3474,7 @@
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_cas _ (little_or_native_endian flags) address expected replacement)))
       (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
-(rule 1 (lower (has_type $I128 (atomic_cas _ flags address expected replacement)))
+(rule 1 (lower (has_type $I128 (atomic_cas _ (mem_flags_data flags) address expected replacement)))
         (if-let true (has_cmpxchg16b))
         (x64_cmpxchg16b expected replacement (to_amode flags address (zero_offset))))
 
@@ -3641,7 +3641,7 @@
       (x64_rsp))
 
 (rule (lower (get_return_address _))
-      (x64_movq_rm (Amode.ImmReg 8 (x64_rbp) (mem_flags_trusted))))
+      (x64_movq_rm (Amode.ImmReg 8 (x64_rbp) (mem_flags_trusted_data))))
 
 ;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

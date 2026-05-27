@@ -1307,11 +1307,12 @@ impl FuncEnvironment<'_> {
             flags.set_can_move();
         }
 
+        let base_flags = func.dfg.mem_flags.insert(flags).unwrap();
         let base = func.create_global_value(ir::GlobalValueData::Load {
             base: store_context_ptr,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags,
+            flags: base_flags,
         });
 
         self.gc_heap_base = Some(base);
@@ -1333,11 +1334,16 @@ impl FuncEnvironment<'_> {
         }
         let store_context_ptr = self.get_vmstore_context_ptr_global(func);
         let offset = self.offsets.ptr.vmstore_context_gc_heap_current_length();
+        let bound_flags = func
+            .dfg
+            .mem_flags
+            .insert(ir::MemFlagsData::trusted())
+            .unwrap();
         let bound = func.create_global_value(ir::GlobalValueData::Load {
             base: store_context_ptr,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlagsData::trusted(),
+            flags: bound_flags,
         });
         self.gc_heap_bound = Some(bound);
         bound

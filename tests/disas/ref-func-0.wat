@@ -14,6 +14,7 @@
   (global (export "funcref-local") funcref (ref.func $local)))
 
 ;; function u0:0(i64 vmctx, i64) -> i32, i32, i64, i64 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -27,8 +28,8 @@
 ;;                                     v16 = iconst.i64 96
 ;; @0091                               v10 = iadd v0, v16  ; v16 = 96
 ;; @0091                               v11 = load.i32 notrap aligned v10
-;; @0093                               v13 = load.i64 notrap aligned table v0+112
-;; @0095                               v15 = load.i64 notrap aligned table v0+128
+;; @0093                               v13 = load.i64 notrap aligned region0 v0+112
+;; @0095                               v15 = load.i64 notrap aligned region0 v0+128
 ;; @0097                               jump block1
 ;;
 ;;                                 block1:

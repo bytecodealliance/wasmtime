@@ -17,6 +17,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -31,12 +32,12 @@
 ;; @003a                               v5 = uextend.i64 v4  ; v4 = 0
 ;; @003a                               v6 = load.i64 notrap aligned readonly can_move v0+56
 ;; @003a                               v7 = iadd v6, v5
-;; @003a                               v8 = load.i8x16 little heap v7
+;; @003a                               v8 = load.i8x16 little region0 v7
 ;; @003e                               v9 = iconst.i32 16
 ;; @0040                               v10 = uextend.i64 v9  ; v9 = 16
 ;; @0040                               v11 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0040                               v12 = iadd v11, v10
-;; @0040                               v13 = load.i8x16 little heap v12
+;; @0040                               v13 = load.i8x16 little region0 v12
 ;; @0046                               brif v2, block2, block4
 ;;
 ;;                                 block2:
@@ -47,7 +48,7 @@
 ;; @004d                               v20 = uextend.i64 v19  ; v19 = 32
 ;; @004d                               v21 = load.i64 notrap aligned readonly can_move v0+56
 ;; @004d                               v22 = iadd v21, v20
-;; @004d                               v23 = load.i8x16 little heap v22
+;; @004d                               v23 = load.i8x16 little region0 v22
 ;; @0051                               v26 = bitcast.i8x16 little v18
 ;; @0051                               jump block3(v26, v23)
 ;;
@@ -59,7 +60,7 @@
 ;; @0057                               v31 = uextend.i64 v30  ; v30 = 0
 ;; @0057                               v32 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0057                               v33 = iadd v32, v31
-;; @0057                               v34 = load.i8x16 little heap v33
+;; @0057                               v34 = load.i8x16 little region0 v33
 ;; @005b                               v35 = bitcast.i8x16 little v29
 ;; @005b                               jump block3(v35, v34)
 ;;
@@ -70,7 +71,7 @@
 ;; @005f                               v39 = uextend.i64 v3  ; v3 = 48
 ;; @005f                               v40 = load.i64 notrap aligned readonly can_move v0+56
 ;; @005f                               v41 = iadd v40, v39
-;; @005f                               store little heap v38, v41
+;; @005f                               store little region0 v38, v41
 ;; @0063                               jump block1
 ;;
 ;;                                 block1:

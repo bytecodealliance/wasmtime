@@ -77,6 +77,7 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
+;;     region0 = 2 "vmctx"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -123,7 +124,7 @@
 ;;                                     v138 = iconst.i32 -16
 ;;                                     v139 = band v135, v138  ; v138 = -16
 ;;                                     v141 = iadd.i32 v24, v139
-;; @0025                               store notrap aligned vmctx v141, v23
+;; @0025                               store notrap aligned region0 v141, v23
 ;;                                     v155 = iconst.i32 -1476395008
 ;;                                     v156 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v157 = load.i64 notrap aligned readonly can_move v156+32
