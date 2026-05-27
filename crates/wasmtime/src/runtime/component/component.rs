@@ -1,4 +1,3 @@
-use crate::component::ExportLookup;
 use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::prelude::*;
@@ -773,7 +772,7 @@ impl Component {
     pub fn get_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<ComponentExportIndex> {
         let index = self.lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
@@ -855,7 +854,7 @@ impl Component {
     pub fn get_export(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
         let index = self.lookup_export_index(instance, name)?;
@@ -878,22 +877,14 @@ impl Component {
     pub(crate) fn lookup_export_index(
         &self,
         instance: Option<&ComponentExportIndex>,
-        name: &str,
+        name: impl ExportLookup,
     ) -> Option<ExportIndex> {
-        let info = self.env_component();
-        let exports = match instance {
-            Some(idx) => {
-                if idx.id != self.inner.id {
-                    return None;
-                }
-                match &info.export_items[idx.index] {
-                    Export::Instance { exports, .. } => exports,
-                    _ => return None,
-                }
+        if let Some(idx) = instance {
+            if idx.id != self.inner.id {
+                return None;
             }
-            None => &info.exports,
-        };
-        exports.get(name, &NameMapNoIntern).map(|pair| pair.0)
+        }
+        name.lookup(self, instance.map(|idx| &idx.index))
     }
 
     pub(crate) fn id(&self) -> CompiledModuleId {
@@ -950,8 +941,59 @@ pub struct ComponentExportIndex {
     pub(crate) index: ExportIndex,
 }
 
+/// Trait used to lookup the export of a component or instance.
+///
+/// This trait is used as an implementation detail of [`Instance::get_func`]
+/// and related `get_*` methods, as well as [`Component::get_export`] and
+/// related `get_*` methods. Notable implementors of this trait are:
+///
+/// * `str`
+/// * `String`
+/// * [`ComponentExportIndex`]
+///
+/// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
+/// need to be implemented externally.
+pub trait ExportLookup {
+    #[doc(hidden)]
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex>;
+}
+
+impl<T> ExportLookup for &T
+where
+    T: ExportLookup + ?Sized,
+{
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        T::lookup(self, component, instance)
+    }
+}
+
+impl ExportLookup for str {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        let info = component.env_component();
+        let exports = match instance {
+            Some(idx) => match &info.export_items[*idx] {
+                Export::Instance { exports, .. } => exports,
+                _ => return None,
+            },
+            None => &info.exports,
+        };
+        let (index, _) = exports.get(self, &NameMapNoIntern)?;
+        Some(*index)
+    }
+}
+
+impl ExportLookup for String {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        str::lookup(self, component, instance)
+    }
+}
+
 impl ExportLookup for ComponentExportIndex {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
+    fn lookup(
+        &self,
+        component: &Component,
+        _instance: Option<&ExportIndex>,
+    ) -> Option<ExportIndex> {
         if component.inner.id == self.id {
             Some(self.index)
         } else {
