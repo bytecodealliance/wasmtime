@@ -57,11 +57,11 @@
 ;;                                     v123 = band v119, v122  ; v122 = -16
 ;;                                     v125 = iadd.i32 v12, v123
 ;; @001f                               store notrap aligned region0 v125, v11
-;;                                     v141 = iconst.i32 -1476395008
+;;                                     v141 = iconst.i32 -1476395002
 ;;                                     v142 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v143 = load.i64 notrap aligned readonly can_move v142+32
 ;; @001f                               v36 = iadd v143, v19
-;; @001f                               store notrap aligned v141, v36  ; v141 = -1476395008
+;; @001f                               store notrap aligned v141, v36  ; v141 = -1476395002
 ;;                                     v144 = load.i64 notrap aligned readonly can_move v0+40
 ;;                                     v145 = load.i32 notrap aligned readonly can_move v144
 ;; @001f                               store notrap aligned v145, v36+4
@@ -70,11 +70,11 @@
 ;; @001f                               jump block4(v12, v36)
 ;;
 ;;                                 block3 cold:
-;; @001f                               v24 = iconst.i32 -1476395008
+;; @001f                               v24 = iconst.i32 -1476395002
 ;; @001f                               v26 = load.i64 notrap aligned readonly can_move v0+40
 ;; @001f                               v27 = load.i32 notrap aligned readonly can_move v26
 ;; @001f                               v28 = iconst.i32 16
-;; @001f                               v29 = call fn0(v0, v24, v27, v9, v28)  ; v24 = -1476395008, v28 = 16
+;; @001f                               v29 = call fn0(v0, v24, v27, v9, v28)  ; v24 = -1476395002, v28 = 16
 ;; @001f                               v96 = load.i64 notrap aligned readonly can_move v0+8
 ;; @001f                               v30 = load.i64 notrap aligned readonly can_move v96+32
 ;; @001f                               v31 = uextend.i64 v29

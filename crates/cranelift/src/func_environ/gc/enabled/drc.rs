@@ -471,6 +471,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             size,
             align,
+            0,
         );
 
         // Write the array's length into the appropriate slot.
@@ -512,6 +513,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             struct_size_val,
             struct_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated struct's fields.
@@ -562,6 +564,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             exn_size_val,
             exn_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated exception

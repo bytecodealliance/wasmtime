@@ -40,11 +40,11 @@
 ;;                                     v69 = iconst.i32 32
 ;;                                     v67 = iadd.i32 v9, v69  ; v69 = 32
 ;; @002a                               store notrap aligned region0 v67, v8
-;;                                     v70 = iconst.i32 -1342177280
+;;                                     v70 = iconst.i32 -1342177246
 ;;                                     v71 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v72 = load.i64 notrap aligned readonly can_move v71+32
 ;; @002a                               v33 = iadd v72, v16
-;; @002a                               store notrap aligned v70, v33  ; v70 = -1342177280
+;; @002a                               store notrap aligned v70, v33  ; v70 = -1342177246
 ;;                                     v73 = load.i64 notrap aligned readonly can_move v0+40
 ;;                                     v74 = load.i32 notrap aligned readonly can_move v73
 ;; @002a                               store notrap aligned v74, v33+4
@@ -53,12 +53,12 @@
 ;; @002a                               jump block4(v9, v33)
 ;;
 ;;                                 block3 cold:
-;; @002a                               v21 = iconst.i32 -1342177280
+;; @002a                               v21 = iconst.i32 -1342177246
 ;; @002a                               v23 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002a                               v24 = load.i32 notrap aligned readonly can_move v23
 ;; @002a                               v6 = iconst.i32 32
 ;; @002a                               v25 = iconst.i32 16
-;; @002a                               v26 = call fn0(v0, v21, v24, v6, v25), stack_map=[i32 @ ss0+0]  ; v21 = -1342177280, v6 = 32, v25 = 16
+;; @002a                               v26 = call fn0(v0, v21, v24, v6, v25), stack_map=[i32 @ ss0+0]  ; v21 = -1342177246, v6 = 32, v25 = 16
 ;; @002a                               v48 = load.i64 notrap aligned readonly can_move v0+8
 ;; @002a                               v27 = load.i64 notrap aligned readonly can_move v48+32
 ;; @002a                               v28 = uextend.i64 v26

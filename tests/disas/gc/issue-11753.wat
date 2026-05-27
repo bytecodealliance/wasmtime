@@ -50,7 +50,7 @@
 ;;       movq    8(%r9), %rsi
 ;;       movq    0x20(%rsi), %rdi
 ;;       leaq    (%rdi, %rcx), %rsi
-;;       movl    $0xb0000000, (%rdi, %rcx)
+;;       movl    $0xb0000002, (%rdi, %rcx)
 ;;       movq    0x28(%r9), %r8
 ;;       movl    (%r8), %r8d
 ;;       movl    %r8d, 4(%rdi, %rcx)
@@ -85,7 +85,7 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   e6: movl    $0xb0000000, %esi
+;;   e6: movl    $0xb0000002, %esi
 ;;   eb: movq    0x28(%rdi), %rax
 ;;   ef: movq    %rdi, 8(%rsp)
 ;;   f4: movl    (%rax), %edx

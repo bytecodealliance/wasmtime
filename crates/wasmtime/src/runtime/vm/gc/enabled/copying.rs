@@ -22,7 +22,7 @@ use core::{
     alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull, sync::atomic::AtomicUsize,
 };
 use wasmtime_environ::copying::{
-    ALIGN, ARRAY_LENGTH_OFFSET, CopyingTypeLayouts, HEADER_COPIED_BIT,
+    ALIGN, ARRAY_LENGTH_OFFSET, CopyingTypeLayouts, HEADER_COPIED_BIT, HEADER_SIZE, InlineTraceInfo,
 };
 use wasmtime_environ::{
     GcArrayLayout, GcStructLayout, GcTypeLayouts, POISON, VMGcKind, VMSharedTypeIndex, gc_assert,
@@ -82,6 +82,12 @@ impl VMCopyingHeader {
     fn set_copied(&mut self) {
         let reserved = self.header.reserved_u26();
         self.header.set_reserved_u26(reserved | HEADER_COPIED_BIT);
+    }
+
+    /// Decode the inline trace info from this header's reserved bits.
+    #[inline]
+    fn inline_trace_info(&self) -> InlineTraceInfo {
+        InlineTraceInfo::decode(self.header.reserved_u26())
     }
 }
 
@@ -586,22 +592,20 @@ survived collection, since the active space is the same size as the idle space",
         let index = gc_ref.heap_index()?.get();
         debug_assert!(self.is_in_active_space(index));
 
-        let ty = self.index(copying_ref(gc_ref))?.header.ty();
-
-        // `externref`s have no GC edges.
-        let Some(ty) = ty else {
-            return Ok(());
-        };
-
+        let inline_info = self.index(copying_ref(gc_ref))?.inline_trace_info();
         let object_start = usize::try_from(index)?;
-        match trace_infos.trace_info(&ty) {
-            TraceInfo::Struct { gc_ref_offsets } => {
-                for &offset in gc_ref_offsets {
-                    self.scan_field(object_start, offset)?;
+
+        match inline_info {
+            InlineTraceInfo::Struct { gc_ref_bitmap } => {
+                let mut remaining = gc_ref_bitmap;
+                while remaining != 0 {
+                    let slot = remaining.trailing_zeros();
+                    self.scan_field(object_start, HEADER_SIZE + slot * 4)?;
+                    remaining &= remaining - 1;
                 }
             }
-            TraceInfo::Array { gc_ref_elems } => {
-                if *gc_ref_elems {
+            InlineTraceInfo::Array { elems_are_gc_refs } => {
+                if elems_are_gc_refs {
                     let array_ref = gc_ref.as_arrayref_unchecked();
                     let len = self.array_len(array_ref)?;
 
@@ -614,6 +618,22 @@ survived collection, since the active space is the same size as the idle space",
                             None => bail_bug!("array element offset overflow"),
                         };
                         self.scan_field(object_start, elem_offset)?;
+                    }
+                }
+            }
+            InlineTraceInfo::OutOfLine => {
+                let ty = self.index(copying_ref(gc_ref))?.header.ty();
+                let Some(ty) = ty else {
+                    bail_bug!("out-of-line trace info but no type index");
+                };
+                match trace_infos.trace_info(&ty) {
+                    TraceInfo::Struct { gc_ref_offsets } => {
+                        for &offset in gc_ref_offsets {
+                            self.scan_field(object_start, offset)?;
+                        }
+                    }
+                    TraceInfo::Array { .. } => {
+                        bail_bug!("arrays should always have inline trace info");
                     }
                 }
             }
@@ -756,10 +776,9 @@ unsafe impl GcHeap for CopyingHeap {
         let align = usize::try_from(ALIGN).unwrap();
         let size = core::mem::size_of::<VMCopyingExternRef>();
         let size = (size + align - 1) & !(align - 1);
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::externref(),
-            Layout::from_size_align(size, align)?,
-        )? {
+        let mut header = VMGcHeader::externref();
+        header.set_reserved_u26(InlineTraceInfo::NO_GC_EDGES.encode());
+        let gc_ref = match self.alloc_raw(header, Layout::from_size_align(size, align)?)? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,
         };
@@ -822,7 +841,7 @@ unsafe impl GcHeap for CopyingHeap {
             0,
             "bump_ptr is not aligned to ALIGN"
         );
-        debug_assert_eq!(header.reserved_u26(), 0);
+        debug_assert_eq!(header.reserved_u26() & HEADER_COPIED_BIT, 0);
 
         // We must have trace info for every GC type that we allocate in this
         // heap. Trace info is eagerly registered during module instantiation
@@ -885,11 +904,12 @@ unsafe impl GcHeap for CopyingHeap {
         } else {
             VMGcKind::StructRef
         };
-        let gc_ref =
-            match self.alloc_raw(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())? {
-                Err(n) => return Ok(Err(n)),
-                Ok(gc_ref) => gc_ref,
-            };
+        let mut header = VMGcHeader::from_kind_and_index(kind, ty);
+        header.set_reserved_u26(InlineTraceInfo::r#struct(layout).encode());
+        let gc_ref = match self.alloc_raw(header, layout.layout())? {
+            Err(n) => return Ok(Err(n)),
+            Ok(gc_ref) => gc_ref,
+        };
 
         Ok(Ok(gc_ref))
     }
@@ -906,14 +926,13 @@ unsafe impl GcHeap for CopyingHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
+        let mut header = VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty);
+        header.set_reserved_u26(InlineTraceInfo::array(layout).encode());
         let layout = layout
             .layout(length)
             .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout,
-        )? {
+        let gc_ref = match self.alloc_raw(header, layout)? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,
         };
