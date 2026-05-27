@@ -105,6 +105,15 @@ struct Swarm {
     module_serialize_deserialize: bool,
     table_copy: bool,
     table_fill: bool,
+    struct_type_new: bool,
+    struct_type_drop: bool,
+    struct_ref_pre_new: bool,
+    struct_ref_pre_drop: bool,
+    struct_ref_new: bool,
+    struct_ref_ty: bool,
+    struct_ref_field: bool,
+    struct_ref_set_field: bool,
+    struct_ref_drop: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -347,6 +356,39 @@ pub enum ApiCall {
         dst: u64,
         len: u64,
     },
+    StructTypeNew {
+        id: usize,
+        fields: Vec<(FuzzValType, bool)>,
+    },
+    StructTypeDrop {
+        id: usize,
+    },
+    StructRefPreNew {
+        id: usize,
+        struct_ty: usize,
+        store: usize,
+    },
+    StructRefPreDrop {
+        id: usize,
+    },
+    StructRefNew {
+        id: usize,
+        pre: usize,
+    },
+    StructRefTy {
+        struct_ref: usize,
+    },
+    StructRefField {
+        struct_ref: usize,
+        index: usize,
+    },
+    StructRefSetField {
+        struct_ref: usize,
+        index: usize,
+    },
+    StructRefDrop {
+        id: usize,
+    },
 }
 use ApiCall::*;
 
@@ -398,6 +440,15 @@ struct Scope {
     /// associated `store_id`.
     tags: BTreeMap<usize, usize>, // tag_id -> store_id
 
+    /// Struct types that are currently live.
+    struct_types: BTreeSet<usize>,
+
+    /// StructRefPres that are currently live. Maps from `pre_id` to the store's id.
+    struct_ref_pres: BTreeMap<usize, usize>, // pre_id -> store_id
+
+    /// StructRefs that are currently live. Maps from `ref_id` to the store's id.
+    struct_refs: BTreeMap<usize, usize>, // ref_id -> store_id
+
     config: Config,
 }
 
@@ -439,6 +490,9 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             funcs: BTreeMap::default(),
             tag_types: BTreeSet::default(),
             tags: BTreeMap::default(),
+            struct_types: BTreeSet::default(),
+            struct_ref_pres: BTreeMap::default(),
+            struct_refs: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -480,6 +534,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.memories.retain(|_, store_id| *store_id != id);
                     scope.funcs.retain(|_, store_id| *store_id != id);
                     scope.tags.retain(|_, store_id| *store_id != id);
+                    scope.struct_ref_pres.retain(|_, store_id| *store_id != id);
+                    scope.struct_refs.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -1061,6 +1117,89 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let dst = u64::arbitrary(input)?;
                     let len = u64::arbitrary(input)? % 8;
                     Ok(TableFill { table, dst, len })
+                });
+            }
+            if swarm.struct_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let fields = Vec::<(FuzzValType, bool)>::arbitrary(input)?;
+                    let fields: Vec<_> = fields.into_iter().take(4).collect();
+                    scope.struct_types.insert(id);
+                    Ok(StructTypeNew { id, fields })
+                });
+            }
+            if swarm.struct_type_drop && !scope.struct_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.struct_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.struct_types.remove(&id);
+                    Ok(StructTypeDrop { id })
+                });
+            }
+            if swarm.struct_ref_pre_new
+                && !scope.struct_types.is_empty()
+                && !scope.stores.is_empty()
+            {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.struct_types.iter().collect();
+                    let struct_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.struct_ref_pres.insert(id, store);
+                    Ok(StructRefPreNew {
+                        id,
+                        struct_ty,
+                        store,
+                    })
+                });
+            }
+            if swarm.struct_ref_pre_drop && !scope.struct_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.struct_ref_pres.keys().collect();
+                    let id = **input.choose(&pres)?;
+                    scope.struct_ref_pres.remove(&id);
+                    Ok(StructRefPreDrop { id })
+                });
+            }
+            if swarm.struct_ref_new && !scope.struct_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.struct_ref_pres.iter().collect();
+                    let (&pre, &store_id) = *input.choose(&pres)?;
+                    let id = scope.next_id();
+                    scope.struct_refs.insert(id, store_id);
+                    Ok(StructRefNew { id, pre })
+                });
+            }
+            if swarm.struct_ref_ty && !scope.struct_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.struct_refs.keys().collect();
+                    let struct_ref = **input.choose(&refs)?;
+                    Ok(StructRefTy { struct_ref })
+                });
+            }
+            if swarm.struct_ref_field && !scope.struct_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.struct_refs.keys().collect();
+                    let struct_ref = **input.choose(&refs)?;
+                    let index = usize::arbitrary(input)?;
+                    Ok(StructRefField { struct_ref, index })
+                });
+            }
+            if swarm.struct_ref_set_field && !scope.struct_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.struct_refs.keys().collect();
+                    let struct_ref = **input.choose(&refs)?;
+                    let index = usize::arbitrary(input)?;
+                    Ok(StructRefSetField { struct_ref, index })
+                });
+            }
+            if swarm.struct_ref_drop && !scope.struct_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.struct_refs.keys().collect();
+                    let id = **input.choose(&refs)?;
+                    scope.struct_refs.remove(&id);
+                    Ok(StructRefDrop { id })
                 });
             }
 

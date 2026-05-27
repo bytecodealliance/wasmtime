@@ -28,6 +28,9 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut funcs: HashMap<usize, (Func, usize)> = Default::default();
     let mut tag_types: HashMap<usize, TagType> = Default::default();
     let mut tags: HashMap<usize, (Tag, usize)> = Default::default();
+    let mut struct_types: HashMap<usize, StructType> = Default::default();
+    let mut struct_ref_pres: HashMap<usize, (StructRefPre, StructType, usize)> = Default::default();
+    let mut struct_refs: HashMap<usize, (OwnedRooted<StructRef>, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -47,6 +50,8 @@ pub fn make_api_calls(api: ApiCalls) {
                 memories.retain(|_, (_, store_id)| *store_id != id);
                 funcs.retain(|_, (_, store_id)| *store_id != id);
                 tags.retain(|_, (_, store_id)| *store_id != id);
+                struct_ref_pres.retain(|_, (_, _, store_id)| *store_id != id);
+                struct_refs.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
             }
 
@@ -865,6 +870,142 @@ pub fn make_api_calls(api: ApiCalls) {
                 if let Some(val) = elem_ty.default_value() {
                     let _ = t.fill(&mut *st, dst, val.ref_().unwrap(), len);
                 }
+            }
+
+            ApiCall::StructTypeNew { id, ref fields } => {
+                log::trace!("creating struct type {id}");
+                if !gc_enabled {
+                    continue;
+                }
+                let field_types = fields.iter().map(|(fvt, mutable)| {
+                    let mutability = if *mutable {
+                        Mutability::Var
+                    } else {
+                        Mutability::Const
+                    };
+                    FieldType::new(mutability, StorageType::ValType(fvt.to_wasmtime()))
+                });
+                match StructType::new(&engine, field_types) {
+                    Ok(st) => {
+                        struct_types.insert(id, st);
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::StructTypeDrop { id } => {
+                log::trace!("dropping struct type {id}");
+                struct_types.remove(&id);
+            }
+
+            ApiCall::StructRefPreNew {
+                id,
+                struct_ty,
+                store,
+            } => {
+                log::trace!("creating struct ref pre {id} with type {struct_ty} in store {store}");
+                let sty = match struct_types.get(&struct_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !gc_enabled {
+                    continue;
+                }
+                let pre = StructRefPre::new(&mut *st, sty.clone());
+                struct_ref_pres.insert(id, (pre, sty, store));
+            }
+
+            ApiCall::StructRefPreDrop { id } => {
+                log::trace!("dropping struct ref pre {id}");
+                struct_ref_pres.remove(&id);
+            }
+
+            ApiCall::StructRefNew { id, pre } => {
+                log::trace!("creating struct ref {id} from pre {pre}");
+                let (allocator, sty, store_id) = match struct_ref_pres.get(&pre) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let store_id = *store_id;
+                let fields: Option<Vec<Val>> = sty
+                    .fields()
+                    .map(|f| f.element_type().unpack().default_value())
+                    .collect();
+                let fields = match fields {
+                    Some(f) => f,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut st = RootScope::new(st);
+                match StructRef::new(&mut st, allocator, &fields) {
+                    Ok(r) => {
+                        struct_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::StructRefTy { struct_ref } => {
+                log::trace!("getting type of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.ty(st);
+            }
+
+            ApiCall::StructRefField { struct_ref, index } => {
+                log::trace!("getting field {index} of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.field(&mut *st, index);
+            }
+
+            ApiCall::StructRefSetField { struct_ref, index } => {
+                log::trace!("setting field {index} of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let sty = match r.ty(&*st) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let field_tys: Vec<_> = sty.fields().collect();
+                if index >= field_tys.len() {
+                    continue;
+                }
+                let val = match field_tys[index].element_type().unpack().default_value() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let _ = r.set_field(&mut *st, index, val);
+            }
+
+            ApiCall::StructRefDrop { id } => {
+                log::trace!("dropping struct ref {id}");
+                struct_refs.remove(&id);
             }
         }
     }
