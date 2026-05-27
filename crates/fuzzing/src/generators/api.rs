@@ -125,6 +125,16 @@ struct Swarm {
     array_ref_get: bool,
     array_ref_set: bool,
     array_ref_drop: bool,
+    exn_type_new: bool,
+    exn_type_from_tag_type: bool,
+    exn_type_drop: bool,
+    exn_ref_pre_new: bool,
+    exn_ref_pre_drop: bool,
+    exn_ref_new: bool,
+    exn_ref_ty: bool,
+    exn_ref_tag: bool,
+    exn_ref_field: bool,
+    exn_ref_drop: bool,
 }
 
 /// A call to one of Wasmtime's public APIs.
@@ -443,6 +453,43 @@ pub enum ApiCall {
     ArrayRefDrop {
         id: usize,
     },
+    ExnTypeNew {
+        id: usize,
+        fields: Vec<FuzzValType>,
+    },
+    ExnTypeFromTagType {
+        id: usize,
+        tag_ty: usize,
+    },
+    ExnTypeDrop {
+        id: usize,
+    },
+    ExnRefPreNew {
+        id: usize,
+        exn_ty: usize,
+        store: usize,
+    },
+    ExnRefPreDrop {
+        id: usize,
+    },
+    ExnRefNew {
+        id: usize,
+        pre: usize,
+        tag: usize,
+    },
+    ExnRefTy {
+        exn_ref: usize,
+    },
+    ExnRefTag {
+        exn_ref: usize,
+    },
+    ExnRefField {
+        exn_ref: usize,
+        index: usize,
+    },
+    ExnRefDrop {
+        id: usize,
+    },
 }
 use ApiCall::*;
 
@@ -512,6 +559,15 @@ struct Scope {
     /// ArrayRefs that are currently live. Maps from `ref_id` to the store's id.
     array_refs: BTreeMap<usize, usize>, // ref_id -> store_id
 
+    /// Exception types that are currently live.
+    exn_types: BTreeSet<usize>,
+
+    /// ExnRefPres that are currently live. Maps from `pre_id` to the store's id.
+    exn_ref_pres: BTreeMap<usize, usize>, // pre_id -> store_id
+
+    /// ExnRefs that are currently live. Maps from `ref_id` to the store's id.
+    exn_refs: BTreeMap<usize, usize>, // ref_id -> store_id
+
     config: Config,
 }
 
@@ -559,6 +615,9 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             array_types: BTreeSet::default(),
             array_ref_pres: BTreeMap::default(),
             array_refs: BTreeMap::default(),
+            exn_types: BTreeSet::default(),
+            exn_ref_pres: BTreeMap::default(),
+            exn_refs: BTreeMap::default(),
             config: config.clone(),
         };
 
@@ -604,6 +663,8 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     scope.struct_refs.retain(|_, store_id| *store_id != id);
                     scope.array_ref_pres.retain(|_, store_id| *store_id != id);
                     scope.array_refs.retain(|_, store_id| *store_id != id);
+                    scope.exn_ref_pres.retain(|_, store_id| *store_id != id);
+                    scope.exn_refs.retain(|_, store_id| *store_id != id);
                     Ok(StoreDrop { id })
                 });
             }
@@ -1371,6 +1432,105 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                     let id = **input.choose(&refs)?;
                     scope.array_refs.remove(&id);
                     Ok(ArrayRefDrop { id })
+                });
+            }
+            if swarm.exn_type_new {
+                choices.push(|input, scope| {
+                    let id = scope.next_id();
+                    let fields = Vec::<FuzzValType>::arbitrary(input)?;
+                    let fields: Vec<_> = fields.into_iter().take(4).collect();
+                    scope.exn_types.insert(id);
+                    Ok(ExnTypeNew { id, fields })
+                });
+            }
+            if swarm.exn_type_from_tag_type && !scope.tag_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.tag_types.iter().collect();
+                    let tag_ty = **input.choose(&types)?;
+                    let id = scope.next_id();
+                    scope.exn_types.insert(id);
+                    Ok(ExnTypeFromTagType { id, tag_ty })
+                });
+            }
+            if swarm.exn_type_drop && !scope.exn_types.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.exn_types.iter().collect();
+                    let id = **input.choose(&types)?;
+                    scope.exn_types.remove(&id);
+                    Ok(ExnTypeDrop { id })
+                });
+            }
+            if swarm.exn_ref_pre_new && !scope.exn_types.is_empty() && !scope.stores.is_empty() {
+                choices.push(|input, scope| {
+                    let types: Vec<_> = scope.exn_types.iter().collect();
+                    let exn_ty = **input.choose(&types)?;
+                    let stores: Vec<_> = scope.stores.iter().collect();
+                    let store = **input.choose(&stores)?;
+                    let id = scope.next_id();
+                    scope.exn_ref_pres.insert(id, store);
+                    Ok(ExnRefPreNew { id, exn_ty, store })
+                });
+            }
+            if swarm.exn_ref_pre_drop && !scope.exn_ref_pres.is_empty() {
+                choices.push(|input, scope| {
+                    let pres: Vec<_> = scope.exn_ref_pres.keys().collect();
+                    let id = **input.choose(&pres)?;
+                    scope.exn_ref_pres.remove(&id);
+                    Ok(ExnRefPreDrop { id })
+                });
+            }
+            if swarm.exn_ref_new
+                && scope
+                    .exn_ref_pres
+                    .values()
+                    .any(|sid| scope.tags.values().any(|tsid| tsid == sid))
+            {
+                choices.push(|input, scope| {
+                    let pres_with_tags: Vec<_> = scope
+                        .exn_ref_pres
+                        .iter()
+                        .filter(|&(_, &sid)| scope.tags.values().any(|&tsid| tsid == sid))
+                        .collect();
+                    let (&pre, &store_id) = *input.choose(&pres_with_tags)?;
+                    let same_store_tags: Vec<_> = scope
+                        .tags
+                        .iter()
+                        .filter(|&(_, &sid)| sid == store_id)
+                        .collect();
+                    let (&tag, _) = *input.choose(&same_store_tags)?;
+                    let id = scope.next_id();
+                    scope.exn_refs.insert(id, store_id);
+                    Ok(ExnRefNew { id, pre, tag })
+                });
+            }
+            if swarm.exn_ref_ty && !scope.exn_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.exn_refs.keys().collect();
+                    let exn_ref = **input.choose(&refs)?;
+                    Ok(ExnRefTy { exn_ref })
+                });
+            }
+            if swarm.exn_ref_tag && !scope.exn_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.exn_refs.keys().collect();
+                    let exn_ref = **input.choose(&refs)?;
+                    Ok(ExnRefTag { exn_ref })
+                });
+            }
+            if swarm.exn_ref_field && !scope.exn_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.exn_refs.keys().collect();
+                    let exn_ref = **input.choose(&refs)?;
+                    let index = usize::arbitrary(input)?;
+                    Ok(ExnRefField { exn_ref, index })
+                });
+            }
+            if swarm.exn_ref_drop && !scope.exn_refs.is_empty() {
+                choices.push(|input, scope| {
+                    let refs: Vec<_> = scope.exn_refs.keys().collect();
+                    let id = **input.choose(&refs)?;
+                    scope.exn_refs.remove(&id);
+                    Ok(ExnRefDrop { id })
                 });
             }
 
