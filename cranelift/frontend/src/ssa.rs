@@ -37,11 +37,11 @@ pub struct SSABuilder {
     /// the variable in the block.
     variables: SecondaryMap<Variable, SecondaryMap<Block, PackedOption<Value>>>,
 
-    /// Records every SSA `Value` ever associated with a variable, including
-    /// values that `variables` has since overwritten within the same block.
-    /// Used by `values_for_var` to feed `FunctionBuilder::finalize`'s
-    /// stack-map propagation.
-    all_var_values: SecondaryMap<Variable, EntitySet<Value>>,
+    /// Variables whose bindings must be tracked for stack maps.
+    stack_map_vars: EntitySet<Variable>,
+
+    /// SSA values that must be included in stack maps.
+    stack_map_values: EntitySet<Value>,
 
     /// Records the position of the basic blocks and the list of values used but not defined in the
     /// block.
@@ -116,7 +116,8 @@ impl SSABuilder {
     /// deallocating memory.
     pub fn clear(&mut self) {
         self.variables.clear();
-        self.all_var_values.clear();
+        self.stack_map_vars.clear();
+        self.stack_map_values.clear();
         self.ssa_blocks.clear();
         self.variable_pool.clear();
         self.inst_pool.clear();
@@ -128,7 +129,8 @@ impl SSABuilder {
     /// Tests whether an `SSABuilder` is in a cleared state.
     pub fn is_empty(&self) -> bool {
         self.variables.is_empty()
-            && self.all_var_values.is_empty()
+            && self.stack_map_vars.is_empty()
+            && self.stack_map_values.is_empty()
             && self.ssa_blocks.is_empty()
             && self.calls.is_empty()
             && self.results.is_empty()
@@ -209,18 +211,41 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// Phi functions.
 ///
 impl SSABuilder {
-    /// Get all of the values associated with the given variable that we have
-    /// inserted in the function thus far.
-    pub fn values_for_var(&self, var: Variable) -> impl Iterator<Item = Value> + '_ {
-        self.all_var_values[var].iter()
-    }
-
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
     pub fn def_var(&mut self, var: Variable, val: Value, block: Block) {
         self.variables[var][block] = PackedOption::from(val);
-        self.all_var_values[var].insert(val);
+        self.record_stack_map_binding(var, val);
+    }
+
+    /// Mark `var` as needing its bindings tracked for stack maps.
+    pub fn mark_var_needs_stack_map(&mut self, var: Variable) {
+        debug_assert!(
+            self.variables[var].values().all(|v| v.is_none()),
+            "declare_var_needs_stack_map({var:?}) must be called before any \
+             definition of the variable; otherwise earlier definitions are \
+             silently omitted from stack maps"
+        );
+        self.stack_map_vars.insert(var);
+    }
+
+    /// SSA values that must be included in stack maps.
+    pub fn stack_map_values(&self) -> &EntitySet<Value> {
+        &self.stack_map_values
+    }
+
+    /// Mutable view of [`Self::stack_map_values`].
+    pub fn stack_map_values_mut(&mut self) -> &mut EntitySet<Value> {
+        &mut self.stack_map_values
+    }
+
+    /// Propagate the needs-stack-map bit from `var` to `val`.
+    fn record_stack_map_binding(&mut self, var: Variable, val: Value) {
+        if self.stack_map_vars.contains(var) {
+            log::trace!("recording stack-map binding {var:?} -> {val:?}");
+            self.stack_map_values.insert(val);
+        }
     }
 
     /// Declares a use of a variable in a given basic block. Returns the SSA value corresponding
@@ -283,7 +308,7 @@ impl SSABuilder {
         // any of the blocks before `from`.
         //
         // So in either case there is no definition in these blocks yet and we can blindly set one.
-        debug_assert!(self.all_var_values[var].contains(val));
+        debug_assert!(!self.stack_map_vars.contains(var) || self.stack_map_values.contains(val));
         let var_defs = &mut self.variables[var];
         while block != from {
             debug_assert!(var_defs[block].is_none());
@@ -340,7 +365,7 @@ impl SSABuilder {
         // find a usable definition. So create one.
         let val = func.dfg.append_block_param(block, ty);
         var_defs[block] = PackedOption::from(val);
-        self.all_var_values[var].insert(val);
+        self.record_stack_map_binding(var, val);
 
         // Now every predecessor needs to pass its definition of this variable to the newly added
         // block parameter. To do that we have to "recursively" call `use_var`, but there are two

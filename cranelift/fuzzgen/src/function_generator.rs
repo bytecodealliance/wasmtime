@@ -1931,7 +1931,6 @@ where
 
         for (ty, value) in vars.into_iter() {
             let var = builder.declare_var(ty);
-            builder.def_var(var, value);
 
             // Randomly declare variables as needing a stack map.
             // We limit these to only types that have fewer than 16 bytes
@@ -1939,6 +1938,8 @@ where
             if ty.bytes() <= 16 && self.u.arbitrary()? {
                 builder.declare_var_needs_stack_map(var);
             }
+
+            builder.def_var(var, value);
 
             self.resources
                 .vars
