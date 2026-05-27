@@ -757,6 +757,22 @@ impl SafepointSpiller {
             let block = self.liveness.post_order[block_index];
             log::trace!("rewriting: processing {block:?}");
 
+            // Eagerly allocate all stack slots for values that are live-out in
+            // this block. This reserves a loop-invariant value's stack slot
+            // across the whole loop, rather than just at the first use site we
+            // see within the loop, which could otherwise lead to incorrect
+            // stack slot reuse.
+            vals.extend(
+                self.liveness.live_outs[block_index]
+                    .iter()
+                    .copied()
+                    .filter(|val| self.liveness.live_across_any_safepoint.contains(*val)),
+            );
+            vals.sort_unstable();
+            for val in vals.drain(..) {
+                self.stack_slots.get_or_create_stack_slot(func, val);
+            }
+
             let mut option_inst = func.layout.last_inst(block);
             while let Some(inst) = option_inst {
                 // If this instruction defines a needs-stack-map value that is
@@ -3104,6 +3120,118 @@ block0:
     return v2, v3
 }
             "#
+        );
+    }
+
+    #[test]
+    fn loop_invariant_value_needs_stack_map() {
+        let sig = Signature::new(CallConv::SystemV);
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        // alloc: () -> i32
+        let alloc_name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 1,
+            });
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.returns.push(AbiParam::new(ir::types::I32));
+        let signature = builder.func.import_signature(sig);
+        let alloc = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(alloc_name),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        // observe: (i32) -> ()
+        let observe_name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index: 1,
+            });
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(ir::types::I32));
+        let signature = builder.func.import_signature(sig);
+        let observe = builder.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(observe_name),
+            signature,
+            colocated: true,
+            patchable: false,
+        });
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+
+        // block0: Allocate a GC reference, then enter the loop.
+        builder.switch_to_block(block0);
+        let call_inst = builder.ins().call(alloc, &[]);
+        let v0 = builder.func.dfg.first_result(call_inst);
+        builder.declare_value_needs_stack_map(v0);
+        builder.ins().jump(block1, &[]);
+
+        // block1: A loop that uses the loop-invariant GC ref and then allocates
+        // another GC ref. The two GC refs' live ranges are overlapping (since
+        // `v0` is live across the whole loop) even if they "don't" overlap
+        // within a single loop iteration.
+        builder.switch_to_block(block1);
+        builder.ins().call(observe, &[v0]);
+        let call_inst = builder.ins().call(alloc, &[]);
+        let v1 = builder.func.dfg.first_result(call_inst);
+        builder.declare_value_needs_stack_map(v1);
+        // This call should have stack map entries for both `v0` and `v1`.
+        builder.ins().call(observe, &[v1]);
+        builder.ins().brif(v1, block2, &[], block1, &[]);
+
+        // block2: Keep `v1` alive across a safepoint and return.
+        builder.switch_to_block(block2);
+        builder.ins().call(observe, &[v1]);
+        builder.ins().call(observe, &[v1]);
+        builder.ins().return_(&[]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        // `v0` and `v1` should be spilled and reloaded from different stack
+        // slots.
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %sample() system_v {
+    ss0 = explicit_slot 4, align = 4
+    ss1 = explicit_slot 4, align = 4
+    sig0 = () -> i32 system_v
+    sig1 = (i32) system_v
+    fn0 = colocated u0:1 sig0
+    fn1 = colocated u0:1 sig1
+
+block0:
+    v0 = call fn0()
+    stack_store v0, ss1
+    jump block1
+
+block1:
+    v6 = stack_load.i32 ss1
+    call fn1(v6), stack_map=[i32 @ ss1+0]
+    v1 = call fn0(), stack_map=[i32 @ ss1+0]
+    stack_store v1, ss0
+    v5 = stack_load.i32 ss0
+    call fn1(v5), stack_map=[i32 @ ss1+0, i32 @ ss0+0]
+    v4 = stack_load.i32 ss0
+    brif v4, block2, block1
+
+block2:
+    v3 = stack_load.i32 ss0
+    call fn1(v3), stack_map=[i32 @ ss0+0]
+    v2 = stack_load.i32 ss0
+    call fn1(v2)
+    return
+}            "#
         );
     }
 }
