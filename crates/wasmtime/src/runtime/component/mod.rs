@@ -128,7 +128,7 @@ pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
 pub use self::has_data::*;
-pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
+pub use self::instance::{Instance, ExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny, ResourceDynamic};

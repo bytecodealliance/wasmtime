@@ -1,4 +1,4 @@
-use crate::component::InstanceExportLookup;
+use crate::component::ExportLookup;
 use crate::component::matching::InstanceType;
 use crate::component::types;
 use crate::prelude::*;
@@ -804,8 +804,8 @@ impl Component {
     /// If the export is located then two values are returned: a
     /// [`types::ComponentItem`] which enables introspection about the type of
     /// the export and a [`ComponentExportIndex`]. The index returned notably
-    /// implements the [`InstanceExportLookup`] trait which enables using it
-    /// with [`Instance::get_func`](crate::component::Instance::get_func) for
+    /// implements the [`ExportLookup`] trait which enables using it with
+    /// [`Instance::get_func`](crate::component::Instance::get_func) for
     /// example.
     ///
     /// The returned [`types::ComponentItem`] is more expensive to calculate
@@ -942,7 +942,7 @@ impl Component {
 /// A value which represents a known export of a component.
 ///
 /// This is the return value of [`Component::get_export`] and implements the
-/// [`InstanceExportLookup`] trait to work with lookups like
+/// [`ExportLookup`] trait to work with lookups like
 /// [`Instance::get_func`](crate::component::Instance::get_func).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct ComponentExportIndex {
@@ -950,7 +950,7 @@ pub struct ComponentExportIndex {
     pub(crate) index: ExportIndex,
 }
 
-impl InstanceExportLookup for ComponentExportIndex {
+impl ExportLookup for ComponentExportIndex {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
         if component.inner.id == self.id {
             Some(self.index)

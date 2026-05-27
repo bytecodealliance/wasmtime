@@ -155,7 +155,7 @@ impl Instance {
     pub fn get_func(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
         let instance = self.id.get(store);
@@ -192,7 +192,7 @@ impl Instance {
     pub fn get_typed_func<Params, Results>(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: ComponentNamedList + Lower,
@@ -224,7 +224,7 @@ impl Instance {
     pub fn get_module(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<Module> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -259,7 +259,7 @@ impl Instance {
     pub fn get_resource(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<ResourceType> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -352,7 +352,7 @@ impl Instance {
     fn lookup_export<'a>(
         &self,
         store: &'a StoreOpaque,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
         let data = self.id().get(store);
         let index = name.lookup(data.component())?;
@@ -654,10 +654,11 @@ where
     unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
 }
 
-/// Trait used to lookup the export of a component instance.
+/// Trait used to lookup the export of a component or instance.
 ///
 /// This trait is used as an implementation detail of [`Instance::get_func`]
-/// and related `get_*` methods. Notable implementors of this trait are:
+/// and related `get_*` methods, as well as [`Component::get_export`] and
+/// related `get_*` methods. Notable implementors of this trait are:
 ///
 /// * `str`
 /// * `String`
@@ -665,21 +666,21 @@ where
 ///
 /// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
 /// need to be implemented externally.
-pub trait InstanceExportLookup {
+pub trait ExportLookup {
     #[doc(hidden)]
     fn lookup(&self, component: &Component) -> Option<ExportIndex>;
 }
 
-impl<T> InstanceExportLookup for &T
+impl<T> ExportLookup for &T
 where
-    T: InstanceExportLookup + ?Sized,
+    T: ExportLookup + ?Sized,
 {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
         T::lookup(self, component)
     }
 }
 
-impl InstanceExportLookup for str {
+impl ExportLookup for str {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
         let (index, _) = component
             .env_component()
@@ -689,7 +690,7 @@ impl InstanceExportLookup for str {
     }
 }
 
-impl InstanceExportLookup for String {
+impl ExportLookup for String {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
         str::lookup(self, component)
     }
