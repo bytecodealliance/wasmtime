@@ -428,8 +428,9 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if the variable's type is larger than 16 bytes, if this
-    /// variable has not been declared yet, or if it has already been defined.
+    /// Panics if the variable's type is larger than 16 bytes or if this
+    /// variable has not been declared yet. In debug builds, also panics if
+    /// the variable has already been defined.
     pub fn declare_var_needs_stack_map(&mut self, var: Variable) {
         log::trace!("declare_var_needs_stack_map({var:?})");
         let ty = self.func_ctx.variables[var];

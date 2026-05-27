@@ -221,7 +221,7 @@ impl SSABuilder {
 
     /// Mark `var` as needing its bindings tracked for stack maps.
     pub fn mark_var_needs_stack_map(&mut self, var: Variable) {
-        assert!(
+        debug_assert!(
             self.variables[var].values().all(|v| v.is_none()),
             "declare_var_needs_stack_map({var:?}) must be called before any \
              definition of the variable; otherwise earlier definitions are \
