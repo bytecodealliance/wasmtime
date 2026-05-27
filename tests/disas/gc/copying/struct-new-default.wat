@@ -37,11 +37,11 @@
 ;;                                     v66 = iconst.i32 32
 ;;                                     v64 = iadd.i32 v9, v66  ; v66 = 32
 ;; @0021                               store notrap aligned region0 v64, v8
-;;                                     v67 = iconst.i32 -1342177280
+;;                                     v67 = iconst.i32 -1342177246
 ;;                                     v68 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v69 = load.i64 notrap aligned readonly can_move v68+32
 ;; @0021                               v33 = iadd v69, v16
-;; @0021                               store notrap aligned v67, v33  ; v67 = -1342177280
+;; @0021                               store notrap aligned v67, v33  ; v67 = -1342177246
 ;;                                     v70 = load.i64 notrap aligned readonly can_move v0+40
 ;;                                     v71 = load.i32 notrap aligned readonly can_move v70
 ;; @0021                               store notrap aligned v71, v33+4
@@ -50,12 +50,12 @@
 ;; @0021                               jump block4(v9, v33)
 ;;
 ;;                                 block3 cold:
-;; @0021                               v21 = iconst.i32 -1342177280
+;; @0021                               v21 = iconst.i32 -1342177246
 ;; @0021                               v23 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0021                               v24 = load.i32 notrap aligned readonly can_move v23
 ;; @0021                               v6 = iconst.i32 32
 ;; @0021                               v25 = iconst.i32 16
-;; @0021                               v26 = call fn0(v0, v21, v24, v6, v25)  ; v21 = -1342177280, v6 = 32, v25 = 16
+;; @0021                               v26 = call fn0(v0, v21, v24, v6, v25)  ; v21 = -1342177246, v6 = 32, v25 = 16
 ;; @0021                               v46 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0021                               v27 = load.i64 notrap aligned readonly can_move v46+32
 ;; @0021                               v28 = uextend.i64 v26

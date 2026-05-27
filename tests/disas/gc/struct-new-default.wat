@@ -40,11 +40,11 @@
 ;;                                     v69 = iconst.i32 48
 ;;                                     v67 = iadd.i32 v10, v69  ; v69 = 48
 ;; @0023                               store notrap aligned region0 v67, v9
-;;                                     v70 = iconst.i32 -1342177280
+;;                                     v70 = iconst.i32 -1342177246
 ;;                                     v71 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v72 = load.i64 notrap aligned readonly can_move v71+32
 ;; @0023                               v34 = iadd v72, v17
-;; @0023                               store notrap aligned v70, v34  ; v70 = -1342177280
+;; @0023                               store notrap aligned v70, v34  ; v70 = -1342177246
 ;;                                     v73 = load.i64 notrap aligned readonly can_move v0+40
 ;;                                     v74 = load.i32 notrap aligned readonly can_move v73
 ;; @0023                               store notrap aligned v74, v34+4
@@ -53,12 +53,12 @@
 ;; @0023                               jump block4(v10, v34)
 ;;
 ;;                                 block3 cold:
-;; @0023                               v22 = iconst.i32 -1342177280
+;; @0023                               v22 = iconst.i32 -1342177246
 ;; @0023                               v24 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0023                               v25 = load.i32 notrap aligned readonly can_move v24
 ;; @0023                               v7 = iconst.i32 48
 ;; @0023                               v26 = iconst.i32 16
-;; @0023                               v27 = call fn0(v0, v22, v25, v7, v26)  ; v22 = -1342177280, v7 = 48, v26 = 16
+;; @0023                               v27 = call fn0(v0, v22, v25, v7, v26)  ; v22 = -1342177246, v7 = 48, v26 = 16
 ;; @0023                               v49 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0023                               v28 = load.i64 notrap aligned readonly can_move v49+32
 ;; @0023                               v29 = uextend.i64 v27

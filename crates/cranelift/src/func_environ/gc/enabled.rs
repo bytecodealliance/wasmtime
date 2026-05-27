@@ -124,13 +124,14 @@ fn emit_gc_raw_alloc(
     ty: ModuleInternedTypeIndex,
     size: ir::Value,
     align: u32,
+    reserved_bits: u32,
 ) -> ir::Value {
     let gc_alloc_raw_builtin = func_env.builtin_functions.gc_alloc_raw(builder.func);
     let vmctx = func_env.vmctx_val(&mut builder.cursor());
 
     let kind = builder
         .ins()
-        .iconst(ir::types::I32, i64::from(kind.as_u32()));
+        .iconst(ir::types::I32, i64::from(kind.as_u32() | reserved_bits));
 
     let ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
 
