@@ -3448,6 +3448,32 @@ impl FuncEnvironment<'_> {
     /// epochs are enabled to break up the copy into a loop of chunks with
     /// preemption checks between them.
     fn raw_bulk_memory_operation(&mut self, builder: &mut FunctionBuilder<'_>, mut op: BulkOp) {
+        // Fast path: a copy whose byte length is a small compile-time constant is
+        // expanded inline (see `emit_inline_memcpy`), skipping the libcall's fixed
+        // per-call cost (a wasm/host transition and an indirect call) that
+        // dominates tiny copies. Larger or dynamic copies, and all fills, use the
+        // libcall below, whose `memmove` amortizes that cost.
+        //
+        // The bound is empirical: measured on aarch64, inline is ~1.7-2.7x faster
+        // than the libcall through 128 bytes and ties by 256 (cost grows with the
+        // length, since every chunk is loaded before any is stored).
+        const INLINE_COPY_MAX_BYTES: u64 = 128;
+        if let BulkOp::MemoryCopy {
+            dst,
+            src,
+            const_len: Some(bytes),
+            ..
+        } = op
+        {
+            if bytes <= INLINE_COPY_MAX_BYTES {
+                if self.tunables.consume_fuel {
+                    self.fuel_consumed += bytes as i64;
+                }
+                self.emit_inline_memcpy(builder, dst, src, bytes);
+                return;
+            }
+        }
+
         // Very scientifically chosen. Or, more seriously, this is just an
         // arbitrary number for now. 100k copies of this size locally takes half
         // a second, so seems like a reasonably large chunk size to not hit perf
@@ -3467,7 +3493,7 @@ impl FuncEnvironment<'_> {
                     env.epoch_check(builder);
                 }
                 match *op {
-                    BulkOp::MemoryCopy { dst, src, len } => {
+                    BulkOp::MemoryCopy { dst, src, len, .. } => {
                         if env.tunables.consume_fuel {
                             // Note that fuel is always a 64-bit counter.
                             let fuel_consumed = match env.pointer_type() {
@@ -3530,7 +3556,7 @@ impl FuncEnvironment<'_> {
             };
             let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
             match *op {
-                BulkOp::MemoryCopy { dst, src, len } => {
+                BulkOp::MemoryCopy { dst, src, len, .. } => {
                     builder.ins().brif(
                         has_chunk,
                         chunk_block,
@@ -3553,7 +3579,7 @@ impl FuncEnvironment<'_> {
         has_chunk_branch(builder, &op);
 
         let append_block_params = |builder: &mut FunctionBuilder<'_>, block, op: &mut _| match op {
-            BulkOp::MemoryCopy { dst, src, len } => {
+            BulkOp::MemoryCopy { dst, src, len, .. } => {
                 *dst = builder.append_block_param(block, pointer_type);
                 *src = builder.append_block_param(block, pointer_type);
                 *len = builder.append_block_param(block, pointer_type);
@@ -3577,7 +3603,7 @@ impl FuncEnvironment<'_> {
         *op_len = chunk;
         raw_call(self, builder, &op);
         match &mut op {
-            BulkOp::MemoryCopy { dst, src, len } => {
+            BulkOp::MemoryCopy { dst, src, len, .. } => {
                 *dst = builder.ins().iadd(*dst, chunk);
                 *src = builder.ins().iadd(*src, chunk);
                 *len = builder.ins().isub(remaining_len, chunk);
@@ -3976,6 +4002,12 @@ impl FuncEnvironment<'_> {
         let len_ptr =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, len_idx_ty);
 
+        // A constant wasm length lets a small copy be expanded inline. Capture it
+        // straight from wasm here (a count of entity elements; for memories an
+        // element is a byte) so the fast path only has to recognize an `iconst`,
+        // not the casts and `* element_size` multiply applied further down.
+        let const_count = Self::value_as_const_int(builder, len);
+
         match dst_entity {
             // Memories are always a `memcpy`.
             CheckedEntity::Memory(_) => {
@@ -3983,12 +4015,15 @@ impl FuncEnvironment<'_> {
                     src_entity,
                     CheckedEntity::Memory(_) | CheckedEntity::Data { .. }
                 ));
+                // A memory's elements are bytes, so the element count is already
+                // the byte length.
                 self.raw_bulk_memory_operation(
                     builder,
                     BulkOp::MemoryCopy {
                         dst: dst_raw_addr,
                         src: src_raw_addr,
                         len: len_ptr,
+                        const_len: const_count,
                     },
                 );
                 Ok(())
@@ -4005,6 +4040,7 @@ impl FuncEnvironment<'_> {
                     src_raw_addr,
                     len_ptr,
                     src,
+                    const_count,
                 ),
 
             // Cannot copy into a data or element segment in wasm.
@@ -4211,7 +4247,9 @@ impl FuncEnvironment<'_> {
     /// `src_elem_addr` and stored to `dst_elem_addr`. The `elem_ty` is the type
     /// being transferred, `one_elem_size` is the byte size of each element,
     /// `copy_len` is the number of elements being copied, and `src_index` is
-    /// the first index within `src_entity` being loaded.
+    /// the first index within `src_entity` being loaded. `const_count` is that
+    /// same element count when it is a wasm constant, used to expand small copies
+    /// inline.
     ///
     /// All values here have type `self.pointer_type()`, except `src_index`
     /// which is typed appropriately to index `src_entity`.
@@ -4227,6 +4265,7 @@ impl FuncEnvironment<'_> {
         src_elem_addr: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
+        const_count: Option<u64>,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_type);
@@ -4300,14 +4339,16 @@ impl FuncEnvironment<'_> {
         }
 
         // For memcpy, that's easy, just call the intrinsic with the right
-        // parameters.
+        // parameters (or expand it inline; see `raw_bulk_memory_operation`).
         if !type_forbids_memcpy && dst_element_size == src_element_size {
+            let const_len = const_count.and_then(|c| c.checked_mul(u64::from(dst_element_size)));
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
                     dst: dst_elem_addr,
                     src: src_elem_addr,
                     len: dst_copy_byte_len,
+                    const_len,
                 },
             );
             return Ok(());
@@ -4382,6 +4423,73 @@ impl FuncEnvironment<'_> {
         )?;
 
         Ok(())
+    }
+
+    /// If `value` is an `iconst`, return its immediate as a `u64`.
+    ///
+    /// This deliberately peeks at a single `iconst` and nothing else. Callers
+    /// pass the length exactly as it appears in wasm, before the width casts and
+    /// `* element_size` multiply that the byte-length computation wraps it in, so
+    /// there is no need to (incorrectly) fold those type-changing ops here.
+    fn value_as_const_int(builder: &FunctionBuilder<'_>, value: ir::Value) -> Option<u64> {
+        let inst = builder.func.dfg.value_def(value).inst()?;
+        match builder.func.dfg.insts[inst] {
+            ir::InstructionData::UnaryImm {
+                opcode: ir::Opcode::Iconst,
+                imm,
+            } => Some(imm.bits().cast_unsigned()),
+            _ => None,
+        }
+    }
+
+    /// Expand a copy of `bytes` (a small compile-time constant) into inline loads
+    /// then stores, avoiding the `memory_copy` libcall.
+    ///
+    /// The copy is bitwise and element-type agnostic: the byte range is covered
+    /// greedily with the widest convenient access (`i8x16` down to `i8`). Every
+    /// chunk is loaded before any is stored, so overlapping ranges keep `memmove`
+    /// semantics. The caller has already bounds-checked the range.
+    fn emit_inline_memcpy(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        dst_addr: ir::Value,
+        src_addr: ir::Value,
+        bytes: u64,
+    ) {
+        // `trusted()` (notrap + aligned) is sound: the range is already
+        // bounds-checked, and each load feeds only its paired store, so the
+        // backend selects unaligned moves regardless of the `aligned` flag.
+        // Endianness is pinned to `Little` because Pulley's `v128` load/store
+        // only encode the little-endian variant, and matching load/store
+        // endianness preserves the destination bytes either way.
+        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
+        const WIDTHS: &[(u64, ir::Type)] = &[
+            (16, ir::types::I8X16),
+            (8, ir::types::I64),
+            (4, ir::types::I32),
+            (2, ir::types::I16),
+            (1, ir::types::I8),
+        ];
+        // 12 covers the worst case under the 128-byte cap: n=127 decomposes into
+        // 7×i8x16 + i64 + i32 + i16 + i8 = 11 chunks. Sized so both `SmallVec`s
+        // stay inline.
+        let mut chunks: SmallVec<[(i32, ir::Type); 12]> = smallvec![];
+        let mut offset = 0u64;
+        let mut remaining = bytes;
+        for &(width, ty) in WIDTHS {
+            while remaining >= width {
+                chunks.push((i32::try_from(offset).unwrap(), ty));
+                offset += width;
+                remaining -= width;
+            }
+        }
+        let vals: SmallVec<[ir::Value; 12]> = chunks
+            .iter()
+            .map(|&(off, ty)| builder.ins().load(ty, flags, src_addr, off))
+            .collect();
+        for (&(off, _), val) in chunks.iter().zip(vals) {
+            builder.ins().store(flags, val, dst_addr, off);
+        }
     }
 
     /// For bulk operations (copies, fills, etc) this is an extra check layered
@@ -5488,11 +5596,14 @@ enum BulkOp {
     /// A `memory.copy` operation, copying memory from `src` to `dst`.
     ///
     /// All of `dst`, `src`, and `len` must be pre-validated and inbounds. All
-    /// must have type `env.pointer_type()`.
+    /// must have type `env.pointer_type()`. `const_len`, when set, is the
+    /// statically-known byte length (from a constant wasm length); the inline
+    /// fast path in `raw_bulk_memory_operation` uses it to expand small copies.
     MemoryCopy {
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
+        const_len: Option<u64>,
     },
 
     /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
