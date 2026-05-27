@@ -313,7 +313,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -395,7 +395,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)

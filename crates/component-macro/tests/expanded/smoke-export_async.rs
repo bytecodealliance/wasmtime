@@ -200,7 +200,7 @@ pub mod exports {
                     .ok_or_else(|| {
                         wasmtime::format_err!("no exported instance named `the-name`")
                     })?;
-                let mut lookup = move |name| {
+                let mut lookup = move |name: &str| {
                     _instance_pre
                         .component()
                         .get_export_index(Some(&instance), name)
