@@ -2,7 +2,7 @@
 //!
 //! This crate builds on top of the core Wasmtime crate's
 //! guest-debugger APIs to present an environment where a debugger
-//! runs as a "co-running process" and sees the debuggee as a a
+//! runs as a "co-running process" and sees the debuggee as a
 //! provider of a stream of events, on which actions can be taken
 //! between each event.
 //!
