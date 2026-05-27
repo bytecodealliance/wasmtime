@@ -190,9 +190,8 @@ fn macho_build_version(triple: &Triple) -> Option<object::write::MachOBuildVersi
             // TODO(madsmtm): Properly support simulator after
             // https://github.com/bytecodealliance/target-lexicon/pull/130
             let platform = match (triple.operating_system, triple.environment) {
-                // Sometimes the target is macOS but the environment is Darwin, 
+                // Sometimes the target is macOS but the environment is Darwin,
                 // and sometimes it's the other way around. Support both.
-                #[cfg(target_os = "macos")]
                 (Darwin(_), _) => PLATFORM_MACOS,
                 (MacOSX(_), _) => PLATFORM_MACOS,
                 (_, Macabi) => PLATFORM_MACCATALYST,
