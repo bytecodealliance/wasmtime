@@ -1,5 +1,7 @@
 use crate::component::matching::InstanceType;
 use crate::component::types;
+#[cfg(feature = "wit-parser")]
+use crate::component::wit_parser::ItemName;
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
@@ -1003,12 +1005,21 @@ impl ExportLookup for ComponentExportIndex {
     }
 }
 
+#[cfg(feature = "wit-parser")]
+impl ExportLookup for ItemName {
+    fn lookup(&self, component: &Component, instance: Option<&ExportIndex>) -> Option<ExportIndex> {
+        let instance = self
+            .instance_name()
+            .and_then(|instance_name| instance_name.lookup(component, instance));
+        self.name.lookup(component, instance.as_ref())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::component::Component;
     use crate::{CodeBuilder, Config, Engine};
     use wasmtime_environ::MemoryInitialization;
-
     #[test]
     #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
@@ -1055,5 +1066,74 @@ mod tests {
         let len = image_range.end.addr() - image_range.start.addr();
         // Length may be strictly greater if it becomes page-aligned.
         assert!(len >= bytes.len());
+    }
+
+    #[cfg(feature = "wit-parser")]
+    #[test]
+    fn component_export_lookup_item_name() {
+        use crate::component::wit_parser::ItemName;
+
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        let engine = Engine::new(&config).unwrap();
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (type $string string)
+                    (export "string-type" (type $string))
+                    (component $inner
+                        (type $a_tuple (tuple string string))
+                        (export "a-tuple" (type $a_tuple))
+                    )
+                    (instance $i (instantiate $inner))
+                    (export "an-instance" (instance $i))
+                    (export "my:test/iface" (instance $i))
+                    (export "my:test/other@0.1.0" (instance $i))
+                )
+            "#,
+        )
+        .unwrap();
+
+        // ItemName can address a top level export:
+        assert!(component.get_export(None, "string-type").is_some());
+        assert_eq!(component.get_export_index(None, "string-type"),
+            component
+                .get_export_index(None, "string-type".parse::<ItemName>().unwrap())
+        );
+
+        // ItemName can address an export in an instance:
+        assert!(component.get_export(None, "an-instance").is_some());
+        let an_instance_index = component.get_export_index(None, "an-instance");
+        assert!(component.get_export(an_instance_index.as_ref(), "a-tuple").is_some());
+
+        // ItemName can address an export in an instance with a package name
+        assert!(component.get_export(None, "my:test/iface").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/iface");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component
+                .get_export_index(None, "my:test/iface.a-tuple".parse::<ItemName>().unwrap())
+        );
+
+        // ItemName can address an export in an instance with a package name
+        // and a version
+        assert!(component.get_export(None, "my:test/other@0.1.0").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/other@0.1.0");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component
+                .get_export_index(None, "my:test/other.a-tuple@0.1.0".parse::<ItemName>().unwrap())
+        );
+
+        // Both mechanisms for lookup respect semver - patch version is
+        // ignored because its a 0.x.y release
+        assert!(component.get_export(None, "my:test/other@0.1.1").is_some());
+        let pkg_iface_index = component.get_export_index(None, "my:test/other@0.1.1");
+        assert_eq!(
+            component.get_export_index(pkg_iface_index.as_ref(), "a-tuple"),
+            component
+                .get_export_index(None, "my:test/other.a-tuple@0.1.2".parse::<ItemName>().unwrap())
+        );
     }
 }
