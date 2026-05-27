@@ -24,8 +24,7 @@ impl PtrLen {
         }
     }
 
-    // macOS ARM64: Use mmap for W^X policy compliance.
-    // Only passes MAP_JIT for pages that will actually be executable.
+    // macOS ARM64: pass MAP_JIT for executable pages so W^X is honored.
     #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
     fn with_size(size: usize, executable: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
@@ -58,18 +57,12 @@ impl PtrLen {
         })
     }
 
-    // Linux x86_64: Use mmap with a hint address to keep JIT code within 2GB
-    // of runtime symbols. Without this, the system allocator may place JIT code
-    // at arbitrary virtual addresses >2GB away, causing i32 overflow in x86_64
-    // PC-relative relocations (X86PCRel4, X86CallPCRel4).
+    // Linux x86_64: mmap hint keeps JIT within 2GB of runtime for PC-relative relocs.
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     fn with_size(size: usize, _executable: bool) -> io::Result<Self> {
         assert_ne!(size, 0);
         let alloc_size = region::page::ceil(size as *const ()) as usize;
 
-        // Use this function's own address as the mmap hint. Since this code is
-        // linked into the same binary as the runtime symbols, the OS will try
-        // to allocate nearby, keeping JIT code within 32-bit relative range.
         let hint = Self::with_size as *const () as *mut libc::c_void;
         let ptr = unsafe {
             libc::mmap(
@@ -113,9 +106,7 @@ impl PtrLen {
     }
 }
 
-// macOS ARM64 and Linux x86_64 allocate via raw `mmap`, so they need an
-// explicit `munmap` on drop. Other platforms back allocations with `MmapMut`,
-// whose own `Drop` impl frees the memory.
+// Raw mmap platforms need explicit munmap; MmapMut handles its own drop.
 #[cfg(any(
     all(target_arch = "aarch64", target_os = "macos"),
     all(target_os = "linux", target_arch = "x86_64"),
@@ -223,9 +214,6 @@ impl Memory {
 
     /// Iterates non protected memory allocations that are of not zero bytes in size.
     fn non_protected_allocations_iter(&self) -> impl Iterator<Item = &PtrLen> {
-        // Raw-mmap platforms (macOS ARM64, Linux x86_64) leave `map` as `None`
-        // even for valid allocations, so check `len` only. Other platforms use
-        // `MmapMut`, where a non-empty allocation always carries `Some(map)`.
         let iter = self.allocations[self.already_protected..].iter();
 
         #[cfg(any(
