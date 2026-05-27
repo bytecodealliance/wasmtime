@@ -2839,6 +2839,11 @@ impl ExnType {
         fields: impl IntoIterator<Item = ValType>,
         func_ty: FuncType,
     ) -> Result<ExnType> {
+        ensure!(
+            engine.gc_runtime().is_some(),
+            "cannot define `ExnType`s without a GC runtime enabled"
+        );
+
         let mut wasm_fields = TryVec::new();
         for ty in fields.into_iter() {
             assert!(ty.comes_from_same_engine(engine));

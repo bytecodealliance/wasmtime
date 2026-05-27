@@ -1,3 +1,4 @@
+use crate::ErrorExt;
 use wasmtime::*;
 
 #[test]
@@ -89,4 +90,20 @@ fn stack_switching_disallows_inlining() -> Result<()> {
     config.compiler_inlining(wasmtime::Inlining::Yes);
     assert!(Engine::new(&config).is_err());
     return Ok(());
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
+    let mut config = Config::new();
+    config.strategy(Strategy::Winch);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let fty = FuncType::new(&engine, [], []);
+    let tty1 = TagType::new(fty.clone());
+    let result = Tag::new(&mut store, &tty1.clone());
+    result
+        .unwrap_err()
+        .assert_contains("cannot define `ExnType`s without a GC runtime enabled");
+    Ok(())
 }
