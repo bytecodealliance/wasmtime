@@ -185,8 +185,8 @@ pub mod imports {
     }
     pub trait Host: Send {}
     impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-    pub fn add_to_linker<T, D>(
-        linker: &mut wasmtime::component::Linker<T>,
+    pub fn add_to_linker_instance<T, D>(
+        inst: &mut wasmtime::component::LinkerInstance<'_, T>,
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
@@ -194,7 +194,6 @@ pub mod imports {
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {
-        let mut inst = linker.instance("imports")?;
         inst.func_wrap_concurrent(
             "y",
             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
@@ -206,5 +205,17 @@ pub mod imports {
             },
         )?;
         Ok(())
+    }
+    pub fn add_to_linker<T, D>(
+        linker: &mut wasmtime::component::Linker<T>,
+        host_getter: fn(&mut T) -> D::Data<'_>,
+    ) -> wasmtime::Result<()>
+    where
+        D: HostWithStore,
+        for<'a> D::Data<'a>: Host,
+        T: 'static + Send,
+    {
+        let mut inst = linker.instance("imports")?;
+        add_to_linker_instance(&mut inst, host_getter)
     }
 }

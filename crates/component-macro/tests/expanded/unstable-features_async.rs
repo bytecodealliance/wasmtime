@@ -456,8 +456,8 @@ pub mod foo {
                     async move { Host::foo(*self).await }
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 options: &LinkOptions,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
@@ -467,7 +467,6 @@ pub mod foo {
                 T: 'static + Send,
             {
                 if options.experimental_interface {
-                    let mut inst = linker.instance("foo:foo/the-interface")?;
                     if options.experimental_interface_resource {
                         inst.resource_async(
                             "bar",
@@ -514,6 +513,19 @@ pub mod foo {
                     }
                 }
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                options: &LinkOptions,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("foo:foo/the-interface")?;
+                add_to_linker_instance(&mut inst, options, host_getter)
             }
         }
     }

@@ -1,41 +1,16 @@
-pub type U = foo::foo::i::T;
-const _: () = {
-    assert!(2 == < U as wasmtime::component::ComponentType >::SIZE32);
-    assert!(2 == < U as wasmtime::component::ComponentType >::ALIGN32);
-};
-pub type T = u32;
-const _: () = {
-    assert!(4 == < T as wasmtime::component::ComponentType >::SIZE32);
-    assert!(4 == < T as wasmtime::component::ComponentType >::ALIGN32);
-};
-#[derive(wasmtime::component::ComponentType)]
-#[derive(wasmtime::component::Lift)]
-#[derive(wasmtime::component::Lower)]
-#[component(record)]
-#[derive(Clone, Copy)]
-pub struct R {}
-impl core::fmt::Debug for R {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("R").finish()
-    }
-}
-const _: () = {
-    assert!(0 == < R as wasmtime::component::ComponentType >::SIZE32);
-    assert!(1 == < R as wasmtime::component::ComponentType >::ALIGN32);
-};
 /// Auto-generated bindings for a pre-instantiated version of a
-/// component which implements the world `foo`.
+/// component which implements the world `cache`.
 ///
-/// This structure is created through [`FooPre::new`] which
+/// This structure is created through [`CachePre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
-/// For more information see [`Foo`] as well.
-pub struct FooPre<T: 'static> {
+/// For more information see [`Cache`] as well.
+pub struct CachePre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    indices: FooIndices,
+    indices: CacheIndices,
 }
-impl<T: 'static> Clone for FooPre<T> {
+impl<T: 'static> Clone for CachePre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -43,8 +18,8 @@ impl<T: 'static> Clone for FooPre<T> {
         }
     }
 }
-impl<_T: 'static> FooPre<_T> {
-    /// Creates a new copy of `FooPre` bindings which can then
+impl<_T: 'static> CachePre<_T> {
+    /// Creates a new copy of `CachePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
     /// This method may fail if the component behind `instance_pre`
@@ -52,7 +27,7 @@ impl<_T: 'static> FooPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = FooIndices::new(&instance_pre)?;
+        let indices = CacheIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -61,7 +36,7 @@ impl<_T: 'static> FooPre<_T> {
     pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
         &self.instance_pre
     }
-    /// Instantiates a new instance of [`Foo`] within the
+    /// Instantiates a new instance of [`Cache`] within the
     /// `store` provided.
     ///
     /// This function will use `self` as the pre-instantiated
@@ -71,52 +46,50 @@ impl<_T: 'static> FooPre<_T> {
     pub fn instantiate(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Foo> {
+    ) -> wasmtime::Result<Cache> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate(&mut store)?;
         self.indices.load(&mut store, &instance)
     }
 }
-impl<_T: Send + 'static> FooPre<_T> {
+impl<_T: Send + 'static> CachePre<_T> {
     /// Same as [`Self::instantiate`], except with `async`.
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Foo> {
+    ) -> wasmtime::Result<Cache> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
     }
 }
 /// Auto-generated bindings for index of the exports of
-/// `foo`.
+/// `cache`.
 ///
-/// This is an implementation detail of [`FooPre`] and can
+/// This is an implementation detail of [`CachePre`] and can
 /// be constructed if needed as well.
 ///
-/// For more information see [`Foo`] as well.
+/// For more information see [`Cache`] as well.
 #[derive(Clone)]
-pub struct FooIndices {
-    f: wasmtime::component::ComponentExportIndex,
-}
+pub struct CacheIndices {}
 /// Auto-generated bindings for an instance a component which
-/// implements the world `foo`.
+/// implements the world `cache`.
 ///
 /// This structure can be created through a number of means
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Foo::instantiate`] which only needs a
+///   [`Cache::instantiate`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
-/// * Alternatively you can create a [`FooPre`] ahead of
+/// * Alternatively you can create a [`CachePre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`FooPre::instantiate`] to
-///   create a [`Foo`].
+///   method then uses [`CachePre::instantiate`] to
+///   create a [`Cache`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Foo::new`].
+///   then you can use [`Cache::new`].
 ///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
@@ -124,12 +97,10 @@ pub struct FooIndices {
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct Foo {
-    f: wasmtime::component::Func,
-}
+pub struct Cache {}
 const _: () = {
-    impl FooIndices {
-        /// Creates a new copy of `FooIndices` bindings which can then
+    impl CacheIndices {
+        /// Creates a new copy of `CacheIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
         /// This method may fail if the component does not have the
@@ -139,25 +110,10 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
             let _instance_type = _instance_pre.instance_type();
-            let f = {
-                let (item, index) = _component
-                    .get_export(None, "f")
-                    .ok_or_else(|| wasmtime::format_err!("no export `f` found"))?;
-                match item {
-                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
-                        wasmtime::error::Context::context(
-                            func.typecheck::<(), ((T, U, R),)>(&_instance_type),
-                            "type-checking export func `f`",
-                        )?;
-                        index
-                    }
-                    _ => Err(wasmtime::format_err!("export `f` is not a function"))?,
-                }
-            };
-            Ok(FooIndices { f })
+            Ok(CacheIndices {})
         }
         /// Uses the indices stored in `self` to load an instance
-        /// of [`Foo`] from the instance provided.
+        /// of [`Cache`] from the instance provided.
         ///
         /// Note that at this time this method will additionally
         /// perform type-checks of all exports.
@@ -165,94 +121,103 @@ const _: () = {
             &self,
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Foo> {
+        ) -> wasmtime::Result<Cache> {
             let _ = &mut store;
             let _instance = instance;
-            let f = *_instance
-                .get_typed_func::<(), ((T, U, R),)>(&mut store, &self.f)?
-                .func();
-            Ok(Foo { f })
+            Ok(Cache {})
         }
     }
-    impl Foo {
-        /// Convenience wrapper around [`FooPre::new`] and
-        /// [`FooPre::instantiate`].
+    impl Cache {
+        /// Convenience wrapper around [`CachePre::new`] and
+        /// [`CachePre::instantiate`].
         pub fn instantiate<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Foo> {
+        ) -> wasmtime::Result<Cache> {
             let pre = linker.instantiate_pre(component)?;
-            FooPre::new(pre)?.instantiate(store)
+            CachePre::new(pre)?.instantiate(store)
         }
-        /// Convenience wrapper around [`FooIndices::new`] and
-        /// [`FooIndices::load`].
+        /// Convenience wrapper around [`CacheIndices::new`] and
+        /// [`CacheIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Foo> {
-            let indices = FooIndices::new(&instance.instance_pre(&store))?;
+        ) -> wasmtime::Result<Cache> {
+            let indices = CacheIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        /// Convenience wrapper around [`FooPre::new`] and
-        /// [`FooPre::instantiate_async`].
+        /// Convenience wrapper around [`CachePre::new`] and
+        /// [`CachePre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Foo>
+        ) -> wasmtime::Result<Cache>
         where
             _T: Send,
         {
             let pre = linker.instantiate_pre(component)?;
-            FooPre::new(pre)?.instantiate_async(store).await
+            CachePre::new(pre)?.instantiate_async(store).await
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::i::HostWithStore,
-            for<'a> D::Data<'a>: foo::foo::i::Host,
-            T: 'static + Send,
+            D: foo::foo::store::HostWithStore + foo::foo::store::HostWithStore,
+            for<'a> D::Data<'a>: foo::foo::store::Host + foo::foo::store::Host,
+            T: 'static,
         {
-            foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::store::add_to_linker_instance::<
+                T,
+                D,
+            >(&mut linker.instance("hot-cache")?, host_getter)?;
+            foo::foo::store::add_to_linker_instance::<
+                T,
+                D,
+            >(&mut linker.instance("durable")?, host_getter)?;
             Ok(())
-        }
-        pub async fn call_f<_T, _D>(
-            &self,
-            accessor: &wasmtime::component::Accessor<_T, _D>,
-        ) -> wasmtime::Result<(T, U, R)>
-        where
-            _T: Send,
-            _D: wasmtime::component::HasData,
-        {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
-            };
-            let (ret0,) = callee.call_concurrent(accessor, ()).await?;
-            Ok(ret0)
         }
     }
 };
 pub mod foo {
     pub mod foo {
         #[allow(clippy::all)]
-        pub mod i {
+        pub mod store {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub type T = u16;
-            const _: () = {
-                assert!(2 == < T as wasmtime::component::ComponentType >::SIZE32);
-                assert!(2 == < T as wasmtime::component::ComponentType >::ALIGN32);
-            };
             pub trait HostWithStore: wasmtime::component::HasData {}
             impl<_T: ?Sized> HostWithStore for _T
             where
                 _T: wasmtime::component::HasData,
             {}
-            pub trait Host {}
-            impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub trait Host {
+                fn get(
+                    &mut self,
+                    key: wasmtime::component::__internal::String,
+                ) -> Option<wasmtime::component::__internal::String>;
+                fn set(
+                    &mut self,
+                    key: wasmtime::component::__internal::String,
+                    value: wasmtime::component::__internal::String,
+                ) -> ();
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn get(
+                    &mut self,
+                    key: wasmtime::component::__internal::String,
+                ) -> Option<wasmtime::component::__internal::String> {
+                    Host::get(*self, key)
+                }
+                fn set(
+                    &mut self,
+                    key: wasmtime::component::__internal::String,
+                    value: wasmtime::component::__internal::String,
+                ) -> () {
+                    Host::set(*self, key, value)
+                }
+            }
             pub fn add_to_linker_instance<T, D>(
                 inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -262,6 +227,34 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
+                inst.func_wrap(
+                    "get",
+                    move |
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        (arg0,): (wasmtime::component::__internal::String,)|
+                    {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::get(host, arg0);
+                        Ok((r,))
+                    },
+                )?;
+                inst.func_wrap(
+                    "set",
+                    move |
+                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        (
+                            arg0,
+                            arg1,
+                        ): (
+                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::String,
+                        )|
+                    {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::set(host, arg0, arg1);
+                        Ok(r)
+                    },
+                )?;
                 Ok(())
             }
             pub fn add_to_linker<T, D>(
@@ -273,7 +266,7 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/i")?;
+                let mut inst = linker.instance("foo:foo/store")?;
                 add_to_linker_instance(&mut inst, host_getter)
             }
         }

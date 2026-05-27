@@ -1001,3 +1001,99 @@ mod anyhow_errors {
         Ok(())
     }
 }
+
+mod implements {
+    use super::*;
+    use std::collections::HashMap;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                get: func(key: string) -> option<string>;
+                set: func(key: string, value: string);
+            }
+
+            world cache {
+                import hot-cache: store;
+                import durable: store;
+            }
+        ",
+    });
+
+    const DUMMY: &str = r#"
+        (component
+            (import "hot-cache" (instance $hot
+                (export "get" (func (param "key" string) (result (option string))))
+                (export "set" (func (param "key" string) (param "value" string)))
+            ))
+            (import "durable" (instance $dur
+                (export "get" (func (param "key" string) (result (option string))))
+                (export "set" (func (param "key" string) (param "value" string)))
+            ))
+        )
+    "#;
+
+    #[test]
+    fn add_to_linker_can_instantiate() -> Result<()> {
+        #[derive(Default)]
+        struct MyHost {
+            kv: HashMap<String, String>,
+        }
+
+        impl demo::pkg::store::Host for MyHost {
+            fn get(&mut self, key: String) -> Option<String> {
+                self.kv.get(&key).cloned()
+            }
+
+            fn set(&mut self, key: String, value: String) {
+                self.kv.insert(key, value);
+            }
+        }
+
+        let engine = engine();
+        let mut linker = Linker::new(&engine);
+        Cache::add_to_linker::<_, HasSelf<MyHost>>(&mut linker, |s| s)?;
+        let component = Component::new(&engine, DUMMY)?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let _instance = Cache::instantiate(&mut store, &component, &linker)?;
+        Ok(())
+    }
+
+    impl demo::pkg::store::Host for HashMap<String, String> {
+        fn get(&mut self, key: String) -> Option<String> {
+            HashMap::get(self, &key).cloned()
+        }
+
+        fn set(&mut self, key: String, value: String) {
+            self.insert(key, value);
+        }
+    }
+
+    #[test]
+    fn add_to_linker_instance_can_instantiate() -> Result<()> {
+        #[derive(Default)]
+        struct MyHost {
+            hot_cache: HashMap<String, String>,
+            durable: HashMap<String, String>,
+        }
+
+        let engine = engine();
+        let mut linker = Linker::new(&engine);
+        demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<HashMap<String, String>>>(
+            &mut linker.instance("hot-cache")?,
+            |s| &mut s.hot_cache,
+        )?;
+        demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<HashMap<String, String>>>(
+            &mut linker.instance("durable")?,
+            |s| &mut s.durable,
+        )?;
+        let component = Component::new(&engine, DUMMY)?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let _pre = linker.instantiate_pre(&component)?;
+        let _ = _pre.instantiate(&mut store)?;
+        Ok(())
+    }
+}
