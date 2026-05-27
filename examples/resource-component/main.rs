@@ -2,7 +2,7 @@
 
 /*
 You can execute this example with:
-    cmake examples/
+    cargo build --target wasm32-wasip2 -p example-resource-component-wasm
     cargo run --example resource-component
 */
 

@@ -2,9 +2,11 @@
 Example of compiling, instantiating, and linking two WebAssembly modules
 together.
 
-You can build using cmake:
+You can build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-linking
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-linking
+  ./build/wasmtime-linking
 */
 
 #include <assert.h>

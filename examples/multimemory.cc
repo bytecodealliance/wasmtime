@@ -1,14 +1,11 @@
 /*
 An example of how to interact with multiple memories.
 
-You can build the example using CMake:
+You can build and run the example using CMake:
 
-mkdir build && (cd build && cmake .. && \
-  cmake --build . --target wasmtime-multimemory-cpp)
-
-And then run it:
-
-build/wasmtime-multimemory-cpp
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-multimemory-cpp
+  ./build/wasmtime-multimemory-cpp
 */
 
 #include <fstream>

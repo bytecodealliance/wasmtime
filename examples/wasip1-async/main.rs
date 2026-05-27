@@ -3,7 +3,7 @@
 
 /*
 You can execute this example with:
-    cmake examples/
+    cargo build --target wasm32-wasip1 -p example-wasi-wasm
     cargo run --example wasip1-async
 */
 

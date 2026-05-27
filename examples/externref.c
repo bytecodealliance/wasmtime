@@ -1,10 +1,11 @@
 /*
 Example of using `externref` values.
 
-You can build using cmake:
+You can build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && \
-  cmake --build . --target wasmtime-externref
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-externref
+  ./build/wasmtime-externref
 */
 
 #include <assert.h>

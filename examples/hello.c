@@ -2,9 +2,11 @@
 Example of instantiating of the WebAssembly module and invoking its exported
 function.
 
-You can build using cmake:
+You can build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-hello
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-hello
+  ./build/wasmtime-hello
 */
 
 #include <assert.h>
