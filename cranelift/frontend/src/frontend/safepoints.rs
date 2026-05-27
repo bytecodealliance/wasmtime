@@ -760,9 +760,16 @@ impl SafepointSpiller {
             // Eagerly allocate all stack slots for values that are live-out in
             // this block. This reserves a loop-invariant value's stack slot
             // across the whole loop, rather than just at the first use site we
-            // see within the loop, which could otherwise lead to
-            // "use-after-free" bugs with our stack slot reuse.
-            for val in self.liveness.live_outs[block_index].iter().copied() {
+            // see within the loop, which could otherwise lead to incorrect
+            // stack slot reuse.
+            vals.extend(
+                self.liveness.live_outs[block_index]
+                    .iter()
+                    .copied()
+                    .filter(|val| self.liveness.live_across_any_safepoint.contains(*val)),
+            );
+            vals.sort_unstable();
+            for val in vals.drain(..) {
                 self.stack_slots.get_or_create_stack_slot(func, val);
             }
 
