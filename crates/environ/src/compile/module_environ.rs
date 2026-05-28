@@ -116,6 +116,11 @@ pub struct ModuleTranslation<'data> {
     /// validation process.
     types: Option<Types>,
 
+    /// Per-function [`BranchHintReader`]s from the `metadata.code.branch_hint`
+    /// section, keyed by function index. Populated only when
+    /// [`Tunables::branch_hinting`] is enabled.
+    branch_hints: HashMap<FuncIndex, BranchHintReader<'data>>,
+
     /// The WebAssembly `start` function, if defined.
     pub start_func: Option<FuncIndex>,
 
@@ -173,6 +178,11 @@ pub enum MemorySegmentOffset {
     Static(u64),
 }
 
+/// Lazy decoder over the branch hints attached to a single function in the
+/// `metadata.code.branch_hint` custom section
+/// ([branch-hinting proposal](https://github.com/WebAssembly/branch-hinting)).
+pub type BranchHintReader<'a> = wasmparser::SectionLimited<'a, wasmparser::BranchHint>;
+
 impl<'data> ModuleTranslation<'data> {
     /// Create a new translation for the module with the given index.
     pub fn new(module_index: StaticModuleIndex) -> Self {
@@ -191,6 +201,7 @@ impl<'data> ModuleTranslation<'data> {
             types: None,
             runtime_data_map: Default::default(),
             passive_elem_map: Default::default(),
+            branch_hints: HashMap::default(),
             start_func: None,
             global_initializers: Vec::new(),
             passive_elements: Default::default(),
@@ -198,6 +209,11 @@ impl<'data> ModuleTranslation<'data> {
             memory_init: MemoryInit::Unprocessed(Vec::new()),
             passive_data: Default::default(),
         }
+    }
+
+    /// Returns the [`BranchHintReader`] for `func`, if the section attached any.
+    pub fn branch_hints(&self, func: FuncIndex) -> Option<BranchHintReader<'data>> {
+        self.branch_hints.get(&func).cloned()
     }
 
     /// Returns a reference to the type information of the current module.
@@ -800,6 +816,26 @@ and for re-adding support for interface types you can see this issue:
                 let result = self.name_section(name);
                 if let Err(e) = result {
                     log::warn!("failed to parse name section {e:?}");
+                }
+            }
+            KnownCustom::BranchHints(reader) if self.tunables.branch_hinting => {
+                // Branch hints are advisory and this section is never validated;
+                // it is decoded lazily during compilation, so record only the
+                // per-function sub-readers here. Discard the whole section if any
+                // entry is malformed rather than applying it partially.
+                let mut hints = HashMap::new();
+                let result: wasmparser::Result<()> = reader.into_iter().try_for_each(|func| {
+                    let func = func?;
+                    // A well-formed section lists each function at most once; keep
+                    // the first entry deterministically if it repeats.
+                    hints
+                        .entry(FuncIndex::from_u32(func.func))
+                        .or_insert(func.hints);
+                    Ok(())
+                });
+                match result {
+                    Ok(()) => self.result.branch_hints = hints,
+                    Err(e) => log::warn!("failed to parse branch-hint section {e:?}"),
                 }
             }
             _ => {

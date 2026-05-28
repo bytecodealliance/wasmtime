@@ -4,6 +4,12 @@ Unreleased.
 
 ### Added
 
+* Added opt-in support for the WebAssembly branch-hinting proposal: the
+  `metadata.code.branch_hint` custom section is parsed and used to mark cold
+  blocks during Cranelift compilation, behind `Config::wasm_branch_hinting`
+  (off by default).
+  [#13459](https://github.com/bytecodealliance/wasmtime/pull/13459)
+
 ### Changed
 
 --------------------------------------------------------------------------------

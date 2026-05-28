@@ -25,8 +25,11 @@ use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::{SmallVec, smallvec};
+use std::iter::Peekable;
 use std::mem;
-use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
+use wasmparser::{
+    BranchHint, FuncValidator, Operator, SectionLimitedIntoIter, WasmFeatures, WasmModuleResources,
+};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
     BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
@@ -235,6 +238,13 @@ pub struct FuncEnvironment<'module_environment> {
     /// to e.g. record the return-address of a callsite for debuginfo.
     pub(crate) next_srcloc: ir::SourceLoc,
 
+    /// Lazily-decoded branch hints for the current function, in ascending
+    /// `func_offset` order (as the proposal requires). `None` when the function
+    /// carries no hints.
+    branch_hints: Option<Peekable<SectionLimitedIntoIter<'module_environment, BranchHint>>>,
+    /// Module-relative byte offset of the current function body's start.
+    func_body_offset: usize,
+
     /// Cached alias regions for alias analysis.
     heap_alias_region: Option<ir::AliasRegion>,
     table_alias_region: Option<ir::AliasRegion>,
@@ -252,9 +262,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         wasm_func_ty: &'module_environment WasmFuncType,
         key: FuncKey,
+        func_index: Option<FuncIndex>,
+        func_body_offset: usize,
     ) -> Self {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
+
+        // Synthesized functions without a wasm body (e.g. module startup) pass
+        // `None`, yielding no hints.
+        let branch_hints = func_index
+            .and_then(|func_index| translation.branch_hints(func_index))
+            .map(|reader| reader.into_iter().peekable());
 
         // This isn't used during translation, so squash the warning about this
         // being unused from the compiler.
@@ -305,9 +323,37 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             state_slot: None,
             next_srcloc: ir::SourceLoc::default(),
             wasm_module_offset: translation.wasm_module_offset,
+
+            branch_hints,
+            func_body_offset,
             heap_alias_region: None,
             table_alias_region: None,
             vmctx_alias_region: None,
+        }
+    }
+
+    /// Consume the branch hint for the instruction at module-relative `offset`
+    /// (i.e. `builder.srcloc().bits()`), if any. The lazy decoder only moves
+    /// forward, making this O(n) over a function body.
+    pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<BranchHint> {
+        // Fast path: no hints (always so when the proposal is off), and this
+        // runs for every `if`/`br_if`.
+        let hints = self.branch_hints.as_mut()?;
+        let rel = u32::try_from(offset.checked_sub(self.func_body_offset)?).ok()?;
+        loop {
+            // Hint bytes were validated when the section was decoded, so an error
+            // here is unexpected; treat it like exhaustion (end of hints).
+            let hint = *hints.peek()?.as_ref().ok()?;
+            if hint.func_offset < rel {
+                hints.next();
+                continue;
+            }
+            if hint.func_offset == rel {
+                hints.next();
+                return Some(hint);
+            }
+            // The next hint is for a later offset; nothing for this branch.
+            return None;
         }
     }
 

@@ -501,6 +501,11 @@ pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_branch_hinting_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_branch_hinting(enable);
+}
+
+#[unsafe(no_mangle)]
 #[cfg(feature = "gc")]
 pub extern "C" fn wasmtime_config_wasm_exceptions_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_exceptions(enable);

@@ -39,6 +39,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         tail_call,
         extended_const,
         wide_arithmetic,
+        branch_hinting,
         component_model_async,
         component_model_more_async_builtins,
         component_model_async_stackful,
@@ -72,6 +73,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let tail_call = tail_call.unwrap_or(false);
     let extended_const = extended_const.unwrap_or(false);
     let wide_arithmetic = wide_arithmetic.unwrap_or(false);
+    let branch_hinting = branch_hinting.unwrap_or(false);
     let component_model_async = component_model_async.unwrap_or(false);
     let component_model_more_async_builtins = component_model_more_async_builtins.unwrap_or(false);
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
@@ -115,6 +117,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_custom_page_sizes(custom_page_sizes)
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
+        .wasm_branch_hinting(branch_hinting)
         .wasm_component_model_async(component_model_async)
         .wasm_component_model_more_async_builtins(component_model_more_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)

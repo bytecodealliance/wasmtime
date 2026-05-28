@@ -413,7 +413,7 @@ impl Compiler {
         context.func.signature = wasm_call_signature(&*self.isa, ty, &self.tunables);
         let (namespace, index) = key.into_raw_parts();
         context.func.name = UserFuncName::User(UserExternalName { namespace, index });
-        let mut func_env = FuncEnvironment::new(self, translation, types, ty, key);
+        let mut func_env = FuncEnvironment::new(self, translation, types, ty, key, None, 0);
         compiler
             .cx
             .func_translator
@@ -486,7 +486,20 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty, key);
+        // Branch hints are keyed by function-body-relative offset, so the body's
+        // module-relative start is needed to convert source locations later.
+        let FunctionBodyData { validator, body } = input;
+        let func_body_offset = body.get_binary_reader().original_position();
+
+        let mut func_env = FuncEnvironment::new(
+            self,
+            translation,
+            types,
+            wasm_func_ty,
+            key,
+            Some(func_index),
+            func_body_offset,
+        );
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -554,7 +567,6 @@ impl wasmtime_environ::Compiler for Compiler {
                 func_env.stack_limit_at_function_entry = Some(stack_limit);
             }
         }
-        let FunctionBodyData { validator, body } = input;
         let mut validator =
             validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
         compiler.cx.func_translator.translate_body(
