@@ -268,10 +268,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let tunables = compiler.tunables();
         let builtin_functions = BuiltinFunctions::new(compiler);
 
-        // Resolve the lazy branch-hint decoder for this function, if any.
-        // `func_body_offset` lets `take_branch_hint` convert source locations to
-        // the function-body-relative offsets the hints use. Synthesized functions
-        // without a wasm body (e.g. module startup) pass `None` and get no hints.
+        // Synthesized functions without a wasm body (e.g. module startup) pass
+        // `None`, yielding no hints.
         let branch_hints = func_index
             .and_then(|func_index| translation.branch_hints(func_index))
             .map(|reader| reader.into_iter().peekable());
@@ -338,17 +336,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// (i.e. `builder.srcloc().bits()`), if any. The lazy decoder only moves
     /// forward, making this O(n) over a function body.
     pub(crate) fn take_branch_hint(&mut self, offset: usize) -> Option<BranchHint> {
-        // `as_mut()?` is the fast path for a function with no hints (always so
-        // when the proposal is disabled): this is called for every `if`/`br_if`.
+        // Fast path: no hints (always so when the proposal is off), and this
+        // runs for every `if`/`br_if`.
         let hints = self.branch_hints.as_mut()?;
         let rel = u32::try_from(offset.checked_sub(self.func_body_offset)?).ok()?;
         loop {
-            // The hint bytes were already validated when the section was decoded
-            // into per-function readers, so a decode error here is unexpected;
-            // defensively treat it (like exhaustion) as the end of the hints.
+            // Hint bytes were validated when the section was decoded, so an error
+            // here is unexpected; treat it like exhaustion (end of hints).
             let hint = *hints.peek()?.as_ref().ok()?;
             if hint.func_offset < rel {
-                // Hint precedes this branch (or never lined up); drop it.
                 hints.next();
                 continue;
             }

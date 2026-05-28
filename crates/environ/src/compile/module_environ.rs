@@ -116,12 +116,9 @@ pub struct ModuleTranslation<'data> {
     /// validation process.
     types: Option<Types>,
 
-    /// Per-function readers into the `metadata.code.branch_hint` custom section,
-    /// keyed by module-level function index. Only populated when
-    /// [`Tunables::branch_hinting`] is enabled. The hints are decoded lazily
-    /// during compilation, so this holds the section's per-function sub-readers
-    /// rather than fully-decoded hints; access them via
-    /// [`ModuleTranslation::branch_hints`].
+    /// Per-function [`BranchHintReader`]s from the `metadata.code.branch_hint`
+    /// section, keyed by function index. Populated only when
+    /// [`Tunables::branch_hinting`] is enabled.
     branch_hints: HashMap<FuncIndex, BranchHintReader<'data>>,
 
     /// The WebAssembly `start` function, if defined.
@@ -214,9 +211,7 @@ impl<'data> ModuleTranslation<'data> {
         }
     }
 
-    /// Returns a lazy decoder over the branch hints for `func`, if the
-    /// `metadata.code.branch_hint` section attached any. Hints are decoded on
-    /// demand during compilation rather than eagerly during parsing.
+    /// Returns the [`BranchHintReader`] for `func`, if the section attached any.
     pub fn branch_hints(&self, func: FuncIndex) -> Option<BranchHintReader<'data>> {
         self.branch_hints.get(&func).cloned()
     }
