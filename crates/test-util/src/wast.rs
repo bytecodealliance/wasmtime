@@ -40,6 +40,7 @@ pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
         &spec_tests,
         &FindConfig::Infer(spec_test_config),
     )
+    .context("Do you need to `git submodule update --init`?")
     .with_context(|| format!("failed to add tests from `{}`", spec_tests.display()))?;
 
     let misc_tests = root.join("tests/misc_testsuite");
@@ -52,6 +53,7 @@ pub fn find_tests(root: &Path) -> Result<Vec<WastTest>> {
         &cm_tests,
         &FindConfig::Infer(component_test_config),
     )
+    .context("Do you need to `git submodule update --init`?")
     .with_context(|| format!("failed to add tests from `{}`", cm_tests.display()))?;
 
     // Temporarily work around upstream tests that fail in unexpected ways (e.g.
