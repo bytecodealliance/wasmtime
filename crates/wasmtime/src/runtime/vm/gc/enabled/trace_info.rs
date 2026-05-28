@@ -16,6 +16,10 @@ pub(super) enum TraceInfo {
     Array {
         /// Whether this array type's elements are GC references, and need
         /// tracing.
+        #[cfg_attr(
+            not(feature = "gc-drc"),
+            allow(dead_code, reason = "easier not to cfg on/off")
+        )]
         gc_ref_elems: bool,
     },
 

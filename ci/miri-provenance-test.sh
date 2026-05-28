@@ -12,7 +12,7 @@
 set -ex
 
 compile() {
-  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model,component-model-async,debug \
+  cargo run --no-default-features --features compile,pulley,wat,gc-copying,component-model,component-model-async,debug \
     compile --target pulley64 $1 \
     -o ${1%.wat}.cwasm \
     -O memory-reservation=$((1 << 20)) \

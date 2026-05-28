@@ -172,7 +172,7 @@ use alloc::sync::{Arc, Weak};
 use core::any;
 use core::marker;
 use core::mem::{self, MaybeUninit};
-use core::num::{NonZeroU64, NonZeroUsize};
+use core::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
 use core::{
     fmt::{self, Debug},
     hash::{Hash, Hasher},
@@ -324,6 +324,26 @@ impl GcRootIndex {
     pub(crate) fn try_clone_gc_ref(&self, store: &mut AutoAssertNoGc<'_>) -> Result<VMGcRef> {
         let gc_ref = self.try_gc_ref(store)?.unchecked_copy();
         Ok(store.clone_gc_ref(&gc_ref))
+    }
+
+    /// Exposes this value's raw `VMGcRef` to wasm as a `u32`.
+    pub(crate) fn expose_gc_ref_to_wasm(
+        &self,
+        store: &mut AutoAssertNoGc<'_>,
+    ) -> Result<NonZeroU32> {
+        let gc_ref = self.try_clone_gc_ref(store)?;
+
+        let raw = match store.optional_gc_store_mut() {
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
+            None => {
+                // NB: do not force the allocation of a GC heap just because the
+                // program is using `i31ref`s.
+                debug_assert!(gc_ref.is_i31());
+                gc_ref.as_raw_non_zero_u32()
+            }
+        };
+
+        Ok(raw)
     }
 }
 
@@ -1210,18 +1230,7 @@ impl<T: GcRef> Rooted<T> {
         ptr: &mut MaybeUninit<ValRaw>,
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-
-        let raw = match store.optional_gc_store_mut() {
-            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
-            None => {
-                // NB: do not force the allocation of a GC heap just because the
-                // program is using `i31ref`s.
-                debug_assert!(gc_ref.is_i31());
-                gc_ref.as_raw_non_zero_u32()
-            }
-        };
-
+        let raw = self.inner.expose_gc_ref_to_wasm(store)?;
         ptr.write(val_raw(raw.get()));
         Ok(())
     }
@@ -1834,16 +1843,7 @@ where
         ptr: &mut MaybeUninit<ValRaw>,
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
-        let gc_ref = self.try_clone_gc_ref(store)?;
-
-        let raw = match store.optional_gc_store_mut() {
-            Some(s) => s.expose_gc_ref_to_wasm(gc_ref)?,
-            None => {
-                debug_assert!(gc_ref.is_i31());
-                gc_ref.as_raw_non_zero_u32()
-            }
-        };
-
+        let raw = self.inner.expose_gc_ref_to_wasm(store)?;
         ptr.write(val_raw(raw.get()));
         Ok(())
     }

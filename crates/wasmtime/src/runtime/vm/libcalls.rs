@@ -341,8 +341,7 @@ fn passive_elem_segment_base(
     store
         .instance_mut(instance)
         .passive_element_segment(elem_index)
-        .as_ptr()
-        .cast_mut()
+        .as_mut_ptr()
         .cast()
 }
 

@@ -43,6 +43,7 @@
   (export "memory" (memory 0)))
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
+;;     region0 = 0 "heap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -62,7 +63,7 @@
 ;; @004b                               v7 = uextend.i64 v3  ; v3 = 35
 ;; @004b                               v8 = load.i64 notrap aligned readonly can_move v0+56
 ;; @004b                               v9 = iadd v8, v7
-;; @004b                               v10 = sload16.i64 little heap v9
+;; @004b                               v10 = sload16.i64 little region0 v9
 ;; @004e                               trap user12
 ;;
 ;;                                 block6:

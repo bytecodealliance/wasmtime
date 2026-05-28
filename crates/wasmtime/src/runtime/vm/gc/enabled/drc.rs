@@ -54,7 +54,7 @@ use crate::runtime::vm::{
     VMGcObjectData, VMGcRef,
 };
 use crate::vm::VMMemoryDefinition;
-use crate::{Engine, bail_bug, prelude::*};
+use crate::{Engine, Trap, bail_bug, prelude::*};
 use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
@@ -1070,8 +1070,7 @@ unsafe impl GcHeap for DrcHeap {
         }
 
         let object_size = u32::try_from(layout.size()).unwrap();
-        let alloc_size = FreeList::aligned_size(object_size)
-            .ok_or_else(|| format_err!("allocation size too large"))?;
+        let alloc_size = FreeList::aligned_size(object_size).ok_or(Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc_fast(alloc_size) {
             None => return Ok(Err(u64::try_from(layout.size())?)),
@@ -1136,9 +1135,7 @@ unsafe impl GcHeap for DrcHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
-        let layout = layout
-            .layout(length)
-            .ok_or_else(|| format_err!("allocation size too large"))?;
+        let layout = layout.layout(length).ok_or(Trap::AllocationTooLarge)?;
         let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
             layout,
@@ -1373,7 +1370,8 @@ mod tests {
             num_defined_globals: 0,
             num_defined_tags: 0,
             num_escaped_funcs: 0,
-            num_passive_data: 0,
+            num_runtime_data: 0,
+            has_startup_func: false,
         });
 
         assert_eq!(

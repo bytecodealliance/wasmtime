@@ -18,14 +18,10 @@ use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
-#[cfg(feature = "debug")]
-use wasmtime_environ::FrameTable;
 use wasmtime_environ::{
-    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind,
-    StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
+    CompiledFunctionsTable, CompiledModuleInfo, EntityIndex, FuncKey, HostPtr, ModuleTypes,
+    ObjectKind, StaticModuleIndex, TypeTrace, VMOffsets, VMSharedTypeIndex, WasmChecksum,
 };
-#[cfg(feature = "gc")]
-use wasmtime_unwinder::ExceptionTable;
 mod registry;
 
 pub use registry::*;
@@ -1096,7 +1092,8 @@ impl Module {
         let module = self.compiled_module();
         let module_index = self.env_module().module_index;
         self.env_module().defined_func_indices().map(move |idx| {
-            let loc = module.func_loc(idx);
+            let key = FuncKey::DefinedWasmFunction(module_index, idx);
+            let loc = module.func_loc(key);
             let idx = module.module().func_index(idx);
             ModuleFunction {
                 module: module_index,
@@ -1162,7 +1159,6 @@ impl Module {
         let ptr = self
             .compiled_module()
             .wasm_to_array_trampoline(trampoline_module_ty)
-            .expect("always have a trampoline for the trampoline type")
             .as_ptr()
             .cast::<VMWasmCallFunction>()
             .cast_mut();
@@ -1178,27 +1174,10 @@ impl Module {
         Ok(images)
     }
 
-    /// Obtain an exception-table parser on this module's exception metadata.
-    #[cfg(feature = "gc")]
-    pub(crate) fn exception_table<'a>(&'a self) -> ExceptionTable<'a> {
-        ExceptionTable::parse(self.inner.code.exception_tables())
-            .expect("Exception tables were validated on module load")
-    }
-
-    /// Obtain a frame-table parser on this module's frame state slot
-    /// (debug instrumentation) metadata.
+    /// See [`CodeMemory::frame_table`].
     #[cfg(feature = "debug")]
-    pub(crate) fn frame_table<'a>(&'a self) -> Option<FrameTable<'a>> {
-        let data = self.inner.code.frame_tables();
-        if data.is_empty() {
-            None
-        } else {
-            let orig_text = self.inner.code.text();
-            Some(
-                FrameTable::parse(data, orig_text)
-                    .expect("Frame tables were validated on module load"),
-            )
-        }
+    pub(crate) fn frame_table<'a>(&'a self) -> Option<wasmtime_environ::FrameTable<'a>> {
+        self.inner.code.frame_table()
     }
 
     /// Is this `Module` the same as another?
@@ -1215,6 +1194,10 @@ impl Module {
     #[inline]
     pub fn same(a: &Module, b: &Module) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
+    }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.inner.module.index()
     }
 }
 
@@ -1292,6 +1275,7 @@ mod tests {
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
         let engine = Engine::default();
         let module = Module::new(

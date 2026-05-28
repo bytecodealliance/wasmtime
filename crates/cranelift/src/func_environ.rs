@@ -13,7 +13,7 @@ use crate::{
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::{
     self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
 };
@@ -32,10 +32,12 @@ use wasmparser::{
 };
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
-    EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
-    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
+    BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
+    DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
+    IndexType, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables, Module,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PassiveElemIndex, PtrSize,
+    RuntimeDataIndex, Table, TableIndex, TableInitialValue, TableSegment, TableSegmentElements,
     TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
 };
@@ -242,6 +244,15 @@ pub struct FuncEnvironment<'module_environment> {
     branch_hints: Option<Peekable<SectionLimitedIntoIter<'module_environment, BranchHint>>>,
     /// Module-relative byte offset of the current function body's start.
     func_body_offset: usize,
+
+    /// Cached alias regions for alias analysis.
+    heap_alias_region: Option<ir::AliasRegion>,
+    table_alias_region: Option<ir::AliasRegion>,
+    #[allow(
+        dead_code,
+        reason = "included for completeness, will be used in follow up commits"
+    )]
+    vmctx_alias_region: Option<ir::AliasRegion>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -251,7 +262,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         types: &'module_environment ModuleTypesBuilder,
         wasm_func_ty: &'module_environment WasmFuncType,
         key: FuncKey,
-        func_index: FuncIndex,
+        func_index: Option<FuncIndex>,
         func_body_offset: usize,
     ) -> Self {
         let tunables = compiler.tunables();
@@ -259,9 +270,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         // Resolve the lazy branch-hint decoder for this function, if any.
         // `func_body_offset` lets `take_branch_hint` convert source locations to
-        // the function-body-relative offsets the hints use.
-        let branch_hints = translation
-            .branch_hints(func_index)
+        // the function-body-relative offsets the hints use. Synthesized functions
+        // without a wasm body (e.g. module startup) pass `None` and get no hints.
+        let branch_hints = func_index
+            .and_then(|func_index| translation.branch_hints(func_index))
             .map(|reader| reader.into_iter().peekable());
 
         // This isn't used during translation, so squash the warning about this
@@ -316,6 +328,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             branch_hints,
             func_body_offset,
+            heap_alias_region: None,
+            table_alias_region: None,
+            vmctx_alias_region: None,
         }
     }
 
@@ -358,6 +373,37 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
+    pub(crate) fn get_heap_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.heap_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 0,
+                description: "heap".into(),
+            })
+        })
+    }
+
+    pub(crate) fn get_table_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.table_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 1,
+                description: "table".into(),
+            })
+        })
+    }
+
+    #[allow(
+        dead_code,
+        reason = "included for completeness, will be used in follow up commits"
+    )]
+    pub(crate) fn get_vmctx_alias_region(&mut self, func: &mut Function) -> ir::AliasRegion {
+        *self.vmctx_alias_region.get_or_insert_with(|| {
+            func.dfg.alias_regions.insert(ir::AliasRegionData {
+                user_id: 2,
+                description: "vmctx".into(),
+            })
+        })
+    }
+
     #[cfg(feature = "threads")]
     fn get_memory_atomic_wait(&mut self, func: &mut Function, ty: ir::Type) -> ir::FuncRef {
         match ty {
@@ -379,11 +425,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (vmctx, offset)
         } else {
             let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
+            let global_flags = func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                .unwrap();
             let global = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                flags: MemFlagsData::trusted().with_readonly().with_can_move(),
+                flags: global_flags,
             });
             (global, 0)
         }
@@ -398,11 +449,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let offset = self.offsets.ptr.vmctx_store_context();
         let base = self.vmctx(func);
+        let ptr_flags = func
+            .dfg
+            .mem_flags
+            .insert(ir::MemFlagsData::trusted().with_readonly().with_can_move())
+            .unwrap();
         let ptr = func.create_global_value(ir::GlobalValueData::Load {
             base,
             offset: Offset32::new(offset.into()),
             global_type: self.pointer_type(),
-            flags: ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            flags: ptr_flags,
         });
         self.vm_store_context = Some(ptr);
         ptr
@@ -1010,6 +1066,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         offset: u32,
         flags: ir::MemFlagsData,
     ) -> ir::GlobalValue {
+        let flags = func.dfg.mem_flags.insert(flags).unwrap();
         func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
@@ -1476,8 +1533,12 @@ impl FuncEnvironment<'_> {
 
         if !self.module.globals[index].mutability {
             if let Some(index) = self.module.defined_global_index(index) {
-                let init = &self.module.global_initializers[index];
-                if let Some(value) = init.const_eval() {
+                if let Ok(i) = self
+                    .module
+                    .global_initializers
+                    .binary_search_by_key(&index, |(def_index, _)| *def_index)
+                {
+                    let (_, value) = self.module.global_initializers[i];
                     return GlobalVariable::Constant { value };
                 }
             }
@@ -1627,11 +1688,12 @@ impl FuncEnvironment<'_> {
             }
         };
 
+        let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
         let bound = func.create_global_value(ir::GlobalValueData::Load {
             base: base_ptr,
             offset: Offset32::new(current_length_offset),
             global_type: pointer_type,
-            flags: MemFlagsData::trusted(),
+            flags: bound_flags,
         });
 
         let base = self.make_heap_base(func, memory, base_ptr, base_offset);
@@ -1659,11 +1721,12 @@ impl FuncEnvironment<'_> {
             flags.set_readonly();
         }
 
+        let heap_base_flags = func.dfg.mem_flags.insert(flags).unwrap();
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(offset),
             global_type: pointer_type,
-            flags,
+            flags: heap_base_flags,
         });
         heap_base
     }
@@ -1684,11 +1747,16 @@ impl FuncEnvironment<'_> {
                 (vmctx, base_offset, current_elements_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmtable_from(index);
+                let table_flags = func
+                    .dfg
+                    .mem_flags
+                    .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                    .unwrap();
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    flags: MemFlagsData::trusted().with_readonly().with_can_move(),
+                    flags: table_flags,
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -1705,17 +1773,20 @@ impl FuncEnvironment<'_> {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
 
+        let base_flags = if Some(table.limits.min) == table.limits.max {
+            func.dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                .unwrap()
+        } else {
+            func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap()
+        };
         let base_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            flags: if Some(table.limits.min) == table.limits.max {
-                // A fixed-size table can't be resized so its base address won't
-                // change.
-                MemFlagsData::trusted().with_readonly().with_can_move()
-            } else {
-                MemFlagsData::trusted()
-            },
+            // A fixed-size table can't be resized so its base address won't change.
+            flags: base_flags,
         });
 
         let bound = if Some(table.limits.min) == table.limits.max {
@@ -1723,6 +1794,7 @@ impl FuncEnvironment<'_> {
                 bound: table.limits.min,
             }
         } else {
+            let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
             TableSize::Dynamic {
                 bound_gv: func.create_global_value(ir::GlobalValueData::Load {
                     base: ptr,
@@ -1731,7 +1803,7 @@ impl FuncEnvironment<'_> {
                         u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
                     )
                     .unwrap(),
-                    flags: MemFlagsData::trusted(),
+                    flags: bound_flags,
                 }),
             }
         };
@@ -2602,7 +2674,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let table_data = self.get_or_create_table(builder.func, table_index);
         let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
-        self.emit_table_set(builder, table_index, dst, flags, value)
+        self.emit_table_set(builder, table_index, dst, flags, value, true)
     }
 
     /// Helper to store `value` into the table address at `addr` using `flags`.
@@ -2616,19 +2688,32 @@ impl FuncEnvironment<'_> {
         addr: ir::Value,
         flags: ir::MemFlagsData,
         value: ir::Value,
+        initialized: bool,
     ) -> WasmResult<()> {
         let table = self.module.tables[table_index];
         match table.ref_type.heap_type.top() {
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                gc::gc_compiler(self)?.translate_write_gc_reference(
-                    self,
-                    builder,
-                    table.ref_type,
-                    addr,
-                    value,
-                    flags,
-                )
+                let mut gc = gc::gc_compiler(self)?;
+                if initialized {
+                    gc.translate_write_gc_reference(
+                        self,
+                        builder,
+                        table.ref_type,
+                        addr,
+                        value,
+                        flags,
+                    )
+                } else {
+                    gc.translate_init_gc_reference(
+                        self,
+                        builder,
+                        table.ref_type,
+                        addr,
+                        value,
+                        flags,
+                    )
+                }
             }
 
             // Function types.
@@ -2677,7 +2762,16 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_fill(builder, table_index, dst, val, len)
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: true,
+            },
+            dst,
+            val,
+            len,
+        )
     }
 
     pub fn translate_ref_i31(
@@ -3112,7 +3206,8 @@ impl FuncEnvironment<'_> {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 Ok(builder.ins().load(ty, flags, addr, offset))
             }
             GlobalVariable::Custom => {
@@ -3148,6 +3243,21 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
         val: ir::Value,
     ) -> WasmResult<()> {
+        self.emit_global_set(builder, global_index, val, true)
+    }
+
+    /// Helper to translate the `global.set` instruction.
+    ///
+    /// The main difference with `translate_global_set`, the main entrypoint, is
+    /// the `initialized` flag to indicate whether the global was previously
+    /// initialized to a valid value.
+    fn emit_global_set(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        global_index: GlobalIndex,
+        val: ir::Value,
+        initialized: bool,
+    ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
             GlobalVariable::Constant { .. } => {
                 unreachable!("validation checks that Wasm cannot `global.set` constant globals")
@@ -3160,7 +3270,8 @@ impl FuncEnvironment<'_> {
                     flags.set_endianness(ir::Endianness::Little);
                 }
                 // Put globals in the "table" abstract heap category as well.
-                flags.set_alias_region(Some(ir::AliasRegion::Table));
+                let region = self.get_table_alias_region(builder.func);
+                flags.set_alias_region(Some(region));
                 debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                 builder.ins().store(flags, val, addr, offset);
                 self.update_global(builder, global_index, val);
@@ -3179,14 +3290,26 @@ impl FuncEnvironment<'_> {
                 let gv = builder.ins().global_value(self.pointer_type(), gv);
                 let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-                gc::gc_compiler(self)?.translate_write_gc_reference(
-                    self,
-                    builder,
-                    ty,
-                    src,
-                    val,
-                    ir::MemFlagsData::trusted(),
-                )?
+                let mut gc = gc::gc_compiler(self)?;
+                if initialized {
+                    gc.translate_write_gc_reference(
+                        self,
+                        builder,
+                        ty,
+                        src,
+                        val,
+                        ir::MemFlagsData::trusted(),
+                    )?;
+                } else {
+                    gc.translate_init_gc_reference(
+                        self,
+                        builder,
+                        ty,
+                        src,
+                        val,
+                        ir::MemFlagsData::trusted(),
+                    )?;
+                }
             }
         }
         Ok(())
@@ -3497,6 +3620,32 @@ impl FuncEnvironment<'_> {
     /// epochs are enabled to break up the copy into a loop of chunks with
     /// preemption checks between them.
     fn raw_bulk_memory_operation(&mut self, builder: &mut FunctionBuilder<'_>, mut op: BulkOp) {
+        // Fast path: a copy whose byte length is a small compile-time constant is
+        // expanded inline (see `emit_inline_memcpy`), skipping the libcall's fixed
+        // per-call cost (a wasm/host transition and an indirect call) that
+        // dominates tiny copies. Larger or dynamic copies, and all fills, use the
+        // libcall below, whose `memmove` amortizes that cost.
+        //
+        // The bound is empirical: measured on aarch64, inline is ~1.7-2.7x faster
+        // than the libcall through 128 bytes and ties by 256 (cost grows with the
+        // length, since every chunk is loaded before any is stored).
+        const INLINE_COPY_MAX_BYTES: u64 = 128;
+        if let BulkOp::MemoryCopy {
+            dst,
+            src,
+            const_len: Some(bytes),
+            ..
+        } = op
+        {
+            if bytes <= INLINE_COPY_MAX_BYTES {
+                if self.tunables.consume_fuel {
+                    self.fuel_consumed += bytes as i64;
+                }
+                self.emit_inline_memcpy(builder, dst, src, bytes);
+                return;
+            }
+        }
+
         // Very scientifically chosen. Or, more seriously, this is just an
         // arbitrary number for now. 100k copies of this size locally takes half
         // a second, so seems like a reasonably large chunk size to not hit perf
@@ -3516,7 +3665,7 @@ impl FuncEnvironment<'_> {
                     env.epoch_check(builder);
                 }
                 match *op {
-                    BulkOp::MemoryCopy { dst, src, len } => {
+                    BulkOp::MemoryCopy { dst, src, len, .. } => {
                         if env.tunables.consume_fuel {
                             // Note that fuel is always a 64-bit counter.
                             let fuel_consumed = match env.pointer_type() {
@@ -3579,7 +3728,7 @@ impl FuncEnvironment<'_> {
             };
             let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
             match *op {
-                BulkOp::MemoryCopy { dst, src, len } => {
+                BulkOp::MemoryCopy { dst, src, len, .. } => {
                     builder.ins().brif(
                         has_chunk,
                         chunk_block,
@@ -3602,7 +3751,7 @@ impl FuncEnvironment<'_> {
         has_chunk_branch(builder, &op);
 
         let append_block_params = |builder: &mut FunctionBuilder<'_>, block, op: &mut _| match op {
-            BulkOp::MemoryCopy { dst, src, len } => {
+            BulkOp::MemoryCopy { dst, src, len, .. } => {
                 *dst = builder.append_block_param(block, pointer_type);
                 *src = builder.append_block_param(block, pointer_type);
                 *len = builder.append_block_param(block, pointer_type);
@@ -3626,7 +3775,7 @@ impl FuncEnvironment<'_> {
         *op_len = chunk;
         raw_call(self, builder, &op);
         match &mut op {
-            BulkOp::MemoryCopy { dst, src, len } => {
+            BulkOp::MemoryCopy { dst, src, len, .. } => {
                 *dst = builder.ins().iadd(*dst, chunk);
                 *src = builder.ins().iadd(*src, chunk);
                 *len = builder.ins().isub(remaining_len, chunk);
@@ -3687,7 +3836,7 @@ impl FuncEnvironment<'_> {
                     },
                 );
             }
-            CheckedEntity::Table(table) => {
+            CheckedEntity::Table { table, initialized } => {
                 self.emit_raw_array_or_table_fill(
                     builder,
                     entity,
@@ -3695,7 +3844,14 @@ impl FuncEnvironment<'_> {
                     val,
                     len_ptr,
                     &|env, builder, addr, value| {
-                        env.emit_table_set(builder, table, addr, ir::MemFlagsData::trusted(), value)
+                        env.emit_table_set(
+                            builder,
+                            table,
+                            addr,
+                            ir::MemFlagsData::trusted(),
+                            value,
+                            initialized,
+                        )
                     },
                 )?;
             }
@@ -3717,7 +3873,9 @@ impl FuncEnvironment<'_> {
                 )?;
             }
             // Not allowed to be written to in wasm.
-            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -3806,6 +3964,12 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(loop_block, current_block);
         builder.insert_block_after(continue_block, loop_block);
 
+        // Before entering the loop below flush our fuel counters to ensure
+        // that previous instructions' fuel isn't counted once-per-iteration.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
         // Current block: test to see if this is actually an empty copy. If it
         // is then skip over the entire loop, otherwise enter the loop and
         // perform the first ieration.
@@ -3823,6 +3987,10 @@ impl FuncEnvironment<'_> {
         // by the element size, then see if we turn again or exit.
         builder.switch_to_block(loop_block);
         let elem_addr = builder.append_block_param(loop_block, pointer_ty);
+        // Consume one unit of fuel per loop iteration.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         emit_elem_write(self, builder, elem_addr, value)?;
         let next_elem_addr = builder.ins().iadd_imm(elem_addr, i64::from(elem_size));
@@ -3939,7 +4107,7 @@ impl FuncEnvironment<'_> {
         // Lookup the passive data segment corresponding to this data segment.
         // If this is an active data segment then it already has length 0 so
         // there's nothing to do.
-        let passive_index = match self.translation.passive_data_map[seg_index] {
+        let runtime_index = match self.translation.runtime_data_map[seg_index] {
             Some(idx) => idx,
             None => return Ok(()),
         };
@@ -3952,7 +4120,7 @@ impl FuncEnvironment<'_> {
             ir::MemFlagsData::trusted(),
             new_length,
             vmctx,
-            i32::try_from(self.offsets.vmctx_passive_data_length(passive_index)).unwrap(),
+            i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap(),
         );
 
         Ok(())
@@ -4015,19 +4183,30 @@ impl FuncEnvironment<'_> {
         let len_ptr =
             self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), len, len_idx_ty);
 
+        // A constant wasm length lets a small copy be expanded inline. Capture it
+        // straight from wasm here (a count of entity elements; for memories an
+        // element is a byte) so the fast path only has to recognize an `iconst`,
+        // not the casts and `* element_size` multiply applied further down.
+        let const_count = Self::value_as_const_int(builder, len);
+
         match dst_entity {
             // Memories are always a `memcpy`.
             CheckedEntity::Memory(_) => {
                 assert!(matches!(
                     src_entity,
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. }
+                    CheckedEntity::Memory(_)
+                        | CheckedEntity::Data { .. }
+                        | CheckedEntity::RuntimeData(_)
                 ));
+                // A memory's elements are bytes, so the element count is already
+                // the byte length.
                 self.raw_bulk_memory_operation(
                     builder,
                     BulkOp::MemoryCopy {
                         dst: dst_raw_addr,
                         src: src_raw_addr,
                         len: len_ptr,
+                        const_len: const_count,
                     },
                 );
                 Ok(())
@@ -4035,7 +4214,7 @@ impl FuncEnvironment<'_> {
 
             // Tables/arrays are sometimes a memcpy, sometimes a per-element
             // loop. Delegate further to figure that out.
-            CheckedEntity::Table(_) | CheckedEntity::Array { .. } => self
+            CheckedEntity::Table { .. } | CheckedEntity::Array { .. } => self
                 .emit_raw_array_or_table_copy(
                     builder,
                     dst_entity,
@@ -4044,10 +4223,13 @@ impl FuncEnvironment<'_> {
                     src_raw_addr,
                     len_ptr,
                     src,
+                    const_count,
                 ),
 
             // Cannot copy into a data or element segment in wasm.
-            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
+                unreachable!()
+            }
         }
     }
 
@@ -4072,26 +4254,16 @@ impl FuncEnvironment<'_> {
         // Load the entity size, as `pointer_type`.
         let entity_size = match entity {
             CheckedEntity::Memory(i) => self.memory_size_in_bytes(&mut builder.cursor(), i),
-            CheckedEntity::Table(i) => {
-                let size = self.translate_table_size(builder.cursor(), i);
+            CheckedEntity::Table { table, .. } => {
+                let size = self.translate_table_size(builder.cursor(), table);
                 self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), size, idx_type)
             }
-            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            CheckedEntity::Data { segment, .. } => match self.translation.runtime_data_map[segment]
             {
-                Some(passive_index) => {
-                    let vmctx = self.vmctx_val(&mut builder.cursor());
-                    let offset =
-                        i32::try_from(self.offsets.vmctx_passive_data_length(passive_index))
-                            .unwrap();
-                    let flags = ir::MemFlagsData::trusted();
-                    match pointer_type {
-                        I32 => builder.ins().load(I32, flags, vmctx, offset),
-                        I64 => builder.ins().uload32(flags, vmctx, offset),
-                        _ => unreachable!(),
-                    }
-                }
+                Some(i) => self.load_runtime_data_length_as_pointer(builder, i),
                 None => builder.ins().iconst(pointer_type, 0),
             },
+            CheckedEntity::RuntimeData(i) => self.load_runtime_data_length_as_pointer(builder, i),
             CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -4161,30 +4333,20 @@ impl FuncEnvironment<'_> {
                 let heap = &self.heaps()[heap];
                 builder.ins().global_value(pointer_type, heap.base)
             }
-            CheckedEntity::Table(i) => {
-                let table = self.get_or_create_table(builder.func, i);
+            CheckedEntity::Table { table, .. } => {
+                let table = self.get_or_create_table(builder.func, table);
                 builder.ins().global_value(pointer_type, table.base_gv)
             }
-            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            CheckedEntity::Data { segment, .. } => match self.translation.runtime_data_map[segment]
             {
-                Some(passive_index) => {
-                    let vmctx = self.vmctx_val(&mut builder.cursor());
-                    let offset =
-                        i32::try_from(self.offsets.vmctx_passive_data_base(passive_index)).unwrap();
-                    builder.ins().load(
-                        self.pointer_type(),
-                        ir::MemFlagsData::trusted(),
-                        vmctx,
-                        offset,
-                    )
-                }
-
+                Some(runtime_index) => self.load_runtime_data_base(builder, runtime_index),
                 // Any address should do for an active data segment, but pick
                 // something non-null for now. Note that the length of an active
                 // data segment is always 0, so we know that the memcpy, if any,
                 // will be 0 elements, so the actual value here doesn't matter.
                 None => builder.ins().iconst(pointer_type, 1),
             },
+            CheckedEntity::RuntimeData(i) => self.load_runtime_data_base(builder, i),
             // Element segments are quite similar to data segments just above.
             CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
                 Some(passive_index) => {
@@ -4231,6 +4393,41 @@ impl FuncEnvironment<'_> {
         Ok(builder.ins().iadd(base, byte_offset))
     }
 
+    fn load_runtime_data_length(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let offset = i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap();
+        let flags = ir::MemFlagsData::trusted();
+        builder.ins().load(I32, flags, vmctx, offset)
+    }
+
+    fn load_runtime_data_length_as_pointer(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let length = self.load_runtime_data_length(builder, runtime_index);
+        self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), length, IndexType::I32)
+    }
+
+    fn load_runtime_data_base(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let offset = i32::try_from(self.offsets.vmctx_runtime_data_base(runtime_index)).unwrap();
+        builder.ins().load(
+            self.pointer_type(),
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            offset,
+        )
+    }
+
     pub fn translate_table_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -4240,7 +4437,20 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_copy(builder, dst_table_index, src_table_index, dst, src, len)
+        self.translate_entity_copy(
+            builder,
+            CheckedEntity::Table {
+                table: dst_table_index,
+                initialized: true,
+            },
+            CheckedEntity::Table {
+                table: src_table_index,
+                initialized: true,
+            },
+            dst,
+            src,
+            len,
+        )
     }
 
     /// Emits a copy between two WebAssembly table or array entities.
@@ -4250,7 +4460,9 @@ impl FuncEnvironment<'_> {
     /// `src_elem_addr` and stored to `dst_elem_addr`. The `elem_ty` is the type
     /// being transferred, `one_elem_size` is the byte size of each element,
     /// `copy_len` is the number of elements being copied, and `src_index` is
-    /// the first index within `src_entity` being loaded.
+    /// the first index within `src_entity` being loaded. `const_count` is that
+    /// same element count when it is a wasm constant, used to expand small copies
+    /// inline.
     ///
     /// All values here have type `self.pointer_type()`, except `src_index`
     /// which is typed appropriately to index `src_entity`.
@@ -4266,6 +4478,7 @@ impl FuncEnvironment<'_> {
         src_elem_addr: ir::Value,
         copy_len: ir::Value,
         src_index: ir::Value,
+        const_count: Option<u64>,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
         assert_eq!(builder.func.dfg.value_type(dst_elem_addr), pointer_type);
@@ -4310,7 +4523,7 @@ impl FuncEnvironment<'_> {
                     // would mean that memcpy isn't suitable. If lazy init is
                     // disabled though then funcrefs are just pointers so a
                     // memcpy can be used.
-                    CheckedEntity::Table(_) => self.tunables.table_lazy_init,
+                    CheckedEntity::Table { .. } => self.tunables.table_lazy_init,
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
                     CheckedEntity::Array { .. } => false,
@@ -4318,7 +4531,9 @@ impl FuncEnvironment<'_> {
                     // can't work.
                     CheckedEntity::Elem(_) => true,
                     // Not possible
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                    CheckedEntity::Memory(_)
+                    | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_) => unreachable!(),
                 },
             },
         };
@@ -4339,14 +4554,16 @@ impl FuncEnvironment<'_> {
         }
 
         // For memcpy, that's easy, just call the intrinsic with the right
-        // parameters.
+        // parameters (or expand it inline; see `raw_bulk_memory_operation`).
         if !type_forbids_memcpy && dst_element_size == src_element_size {
+            let const_len = const_count.and_then(|c| c.checked_mul(u64::from(dst_element_size)));
             self.raw_bulk_memory_operation(
                 builder,
                 BulkOp::MemoryCopy {
                     dst: dst_elem_addr,
                     src: src_elem_addr,
                     len: dst_copy_byte_len,
+                    const_len,
                 },
             );
             return Ok(());
@@ -4370,7 +4587,10 @@ impl FuncEnvironment<'_> {
                     // it's easier right now to share the internals of
                     // `translate_table_get` which are a bit tricky with
                     // funcrefs.
-                    CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
+                    CheckedEntity::Table { table, initialized } => {
+                        assert!(initialized);
+                        this.translate_table_get(builder, table, src_index)?
+                    }
                     CheckedEntity::Array { initialized, .. } => {
                         assert!(initialized);
                         let read_ty = src_entity.storage_type(this);
@@ -4399,11 +4619,20 @@ impl FuncEnvironment<'_> {
                             }
                         }
                     }
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                    CheckedEntity::Memory(_)
+                    | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_) => unreachable!(),
                 };
                 match dst_entity {
-                    CheckedEntity::Table(i) => {
-                        this.emit_table_set(builder, i, dst, ir::MemFlagsData::trusted(), val)?;
+                    CheckedEntity::Table { table, initialized } => {
+                        this.emit_table_set(
+                            builder,
+                            table,
+                            dst,
+                            ir::MemFlagsData::trusted(),
+                            val,
+                            initialized,
+                        )?;
                     }
                     CheckedEntity::Array { initialized, .. } => {
                         if initialized {
@@ -4414,6 +4643,7 @@ impl FuncEnvironment<'_> {
                     }
                     CheckedEntity::Memory(_)
                     | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_)
                     | CheckedEntity::Elem(_) => unreachable!(),
                 }
                 Ok(())
@@ -4421,6 +4651,73 @@ impl FuncEnvironment<'_> {
         )?;
 
         Ok(())
+    }
+
+    /// If `value` is an `iconst`, return its immediate as a `u64`.
+    ///
+    /// This deliberately peeks at a single `iconst` and nothing else. Callers
+    /// pass the length exactly as it appears in wasm, before the width casts and
+    /// `* element_size` multiply that the byte-length computation wraps it in, so
+    /// there is no need to (incorrectly) fold those type-changing ops here.
+    fn value_as_const_int(builder: &FunctionBuilder<'_>, value: ir::Value) -> Option<u64> {
+        let inst = builder.func.dfg.value_def(value).inst()?;
+        match builder.func.dfg.insts[inst] {
+            ir::InstructionData::UnaryImm {
+                opcode: ir::Opcode::Iconst,
+                imm,
+            } => Some(imm.bits().cast_unsigned()),
+            _ => None,
+        }
+    }
+
+    /// Expand a copy of `bytes` (a small compile-time constant) into inline loads
+    /// then stores, avoiding the `memory_copy` libcall.
+    ///
+    /// The copy is bitwise and element-type agnostic: the byte range is covered
+    /// greedily with the widest convenient access (`i8x16` down to `i8`). Every
+    /// chunk is loaded before any is stored, so overlapping ranges keep `memmove`
+    /// semantics. The caller has already bounds-checked the range.
+    fn emit_inline_memcpy(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        dst_addr: ir::Value,
+        src_addr: ir::Value,
+        bytes: u64,
+    ) {
+        // `trusted()` (notrap + aligned) is sound: the range is already
+        // bounds-checked, and each load feeds only its paired store, so the
+        // backend selects unaligned moves regardless of the `aligned` flag.
+        // Endianness is pinned to `Little` because Pulley's `v128` load/store
+        // only encode the little-endian variant, and matching load/store
+        // endianness preserves the destination bytes either way.
+        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
+        const WIDTHS: &[(u64, ir::Type)] = &[
+            (16, ir::types::I8X16),
+            (8, ir::types::I64),
+            (4, ir::types::I32),
+            (2, ir::types::I16),
+            (1, ir::types::I8),
+        ];
+        // 12 covers the worst case under the 128-byte cap: n=127 decomposes into
+        // 7×i8x16 + i64 + i32 + i16 + i8 = 11 chunks. Sized so both `SmallVec`s
+        // stay inline.
+        let mut chunks: SmallVec<[(i32, ir::Type); 12]> = smallvec![];
+        let mut offset = 0u64;
+        let mut remaining = bytes;
+        for &(width, ty) in WIDTHS {
+            while remaining >= width {
+                chunks.push((i32::try_from(offset).unwrap(), ty));
+                offset += width;
+                remaining -= width;
+            }
+        }
+        let vals: SmallVec<[ir::Value; 12]> = chunks
+            .iter()
+            .map(|&(off, ty)| builder.ins().load(ty, flags, src_addr, off))
+            .collect();
+        for (&(off, _), val) in chunks.iter().zip(vals) {
+            builder.ins().store(flags, val, dst_addr, off);
+        }
     }
 
     /// For bulk operations (copies, fills, etc) this is an extra check layered
@@ -4528,6 +4825,13 @@ impl FuncEnvironment<'_> {
         builder.insert_block_after(backwards_block, forward_block);
         builder.insert_block_after(done_block, backwards_block);
 
+        // Update our local fuel counter, if enabled, before entering the loops
+        // below. This zeros out `self.fuel_consumed` so we don't consume
+        // previous fuel on each iteration of the loop.
+        if self.tunables.consume_fuel {
+            self.fuel_increment_var(builder);
+        }
+
         // Terminate `current_block` by testing to see if we're copying any
         // elements at all.
         builder
@@ -4558,12 +4862,56 @@ impl FuncEnvironment<'_> {
             _ => unreachable!(),
         };
         let end_index = builder.ins().iadd(src_index, copy_len_as_src_index_ty);
+
+        // The per-element loop uses only raw pointers derived from the
+        // source and destination array gc-refs. Cranelift's stack-map
+        // machinery tracks SSA-value liveness, and raw pointers don't keep
+        // their base gc-ref alive, so without intervention the gc-refs are
+        // dead in CLIF inside the loop. If a GC fires from a safe point in
+        // the loop body (e.g. `force_gc` from the DRC read barrier), sweep
+        // can drop the arrays from OASR, free them, and cascade dec-refs
+        // through their elements, leaving the rest of the copy reading
+        // freed memory. Thread the array gc-refs through the loop's
+        // iteration blocks as block params so each iteration's brif gives
+        // them a live use and they appear in the stack map at every safe
+        // point inside the loop.
+        let keepalives: SmallVec<[ir::Value; 2]> = [dst_entity, src_entity]
+            .into_iter()
+            .filter_map(|e| match e {
+                CheckedEntity::Array { array, .. } => Some(array),
+                _ => None,
+            })
+            .collect();
+
+        // Build a brif args list of `fixed` followed by the keepalive values.
+        let with_keepalives = |fixed: &[ir::Value]| -> SmallVec<[ir::BlockArg; 5]> {
+            fixed
+                .iter()
+                .chain(&keepalives[..])
+                .map(|v| (*v).into())
+                .collect()
+        };
+
+        // Append one block param per keepalive value to `block`, declare each
+        // as needing a stack map, and return the new params.
+        let append_keepalive_params =
+            |builder: &mut FunctionBuilder<'_>, block: ir::Block| -> SmallVec<[ir::Value; 2]> {
+                keepalives
+                    .iter()
+                    .map(|_| {
+                        let v = builder.append_block_param(block, ir::types::I32);
+                        builder.declare_value_needs_stack_map(v);
+                        v
+                    })
+                    .collect()
+            };
+
         builder.ins().brif(
             dst_first,
             forward_block,
-            &[dst_elem_addr.into(), src_elem_addr.into(), src_index.into()],
+            &with_keepalives(&[dst_elem_addr, src_elem_addr, src_index])[..],
             backwards_block,
-            &[dst_end_addr.into(), src_end_addr.into(), end_index.into()],
+            &with_keepalives(&[dst_end_addr, src_end_addr, end_index])[..],
         );
 
         // Forward copy -- copy one field, then mutate the current pointers, then
@@ -4572,19 +4920,25 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_cur = builder.append_block_param(forward_block, self.pointer_type());
         let src_index = builder.append_block_param(forward_block, src_index_ty);
+        let forward_keepalives = append_keepalive_params(builder, forward_block);
+        // Consume a single unit of fuel on each iteration of the loop.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let dst_next = builder.ins().iadd_imm(dst_cur, i64::from(dst_element_size));
         let src_next = builder.ins().iadd_imm(src_cur, i64::from(src_element_size));
         let src_index_next = builder.ins().iadd_imm(src_index, 1);
         let done = builder.ins().icmp(IntCC::Equal, src_next, src_end_addr);
-        builder.ins().brif(
-            done,
-            done_block,
-            &[],
-            forward_block,
-            &[dst_next.into(), src_next.into(), src_index_next.into()],
-        );
+        let forward_next_args: SmallVec<[ir::BlockArg; 5]> = [dst_next, src_next, src_index_next]
+            .iter()
+            .chain(&forward_keepalives[..])
+            .map(|v| (*v).into())
+            .collect();
+        builder
+            .ins()
+            .brif(done, done_block, &[], forward_block, &forward_next_args[..]);
 
         // Backwards copy -- update the pointers, then perform a copy, then check
         // to see if we're done.
@@ -4592,6 +4946,10 @@ impl FuncEnvironment<'_> {
         let dst_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_cur = builder.append_block_param(backwards_block, self.pointer_type());
         let src_index = builder.append_block_param(backwards_block, src_index_ty);
+        let backward_keepalives = append_keepalive_params(builder, backwards_block);
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+        }
         self.translate_loop_header(builder)?;
         let dst_cur = {
             let size = builder
@@ -4611,12 +4969,17 @@ impl FuncEnvironment<'_> {
         };
         copy_one(self, builder, dst_cur, src_cur, src_index)?;
         let done = builder.ins().icmp(IntCC::Equal, src_cur, src_elem_addr);
+        let backward_next_args: SmallVec<[ir::BlockArg; 5]> = [dst_cur, src_cur, src_index]
+            .iter()
+            .chain(&backward_keepalives[..])
+            .map(|v| (*v).into())
+            .collect();
         builder.ins().brif(
             done,
             done_block,
             &[],
             backwards_block,
-            &[dst_cur.into(), src_cur.into(), src_index.into()],
+            &backward_next_args[..],
         );
 
         builder.switch_to_block(done_block);
@@ -4640,7 +5003,10 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         self.translate_entity_copy(
             builder,
-            table_index,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: true,
+            },
             CheckedEntity::Elem(ElemIndex::from_u32(seg_index)),
             dst,
             src,
@@ -5443,6 +5809,386 @@ impl FuncEnvironment<'_> {
     pub fn is_reachable(&self) -> bool {
         self.stacks.reachable()
     }
+
+    /// Generates the body of a `FuncKey::ModuleStartup(..)` function.
+    ///
+    /// This will perform all initialization of a module before any code in the
+    /// module itself starts executing. This will, for example, execute all
+    /// constant expressions for global initializers.
+    pub fn translate_module_startup(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+        for (i, expr) in self.translation.global_initializers.iter() {
+            self.module_initialize_global(builder, *i, expr)?;
+        }
+        for (i, exprs) in self.translation.passive_elements.iter() {
+            self.module_initialize_passive_element(builder, i, exprs)?;
+        }
+        for (i, init) in self.translation.table_initialization.initial_values.iter() {
+            match init {
+                TableInitialValue::Null => {}
+                TableInitialValue::Expr(expr) => {
+                    self.module_initialize_table_with_fill(builder, i, expr)?;
+                }
+            }
+        }
+        for segment in self.translation.table_initialization.segments.iter() {
+            self.module_initialize_table_with_segment(builder, segment)?;
+        }
+        match &self.translation.memory_init {
+            MemoryInit::Unprocessed(_) => unreachable!(),
+            MemoryInit::Processed(segments) => {
+                for (memory, offset, data) in segments.iter() {
+                    self.module_initialize_memory_segment(builder, *memory, offset, *data)?;
+                }
+            }
+        }
+        if let Some(i) = self.translation.start_func {
+            self.module_start(builder, i)?;
+        }
+        Ok(())
+    }
+
+    /// Initializes all "complicated" globals in a module.
+    ///
+    /// This will translate the given constant expression and then initialize
+    /// the global. Note that this translation is done with the global not
+    /// initialized, meaning that GC barriers are slightly tweaked.
+    fn module_initialize_global(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        global: DefinedGlobalIndex,
+        expr: &ConstExpr,
+    ) -> WasmResult<()> {
+        let index = self.module.global_index(global);
+        let val = self.translate_const_expr(builder, expr)?;
+        self.emit_global_set(builder, index, val, false)
+    }
+
+    /// Initializes all passive element segments for a module.
+    ///
+    /// This will execute all constant expressions for all passive element
+    /// segments and initialize all `ValRaw` storage on the host. This
+    /// implements the semantics of how passive element segments are evaluated
+    /// once in a wasm instance.
+    fn module_initialize_passive_element(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        elem: PassiveElemIndex,
+        exprs: &TableSegmentElements,
+    ) -> WasmResult<()> {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let libcall = self
+            .builtin_functions
+            .passive_elem_segment_base(builder.func);
+        let idx = builder.ins().iconst(I32, i64::from(elem.as_u32()));
+        let call = builder.ins().call(libcall, &[vmctx, idx]);
+        let base = builder.func.dfg.first_result(call);
+
+        // Values in `ValRaw` are always stored in little-endian.
+        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
+
+        match exprs {
+            TableSegmentElements::Functions(indices) => {
+                for (i, func) in indices.iter().enumerate() {
+                    let func = self.translate_ref_func(builder.cursor(), *func)?;
+                    builder.ins().store(
+                        flags,
+                        func,
+                        base,
+                        i32::try_from(i.checked_mul(16).unwrap()).unwrap(),
+                    );
+                }
+            }
+            TableSegmentElements::Expressions { exprs, ty } => {
+                for (i, expr) in exprs.iter().enumerate() {
+                    let val = self.translate_const_expr(builder, expr)?;
+
+                    let dst = builder
+                        .ins()
+                        .iadd_imm(base, i64::try_from(i.checked_mul(16).unwrap()).unwrap());
+                    match ty.heap_type.top() {
+                        WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                            let ty = WasmStorageType::Val(WasmValType::Ref(*ty));
+                            gc::init_field_at_addr(self, builder, ty, dst, val)?;
+                        }
+                        WasmHeapTopType::Func | WasmHeapTopType::Cont => {
+                            builder.ins().store(
+                                flags,
+                                val,
+                                base,
+                                i32::try_from(i.checked_mul(16).unwrap()).unwrap(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Initializes all tables with non-null initializers.
+    ///
+    /// This function will morally execute a `table.fill` for the specified
+    /// defined table in this module for the result of the constant expression
+    /// provided. Note that the fill operation is done on an initialized table
+    /// which slightly alters the barriers emitted for GC types.
+    fn module_initialize_table_with_fill(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table: DefinedTableIndex,
+        init: &ConstExpr,
+    ) -> WasmResult<()> {
+        let table = self.module.table_index(table);
+        let ty = self.module.tables[table];
+        let val = self.translate_const_expr(builder, init)?;
+        let dst = builder.ins().iconst(index_type_to_ir_type(ty.idx_type), 0);
+        let len = builder.ins().iconst(
+            index_type_to_ir_type(ty.idx_type),
+            ty.limits.min.cast_signed(),
+        );
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table,
+                initialized: false,
+            },
+            dst,
+            val,
+            len,
+        )
+    }
+
+    /// Executes initialization for an active element segment in a module.
+    ///
+    /// Note that this isn't done for "precomputed" tables which won't have
+    /// initializers present. Additionally note that this doesn't use
+    /// `table.init` because the element segment won't actually be present
+    /// anywhere at runtime.
+    fn module_initialize_table_with_segment(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        segment: &TableSegment,
+    ) -> WasmResult<()> {
+        let offset = self.translate_const_expr(builder, &segment.offset)?;
+        let segment_len = builder.ins().iconst(
+            index_type_to_ir_type(self.module.tables[segment.table_index].idx_type),
+            i64::try_from(segment.elements.len()).unwrap(),
+        );
+
+        // Check the bounds first before mutating anything.
+        self.translate_entity_bounds_check(
+            builder,
+            CheckedEntity::Table {
+                table: segment.table_index,
+                initialized: true,
+            },
+            offset,
+            segment_len,
+        )?;
+
+        // Re-use the `table.set` translation for making this a simple function
+        // to define. That re-executes the bounds check which is a bit
+        // inefficient, but can be optimized in the future.
+        match &segment.elements {
+            TableSegmentElements::Functions(indices) => {
+                for (i, func) in indices.iter().enumerate() {
+                    let func = self.translate_ref_func(builder.cursor(), *func)?;
+                    let index = builder.ins().iadd_imm(offset, i64::try_from(i).unwrap());
+                    self.translate_table_set(builder, segment.table_index, func, index)?;
+                }
+            }
+            TableSegmentElements::Expressions { exprs, ty: _ } => {
+                for (i, expr) in exprs.iter().enumerate() {
+                    let val = self.translate_const_expr(builder, expr)?;
+                    let index = builder.ins().iadd_imm(offset, i64::try_from(i).unwrap());
+                    self.translate_table_set(builder, segment.table_index, val, index)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Peform initialization of an active data segment in a module.
+    fn module_initialize_memory_segment(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        memory: MemoryIndex,
+        offset: &MemorySegmentOffset,
+        data: RuntimeDataIndex,
+    ) -> WasmResult<()> {
+        let mut end = None;
+        let offset = match offset {
+            // This is a bit subtle, but the goal here is to make a dynamic
+            // deduction to see if this initialization is actually necessary
+            // based on state at runtime. With a static initializer the goal is
+            // to enable CoW initialization at runtime, but not all hosts have
+            // that configured or supported. If it's supported then we shouldn't
+            // do anything here, but if it's unsupported then this must actually
+            // execute initialization.
+            //
+            // The host already put the addresses of all data segments into the
+            // `VMContext` during `VMContext::initialize_vmctx`, and this reads
+            // out the base pointer. If it's null then the host doesn't actually
+            // need initialization, so this is skipped, and otherwise it's the
+            // actual base pointer that's going to be used.
+            MemorySegmentOffset::Static(n) => {
+                let current_block = builder.current_block().unwrap();
+                let init_block = builder.create_block();
+                let end_block = builder.create_block();
+                end = Some(end_block);
+
+                builder.ensure_inserted_block();
+                builder.insert_block_after(init_block, current_block);
+                builder.insert_block_after(end_block, init_block);
+
+                let base = self.load_runtime_data_base(builder, data);
+                let null = builder.ins().iconst(self.pointer_type(), 0);
+                let is_null = builder.ins().icmp(IntCC::Equal, base, null);
+                builder.ins().brif(is_null, end_block, &[], init_block, &[]);
+                builder.switch_to_block(init_block);
+                builder.seal_block(init_block);
+                let ty = index_type_to_ir_type(self.module.memories[memory].idx_type);
+                builder.ins().iconst(ty, n.cast_signed())
+            }
+            MemorySegmentOffset::Expr(expr) => self.translate_const_expr(builder, expr)?,
+        };
+
+        // Model the initialization here as a `memory.init`.
+        let len = self.load_runtime_data_length(builder, data);
+        let start = builder.ins().iconst(I32, 0);
+        self.translate_entity_copy(builder, memory, data, offset, start, len)?;
+
+        // Finalize control-flow for the `MemorySegmentOffset::Static` case
+        // above.
+        if let Some(end) = end {
+            builder.ins().jump(end, &[]);
+            builder.switch_to_block(end);
+            builder.seal_block(end);
+        }
+        Ok(())
+    }
+
+    /// Translates the final step of module initialization, executing the
+    /// `start` function.
+    fn module_start(&mut self, builder: &mut FunctionBuilder, func: FuncIndex) -> WasmResult<()> {
+        // Manuall manage fuel around the call as the `Call` opcode does for
+        // normal wasm to ensure that it's correctly accounted for.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+            self.fuel_increment_var(builder);
+            self.fuel_save_from_var(builder);
+        }
+        let ty = self.module.functions[func]
+            .signature
+            .unwrap_module_type_index();
+        let sig_ref = self.get_or_create_interned_sig_ref(builder.func, ty);
+        self.translate_call(builder, Default::default(), func, sig_ref, &[])?;
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
+        Ok(())
+    }
+
+    /// Helper function to evaluate `expr` into a value.
+    ///
+    /// This primarily reuses all the `translate_*` functions elsewhere on this
+    /// builder toe deduplicate implementation details.
+    fn translate_const_expr(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        expr: &ConstExpr,
+    ) -> WasmResult<ir::Value> {
+        let mut stack = Vec::new();
+        for op in expr.ops() {
+            if self.tunables.consume_fuel {
+                self.fuel_consumed += 1;
+            }
+            match op {
+                ConstOp::I32Const(i) => {
+                    stack.push(builder.ins().iconst(I32, i64::from(*i)));
+                }
+                ConstOp::I64Const(i) => {
+                    stack.push(builder.ins().iconst(I64, *i));
+                }
+                ConstOp::F32Const(i) => {
+                    stack.push(builder.ins().f32const(Ieee32::with_bits(*i)));
+                }
+                ConstOp::F64Const(i) => {
+                    stack.push(builder.ins().f64const(Ieee64::with_bits(*i)));
+                }
+                ConstOp::V128Const(i) => {
+                    let data = i.to_le_bytes().to_vec().into();
+                    let handle = builder.func.dfg.constants.insert(data);
+                    stack.push(builder.ins().vconst(ir::types::I8X16, handle));
+                }
+                ConstOp::GlobalGet(i) => {
+                    stack.push(self.translate_global_get(builder, *i)?);
+                }
+                ConstOp::RefI31 => {
+                    let val = stack.pop().unwrap();
+                    stack.push(self.translate_ref_i31(builder.cursor(), val)?);
+                }
+                ConstOp::RefNull(ty) => {
+                    stack.push(self.translate_ref_null(builder.cursor(), *ty)?);
+                }
+                ConstOp::RefFunc(i) => {
+                    stack.push(self.translate_ref_func(builder.cursor(), *i)?);
+                }
+                ConstOp::I32Add | ConstOp::I64Add => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().iadd(a, b));
+                }
+                ConstOp::I32Sub | ConstOp::I64Sub => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().isub(a, b));
+                }
+                ConstOp::I32Mul | ConstOp::I64Mul => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().imul(a, b));
+                }
+                ConstOp::StructNew { struct_type_index } => {
+                    let arity = self.struct_fields_len(*struct_type_index)?;
+                    let fields = stack.drain(stack.len() - arity..).collect::<_>();
+                    stack.push(self.translate_struct_new(builder, *struct_type_index, fields)?);
+                }
+                ConstOp::StructNewDefault { struct_type_index } => {
+                    stack.push(self.translate_struct_new_default(builder, *struct_type_index)?);
+                }
+                ConstOp::ArrayNew { array_type_index } => {
+                    let len = stack.pop().unwrap();
+                    let elem = stack.pop().unwrap();
+                    stack.push(self.translate_array_new(builder, *array_type_index, elem, len)?);
+                }
+                ConstOp::ArrayNewDefault { array_type_index } => {
+                    let len = stack.pop().unwrap();
+                    stack.push(self.translate_array_new_default(
+                        builder,
+                        *array_type_index,
+                        len,
+                    )?);
+                }
+                ConstOp::ArrayNewFixed {
+                    array_type_index,
+                    array_size,
+                } => {
+                    let array_size = usize::try_from(*array_size).unwrap();
+                    let elems = stack.drain(stack.len() - array_size..).collect::<Vec<_>>();
+                    stack.push(self.translate_array_new_fixed(
+                        builder,
+                        *array_type_index,
+                        &elems,
+                    )?);
+                }
+                ConstOp::ExternConvertAny => {}
+                ConstOp::AnyConvertExtern => {}
+            }
+        }
+        let ret = stack.pop().unwrap();
+        assert!(stack.is_empty());
+        Ok(ret)
+    }
 }
 
 // Helper function to convert an `IndexType` to an `ir::Type`.
@@ -5461,11 +6207,14 @@ enum BulkOp {
     /// A `memory.copy` operation, copying memory from `src` to `dst`.
     ///
     /// All of `dst`, `src`, and `len` must be pre-validated and inbounds. All
-    /// must have type `env.pointer_type()`.
+    /// must have type `env.pointer_type()`. `const_len`, when set, is the
+    /// statically-known byte length (from a constant wasm length); the inline
+    /// fast path in `raw_bulk_memory_operation` uses it to expand small copies.
     MemoryCopy {
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
+        const_len: Option<u64>,
     },
 
     /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
@@ -5493,7 +6242,12 @@ enum CheckedEntity {
     /// A WebAssembly linear memory.
     Memory(MemoryIndex),
     /// A WebAssembly table.
-    Table(TableIndex),
+    Table {
+        /// The index of the table that's being accessed.
+        table: TableIndex,
+        /// Whether or not this table has been initialized yet.
+        initialized: bool,
+    },
     /// A WebAssembly data segment loaded in chunks of `element_size` bytes.
     ///
     /// For `memory.init` this will have `element_size = 1`, but for
@@ -5506,6 +6260,11 @@ enum CheckedEntity {
         /// or possibly more for array initialization.
         element_size: u32,
     },
+    /// A refinement of `Data` above which uses a `RuntimeDataIndex`.
+    ///
+    /// This isn't reachable from core wasm but is used during module
+    /// startup.
+    RuntimeData(RuntimeDataIndex),
     /// A WebAssembly passive element segment.
     Elem(ElemIndex),
     /// An `arrayref` with the specified type.
@@ -5526,9 +6285,9 @@ impl From<MemoryIndex> for CheckedEntity {
     }
 }
 
-impl From<TableIndex> for CheckedEntity {
-    fn from(table_index: TableIndex) -> Self {
-        CheckedEntity::Table(table_index)
+impl From<RuntimeDataIndex> for CheckedEntity {
+    fn from(runtime_data_index: RuntimeDataIndex) -> Self {
+        CheckedEntity::RuntimeData(runtime_data_index)
     }
 }
 
@@ -5537,10 +6296,11 @@ impl CheckedEntity {
     fn index_type(&self, env: &FuncEnvironment) -> IndexType {
         match *self {
             CheckedEntity::Memory(i) => env.memory(i).idx_type,
-            CheckedEntity::Table(i) => env.table(i).idx_type,
-            CheckedEntity::Data { .. } | CheckedEntity::Array { .. } | CheckedEntity::Elem(_) => {
-                IndexType::I32
-            }
+            CheckedEntity::Table { table, .. } => env.table(table).idx_type,
+            CheckedEntity::Data { .. }
+            | CheckedEntity::Array { .. }
+            | CheckedEntity::Elem(_)
+            | CheckedEntity::RuntimeData(_) => IndexType::I32,
         }
     }
 
@@ -5551,9 +6311,9 @@ impl CheckedEntity {
         func: &mut ir::Function,
     ) -> WasmResult<u32> {
         Ok(match *self {
-            CheckedEntity::Memory(_) => 1,
+            CheckedEntity::Memory(_) | CheckedEntity::RuntimeData(_) => 1,
             CheckedEntity::Data { element_size, .. } => element_size,
-            CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
+            CheckedEntity::Table { table, .. } => env.get_or_create_table(func, table).element_size,
             CheckedEntity::Array { ty, .. } => env.array_layout(ty)?.elem_size,
             CheckedEntity::Elem(_) => 16,
         })
@@ -5565,8 +6325,9 @@ impl CheckedEntity {
             CheckedEntity::Memory(_)
             | CheckedEntity::Data {
                 element_size: 1, ..
-            } => WasmStorageType::I8,
-            CheckedEntity::Table(table) => {
+            }
+            | CheckedEntity::RuntimeData(_) => WasmStorageType::I8,
+            CheckedEntity::Table { table, .. } => {
                 WasmStorageType::Val(WasmValType::Ref(env.table(table).ref_type))
             }
             CheckedEntity::Array { ty, .. } => {
@@ -5581,10 +6342,10 @@ impl CheckedEntity {
     /// Returns the trap code to use when an index into this entity is out-of-bounds.
     fn oob_trap_code(&self) -> ir::TrapCode {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => {
-                ir::TrapCode::HEAP_OUT_OF_BOUNDS
-            }
-            CheckedEntity::Table(_) | CheckedEntity::Elem(_) => TRAP_TABLE_OUT_OF_BOUNDS,
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data { .. }
+            | CheckedEntity::RuntimeData(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            CheckedEntity::Table { .. } | CheckedEntity::Elem(_) => TRAP_TABLE_OUT_OF_BOUNDS,
             CheckedEntity::Array { .. } => TRAP_ARRAY_OUT_OF_BOUNDS,
         }
     }
@@ -5593,13 +6354,22 @@ impl CheckedEntity {
     /// bit patterns.
     fn allows_memset(&self, env: &FuncEnvironment) -> bool {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => {
-                true
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data { .. }
+            | CheckedEntity::RuntimeData(_) => true,
+            CheckedEntity::Array { ty, .. } => {
+                let array_ty = env.types.unwrap_array(*ty).unwrap();
+                // Most GC references need barriers, funcrefs need intern-ing,
+                // etc. Disallow memset on all reference types.
+                !matches!(
+                    array_ty.0.element_type,
+                    WasmStorageType::Val(WasmValType::Ref(_))
+                )
             }
             CheckedEntity::Elem(_) => false,
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
-            CheckedEntity::Table(_) => !env.tunables.table_lazy_init,
+            CheckedEntity::Table { .. } => !env.tunables.table_lazy_init,
         }
     }
 }

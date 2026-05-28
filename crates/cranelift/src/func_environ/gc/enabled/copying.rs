@@ -13,7 +13,7 @@ use crate::translate::TargetEnvironment;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::copying::{
-    ALIGN, EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET,
+    ALIGN, EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET, InlineTraceInfo,
 };
 use wasmtime_environ::{
     GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
@@ -92,6 +92,7 @@ impl CopyingCompiler {
         kind: VMGcKind,
         ty: ModuleInternedTypeIndex,
         size: ir::Value,
+        reserved_bits: u32,
     ) -> WasmResult<(ir::Value, ir::Value)> {
         debug_assert_ne!(kind, VMGcKind::ExternRef);
         debug_assert!(!ty.is_reserved_value());
@@ -132,7 +133,7 @@ impl CopyingCompiler {
             builder.switch_to_block(slow_block);
             builder.seal_block(slow_block);
             builder.set_cold_block(slow_block);
-            let gc_ref = emit_gc_raw_alloc(func_env, builder, kind, ty, size, ALIGN);
+            let gc_ref = emit_gc_raw_alloc(func_env, builder, kind, ty, size, ALIGN, reserved_bits);
             let base = func_env.get_gc_heap_base(builder)?;
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
@@ -153,8 +154,9 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
+            let vmctx_region = func_env.get_vmctx_alias_region(&mut builder.func);
             builder.ins().store(
-                ir::MemFlagsData::trusted().with_alias_region(Some(ir::AliasRegion::Vmctx)),
+                ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                 end_of_object,
                 ptr_to_heap_data,
                 i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
@@ -165,10 +167,10 @@ impl CopyingCompiler {
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
-            // Write `VMGcHeader::kind`.
+            // Write `VMGcHeader::kind` with inline trace info bits included.
             let kind_val = builder
                 .ins()
-                .iconst(ir::types::I32, i64::from(kind.as_u32()));
+                .iconst(ir::types::I32, i64::from(kind.as_u32() | reserved_bits));
             builder.ins().store(
                 ir::MemFlagsData::trusted(),
                 kind_val,
@@ -231,6 +233,7 @@ impl GcCompiler for CopyingCompiler {
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
         let array_layout = func_env.array_layout(interned_type_index)?.clone();
+        let reserved_bits = InlineTraceInfo::array(&array_layout).encode();
 
         // First, compute the array's total size.
         let size = emit_array_size(func_env, builder, &array_layout, len);
@@ -242,6 +245,7 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::ArrayRef,
             interned_type_index,
             size,
+            reserved_bits,
         )?;
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
         builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
@@ -261,6 +265,7 @@ impl GcCompiler for CopyingCompiler {
         let struct_layout = func_env.struct_or_exn_layout(interned_type_index);
 
         let struct_size = struct_layout.size;
+        let reserved_bits = InlineTraceInfo::r#struct(&struct_layout).encode();
 
         let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
@@ -270,6 +275,7 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::StructRef,
             interned_type_index,
             struct_size_val,
+            reserved_bits,
         )?;
 
         // Initialize fields.
@@ -299,6 +305,7 @@ impl GcCompiler for CopyingCompiler {
         let exn_layout = func_env.struct_or_exn_layout(interned_type_index);
 
         let exn_size = exn_layout.size;
+        let reserved_bits = InlineTraceInfo::r#struct(&exn_layout).encode();
 
         let exn_size_val = builder.ins().iconst(ir::types::I32, i64::from(exn_size));
 
@@ -308,6 +315,7 @@ impl GcCompiler for CopyingCompiler {
             VMGcKind::ExnRef,
             interned_type_index,
             exn_size_val,
+            reserved_bits,
         )?;
 
         // Initialize fields.
@@ -380,6 +388,19 @@ impl GcCompiler for CopyingCompiler {
     }
 
     fn translate_write_gc_reference(
+        &mut self,
+        _func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlagsData,
+    ) -> WasmResult<()> {
+        // No write barrier needed for the copying collector.
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
+    }
+
+    fn translate_init_gc_reference(
         &mut self,
         _func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,

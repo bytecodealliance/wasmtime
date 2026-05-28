@@ -423,6 +423,8 @@ jobs:
               -p wasmtime-wasi-http --no-default-features
               -p wasmtime-wasi-http --no-default-features --features p2
               -p wasmtime-wasi-http --no-default-features --features p3
+              -p wasmtime-wasi-http --no-default-features --features p2,component-model-async
+              -p wasmtime-wasi-http --no-default-features --features p3,component-model-async
               -p wasmtime-wasi-http --no-default-features --features p3 --all-targets
 
           - name: wasmtime-wasi
@@ -605,7 +607,7 @@ jobs:
             cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,pulley,async,debug,debug-builtins,demangle,anyhow &&
             cargo check -p cranelift-control --no-default-features &&
             cargo check -p cranelift-assembler-x64 --lib &&
-            cargo check -p cranelift-codegen --no-default-features --features x86,arm64 &&
+            cargo check -p cranelift-codegen --no-default-features --features x86,arm64,riscv64 &&
             cargo check -p cranelift-frontend --no-default-features &&
             cargo check -p pulley-interpreter --features encode,decode,disas,interp &&
             cargo check -p wasmtime-wasi-io --no-default-features

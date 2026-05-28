@@ -205,6 +205,7 @@ impl ObjdumpCommand {
                 || name.ends_with("_array_call")
                 || name.ends_with("_wasm_call")
                 || name.contains("unsafe-intrinsics-")
+                || name.contains("module_start")
             {
                 Func::Trampoline
             } else if name.contains("libcall") || name.starts_with("component") {

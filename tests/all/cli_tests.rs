@@ -1150,6 +1150,17 @@ mod test_programs {
     }
 
     #[test]
+    fn p2_cli_initial_cwd() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "-Scwd=/sandbox",
+            P2_CLI_INITIAL_CWD_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
     fn p2_cli_stdin_empty() -> Result<()> {
         let mut child = get_wasmtime_command()?
             .args(&["run", "-Wcomponent-model", P2_CLI_STDIN_EMPTY_COMPONENT])
@@ -1745,6 +1756,70 @@ mod test_programs {
         assert!(bar_env.body().is_empty());
         let headers = bar_env.headers();
         assert_eq!(headers.get("env"), None);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_header_replaces_request_header() -> Result<()> {
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg("--env=BAR=baz");
+            cmd.arg("--header=env: FOO");
+            cmd.arg("--header=env: BAR");
+            cmd.arg("--header=expect-env-count: 2");
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty());
+        assert_eq!(
+            resp.headers().get("env"),
+            Some(&HeaderValue::from_static("bar"))
+        );
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn p2_cli_serve_header_file() -> Result<()> {
+        let td = tempfile::TempDir::new()?;
+        let headers_path = td.path().join("headers.txt");
+        std::fs::write(&headers_path, "env: FOO\n\nunused: value\n")?;
+
+        let server = WasmtimeServe::new(P2_CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg(format!("--header=@{}", headers_path.display()));
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert!(resp.body().is_empty());
+        assert_eq!(
+            resp.headers().get("env"),
+            Some(&HeaderValue::from_static("bar"))
+        );
 
         server.finish()?;
         Ok(())
@@ -2976,11 +3051,11 @@ fn profile_guest() -> Result<()> {
         None,
     )?;
 
-    assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("> stdout:\n{stdout}");
     println!("> stderr:\n{stderr}");
+    assert!(output.status.success());
     assert!(!stderr.contains("Error"));
     let out_json = std::fs::read_to_string(format!("{dir}/out.json")).unwrap();
     println!("> out.json:\n{out_json}");

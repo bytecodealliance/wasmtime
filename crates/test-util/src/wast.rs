@@ -476,9 +476,6 @@ impl WastTest {
             // Wasmtime doesn't expose the component-model `cm64` feature toggle
             // yet, so this parser-only test can't be enabled here.
             "test/wasm-tools/memory64.wast",
-            // Cancellable `thread.yield` semantics still diverge from the
-            // latest submodule expectation.
-            "test/async/cancellable.wast",
         ];
         if unsupported.iter().any(|part| self.path.ends_with(part)) {
             return true;
@@ -659,6 +656,7 @@ impl WastTest {
                         "misc_testsuite/winch/issue-10331.wast",
                         "misc_testsuite/winch/replace_lane.wast",
                         "misc_testsuite/simd/riscv64-replicated-imm5-works.wast",
+                        "misc_testsuite/simd/v128-equal.wast",
                         "spec_testsuite/simd_align.wast",
                         "spec_testsuite/simd_boolean.wast",
                         "spec_testsuite/simd_conversions.wast",

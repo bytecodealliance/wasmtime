@@ -1,14 +1,12 @@
 /*
 Example of instantiating a wasm module which uses WASI imports.
 
-You can build the example using CMake:
+You can build and run the example using CMake:
 
-mkdir build && (cd build && cmake .. && \
-  cmake --build . --target wasmtime-wasip1-cpp)
-
-And then run it:
-
-build/wasmtime-wasip1-cpp
+  cargo build --target wasm32-wasip1 -p example-wasi-wasm
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-wasip1-cpp
+  ./build/wasmtime-wasip1-cpp
 */
 
 #include <fstream>

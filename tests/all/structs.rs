@@ -912,6 +912,7 @@ fn issue_9714(config: &mut Config) -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_structref_has_trace_info_for_gc() -> Result<()> {
     for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
         println!("Using GC collector: {collector:?}");

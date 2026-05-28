@@ -141,6 +141,7 @@ fn serialize_deterministic() {
 // into an initialization image doesn't unnecessarily create a massive module by
 // accident with a very large initialization image in it.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn serialize_not_overly_massive() -> Result<()> {
     let mut config = Config::new();
     config.memory_guaranteed_dense_image_size(1 << 20);

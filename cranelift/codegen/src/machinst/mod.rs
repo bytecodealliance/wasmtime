@@ -46,7 +46,8 @@
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc};
 use crate::ir::{
-    self, DynamicStackSlot, RelSourceLoc, StackSlot, Type, function::FunctionParameters,
+    self, DynamicStackSlot, Endianness, RelSourceLoc, StackSlot, TrapCode, Type,
+    function::FunctionParameters,
 };
 use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
@@ -55,7 +56,9 @@ use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt;
 use core::fmt::Debug;
+use core::num::NonZeroU8;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
@@ -63,6 +66,186 @@ use smallvec::{SmallVec, smallvec};
 
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
+
+/// Guaranteed to use "natural alignment" for the given type.
+const BIT_ALIGNED: u16 = 1 << 0;
+
+/// A load that reads data in memory that does not change for the
+/// duration of the function's execution.
+const BIT_READONLY: u16 = 1 << 1;
+
+/// Load multi-byte values from memory in a little-endian format.
+const BIT_LITTLE_ENDIAN: u16 = 1 << 2;
+
+/// Load multi-byte values from memory in a big-endian format.
+const BIT_BIG_ENDIAN: u16 = 1 << 3;
+
+/// Trap code, if any, for this memory operation.
+const MASK_TRAP_CODE: u16 = ((1 << TRAP_CODE_BITS) - 1) << TRAP_CODE_OFFSET;
+const TRAP_CODE_BITS: u16 = 8;
+const TRAP_CODE_OFFSET: u16 = 7;
+
+/// Whether this memory operation may be freely moved by the optimizer.
+const BIT_CAN_MOVE: u16 = 1 << 15;
+
+/// Backend memory-operation flags.
+///
+/// These are the bit-packed flags that backends operate on directly.
+///
+/// Unlike [`ir::MemFlagsData`], this does not carry alias-region metadata.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct MachMemFlags {
+    // Bit layout:
+    //
+    // - Bit 0: aligned
+    // - Bit 1: readonly
+    // - Bit 2: little-endian
+    // - Bit 3: big-endian
+    // - Bits 4..6: unused
+    // - Bits 7..14: trap code
+    // - Bit 15: can_move
+    bits: u16,
+}
+
+impl MachMemFlags {
+    /// Create a new empty set of flags.
+    pub const fn new() -> Self {
+        Self { bits: 0 }.with_trap_code(Some(TrapCode::HEAP_OUT_OF_BOUNDS))
+    }
+
+    /// Create a set of flags representing an access from a "trusted" address.
+    pub const fn trusted() -> Self {
+        Self::new().with_notrap().with_aligned()
+    }
+
+    const fn read_bit(self, bit: u16) -> bool {
+        self.bits & bit != 0
+    }
+
+    const fn with_bit(mut self, bit: u16) -> Self {
+        self.bits |= bit;
+        self
+    }
+
+    /// Return endianness of the memory access.
+    pub const fn endianness(self, native_endianness: Endianness) -> Endianness {
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
+            Endianness::Little
+        } else if self.read_bit(BIT_BIG_ENDIAN) {
+            Endianness::Big
+        } else {
+            native_endianness
+        }
+    }
+
+    /// Return endianness of the memory access, if explicitly specified.
+    pub const fn explicit_endianness(self) -> Option<Endianness> {
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
+            Some(Endianness::Little)
+        } else if self.read_bit(BIT_BIG_ENDIAN) {
+            Some(Endianness::Big)
+        } else {
+            None
+        }
+    }
+
+    /// Set endianness of the memory access, returning new flags.
+    pub const fn with_endianness(self, endianness: Endianness) -> Self {
+        let res = match endianness {
+            Endianness::Little => self.with_bit(BIT_LITTLE_ENDIAN),
+            Endianness::Big => self.with_bit(BIT_BIG_ENDIAN),
+        };
+        assert!(!(res.read_bit(BIT_LITTLE_ENDIAN) && res.read_bit(BIT_BIG_ENDIAN)));
+        res
+    }
+
+    /// Test if this memory access cannot trap.
+    pub const fn notrap(self) -> bool {
+        self.trap_code().is_none()
+    }
+
+    /// Set these flags to indicate this access does not trap.
+    pub const fn with_notrap(self) -> Self {
+        self.with_trap_code(None)
+    }
+
+    /// Test if the `can_move` flag is set.
+    pub const fn can_move(self) -> bool {
+        self.read_bit(BIT_CAN_MOVE)
+    }
+
+    /// Set the `can_move` flag, returning new flags.
+    pub const fn with_can_move(self) -> Self {
+        self.with_bit(BIT_CAN_MOVE)
+    }
+
+    /// Test if the `aligned` flag is set.
+    pub const fn aligned(self) -> bool {
+        self.read_bit(BIT_ALIGNED)
+    }
+
+    /// Set the `aligned` flag, returning new flags.
+    pub const fn with_aligned(self) -> Self {
+        self.with_bit(BIT_ALIGNED)
+    }
+
+    /// Test if the `readonly` flag is set.
+    pub const fn readonly(self) -> bool {
+        self.read_bit(BIT_READONLY)
+    }
+
+    /// Set the `readonly` flag, returning new flags.
+    pub const fn with_readonly(self) -> Self {
+        self.with_bit(BIT_READONLY)
+    }
+
+    /// Get the trap code to report if this memory access traps.
+    pub const fn trap_code(self) -> Option<TrapCode> {
+        let byte = ((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8;
+        match NonZeroU8::new(byte) {
+            Some(code) => Some(TrapCode::from_raw(code)),
+            None => None,
+        }
+    }
+
+    /// Configures these flags with the specified trap code `code`.
+    pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
+        let bits = match code {
+            Some(code) => code.as_raw().get() as u16,
+            None => 0,
+        };
+        self.bits &= !MASK_TRAP_CODE;
+        self.bits |= bits << TRAP_CODE_OFFSET;
+        self
+    }
+}
+
+impl fmt::Display for MachMemFlags {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.trap_code() {
+            None => write!(f, " notrap")?,
+            Some(TrapCode::HEAP_OUT_OF_BOUNDS) => {}
+            Some(t) => write!(f, " {t}")?,
+        }
+        if self.aligned() {
+            write!(f, " aligned")?;
+        }
+        if self.readonly() {
+            write!(f, " readonly")?;
+        }
+        if self.can_move() {
+            write!(f, " can_move")?;
+        }
+        if self.read_bit(BIT_BIG_ENDIAN) {
+            write!(f, " big")?;
+        }
+        if self.read_bit(BIT_LITTLE_ENDIAN) {
+            write!(f, " little")?;
+        }
+        Ok(())
+    }
+}
 
 #[macro_use]
 pub mod isle;

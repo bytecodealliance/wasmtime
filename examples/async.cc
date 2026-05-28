@@ -16,9 +16,11 @@ You can compile and run this example on Linux with:
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
 
-You can also build using cmake:
+You can also build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-async
+  ./build/wasmtime-async
 */
 
 #include <array>

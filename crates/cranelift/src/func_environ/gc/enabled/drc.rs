@@ -330,109 +330,6 @@ impl DrcCompiler {
         );
         builder.ins().store(GC_MEMFLAGS, new_reserved, ptr, 0);
     }
-
-    /// Write to an uninitialized GC reference field, initializing it.
-    ///
-    /// ```text
-    /// *dst = new_val
-    /// ```
-    ///
-    /// Doesn't need to do a full write barrier: we don't have an old reference
-    /// that is being overwritten and needs its refcount decremented, just a new
-    /// reference whose count should be incremented.
-    fn translate_init_gc_reference(
-        &mut self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder,
-        ty: WasmRefType,
-        dst: ir::Value,
-        new_val: ir::Value,
-        flags: ir::MemFlagsData,
-    ) -> WasmResult<()> {
-        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
-
-        // Special case for references to uninhabited bottom types: see
-        // `translate_write_gc_reference` for details.
-        if let WasmHeapType::None = ty.heap_type {
-            if ty.nullable {
-                let null = builder.ins().iconst(ref_ty, 0);
-                builder.ins().store(flags, null, dst, 0);
-            } else {
-                let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
-            }
-            return Ok(());
-        };
-
-        // Special case for `i31ref`s: no need for any barriers.
-        if let WasmHeapType::I31 = ty.heap_type {
-            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
-        }
-
-        // Our initialization barrier for GC references being copied out of the
-        // stack and initializing a table/global/struct field/etc... is roughly
-        // equivalent to the following pseudo-CLIF:
-        //
-        // ```
-        // current_block:
-        //     ...
-        //     let new_val_is_null_or_i31 = ...
-        //     brif new_val_is_null_or_i31, continue_block, inc_ref_block
-        //
-        // inc_ref_block:
-        //     let ref_count = load new_val.ref_count
-        //     let new_ref_count = iadd_imm ref_count, 1
-        //     store new_val.ref_count, new_ref_count
-        //     jump check_old_val_block
-        //
-        // continue_block:
-        //     store dst, new_val
-        //     ...
-        // ```
-        //
-        // This write barrier is responsible for ensuring that the new value's
-        // ref count is incremented now that the table/global/struct/etc... is
-        // holding onto it.
-
-        let current_block = builder.current_block().unwrap();
-        let inc_ref_block = builder.create_block();
-        let continue_block = builder.create_block();
-
-        builder.ensure_inserted_block();
-        builder.insert_block_after(inc_ref_block, current_block);
-        builder.insert_block_after(continue_block, inc_ref_block);
-
-        // Current block: check whether the new value is non-null and
-        // non-i31. If so, branch to the `inc_ref_block`.
-        log::trace!("DRC initialization barrier: check if the value is null or i31");
-        let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
-        builder.ins().brif(
-            new_val_is_null_or_i31,
-            continue_block,
-            &[],
-            inc_ref_block,
-            &[],
-        );
-
-        // Block to increment the ref count of the new value when it is non-null
-        // and non-i31.
-        builder.switch_to_block(inc_ref_block);
-        builder.seal_block(inc_ref_block);
-        log::trace!("DRC initialization barrier: increment the ref count of the initial value");
-        self.mutate_ref_count(func_env, builder, new_val, 1);
-        builder.ins().jump(continue_block, &[]);
-
-        // Join point after we're done with the GC barrier: do the actual store
-        // to initialize the field.
-        builder.switch_to_block(continue_block);
-        builder.seal_block(continue_block);
-        log::trace!(
-            "DRC initialization barrier: finally, store into {dst:?} to initialize the field"
-        );
-        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
-
-        Ok(())
-    }
 }
 
 impl GcCompiler for DrcCompiler {
@@ -471,6 +368,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             size,
             align,
+            0,
         );
 
         // Write the array's length into the appropriate slot.
@@ -512,6 +410,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             struct_size_val,
             struct_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated struct's fields.
@@ -562,6 +461,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             exn_size_val,
             exn_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated exception
@@ -953,6 +853,109 @@ impl GcCompiler for DrcCompiler {
         builder.switch_to_block(continue_block);
         builder.seal_block(continue_block);
         log::trace!("DRC write barrier: finished");
+        Ok(())
+    }
+
+    /// Write to an uninitialized GC reference field, initializing it.
+    ///
+    /// ```text
+    /// *dst = new_val
+    /// ```
+    ///
+    /// Doesn't need to do a full write barrier: we don't have an old reference
+    /// that is being overwritten and needs its refcount decremented, just a new
+    /// reference whose count should be incremented.
+    fn translate_init_gc_reference(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlagsData,
+    ) -> WasmResult<()> {
+        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
+
+        // Special case for references to uninhabited bottom types: see
+        // `translate_write_gc_reference` for details.
+        if let WasmHeapType::None = ty.heap_type {
+            if ty.nullable {
+                let null = builder.ins().iconst(ref_ty, 0);
+                builder.ins().store(flags, null, dst, 0);
+            } else {
+                let zero = builder.ins().iconst(ir::types::I32, 0);
+                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
+            }
+            return Ok(());
+        };
+
+        // Special case for `i31ref`s: no need for any barriers.
+        if let WasmHeapType::I31 = ty.heap_type {
+            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
+        }
+
+        // Our initialization barrier for GC references being copied out of the
+        // stack and initializing a table/global/struct field/etc... is roughly
+        // equivalent to the following pseudo-CLIF:
+        //
+        // ```
+        // current_block:
+        //     ...
+        //     let new_val_is_null_or_i31 = ...
+        //     brif new_val_is_null_or_i31, continue_block, inc_ref_block
+        //
+        // inc_ref_block:
+        //     let ref_count = load new_val.ref_count
+        //     let new_ref_count = iadd_imm ref_count, 1
+        //     store new_val.ref_count, new_ref_count
+        //     jump check_old_val_block
+        //
+        // continue_block:
+        //     store dst, new_val
+        //     ...
+        // ```
+        //
+        // This write barrier is responsible for ensuring that the new value's
+        // ref count is incremented now that the table/global/struct/etc... is
+        // holding onto it.
+
+        let current_block = builder.current_block().unwrap();
+        let inc_ref_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(inc_ref_block, current_block);
+        builder.insert_block_after(continue_block, inc_ref_block);
+
+        // Current block: check whether the new value is non-null and
+        // non-i31. If so, branch to the `inc_ref_block`.
+        log::trace!("DRC initialization barrier: check if the value is null or i31");
+        let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
+        builder.ins().brif(
+            new_val_is_null_or_i31,
+            continue_block,
+            &[],
+            inc_ref_block,
+            &[],
+        );
+
+        // Block to increment the ref count of the new value when it is non-null
+        // and non-i31.
+        builder.switch_to_block(inc_ref_block);
+        builder.seal_block(inc_ref_block);
+        log::trace!("DRC initialization barrier: increment the ref count of the initial value");
+        self.mutate_ref_count(func_env, builder, new_val, 1);
+        builder.ins().jump(continue_block, &[]);
+
+        // Join point after we're done with the GC barrier: do the actual store
+        // to initialize the field.
+        builder.switch_to_block(continue_block);
+        builder.seal_block(continue_block);
+        log::trace!(
+            "DRC initialization barrier: finally, store into {dst:?} to initialize the field"
+        );
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
+
         Ok(())
     }
 

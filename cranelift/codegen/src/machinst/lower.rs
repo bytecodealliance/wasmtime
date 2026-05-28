@@ -9,15 +9,15 @@ use crate::entity::SecondaryMap;
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
-    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlagsData,
-    RelSourceLoc, SigRef, Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, RelSourceLoc, SigRef,
+    Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
     ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, CallArgList, CallInfo,
-    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig, SigSet, TryCallInfo, VCode,
-    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
-    writable_value_regs,
+    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, MachMemFlags, Reg, Sig, SigSet,
+    TryCallInfo, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    ValueRegs, Writable, writable_value_regs,
 };
 use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult, trace};
@@ -1420,14 +1420,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Returns the memory flags of a given memory access.
-    pub fn memflags(&self, ir_inst: Inst) -> Option<MemFlagsData> {
+    pub fn memflags(&self, ir_inst: Inst) -> Option<MachMemFlags> {
         match &self.f.dfg.insts[ir_inst] {
-            &InstructionData::AtomicCas { flags, .. } => Some(flags),
-            &InstructionData::AtomicRmw { flags, .. } => Some(flags),
+            &InstructionData::AtomicCas { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
+            &InstructionData::AtomicRmw { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadNoOffset { flags, .. }
-            | &InstructionData::Store { flags, .. } => Some(flags),
-            &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
+            | &InstructionData::Store { flags, .. } => Some(self.f.dfg.mem_flags[flags].into()),
+            &InstructionData::StoreNoOffset { flags, .. } => {
+                Some(self.f.dfg.mem_flags[flags].into())
+            }
             _ => None,
         }
     }

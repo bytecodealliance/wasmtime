@@ -270,9 +270,10 @@
 (type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
 (decl pure partial sinkable_load (Value) SinkableLoad)
 (rule (sinkable_load value @ (value_type ty))
-  (if-let inst @ (load _ flags addr (offset32 offset)) (is_sinkable_inst value))
-  (if-let true (is_native_endianness (endianness flags)))
-  (if-let true (memflags_nontrapping flags))
+  (if-let inst @ (load _ (mem_flags_data flags_data) addr (offset32 offset))
+          (is_sinkable_inst value))
+  (if-let true (is_native_endianness (endianness flags_data)))
+  (if-let true (memflags_nontrapping flags_data))
   (if-let offset8 (i32_try_into_u8 offset))
   (SinkableLoad.Load inst ty addr offset8))
 
@@ -430,9 +431,9 @@
 ;; of the address against a particular bound.
 (decl pure partial wasm_oob_cond (Value Value) OobCond)
 (type OobCond (enum (All (a Value) (b u64))))
-(rule (wasm_oob_cond wasm_addr (ugt wasm_addr (isub _ bound (u64_from_iconst n))))
+(rule (wasm_oob_cond wasm_addr (ugt _ wasm_addr (isub _ bound (u64_from_iconst n))))
   (OobCond.All bound n))
-(rule (wasm_oob_cond wasm_addr (ult (isub _ bound (u64_from_iconst n)) wasm_addr))
+(rule (wasm_oob_cond wasm_addr (ult _ (isub _ bound (u64_from_iconst n)) wasm_addr))
   (OobCond.All bound n))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

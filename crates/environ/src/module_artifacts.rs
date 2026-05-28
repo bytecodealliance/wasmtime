@@ -552,7 +552,8 @@ impl CompiledFunctionsTable {
 
             FuncKeyKind::ArrayToWasmTrampoline
             | FuncKeyKind::WasmToBuiltinTrampoline
-            | FuncKeyKind::PatchableToBuiltinTrampoline => false,
+            | FuncKeyKind::PatchableToBuiltinTrampoline
+            | FuncKeyKind::ModuleStartup => false,
 
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
@@ -569,7 +570,8 @@ impl CompiledFunctionsTable {
             | FuncKeyKind::WasmToArrayTrampoline
             | FuncKeyKind::WasmToBuiltinTrampoline
             | FuncKeyKind::PatchableToBuiltinTrampoline
-            | FuncKeyKind::PulleyHostCall => false,
+            | FuncKeyKind::PulleyHostCall
+            | FuncKeyKind::ModuleStartup => false,
             #[cfg(feature = "component-model")]
             FuncKeyKind::ComponentTrampoline
             | FuncKeyKind::ResourceDropTrampoline
@@ -807,13 +809,20 @@ mod tests {
 
             // Build up a random set of functions with random indices.
             for _ in 0..u.int_in_range(1..=200)? {
-                let key = match u.int_in_range(0..=6)? {
+                #[cfg(feature = "component-model")]
+                let choice = u.int_in_range(0..=6)?;
+                #[cfg(not(feature = "component-model"))]
+                let choice = u.int_in_range(0..=4)?;
+
+                let key = match choice {
                     0 => FuncKey::DefinedWasmFunction(idx(u, 10)?, idx(u, 200)?),
                     1 => FuncKey::ArrayToWasmTrampoline(idx(u, 10)?, idx(u, 200)?),
                     2 => FuncKey::WasmToArrayTrampoline(idx(u, 100)?),
                     3 => FuncKey::WasmToBuiltinTrampoline(u.arbitrary()?),
                     4 => FuncKey::PulleyHostCall(u.arbitrary()?),
+                    #[cfg(feature = "component-model")]
                     5 => FuncKey::ComponentTrampoline(u.arbitrary()?, idx(u, 50)?),
+                    #[cfg(feature = "component-model")]
                     6 => FuncKey::ResourceDropTrampoline,
                     _ => unreachable!(),
                 };

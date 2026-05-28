@@ -7,8 +7,8 @@ use cranelift_entity::{EntityRef, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
 
 /// A WebAssembly linear memory initializer.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MemoryInitializer {
+#[derive(Clone, Debug)]
+pub struct MemoryInitializer<'a> {
     /// The index of a linear memory to initialize.
     pub memory_index: MemoryIndex,
     /// The base offset to start this segment at.
@@ -17,19 +17,7 @@ pub struct MemoryInitializer {
     ///
     /// This range indexes into a separately stored data section which will be
     /// provided with the compiled module's code as well.
-    pub data: Range<u32>,
-}
-
-/// Similar to the above `MemoryInitializer` but only used when memory
-/// initializers are statically known to be valid.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StaticMemoryInitializer {
-    /// The 64-bit offset, in bytes, of where this initializer starts.
-    pub offset: u64,
-
-    /// The range of data to write at `offset`, where these indices are indexes
-    /// into the compiled wasm module's data section.
-    pub data: Range<u32>,
+    pub data: &'a [u8],
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.
@@ -47,7 +35,7 @@ pub enum MemoryInitialization {
     /// data segments when the module is instantiated.
     ///
     /// This is the default memory initialization type.
-    Segmented(TryVec<MemoryInitializer>),
+    Segmented,
 
     /// Memory initialization is statically known and involves a single `memcpy`
     /// or otherwise simply making the defined data visible.
@@ -81,13 +69,13 @@ pub enum MemoryInitialization {
         ///
         /// The offset, range base, and range end are all guaranteed to be page
         /// aligned to the page size passed in to `try_static_init`.
-        map: TryPrimaryMap<MemoryIndex, Option<StaticMemoryInitializer>>,
+        map: TryPrimaryMap<MemoryIndex, Option<(u64, RuntimeDataIndex)>>,
     },
 }
 
 impl Default for MemoryInitialization {
     fn default() -> Self {
-        Self::Segmented(TryVec::new())
+        Self::Segmented
     }
 }
 
@@ -96,121 +84,10 @@ impl MemoryInitialization {
     /// `MemoryInitialization::Segmented`.
     pub fn is_segmented(&self) -> bool {
         match self {
-            MemoryInitialization::Segmented(_) => true,
+            MemoryInitialization::Segmented => true,
             _ => false,
         }
     }
-
-    /// Performs the memory initialization steps for this set of initializers.
-    ///
-    /// This will perform wasm initialization in compliance with the wasm spec
-    /// and how data segments are processed. This doesn't need to necessarily
-    /// only be called as part of initialization, however, as it's structured to
-    /// allow learning about memory ahead-of-time at compile time possibly.
-    ///
-    /// This function will return true if all memory initializers are processed
-    /// successfully. If any initializer hits an error or, for example, a
-    /// global value is needed but `None` is returned, then false will be
-    /// returned. At compile-time this typically means that the "error" in
-    /// question needs to be deferred to runtime, and at runtime this means
-    /// that an invalid initializer has been found and a trap should be
-    /// generated.
-    pub fn init_memory(&self, state: &mut dyn InitMemory) -> bool {
-        let initializers = match self {
-            // Fall through below to the segmented memory one-by-one
-            // initialization.
-            MemoryInitialization::Segmented(list) => list,
-
-            // If previously switched to static initialization then pass through
-            // all those parameters here to the `write` callback.
-            //
-            // Note that existence of `Static` already guarantees that all
-            // indices are in-bounds.
-            MemoryInitialization::Static { map } => {
-                for (index, init) in map {
-                    if let Some(init) = init {
-                        let result = state.write(index, init);
-                        if !result {
-                            return result;
-                        }
-                    }
-                }
-                return true;
-            }
-        };
-
-        for initializer in initializers {
-            let &MemoryInitializer {
-                memory_index,
-                ref offset,
-                ref data,
-            } = initializer;
-
-            // First up determine the start/end range and verify that they're
-            // in-bounds for the initial size of the memory at `memory_index`.
-            // Note that this can bail if we don't have access to globals yet
-            // (e.g. this is a task happening before instantiation at
-            // compile-time).
-            let start = match state.eval_offset(memory_index, offset) {
-                Some(start) => start,
-                None => return false,
-            };
-            let len = u64::try_from(data.len()).unwrap();
-            let end = match start.checked_add(len) {
-                Some(end) => end,
-                None => return false,
-            };
-
-            match state.memory_size_in_bytes(memory_index) {
-                Ok(max) => {
-                    if end > max {
-                        return false;
-                    }
-                }
-
-                // Note that computing the minimum can overflow if the page size
-                // is the default 64KiB and the memory's minimum size in pages
-                // is `1 << 48`, the maximum number of minimum pages for 64-bit
-                // memories. We don't return `false` to signal an error here and
-                // instead defer the error to runtime, when it will be
-                // impossible to allocate that much memory anyways.
-                Err(_) => {}
-            }
-
-            // The limits of the data segment have been validated at this point
-            // so the `write` callback is called with the range of data being
-            // written. Any erroneous result is propagated upwards.
-            let init = StaticMemoryInitializer {
-                offset: start,
-                data: data.clone(),
-            };
-            let result = state.write(memory_index, &init);
-            if !result {
-                return result;
-            }
-        }
-
-        return true;
-    }
-}
-
-/// The various callbacks provided here are used to drive the smaller bits of
-/// memory initialization.
-pub trait InitMemory {
-    /// Returns the size, in bytes, of the memory specified. For compile-time
-    /// purposes this would be the memory type's minimum size.
-    fn memory_size_in_bytes(&mut self, memory_index: MemoryIndex) -> Result<u64, SizeOverflow>;
-
-    /// Returns the value of the constant expression, as a `u64`. Note that
-    /// this may involve zero-extending a 32-bit global to a 64-bit number. May
-    /// return `None` to indicate that the expression involves a value which is
-    /// not available yet.
-    fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64>;
-
-    /// A callback used to actually write data. This indicates that the
-    /// specified memory must receive the specified range of data at the
-    /// specified offset. This can return false on failure.
-    fn write(&mut self, memory_index: MemoryIndex, init: &StaticMemoryInitializer) -> bool;
 }
 
 /// Table initialization data for all tables in the module.
@@ -240,16 +117,7 @@ pub struct TableInitialization {
 pub enum TableInitialValue {
     /// Initialize each table element to null, optionally setting some elements
     /// to non-null given the precomputed image.
-    Null {
-        /// A precomputed image of table initializers for this table.
-        ///
-        /// This image is constructed during `try_func_table_init` and
-        /// null-initialized elements are represented with
-        /// `FuncIndex::reserved_value()`. Note that this image is empty by
-        /// default and may not encompass the entire span of the table in which
-        /// case the elements are initialized to null.
-        precomputed: TryVec<FuncIndex>,
-    },
+    Null,
     /// An arbitrary const expression.
     Expr(ConstExpr),
 }
@@ -285,6 +153,14 @@ pub enum TableSegmentElements {
 }
 
 impl TableSegmentElements {
+    /// Returns the type of this segment.
+    pub fn ty(&self) -> WasmRefType {
+        match self {
+            Self::Functions(_) => WasmRefType::FUNCREF,
+            Self::Expressions { ty, .. } => *ty,
+        }
+    }
+
     /// Returns the number of elements in this segment.
     pub fn len(&self) -> u64 {
         match self {
@@ -313,20 +189,38 @@ pub struct Module {
     /// Exported entities.
     pub exports: TryIndexMap<Atom, EntityIndex>,
 
-    /// The module "start" function, if present.
-    pub start_func: Option<FuncIndex>,
+    /// Whether or not this module has a start function,
+    pub startup: ModuleStartup,
 
-    /// WebAssembly table initialization data, per table.
-    pub table_initialization: TableInitialization,
+    /// Precompute per-table static images, if applicable.
+    ///
+    /// This map tracks, for each defined table in this module, the initial
+    /// precomputed contents of the table. This is only applicable for funcref
+    /// tables and the `TryVec` here uses `FuncIndex::reserved_value()` for null
+    /// entries. This structure is filled in if table initialization is detected
+    /// to be infallible as part of [`ModuleTranslation::finalize_table_init`].
+    pub table_initialization: TryPrimaryMap<DefinedTableIndex, TryVec<FuncIndex>>,
 
     /// WebAssembly linear memory initializer.
+    ///
+    /// This will track how memory is initialized, either exclusively via
+    /// segments or if some memories can be initialized with static images. This
+    /// is computed during [`ModuleTranslation::finalize_memory_init`].
     pub memory_initialization: MemoryInitialization,
 
     /// WebAssembly passive elements.
-    pub passive_elements: TryPrimaryMap<PassiveElemIndex, TableSegmentElements>,
+    ///
+    /// This is a map of all passive element segments to their type and the
+    /// initial size of the segment. Note that the contents of the segment are
+    /// initialized by compiled code.
+    pub passive_elements: TryPrimaryMap<PassiveElemIndex, (WasmRefType, u64)>,
 
-    /// Where passive data segments are located in the module's image.
-    pub passive_data: PrimaryMap<PassiveDataIndex, Range<u32>>,
+    /// Where runtime data segments are located in the module's image.
+    ///
+    /// Note that this does not directly correspond to either active or passive
+    /// data segments. Those are massaged during
+    /// [`ModuleTranslation::finalize_memory_init`] into the form used here.
+    pub runtime_data: TryPrimaryMap<RuntimeDataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
     pub types: TryPrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
@@ -368,8 +262,18 @@ pub struct Module {
     /// WebAssembly global variables.
     pub globals: TryPrimaryMap<GlobalIndex, Global>,
 
-    /// WebAssembly global initializers for locally-defined globals.
-    pub global_initializers: TryPrimaryMap<DefinedGlobalIndex, ConstExpr>,
+    /// "Simple" WebAssembly global initializers for locally-defined globals.
+    ///
+    /// This map does not track initialization of all globals in this module,
+    /// but only those considered "simple" which can be easily evaluated at
+    /// compile-time. For example an initialization expression of `i32.const N`
+    /// is considered simple. These globals are manually initialized in the
+    /// host.
+    ///
+    /// This is all in contrast to [`ModuleTranslation::global_initializers`]
+    /// which is processed in compiled code and initialized after the instance
+    /// has been created.
+    pub global_initializers: TryVec<(DefinedGlobalIndex, GlobalConstValue)>,
 
     /// WebAssembly exception and control tags.
     pub tags: TryPrimaryMap<TagIndex, Tag>,
@@ -400,11 +304,11 @@ impl Module {
             name: Default::default(),
             initializers: Default::default(),
             exports: Default::default(),
-            start_func: Default::default(),
+            startup: ModuleStartup::None,
             table_initialization: Default::default(),
             memory_initialization: Default::default(),
             passive_elements: Default::default(),
-            passive_data: Default::default(),
+            runtime_data: Default::default(),
             types: Default::default(),
             num_imported_funcs: Default::default(),
             num_imported_tables: Default::default(),
@@ -690,11 +594,11 @@ impl TypeTrace for Module {
             name: _,
             initializers: _,
             exports: _,
-            start_func: _,
+            startup,
             table_initialization: _,
             memory_initialization: _,
             passive_elements: _,
-            passive_data: _,
+            runtime_data: _,
             types,
             num_imported_funcs: _,
             num_imported_tables: _,
@@ -726,6 +630,7 @@ impl TypeTrace for Module {
         for t in tags.values() {
             t.trace(func)?;
         }
+        startup.trace(func)?;
         Ok(())
     }
 
@@ -741,11 +646,11 @@ impl TypeTrace for Module {
             name: _,
             initializers: _,
             exports: _,
-            start_func: _,
+            startup,
             table_initialization: _,
             memory_initialization: _,
             passive_elements: _,
-            passive_data: _,
+            runtime_data: _,
             types,
             num_imported_funcs: _,
             num_imported_tables: _,
@@ -777,7 +682,30 @@ impl TypeTrace for Module {
         for t in tags.values_mut() {
             t.trace_mut(func)?;
         }
+        startup.trace_mut(func)?;
         Ok(())
+    }
+}
+
+impl TypeTrace for ModuleStartup {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            ModuleStartup::None => Ok(()),
+            ModuleStartup::Always(t) | ModuleStartup::IfMemoriesNeedInit(t) => func(*t),
+        }
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        match self {
+            ModuleStartup::None => Ok(()),
+            ModuleStartup::Always(t) | ModuleStartup::IfMemoriesNeedInit(t) => func(t),
+        }
     }
 }
 
@@ -821,3 +749,34 @@ impl FunctionType {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncRefIndex(u32);
 cranelift_entity::entity_impl!(FuncRefIndex);
+
+/// Different means of startup for a wasm module.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ModuleStartup {
+    /// No startup is necessary.
+    None,
+
+    /// Startup is always required, for example to apply active table segments.
+    ///
+    /// The type of the startup function, of wasm signature `[] -> []`, is
+    /// provided here.
+    Always(EngineOrModuleTypeIndex),
+
+    /// Startup is only required if some linear memory within this module, at
+    /// runtime, says `needs_init() == true`.
+    ///
+    /// This special mode of startup indicates that the startup function has no
+    /// purpose other than to initialize the initial contents of
+    /// `MemoryInitialization::Static` linear memories. In this situation if all
+    /// memories say `needs_init() == false` then the startup function won't
+    /// actually do anything meaning that it can be optimized slightly by
+    /// skipping it entirely.
+    IfMemoriesNeedInit(EngineOrModuleTypeIndex),
+}
+
+impl ModuleStartup {
+    /// Returns if this is `ModuleStartup::None`.
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}

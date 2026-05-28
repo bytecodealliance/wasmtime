@@ -933,6 +933,10 @@ impl Component {
             _ => unreachable!(),
         }
     }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.inner.index
+    }
 }
 
 /// A value which represents a known export of a component.
@@ -963,6 +967,7 @@ mod tests {
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
         let mut config = Config::new();
         config.wasm_component_model(true);

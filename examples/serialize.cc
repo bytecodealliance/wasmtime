@@ -2,14 +2,11 @@
 Small example of how to serialize compiled wasm module to the disk,
 and then instantiate it from the compilation artifacts.
 
-You can build the example using CMake:
+You can build and run the example using CMake:
 
-mkdir build && (cd build && cmake .. && \
-  cmake --build . --target wasmtime-serialize-cpp)
-
-And then run it:
-
-build/wasmtime-serialize-cpp
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-serialize-cpp
+  ./build/wasmtime-serialize-cpp
 */
 
 #include <fstream>

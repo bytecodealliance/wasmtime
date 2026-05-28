@@ -1,6 +1,6 @@
 //! S390x ISA definitions: instruction arguments.
 
-use crate::ir::MemFlagsData;
+use crate::ir::MachMemFlags;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::isa::s390x::inst::*;
 
@@ -18,7 +18,7 @@ pub enum MemArg {
         base: Reg,
         index: Reg,
         disp: UImm12,
-        flags: MemFlagsData,
+        flags: MachMemFlags,
     },
 
     /// Base register, index register, and 20-bit signed displacement.
@@ -26,7 +26,7 @@ pub enum MemArg {
         base: Reg,
         index: Reg,
         disp: SImm20,
-        flags: MemFlagsData,
+        flags: MachMemFlags,
     },
 
     /// PC-relative Reference to a label.
@@ -39,7 +39,7 @@ pub enum MemArg {
     Symbol {
         name: Box<ExternalName>,
         offset: i32,
-        flags: MemFlagsData,
+        flags: MachMemFlags,
     },
 
     //
@@ -50,7 +50,7 @@ pub enum MemArg {
     RegOffset {
         reg: Reg,
         off: i64,
-        flags: MemFlagsData,
+        flags: MachMemFlags,
     },
 
     /// Offset from the stack pointer at function entry.
@@ -80,7 +80,8 @@ pub enum MemArg {
 
 impl MemArg {
     /// Memory reference using an address in a register.
-    pub fn reg(reg: Reg, flags: MemFlagsData) -> MemArg {
+    pub fn reg(reg: Reg, flags: impl Into<MachMemFlags>) -> MemArg {
+        let flags = flags.into();
         MemArg::BXD12 {
             base: reg,
             index: zero_reg(),
@@ -90,7 +91,8 @@ impl MemArg {
     }
 
     /// Memory reference using the sum of two registers as an address.
-    pub fn reg_plus_reg(reg1: Reg, reg2: Reg, flags: MemFlagsData) -> MemArg {
+    pub fn reg_plus_reg(reg1: Reg, reg2: Reg, flags: impl Into<MachMemFlags>) -> MemArg {
+        let flags = flags.into();
         MemArg::BXD12 {
             base: reg1,
             index: reg2,
@@ -100,23 +102,24 @@ impl MemArg {
     }
 
     /// Memory reference using the sum of a register an offset as address.
-    pub fn reg_plus_off(reg: Reg, off: i64, flags: MemFlagsData) -> MemArg {
+    pub fn reg_plus_off(reg: Reg, off: i64, flags: impl Into<MachMemFlags>) -> MemArg {
+        let flags = flags.into();
         MemArg::RegOffset { reg, off, flags }
     }
 
-    pub(crate) fn get_flags(&self) -> MemFlagsData {
+    pub(crate) fn get_flags(&self) -> MachMemFlags {
         match self {
             MemArg::BXD12 { flags, .. } => *flags,
             MemArg::BXD20 { flags, .. } => *flags,
             MemArg::RegOffset { flags, .. } => *flags,
-            MemArg::Label { .. } => MemFlagsData::trusted(),
-            MemArg::Constant { .. } => MemFlagsData::trusted(),
+            MemArg::Label { .. } => MachMemFlags::trusted(),
+            MemArg::Constant { .. } => MachMemFlags::trusted(),
             MemArg::Symbol { flags, .. } => *flags,
-            MemArg::InitialSPOffset { .. } => MemFlagsData::trusted(),
-            MemArg::IncomingArgOffset { .. } => MemFlagsData::trusted(),
-            MemArg::OutgoingArgOffset { .. } => MemFlagsData::trusted(),
-            MemArg::SlotOffset { .. } => MemFlagsData::trusted(),
-            MemArg::SpillOffset { .. } => MemFlagsData::trusted(),
+            MemArg::InitialSPOffset { .. } => MachMemFlags::trusted(),
+            MemArg::IncomingArgOffset { .. } => MachMemFlags::trusted(),
+            MemArg::OutgoingArgOffset { .. } => MachMemFlags::trusted(),
+            MemArg::SlotOffset { .. } => MachMemFlags::trusted(),
+            MemArg::SpillOffset { .. } => MachMemFlags::trusted(),
         }
     }
 }

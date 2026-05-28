@@ -194,7 +194,7 @@ impl ModuleMemoryImages {
 
             // If there's no initialization for this memory known then we don't
             // need an image for the memory so push `None` and move on.
-            let init = match init {
+            let (offset, runtime_index) = match init {
                 Some(init) => init,
                 None => {
                     memories.push(None)?;
@@ -202,11 +202,14 @@ impl ModuleMemoryImages {
                 }
             };
 
-            let data_range = init.data.start as usize..init.data.end as usize;
+            let data_range = &module.runtime_data[*runtime_index];
+            let data_range = usize::try_from(data_range.start).unwrap()
+                ..usize::try_from(data_range.end).unwrap();
+
             if module.memories[memory_index]
                 .minimum_byte_size()
                 .map_or(false, |mem_initial_len| {
-                    init.offset + u64::try_from(data_range.len()).unwrap() > mem_initial_len
+                    *offset + u64::try_from(data_range.len()).unwrap() > mem_initial_len
                 })
             {
                 // The image is rounded up to multiples of the host OS page
@@ -220,7 +223,7 @@ impl ModuleMemoryImages {
                 return Ok(None);
             }
 
-            let offset_usize = match usize::try_from(init.offset) {
+            let offset_usize = match usize::try_from(*offset) {
                 Ok(offset) => offset,
                 Err(_) => return Ok(None),
             };

@@ -13,7 +13,7 @@ use fxprof_processed_profile::{
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use wasmtime_environ::demangle_function_name_or_index;
+use wasmtime_environ::{FuncKey, demangle_function_name_or_index};
 
 // TODO: collect more data
 // - On non-Windows, measure thread-local CPU usage between events with
@@ -268,7 +268,9 @@ fn module_symbols(name: String, module: &Module) -> Option<LibraryInfo> {
             .env_module()
             .defined_func_indices()
             .map(|defined_idx| {
-                let loc = compiled.func_loc(defined_idx);
+                let key =
+                    FuncKey::DefinedWasmFunction(module.env_module().module_index, defined_idx);
+                let loc = compiled.func_loc(key);
                 let func_idx = compiled.module().func_index(defined_idx);
                 let mut name = String::new();
                 demangle_function_name_or_index(

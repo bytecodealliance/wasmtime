@@ -1,7 +1,8 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::CodegenResult;
-use crate::ir::{self, LibCall, MemFlagsData, Signature, TrapCode, types};
+use crate::ir::MemFlagsData;
+use crate::ir::{self, LibCall, Signature, TrapCode, types};
 use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;

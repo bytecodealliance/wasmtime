@@ -7,8 +7,11 @@ use wasmtime::*;
 pub fn make_api_calls(api: ApiCalls) {
     // The generator always starts with StoreNew; use its config to build the
     // shared engine that all stores in this sequence will use.
-    let engine = match api.calls.first() {
-        Some(ApiCall::StoreNew { config, .. }) => Engine::new(&config.to_wasmtime()).unwrap(),
+    let (engine, gc_enabled) = match api.calls.first() {
+        Some(ApiCall::StoreNew { config, .. }) => (
+            Engine::new(&config.to_wasmtime()).unwrap(),
+            config.module_config.config.gc_enabled,
+        ),
         _ => return,
     };
 
@@ -21,6 +24,19 @@ pub fn make_api_calls(api: ApiCalls) {
     let mut tables: HashMap<usize, (Table, usize)> = Default::default();
     let mut memory_types: HashMap<usize, MemoryType> = Default::default();
     let mut memories: HashMap<usize, (Memory, usize)> = Default::default();
+    let mut func_types: HashMap<usize, FuncType> = Default::default();
+    let mut funcs: HashMap<usize, (Func, usize)> = Default::default();
+    let mut tag_types: HashMap<usize, TagType> = Default::default();
+    let mut tags: HashMap<usize, (Tag, usize)> = Default::default();
+    let mut struct_types: HashMap<usize, StructType> = Default::default();
+    let mut struct_ref_pres: HashMap<usize, (StructRefPre, StructType, usize)> = Default::default();
+    let mut struct_refs: HashMap<usize, (OwnedRooted<StructRef>, usize)> = Default::default();
+    let mut array_types: HashMap<usize, ArrayType> = Default::default();
+    let mut array_ref_pres: HashMap<usize, (ArrayRefPre, ArrayType, usize)> = Default::default();
+    let mut array_refs: HashMap<usize, (OwnedRooted<ArrayRef>, usize)> = Default::default();
+    let mut exn_types: HashMap<usize, ExnType> = Default::default();
+    let mut exn_ref_pres: HashMap<usize, (ExnRefPre, ExnType, usize)> = Default::default();
+    let mut exn_refs: HashMap<usize, (OwnedRooted<ExnRef>, usize)> = Default::default();
 
     for call in api.calls {
         match call {
@@ -38,7 +54,24 @@ pub fn make_api_calls(api: ApiCalls) {
                 globals.retain(|_, (_, store_id)| *store_id != id);
                 tables.retain(|_, (_, store_id)| *store_id != id);
                 memories.retain(|_, (_, store_id)| *store_id != id);
+                funcs.retain(|_, (_, store_id)| *store_id != id);
+                tags.retain(|_, (_, store_id)| *store_id != id);
+                struct_ref_pres.retain(|_, (_, _, store_id)| *store_id != id);
+                struct_refs.retain(|_, (_, store_id)| *store_id != id);
+                array_ref_pres.retain(|_, (_, _, store_id)| *store_id != id);
+                array_refs.retain(|_, (_, store_id)| *store_id != id);
+                exn_ref_pres.retain(|_, (_, _, store_id)| *store_id != id);
+                exn_refs.retain(|_, (_, store_id)| *store_id != id);
                 stores.remove(&id);
+            }
+
+            ApiCall::StoreGc { id } => {
+                log::trace!("collecting garbage in store {id}");
+                let st = match stores.get_mut(&id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = st.gc(None);
             }
 
             ApiCall::ModuleNew { id, wasm } => {
@@ -564,6 +597,736 @@ pub fn make_api_calls(api: ApiCalls) {
                     continue;
                 }
                 memories.insert(id, (ms[nth % ms.len()], store_id));
+            }
+
+            ApiCall::FuncTypeNew {
+                id,
+                ref params,
+                ref results,
+            } => {
+                log::trace!("creating func type {id}");
+                let param_tys = params.iter().map(|p| p.to_wasmtime());
+                let result_tys = results.iter().map(|r| r.to_wasmtime());
+                let ft = FuncType::new(&engine, param_tys, result_tys);
+                let old = func_types.insert(id, ft);
+                assert!(old.is_none());
+            }
+
+            ApiCall::FuncTypeDrop { id } => {
+                log::trace!("dropping func type {id}");
+                func_types.remove(&id);
+            }
+
+            ApiCall::FuncNew { id, func_ty, store } => {
+                log::trace!("creating func {id} with type {func_ty} in store {store}");
+                let ft = match func_types.get(&func_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let f = Func::new(&mut *st, ft, |_caller, _params, _results| Ok(()));
+                funcs.insert(id, (f, store));
+            }
+
+            ApiCall::FuncTy { func } => {
+                log::trace!("checking type of func {func}");
+                let (f, store_id) = match funcs.get(&func) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = f.ty(&*st);
+            }
+
+            ApiCall::FuncCall { func } => {
+                log::trace!("calling func {func}");
+                let (f, store_id) = match funcs.get(&func) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = f.ty(&*st);
+                if let Some(params) = ty
+                    .params()
+                    .map(|p| p.default_value())
+                    .collect::<Option<Vec<_>>>()
+                {
+                    let mut results = vec![Val::I32(0); ty.results().len()];
+                    let _ = f.call(st, &params, &mut results);
+                }
+            }
+
+            ApiCall::GetFuncExport { id, instance, nth } => {
+                log::trace!("getting {nth}th func export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let fs = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| match e.into_extern() {
+                        Extern::Func(f) => Some(f),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if fs.is_empty() {
+                    continue;
+                }
+                funcs.insert(id, (fs[nth % fs.len()], store_id));
+            }
+
+            ApiCall::FuncDrop { id } => {
+                log::trace!("dropping func {id}");
+                funcs.remove(&id);
+            }
+
+            ApiCall::TagTypeNew { id, func_ty } => {
+                log::trace!("creating tag type {id} from func type {func_ty}");
+                let ft = match func_types.get(&func_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let old = tag_types.insert(id, TagType::new(ft));
+                assert!(old.is_none());
+            }
+
+            ApiCall::TagTypeDrop { id } => {
+                log::trace!("dropping tag type {id}");
+                tag_types.remove(&id);
+            }
+
+            ApiCall::TagNew { id, tag_ty, store } => {
+                log::trace!("creating tag {id} with type {tag_ty} in store {store}");
+                let tt = match tag_types.get(&tag_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !gc_enabled {
+                    continue;
+                }
+                match Tag::new(&mut *st, &tt) {
+                    Ok(t) => {
+                        tags.insert(id, (t, store));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::TagTy { tag } => {
+                log::trace!("checking type of tag {tag}");
+                let (t, store_id) = match tags.get(&tag) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = t.ty(st);
+            }
+
+            ApiCall::TagEq { a, b } => {
+                log::trace!("comparing tags {a} and {b}");
+                let (ta, store_id) = match tags.get(&a) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let (tb, store_id_b) = match tags.get(&b) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                if store_id != store_id_b {
+                    continue;
+                }
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = Tag::eq(&ta, &tb, st);
+            }
+
+            ApiCall::GetTagExport { id, instance, nth } => {
+                log::trace!("getting {nth}th tag export of instance {instance} as {id}");
+                let (inst, store_id) = match instances.get(&instance) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ts = inst
+                    .exports(&mut *st)
+                    .filter_map(|e| e.into_tag())
+                    .collect::<Vec<_>>();
+                if ts.is_empty() {
+                    continue;
+                }
+                tags.insert(id, (ts[nth % ts.len()], store_id));
+            }
+
+            ApiCall::TagDrop { id } => {
+                log::trace!("dropping tag {id}");
+                tags.remove(&id);
+            }
+
+            ApiCall::ModuleImports { module } => {
+                log::trace!("iterating imports of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                for _ in m.imports() {}
+            }
+
+            ApiCall::ModuleExports { module } => {
+                log::trace!("iterating exports of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                for _ in m.exports() {}
+            }
+
+            ApiCall::ModuleGetExport { module, ref name } => {
+                log::trace!("getting export {name:?} of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let _ = m.get_export(name);
+            }
+
+            ApiCall::ModuleName { module } => {
+                log::trace!("getting name of module {module}");
+                let m = match modules.get(&module) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let _ = m.name();
+            }
+
+            ApiCall::ModuleValidate { ref wasm } => {
+                log::trace!("validating {} bytes of wasm", wasm.len());
+                let _ = Module::validate(&engine, wasm);
+            }
+
+            ApiCall::ModuleSerializeDeserialize { src_id, dst_id } => {
+                log::trace!("serializing module {src_id} and deserializing as {dst_id}");
+                let src = match modules.get(&src_id) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let bytes = match src.serialize() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                match unsafe { Module::deserialize(&engine, &bytes) } {
+                    Ok(m) => {
+                        modules.insert(dst_id, m);
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::TableCopy {
+                dst_table,
+                dst_index,
+                src_table,
+                src_index,
+                len,
+            } => {
+                log::trace!(
+                    "copying table {src_table}[{src_index}..+{len}] to {dst_table}[{dst_index}]"
+                );
+                let (dt, dst_store_id) = match tables.get(&dst_table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let (st_tbl, src_store_id) = match tables.get(&src_table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                if dst_store_id != src_store_id {
+                    continue;
+                }
+                let st = match stores.get_mut(&dst_store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = Table::copy(&mut *st, &dt, dst_index, &st_tbl, src_index, len);
+            }
+
+            ApiCall::TableFill { table, dst, len } => {
+                log::trace!("filling table {table}[{dst}..+{len}]");
+                let (t, store_id) = match tables.get(&table) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let ty = t.ty(&*st);
+                let elem_ty: ValType = ty.element().clone().into();
+                if let Some(val) = elem_ty.default_value() {
+                    let _ = t.fill(&mut *st, dst, val.ref_().unwrap(), len);
+                }
+            }
+
+            ApiCall::StructTypeNew { id, ref fields } => {
+                log::trace!("creating struct type {id}");
+                if !gc_enabled {
+                    continue;
+                }
+                let field_types = fields.iter().map(|(fvt, mutable)| {
+                    let mutability = if *mutable {
+                        Mutability::Var
+                    } else {
+                        Mutability::Const
+                    };
+                    FieldType::new(mutability, StorageType::ValType(fvt.to_wasmtime()))
+                });
+                match StructType::new(&engine, field_types) {
+                    Ok(st) => {
+                        struct_types.insert(id, st);
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::StructTypeDrop { id } => {
+                log::trace!("dropping struct type {id}");
+                struct_types.remove(&id);
+            }
+
+            ApiCall::StructRefPreNew {
+                id,
+                struct_ty,
+                store,
+            } => {
+                log::trace!("creating struct ref pre {id} with type {struct_ty} in store {store}");
+                let sty = match struct_types.get(&struct_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !gc_enabled {
+                    continue;
+                }
+                let pre = StructRefPre::new(&mut *st, sty.clone());
+                struct_ref_pres.insert(id, (pre, sty, store));
+            }
+
+            ApiCall::StructRefPreDrop { id } => {
+                log::trace!("dropping struct ref pre {id}");
+                struct_ref_pres.remove(&id);
+            }
+
+            ApiCall::StructRefNew { id, pre } => {
+                log::trace!("creating struct ref {id} from pre {pre}");
+                let (allocator, sty, store_id) = match struct_ref_pres.get(&pre) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let store_id = *store_id;
+                let fields: Option<Vec<Val>> = sty
+                    .fields()
+                    .map(|f| f.element_type().unpack().default_value())
+                    .collect();
+                let fields = match fields {
+                    Some(f) => f,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut st = RootScope::new(st);
+                match StructRef::new(&mut st, allocator, &fields) {
+                    Ok(r) => {
+                        struct_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::StructRefTy { struct_ref } => {
+                log::trace!("getting type of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.ty(st);
+            }
+
+            ApiCall::StructRefField { struct_ref, index } => {
+                log::trace!("getting field {index} of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.field(&mut *st, index);
+            }
+
+            ApiCall::StructRefSetField { struct_ref, index } => {
+                log::trace!("setting field {index} of struct ref {struct_ref}");
+                let (r, store_id) = match struct_refs.get(&struct_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let sty = match r.ty(&*st) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let field_tys: Vec<_> = sty.fields().collect();
+                if index >= field_tys.len() {
+                    continue;
+                }
+                let val = match field_tys[index].element_type().unpack().default_value() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let _ = r.set_field(&mut *st, index, val);
+            }
+
+            ApiCall::StructRefDrop { id } => {
+                log::trace!("dropping struct ref {id}");
+                struct_refs.remove(&id);
+            }
+
+            ApiCall::ArrayTypeNew {
+                id,
+                elem_ty,
+                mutable,
+            } => {
+                log::trace!("creating array type {id}");
+                if !gc_enabled {
+                    continue;
+                }
+                let mutability = if mutable {
+                    Mutability::Var
+                } else {
+                    Mutability::Const
+                };
+                let ft = FieldType::new(mutability, StorageType::ValType(elem_ty.to_wasmtime()));
+                let at = ArrayType::new(&engine, ft);
+                array_types.insert(id, at);
+            }
+
+            ApiCall::ArrayTypeDrop { id } => {
+                log::trace!("dropping array type {id}");
+                array_types.remove(&id);
+            }
+
+            ApiCall::ArrayRefPreNew {
+                id,
+                array_ty,
+                store,
+            } => {
+                log::trace!("creating array ref pre {id} with type {array_ty} in store {store}");
+                let aty = match array_types.get(&array_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !gc_enabled {
+                    continue;
+                }
+                let pre = ArrayRefPre::new(&mut *st, aty.clone());
+                array_ref_pres.insert(id, (pre, aty, store));
+            }
+
+            ApiCall::ArrayRefPreDrop { id } => {
+                log::trace!("dropping array ref pre {id}");
+                array_ref_pres.remove(&id);
+            }
+
+            ApiCall::ArrayRefNew { id, pre, len } => {
+                log::trace!("creating array ref {id} from pre {pre} with len {len}");
+                let (allocator, aty, store_id) = match array_ref_pres.get(&pre) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let store_id = *store_id;
+                let len = len % 17;
+                let elem_val = match aty.field_type().element_type().unpack().default_value() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut st = RootScope::new(st);
+                match ArrayRef::new(&mut st, allocator, &elem_val, len) {
+                    Ok(r) => {
+                        array_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::ArrayRefNewFixed { id, pre, count } => {
+                log::trace!("creating array ref {id} from pre {pre} with {count} elements");
+                let (allocator, aty, store_id) = match array_ref_pres.get(&pre) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let store_id = *store_id;
+                let count = count % 9;
+                let elem_val = match aty.field_type().element_type().unpack().default_value() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let elems: Vec<Val> = (0..count).map(|_| elem_val).collect();
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut st = RootScope::new(st);
+                match ArrayRef::new_fixed(&mut st, allocator, &elems) {
+                    Ok(r) => {
+                        array_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::ArrayRefTy { array_ref } => {
+                log::trace!("getting type of array ref {array_ref}");
+                let (r, store_id) = match array_refs.get(&array_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.ty(st);
+            }
+
+            ApiCall::ArrayRefLen { array_ref } => {
+                log::trace!("getting length of array ref {array_ref}");
+                let (r, store_id) = match array_refs.get(&array_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.len(st);
+            }
+
+            ApiCall::ArrayRefGet { array_ref, index } => {
+                log::trace!("getting index {index} of array ref {array_ref}");
+                let (r, store_id) = match array_refs.get(&array_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.get(&mut *st, index);
+            }
+
+            ApiCall::ArrayRefSet { array_ref, index } => {
+                log::trace!("setting index {index} of array ref {array_ref}");
+                let (r, store_id) = match array_refs.get(&array_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let aty = match r.ty(&*st) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let val = match aty.field_type().element_type().unpack().default_value() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let _ = r.set(&mut *st, index, val);
+            }
+
+            ApiCall::ArrayRefDrop { id } => {
+                log::trace!("dropping array ref {id}");
+                array_refs.remove(&id);
+            }
+
+            ApiCall::ExnTypeNew { id, ref fields } => {
+                log::trace!("creating exn type {id}");
+                if !gc_enabled {
+                    continue;
+                }
+                match ExnType::new(&engine, fields.iter().map(|f| f.to_wasmtime())) {
+                    Ok(et) => {
+                        exn_types.insert(id, et);
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::ExnTypeFromTagType { id, tag_ty } => {
+                log::trace!("creating exn type {id} from tag type {tag_ty}");
+                if !gc_enabled {
+                    continue;
+                }
+                let tt = match tag_types.get(&tag_ty) {
+                    Some(t) => t,
+                    None => continue,
+                };
+                match ExnType::from_tag_type(tt) {
+                    Ok(et) => {
+                        exn_types.insert(id, et);
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::ExnTypeDrop { id } => {
+                log::trace!("dropping exn type {id}");
+                exn_types.remove(&id);
+            }
+
+            ApiCall::ExnRefPreNew { id, exn_ty, store } => {
+                log::trace!("creating exn ref pre {id} with type {exn_ty} in store {store}");
+                let ety = match exn_types.get(&exn_ty) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !gc_enabled {
+                    continue;
+                }
+                let pre = ExnRefPre::new(&mut *st, ety.clone());
+                exn_ref_pres.insert(id, (pre, ety, store));
+            }
+
+            ApiCall::ExnRefPreDrop { id } => {
+                log::trace!("dropping exn ref pre {id}");
+                exn_ref_pres.remove(&id);
+            }
+
+            ApiCall::ExnRefNew { id, pre, tag } => {
+                log::trace!("creating exn ref {id} from pre {pre} with tag {tag}");
+                let (allocator, ety, store_id) = match exn_ref_pres.get(&pre) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let store_id = *store_id;
+                let (t, tag_store_id) = match tags.get(&tag) {
+                    Some(&x) => x,
+                    None => continue,
+                };
+                if store_id != tag_store_id {
+                    continue;
+                }
+                let fields: Option<Vec<Val>> = ety
+                    .fields()
+                    .map(|f| f.element_type().unpack().default_value())
+                    .collect();
+                let fields = match fields {
+                    Some(f) => f,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let mut st = RootScope::new(st);
+                match ExnRef::new(&mut st, allocator, &t, &fields) {
+                    Ok(r) => {
+                        exn_refs.insert(id, (r.to_owned_rooted(st).unwrap(), store_id));
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            ApiCall::ExnRefTy { exn_ref } => {
+                log::trace!("getting type of exn ref {exn_ref}");
+                let (r, store_id) = match exn_refs.get(&exn_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.ty(st);
+            }
+
+            ApiCall::ExnRefTag { exn_ref } => {
+                log::trace!("getting tag of exn ref {exn_ref}");
+                let (r, store_id) = match exn_refs.get(&exn_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.tag(&mut *st);
+            }
+
+            ApiCall::ExnRefField { exn_ref, index } => {
+                log::trace!("getting field {index} of exn ref {exn_ref}");
+                let (r, store_id) = match exn_refs.get(&exn_ref) {
+                    Some(x) => x,
+                    None => continue,
+                };
+                let st = match stores.get_mut(&store_id) {
+                    Some(s) => s,
+                    None => continue,
+                };
+                let _ = r.field(&mut *st, index);
+            }
+
+            ApiCall::ExnRefDrop { id } => {
+                log::trace!("dropping exn ref {id}");
+                exn_refs.remove(&id);
             }
         }
     }

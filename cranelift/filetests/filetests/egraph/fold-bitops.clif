@@ -213,11 +213,9 @@ block0(v0: i32, v1: i32):
 
 ; function %test_isub_band_band_bnot(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = bnot v1
-;     v3 = band v0, v2
-;     v4 = band v0, v1
-;     v5 = isub v3, v4
-;     return v5
+;     v6 = bxor v0, v1
+;     v7 = isub v6, v1
+;     return v7
 ; }
 
 ;; (x & ~y) | (~x & y) --> (x ^ y)
@@ -233,12 +231,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_bor_band_bnot_to_bxor(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = bnot v1
-;     v3 = band v0, v2
-;     v4 = bnot v0
-;     v5 = band v4, v1
-;     v6 = bor v3, v5
-;     return v6
+;     v8 = bxor v1, v0
+;     return v8
 ; }
 
 ;; (x & ~y) | (x ^ y) --> (x ^ y)
@@ -253,11 +247,8 @@ block0(v0: i32, v1: i32):
 
 ; function %test_bor_band_bnot_bxor_absorb(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
-;     v2 = bnot v1
-;     v3 = band v0, v2
 ;     v4 = bxor v0, v1
-;     v5 = bor v3, v4
-;     return v5
+;     return v4
 ; }
 
 ;; (x & ~y) ^ ~x --> ~(x & y)
@@ -272,9 +263,9 @@ block0(v0: i32, v1: i32):
 
 ; function %test_bxor_band_bnot_to_bnot_band(i32, i32) -> i32 fast {
 ; block0(v0: i32, v1: i32):
-;     v6 = band v1, v0
-;     v10 = bnot v6
-;     return v10
+;     v8 = band v1, v0
+;     v12 = bnot v8
+;     return v12
 ; }
 
 ;; (~x & y) ^ x --> x | y

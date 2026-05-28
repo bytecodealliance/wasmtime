@@ -3,7 +3,7 @@ Example of instantiating a WebAssembly which uses WASI imports.
 
 You can compile and run this example on Linux with:
 
-   cmake examples/
+   cargo build --target wasm32-wasip1 -p example-wasi-wasm
    cargo build --release -p wasmtime-c-api
    cc examples/wasip1/main.c \
        -I crates/c-api/include \
@@ -15,9 +15,12 @@ You can compile and run this example on Linux with:
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
 
-You can also build using cmake:
+You can also build and run this example using cmake:
 
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-wasip1
+  cargo build --target wasm32-wasip1 -p example-wasi-wasm
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-wasip1
+  ./build/wasmtime-wasip1
 */
 
 #include <assert.h>

@@ -510,6 +510,7 @@ fn dynamic_extra_growth_unchanged_pointer(config: &mut Config) -> Result<()> {
 // determining this failure we shouldn't hit any overflows or anything like that
 // (checked via debug-mode tests).
 #[wasmtime_test]
+#[cfg_attr(miri, ignore)]
 fn memory64_maximum_minimum(config: &mut Config) -> Result<()> {
     config.wasm_memory64(true);
     let engine = Engine::new(&config)?;

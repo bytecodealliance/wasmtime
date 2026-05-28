@@ -7,7 +7,7 @@ use crate::{
 };
 use core::ptr::NonNull;
 use wasmtime_environ::{DefinedTagIndex, TagIndex};
-use wasmtime_unwinder::{Frame, Handler};
+use wasmtime_unwinder::{ExceptionTable, Frame, Handler};
 
 /// Compute the target of the pending exception on the store.
 ///
@@ -50,8 +50,9 @@ pub unsafe fn compute_handler(
             frame.fp(),
             frame.pc()
         );
-        let (module, rel_pc) = store.modules().module_and_code_by_pc(frame.pc())?;
-        let et = module.module().exception_table();
+        let (store_code, rel_pc) = store.modules().store_code_by_pc(frame.pc())?;
+        let et = ExceptionTable::parse(store_code.code_memory().exception_tables())
+            .expect("Exception tables were validated on module load");
         let (frame_offset, handlers) = et.lookup_pc(u32::try_from(rel_pc).unwrap());
         let fp_to_sp = frame_offset.map(|frame_offset| -isize::try_from(frame_offset).unwrap());
         for handler in handlers {
@@ -106,7 +107,7 @@ pub unsafe fn compute_handler(
             if is_match {
                 let fp_to_sp = fp_to_sp.expect("frame offset must be known if we found a handler");
                 return Some((
-                    (module.store_code().text_range().start
+                    (store_code.text_range().start
                         + usize::try_from(handler.handler_offset)
                             .expect("Module larger than usize"))
                     .raw(),

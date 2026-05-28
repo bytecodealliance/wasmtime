@@ -4,7 +4,6 @@
 mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
-use crate::bail_bug;
 use crate::prelude::*;
 use crate::runtime::vm::{InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
@@ -20,7 +19,6 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
-    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -598,86 +596,6 @@ impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
     pub fn new() -> Self {
         Self { storage: [0; 16] }
-    }
-
-    /// Create a `VMGlobalDefinition` from a `ValRaw`.
-    ///
-    /// # Unsafety
-    ///
-    /// This raw value's type must match the given `WasmValType`.
-    pub unsafe fn from_val_raw(
-        store: &mut StoreOpaque,
-        wasm_ty: WasmValType,
-        raw: ValRaw,
-    ) -> Result<Self> {
-        let mut global = Self::new();
-        unsafe {
-            match wasm_ty {
-                WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
-                WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
-                WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
-                WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
-                WasmValType::V128 => global.set_u128(raw.get_v128()),
-                WasmValType::Ref(r) => match r.heap_type.top() {
-                    WasmHeapTopType::Extern => {
-                        let r = VMGcRef::from_raw_u32(raw.get_externref());
-                        global.init_gc_ref(store, r.as_ref())?
-                    }
-                    WasmHeapTopType::Any => {
-                        let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                        global.init_gc_ref(store, r.as_ref())?
-                    }
-                    WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                    WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
-                    WasmHeapTopType::Exn => {
-                        let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                        global.init_gc_ref(store, r.as_ref())?
-                    }
-                },
-            }
-        }
-        Ok(global)
-    }
-
-    /// Get this global's value as a `ValRaw`.
-    ///
-    /// # Unsafety
-    ///
-    /// This global's value's type must match the given `WasmValType`.
-    pub unsafe fn to_val_raw(
-        &self,
-        store: &mut StoreOpaque,
-        wasm_ty: WasmValType,
-    ) -> Result<ValRaw> {
-        unsafe {
-            Ok(match wasm_ty {
-                WasmValType::I32 => ValRaw::i32(*self.as_i32()),
-                WasmValType::I64 => ValRaw::i64(*self.as_i64()),
-                WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
-                WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
-                WasmValType::V128 => ValRaw::v128(self.get_u128()),
-                WasmValType::Ref(r) => match r.heap_type.top() {
-                    WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
-                        Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                        None => 0,
-                    }),
-                    WasmHeapTopType::Any => ValRaw::anyref({
-                        match self.as_gc_ref() {
-                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
-                        }
-                    }),
-                    WasmHeapTopType::Exn => ValRaw::exnref({
-                        match self.as_gc_ref() {
-                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
-                        }
-                    }),
-                    WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                    WasmHeapTopType::Cont => bail_bug!("unimplemented"), // FIXME: #10248 stack switching support.
-                },
-            })
-        }
     }
 
     /// Return a reference to the value as an i32.

@@ -127,6 +127,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -141,7 +142,7 @@
 ;; @0048                               v12 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v67 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v67  ; v67 = 8
-;; @0048                               v17 = load.i64 user6 aligned table v14
+;; @0048                               v17 = load.i64 user6 aligned region0 v14
 ;;                                     v57 = iconst.i64 -2
 ;; @0048                               v18 = band v17, v57  ; v57 = -2
 ;; @0048                               brif v17, block3(v18), block2
@@ -158,7 +159,7 @@
 ;; @004a                               v26 = call_indirect sig1, v24(v25, v0, v2, v3, v4, v5)
 ;;                                     v74 = iconst.i64 16
 ;; @005b                               v39 = iadd.i64 v12, v74  ; v74 = 16
-;; @005b                               v42 = load.i64 user6 aligned table v39
+;; @005b                               v42 = load.i64 user6 aligned region0 v39
 ;;                                     v75 = iconst.i64 -2
 ;;                                     v76 = band v42, v75  ; v75 = -2
 ;; @005b                               brif v42, block5(v76), block4
@@ -181,6 +182,7 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -195,7 +197,7 @@
 ;; @0075                               v12 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v67 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v67  ; v67 = 8
-;; @0075                               v17 = load.i64 user6 aligned table v14
+;; @0075                               v17 = load.i64 user6 aligned region0 v14
 ;;                                     v57 = iconst.i64 -2
 ;; @0075                               v18 = band v17, v57  ; v57 = -2
 ;; @0075                               brif v17, block3(v18), block2
@@ -212,7 +214,7 @@
 ;; @0075                               v26 = call_indirect sig0, v24(v25, v0, v2, v3, v4, v5)
 ;;                                     v74 = iconst.i64 16
 ;; @0087                               v39 = iadd.i64 v12, v74  ; v74 = 16
-;; @0087                               v42 = load.i64 user6 aligned table v39
+;; @0087                               v42 = load.i64 user6 aligned region0 v39
 ;;                                     v75 = iconst.i64 -2
 ;;                                     v76 = band v42, v75  ; v75 = -2
 ;; @0087                               brif v42, block5(v76), block4
@@ -235,6 +237,7 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
+;;     region0 = 1 "table"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -243,11 +246,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @009e                               v9 = load.i64 notrap aligned table v0+64
+;; @009e                               v9 = load.i64 notrap aligned region0 v0+64
 ;; @00a0                               v10 = load.i64 user16 aligned readonly v9+8
 ;; @00a0                               v11 = load.i64 notrap aligned readonly v9+24
 ;; @00a0                               v12 = call_indirect sig0, v10(v11, v0, v2, v3, v4, v5)
-;; @00af                               v15 = load.i64 notrap aligned table v0+80
+;; @00af                               v15 = load.i64 notrap aligned region0 v0+80
 ;; @00b1                               v16 = load.i64 user16 aligned readonly v15+8
 ;; @00b1                               v17 = load.i64 notrap aligned readonly v15+24
 ;; @00b1                               v18 = call_indirect sig0, v16(v17, v0, v2, v3, v4, v5)

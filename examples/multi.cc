@@ -2,14 +2,11 @@
 Example of instantiating of the WebAssembly module and invoking its exported
 function.
 
-You can build the example using CMake:
+You can build and run the example using CMake:
 
-mkdir build && (cd build && cmake .. && \
-  cmake --build . --target wasmtime-multi-cpp)
-
-And then run it:
-
-build/wasmtime-multi-cpp
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-multi-cpp
+  ./build/wasmtime-multi-cpp
 */
 
 #include <fstream>

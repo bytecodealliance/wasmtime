@@ -1,7 +1,7 @@
 //! Global values.
 
 use crate::ir::immediates::{Imm64, Offset32};
-use crate::ir::{ExternalName, GlobalValue, MemFlagsData, Type};
+use crate::ir::{ExternalName, GlobalValue, MemFlags, MemFlagsSet, Type};
 use crate::isa::TargetIsa;
 use core::fmt;
 
@@ -32,7 +32,7 @@ pub enum GlobalValueData {
         global_type: Type,
 
         /// Specifies the memory flags to be used by the load. Guaranteed to be notrap and aligned.
-        flags: MemFlagsData,
+        flags: MemFlags,
     },
 
     /// Value is an offset from another global value.
@@ -102,6 +102,69 @@ impl GlobalValueData {
     }
 }
 
+impl GlobalValueData {
+    /// Return a display wrapper that can resolve `MemFlags` entities.
+    pub fn display<'a>(&'a self, mem_flags: &'a MemFlagsSet) -> DisplayGlobalValueData<'a> {
+        DisplayGlobalValueData {
+            data: self,
+            mem_flags,
+        }
+    }
+}
+
+/// Wrapper for displaying a `GlobalValueData` with resolved `MemFlags`.
+pub struct DisplayGlobalValueData<'a> {
+    data: &'a GlobalValueData,
+    mem_flags: &'a MemFlagsSet,
+}
+
+impl fmt::Display for DisplayGlobalValueData<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self.data {
+            GlobalValueData::VMContext => write!(f, "vmctx"),
+            GlobalValueData::Load {
+                base,
+                offset,
+                global_type,
+                flags,
+            } => {
+                let flags_data = self.mem_flags[flags];
+                write!(f, "load.{global_type}{flags_data} {base}{offset}")
+            }
+            GlobalValueData::IAddImm {
+                global_type,
+                base,
+                offset,
+            } => write!(f, "iadd_imm.{global_type} {base}, {offset}"),
+            GlobalValueData::Symbol {
+                ref name,
+                offset,
+                colocated,
+                tls,
+            } => {
+                write!(
+                    f,
+                    "symbol {}{}{}",
+                    if colocated { "colocated " } else { "" },
+                    if tls { "tls " } else { "" },
+                    name.display(None)
+                )?;
+                let offset_val: i64 = offset.into();
+                if offset_val > 0 {
+                    write!(f, "+")?;
+                }
+                if offset_val != 0 {
+                    write!(f, "{offset}")?;
+                }
+                Ok(())
+            }
+            GlobalValueData::DynScaleTargetConst { vector_type } => {
+                write!(f, "dyn_scale_target_const.{vector_type}")
+            }
+        }
+    }
+}
+
 impl fmt::Display for GlobalValueData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -111,7 +174,7 @@ impl fmt::Display for GlobalValueData {
                 offset,
                 global_type,
                 flags,
-            } => write!(f, "load.{global_type}{flags} {base}{offset}"),
+            } => write!(f, "load.{global_type} {flags} {base}{offset}"),
             Self::IAddImm {
                 global_type,
                 base,

@@ -34,7 +34,15 @@ pub fn expand_global_value(
             offset,
             global_type,
             flags,
-        } => load_addr(inst, func, base, offset, global_type, flags, isa),
+        } => load_addr(
+            inst,
+            func,
+            base,
+            offset,
+            global_type,
+            func.dfg.mem_flags[flags],
+            isa,
+        ),
         ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, global_value, isa, tls),
         ir::GlobalValueData::DynScaleTargetConst { vector_type } => {
             const_vector_scale(inst, func, vector_type, isa)

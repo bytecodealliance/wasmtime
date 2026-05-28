@@ -9,6 +9,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64, i64) -> i32 tail {
+;;     region0 = 2 "vmctx"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -34,12 +35,12 @@
 ;;                                 block2:
 ;;                                     v260 = iconst.i32 48
 ;;                                     v168 = iadd.i32 v15, v260  ; v260 = 48
-;; @0025                               store notrap aligned vmctx v168, v14
-;;                                     v261 = iconst.i32 -1476395008
+;; @0025                               store notrap aligned region0 v168, v14
+;;                                     v261 = iconst.i32 -1476395002
 ;;                                     v262 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v263 = load.i64 notrap aligned readonly can_move v262+32
 ;; @0025                               v39 = iadd v263, v22
-;; @0025                               store notrap aligned v261, v39  ; v261 = -1476395008
+;; @0025                               store notrap aligned v261, v39  ; v261 = -1476395002
 ;;                                     v264 = load.i64 notrap aligned readonly can_move v0+40
 ;;                                     v265 = load.i32 notrap aligned readonly can_move v264
 ;; @0025                               store notrap aligned v265, v39+4
@@ -48,12 +49,12 @@
 ;; @0025                               jump block4(v15, v39)
 ;;
 ;;                                 block3 cold:
-;; @0025                               v27 = iconst.i32 -1476395008
+;; @0025                               v27 = iconst.i32 -1476395002
 ;; @0025                               v29 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0025                               v30 = load.i32 notrap aligned readonly can_move v29
 ;;                                     v153 = iconst.i32 48
 ;; @0025                               v31 = iconst.i32 16
-;; @0025                               v32 = call fn0(v0, v27, v30, v153, v31)  ; v27 = -1476395008, v153 = 48, v31 = 16
+;; @0025                               v32 = call fn0(v0, v27, v30, v153, v31)  ; v27 = -1476395002, v153 = 48, v31 = 16
 ;; @0025                               v138 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0025                               v33 = load.i64 notrap aligned readonly can_move v138+32
 ;; @0025                               v34 = uextend.i64 v32
