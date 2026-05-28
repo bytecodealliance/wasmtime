@@ -606,7 +606,7 @@ pub fn new<_T>(
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
         .ok_or_else(|| {wt}::format_err!(\"no exported instance named `{instance_name}`\"))?;
-    let mut lookup = move |name| {{
+    let mut lookup = move |name: &str| {{
         _instance_pre.component().get_export_index(Some(&instance), name).ok_or_else(|| {{
             {wt}::format_err!(
                 \"instance export `{instance_name}` does \\

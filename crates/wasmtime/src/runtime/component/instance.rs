@@ -1,4 +1,3 @@
-use crate::component::RuntimeInstance;
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::store::{ComponentInstanceId, StoreComponentInstanceId};
@@ -6,6 +5,7 @@ use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
     TypedFunc, types::ComponentItem,
 };
+use crate::component::{ExportLookup, RuntimeInstance};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
@@ -152,17 +152,13 @@ impl Instance {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get_func(
-        &self,
-        mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
-    ) -> Option<Func> {
+    pub fn get_func(&self, mut store: impl AsContextMut, name: impl ExportLookup) -> Option<Func> {
         let store = store.as_context_mut().0;
         let instance = self.id.get(store);
         let component = instance.component();
 
         // Validate that `name` exists within `self.`
-        let index = name.lookup(component)?;
+        let index = name.lookup(component, None)?;
 
         // Validate that `index` is indeed a lifted function.
         match &component.env_component().export_items[index] {
@@ -192,7 +188,7 @@ impl Instance {
     pub fn get_typed_func<Params, Results>(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Result<TypedFunc<Params, Results>>
     where
         Params: ComponentNamedList + Lower,
@@ -224,7 +220,7 @@ impl Instance {
     pub fn get_module(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<Module> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -259,7 +255,7 @@ impl Instance {
     pub fn get_resource(
         &self,
         mut store: impl AsContextMut,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<ResourceType> {
         let store = store.as_context_mut().0;
         let (instance, export) = self.lookup_export(store, name)?;
@@ -352,10 +348,10 @@ impl Instance {
     fn lookup_export<'a>(
         &self,
         store: &'a StoreOpaque,
-        name: impl InstanceExportLookup,
+        name: impl ExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
         let data = self.id().get(store);
-        let index = name.lookup(data.component())?;
+        let index = name.lookup(data.component(), None)?;
         Some((data, &data.component().env_component().export_items[index]))
     }
 
@@ -652,47 +648,6 @@ where
     // SAFETY: the `store_id` owns this instance and all exports contained
     // within.
     unsafe { instance.get_export_by_index_mut(registry, store_id, idx) }
-}
-
-/// Trait used to lookup the export of a component instance.
-///
-/// This trait is used as an implementation detail of [`Instance::get_func`]
-/// and related `get_*` methods. Notable implementors of this trait are:
-///
-/// * `str`
-/// * `String`
-/// * [`ComponentExportIndex`]
-///
-/// Note that this is intended to be a `wasmtime`-sealed trait so it shouldn't
-/// need to be implemented externally.
-pub trait InstanceExportLookup {
-    #[doc(hidden)]
-    fn lookup(&self, component: &Component) -> Option<ExportIndex>;
-}
-
-impl<T> InstanceExportLookup for &T
-where
-    T: InstanceExportLookup + ?Sized,
-{
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        T::lookup(self, component)
-    }
-}
-
-impl InstanceExportLookup for str {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        let (index, _) = component
-            .env_component()
-            .exports
-            .get(self, &NameMapNoIntern)?;
-        Some(*index)
-    }
-}
-
-impl InstanceExportLookup for String {
-    fn lookup(&self, component: &Component) -> Option<ExportIndex> {
-        str::lookup(self, component)
-    }
 }
 
 struct Instantiator<'a> {

@@ -398,7 +398,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/anon`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)

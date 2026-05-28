@@ -335,7 +335,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/simple-export`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -490,7 +490,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/export-using-import`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -650,7 +650,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/export-using-export1`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -746,7 +746,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/export-using-export2`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
