@@ -4020,7 +4020,11 @@ fn translate_br_if(
 
     if let Some(hint) = branch_hint {
         // Likely taken => the fallthrough is cold, else the branch target is.
-        builder.set_cold_block(if hint.taken { next_block } else { br_destination });
+        builder.set_cold_block(if hint.taken {
+            next_block
+        } else {
+            br_destination
+        });
     }
 
     canonicalise_brif(builder, val, br_destination, inputs, next_block, &[]);
