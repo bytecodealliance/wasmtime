@@ -13,7 +13,7 @@ use crate::{
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::{
     self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
 };
@@ -29,10 +29,12 @@ use std::mem;
 use wasmparser::{FuncValidator, Operator, WasmFeatures, WasmModuleResources};
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, ComponentPC, DataIndex, DefinedFuncIndex, ElemIndex,
-    EngineOrModuleTypeIndex, FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey,
-    GlobalConstValue, GlobalIndex, IndexType, Memory, MemoryIndex, MemoryTunables, Module,
-    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex,
+    BuiltinFunctionIndex, ComponentPC, ConstExpr, ConstOp, DataIndex, DefinedFuncIndex,
+    DefinedGlobalIndex, DefinedTableIndex, ElemIndex, EngineOrModuleTypeIndex,
+    FrameStateSlotBuilder, FrameValType, FuncIndex, FuncKey, GlobalConstValue, GlobalIndex,
+    IndexType, Memory, MemoryIndex, MemoryInit, MemorySegmentOffset, MemoryTunables, Module,
+    ModuleInternedTypeIndex, ModuleTranslation, ModuleTypesBuilder, PassiveElemIndex, PtrSize,
+    RuntimeDataIndex, Table, TableIndex, TableInitialValue, TableSegment, TableSegmentElements,
     TagIndex, Tunables, TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType,
     WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
 };
@@ -1481,8 +1483,12 @@ impl FuncEnvironment<'_> {
 
         if !self.module.globals[index].mutability {
             if let Some(index) = self.module.defined_global_index(index) {
-                let init = &self.module.global_initializers[index];
-                if let Some(value) = init.const_eval() {
+                if let Ok(i) = self
+                    .module
+                    .global_initializers
+                    .binary_search_by_key(&index, |(def_index, _)| *def_index)
+                {
+                    let (_, value) = self.module.global_initializers[i];
                     return GlobalVariable::Constant { value };
                 }
             }
@@ -2618,7 +2624,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let table_data = self.get_or_create_table(builder.func, table_index);
         let (dst, flags) = table_data.prepare_table_addr(self, builder, index);
-        self.emit_table_set(builder, table_index, dst, flags, value)
+        self.emit_table_set(builder, table_index, dst, flags, value, true)
     }
 
     /// Helper to store `value` into the table address at `addr` using `flags`.
@@ -2632,19 +2638,32 @@ impl FuncEnvironment<'_> {
         addr: ir::Value,
         flags: ir::MemFlagsData,
         value: ir::Value,
+        initialized: bool,
     ) -> WasmResult<()> {
         let table = self.module.tables[table_index];
         match table.ref_type.heap_type.top() {
             // GC-managed types.
             WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Exn => {
-                gc::gc_compiler(self)?.translate_write_gc_reference(
-                    self,
-                    builder,
-                    table.ref_type,
-                    addr,
-                    value,
-                    flags,
-                )
+                let mut gc = gc::gc_compiler(self)?;
+                if initialized {
+                    gc.translate_write_gc_reference(
+                        self,
+                        builder,
+                        table.ref_type,
+                        addr,
+                        value,
+                        flags,
+                    )
+                } else {
+                    gc.translate_init_gc_reference(
+                        self,
+                        builder,
+                        table.ref_type,
+                        addr,
+                        value,
+                        flags,
+                    )
+                }
             }
 
             // Function types.
@@ -2693,7 +2712,16 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_fill(builder, table_index, dst, val, len)
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: true,
+            },
+            dst,
+            val,
+            len,
+        )
     }
 
     pub fn translate_ref_i31(
@@ -3165,6 +3193,21 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
         val: ir::Value,
     ) -> WasmResult<()> {
+        self.emit_global_set(builder, global_index, val, true)
+    }
+
+    /// Helper to translate the `global.set` instruction.
+    ///
+    /// The main difference with `translate_global_set`, the main entrypoint, is
+    /// the `initialized` flag to indicate whether the global was previously
+    /// initialized to a valid value.
+    fn emit_global_set(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        global_index: GlobalIndex,
+        val: ir::Value,
+        initialized: bool,
+    ) -> WasmResult<()> {
         match self.get_or_create_global(builder.func, global_index) {
             GlobalVariable::Constant { .. } => {
                 unreachable!("validation checks that Wasm cannot `global.set` constant globals")
@@ -3197,14 +3240,26 @@ impl FuncEnvironment<'_> {
                 let gv = builder.ins().global_value(self.pointer_type(), gv);
                 let src = builder.ins().iadd_imm(gv, i64::from(offset));
 
-                gc::gc_compiler(self)?.translate_write_gc_reference(
-                    self,
-                    builder,
-                    ty,
-                    src,
-                    val,
-                    ir::MemFlagsData::trusted(),
-                )?
+                let mut gc = gc::gc_compiler(self)?;
+                if initialized {
+                    gc.translate_write_gc_reference(
+                        self,
+                        builder,
+                        ty,
+                        src,
+                        val,
+                        ir::MemFlagsData::trusted(),
+                    )?;
+                } else {
+                    gc.translate_init_gc_reference(
+                        self,
+                        builder,
+                        ty,
+                        src,
+                        val,
+                        ir::MemFlagsData::trusted(),
+                    )?;
+                }
             }
         }
         Ok(())
@@ -3731,7 +3786,7 @@ impl FuncEnvironment<'_> {
                     },
                 );
             }
-            CheckedEntity::Table(table) => {
+            CheckedEntity::Table { table, initialized } => {
                 self.emit_raw_array_or_table_fill(
                     builder,
                     entity,
@@ -3739,7 +3794,14 @@ impl FuncEnvironment<'_> {
                     val,
                     len_ptr,
                     &|env, builder, addr, value| {
-                        env.emit_table_set(builder, table, addr, ir::MemFlagsData::trusted(), value)
+                        env.emit_table_set(
+                            builder,
+                            table,
+                            addr,
+                            ir::MemFlagsData::trusted(),
+                            value,
+                            initialized,
+                        )
                     },
                 )?;
             }
@@ -3761,7 +3823,9 @@ impl FuncEnvironment<'_> {
                 )?;
             }
             // Not allowed to be written to in wasm.
-            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -3993,7 +4057,7 @@ impl FuncEnvironment<'_> {
         // Lookup the passive data segment corresponding to this data segment.
         // If this is an active data segment then it already has length 0 so
         // there's nothing to do.
-        let passive_index = match self.translation.passive_data_map[seg_index] {
+        let runtime_index = match self.translation.runtime_data_map[seg_index] {
             Some(idx) => idx,
             None => return Ok(()),
         };
@@ -4006,7 +4070,7 @@ impl FuncEnvironment<'_> {
             ir::MemFlagsData::trusted(),
             new_length,
             vmctx,
-            i32::try_from(self.offsets.vmctx_passive_data_length(passive_index)).unwrap(),
+            i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap(),
         );
 
         Ok(())
@@ -4080,7 +4144,9 @@ impl FuncEnvironment<'_> {
             CheckedEntity::Memory(_) => {
                 assert!(matches!(
                     src_entity,
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. }
+                    CheckedEntity::Memory(_)
+                        | CheckedEntity::Data { .. }
+                        | CheckedEntity::RuntimeData(_)
                 ));
                 // A memory's elements are bytes, so the element count is already
                 // the byte length.
@@ -4098,7 +4164,7 @@ impl FuncEnvironment<'_> {
 
             // Tables/arrays are sometimes a memcpy, sometimes a per-element
             // loop. Delegate further to figure that out.
-            CheckedEntity::Table(_) | CheckedEntity::Array { .. } => self
+            CheckedEntity::Table { .. } | CheckedEntity::Array { .. } => self
                 .emit_raw_array_or_table_copy(
                     builder,
                     dst_entity,
@@ -4111,7 +4177,9 @@ impl FuncEnvironment<'_> {
                 ),
 
             // Cannot copy into a data or element segment in wasm.
-            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) => unreachable!(),
+            CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
+                unreachable!()
+            }
         }
     }
 
@@ -4136,26 +4204,16 @@ impl FuncEnvironment<'_> {
         // Load the entity size, as `pointer_type`.
         let entity_size = match entity {
             CheckedEntity::Memory(i) => self.memory_size_in_bytes(&mut builder.cursor(), i),
-            CheckedEntity::Table(i) => {
-                let size = self.translate_table_size(builder.cursor(), i);
+            CheckedEntity::Table { table, .. } => {
+                let size = self.translate_table_size(builder.cursor(), table);
                 self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), size, idx_type)
             }
-            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            CheckedEntity::Data { segment, .. } => match self.translation.runtime_data_map[segment]
             {
-                Some(passive_index) => {
-                    let vmctx = self.vmctx_val(&mut builder.cursor());
-                    let offset =
-                        i32::try_from(self.offsets.vmctx_passive_data_length(passive_index))
-                            .unwrap();
-                    let flags = ir::MemFlagsData::trusted();
-                    match pointer_type {
-                        I32 => builder.ins().load(I32, flags, vmctx, offset),
-                        I64 => builder.ins().uload32(flags, vmctx, offset),
-                        _ => unreachable!(),
-                    }
-                }
+                Some(i) => self.load_runtime_data_length_as_pointer(builder, i),
                 None => builder.ins().iconst(pointer_type, 0),
             },
+            CheckedEntity::RuntimeData(i) => self.load_runtime_data_length_as_pointer(builder, i),
             CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
                 Some(passive_index) => {
                     let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -4225,30 +4283,20 @@ impl FuncEnvironment<'_> {
                 let heap = &self.heaps()[heap];
                 builder.ins().global_value(pointer_type, heap.base)
             }
-            CheckedEntity::Table(i) => {
-                let table = self.get_or_create_table(builder.func, i);
+            CheckedEntity::Table { table, .. } => {
+                let table = self.get_or_create_table(builder.func, table);
                 builder.ins().global_value(pointer_type, table.base_gv)
             }
-            CheckedEntity::Data { segment, .. } => match self.translation.passive_data_map[segment]
+            CheckedEntity::Data { segment, .. } => match self.translation.runtime_data_map[segment]
             {
-                Some(passive_index) => {
-                    let vmctx = self.vmctx_val(&mut builder.cursor());
-                    let offset =
-                        i32::try_from(self.offsets.vmctx_passive_data_base(passive_index)).unwrap();
-                    builder.ins().load(
-                        self.pointer_type(),
-                        ir::MemFlagsData::trusted(),
-                        vmctx,
-                        offset,
-                    )
-                }
-
+                Some(runtime_index) => self.load_runtime_data_base(builder, runtime_index),
                 // Any address should do for an active data segment, but pick
                 // something non-null for now. Note that the length of an active
                 // data segment is always 0, so we know that the memcpy, if any,
                 // will be 0 elements, so the actual value here doesn't matter.
                 None => builder.ins().iconst(pointer_type, 1),
             },
+            CheckedEntity::RuntimeData(i) => self.load_runtime_data_base(builder, i),
             // Element segments are quite similar to data segments just above.
             CheckedEntity::Elem(i) => match self.translation.passive_elem_map[i] {
                 Some(passive_index) => {
@@ -4295,6 +4343,41 @@ impl FuncEnvironment<'_> {
         Ok(builder.ins().iadd(base, byte_offset))
     }
 
+    fn load_runtime_data_length(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let offset = i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap();
+        let flags = ir::MemFlagsData::trusted();
+        builder.ins().load(I32, flags, vmctx, offset)
+    }
+
+    fn load_runtime_data_length_as_pointer(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let length = self.load_runtime_data_length(builder, runtime_index);
+        self.unchecked_cast_wasm_addr_to_native_addr(&mut builder.cursor(), length, IndexType::I32)
+    }
+
+    fn load_runtime_data_base(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+        runtime_index: RuntimeDataIndex,
+    ) -> ir::Value {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let offset = i32::try_from(self.offsets.vmctx_runtime_data_base(runtime_index)).unwrap();
+        builder.ins().load(
+            self.pointer_type(),
+            ir::MemFlagsData::trusted(),
+            vmctx,
+            offset,
+        )
+    }
+
     pub fn translate_table_copy(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -4304,7 +4387,20 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        self.translate_entity_copy(builder, dst_table_index, src_table_index, dst, src, len)
+        self.translate_entity_copy(
+            builder,
+            CheckedEntity::Table {
+                table: dst_table_index,
+                initialized: true,
+            },
+            CheckedEntity::Table {
+                table: src_table_index,
+                initialized: true,
+            },
+            dst,
+            src,
+            len,
+        )
     }
 
     /// Emits a copy between two WebAssembly table or array entities.
@@ -4377,7 +4473,7 @@ impl FuncEnvironment<'_> {
                     // would mean that memcpy isn't suitable. If lazy init is
                     // disabled though then funcrefs are just pointers so a
                     // memcpy can be used.
-                    CheckedEntity::Table(_) => self.tunables.table_lazy_init,
+                    CheckedEntity::Table { .. } => self.tunables.table_lazy_init,
                     // The GC heap has integers representing funcrefs, so memcpy
                     // is fine.
                     CheckedEntity::Array { .. } => false,
@@ -4385,7 +4481,9 @@ impl FuncEnvironment<'_> {
                     // can't work.
                     CheckedEntity::Elem(_) => true,
                     // Not possible
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                    CheckedEntity::Memory(_)
+                    | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_) => unreachable!(),
                 },
             },
         };
@@ -4439,7 +4537,10 @@ impl FuncEnvironment<'_> {
                     // it's easier right now to share the internals of
                     // `translate_table_get` which are a bit tricky with
                     // funcrefs.
-                    CheckedEntity::Table(i) => this.translate_table_get(builder, i, src_index)?,
+                    CheckedEntity::Table { table, initialized } => {
+                        assert!(initialized);
+                        this.translate_table_get(builder, table, src_index)?
+                    }
                     CheckedEntity::Array { initialized, .. } => {
                         assert!(initialized);
                         let read_ty = src_entity.storage_type(this);
@@ -4468,11 +4569,20 @@ impl FuncEnvironment<'_> {
                             }
                         }
                     }
-                    CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => unreachable!(),
+                    CheckedEntity::Memory(_)
+                    | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_) => unreachable!(),
                 };
                 match dst_entity {
-                    CheckedEntity::Table(i) => {
-                        this.emit_table_set(builder, i, dst, ir::MemFlagsData::trusted(), val)?;
+                    CheckedEntity::Table { table, initialized } => {
+                        this.emit_table_set(
+                            builder,
+                            table,
+                            dst,
+                            ir::MemFlagsData::trusted(),
+                            val,
+                            initialized,
+                        )?;
                     }
                     CheckedEntity::Array { initialized, .. } => {
                         if initialized {
@@ -4483,6 +4593,7 @@ impl FuncEnvironment<'_> {
                     }
                     CheckedEntity::Memory(_)
                     | CheckedEntity::Data { .. }
+                    | CheckedEntity::RuntimeData(_)
                     | CheckedEntity::Elem(_) => unreachable!(),
                 }
                 Ok(())
@@ -4842,7 +4953,10 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         self.translate_entity_copy(
             builder,
-            table_index,
+            CheckedEntity::Table {
+                table: table_index,
+                initialized: true,
+            },
             CheckedEntity::Elem(ElemIndex::from_u32(seg_index)),
             dst,
             src,
@@ -5645,6 +5759,386 @@ impl FuncEnvironment<'_> {
     pub fn is_reachable(&self) -> bool {
         self.stacks.reachable()
     }
+
+    /// Generates the body of a `FuncKey::ModuleStartup(..)` function.
+    ///
+    /// This will perform all initialization of a module before any code in the
+    /// module itself starts executing. This will, for example, execute all
+    /// constant expressions for global initializers.
+    pub fn translate_module_startup(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+        for (i, expr) in self.translation.global_initializers.iter() {
+            self.module_initialize_global(builder, *i, expr)?;
+        }
+        for (i, exprs) in self.translation.passive_elements.iter() {
+            self.module_initialize_passive_element(builder, i, exprs)?;
+        }
+        for (i, init) in self.translation.table_initialization.initial_values.iter() {
+            match init {
+                TableInitialValue::Null => {}
+                TableInitialValue::Expr(expr) => {
+                    self.module_initialize_table_with_fill(builder, i, expr)?;
+                }
+            }
+        }
+        for segment in self.translation.table_initialization.segments.iter() {
+            self.module_initialize_table_with_segment(builder, segment)?;
+        }
+        match &self.translation.memory_init {
+            MemoryInit::Unprocessed(_) => unreachable!(),
+            MemoryInit::Processed(segments) => {
+                for (memory, offset, data) in segments.iter() {
+                    self.module_initialize_memory_segment(builder, *memory, offset, *data)?;
+                }
+            }
+        }
+        if let Some(i) = self.translation.start_func {
+            self.module_start(builder, i)?;
+        }
+        Ok(())
+    }
+
+    /// Initializes all "complicated" globals in a module.
+    ///
+    /// This will translate the given constant expression and then initialize
+    /// the global. Note that this translation is done with the global not
+    /// initialized, meaning that GC barriers are slightly tweaked.
+    fn module_initialize_global(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        global: DefinedGlobalIndex,
+        expr: &ConstExpr,
+    ) -> WasmResult<()> {
+        let index = self.module.global_index(global);
+        let val = self.translate_const_expr(builder, expr)?;
+        self.emit_global_set(builder, index, val, false)
+    }
+
+    /// Initializes all passive element segments for a module.
+    ///
+    /// This will execute all constant expressions for all passive element
+    /// segments and initialize all `ValRaw` storage on the host. This
+    /// implements the semantics of how passive element segments are evaluated
+    /// once in a wasm instance.
+    fn module_initialize_passive_element(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        elem: PassiveElemIndex,
+        exprs: &TableSegmentElements,
+    ) -> WasmResult<()> {
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let libcall = self
+            .builtin_functions
+            .passive_elem_segment_base(builder.func);
+        let idx = builder.ins().iconst(I32, i64::from(elem.as_u32()));
+        let call = builder.ins().call(libcall, &[vmctx, idx]);
+        let base = builder.func.dfg.first_result(call);
+
+        // Values in `ValRaw` are always stored in little-endian.
+        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
+
+        match exprs {
+            TableSegmentElements::Functions(indices) => {
+                for (i, func) in indices.iter().enumerate() {
+                    let func = self.translate_ref_func(builder.cursor(), *func)?;
+                    builder.ins().store(
+                        flags,
+                        func,
+                        base,
+                        i32::try_from(i.checked_mul(16).unwrap()).unwrap(),
+                    );
+                }
+            }
+            TableSegmentElements::Expressions { exprs, ty } => {
+                for (i, expr) in exprs.iter().enumerate() {
+                    let val = self.translate_const_expr(builder, expr)?;
+
+                    let dst = builder
+                        .ins()
+                        .iadd_imm(base, i64::try_from(i.checked_mul(16).unwrap()).unwrap());
+                    match ty.heap_type.top() {
+                        WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
+                            let ty = WasmStorageType::Val(WasmValType::Ref(*ty));
+                            gc::init_field_at_addr(self, builder, ty, dst, val)?;
+                        }
+                        WasmHeapTopType::Func | WasmHeapTopType::Cont => {
+                            builder.ins().store(
+                                flags,
+                                val,
+                                base,
+                                i32::try_from(i.checked_mul(16).unwrap()).unwrap(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Initializes all tables with non-null initializers.
+    ///
+    /// This function will morally execute a `table.fill` for the specified
+    /// defined table in this module for the result of the constant expression
+    /// provided. Note that the fill operation is done on an initialized table
+    /// which slightly alters the barriers emitted for GC types.
+    fn module_initialize_table_with_fill(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table: DefinedTableIndex,
+        init: &ConstExpr,
+    ) -> WasmResult<()> {
+        let table = self.module.table_index(table);
+        let ty = self.module.tables[table];
+        let val = self.translate_const_expr(builder, init)?;
+        let dst = builder.ins().iconst(index_type_to_ir_type(ty.idx_type), 0);
+        let len = builder.ins().iconst(
+            index_type_to_ir_type(ty.idx_type),
+            ty.limits.min.cast_signed(),
+        );
+        self.translate_entity_fill(
+            builder,
+            CheckedEntity::Table {
+                table,
+                initialized: false,
+            },
+            dst,
+            val,
+            len,
+        )
+    }
+
+    /// Executes initialization for an active element segment in a module.
+    ///
+    /// Note that this isn't done for "precomputed" tables which won't have
+    /// initializers present. Additionally note that this doesn't use
+    /// `table.init` because the element segment won't actually be present
+    /// anywhere at runtime.
+    fn module_initialize_table_with_segment(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        segment: &TableSegment,
+    ) -> WasmResult<()> {
+        let offset = self.translate_const_expr(builder, &segment.offset)?;
+        let segment_len = builder.ins().iconst(
+            index_type_to_ir_type(self.module.tables[segment.table_index].idx_type),
+            i64::try_from(segment.elements.len()).unwrap(),
+        );
+
+        // Check the bounds first before mutating anything.
+        self.translate_entity_bounds_check(
+            builder,
+            CheckedEntity::Table {
+                table: segment.table_index,
+                initialized: true,
+            },
+            offset,
+            segment_len,
+        )?;
+
+        // Re-use the `table.set` translation for making this a simple function
+        // to define. That re-executes the bounds check which is a bit
+        // inefficient, but can be optimized in the future.
+        match &segment.elements {
+            TableSegmentElements::Functions(indices) => {
+                for (i, func) in indices.iter().enumerate() {
+                    let func = self.translate_ref_func(builder.cursor(), *func)?;
+                    let index = builder.ins().iadd_imm(offset, i64::try_from(i).unwrap());
+                    self.translate_table_set(builder, segment.table_index, func, index)?;
+                }
+            }
+            TableSegmentElements::Expressions { exprs, ty: _ } => {
+                for (i, expr) in exprs.iter().enumerate() {
+                    let val = self.translate_const_expr(builder, expr)?;
+                    let index = builder.ins().iadd_imm(offset, i64::try_from(i).unwrap());
+                    self.translate_table_set(builder, segment.table_index, val, index)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Peform initialization of an active data segment in a module.
+    fn module_initialize_memory_segment(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        memory: MemoryIndex,
+        offset: &MemorySegmentOffset,
+        data: RuntimeDataIndex,
+    ) -> WasmResult<()> {
+        let mut end = None;
+        let offset = match offset {
+            // This is a bit subtle, but the goal here is to make a dynamic
+            // deduction to see if this initialization is actually necessary
+            // based on state at runtime. With a static initializer the goal is
+            // to enable CoW initialization at runtime, but not all hosts have
+            // that configured or supported. If it's supported then we shouldn't
+            // do anything here, but if it's unsupported then this must actually
+            // execute initialization.
+            //
+            // The host already put the addresses of all data segments into the
+            // `VMContext` during `VMContext::initialize_vmctx`, and this reads
+            // out the base pointer. If it's null then the host doesn't actually
+            // need initialization, so this is skipped, and otherwise it's the
+            // actual base pointer that's going to be used.
+            MemorySegmentOffset::Static(n) => {
+                let current_block = builder.current_block().unwrap();
+                let init_block = builder.create_block();
+                let end_block = builder.create_block();
+                end = Some(end_block);
+
+                builder.ensure_inserted_block();
+                builder.insert_block_after(init_block, current_block);
+                builder.insert_block_after(end_block, init_block);
+
+                let base = self.load_runtime_data_base(builder, data);
+                let null = builder.ins().iconst(self.pointer_type(), 0);
+                let is_null = builder.ins().icmp(IntCC::Equal, base, null);
+                builder.ins().brif(is_null, end_block, &[], init_block, &[]);
+                builder.switch_to_block(init_block);
+                builder.seal_block(init_block);
+                let ty = index_type_to_ir_type(self.module.memories[memory].idx_type);
+                builder.ins().iconst(ty, n.cast_signed())
+            }
+            MemorySegmentOffset::Expr(expr) => self.translate_const_expr(builder, expr)?,
+        };
+
+        // Model the initialization here as a `memory.init`.
+        let len = self.load_runtime_data_length(builder, data);
+        let start = builder.ins().iconst(I32, 0);
+        self.translate_entity_copy(builder, memory, data, offset, start, len)?;
+
+        // Finalize control-flow for the `MemorySegmentOffset::Static` case
+        // above.
+        if let Some(end) = end {
+            builder.ins().jump(end, &[]);
+            builder.switch_to_block(end);
+            builder.seal_block(end);
+        }
+        Ok(())
+    }
+
+    /// Translates the final step of module initialization, executing the
+    /// `start` function.
+    fn module_start(&mut self, builder: &mut FunctionBuilder, func: FuncIndex) -> WasmResult<()> {
+        // Manuall manage fuel around the call as the `Call` opcode does for
+        // normal wasm to ensure that it's correctly accounted for.
+        if self.tunables.consume_fuel {
+            self.fuel_consumed += 1;
+            self.fuel_increment_var(builder);
+            self.fuel_save_from_var(builder);
+        }
+        let ty = self.module.functions[func]
+            .signature
+            .unwrap_module_type_index();
+        let sig_ref = self.get_or_create_interned_sig_ref(builder.func, ty);
+        self.translate_call(builder, Default::default(), func, sig_ref, &[])?;
+        if self.tunables.consume_fuel {
+            self.fuel_load_into_var(builder);
+        }
+        Ok(())
+    }
+
+    /// Helper function to evaluate `expr` into a value.
+    ///
+    /// This primarily reuses all the `translate_*` functions elsewhere on this
+    /// builder toe deduplicate implementation details.
+    fn translate_const_expr(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        expr: &ConstExpr,
+    ) -> WasmResult<ir::Value> {
+        let mut stack = Vec::new();
+        for op in expr.ops() {
+            if self.tunables.consume_fuel {
+                self.fuel_consumed += 1;
+            }
+            match op {
+                ConstOp::I32Const(i) => {
+                    stack.push(builder.ins().iconst(I32, i64::from(*i)));
+                }
+                ConstOp::I64Const(i) => {
+                    stack.push(builder.ins().iconst(I64, *i));
+                }
+                ConstOp::F32Const(i) => {
+                    stack.push(builder.ins().f32const(Ieee32::with_bits(*i)));
+                }
+                ConstOp::F64Const(i) => {
+                    stack.push(builder.ins().f64const(Ieee64::with_bits(*i)));
+                }
+                ConstOp::V128Const(i) => {
+                    let data = i.to_le_bytes().to_vec().into();
+                    let handle = builder.func.dfg.constants.insert(data);
+                    stack.push(builder.ins().vconst(ir::types::I8X16, handle));
+                }
+                ConstOp::GlobalGet(i) => {
+                    stack.push(self.translate_global_get(builder, *i)?);
+                }
+                ConstOp::RefI31 => {
+                    let val = stack.pop().unwrap();
+                    stack.push(self.translate_ref_i31(builder.cursor(), val)?);
+                }
+                ConstOp::RefNull(ty) => {
+                    stack.push(self.translate_ref_null(builder.cursor(), *ty)?);
+                }
+                ConstOp::RefFunc(i) => {
+                    stack.push(self.translate_ref_func(builder.cursor(), *i)?);
+                }
+                ConstOp::I32Add | ConstOp::I64Add => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().iadd(a, b));
+                }
+                ConstOp::I32Sub | ConstOp::I64Sub => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().isub(a, b));
+                }
+                ConstOp::I32Mul | ConstOp::I64Mul => {
+                    let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
+                    stack.push(builder.ins().imul(a, b));
+                }
+                ConstOp::StructNew { struct_type_index } => {
+                    let arity = self.struct_fields_len(*struct_type_index)?;
+                    let fields = stack.drain(stack.len() - arity..).collect::<_>();
+                    stack.push(self.translate_struct_new(builder, *struct_type_index, fields)?);
+                }
+                ConstOp::StructNewDefault { struct_type_index } => {
+                    stack.push(self.translate_struct_new_default(builder, *struct_type_index)?);
+                }
+                ConstOp::ArrayNew { array_type_index } => {
+                    let len = stack.pop().unwrap();
+                    let elem = stack.pop().unwrap();
+                    stack.push(self.translate_array_new(builder, *array_type_index, elem, len)?);
+                }
+                ConstOp::ArrayNewDefault { array_type_index } => {
+                    let len = stack.pop().unwrap();
+                    stack.push(self.translate_array_new_default(
+                        builder,
+                        *array_type_index,
+                        len,
+                    )?);
+                }
+                ConstOp::ArrayNewFixed {
+                    array_type_index,
+                    array_size,
+                } => {
+                    let array_size = usize::try_from(*array_size).unwrap();
+                    let elems = stack.drain(stack.len() - array_size..).collect::<Vec<_>>();
+                    stack.push(self.translate_array_new_fixed(
+                        builder,
+                        *array_type_index,
+                        &elems,
+                    )?);
+                }
+                ConstOp::ExternConvertAny => {}
+                ConstOp::AnyConvertExtern => {}
+            }
+        }
+        let ret = stack.pop().unwrap();
+        assert!(stack.is_empty());
+        Ok(ret)
+    }
 }
 
 // Helper function to convert an `IndexType` to an `ir::Type`.
@@ -5698,7 +6192,12 @@ enum CheckedEntity {
     /// A WebAssembly linear memory.
     Memory(MemoryIndex),
     /// A WebAssembly table.
-    Table(TableIndex),
+    Table {
+        /// The index of the table that's being accessed.
+        table: TableIndex,
+        /// Whether or not this table has been initialized yet.
+        initialized: bool,
+    },
     /// A WebAssembly data segment loaded in chunks of `element_size` bytes.
     ///
     /// For `memory.init` this will have `element_size = 1`, but for
@@ -5711,6 +6210,11 @@ enum CheckedEntity {
         /// or possibly more for array initialization.
         element_size: u32,
     },
+    /// A refinement of `Data` above which uses a `RuntimeDataIndex`.
+    ///
+    /// This isn't reachable from core wasm but is used during module
+    /// startup.
+    RuntimeData(RuntimeDataIndex),
     /// A WebAssembly passive element segment.
     Elem(ElemIndex),
     /// An `arrayref` with the specified type.
@@ -5731,9 +6235,9 @@ impl From<MemoryIndex> for CheckedEntity {
     }
 }
 
-impl From<TableIndex> for CheckedEntity {
-    fn from(table_index: TableIndex) -> Self {
-        CheckedEntity::Table(table_index)
+impl From<RuntimeDataIndex> for CheckedEntity {
+    fn from(runtime_data_index: RuntimeDataIndex) -> Self {
+        CheckedEntity::RuntimeData(runtime_data_index)
     }
 }
 
@@ -5742,10 +6246,11 @@ impl CheckedEntity {
     fn index_type(&self, env: &FuncEnvironment) -> IndexType {
         match *self {
             CheckedEntity::Memory(i) => env.memory(i).idx_type,
-            CheckedEntity::Table(i) => env.table(i).idx_type,
-            CheckedEntity::Data { .. } | CheckedEntity::Array { .. } | CheckedEntity::Elem(_) => {
-                IndexType::I32
-            }
+            CheckedEntity::Table { table, .. } => env.table(table).idx_type,
+            CheckedEntity::Data { .. }
+            | CheckedEntity::Array { .. }
+            | CheckedEntity::Elem(_)
+            | CheckedEntity::RuntimeData(_) => IndexType::I32,
         }
     }
 
@@ -5756,9 +6261,9 @@ impl CheckedEntity {
         func: &mut ir::Function,
     ) -> WasmResult<u32> {
         Ok(match *self {
-            CheckedEntity::Memory(_) => 1,
+            CheckedEntity::Memory(_) | CheckedEntity::RuntimeData(_) => 1,
             CheckedEntity::Data { element_size, .. } => element_size,
-            CheckedEntity::Table(table) => env.get_or_create_table(func, table).element_size,
+            CheckedEntity::Table { table, .. } => env.get_or_create_table(func, table).element_size,
             CheckedEntity::Array { ty, .. } => env.array_layout(ty)?.elem_size,
             CheckedEntity::Elem(_) => 16,
         })
@@ -5770,8 +6275,9 @@ impl CheckedEntity {
             CheckedEntity::Memory(_)
             | CheckedEntity::Data {
                 element_size: 1, ..
-            } => WasmStorageType::I8,
-            CheckedEntity::Table(table) => {
+            }
+            | CheckedEntity::RuntimeData(_) => WasmStorageType::I8,
+            CheckedEntity::Table { table, .. } => {
                 WasmStorageType::Val(WasmValType::Ref(env.table(table).ref_type))
             }
             CheckedEntity::Array { ty, .. } => {
@@ -5786,10 +6292,10 @@ impl CheckedEntity {
     /// Returns the trap code to use when an index into this entity is out-of-bounds.
     fn oob_trap_code(&self) -> ir::TrapCode {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } => {
-                ir::TrapCode::HEAP_OUT_OF_BOUNDS
-            }
-            CheckedEntity::Table(_) | CheckedEntity::Elem(_) => TRAP_TABLE_OUT_OF_BOUNDS,
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data { .. }
+            | CheckedEntity::RuntimeData(_) => ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            CheckedEntity::Table { .. } | CheckedEntity::Elem(_) => TRAP_TABLE_OUT_OF_BOUNDS,
             CheckedEntity::Array { .. } => TRAP_ARRAY_OUT_OF_BOUNDS,
         }
     }
@@ -5798,13 +6304,22 @@ impl CheckedEntity {
     /// bit patterns.
     fn allows_memset(&self, env: &FuncEnvironment) -> bool {
         match self {
-            CheckedEntity::Memory(_) | CheckedEntity::Data { .. } | CheckedEntity::Array { .. } => {
-                true
+            CheckedEntity::Memory(_)
+            | CheckedEntity::Data { .. }
+            | CheckedEntity::RuntimeData(_) => true,
+            CheckedEntity::Array { ty, .. } => {
+                let array_ty = env.types.unwrap_array(*ty).unwrap();
+                // Most GC references need barriers, funcrefs need intern-ing,
+                // etc. Disallow memset on all reference types.
+                !matches!(
+                    array_ty.0.element_type,
+                    WasmStorageType::Val(WasmValType::Ref(_))
+                )
             }
             CheckedEntity::Elem(_) => false,
             // Tables that are lazily initialized can't be memset because the
             // initialized bit needs to be set when storing values.
-            CheckedEntity::Table(_) => !env.tunables.table_lazy_init,
+            CheckedEntity::Table { .. } => !env.tunables.table_lazy_init,
         }
     }
 }

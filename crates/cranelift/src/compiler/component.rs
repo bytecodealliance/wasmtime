@@ -1588,7 +1588,7 @@ impl TranslateTrap for TrapTranslator<'_> {
 }
 
 impl ComponentCompiler for Compiler {
-    fn compile_trampoline(
+    fn compile_component_trampoline(
         &self,
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,

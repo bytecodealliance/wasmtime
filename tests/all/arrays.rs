@@ -1002,6 +1002,7 @@ fn issue_13034_array_layout_overflow() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_arrayref_has_trace_info_for_gc() -> Result<()> {
     for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
         println!("Using GC collector: {collector:?}");

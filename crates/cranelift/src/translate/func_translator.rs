@@ -96,6 +96,26 @@ impl FuncTranslator {
         log::trace!("translated Wasm to CLIF:\n{}", func.display());
         Ok(())
     }
+
+    /// Translate the `FuncKey::ModuleStartup` function.
+    pub fn translate_module_startup(
+        &mut self,
+        func: &mut ir::Function,
+        environ: &mut FuncEnvironment<'_>,
+    ) -> WasmResult<()> {
+        let mut builder = FunctionBuilder::new(func, &mut self.func_ctx);
+        let entry_block = builder.create_block();
+        builder.append_block_params_for_function_params(entry_block);
+        builder.switch_to_block(entry_block);
+        builder.seal_block(entry_block);
+        builder.ensure_inserted_block();
+        environ.before_translate_function(&mut builder)?;
+        environ.translate_module_startup(&mut builder)?;
+        environ.after_translate_function(&mut builder)?;
+        builder.ins().return_(&[]);
+        builder.finalize();
+        Ok(())
+    }
 }
 
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.

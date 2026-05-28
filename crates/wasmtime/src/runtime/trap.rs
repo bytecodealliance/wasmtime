@@ -7,7 +7,7 @@ use core::fmt;
 use core::num::NonZeroUsize;
 use wasmtime_core::alloc::TryVec;
 use wasmtime_environ::{
-    CompiledTrap, FilePos, demangle_function_name, demangle_function_name_or_index,
+    CompiledTrap, FilePos, FuncKey, demangle_function_name, demangle_function_name_or_index,
 };
 
 /// Representation of a WebAssembly trap and what caused it to occur.
@@ -501,7 +501,8 @@ impl FrameInfo {
     pub(crate) fn new(module: Module, text_offset: usize) -> Option<FrameInfo> {
         let compiled_module = module.compiled_module();
         let index = compiled_module.func_by_text_offset(text_offset)?;
-        let func_start = compiled_module.func_start_srcloc(index);
+        let key = FuncKey::DefinedWasmFunction(compiled_module.module().module_index, index);
+        let func_start = compiled_module.func_start_srcloc(key);
         let instr =
             wasmtime_environ::lookup_file_pos(module.engine_code().address_map_data(), text_offset);
         let index = compiled_module.module().func_index(index);

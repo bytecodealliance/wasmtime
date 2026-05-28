@@ -53,7 +53,6 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 mod always_mut;
 #[cfg(feature = "component-model")]
 pub mod component;
-mod const_expr;
 mod export;
 mod gc;
 mod imports;
@@ -100,7 +99,7 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{

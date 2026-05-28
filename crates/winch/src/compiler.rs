@@ -167,25 +167,15 @@ impl wasmtime_environ::Compiler for Compiler {
         })
     }
 
-    fn compile_array_to_wasm_trampoline(
+    fn compile_trampoline(
         &self,
-        translation: &ModuleTranslation<'_>,
+        translation: Option<&ModuleTranslation<'_>>,
+        key: FuncKey,
         types: &ModuleTypesBuilder,
-        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
-            .compile_array_to_wasm_trampoline(translation, types, key, symbol)
-    }
-
-    fn compile_wasm_to_array_trampoline(
-        &self,
-        wasm_func_ty: &wasmtime_environ::WasmFuncType,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        self.trampolines
-            .compile_wasm_to_array_trampoline(wasm_func_ty, key, symbol)
+            .compile_trampoline(translation, key, types, symbol)
     }
 
     fn append_code(
@@ -236,14 +226,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.create_systemv_cie()
     }
 
-    fn compile_wasm_to_builtin(
-        &self,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        self.trampolines.compile_wasm_to_builtin(key, symbol)
-    }
-
     fn compiled_function_relocation_targets<'a>(
         &'a self,
         func: &'a dyn Any,
@@ -280,45 +262,14 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         Ok(body)
     }
 
-    fn compile_array_to_wasm_trampoline(
+    fn compile_trampoline(
         &self,
-        translation: &ModuleTranslation<'_>,
+        translation: Option<&ModuleTranslation<'_>>,
+        key: FuncKey,
         types: &ModuleTypesBuilder,
-        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        let mut body = self
-            .0
-            .compile_array_to_wasm_trampoline(translation, types, key, symbol)?;
-        if let Some(c) = self.0.inlining_compiler() {
-            c.finish_compiling(&mut body, None, symbol)
-                .map_err(|e| CompileError::Codegen(e.to_string()))?;
-        }
-        Ok(body)
-    }
-
-    fn compile_wasm_to_array_trampoline(
-        &self,
-        wasm_func_ty: &wasmtime_environ::WasmFuncType,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        let mut body = self
-            .0
-            .compile_wasm_to_array_trampoline(wasm_func_ty, key, symbol)?;
-        if let Some(c) = self.0.inlining_compiler() {
-            c.finish_compiling(&mut body, None, symbol)
-                .map_err(|e| CompileError::Codegen(e.to_string()))?;
-        }
-        Ok(body)
-    }
-
-    fn compile_wasm_to_builtin(
-        &self,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        let mut body = self.0.compile_wasm_to_builtin(key, symbol)?;
+        let mut body = self.0.compile_trampoline(translation, key, types, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;
@@ -381,7 +332,7 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
 
 #[cfg(feature = "component-model")]
 impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
-    fn compile_trampoline(
+    fn compile_component_trampoline(
         &self,
         component: &wasmtime_environ::component::ComponentTranslation,
         types: &wasmtime_environ::component::ComponentTypesBuilder,
@@ -393,7 +344,7 @@ impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
         let mut body = self
             .0
             .component_compiler()
-            .compile_trampoline(component, types, key, abi, tunables, symbol)?;
+            .compile_component_trampoline(component, types, key, abi, tunables, symbol)?;
         if let Some(c) = self.0.inlining_compiler() {
             c.finish_compiling(&mut body, None, symbol)
                 .map_err(|e| CompileError::Codegen(e.to_string()))?;

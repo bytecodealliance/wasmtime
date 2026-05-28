@@ -1722,7 +1722,7 @@ where
         self.emit_bounds_check_and_compute_addr(&dst_heap, dst_raw_addr, dst.reg, len.reg)?;
         self.context.free_reg(dst);
 
-        let passive_data_index = match self.env.translation.passive_data_map[segment] {
+        let runtime_data_index = match self.env.translation.runtime_data_map[segment] {
             Some(i) => i,
 
             // Active data segments always have length zero, so this is only
@@ -1747,7 +1747,7 @@ where
         let data_segment_length_offset = self
             .env
             .vmoffsets
-            .vmctx_passive_data_length(passive_data_index);
+            .vmctx_runtime_data_length(runtime_data_index);
         let tmp1 = self.context.any_gpr(self.masm)?;
         let tmp2 = self.context.any_gpr(self.masm)?;
         self.masm.load(
@@ -1774,7 +1774,7 @@ where
         let data_segment_base_offset = self
             .env
             .vmoffsets
-            .vmctx_passive_data_base(passive_data_index);
+            .vmctx_runtime_data_base(runtime_data_index);
         self.masm.load(
             self.masm.address_at_vmctx(data_segment_base_offset)?,
             writable!(tmp1),
@@ -1804,7 +1804,7 @@ where
     }
 
     pub fn emit_data_drop(&mut self, data_index: DataIndex) -> Result<()> {
-        let passive_data_index = match self.env.translation.passive_data_map[data_index] {
+        let runtime_data_index = match self.env.translation.runtime_data_map[data_index] {
             Some(idx) => idx,
             // Active data segments do nothing when dropped, so this is a noop.
             None => return Ok(()),
@@ -1812,7 +1812,7 @@ where
         let data_segment_offset = self
             .env
             .vmoffsets
-            .vmctx_passive_data_length(passive_data_index);
+            .vmctx_runtime_data_length(runtime_data_index);
         let len_addr = self.masm.address_at_vmctx(data_segment_offset)?;
         self.masm.store(RegImm::i32(0), len_addr, OperandSize::S32)
     }

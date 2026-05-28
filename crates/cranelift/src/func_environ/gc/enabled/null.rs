@@ -371,6 +371,18 @@ impl GcCompiler for NullCompiler {
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
     }
 
+    fn translate_init_gc_reference(
+        &mut self,
+        _func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlagsData,
+    ) -> WasmResult<()> {
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)
+    }
+
     fn init_field(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,

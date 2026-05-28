@@ -14,7 +14,6 @@ use crate::{
 };
 use alloc::sync::Arc;
 use core::ptr::NonNull;
-use wasmparser::WasmFeatures;
 use wasmtime_environ::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TagIndex, TypeTrace,
 };
@@ -255,21 +254,26 @@ impl Instance {
         imports: Imports<'_>,
         asyncness: Asyncness,
     ) -> Result<Instance> {
-        let (instance, start) = {
+        let instance = {
             let (mut limiter, store) = store.0.resource_limiter_and_store_opaque();
             // SAFETY: the safety contract of `new_raw` is the same as this
             // function.
-            unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports, asyncness).await? }
+            unsafe { Instance::new_raw(store, limiter.as_mut(), module, imports).await? }
         };
-        if let Some(start) = start {
+
+        // If this instance requires startup, which is a dynamic decision made
+        // at this point in conjunction with analysis at compile time, the
+        // instance gets started. Note that this isn't just the wasm start
+        // function itself, but it's finalization of initialization of this
+        // instance, for example for complicated global initialization
+        // expressions.
+        if instance.id.get_mut(store.0).needs_startup() {
             if asyncness == Asyncness::No {
-                instance.start_raw(store, start)?;
+                instance.start_raw(store)?;
             } else {
                 #[cfg(feature = "async")]
                 {
-                    store
-                        .on_fiber(|store| instance.start_raw(store, start))
-                        .await??;
+                    store.on_fiber(|store| instance.start_raw(store)).await??;
                 }
                 #[cfg(not(feature = "async"))]
                 unreachable!();
@@ -298,8 +302,7 @@ impl Instance {
         mut limiter: Option<&mut StoreResourceLimiter<'_>>,
         module: &Module,
         imports: Imports<'_>,
-        asyncness: Asyncness,
-    ) -> Result<(Instance, Option<FuncIndex>)> {
+    ) -> Result<Instance> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
@@ -316,8 +319,6 @@ impl Instance {
                 }
             }
         }
-
-        let compiled_module = module.compiled_module();
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
@@ -341,46 +342,12 @@ impl Instance {
                 .await?
         };
 
-        // Additionally, before we start doing fallible instantiation, we
-        // do one more step which is to insert an `InstanceData`
-        // corresponding to this instance. This `InstanceData` can be used
-        // via `Caller::get_export` if our instance's state "leaks" into
-        // other instances, even if we don't return successfully from this
-        // function.
-        //
-        // We don't actually load all exports from the instance at this
-        // time, instead preferring to lazily load them as they're demanded.
-        // For module/instance exports, though, those aren't actually
-        // stored in the instance handle so we need to immediately handle
-        // those here.
-        let instance = Instance::from_wasmtime(id, store);
-
-        // Now that we've recorded all information we need to about this
-        // instance within a `Store` we can start performing fallible
-        // initialization. Note that we still defer the `start` function to
-        // later since that may need to run asynchronously.
-        //
-        // If this returns an error (or if the start function traps) then
-        // any other initialization which may have succeeded which placed
-        // items from this instance into other instances should be ok when
-        // those items are loaded and run we'll have all the metadata to
-        // look at them.
-        let bulk_memory = store
-            .engine()
-            .features()
-            .contains(WasmFeatures::BULK_MEMORY);
-
-        vm::initialize_instance(
-            store,
-            limiter,
-            id,
-            compiled_module.module(),
-            bulk_memory,
-            asyncness,
-        )
-        .await?;
-
-        Ok((instance, compiled_module.module().start_func))
+        // At this point the instance is created and stored within the store,
+        // but it's also not quite usable just yet. Initialization hasn't
+        // completed (e.g. active data/element segments) and the `start`
+        // function additionally has not yet been invoked. That's the
+        // responsibility of the caller to handle, however.
+        Ok(Instance::from_wasmtime(id, store))
     }
 
     pub(crate) fn from_wasmtime(id: InstanceId, store: &mut StoreOpaque) -> Instance {
@@ -389,7 +356,7 @@ impl Instance {
         }
     }
 
-    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
+    fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
         let store_id = store.0.id();
@@ -399,7 +366,8 @@ impl Instance {
         let f = unsafe {
             instance
                 .as_mut()
-                .get_exported_func(registry, store_id, start)
+                .get_startup_func(registry, store_id)
+                .expect("should have a startup function")
         };
         let caller_vmctx = instance.vmctx();
         unsafe {

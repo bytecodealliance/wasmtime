@@ -162,6 +162,20 @@ pub trait GcCompiler {
         flags: ir::MemFlagsData,
     ) -> WasmResult<()>;
 
+    /// Same as [`Self::translate_write_gc_reference`] except that the
+    /// destination address has not been previously initialized.
+    ///
+    /// This will, for example, skip barriers on the destination address.
+    fn translate_init_gc_reference(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlagsData,
+    ) -> WasmResult<()>;
+
     /// Stores `val` into `addr` with the `ty` specified.
     ///
     /// This initializes a previously-uninitialized field, so barriers on the

@@ -1,20 +1,19 @@
 use crate::error::{OutOfMemory, Result, bail};
 use crate::module::{
-    FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
-    TableSegmentElements,
+    FuncRefIndex, Initializer, MemoryInitialization, Module, TableSegment, TableSegmentElements,
 };
 use crate::prelude::*;
 use crate::{
-    ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
-    EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType, InitMemory, MemoryIndex,
-    ModuleInternedTypeIndex, ModuleTypesBuilder, PanicOnOom as _, PassiveDataIndex,
-    PassiveElemIndex, PrimaryMap, SizeOverflow, StaticMemoryInitializer, StaticModuleIndex,
-    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, WasmError,
+    ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, DefinedGlobalIndex, ElemIndex,
+    EngineOrModuleTypeIndex, EntityIndex, EntityType, FuncIndex, FuncKey, GlobalIndex, IndexType,
+    MemoryIndex, MemoryInitializer, ModuleInternedTypeIndex, ModuleStartup, ModuleTypesBuilder,
+    PanicOnOom as _, PassiveElemIndex, PrimaryMap, RuntimeDataIndex, StaticModuleIndex, TableIndex,
+    TableInitialValue, TableInitialization, Tag, TagIndex, Tunables, TypeConvert, TypeIndex,
     WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
+use alloc::borrow::Cow;
 use cranelift_entity::SecondaryMap;
 use cranelift_entity::packed_option::ReservedValue;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::mem;
 use std::path::PathBuf;
@@ -84,13 +83,6 @@ pub struct ModuleTranslation<'data> {
     /// configuration.
     pub has_unparsed_debuginfo: bool,
 
-    /// List of data segments found in this module which should be concatenated
-    /// together for the final compiled artifact.
-    ///
-    /// These data segments, when concatenated, are indexed by the
-    /// `MemoryInitializer` type.
-    pub data: Vec<Cow<'data, [u8]>>,
-
     /// The desired alignment of `data` in the final data section of the object
     /// file that we'll emit.
     ///
@@ -100,20 +92,21 @@ pub struct ModuleTranslation<'data> {
     pub data_align: Option<u64>,
 
     /// Map from a data segment to whether it's a passive data segment or not.
-    pub passive_data_map: SecondaryMap<DataIndex, Option<PassiveDataIndex>>,
+    pub runtime_data_map: SecondaryMap<DataIndex, Option<RuntimeDataIndex>>,
 
     /// Map from an elem segment to whether it's a passive elem segment or not.
     pub passive_elem_map: SecondaryMap<ElemIndex, Option<PassiveElemIndex>>,
 
-    /// Total size of all data pushed onto `data` so far.
-    total_data: u32,
-
     /// List of passive element segments found in this module which will get
     /// concatenated for the final artifact.
-    pub passive_data: Vec<&'data [u8]>,
+    pub runtime_data: PrimaryMap<RuntimeDataIndex, Cow<'data, [u8]>>,
 
-    /// Total size of all passive data pushed into `passive_data` so far.
-    total_passive_data: u32,
+    /// Record of all passive data segments that this module contains.
+    ///
+    /// These are processed during [`ModuleTranslation::finalize_memory_init`]
+    /// and eventually moved over into the `runtime_data` list above. Until
+    /// then, however, their `RuntimeDataIndex` is not yet assigned.
+    passive_data: Vec<(DataIndex, &'data [u8])>,
 
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
@@ -122,6 +115,62 @@ pub struct ModuleTranslation<'data> {
     /// The type information of the current module made available at the end of the
     /// validation process.
     types: Option<Types>,
+
+    /// The WebAssembly `start` function, if defined.
+    pub start_func: Option<FuncIndex>,
+
+    /// Initializers for `global` values which aren't considered "simple".
+    ///
+    /// These initializers are later compiled into a "module startup" function.
+    pub global_initializers: Vec<(DefinedGlobalIndex, ConstExpr)>,
+
+    /// Definitions of all passive elements found within a module.
+    ///
+    /// This maps passive element segments to their definition, either functions
+    /// or expressions-basd.
+    pub passive_elements: PrimaryMap<PassiveElemIndex, TableSegmentElements>,
+
+    /// WebAssembly table initialization data, per table.
+    ///
+    /// This keeps track of all per-table initialization (e.g. initial value for
+    /// non-null tables) as well as active element segments. This is processed
+    /// and refined by [`ModuleTranslation::finalize_table_init`] after
+    /// translation.
+    pub table_initialization: TableInitialization,
+
+    /// WebAssembly memory initialization.
+    ///
+    /// This is held here in an `Unprocessed` form during translation, and then
+    /// this is later finished with [`ModuleTranslation::finalize_memory_init`].
+    pub memory_init: MemoryInit<'data>,
+}
+
+/// Different forms of memory initialization that happens for a module.
+pub enum MemoryInit<'a> {
+    /// Raw active data segments that are being applied for an instance.
+    ///
+    /// This list contains the raw data  which hasn't yet been processed into
+    /// `RuntimeDataIndex`, for example. This is later processed during
+    /// [`ModuleTranslation::finalize_memory_init`] to optionally shuffle things
+    /// around.
+    Unprocessed(Vec<MemoryInitializer<'a>>),
+
+    /// Finalized memory initialization to be executed after
+    /// [`ModuleTranslation::finalize_memory_init`] has run. This represents
+    /// active data segments which may have been merged from the `Unprocessed`
+    /// list above, and may or may not have statically know offsets.
+    Processed(Vec<(MemoryIndex, MemorySegmentOffset, RuntimeDataIndex)>),
+}
+
+/// Offset within [`MemoryInit::Processed`] which indicates the initial offset
+/// a data segment is applied at.
+pub enum MemorySegmentOffset {
+    /// A "complicated" constant expression deferred to get evaluated at runtime
+    /// with compiled code.
+    Expr(ConstExpr),
+
+    /// A statically known, in-bounds, constant value.
+    Static(u64),
 }
 
 impl<'data> ModuleTranslation<'data> {
@@ -136,15 +185,18 @@ impl<'data> ModuleTranslation<'data> {
             exported_signatures: Vec::default(),
             debuginfo: DebugInfoData::default(),
             has_unparsed_debuginfo: false,
-            data: Vec::default(),
             data_align: None,
-            total_data: 0,
-            passive_data: Vec::default(),
-            total_passive_data: 0,
+            runtime_data: Default::default(),
             code_index: 0,
             types: None,
-            passive_data_map: Default::default(),
+            runtime_data_map: Default::default(),
             passive_elem_map: Default::default(),
+            start_func: None,
+            global_initializers: Vec::new(),
+            passive_elements: Default::default(),
+            table_initialization: Default::default(),
+            memory_init: MemoryInit::Unprocessed(Vec::new()),
+            passive_data: Default::default(),
         }
     }
 
@@ -417,9 +469,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     self.result.module.needs_gc_heap |= table.ref_type.is_vmgcref_type();
                     self.result.module.tables.push(table)?;
                     let init = match init {
-                        wasmparser::TableInit::RefNull => TableInitialValue::Null {
-                            precomputed: TryVec::new(),
-                        },
+                        wasmparser::TableInit::RefNull => TableInitialValue::Null,
                         wasmparser::TableInit::Expr(expr) => {
                             let (init, escaped) = ConstExpr::from_wasmparser(self, expr)?;
                             for f in escaped {
@@ -428,11 +478,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             TableInitialValue::Expr(init)
                         }
                     };
+                    self.result.table_initialization.initial_values.push(init)?;
                     self.result
                         .module
                         .table_initialization
-                        .initial_values
-                        .push(init)?;
+                        .push(Default::default())?;
                 }
             }
 
@@ -475,8 +525,24 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         self.flag_func_escaped(f);
                     }
                     let ty = self.convert_global_type(&ty)?;
-                    self.result.module.globals.push(ty)?;
-                    self.result.module.global_initializers.push(initializer)?;
+                    let index = self.result.module.globals.push(ty)?;
+                    let defined_index = self.result.module.defined_global_index(index).unwrap();
+                    match initializer.const_eval() {
+                        Some(val) => {
+                            self.result
+                                .module
+                                .global_initializers
+                                .push((defined_index, val))?;
+                        }
+                        None => {
+                            // "Complicated" global initializers are deferred
+                            // to get evaluated in the startup function.
+                            self.require_startup_func();
+                            self.result
+                                .global_initializers
+                                .push((defined_index, initializer));
+                        }
+                    }
                 }
             }
 
@@ -508,9 +574,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.start_section(func, &range)?;
 
                 let func_index = FuncIndex::from_u32(func);
-                self.flag_func_escaped(func_index);
-                debug_assert!(self.result.module.start_func.is_none());
-                self.result.module.start_func = Some(func_index);
+                debug_assert!(self.result.start_func.is_none());
+                self.result.start_func = Some(func_index);
+
+                // To make startup a bit easier, invoking the `start` function
+                // is a responsibility deferred to the startup function.
+                self.require_startup_func();
             }
 
             Payload::ElementSection(elements) => {
@@ -566,19 +635,27 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            self.result.module.table_initialization.segments.push(
-                                TableSegment {
+                            self.result
+                                .table_initialization
+                                .segments
+                                .push(TableSegment {
                                     table_index,
                                     offset,
                                     elements,
-                                },
-                            )?;
+                                })?;
                             None
                         }
 
                         ElementKind::Passive => {
-                            let passive_index =
-                                self.result.module.passive_elements.push(elements)?;
+                            let passive_index = self
+                                .result
+                                .module
+                                .passive_elements
+                                .push((elements.ty(), elements.len()))?;
+                            self.result.passive_elements.push(elements);
+                            // One-time initialization of passive element
+                            // segments is deferred to the startup function.
+                            self.require_startup_func();
                             Some(passive_index)
                         }
 
@@ -639,14 +716,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::DataSection(data) => {
                 self.validator.data_section(&data)?;
 
-                let initializers = match &mut self.result.module.memory_initialization {
-                    MemoryInitialization::Segmented(i) => i,
-                    _ => unreachable!(),
-                };
-
-                let cnt = usize::try_from(data.count()).unwrap();
-                initializers.reserve_exact(cnt)?;
-                self.result.data.reserve_exact(cnt);
+                assert!(self.result.module.memory_initialization.is_segmented());
 
                 for (index, entry) in data.into_iter().enumerate() {
                     let wasmparser::Data {
@@ -655,53 +725,28 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         range: _,
                     } = entry?;
                     let data_index = DataIndex::from_u32(index.try_into().unwrap());
-                    let mk_range = |total: &mut u32| -> Result<_, WasmError> {
-                        let range = u32::try_from(data.len())
-                            .ok()
-                            .and_then(|size| {
-                                let start = *total;
-                                let end = start.checked_add(size)?;
-                                Some(start..end)
-                            })
-                            .ok_or_else(|| {
-                                WasmError::Unsupported(format!(
-                                    "more than 4 gigabytes of data in wasm module",
-                                ))
-                            })?;
-                        *total += range.end - range.start;
-                        Ok(range)
-                    };
-                    let passive_index = match kind {
+                    match kind {
                         DataKind::Active {
                             memory_index,
                             offset_expr,
                         } => {
-                            let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
                             let (offset, escaped) = ConstExpr::from_wasmparser(self, offset_expr)?;
                             debug_assert!(escaped.is_empty());
 
-                            let initializers = match &mut self.result.module.memory_initialization {
-                                MemoryInitialization::Segmented(i) => i,
-                                _ => unreachable!(),
+                            let MemoryInit::Unprocessed(list) = &mut self.result.memory_init else {
+                                panic!("memory initializers should be unprocessed at this point");
                             };
-                            initializers.push(MemoryInitializer {
+                            list.push(MemoryInitializer {
                                 memory_index,
                                 offset,
-                                data: range,
-                            })?;
-                            self.result.data.push(data.into());
-                            None
+                                data,
+                            });
                         }
                         DataKind::Passive => {
-                            let range = mk_range(&mut self.result.total_passive_data)?;
-                            self.result.passive_data.push(data);
-                            Some(self.result.module.passive_data.push(range)?)
+                            self.result.passive_data.push((data_index, data));
                         }
-                    };
-                    self.result
-                        .passive_data_map
-                        .insert(data_index, passive_index);
+                    }
                 }
             }
 
@@ -952,6 +997,10 @@ and for re-adding support for interface types you can see this issue:
         }
         Ok(())
     }
+
+    fn require_startup_func(&mut self) {
+        self.result.require_startup_func(self.types);
+    }
 }
 
 impl TypeConvert for ModuleEnvironment<'_, '_> {
@@ -971,6 +1020,75 @@ impl TypeConvert for ModuleEnvironment<'_, '_> {
 }
 
 impl ModuleTranslation<'_> {
+    /// Called after translation is complete this will finalize the memory
+    /// initialization strategy for this module.
+    ///
+    /// This will notably use `Self::try_static_init` to attempt to massage
+    /// data segments to being CoW-init-friendly. Afterwards the
+    /// `self.memory_init` field is transitioned from `Unprocessed` to
+    /// `Processed`.
+    pub fn finalize_memory_init(
+        &mut self,
+        tunables: &Tunables,
+        page_size: u64,
+        max_image_size_always_allowed: u64,
+        types: &mut ModuleTypesBuilder,
+    ) {
+        if tunables.memory_init_cow {
+            self.try_static_init(page_size, max_image_size_always_allowed);
+        }
+
+        // If any memory is statically initialized, and if that memory has an
+        // initial data segment, then a startup function is at least
+        // conditionally needed if the memory needs initialization. Flag as such
+        // here.
+        if let MemoryInitialization::Static { map } = &self.module.memory_initialization {
+            if map.iter().any(|(_, v)| v.is_some()) {
+                self.require_startup_func_if_memories_need_init(types);
+            }
+        }
+
+        // If, after `try_static_init`, initializers are still `Unprocessed`
+        // then this is the catch-all fallback path for initialization. All
+        // segments are promoted into `self.runtime_data` and then the
+        // initialization is rewritten to `Processed`.
+        if let MemoryInit::Unprocessed(list) = &mut self.memory_init {
+            let segments = mem::take(list);
+            let mut new_initializers = Vec::new();
+            for segment in segments {
+                new_initializers.push((
+                    segment.memory_index,
+                    MemorySegmentOffset::Expr(segment.offset),
+                    self.runtime_data.push(segment.data.into()),
+                ));
+            }
+            if !new_initializers.is_empty() {
+                self.require_startup_func(types);
+            }
+            self.memory_init = MemoryInit::Processed(new_initializers);
+        }
+
+        // At this point append all passive data to the `runtime_data` list.
+        // This notably occurs after `try_static_init` above to ensure that the
+        // page-aligned data for static initialization, if applicable, comes
+        // first.
+        for (data_index, segment) in self.passive_data.iter() {
+            let runtime_index = self.runtime_data.push((*segment).into());
+            self.runtime_data_map
+                .insert(*data_index, Some(runtime_index));
+        }
+
+        // And, finally, record all chunks from `self.runtime_data` within
+        // `self.module.runtime_data` as well.
+        let mut cur = 0;
+        for (idx, data) in self.runtime_data.iter() {
+            let len = u32::try_from(data.len()).unwrap();
+            let i = self.module.runtime_data.push(cur..cur + len).panic_on_oom();
+            cur += len;
+            assert_eq!(idx, i);
+        }
+    }
+
     /// Attempts to convert segmented memory initialization into static
     /// initialization for the module that this translation represents.
     ///
@@ -1001,24 +1119,20 @@ impl ModuleTranslation<'_> {
     /// modules that have some dynamically-placed data segments. But,
     /// for now, this is sufficient to allow a system that "knows what
     /// it's doing" to always get static init.
-    pub fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
-        // This method only attempts to transform a `Segmented` memory init
-        // into a `Static` one, no other state.
-        if !self.module.memory_initialization.is_segmented() {
-            return;
-        }
+    fn try_static_init(&mut self, page_size: u64, max_image_size_always_allowed: u64) {
+        let segments = match &mut self.memory_init {
+            MemoryInit::Unprocessed(list) => list,
+            _ => return,
+        };
 
         // First a dry run of memory initialization is performed. This
         // collects information about the extent of memory initialized for each
         // memory as well as the size of all data segments being copied in.
-        struct Memory {
+        struct Memory<'a> {
             data_size: u64,
             min_addr: u64,
             max_addr: u64,
-            // The `usize` here is a pointer into `self.data` which is the list
-            // of data segments corresponding to what was found in the original
-            // wasm module.
-            segments: Vec<(usize, StaticMemoryInitializer)>,
+            segments: Vec<(u64, &'a [u8])>,
         }
         let mut info = PrimaryMap::with_capacity(self.module.memories.len());
         for _ in 0..self.module.memories.len() {
@@ -1030,59 +1144,64 @@ impl ModuleTranslation<'_> {
             });
         }
 
-        struct InitMemoryAtCompileTime<'a> {
-            module: &'a Module,
-            info: &'a mut PrimaryMap<MemoryIndex, Memory>,
-            idx: usize,
-        }
-        impl InitMemory for InitMemoryAtCompileTime<'_> {
-            fn memory_size_in_bytes(
-                &mut self,
-                memory_index: MemoryIndex,
-            ) -> Result<u64, SizeOverflow> {
-                self.module.memories[memory_index].minimum_byte_size()
+        for initializer in segments.iter() {
+            let &MemoryInitializer {
+                memory_index,
+                ref offset,
+                ref data,
+            } = initializer;
+
+            // Currently `Static` only applies to locally-defined memories,
+            // so if a data segment references an imported memory then
+            // transitioning to a `Static` memory initializer is not
+            // possible.
+            if self.module.defined_memory_index(memory_index).is_none() {
+                return;
             }
 
-            fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64> {
-                match (expr.ops(), self.module.memories[memory_index].idx_type) {
-                    (&[ConstOp::I32Const(offset)], IndexType::I32) => {
-                        Some(offset.cast_unsigned().into())
+            // First up determine the start/end range and verify that they're
+            // in-bounds for the initial size of the memory at `memory_index`.
+            // Note that this can bail if we don't have access to globals yet
+            // (e.g. this is a task happening before instantiation at
+            // compile-time).
+            let start = match (offset.ops(), self.module.memories[memory_index].idx_type) {
+                (&[ConstOp::I32Const(offset)], IndexType::I32) => offset.cast_unsigned().into(),
+                (&[ConstOp::I64Const(offset)], IndexType::I64) => offset.cast_unsigned(),
+                _ => return,
+            };
+            let len = u64::try_from(data.len()).unwrap();
+            let end = match start.checked_add(len) {
+                Some(end) => end,
+                None => return,
+            };
+
+            match self.module.memories[memory_index].minimum_byte_size() {
+                Ok(max) => {
+                    if end > max {
+                        return;
                     }
-                    (&[ConstOp::I64Const(offset)], IndexType::I64) => Some(offset.cast_unsigned()),
-                    _ => None,
                 }
+
+                // Note that computing the minimum can overflow if the page
+                // size is the default 64KiB and the memory's minimum size in
+                // pages is `1 << 48`, the maximum number of minimum pages for
+                // 64-bit memories. We don't return `false` to signal an error
+                // here and instead defer the error to runtime, when it will be
+                // impossible to allocate that much memory anyways.
+                Err(_) => return,
             }
 
-            fn write(&mut self, memory: MemoryIndex, init: &StaticMemoryInitializer) -> bool {
-                // Currently `Static` only applies to locally-defined memories,
-                // so if a data segment references an imported memory then
-                // transitioning to a `Static` memory initializer is not
-                // possible.
-                if self.module.defined_memory_index(memory).is_none() {
-                    return false;
-                };
-                let info = &mut self.info[memory];
-                let data_len = u64::from(init.data.end - init.data.start);
-                if data_len > 0 {
-                    info.data_size += data_len;
-                    info.min_addr = info.min_addr.min(init.offset);
-                    info.max_addr = info.max_addr.max(init.offset + data_len);
-                    info.segments.push((self.idx, init.clone()));
-                }
-                self.idx += 1;
-                true
+            // Skip empty in-bounds data segments.
+            if data.is_empty() {
+                continue;
             }
-        }
-        let ok = self
-            .module
-            .memory_initialization
-            .init_memory(&mut InitMemoryAtCompileTime {
-                idx: 0,
-                module: &self.module,
-                info: &mut info,
-            });
-        if !ok {
-            return;
+
+            let info = &mut info[memory_index];
+            let len64 = u64::try_from(data.len()).unwrap();
+            info.data_size += len64;
+            info.min_addr = info.min_addr.min(start);
+            info.max_addr = info.max_addr.max(start + len64);
+            info.segments.push((start, data));
         }
 
         // Validate that the memory information collected is indeed valid for
@@ -1127,9 +1246,8 @@ impl ModuleTranslation<'_> {
         // Here's where we've now committed to changing to static memory. The
         // memory initialization image is built here from the page data and then
         // it's converted to a single initializer.
-        let data = mem::replace(&mut self.data, Vec::new());
         let mut map = TryPrimaryMap::with_capacity(info.len()).panic_on_oom();
-        let mut module_data_size = 0u32;
+        let mut new_initializers = Vec::new();
         for (memory, info) in info.iter() {
             // Create the in-memory `image` which is the initialized contents of
             // this linear memory.
@@ -1139,10 +1257,8 @@ impl ModuleTranslation<'_> {
                 0
             };
             let mut image = Vec::with_capacity(extent);
-            for (idx, init) in info.segments.iter() {
-                let data = &data[*idx];
-                assert_eq!(data.len(), init.data.len());
-                let offset = usize::try_from(init.offset - info.min_addr).unwrap();
+            for (offset, data) in info.segments.iter() {
+                let offset = usize::try_from(*offset - info.min_addr).unwrap();
                 if image.len() < offset {
                     image.resize(offset, 0u8);
                     image.extend_from_slice(data);
@@ -1181,50 +1297,72 @@ impl ModuleTranslation<'_> {
             // the front and back with extra zeros as necessary
             if offset % page_size != 0 {
                 let zero_padding = offset % page_size;
-                self.data.push(vec![0; zero_padding as usize].into());
+                image.splice(0..0, std::iter::repeat(0).take(zero_padding as usize));
                 offset -= zero_padding;
                 len += zero_padding;
             }
-            self.data.push(image.into());
             if len % page_size != 0 {
                 let zero_padding = page_size - (len % page_size);
-                self.data.push(vec![0; zero_padding as usize].into());
+                image.extend(std::iter::repeat(0).take(zero_padding as usize));
                 len += zero_padding;
             }
+            let runtime_index = if image.is_empty() {
+                None
+            } else {
+                Some(self.runtime_data.push(image.into()))
+            };
 
             // Offset/length should now always be page-aligned.
             assert!(offset % page_size == 0);
             assert!(len % page_size == 0);
 
-            // Create the `StaticMemoryInitializer` which describes this image,
+            // Record the static memory initializer which describes this image,
             // only needed if the image is actually present and has a nonzero
             // length. The `offset` has been calculates above, originally
             // sourced from `info.min_addr`. The `data` field is the extent
             // within the final data segment we'll emit to an ELF image, which
             // is the concatenation of `self.data`, so here it's the size of
             // the section-so-far plus the current segment we're appending.
-            let len = u32::try_from(len).unwrap();
-            let init = if len > 0 {
-                Some(StaticMemoryInitializer {
-                    offset,
-                    data: module_data_size..module_data_size + len,
-                })
-            } else {
-                None
-            };
-            let idx = map.push(init).panic_on_oom();
+            let idx = map.push(runtime_index.map(|i| (offset, i))).panic_on_oom();
             assert_eq!(idx, memory);
-            module_data_size += len;
+            if let Some(runtime_index) = runtime_index {
+                new_initializers.push((idx, MemorySegmentOffset::Static(offset), runtime_index));
+            }
         }
         self.data_align = Some(page_size);
         self.module.memory_initialization = MemoryInitialization::Static { map };
+        self.memory_init = MemoryInit::Processed(new_initializers);
+    }
+
+    /// Finalizes the initialization of tables.
+    ///
+    /// This is invoked after translation and notably uses
+    /// `Self::try_func_table_init` to attempt to optimize initialization of
+    /// tables into static precomputed images.
+    pub fn finalize_table_init(&mut self, tunables: &Tunables, types: &mut ModuleTypesBuilder) {
+        if tunables.table_lazy_init {
+            self.try_func_table_init();
+        }
+
+        // If any table has a non-null initializers, or if there's any active
+        // data segments, then a startup function is unconditionally required to
+        // configure the table.
+        if self
+            .table_initialization
+            .initial_values
+            .iter()
+            .any(|(_, v)| !matches!(v, TableInitialValue::Null))
+            || !self.table_initialization.segments.is_empty()
+        {
+            self.require_startup_func(types);
+        }
     }
 
     /// Attempts to convert the module's table initializers to
     /// FuncTable form where possible. This enables lazy table
     /// initialization later by providing a one-to-one map of initial
     /// table values, without having to parse all segments.
-    pub fn try_func_table_init(&mut self) {
+    fn try_func_table_init(&mut self) {
         // This should be large enough to support very large Wasm
         // modules with huge funcref tables, but small enough to avoid
         // OOMs or DoS on truly sparse tables.
@@ -1232,32 +1370,27 @@ impl ModuleTranslation<'_> {
 
         // First convert any element-initialized tables to images of just that
         // single function if the minimum size of the table allows doing so.
-        for ((_, init), (_, table)) in self
-            .module
-            .table_initialization
-            .initial_values
-            .iter_mut()
-            .zip(
-                self.module
-                    .tables
-                    .iter()
-                    .skip(self.module.num_imported_tables),
-            )
-        {
+        for ((i, init), (_, table)) in self.table_initialization.initial_values.iter_mut().zip(
+            self.module
+                .tables
+                .iter()
+                .skip(self.module.num_imported_tables),
+        ) {
             let table_size = table.limits.min;
             if table_size > MAX_FUNC_TABLE_SIZE {
                 continue;
             }
             if let TableInitialValue::Expr(expr) = init {
                 if let [ConstOp::RefFunc(f)] = expr.ops() {
-                    *init = TableInitialValue::Null {
-                        precomputed: try_vec![*f; table_size as usize].panic_on_oom(),
-                    };
+                    assert!(self.module.table_initialization[i].is_empty());
+                    self.module.table_initialization[i] =
+                        try_vec![*f; table_size as usize].panic_on_oom();
+                    *init = TableInitialValue::Null;
                 }
             }
         }
 
-        let mut segments = mem::take(&mut self.module.table_initialization.segments)
+        let mut segments = mem::take(&mut self.table_initialization.segments)
             .into_iter()
             .peekable();
 
@@ -1326,18 +1459,18 @@ impl ModuleTranslation<'_> {
                 TableSegmentElements::Expressions { .. } => break,
             };
 
-            let precomputed =
-                match &mut self.module.table_initialization.initial_values[defined_index] {
-                    TableInitialValue::Null { precomputed } => precomputed,
+            match &self.table_initialization.initial_values[defined_index] {
+                TableInitialValue::Null => {}
 
-                    // If this table is still listed as an initial value here
-                    // then that means the initial size of the table doesn't
-                    // support a precomputed function list, so skip this.
-                    // Technically this won't trap so it's possible to process
-                    // further initializers, but that's left as a future
-                    // optimization.
-                    TableInitialValue::Expr(_) => break,
-                };
+                // If this table is still listed as an initial value here
+                // then that means the initial size of the table doesn't
+                // support a precomputed function list, so skip this.
+                // Technically this won't trap so it's possible to process
+                // further initializers, but that's left as a future
+                // optimization.
+                TableInitialValue::Expr(_) => break,
+            }
+            let precomputed = &mut self.module.table_initialization[defined_index];
 
             // At this point we're committing to pre-initializing the table
             // with the `segment` that's being iterated over. This segment is
@@ -1355,6 +1488,27 @@ impl ModuleTranslation<'_> {
             // advance the iterator to see the next segment
             let _ = segments.next();
         }
-        self.module.table_initialization.segments = segments.try_collect().panic_on_oom();
+        self.table_initialization.segments = segments.try_collect().panic_on_oom();
+    }
+
+    /// Helper function to ratchet the `startup` function for this module as
+    /// `Always`.
+    fn require_startup_func(&mut self, types: &mut ModuleTypesBuilder) {
+        let ty = match self.module.startup {
+            ModuleStartup::None => types.startup_func_type().into(),
+            ModuleStartup::Always(_) => return,
+            ModuleStartup::IfMemoriesNeedInit(ty) => ty,
+        };
+        self.module.startup = ModuleStartup::Always(ty);
+    }
+
+    /// Helper function to ratchet the `startup` function for this module as
+    /// `IfMemoriesNeedInit`.
+    fn require_startup_func_if_memories_need_init(&mut self, types: &mut ModuleTypesBuilder) {
+        let ty = match self.module.startup {
+            ModuleStartup::None => types.startup_func_type().into(),
+            ModuleStartup::Always(_) | ModuleStartup::IfMemoriesNeedInit(_) => return,
+        };
+        self.module.startup = ModuleStartup::IfMemoriesNeedInit(ty);
     }
 }

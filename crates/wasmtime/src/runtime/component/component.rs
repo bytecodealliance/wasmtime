@@ -967,6 +967,7 @@ mod tests {
     use wasmtime_environ::MemoryInitialization;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cow_on_by_default() {
         let mut config = Config::new();
         config.wasm_component_model(true);

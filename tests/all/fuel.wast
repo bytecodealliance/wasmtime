@@ -1,11 +1,11 @@
 (assert_fuel 0 (module))
 
-(assert_fuel 1
+(assert_fuel 3
   (module
     (func $f)
     (start $f)))
 
-(assert_fuel 2
+(assert_fuel 4
   (module
     (func $f
       i32.const 0
@@ -13,7 +13,7 @@
     )
     (start $f)))
 
-(assert_fuel 1
+(assert_fuel 3
   (module
     (func $f
       block
@@ -21,14 +21,14 @@
     )
     (start $f)))
 
-(assert_fuel 1
+(assert_fuel 3
   (module
     (func $f
       unreachable
     )
     (start $f)))
 
-(assert_fuel 7
+(assert_fuel 9
   (module
     (func $f
       i32.const 0
@@ -41,7 +41,7 @@
     )
     (start $f)))
 
-(assert_fuel 1
+(assert_fuel 3
   (module
     (func $f
       return
@@ -55,7 +55,7 @@
     )
     (start $f)))
 
-(assert_fuel 3
+(assert_fuel 5
   (module
     (func $f
       i32.const 0
@@ -65,7 +65,7 @@
     )
     (start $f)))
 
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       i32.const 1
@@ -76,7 +76,7 @@
     )
     (start $f)))
 
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       i32.const 1
@@ -89,7 +89,7 @@
     )
     (start $f)))
 
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       i32.const 0
@@ -102,7 +102,7 @@
     )
     (start $f)))
 
-(assert_fuel 3
+(assert_fuel 5
   (module
     (func $f
       block
@@ -114,7 +114,7 @@
     )
     (start $f)))
 
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       block
@@ -127,7 +127,7 @@
     (start $f)))
 
 ;; count code before unreachable
-(assert_fuel 2
+(assert_fuel 4
   (module
     (func $f
       i32.const 0
@@ -136,7 +136,7 @@
     (start $f)))
 
 ;; count code before return
-(assert_fuel 2
+(assert_fuel 4
   (module
     (func $f
       i32.const 0
@@ -145,14 +145,14 @@
     (start $f)))
 
 ;; cross-function fuel works
-(assert_fuel 3
+(assert_fuel 5
   (module
     (func $f
       call $other
     )
     (func $other)
     (start $f)))
-(assert_fuel 5
+(assert_fuel 7
   (module
     (func $f
       i32.const 0
@@ -162,7 +162,7 @@
     )
     (func $other (param i32))
     (start $f)))
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       call $other
@@ -172,7 +172,7 @@
       i32.const 0
     )
     (start $f)))
-(assert_fuel 4
+(assert_fuel 6
   (module
     (func $f
       i32.const 0
@@ -183,14 +183,14 @@
     (start $f)))
 
 ;; loops!
-(assert_fuel 1
+(assert_fuel 3
   (module
     (func $f
       loop
       end
     )
     (start $f)))
-(assert_fuel 53 ;; 5 loop instructions, 10 iterations, 2 header instrs, 1 func
+(assert_fuel 55 ;; 5 loop instructions, 10 iterations, 2 header instrs, 1 func
   (module
     (func $f
       (local i32)
@@ -207,7 +207,7 @@
     )
     (start $f)))
 
-(assert_fuel 105
+(assert_fuel 107
   (module
     (memory 1)
     (func $f
@@ -218,7 +218,7 @@
     )
     (start $f)))
 
-(assert_fuel 105
+(assert_fuel 107
   (module
     (memory 1)
     (func $f
@@ -229,7 +229,7 @@
     )
     (start $f)))
 
-(assert_fuel 25
+(assert_fuel 27
   (module
     (memory 1)
     (func $f
@@ -241,7 +241,7 @@
     (start $f)
     (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")))
 
-(assert_fuel 105
+(assert_fuel 107
   (module
     (table 100 funcref)
     (func $f
@@ -252,7 +252,7 @@
     )
     (start $f)))
 
-(assert_fuel 105
+(assert_fuel 107
   (module
     (table 100 funcref)
     (func $f
@@ -263,7 +263,7 @@
     )
     (start $f)))
 
-(assert_fuel 104
+(assert_fuel 106
   (module
     (table 0 funcref)
     (func $f
@@ -274,7 +274,7 @@
     )
     (start $f)))
 
-(assert_fuel 25
+(assert_fuel 27
   (module
     (table 20 funcref)
     (func $f
@@ -286,7 +286,7 @@
     (start $f)
     (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
 
-(assert_fuel 107
+(assert_fuel 211
   (module
     (type $a (array (mut i8)))
     (global $a (ref $a) (array.new_default $a (i32.const 100)))
@@ -300,7 +300,7 @@
     )
     (start $f)))
 
-(assert_fuel 106
+(assert_fuel 210
   (module
     (type $a (array (mut i8)))
     (global $a (ref $a) (array.new_default $a (i32.const 100)))
@@ -313,7 +313,7 @@
     )
     (start $f)))
 
-(assert_fuel 24
+(assert_fuel 26
   (module
     (type $a (array (mut i8)))
     (func $f
@@ -325,7 +325,7 @@
     (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     (start $f)))
 
-(assert_fuel 26
+(assert_fuel 130
   (module
     (type $a (array (mut i8)))
     (global $a (ref $a) (array.new_default $a (i32.const 100)))
@@ -339,7 +339,7 @@
     (data $d "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
     (start $f)))
 
-(assert_fuel 24
+(assert_fuel 26
   (module
     (type $a (array (mut funcref)))
     (func $f
@@ -351,7 +351,7 @@
     (start $f)
     (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
 
-(assert_fuel 26
+(assert_fuel 130
   (module
     (type $a (array (mut funcref)))
     (global $a (ref $a) (array.new_default $a (i32.const 100)))
@@ -365,7 +365,7 @@
     (start $f)
     (elem $e func $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f $f)))
 
-(assert_fuel 403 ;; 400 bytes set + 1 func + 2 instructions (drop is 0)
+(assert_fuel 105
   (module
     (type $a (array (mut funcref)))
     (func $f
@@ -375,7 +375,7 @@
     )
     (start $f)))
 
-(assert_fuel 404 ;; 400 bytes set + 1 func + 3 instructions (drop is 0)
+(assert_fuel 106
   (module
     (type $a (array (mut funcref)))
     (func $f
