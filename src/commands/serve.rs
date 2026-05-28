@@ -27,7 +27,7 @@ use wasmtime::{
 };
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
-use wasmtime_wasi::{I32Exit, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 #[cfg(feature = "component-model-async")]
 use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{
@@ -862,12 +862,7 @@ impl WorkerState for HostWorkerState {
 
     fn drop(&self, mut store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
         if let Err(error) = result {
-            // A clean exit via `wasi:cli/exit(ok)` is a guest-controlled signal
-            // that the instance is done and should not be reused.  Treat it as a
-            // graceful worker exit rather than an error.
-            if !error.downcast_ref::<I32Exit>().map_or(false, |e| e.0 == 0) {
-                eprintln!("worker failed: {error:?}");
-            }
+            eprintln!("worker failed: {error:?}");
         }
 
         if let Some(write_profile) = store.data_mut().write_profile.take() {

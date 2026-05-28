@@ -831,6 +831,15 @@ where
                             }
                         }
 
+                        // A clean exit via `wasi:cli/exit(ok)` is a
+                        // guest-controlled signal that the instance is done (not a trap).
+                        Poll::Ready(Some(Err(ref e)))
+                            if e.downcast_ref::<wasmtime_wasi::I32Exit>()
+                                .map_or(false, |e| e.0 == 0) =>
+                        {
+                            break Poll::Ready(Ok(()));
+                        }
+
                         // Instance trapped.
                         Poll::Ready(Some(Err(error))) => {
                             break Poll::Ready(Err(error));
