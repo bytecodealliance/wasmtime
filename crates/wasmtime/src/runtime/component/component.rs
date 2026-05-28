@@ -943,7 +943,8 @@ pub struct ComponentExportIndex {
 
 /// Trait used to lookup the export of a component or instance.
 ///
-/// This trait is used as an implementation detail of [`Instance::get_func`]
+/// This trait is used as an implementation detail of
+/// [`Instance::get_func`](crate::component::Instance::get_func).
 /// and related `get_*` methods, as well as [`Component::get_export`] and
 /// related `get_*` methods. Notable implementors of this trait are:
 ///
