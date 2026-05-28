@@ -2252,24 +2252,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             .bits()
             .cast_unsigned();
 
-        // (3) Slot must be precomputable.
-        let init = module
-            .table_initialization
-            .initial_values
-            .get(defined_table)?;
-        let precomputed = match init {
-            TableInitialValue::Null { precomputed } => precomputed,
-            // A fully-expression-driven initializer can't be resolved at
-            // compile time. Bail.
-            TableInitialValue::Expr(_) => return None,
-        };
+        // (3) Slot must be precomputable from the static funcref image.
+        let precomputed = module.table_initialization.get(defined_table)?;
         let slot = usize::try_from(callee_idx_u64).ok()?;
         if slot >= precomputed.len() {
             return None;
         }
         let target = precomputed[slot];
-        // `FuncIndex::reserved_value()` is the "no entry" sentinel —
-        // this slot wasn't covered by any static `elem` segment.
+        // `FuncIndex::reserved_value()` marks a null (uncovered) slot.
         if target.is_reserved_value() {
             return None;
         }
@@ -2333,35 +2323,20 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let Some(defined_table) = module.defined_table_index(table_index) else {
             return false;
         };
-        let Some(init) = module.table_initialization.initial_values.get(defined_table)
-        else {
+        let Some(precomputed) = module.table_initialization.get(defined_table) else {
             return false;
         };
-        let precomputed = match init {
-            TableInitialValue::Null { precomputed } => precomputed,
-            TableInitialValue::Expr(_) => return false,
-        };
-        // Empty precomputed means we have no information.
         if precomputed.is_empty() {
             return false;
         }
-        // The precomputed list only describes slots covered by the elem
-        // segments processed in `try_func_table_init`; slots beyond
-        // `precomputed.len()` are null at runtime. To prove the table
-        // can never yield a null funcref to a `call_indirect` we need
-        // coverage all the way to the table's minimum (== full, since
-        // the caller already proved the table is immutable and so can't
-        // be grown). Without this guard, a `call_indirect` to an
-        // uncovered-but-in-bounds slot would skip the null trap and
-        // dereference a null funcref pointer.
+        // Slots beyond `precomputed.len()` are null at runtime; coverage
+        // up to `limits.min` is required (caller proved immutable, so the
+        // table can't grow beyond min).
         let table_min = module.tables[table_index].limits.min;
         if (precomputed.len() as u64) < table_min {
             return false;
         }
-        // Every slot must be a real FuncIndex — no reserved-value sentinels.
-        precomputed
-            .iter()
-            .all(|f| !f.is_reserved_value())
+        precomputed.iter().all(|f| !f.is_reserved_value())
     }
 
     fn try_elide_sig_check_for_immutable_table(
@@ -2380,27 +2355,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             None => return false,
         };
 
-        let init = match module.table_initialization.initial_values.get(defined_table) {
-            Some(i) => i,
-            None => return false,
+        let precomputed = match module.table_initialization.get(defined_table) {
+            Some(p) if !p.is_empty() => p,
+            _ => return false,
         };
-        let precomputed = match init {
-            TableInitialValue::Null { precomputed } => precomputed,
-            TableInitialValue::Expr(_) => return false,
-        };
-
-        // Empty precomputed list means we have no information — fall back
-        // to the runtime sig check. (A subsequent `call_indirect` could
-        // still trap on OOB, but we don't have anything to elide against.)
-        if precomputed.is_empty() {
-            return false;
-        }
 
         let expected_ty = module.types[ty_index].unwrap_module_type_index();
         for &func_idx in precomputed.iter() {
-            // Null slots can't be called without trapping — fine to ignore
-            // here; the elided check would have trapped anyway, and the
-            // unchecked code path will trap on the null funcref deref.
+            // Null slots will trap on the funcref-NULL load anyway.
             if func_idx.is_reserved_value() {
                 continue;
             }

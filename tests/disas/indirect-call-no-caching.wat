@@ -68,7 +68,6 @@
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region2 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -101,17 +100,11 @@
 ;; @0050                               jump block3(v19)
 ;;
 ;;                                 block3(v16: i64):
-;; @0050                               v20 = load.i64 notrap aligned readonly can_move region2 v0+40
-;; @0050                               v21 = load.i32 notrap aligned readonly can_move v20
-;; @0050                               v22 = load.i32 user7 aligned readonly v16+16
-;; @0050                               v23 = icmp eq v22, v21
-;; @0050                               v24 = uextend.i32 v23
-;; @0050                               trapz v24, user8
-;; @0050                               v25 = load.i64 notrap aligned readonly v16+8
-;; @0050                               v26 = load.i64 notrap aligned readonly v16+24
-;; @0050                               v27 = call_indirect sig0, v25(v26, v0)
+;; @0050                               v20 = load.i64 user7 aligned readonly v16+8
+;; @0050                               v21 = load.i64 notrap aligned readonly v16+24
+;; @0050                               v22 = call_indirect sig0, v20(v21, v0)
 ;; @0053                               jump block1
 ;;
 ;;                                 block1:
-;; @0053                               return v27
+;; @0053                               return v22
 ;; }
