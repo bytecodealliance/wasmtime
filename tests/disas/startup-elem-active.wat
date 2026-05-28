@@ -46,6 +46,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
+<<<<<<< HEAD
 ;;     region0 = 671088640 "VMTableDefinition+0x0"
 ;;     region1 = 671088648 "VMTableDefinition+0x8"
 ;;     region2 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
@@ -79,5 +80,25 @@
 ;;     v66 = iadd v13, v138  ; v138 = 12
 ;;     v68 = select_spectre_guard v136, v71, v66  ; v71 = 0
 ;;     store user6 aligned region2 v125, v68  ; v125 = 25
+=======
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly can_move gv0+48
+;;
+;; block0(v0: i64, v1: i64):
+;;     v100 = iconst.i32 21
+;;     v12 = load.i64 notrap aligned readonly can_move v0+48
+;;     v79 = iconst.i64 4
+;;     v16 = iadd v12, v79  ; v79 = 4
+;;     store user6 aligned region0 v100, v16  ; v100 = 21
+;;     v117 = iconst.i32 23
+;;     v134 = iconst.i64 8
+;;     v46 = iadd v12, v134  ; v134 = 8
+;;     store user6 aligned region0 v117, v46  ; v117 = 23
+;;     v136 = iconst.i32 25
+;;     v152 = iconst.i64 12
+;;     v62 = iadd v12, v152  ; v152 = 12
+;;     store user6 aligned region0 v136, v62  ; v136 = 25
+>>>>>>> 8ca462d0d4 (port call_indirect elisions to upstream table_initialization model)
 ;;     return
 ;; }

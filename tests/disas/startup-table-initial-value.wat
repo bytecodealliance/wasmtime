@@ -40,6 +40,7 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
+<<<<<<< HEAD
 ;;     region0 = 671088640 "VMTableDefinition+0x0"
 ;;     region1 = 671088648 "VMTableDefinition+0x8"
 ;;     region2 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
@@ -66,6 +67,27 @@
 ;;     v89 = iconst.i64 4
 ;;     v90 = iadd v29, v89  ; v89 = 4
 ;;     brif v88, block2, block1(v90)
+=======
+;;     gv0 = vmctx
+;;     gv1 = load.i64 notrap aligned readonly can_move gv0+48
+;;
+;; block0(v0: i64, v1: i64):
+;;     v17 = load.i64 notrap aligned readonly can_move v0+48
+;;     v3 = iconst.i32 1
+;;     v84 = iconst.i64 36
+;;     v86 = iadd v17, v84  ; v84 = 36
+;;     v19 = iconst.i64 4
+;;     jump block1(v17)
+;;
+;; block1(v28: i64):
+;;     v89 = iconst.i32 1
+;;     store notrap aligned v89, v28  ; v89 = 1
+;;     v90 = iadd.i64 v17, v84  ; v84 = 36
+;;     v91 = icmp eq v28, v90
+;;     v92 = iconst.i64 4
+;;     v93 = iadd v28, v92  ; v92 = 4
+;;     brif v91, block2, block1(v93)
+>>>>>>> 8ca462d0d4 (port call_indirect elisions to upstream table_initialization model)
 ;;
 ;; block2:
 ;;     return
