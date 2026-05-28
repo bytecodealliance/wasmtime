@@ -193,6 +193,17 @@ pub mod foo {
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -203,7 +214,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/green")?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -228,6 +239,25 @@ pub mod foo {
                     Host::foo(*self)
                 }
             }
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                inst.func_wrap(
+                    "foo",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::foo(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -238,15 +268,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/red")?;
-                inst.func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::foo(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }

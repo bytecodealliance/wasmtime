@@ -1001,3 +1001,138 @@ mod anyhow_errors {
         Ok(())
     }
 }
+
+mod implements {
+    use super::*;
+    use std::collections::HashMap;
+    use wasmtime::component::HasSelf;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                get: func(key: u32) -> u32;
+                set: func(key: u32, value: u32);
+            }
+
+            world cache {
+                import hot-cache: store;
+                import durable: store;
+
+                export run: func();
+            }
+        ",
+    });
+
+    const DUMMY: &str = r#"
+        (component
+            (import "hot-cache" (instance $hot
+                (export "get" (func (param "key" u32) (result u32)))
+                (export "set" (func (param "key" u32) (param "value" u32)))
+            ))
+            (import "durable" (instance $dur
+                (export "get" (func (param "key" u32) (result u32)))
+                (export "set" (func (param "key" u32) (param "value" u32)))
+            ))
+
+            (core module $m
+                (import "hot" "get" (func $hot-get (param i32) (result i32)))
+                (import "hot" "set" (func $hot-set (param i32 i32)))
+                (import "durable" "get" (func $durable-get (param i32) (result i32)))
+                (import "durable" "set" (func $durable-set (param i32 i32)))
+
+                (func (export "run")
+                    (call $durable-set (i32.const 0) (i32.const 1))
+                    (call $hot-set (i32.const 0) (i32.const 2))
+
+                    (if (i32.ne (call $durable-get (i32.const 0)) (i32.const 1))
+                        (then unreachable))
+                    (if (i32.ne (call $hot-get (i32.const 0)) (i32.const 2))
+                        (then unreachable))
+                )
+            )
+            (core func $hot-get (canon lower (func $hot "get")))
+            (core func $hot-set (canon lower (func $hot "set")))
+            (core func $dur-get (canon lower (func $dur "get")))
+            (core func $dur-set (canon lower (func $dur "set")))
+            (core instance $i (instantiate $m
+                (with "hot" (instance
+                    (export "get" (func $hot-get))
+                    (export "set" (func $hot-set))
+                ))
+                (with "durable" (instance
+                    (export "get" (func $dur-get))
+                    (export "set" (func $dur-set))
+                ))
+            ))
+
+            (func (export "run") (canon lift (core func $i "run")))
+        )
+    "#;
+
+    #[test]
+    fn add_to_linker_can_instantiate() -> Result<()> {
+        #[derive(Default)]
+        struct MyHost {
+            kv: HashMap<u32, u32>,
+        }
+
+        impl demo::pkg::store::Host for MyHost {
+            fn get(&mut self, key: u32) -> u32 {
+                *self.kv.get(&key).unwrap()
+            }
+
+            fn set(&mut self, key: u32, value: u32) {
+                self.kv.insert(key, value);
+            }
+        }
+
+        let engine = engine();
+        let mut linker = Linker::new(&engine);
+        Cache::add_to_linker::<_, HasSelf<MyHost>>(&mut linker, |s| s)?;
+        let component = Component::new(&engine, DUMMY)?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let instance = Cache::instantiate(&mut store, &component, &linker)?;
+
+        // This is expected to fail since both interfaces are routed to the same
+        // location, not different ones.
+        assert!(instance.call_run(&mut store).is_err());
+        Ok(())
+    }
+
+    impl demo::pkg::store::Host for HashMap<u32, u32> {
+        fn get(&mut self, key: u32) -> u32 {
+            *HashMap::get(self, &key).unwrap()
+        }
+
+        fn set(&mut self, key: u32, value: u32) {
+            self.insert(key, value);
+        }
+    }
+
+    #[test]
+    fn add_to_linker_instance_can_instantiate() -> Result<()> {
+        #[derive(Default)]
+        struct MyHost {
+            hot_cache: HashMap<u32, u32>,
+            durable: HashMap<u32, u32>,
+        }
+
+        let engine = engine();
+        let mut linker = Linker::new(&engine);
+        demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<HashMap<u32, u32>>>(
+            &mut linker.instance("hot-cache")?,
+            |s| &mut s.hot_cache,
+        )?;
+        demo::pkg::store::add_to_linker_instance::<MyHost, HasSelf<HashMap<u32, u32>>>(
+            &mut linker.instance("durable")?,
+            |s| &mut s.durable,
+        )?;
+        let component = Component::new(&engine, DUMMY)?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let instance = Cache::instantiate(&mut store, &component, &linker)?;
+        instance.call_run(&mut store)?;
+        Ok(())
+    }
+}

@@ -8,3 +8,6 @@
 
 # ISLE should use lisp syntax highlighting.
 *.isle linguist-language=lisp
+
+# Generated files don't need diffs rendered by default
+crates/component-macro/tests/expanded/** linguist-generated=true
