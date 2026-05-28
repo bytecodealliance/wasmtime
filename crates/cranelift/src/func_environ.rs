@@ -1483,13 +1483,13 @@ impl FuncEnvironment<'_> {
 
         if !self.module.globals[index].mutability {
             if let Some(index) = self.module.defined_global_index(index) {
-                if let Some((_, value)) = self
+                if let Ok(i) = self
                     .module
                     .global_initializers
-                    .iter()
-                    .find(|(def_index, _)| *def_index == index)
+                    .binary_search_by_key(&index, |(def_index, _)| *def_index)
                 {
-                    return GlobalVariable::Constant { value: *value };
+                    let (_, value) = self.module.global_initializers[i];
+                    return GlobalVariable::Constant { value };
                 }
             }
         }

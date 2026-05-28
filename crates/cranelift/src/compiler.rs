@@ -648,7 +648,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 };
                 let ty = types[ty].unwrap_func();
                 match abi {
-                    // This is a think array-to-wasm shim around the actual
+                    // This is a thin array-to-wasm shim around the actual
                     // implementation.
                     Abi::Array => self.array_to_wasm_trampoline(
                         key,
@@ -658,7 +658,7 @@ impl wasmtime_environ::Compiler for Compiler {
                         self.isa.pointer_bytes().vmctx_store_context().into(),
                         wasmtime_environ::VMCONTEXT_MAGIC,
                     ),
-                    // Delegate to a helper t o finish compiling this.
+                    // Delegate to a helper to finish compiling this.
                     Abi::Wasm => self.compile_module_startup(translation, types, key, ty),
                     Abi::Patchable => unreachable!(),
                 }
