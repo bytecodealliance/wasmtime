@@ -80,40 +80,40 @@
 ;; @001f                               jump block4(v29, v32)
 ;;
 ;;                                 block4(v41: i32, v42: i64):
-;;                                     v91 = iconst.i64 16
-;; @001f                               v43 = iadd v42, v91  ; v91 = 16
-;; @001f                               store.i32 user2 region1 v2, v43
+;; @001f                               v43 = iconst.i64 16
+;; @001f                               v44 = iadd v42, v43  ; v43 = 16
+;; @001f                               store.i32 user2 region1 v2, v44
 ;; @001f                               trapz v41, user16
 ;;                                     v143 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v144 = load.i64 notrap aligned readonly can_move v143+32
-;; @001f                               v46 = uextend.i64 v41
-;; @001f                               v48 = iadd v144, v46
-;; @001f                               v50 = iadd v48, v91  ; v91 = 16
-;; @001f                               v51 = load.i32 user2 readonly region1 v50
-;; @001f                               v52 = uextend.i64 v51
-;; @001f                               v57 = icmp.i64 ugt v5, v52
-;; @001f                               trapnz v57, user17
-;; @001f                               v68 = load.i64 notrap aligned v143+40
-;;                                     v85 = iconst.i64 20
-;; @001f                               v61 = iadd v48, v85  ; v85 = 20
-;; @001f                               v70 = uadd_overflow_trap v61, v99, user2
-;; @001f                               v69 = iadd v144, v68
-;; @001f                               v71 = icmp ugt v70, v69
-;; @001f                               trapnz v71, user2
+;; @001f                               v47 = uextend.i64 v41
+;; @001f                               v49 = iadd v144, v47
+;; @001f                               v51 = iadd v49, v43  ; v43 = 16
+;; @001f                               v52 = load.i32 user2 readonly region1 v51
+;; @001f                               v53 = uextend.i64 v52
+;; @001f                               v58 = icmp.i64 ugt v5, v53
+;; @001f                               trapnz v58, user17
+;; @001f                               v70 = load.i64 notrap aligned v143+40
+;; @001f                               v62 = iconst.i64 20
+;; @001f                               v63 = iadd v49, v62  ; v62 = 20
+;; @001f                               v72 = uadd_overflow_trap v63, v99, user2
+;; @001f                               v71 = iadd v144, v70
+;; @001f                               v73 = icmp ugt v72, v71
+;; @001f                               trapnz v73, user2
 ;;                                     v123 = iconst.i64 0
-;; @001f                               v74 = icmp.i64 eq v5, v123  ; v123 = 0
-;; @001f                               v44 = iconst.i32 0
+;; @001f                               v76 = icmp.i64 eq v5, v123  ; v123 = 0
+;; @001f                               v45 = iconst.i32 0
 ;;                                     v97 = iconst.i64 4
-;; @001f                               v72 = iadd v61, v99
-;; @001f                               brif v74, block6, block5(v61)
+;; @001f                               v74 = iadd v63, v99
+;; @001f                               brif v76, block6, block5(v63)
 ;;
-;;                                 block5(v75: i64):
+;;                                 block5(v77: i64):
 ;;                                     v145 = iconst.i32 0
-;; @001f                               store user2 little region1 v145, v75  ; v145 = 0
+;; @001f                               store user2 little region1 v145, v77  ; v145 = 0
 ;;                                     v146 = iconst.i64 4
-;;                                     v147 = iadd v75, v146  ; v146 = 4
-;; @001f                               v77 = icmp eq v147, v72
-;; @001f                               brif v77, block6, block5(v147)
+;;                                     v147 = iadd v77, v146  ; v146 = 4
+;; @001f                               v80 = icmp eq v147, v74
+;; @001f                               brif v80, block6, block5(v147)
 ;;
 ;;                                 block6:
 ;; @0022                               jump block1(v41)

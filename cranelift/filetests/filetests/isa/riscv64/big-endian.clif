@@ -201,7 +201,8 @@ function %f(i64) -> i64 {
 function %f(i64) {
     block0(v0: i64):
         v1 = load.i32 big v0+8
-        v2 = iadd_imm v0, 1
+        v3 = iconst.i64 1
+        v2 = iadd v0, v3
         store v2, v0
         return
 }

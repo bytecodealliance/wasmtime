@@ -82,7 +82,8 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
     v38 = ishl v32, v32
     v39 = select v30, v36, v36
     v40 = stack_addr.i64 ss0+3
-    v41 = iadd_imm v40, 0
+    v87 = iconst.i64 0
+    v41 = iadd v40, v87
     v42 = atomic_rmw.i8 and v41, v10
     v43 = select v30, v39, v39
     v44 = select v30, v43, v43

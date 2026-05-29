@@ -38,36 +38,36 @@
 ;; @002a                               v14 = load.i64 notrap aligned readonly can_move v56+32
 ;; @002a                               v15 = uextend.i64 v13
 ;; @002a                               v16 = iadd v14, v15
-;;                                     v55 = iconst.i64 24
-;; @002a                               v17 = iadd v16, v55  ; v55 = 24
-;; @002a                               store user2 little region0 v2, v17
-;;                                     v54 = iconst.i64 28
-;; @002a                               v18 = iadd v16, v54  ; v54 = 28
-;; @002a                               istore8 user2 little region0 v3, v18
-;;                                     v41 = load.i32 notrap v58
-;;                                     v51 = iconst.i32 1
-;; @002a                               v20 = band v41, v51  ; v51 = 1
-;; @002a                               v21 = iconst.i32 0
-;; @002a                               v22 = icmp eq v41, v21  ; v21 = 0
-;; @002a                               v23 = uextend.i32 v22
-;; @002a                               v24 = bor v20, v23
-;; @002a                               brif v24, block3, block2
+;; @002a                               v17 = iconst.i64 24
+;; @002a                               v18 = iadd v16, v17  ; v17 = 24
+;; @002a                               store user2 little region0 v2, v18
+;; @002a                               v19 = iconst.i64 28
+;; @002a                               v20 = iadd v16, v19  ; v19 = 28
+;; @002a                               istore8 user2 little region0 v3, v20
+;;                                     v45 = load.i32 notrap v58
+;;                                     v54 = iconst.i32 1
+;; @002a                               v23 = band v45, v54  ; v54 = 1
+;; @002a                               v24 = iconst.i32 0
+;; @002a                               v25 = icmp eq v45, v24  ; v24 = 0
+;; @002a                               v26 = uextend.i32 v25
+;; @002a                               v27 = bor v23, v26
+;; @002a                               brif v27, block3, block2
 ;;
 ;;                                 block2:
-;; @002a                               v25 = uextend.i64 v41
-;; @002a                               v27 = iadd.i64 v14, v25
-;; @002a                               v28 = iconst.i64 8
-;; @002a                               v29 = iadd v27, v28  ; v28 = 8
-;; @002a                               v30 = load.i64 user2 region0 v29
-;;                                     v46 = iconst.i64 1
-;; @002a                               v31 = iadd v30, v46  ; v46 = 1
-;; @002a                               store user2 region0 v31, v29
+;; @002a                               v28 = uextend.i64 v45
+;; @002a                               v30 = iadd.i64 v14, v28
+;; @002a                               v31 = iconst.i64 8
+;; @002a                               v32 = iadd v30, v31  ; v31 = 8
+;; @002a                               v33 = load.i64 user2 region0 v32
+;; @002a                               v34 = iconst.i64 1
+;; @002a                               v35 = iadd v33, v34  ; v34 = 1
+;; @002a                               store user2 region0 v35, v32
 ;; @002a                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v53 = iconst.i64 32
-;; @002a                               v19 = iadd.i64 v16, v53  ; v53 = 32
-;; @002a                               store.i32 user2 little region0 v41, v19
+;; @002a                               v21 = iconst.i64 32
+;; @002a                               v22 = iadd.i64 v16, v21  ; v21 = 32
+;; @002a                               store.i32 user2 little region0 v45, v22
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

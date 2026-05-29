@@ -63,7 +63,8 @@ block0(v0: i64, v1: i64):
 
 function %i8_imm(i8) -> i8 {
 block0(v0: i8):
-    v2 = iadd_imm v0, 10
+    v3 = iconst.i8 10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -78,7 +79,8 @@ block0(v0: i8):
 
 function %i16_imm(i16) -> i16 {
 block0(v0: i16):
-    v2 = iadd_imm v0, 10
+    v3 = iconst.i16 10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -93,7 +95,8 @@ block0(v0: i16):
 
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, 10
+    v3 = iconst.i32 10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -108,7 +111,8 @@ block0(v0: i32):
 
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -123,7 +127,8 @@ block0(v0: i64):
 
 function %i32_imm_big(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, 65536
+    v3 = iconst.i32 65536
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -138,7 +143,8 @@ block0(v0: i32):
 
 function %i64_imm_big(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, 65536
+    v3 = iconst.i64 65536
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -153,7 +159,8 @@ block0(v0: i64):
 
 function %i64_imm_super_big(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, 0x1_1111_1111
+    v3 = iconst.i64 0x1_1111_1111
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -170,7 +177,8 @@ block0(v0: i64):
 
 function %i8_negative_imm(i8) -> i8 {
 block0(v0: i8):
-    v2 = iadd_imm v0, -10
+    v3 = iconst.i8 -10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -185,7 +193,8 @@ block0(v0: i8):
 
 function %i16_negative_imm(i16) -> i16 {
 block0(v0: i16):
-    v2 = iadd_imm v0, -10
+    v3 = iconst.i16 -10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -200,7 +209,8 @@ block0(v0: i16):
 
 function %i32_negative_imm(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, -10
+    v3 = iconst.i32 -10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -215,7 +225,8 @@ block0(v0: i32):
 
 function %i64_negative_imm(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, -10
+    v3 = iconst.i64 -10
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -230,7 +241,8 @@ block0(v0: i64):
 
 function %i32_negative_imm_big(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, -65536
+    v3 = iconst.i32 -65536
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -245,7 +257,8 @@ block0(v0: i32):
 
 function %i64_negative_imm_big(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, -65536
+    v3 = iconst.i64 -65536
+    v2 = iadd v0, v3
     return v2
 }
 
@@ -260,7 +273,8 @@ block0(v0: i64):
 
 function %i32_negative_i32_min(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, 0x8000_0000
+    v3 = iconst.i32 -2147483648
+    v2 = iadd v0, v3
     return v2
 }
 

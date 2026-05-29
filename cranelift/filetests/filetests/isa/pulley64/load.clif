@@ -465,7 +465,8 @@ block0(v0: i64):
 
 function %load_i64_with_add_and_offset(i64) -> i64 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i64 v1+8
     return v2
 }
@@ -481,7 +482,8 @@ block0(v0: i64):
 
 function %load_i8_be_custom_trap(i64) -> i8 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i8 big user12 v1+8
     return v2
 }
@@ -497,7 +499,8 @@ block0(v0: i64):
 
 function %load_i16_be_custom_trap(i64) -> i16 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i16 big user12 v1+8
     return v2
 }
@@ -513,7 +516,8 @@ block0(v0: i64):
 
 function %load_i32_be_custom_trap(i64) -> i32 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i32 big user12 v1+8
     return v2
 }
@@ -529,7 +533,8 @@ block0(v0: i64):
 
 function %load_i64_be_custom_trap(i64) -> i64 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i64 big user12 v1+8
     return v2
 }
@@ -545,7 +550,8 @@ block0(v0: i64):
 
 function %load_f32_be_custom_trap(i64) -> f32 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.f32 big user12 v1+8
     return v2
 }
@@ -561,7 +567,8 @@ block0(v0: i64):
 
 function %load_f64_be_custom_trap(i64) -> f64 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.f64 big user12 v1+8
     return v2
 }
@@ -577,7 +584,8 @@ block0(v0: i64):
 
 function %load_i64x2_be_custom_trap(i64) -> i64x2 {
 block0(v0: i64):
-    v1 = iadd_imm v0, 10
+    v3 = iconst.i64 10
+    v1 = iadd v0, v3
     v2 = load.i64x2 big user12 v1+8
     return v2
 }

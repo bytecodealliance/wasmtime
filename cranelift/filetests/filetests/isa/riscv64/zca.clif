@@ -283,7 +283,8 @@ block0:
 
 function %c_addi_max(i64) -> i64 {
 block0(v0: i64):
-  v2 = iadd_imm.i64 v0, 31
+  v3 = iconst.i64 31
+  v2 = iadd v0, v3
   return v2
 }
 
@@ -299,7 +300,8 @@ block0(v0: i64):
 
 function %c_addi_min(i64) -> i64 {
 block0(v0: i64):
-  v2 = iadd_imm.i64 v0, -32
+  v3 = iconst.i64 -32
+  v2 = iadd v0, v3
   return v2
 }
 
@@ -331,7 +333,8 @@ block0(v0: i32):
 
 function %c_addiw(i32) -> i64 {
 block0(v0: i32):
-  v1 = iadd_imm.i32 v0, -32
+  v3 = iconst.i32 -32
+  v1 = iadd v0, v3
   v2 = sextend.i64 v1
   return v2
 }

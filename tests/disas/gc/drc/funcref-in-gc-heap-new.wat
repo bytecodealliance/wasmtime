@@ -33,18 +33,18 @@
 ;; @0020                               v11 = call fn0(v0, v6, v9, v4, v10)  ; v6 = -1342177280, v4 = 32, v10 = 8
 ;;                                     v26 = stack_addr.i64 ss0
 ;;                                     store notrap v11, v26
-;; @0020                               v17 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
-;; @0020                               v18 = ireduce.i32 v17
+;; @0020                               v18 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
+;; @0020                               v19 = ireduce.i32 v18
 ;; @0020                               v24 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0020                               v12 = load.i64 notrap aligned readonly can_move v24+32
 ;; @0020                               v13 = uextend.i64 v11
 ;; @0020                               v14 = iadd v12, v13
-;;                                     v22 = iconst.i64 24
-;; @0020                               v15 = iadd v14, v22  ; v22 = 24
-;; @0020                               store user2 little region0 v18, v15
-;;                                     v19 = load.i32 notrap v26
+;; @0020                               v15 = iconst.i64 24
+;; @0020                               v16 = iadd v14, v15  ; v15 = 24
+;; @0020                               store user2 little region0 v19, v16
+;;                                     v20 = load.i32 notrap v26
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;; @0023                               return v19
+;; @0023                               return v20
 ;; }

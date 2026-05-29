@@ -36,7 +36,8 @@ block1(v5: i32):
     v9 = f32const 0.0
     v10 = f32const 0.0
     v11 = fadd v9, v10
-    v12 = iadd_imm v5, 1
+    v101 = iconst.i32 1
+    v12 = iadd v5, v101
     v13 = icmp ult v12, v2
     brif v13, block1(v12), block4 ; unordered: block1:$BRIF1 -> block1
                                   ; unordered: block1:$BRIF1 -> block4

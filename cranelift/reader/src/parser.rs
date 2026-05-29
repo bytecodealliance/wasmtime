@@ -3108,7 +3108,8 @@ mod tests {
                                            block0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
-                                             v1 = iadd_imm v3, 17
+                                             v5 = iconst.i8 17
+                                             v1 = iadd v3, v5
                                            }",
         )
         .parse_function()

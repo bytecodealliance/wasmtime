@@ -157,32 +157,32 @@
 ;; @004e                               v37 = iconst.i64 8
 ;; @004e                               v38 = iadd.i64 v17, v37  ; v37 = 8
 ;; @004e                               v39 = load.i64 user2 region0 v38
-;;                                     v79 = iconst.i64 1
-;; @004e                               v40 = iadd v39, v79  ; v79 = 1
-;; @004e                               store user2 region0 v40, v38
+;; @004e                               v40 = iconst.i64 1
+;; @004e                               v41 = iadd v39, v40  ; v40 = 1
+;; @004e                               store user2 region0 v41, v38
 ;; @004e                               store.i32 user2 region0 v9, v22
-;; @004e                               v48 = load.i32 notrap aligned v22+4
+;; @004e                               v49 = load.i32 notrap aligned v22+4
 ;;                                     v100 = iconst.i32 1
-;;                                     v101 = iadd v48, v100  ; v100 = 1
+;;                                     v101 = iadd v49, v100  ; v100 = 1
 ;; @004e                               store notrap aligned v101, v22+4
-;; @004e                               v57 = load.i32 notrap aligned v22+8
-;; @004e                               v58 = iadd v57, v57
-;; @004e                               v59 = iconst.i32 1024
-;; @004e                               v60 = umax v58, v59  ; v59 = 1024
-;; @004e                               v61 = icmp uge v101, v60
-;; @004e                               brif v61, block5, block6
+;; @004e                               v59 = load.i32 notrap aligned v22+8
+;; @004e                               v60 = iadd v59, v59
+;; @004e                               v61 = iconst.i32 1024
+;; @004e                               v62 = umax v60, v61  ; v61 = 1024
+;; @004e                               v63 = icmp uge v101, v62
+;; @004e                               brif v63, block5, block6
 ;;
 ;;                                 block5 cold:
-;; @004e                               v63 = call fn0(v0), stack_map=[i32 @ ss0+0]
+;; @004e                               v65 = call fn0(v0), stack_map=[i32 @ ss0+0]
 ;; @004e                               jump block6
 ;;
 ;;                                 block6:
 ;; @004e                               jump block4
 ;;
 ;;                                 block4:
-;;                                     v64 = load.i32 notrap v95
+;;                                     v66 = load.i32 notrap v95
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:
-;; @0052                               return v64
+;; @0052                               return v66
 ;; }
