@@ -2797,10 +2797,42 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             ("", "", "")
         };
-
-        self.rustdoc(&func.docs);
+        let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
+            TypeMode::Owned
+        } else {
+            TypeMode::AllBorrowed("'_")
+        };
         let wt = self.generator.wasmtime_path();
 
+        // First generate an accessor to get the raw `TypedFunc` itself.
+        uwrite!(
+            self.src,
+            "pub fn func_{}(&self) -> {wt}::component::TypedFunc<{}> {{\n",
+            func.item_name().to_snake_case(),
+            self.typedfunc_sig(func, param_mode)
+        );
+
+        self.src.push_str("unsafe {\n");
+        uwrite!(
+            self.src,
+            "{wt}::component::TypedFunc::<{}>",
+            self.typedfunc_sig(func, param_mode)
+        );
+        let projection_to_func = if func.kind.resource().is_some() {
+            ".funcs"
+        } else {
+            ""
+        };
+        uwriteln!(
+            self.src,
+            "::new_unchecked(self{projection_to_func}.{})",
+            func_field_name(self.resolve, func),
+        );
+        self.src.push_str("}\n");
+        self.src.push_str("}\n");
+
+        // Next generate the actual function itself.
+        self.rustdoc(&func.docs);
         uwrite!(
             self.src,
             "pub {async_} fn call_{}",
@@ -2814,12 +2846,6 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             uwrite!(self.src, "<S: {wt}::AsContextMut>(&self, mut store: S, ",);
         }
-
-        let param_mode = if flags.contains(FunctionFlags::ASYNC | FunctionFlags::STORE) {
-            TypeMode::Owned
-        } else {
-            TypeMode::AllBorrowed("'_")
-        };
 
         for (i, param) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{}: ", i);
@@ -2868,23 +2894,11 @@ impl<'a> InterfaceGenerator<'a> {
             }
         }
 
-        self.src.push_str("let callee = unsafe {\n");
-        uwrite!(
-            self.src,
-            "{wt}::component::TypedFunc::<{}>",
-            self.typedfunc_sig(func, param_mode)
-        );
-        let projection_to_func = if func.kind.resource().is_some() {
-            ".funcs"
-        } else {
-            ""
-        };
         uwriteln!(
             self.src,
-            "::new_unchecked(self{projection_to_func}.{})",
-            func_field_name(self.resolve, func),
+            "let callee = self.func_{}();",
+            func.item_name().to_snake_case(),
         );
-        self.src.push_str("};\n");
 
         self.src.push_str("let (");
         if func.result.is_some() {

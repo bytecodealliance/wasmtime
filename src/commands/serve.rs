@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::io::{self, AsyncWrite};
 use tokio::sync::Notify;
-use wasmtime::component::{Component, Linker};
+use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
 use wasmtime::{
     AsContextMut as _, Engine, Result, Store, StoreContextMut, StoreLimits, UpdateDeadline, bail,
@@ -28,8 +28,6 @@ use wasmtime::{
 use wasmtime_cli_flags::opt::WasmtimeOptionValue;
 use wasmtime_wasi::p2::{StreamError, StreamResult};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-#[cfg(feature = "component-model-async")]
-use wasmtime_wasi_http::handler::p2::bindings as p2;
 use wasmtime_wasi_http::handler::{
     self, HandlerState, Instance, ProxyHandler, ProxyPre, ShouldAccept, ViewFn, WorkerExpiration,
     WorkerState, WorkerStatus,
@@ -609,10 +607,10 @@ impl ServeCommand {
         #[cfg(feature = "component-model-async")]
         let instance = match wasmtime_wasi_http::p3::bindings::ServicePre::new(instance.clone()) {
             Ok(pre) => ProxyPre::P3(pre),
-            Err(_) => ProxyPre::P2(p2::ProxyPre::new(instance)?),
+            Err(_) => ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?),
         };
         #[cfg(not(feature = "component-model-async"))]
-        let instance = ProxyPre::P2(p2::ProxyPre::new(instance)?);
+        let instance = ProxyPre::P2(wasmtime_wasi_http::p2::bindings::ProxyPre::new(instance)?);
 
         // Spawn background task(s) waiting for graceful shutdown signals. This
         // always listens for ctrl-c but additionally can listen for a TCP
@@ -691,6 +689,7 @@ impl ServeCommand {
             max_instance_concurrent_reuse_count,
             instance,
             next_instance_id: AtomicU64::default(),
+            next_request_id: AtomicU64::default(),
             // Give one shutdown guard to this handler which will track the
             // full lifetime of any instances spawned.
             _shutdown_guard: Box::new(shutdown.clone().increment()),
@@ -835,6 +834,7 @@ struct HostWorkerState {
 
 impl WorkerState for HostWorkerState {
     type StoreData = Host;
+    type RequestId = u64;
 
     fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
         if total_count >= self.max_instance_reuse_count {
@@ -848,13 +848,13 @@ impl WorkerState for HostWorkerState {
 
     fn on_request_start(
         &self,
-        req: &handler::Request,
+        _store: StoreContextMut<Host>,
+        request_id: u64,
+        _task_id: GuestTaskId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>> {
         log::info!(
-            "Instance {} handling request {} {}",
+            "Instance {} handling request {request_id}",
             self.instance_id,
-            req.method(),
-            req.uri()
         );
 
         Box::pin(tokio::time::sleep(self.request_timeout))
@@ -882,6 +882,7 @@ struct HostHandlerState {
     max_instance_concurrent_reuse_count: usize,
     instance: ProxyPre<Host>,
     next_instance_id: AtomicU64,
+    next_request_id: AtomicU64,
     _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
 }
 
@@ -1257,12 +1258,24 @@ async fn handle_request(
 
     handler.state().request_headers.apply(req.headers_mut());
 
+    let request_id = handler
+        .state()
+        .next_request_id
+        .fetch_add(1, Ordering::Relaxed);
+    log::info!(
+        "Received request {request_id}: {} {}",
+        req.method(),
+        req.uri()
+    );
     handler
-        .handle(req.map(|body| {
-            body.map_err(ErrorCode::from_hyper_request_error)
-                .map_err(handler::ErrorCode::from)
-                .boxed_unsync()
-        }))
+        .handle(
+            request_id,
+            req.map(|body| {
+                body.map_err(ErrorCode::from_hyper_request_error)
+                    .map_err(handler::ErrorCode::from)
+                    .boxed_unsync()
+            }),
+        )
         .await
 }
 
