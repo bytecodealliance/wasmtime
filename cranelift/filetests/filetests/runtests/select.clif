@@ -187,7 +187,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_eq_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm eq v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp eq v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -197,7 +198,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_eq_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm eq v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp eq v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -207,7 +209,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_ne_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm ne v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp ne v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -217,7 +220,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_ne_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm ne v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp ne v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -227,7 +231,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_slt_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm slt v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp slt v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -238,7 +243,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_slt_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm slt v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp slt v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -249,7 +255,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_ult_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm ult v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp ult v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -260,7 +267,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_ult_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm ult v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp ult v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -271,7 +279,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_sle_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm sle v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp sle v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -282,7 +291,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_sle_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm sle v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp sle v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -293,7 +303,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_ule_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm ule v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp ule v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -304,7 +315,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_ule_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm ule v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp ule v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -315,7 +327,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_sgt_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm sgt v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp sgt v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -326,7 +339,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_sgt_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm sgt v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp sgt v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -337,7 +351,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_ugt_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm ugt v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp ugt v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -348,7 +363,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_ugt_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm ugt v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp ugt v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -359,7 +375,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_sge_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm sge v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp sge v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -370,7 +387,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_sge_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm sge v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp sge v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }
@@ -381,7 +399,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 function %select_icmp32_uge_imm(i32, i32, i32) -> i32 {
 block0(v0: i32, v1: i32, v2: i32):
-  v3 = icmp_imm uge v0, 7
+  v5 = iconst.i32 7
+  v3 = icmp uge v0, v5
   v4 = select.i32 v3, v1, v2
   return v4
 }
@@ -392,7 +411,8 @@ block0(v0: i32, v1: i32, v2: i32):
 
 function %select_icmp64_uge_imm(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = icmp_imm uge v0, 7
+  v5 = iconst.i64 7
+  v3 = icmp uge v0, v5
   v4 = select.i64 v3, v1, v2
   return v4
 }

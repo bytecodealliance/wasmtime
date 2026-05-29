@@ -749,7 +749,6 @@ impl<'a> Verifier<'a> {
             | Shuffle { .. }
             | IntAddTrap { .. }
             | IntCompare { .. }
-            | IntCompareImm { .. }
             | FloatCompare { .. }
             | Load { .. }
             | Store { .. }

@@ -100,17 +100,17 @@
 ;; @0022                               v71 = icmp ugt v70, v69
 ;; @0022                               trapnz v71, user2
 ;;                                     v123 = iconst.i64 0
-;; @0022                               v73 = icmp.i64 eq v6, v123  ; v123 = 0
+;; @0022                               v74 = icmp.i64 eq v6, v123  ; v123 = 0
 ;;                                     v97 = iconst.i64 8
 ;; @0022                               v72 = iadd v61, v99
-;; @0022                               brif v73, block6, block5(v61)
+;; @0022                               brif v74, block6, block5(v61)
 ;;
-;;                                 block5(v74: i64):
-;; @0022                               store.i64 user2 little region1 v2, v74
+;;                                 block5(v75: i64):
+;; @0022                               store.i64 user2 little region1 v2, v75
 ;;                                     v145 = iconst.i64 8
-;;                                     v146 = iadd v74, v145  ; v145 = 8
-;; @0022                               v76 = icmp eq v146, v72
-;; @0022                               brif v76, block6, block5(v146)
+;;                                     v146 = iadd v75, v145  ; v145 = 8
+;; @0022                               v77 = icmp eq v146, v72
+;; @0022                               brif v77, block6, block5(v146)
 ;;
 ;;                                 block6:
 ;; @0025                               jump block1(v42)

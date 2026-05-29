@@ -19,31 +19,31 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v23 = iconst.i32 0
-;; @001b                               v4 = icmp eq v2, v23  ; v23 = 0
-;; @001b                               v5 = uextend.i32 v4
-;; @001b                               brif v5, block4(v23), block2  ; v23 = 0
+;; @001b                               v4 = iconst.i32 0
+;; @001b                               v5 = icmp eq v2, v4  ; v4 = 0
+;; @001b                               v6 = uextend.i32 v5
+;; @001b                               brif v6, block4(v4), block2  ; v4 = 0
 ;;
 ;;                                 block2:
-;; @001b                               v7 = iconst.i32 1
-;; @001b                               v8 = band.i32 v2, v7  ; v7 = 1
+;; @001b                               v8 = iconst.i32 1
+;; @001b                               v9 = band.i32 v2, v8  ; v8 = 1
 ;;                                     v24 = iconst.i32 0
-;; @001b                               brif v8, block4(v24), block3  ; v24 = 0
+;; @001b                               brif v9, block4(v24), block3  ; v24 = 0
 ;;
 ;;                                 block3:
-;; @001b                               v21 = load.i64 notrap aligned readonly can_move v0+8
-;; @001b                               v11 = load.i64 notrap aligned readonly can_move v21+32
-;; @001b                               v10 = uextend.i64 v2
-;; @001b                               v12 = iadd v11, v10
-;; @001b                               v15 = load.i32 user2 readonly region0 v12
-;; @001b                               v16 = iconst.i32 -1342177280
-;; @001b                               v17 = band v15, v16  ; v16 = -1342177280
-;; @001b                               v18 = icmp eq v17, v16  ; v16 = -1342177280
-;; @001b                               v19 = uextend.i32 v18
-;; @001b                               jump block4(v19)
+;; @001b                               v22 = load.i64 notrap aligned readonly can_move v0+8
+;; @001b                               v12 = load.i64 notrap aligned readonly can_move v22+32
+;; @001b                               v11 = uextend.i64 v2
+;; @001b                               v13 = iadd v12, v11
+;; @001b                               v16 = load.i32 user2 readonly region0 v13
+;; @001b                               v17 = iconst.i32 -1342177280
+;; @001b                               v18 = band v16, v17  ; v17 = -1342177280
+;; @001b                               v19 = icmp eq v18, v17  ; v17 = -1342177280
+;; @001b                               v20 = uextend.i32 v19
+;; @001b                               jump block4(v20)
 ;;
-;;                                 block4(v20: i32):
-;; @001e                               jump block1(v20)
+;;                                 block4(v21: i32):
+;; @001e                               jump block1(v21)
 ;;
 ;;                                 block1(v3: i32):
 ;; @001e                               return v3

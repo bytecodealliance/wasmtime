@@ -12,7 +12,8 @@ target pulley64be
 
 function %icmp_imm_eq_i8(i8) -> i8 {
 block0(v0: i8):
-    v1 = icmp_imm eq v0, 0x44
+    v2 = iconst.i8 0x44
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_imm_eq_i8(0) == 0
@@ -21,7 +22,8 @@ block0(v0: i8):
 
 function %icmp_neg_eq_i8(i8) -> i8 {
 block0(v0: i8):
-    v1 = icmp_imm eq v0, 0xf4
+    v2 = iconst.i8 0xf4
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_neg_eq_i8(0) == 0
@@ -30,7 +32,8 @@ block0(v0: i8):
 
 function %icmp_imm_eq_i16(i16) -> i8 {
 block0(v0: i16):
-    v1 = icmp_imm eq v0, 0x4444
+    v2 = iconst.i16 0x4444
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_imm_eq_i16(0) == 0
@@ -39,7 +42,8 @@ block0(v0: i16):
 
 function %icmp_neg_eq_i16(i16) -> i8 {
 block0(v0: i16):
-    v1 = icmp_imm eq v0, 0xff44
+    v2 = iconst.i16 0xff44
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_neg_eq_i16(0) == 0
@@ -48,7 +52,8 @@ block0(v0: i16):
 
 function %icmp_imm_eq_i32(i32) -> i8 {
 block0(v0: i32):
-    v1 = icmp_imm eq v0, 0x4444_4444
+    v2 = iconst.i32 0x4444_4444
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_imm_eq_i32(0) == 0
@@ -57,7 +62,8 @@ block0(v0: i32):
 
 function %icmp_neg_eq_i32(i32) -> i8 {
 block0(v0: i32):
-    v1 = icmp_imm eq v0, 0xffff_4444
+    v2 = iconst.i32 0xffff_4444
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_neg_eq_i32(0) == 0
@@ -66,7 +72,8 @@ block0(v0: i32):
 
 function %icmp_imm_eq_i64(i64) -> i8 {
 block0(v0: i64):
-    v1 = icmp_imm eq v0, 0x4444_4444_4444_4444
+    v2 = iconst.i64 0x4444_4444_4444_4444
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_imm_eq_i64(0) == 0
@@ -75,7 +82,8 @@ block0(v0: i64):
 
 function %icmp_neg_eq_i64(i64) -> i8 {
 block0(v0: i64):
-    v1 = icmp_imm eq v0, 0xffff_ffff_4444_4444
+    v2 = iconst.i64 0xffff_ffff_4444_4444
+    v1 = icmp eq v0, v2
     return v1
 }
 ; run: %icmp_neg_eq_i64(0) == 0

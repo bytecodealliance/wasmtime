@@ -91,11 +91,13 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block3:
 @0001                               v13 = stack_load.i8 ss3+1
 @0001                               v14 = uextend.i64 v13
-@0005                               v15 = icmp_imm eq v14, 3
+@0005                               v114 = iconst.i64 3
+@0005                               v15 = icmp eq v14, v114
 @0005                               brif v15, block27, block38
 
                                 block38:
-@0005                               v16 = icmp_imm.i64 eq v14, 1
+@0005                               v115 = iconst.i64 1
+@0005                               v16 = icmp eq v14, v115
 @0005                               brif v16, block29, block8
 
                                 block4:
@@ -106,7 +108,8 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block5:
 @0001                               v19 = stack_load.i8 ss3+1
 @0001                               v20 = uextend.i64 v19
-@0005                               v21 = icmp_imm eq v20, 2
+@0005                               v116 = iconst.i64 2
+@0005                               v21 = icmp eq v20, v116
 @0005                               brif v21, block9, block39
 
                                 block39:
@@ -115,7 +118,8 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block6:
 @0001                               v22 = stack_load.i8 ss3+1
 @0001                               v23 = uextend.i64 v22
-@0005                               v24 = icmp_imm eq v23, 2
+@0005                               v117 = iconst.i64 2
+@0005                               v24 = icmp eq v23, v117
 @0005                               brif v24, block13, block40
 
                                 block40:
@@ -124,11 +128,13 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                 block7:
 @0001                               v25 = stack_load.i8 ss3+1
 @0001                               v26 = uextend.i64 v25
-@0005                               v27 = icmp_imm eq v26, 4
+@0005                               v118 = iconst.i64 4
+@0005                               v27 = icmp eq v26, v118
 @0005                               brif v27, block17, block41
 
                                 block41:
-@0005                               v28 = icmp_imm.i64 eq v26, 2
+@0005                               v119 = iconst.i64 2
+@0005                               v28 = icmp eq v26, v119
 @0005                               brif v28, block25, block42
 
                                 block42:

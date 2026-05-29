@@ -167,27 +167,33 @@ block0:
     store notrap region2 v21, v63  ; v21 = 0
     v64 = stack_addr.i64 ss5+124
     store notrap region2 v20, v64  ; v20 = 0
-    v65 = icmp_imm uge v3, 0x504d  ; v3 = 0xffef
+    v167 = iconst.i16 0x504d
+    v65 = icmp uge v3, v167 ; v3 = 0xffef
     brif v65, block3, block2
 
 block3:
-    v66 = icmp_imm.i16 uge v3, 0xd5d7  ; v3 = 0xffef
+    v168 = iconst.i16 0xd5d7
+    v66 = icmp uge v3, v168 ; v3 = 0xffef
     brif v66, block5, block4
 
 block5:
-    v67 = icmp_imm.i16 uge v3, 0xf6ff  ; v3 = 0xffef
+    v169 = iconst.i16 0xf6ff
+    v67 = icmp uge v3, v169 ; v3 = 0xffef
     brif v67, block7, block6
 
 block7:
-    v68 = icmp_imm.i16 uge v3, 0xff22  ; v3 = 0xffef
+    v170 = iconst.i16 0xff22
+    v68 = icmp uge v3, v170 ; v3 = 0xffef
     brif v68, block9, block8
 
 block9:
-    v69 = icmp_imm.i16 eq v3, 0xffdd  ; v3 = 0xffef
+    v171 = iconst.i16 0xffdd
+    v69 = icmp eq v3, v171 ; v3 = 0xffef
     brif v69, block1, block10
 
 block10:
-    v70 = icmp_imm.i16 uge v3, 0xff79  ; v3 = 0xffef
+    v172 = iconst.i16 0xff79
+    v70 = icmp uge v3, v172 ; v3 = 0xffef
     brif v70, block12, block11
 
 block12:
@@ -196,7 +202,8 @@ block12:
     br_table v72, block1, [block1, block1, block1, block1, block1, block1]
 
 block11:
-    v73 = icmp_imm.i16 uge v3, 0xff22  ; v3 = 0xffef
+    v173 = iconst.i16 0xff22
+    v73 = icmp uge v3, v173 ; v3 = 0xffef
     brif v73, block13, block1
 
 block13:
@@ -205,11 +212,13 @@ block13:
     br_table v75, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block8:
-    v76 = icmp_imm.i16 eq v3, 0xf951  ; v3 = 0xffef
+    v174 = iconst.i16 0xf951
+    v76 = icmp eq v3, v174 ; v3 = 0xffef
     brif v76, block1, block14
 
 block14:
-    v77 = icmp_imm.i16 uge v3, 0xf6ff  ; v3 = 0xffef
+    v175 = iconst.i16 0xf6ff
+    v77 = icmp uge v3, v175 ; v3 = 0xffef
     brif v77, block15, block1
 
 block15:
@@ -218,15 +227,18 @@ block15:
     br_table v79, block1, [block1, block1, block1, block1, block1, block1, block1]
 
 block6:
-    v80 = icmp_imm.i16 uge v3, 0xef2a  ; v3 = 0xffef
+    v176 = iconst.i16 0xef2a
+    v80 = icmp uge v3, v176 ; v3 = 0xffef
     brif v80, block17, block16
 
 block17:
-    v81 = icmp_imm.i16 eq v3, 0xf426  ; v3 = 0xffef
+    v177 = iconst.i16 0xf426
+    v81 = icmp eq v3, v177 ; v3 = 0xffef
     brif v81, block1, block18
 
 block18:
-    v82 = icmp_imm.i16 uge v3, 0xefff  ; v3 = 0xffef
+    v178 = iconst.i16 0xefff
+    v82 = icmp uge v3, v178 ; v3 = 0xffef
     brif v82, block20, block19
 
 block20:
@@ -235,7 +247,8 @@ block20:
     br_table v84, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block19:
-    v85 = icmp_imm.i16 uge v3, 0xef2a  ; v3 = 0xffef
+    v179 = iconst.i16 0xef2a
+    v85 = icmp uge v3, v179 ; v3 = 0xffef
     brif v85, block21, block1
 
 block21:
@@ -244,11 +257,13 @@ block21:
     br_table v87, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block16:
-    v88 = icmp_imm.i16 eq v3, 0xdc2a  ; v3 = 0xffef
+    v180 = iconst.i16 0xdc2a
+    v88 = icmp eq v3, v180 ; v3 = 0xffef
     brif v88, block1, block22
 
 block22:
-    v89 = icmp_imm.i16 uge v3, 0xd5d7  ; v3 = 0xffef
+    v181 = iconst.i16 0xd5d7
+    v89 = icmp uge v3, v181 ; v3 = 0xffef
     brif v89, block23, block1
 
 block23:
@@ -257,15 +272,18 @@ block23:
     br_table v91, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block4:
-    v92 = icmp_imm.i16 uge v3, 0x7363  ; v3 = 0xffef
+    v182 = iconst.i16 0x7363
+    v92 = icmp uge v3, v182 ; v3 = 0xffef
     brif v92, block25, block24
 
 block25:
-    v93 = icmp_imm.i16 uge v3, 0x9f22  ; v3 = 0xffef
+    v183 = iconst.i16 0x9f22
+    v93 = icmp uge v3, v183 ; v3 = 0xffef
     brif v93, block27, block26
 
 block27:
-    v94 = icmp_imm.i16 uge v3, 0xbf41  ; v3 = 0xffef
+    v184 = iconst.i16 0xbf41
+    v94 = icmp uge v3, v184 ; v3 = 0xffef
     brif v94, block29, block28
 
 block29:
@@ -274,15 +292,18 @@ block29:
     br_table v96, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block28:
-    v97 = icmp_imm.i16 eq v3, 0xae73  ; v3 = 0xffef
+    v185 = iconst.i16 0xae73
+    v97 = icmp eq v3, v185 ; v3 = 0xffef
     brif v97, block1, block30
 
 block30:
-    v98 = icmp_imm.i16 eq v3, 0x9f22  ; v3 = 0xffef
+    v186 = iconst.i16 0x9f22
+    v98 = icmp eq v3, v186 ; v3 = 0xffef
     brif v98, block1, block1
 
 block26:
-    v99 = icmp_imm.i16 uge v3, 0x9301  ; v3 = 0xffef
+    v187 = iconst.i16 0x9301
+    v99 = icmp uge v3, v187 ; v3 = 0xffef
     brif v99, block32, block31
 
 block32:
@@ -291,7 +312,8 @@ block32:
     br_table v101, block1, [block1, block1, block1, block1, block1, block1, block1]
 
 block31:
-    v102 = icmp_imm.i16 uge v3, 0x7363  ; v3 = 0xffef
+    v188 = iconst.i16 0x7363
+    v102 = icmp uge v3, v188 ; v3 = 0xffef
     brif v102, block33, block1
 
 block33:
@@ -300,23 +322,28 @@ block33:
     br_table v104, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block24:
-    v105 = icmp_imm.i16 uge v3, 0x5230  ; v3 = 0xffef
+    v189 = iconst.i16 0x5230
+    v105 = icmp uge v3, v189 ; v3 = 0xffef
     brif v105, block35, block34
 
 block35:
-    v106 = icmp_imm.i16 eq v3, 0x6720  ; v3 = 0xffef
+    v190 = iconst.i16 0x6720
+    v106 = icmp eq v3, v190 ; v3 = 0xffef
     brif v106, block1, block36
 
 block36:
-    v107 = icmp_imm.i16 eq v3, 0x56cc  ; v3 = 0xffef
+    v191 = iconst.i16 0x56cc
+    v107 = icmp eq v3, v191 ; v3 = 0xffef
     brif v107, block1, block37
 
 block37:
-    v108 = icmp_imm.i16 eq v3, 0x5230  ; v3 = 0xffef
+    v192 = iconst.i16 0x5230
+    v108 = icmp eq v3, v192 ; v3 = 0xffef
     brif v108, block1, block1
 
 block34:
-    v109 = icmp_imm.i16 uge v3, 0x5123  ; v3 = 0xffef
+    v193 = iconst.i16 0x5123
+    v109 = icmp uge v3, v193 ; v3 = 0xffef
     brif v109, block39, block38
 
 block39:
@@ -325,7 +352,8 @@ block39:
     br_table v111, block1, [block1, block1, block1, block1, block1, block1, block1]
 
 block38:
-    v112 = icmp_imm.i16 uge v3, 0x504d  ; v3 = 0xffef
+    v194 = iconst.i16 0x504d
+    v112 = icmp uge v3, v194 ; v3 = 0xffef
     brif v112, block40, block1
 
 block40:
@@ -334,27 +362,33 @@ block40:
     br_table v114, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block2:
-    v115 = icmp_imm.i16 uge v3, 9983  ; v3 = 0xffef
+    v195 = iconst.i16 9983
+    v115 = icmp uge v3, v195 ; v3 = 0xffef
     brif v115, block42, block41
 
 block42:
-    v116 = icmp_imm.i16 uge v3, 0x2ade  ; v3 = 0xffef
+    v196 = iconst.i16 0x2ade
+    v116 = icmp uge v3, v196 ; v3 = 0xffef
     brif v116, block44, block43
 
 block44:
-    v117 = icmp_imm.i16 uge v3, 0x2f2a  ; v3 = 0xffef
+    v197 = iconst.i16 0x2f2a
+    v117 = icmp uge v3, v197 ; v3 = 0xffef
     brif v117, block46, block45
 
 block46:
-    v118 = icmp_imm.i16 eq v3, 0x4118  ; v3 = 0xffef
+    v198 = iconst.i16 0x4118
+    v118 = icmp eq v3, v198 ; v3 = 0xffef
     brif v118, block1, block47
 
 block47:
-    v119 = icmp_imm.i16 eq v3, 0x3320  ; v3 = 0xffef
+    v199 = iconst.i16 0x3320
+    v119 = icmp eq v3, v199 ; v3 = 0xffef
     brif v119, block1, block48
 
 block48:
-    v120 = icmp_imm.i16 uge v3, 0x2f2a  ; v3 = 0xffef
+    v200 = iconst.i16 0x2f2a
+    v120 = icmp uge v3, v200 ; v3 = 0xffef
     brif v120, block49, block1
 
 block49:
@@ -363,11 +397,13 @@ block49:
     br_table v122, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block45:
-    v123 = icmp_imm.i16 eq v3, 0x2f22  ; v3 = 0xffef
+    v201 = iconst.i16 0x2f22
+    v123 = icmp eq v3, v201 ; v3 = 0xffef
     brif v123, block1, block50
 
 block50:
-    v124 = icmp_imm.i16 uge v3, 0x2ade  ; v3 = 0xffef
+    v202 = iconst.i16 0x2ade
+    v124 = icmp uge v3, v202 ; v3 = 0xffef
     brif v124, block51, block1
 
 block51:
@@ -376,15 +412,18 @@ block51:
     br_table v126, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block43:
-    v127 = icmp_imm.i16 uge v3, 0x2a38  ; v3 = 0xffef
+    v203 = iconst.i16 0x2a38
+    v127 = icmp uge v3, v203 ; v3 = 0xffef
     brif v127, block53, block52
 
 block53:
-    v128 = icmp_imm.i16 eq v3, 0x2ab2  ; v3 = 0xffef
+    v204 = iconst.i16 0x2ab2
+    v128 = icmp eq v3, v204 ; v3 = 0xffef
     brif v128, block1, block54
 
 block54:
-    v129 = icmp_imm.i16 uge v3, 0x2a67  ; v3 = 0xffef
+    v205 = iconst.i16 0x2a67
+    v129 = icmp uge v3, v205 ; v3 = 0xffef
     brif v129, block56, block55
 
 block56:
@@ -393,27 +432,33 @@ block56:
     br_table v131, block1, [block1, block1, block1, block1, block1, block1]
 
 block55:
-    v132 = icmp_imm.i16 eq v3, 0x2a38  ; v3 = 0xffef
+    v206 = iconst.i16 0x2a38
+    v132 = icmp eq v3, v206 ; v3 = 0xffef
     brif v132, block1, block1
 
 block52:
-    v133 = icmp_imm.i16 eq v3, 0x2a20  ; v3 = 0xffef
+    v207 = iconst.i16 0x2a20
+    v133 = icmp eq v3, v207 ; v3 = 0xffef
     brif v133, block1, block57
 
 block57:
-    v134 = icmp_imm.i16 eq v3, 9983  ; v3 = 0xffef
+    v208 = iconst.i16 9983
+    v134 = icmp eq v3, v208 ; v3 = 0xffef
     brif v134, block1, block1
 
 block41:
-    v135 = icmp_imm.i16 uge v3, 341  ; v3 = 0xffef
+    v209 = iconst.i16 341
+    v135 = icmp uge v3, v209 ; v3 = 0xffef
     brif v135, block59, block58
 
 block59:
-    v136 = icmp_imm.i16 uge v3, 6493  ; v3 = 0xffef
+    v210 = iconst.i16 6493
+    v136 = icmp uge v3, v210 ; v3 = 0xffef
     brif v136, block61, block60
 
 block61:
-    v137 = icmp_imm.i16 uge v3, 8738  ; v3 = 0xffef
+    v211 = iconst.i16 8738
+    v137 = icmp uge v3, v211 ; v3 = 0xffef
     brif v137, block63, block62
 
 block63:
@@ -422,7 +467,8 @@ block63:
     br_table v139, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block62:
-    v140 = icmp_imm.i16 uge v3, 8241  ; v3 = 0xffef
+    v212 = iconst.i16 8241
+    v140 = icmp uge v3, v212 ; v3 = 0xffef
     brif v140, block65, block64
 
 block65:
@@ -431,11 +477,13 @@ block65:
     br_table v142, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block64:
-    v143 = icmp_imm.i16 eq v3, 6493  ; v3 = 0xffef
+    v213 = iconst.i16 6493
+    v143 = icmp eq v3, v213 ; v3 = 0xffef
     brif v143, block1, block1
 
 block60:
-    v144 = icmp_imm.i16 uge v3, 512  ; v3 = 0xffef
+    v214 = iconst.i16 512
+    v144 = icmp uge v3, v214 ; v3 = 0xffef
     brif v144, block67, block66
 
 block67:
@@ -444,7 +492,8 @@ block67:
     br_table v146, block1, [block1, block1, block1]
 
 block66:
-    v147 = icmp_imm.i16 uge v3, 341  ; v3 = 0xffef
+    v215 = iconst.i16 341
+    v147 = icmp uge v3, v215 ; v3 = 0xffef
     brif v147, block68, block1
 
 block68:
@@ -453,11 +502,13 @@ block68:
     br_table v149, block1, [block1, block1]
 
 block58:
-    v150 = icmp_imm.i16 uge v3, 148  ; v3 = 0xffef
+    v216 = iconst.i16 148
+    v150 = icmp uge v3, v216 ; v3 = 0xffef
     brif v150, block70, block69
 
 block70:
-    v151 = icmp_imm.i16 uge v3, 212  ; v3 = 0xffef
+    v217 = iconst.i16 212
+    v151 = icmp uge v3, v217 ; v3 = 0xffef
     brif v151, block72, block71
 
 block72:
@@ -466,7 +517,8 @@ block72:
     br_table v153, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block71:
-    v154 = icmp_imm.i16 uge v3, 148  ; v3 = 0xffef
+    v218 = iconst.i16 148
+    v154 = icmp uge v3, v218 ; v3 = 0xffef
     brif v154, block73, block1
 
 block73:
@@ -475,7 +527,8 @@ block73:
     br_table v156, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
 block69:
-    v157 = icmp_imm.i16 uge v3, 128  ; v3 = 0xffef
+    v219 = iconst.i16 128
+    v157 = icmp uge v3, v219 ; v3 = 0xffef
     brif v157, block75, block74
 
 block75:

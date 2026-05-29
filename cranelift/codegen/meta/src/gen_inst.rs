@@ -1346,6 +1346,99 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     });
 }
 
+/// Emit an additional `{name}_imm` convenience method for `inst`, requested via
+/// `.inst_builder_imm_method(true)`.
+///
+/// The generated method has the same shape as `inst`'s normal builder method,
+/// except that its trailing value operand is taken as an `Into<Imm64>`
+/// immediate. That immediate is materialized as an `iconst` (sign- or
+/// zero-extended to the controlling type as needed, see
+/// `InstBuilder::build_imm_const`) and then `inst` is built with it.
+fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
+    // Only the simple, fixed-operand, single-result integer instructions that
+    // used to have a `binary_imm64`/`int_compare_imm` counterpart are
+    // supported.
+    assert!(
+        !inst.format.has_value_list,
+        "inst_builder_imm_method is not supported for {} (has a value list)",
+        inst.name
+    );
+    assert_eq!(
+        inst.value_results.len(),
+        1,
+        "inst_builder_imm_method is only supported for single-result instructions, not {}",
+        inst.name
+    );
+    assert!(
+        inst.value_opnums.len() >= 2,
+        "inst_builder_imm_method requires at least two value operands, but {} has {}",
+        inst.name,
+        inst.value_opnums.len()
+    );
+
+    // The immediate replaces the trailing value operand; the first value
+    // operand provides the controlling type for the synthesized `iconst`.
+    let imm_opnum = *inst.value_opnums.last().unwrap();
+    let ctrl_opnum = *inst.value_opnums.first().unwrap();
+    let imm_name = inst.operands_in[imm_opnum].name;
+    let ctrl_name = inst.operands_in[ctrl_opnum].name;
+
+    let mut args = vec!["mut self".to_string()];
+    let mut args_doc = Vec::new();
+    for (i, op) in inst.operands_in.iter().enumerate() {
+        if i == imm_opnum {
+            args.push(format!("{}: T", op.name));
+            args_doc.push(format!("- {}: an immediate integer constant", op.name));
+        } else if op.is_value() {
+            args.push(format!("{}: Value", op.name));
+            args_doc.push(format!("- {}: {}", op.name, op.doc()));
+        } else {
+            args.push(format!("{}: {}", op.name, op.kind.rust_type));
+            args_doc.push(format!("- {}: {}", op.name, op.doc()));
+        }
+    }
+
+    let proto = format!(
+        "{}_imm<T: Into<ir::immediates::Imm64>>({}) -> Value",
+        inst.snake_name(),
+        args.join(", "),
+    );
+
+    fmt.doc_comment(format!(
+        "Convenience method that is like [`{name}`][Self::{name}], but takes its \
+         trailing operand as an immediate integer constant which is materialized \
+         with an `iconst`.",
+        name = inst.snake_name(),
+    ));
+    fmt.line("///");
+    fmt.doc_comment("Inputs:");
+    fmt.line("///");
+    for doc_line in args_doc {
+        fmt.doc_comment(doc_line);
+    }
+
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(&format!("fn {proto}"), |fmt| {
+        fmtln!(fmt, "let {imm_name} = {imm_name}.into();");
+        fmtln!(
+            fmt,
+            "let imm_ty = self.data_flow_graph().value_type({ctrl_name});"
+        );
+        fmtln!(
+            fmt,
+            "let {imm_name} = self.build_imm_const(imm_ty, {imm_name}, Opcode::{});",
+            inst.camel_name
+        );
+        let call_args = inst
+            .operands_in
+            .iter()
+            .map(|op| op.name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        fmtln!(fmt, "self.{}({call_args})", inst.snake_name());
+    });
+}
+
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
@@ -1376,6 +1469,10 @@ fn gen_builder(
         for inst in instructions.iter() {
             gen_inst_builder(inst, &inst.format, fmt);
             fmt.empty_line();
+            if inst.inst_builder_imm_method {
+                gen_imm_inst_builder(inst, fmt);
+                fmt.empty_line();
+            }
         }
         for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);

@@ -7,7 +7,8 @@ target x86_64 haswell
 
 function %i32_eqz(i32) -> i32 {
 block0(v0: i32):
-    v1 = icmp_imm eq v0, 0
+    v3 = iconst.i32 0
+    v1 = icmp eq v0, v3
     v2 = uextend.i32 v1
     return v2
 }

@@ -77,7 +77,7 @@ impl BranchToTrap {
             pos.ins().trapnz(arg, code);
 
             let args: SmallVec<[_; 8]> = blocks[1].args(&pos.func.dfg.value_lists).collect();
-            pos.func.dfg.replace(inst).jump(alternative, &args);
+            pos.func.replace(inst).jump(alternative, &args);
         } else if self.just_trap_blocks.contains(alternative) {
             let mut pos = FuncCursor::new(func);
             pos.use_srcloc(
@@ -92,7 +92,7 @@ impl BranchToTrap {
             pos.ins().trapz(arg, code);
 
             let args: SmallVec<[_; 8]> = blocks[0].args(&pos.func.dfg.value_lists).collect();
-            pos.func.dfg.replace(inst).jump(consequent, &args);
+            pos.func.replace(inst).jump(consequent, &args);
         }
     }
 }

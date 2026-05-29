@@ -577,7 +577,8 @@ mod tests {
             v0 = iconst.i32 1
             v1 = iadd_imm v0, 1
             v2 = irsub_imm v1, 44  ; 44 - 2 == 42 (see irsub_imm's semantics)
-            v3 = icmp_imm eq v2, 42
+            v4 = iconst.i32 42
+            v3 = icmp eq v2, v4
             return v3
         }";
 

@@ -440,8 +440,7 @@ fn harvest_candidate_lhs(
                         let a = arg(allocs, 0);
                         ast::Instruction::Trunc { a }.into()
                     }
-                    (ir::Opcode::Icmp, ir::InstructionData::IntCompare { cond, .. })
-                    | (ir::Opcode::IcmpImm, ir::InstructionData::IntCompare { cond, .. }) => {
+                    (ir::Opcode::Icmp, ir::InstructionData::IntCompare { cond, .. }) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
                         let cmp = match cond {

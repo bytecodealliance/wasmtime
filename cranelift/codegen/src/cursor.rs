@@ -686,4 +686,11 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         }
         &mut self.func.dfg
     }
+
+    fn insert_aux_inst(&mut self, inst: ir::Inst) {
+        self.insert_inst(inst);
+        if !self.srcloc.is_default() {
+            self.func.set_srcloc(inst, self.srcloc);
+        }
+    }
 }

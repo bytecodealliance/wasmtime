@@ -419,7 +419,8 @@ block1:
     v115 = iconst.i64 0
     v116 = icmp ugt v114, v115
     v118 = uextend.i32 v116
-    v119 = icmp_imm eq v118, 0
+    v1062 = iconst.i32 0
+    v119 = icmp eq v118, v1062
     v121 = uextend.i32 v119
     brif v121, block2, block3
 
@@ -434,7 +435,8 @@ block3:
     v127 = iconst.i64 0
     v128 = icmp ugt v126, v127
     v130 = uextend.i32 v128
-    v131 = icmp_imm eq v130, 0
+    v1063 = iconst.i32 0
+    v131 = icmp eq v130, v1063
     v133 = uextend.i32 v131
     brif v133, block4, block5
 
@@ -449,7 +451,8 @@ block5:
     v139 = iconst.i64 0
     v140 = icmp ugt v138, v139
     v142 = uextend.i32 v140
-    v143 = icmp_imm eq v142, 0
+    v1064 = iconst.i32 0
+    v143 = icmp eq v142, v1064
     v145 = uextend.i32 v143
     brif v145, block6, block7
 
@@ -472,7 +475,8 @@ block8:
 block9:
     v153 = load.i8 v6
     v154 = uextend.i32 v153
-    v155 = icmp_imm eq v154, 0
+    v1065 = iconst.i32 0
+    v155 = icmp eq v154, v1065
     v157 = uextend.i32 v155
     brif v157, block10, block11
 
@@ -495,7 +499,8 @@ block12:
 block13:
     v165 = load.i8 v8
     v166 = uextend.i32 v165
-    v167 = icmp_imm eq v166, 0
+    v1066 = iconst.i32 0
+    v167 = icmp eq v166, v1066
     v169 = uextend.i32 v167
     brif v169, block14, block15
 
@@ -515,7 +520,8 @@ block16:
     v176 = load.i64 v10
     v177 = icmp uge v176, v175
     v179 = uextend.i32 v177
-    v180 = icmp_imm eq v179, 0
+    v1067 = iconst.i32 0
+    v180 = icmp eq v179, v1067
     v182 = uextend.i32 v180
     brif v182, block17, block18
 
@@ -567,7 +573,8 @@ block20:
     v212 = load.i64 v13
     v214 = icmp.i64 ult v213, v212
     v216 = uextend.i32 v214
-    v217 = icmp_imm eq v216, 0
+    v1068 = iconst.i32 0
+    v217 = icmp eq v216, v1068
     v219 = uextend.i32 v217
     brif v219, block21, block22
 
@@ -754,7 +761,8 @@ block36:
     v331 = load.i16 v329
     v332 = icmp eq v330, v331
     v334 = uextend.i32 v332
-    v335 = icmp_imm eq v334, 0
+    v1069 = iconst.i32 0
+    v335 = icmp eq v334, v1069
     v337 = uextend.i32 v335
     brif v337, block37, block38
 
@@ -817,7 +825,8 @@ block43:
     v371 = load.i16 v369
     v372 = icmp eq v370, v371
     v374 = uextend.i32 v372
-    v375 = icmp_imm eq v374, 0
+    v1070 = iconst.i32 0
+    v375 = icmp eq v374, v1070
     v377 = uextend.i32 v375
     brif v377, block44, block45
 
@@ -1159,7 +1168,8 @@ block65:
     v575 = iconst.i32 10
     v576 = icmp.i32 ult v574, v575
     v578 = uextend.i32 v576
-    v579 = icmp_imm eq v578, 0
+    v1071 = iconst.i32 0
+    v579 = icmp eq v578, v1071
     v581 = uextend.i32 v579
     brif v581, block66, block67
 
@@ -1351,7 +1361,8 @@ block82:
     v709 = load.i32 v707
     v710 = icmp eq v708, v709
     v712 = uextend.i32 v710
-    v713 = icmp_imm eq v712, 0
+    v1072 = iconst.i32 0
+    v713 = icmp eq v712, v1072
     v715 = uextend.i32 v713
     brif v715, block83, block84
 
@@ -1413,7 +1424,8 @@ block89:
     v748 = load.i16 v746
     v749 = icmp eq v747, v748
     v751 = uextend.i32 v749
-    v752 = icmp_imm eq v751, 0
+    v1073 = iconst.i32 0
+    v752 = icmp eq v751, v1073
     v754 = uextend.i32 v752
     brif v754, block90, block91
 
@@ -1650,7 +1662,8 @@ block106:
     v887 = iconst.i64 10
     v888 = icmp.i64 ult v886, v887
     v890 = uextend.i32 v888
-    v891 = icmp_imm eq v890, 0
+    v1074 = iconst.i32 0
+    v891 = icmp eq v890, v1074
     v893 = uextend.i32 v891
     brif v893, block107, block108
 

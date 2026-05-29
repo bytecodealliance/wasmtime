@@ -213,6 +213,13 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
         }
         (inst, &mut self.builder.func.dfg)
     }
+
+    fn build_aux_inst(&mut self, data: InstructionData, ctrl_typevar: Type) -> Inst {
+        // Reborrow the underlying `FunctionBuilder` to append the auxiliary
+        // instruction to the current block, leaving `self` intact so the
+        // caller can still build its final instruction.
+        self.builder.ins().build(data, ctrl_typevar).0
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -1751,14 +1758,15 @@ block0:
     fn0 = %Memcmp sig0
 
 block0:
+    v7 = iconst.i64 0
+    v1 -> v7
     v6 = iconst.i64 0
-    v1 -> v6
-    v5 = iconst.i64 0
-    v0 -> v5
+    v0 -> v6
     v2 = iconst.i64 3
     v3 = call fn0(v0, v1, v2)  ; v0 = 0, v1 = 0, v2 = 3
-    v4 = icmp_imm sge v3, 0
-    return v4",
+    v4 = iconst.i32 0
+    v5 = icmp sge v3, v4  ; v4 = 0
+    return v5",
             |builder, target, x, y| {
                 builder.emit_small_memory_compare(
                     target.frontend_config(),

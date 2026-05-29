@@ -9,8 +9,8 @@ use crate::ir::DebugTags;
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, SigRef, Signature, SourceLocs, StackSlot, StackSlotData, StackSlots,
-    Type,
+    JumpTableData, Layout, ReplaceBuilder, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
+    StackSlots, Type,
 };
 use crate::isa::CallConv;
 use crate::write::{write_function, write_function_spec};
@@ -220,6 +220,14 @@ impl FunctionStencil {
         self.srclocs.clear();
         self.debug_tags.clear();
         self.stack_limit = None;
+    }
+
+    /// Create a `ReplaceBuilder` that will replace `inst` with a new
+    /// instruction in place.
+    ///
+    /// `inst` must be present in the function's layout.
+    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder<'_> {
+        ReplaceBuilder::new(&mut self.dfg, &mut self.layout, inst)
     }
 
     /// Creates a jump table in the function, to be used by `br_table` instructions.

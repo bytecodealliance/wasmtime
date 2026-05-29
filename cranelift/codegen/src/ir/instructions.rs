@@ -511,8 +511,7 @@ impl InstructionData {
     /// condition.  Otherwise, return `None`.
     pub fn cond_code(&self) -> Option<IntCC> {
         match self {
-            &InstructionData::IntCompare { cond, .. }
-            | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
+            &InstructionData::IntCompare { cond, .. } => Some(cond),
             _ => None,
         }
     }
@@ -649,17 +648,6 @@ impl InstructionData {
                 imm,
             } => {
                 if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
-                    *imm = imm.mask_to_width(bit_width);
-                }
-            }
-            Self::IntCompareImm {
-                opcode,
-                arg: _,
-                cond,
-                imm,
-            } => {
-                debug_assert_eq!(*opcode, Opcode::IcmpImm);
-                if cond.unsigned() != *cond {
                     *imm = imm.mask_to_width(bit_width);
                 }
             }

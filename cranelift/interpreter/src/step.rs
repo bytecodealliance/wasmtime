@@ -154,9 +154,9 @@ where
             | InstructionData::StackLoad { offset, .. }
             | InstructionData::StackStore { offset, .. } => DataValue::from(offset),
             // 64-bit.
-            InstructionData::UnaryImm { imm, .. }
-            | InstructionData::BinaryImm64 { imm, .. }
-            | InstructionData::IntCompareImm { imm, .. } => DataValue::from(imm.bits()),
+            InstructionData::UnaryImm { imm, .. } | InstructionData::BinaryImm64 { imm, .. } => {
+                DataValue::from(imm.bits())
+            }
             InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
             _ => unreachable!(),
         }
@@ -601,12 +601,6 @@ where
         Opcode::Select | Opcode::SelectSpectreGuard => choose(arg(0).into_bool()?, arg(1), arg(2)),
         Opcode::Bitselect => assign(bitselect(arg(0), arg(1), arg(2))?),
         Opcode::Icmp => assign(icmp(ctrl_ty, inst.cond_code().unwrap(), &arg(0), &arg(1))?),
-        Opcode::IcmpImm => assign(icmp(
-            ctrl_ty,
-            inst.cond_code().unwrap(),
-            &arg(0),
-            &imm_as_ctrl_ty()?,
-        )?),
         Opcode::Smin => {
             if ctrl_ty.is_vector() {
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1), &arg(0))?;
