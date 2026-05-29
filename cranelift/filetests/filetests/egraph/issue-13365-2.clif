@@ -1,0 +1,33 @@
+test optimize precise-output
+set opt_level=speed
+target aarch64
+
+function %f(i8) {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    brif v1, block1, block2
+
+block1:
+    brif v0, block3, block2
+
+block2:
+    jump block1
+
+block3:
+    return
+}
+
+; function %f(i8) fast {
+; block0(v0: i8):
+;     jump block2
+;
+; block1:
+;     brif.i8 v0, block3, block2
+;
+; block2:
+;     jump block1
+;
+; block3:
+;     return
+; }
+
