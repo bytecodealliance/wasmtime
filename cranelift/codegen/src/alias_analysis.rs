@@ -98,7 +98,12 @@ impl LastStores {
                 match func.dfg.mem_flags[memflags].alias_region() {
                     Some(region) => self.regions[region] = inst.into(),
                     None => {
+                        // A store with no alias region may alias any region, so
+                        // treat it like a fence: clear all regions and update
+                        // `last_fence` so that subsequent region-tagged loads don't
+                        // forward stale values past this store.
                         self.regions.clear();
+                        self.last_fence = inst.into();
                         self.other = inst.into();
                     }
                 }
