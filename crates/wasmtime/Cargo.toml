@@ -36,6 +36,7 @@ wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
 wasm-wave = { workspace = true, optional = true }
 wasm-compose = { workspace = true, optional = true }
+wit-parser = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
@@ -154,6 +155,7 @@ default = [
   'std',
   'debug',
   'compile-time-builtins',
+  'wit-parser',
 ]
 
 # Enables conversion helpers between `anyhow::Error` and `wasmtime::Error`.
@@ -389,6 +391,9 @@ reexport-wasmparser = []
 # Enables instances of the traits defined in the wasm-wave crate, which
 # provides a human-readable text format for component values.
 wave = ["dep:wasm-wave", "component-model", "std"]
+
+# Enables instance of ExportLookup for wit_parser::ItemName
+wit-parser = ["dep:wit-parser", "component-model", "std"]
 
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
