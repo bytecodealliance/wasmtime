@@ -970,3 +970,95 @@ async fn bytes_stream_producer() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn async_call_stack() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    let engine = Engine::new(&config)?;
+
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+            (import "a" (func $a))
+            (core func $a (canon lower (func $a)))
+
+            (core module $a
+                (import "" "a" (func $a))
+                (func (export "a") call $a)
+            )
+            (core instance $a (instantiate $a
+                (with "" (instance (export "a" (func $a))))
+            ))
+            (func (export "a") async (canon lift (core func $a "a")))
+        )
+    "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "a",
+        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
+            let stack = store.async_call_stack().collect::<Vec<_>>();
+            assert_eq!(stack, [store.data().unwrap()]);
+            Ok(())
+        },
+    )?;
+    let mut store = Store::new(&engine, None);
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+
+    let call = func.start_call_concurrent(&mut store, ())?;
+    *store.data_mut() = Some(call.task());
+    store
+        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
+        .await??;
+
+    let component = Component::new(
+        &engine,
+        r#"
+        (component
+            (import "a" (func $a))
+            (component $a
+                (import "a" (func $a))
+                (core func $a (canon lower (func $a)))
+
+                (core module $a
+                    (import "" "a" (func $a))
+                    (func (export "a") call $a)
+                )
+                (core instance $a (instantiate $a
+                    (with "" (instance (export "a" (func $a))))
+                ))
+                (func (export "a") (canon lift (core func $a "a")))
+            )
+
+            (instance $a (instantiate $a (with "a" (func $a))))
+            (instance $b (instantiate $a (with "a" (func $a "a"))))
+            (export "a" (func $b "a"))
+        )
+    "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap(
+        "a",
+        |mut store: StoreContextMut<Option<GuestTaskId>>, (): ()| {
+            let stack = store.async_call_stack().collect::<Vec<_>>();
+            assert_eq!(stack.len(), 2);
+            assert_eq!(stack.last(), store.data().as_ref());
+            Ok(())
+        },
+    )?;
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "a")?;
+
+    let call = func.start_call_concurrent(&mut store, ())?;
+    *store.data_mut() = Some(call.task());
+    store
+        .run_concurrent(async |store| func.finish_call_concurrent(store, call).await)
+        .await??;
+    Ok(())
+}

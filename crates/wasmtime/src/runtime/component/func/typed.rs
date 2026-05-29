@@ -17,9 +17,6 @@ use wasmtime_environ::component::{
     OptionsIndex, StringEncoding, TypeMap, VariantInfo,
 };
 
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, AsAccessor, PreparedCall};
-
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
 ///
@@ -178,57 +175,7 @@ where
 
         #[cfg(feature = "component-model-async")]
         if store.0.concurrency_support() {
-            use crate::component::concurrent::TaskId;
-            use crate::runtime::vm::SendSyncPtr;
-            use core::ptr::NonNull;
-
-            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
-            let prepared =
-                self.prepare_call(store.as_context_mut(), true, move |cx, ty, dst| {
-                    // SAFETY: The goal here is to get `Params`, a non-`'static`
-                    // value, to live long enough to the lowering of the
-                    // parameters. We're guaranteed that `Params` lives in the
-                    // future of the outer function (we're in an `async fn`) so it'll
-                    // stay alive as long as the future itself. That is distinct,
-                    // for example, from the signature of `call_concurrent` below.
-                    //
-                    // Here a pointer to `Params` is smuggled to this location
-                    // through a `SendSyncPtr<u8>` to thwart the `'static` check
-                    // of rustc and the signature of `prepare_call`.
-                    //
-                    // Note the use of `SignalOnDrop` in the code that follows
-                    // this closure, which ensures that the task will be removed
-                    // from the concurrent state to which it belongs when the
-                    // containing `Future` is dropped, so long as the parameters
-                    // have not yet been lowered. Since this closure is removed from
-                    // the task after the parameters are lowered, it will never be called
-                    // after the containing `Future` is dropped.
-                    let params = unsafe { ptr.cast::<Params>().as_ref() };
-                    Self::lower_args(cx, ty, dst, params)
-                })?;
-
-            struct SignalOnDrop<'a, T: 'static> {
-                store: StoreContextMut<'a, T>,
-                task: TaskId,
-            }
-
-            impl<'a, T> Drop for SignalOnDrop<'a, T> {
-                fn drop(&mut self) {
-                    self.task.host_future_dropped(self.store.0).unwrap();
-                }
-            }
-
-            let mut wrapper = SignalOnDrop {
-                store,
-                task: prepared.task_id(),
-            };
-
-            let result = concurrent::queue_call(wrapper.store.as_context_mut(), prepared)?;
-            return wrapper
-                .store
-                .as_context_mut()
-                .run_concurrent_trap_on_idle(async |_| Ok(result.await?))
-                .await?;
+            return self.call_async_concurrent(store, params).await;
         }
 
         store
@@ -236,94 +183,7 @@ where
             .await?
     }
 
-    /// Start a concurrent call to this function.
-    ///
-    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
-    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
-    ///
-    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
-    /// exclusive access to the store until the completion of the call), calls
-    /// made using this method may run concurrently with other calls to the same
-    /// instance.  In addition, the runtime will call the `post-return` function
-    /// (if any) automatically when the guest task completes.
-    ///
-    /// This function will return an error if [`Config::concurrency_support`] is
-    /// disabled.
-    ///
-    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
-    ///
-    /// # Progress and Cancellation
-    ///
-    /// For more information about how to make progress on the wasm task or how
-    /// to cancel the wasm task see the documentation for
-    /// [`Func::call_concurrent`].
-    ///
-    /// [`Func::call_concurrent`]: crate::component::Func::call_concurrent
-    ///
-    /// # Panics
-    ///
-    /// Panics if the store that the [`Accessor`] is derived from does not own
-    /// this function.
-    ///
-    /// [`Accessor`]: crate::component::Accessor
-    ///
-    /// # Example
-    ///
-    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
-    ///
-    /// ```
-    /// # use {
-    /// #   wasmtime::{
-    /// #     error::{Result},
-    /// #     component::{Component, Linker, ResourceTable},
-    /// #     Config, Engine, Store
-    /// #   },
-    /// # };
-    /// #
-    /// # struct Ctx { table: ResourceTable }
-    /// #
-    /// # async fn foo() -> Result<()> {
-    /// # let mut config = Config::new();
-    /// # let engine = Engine::new(&config)?;
-    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
-    /// # let mut linker = Linker::new(&engine);
-    /// # let component = Component::new(&engine, "")?;
-    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// let my_typed_func = instance.get_typed_func::<(), ()>(&mut store, "my_typed_func")?;
-    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
-    ///    my_typed_func.call_concurrent(accessor, ()).await?;
-    ///    Ok(())
-    /// }).await??;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent(
-        self,
-        accessor: impl AsAccessor<Data: Send>,
-        params: Params,
-    ) -> Result<Return>
-    where
-        Params: 'static,
-        Return: 'static,
-    {
-        let result = accessor.as_accessor().with(|mut store| {
-            let mut store = store.as_context_mut();
-            ensure!(
-                store.0.concurrency_support(),
-                "cannot use `call_concurrent` Config::concurrency_support disabled",
-            );
-
-            let prepared =
-                self.prepare_call(store.as_context_mut(), false, move |cx, ty, dst| {
-                    Self::lower_args(cx, ty, dst, &params)
-                })?;
-            concurrent::queue_call(store, prepared)
-        });
-        Ok(result?.await?)
-    }
-
-    fn lower_args<T>(
+    pub(crate) fn lower_args<T>(
         cx: &mut LowerContext<T>,
         ty: InterfaceType,
         dst: &mut [MaybeUninit<ValRaw>],
@@ -341,81 +201,6 @@ where
         } else {
             Self::lower_heap_args(cx, &params, ty, &mut dst[0])
         }
-    }
-
-    /// Calls `concurrent::prepare_call` with monomorphized functions for
-    /// lowering the parameters and lifting the result according to the number
-    /// of core Wasm parameters and results in the signature of the function to
-    /// be called.
-    #[cfg(feature = "component-model-async")]
-    fn prepare_call<T>(
-        self,
-        store: StoreContextMut<'_, T>,
-        host_future_present: bool,
-        lower: impl FnOnce(
-            &mut LowerContext<T>,
-            InterfaceType,
-            &mut [MaybeUninit<ValRaw>],
-        ) -> Result<()>
-        + Send
-        + Sync
-        + 'static,
-    ) -> Result<PreparedCall<Return>>
-    where
-        Return: 'static,
-    {
-        use crate::component::storage::slice_to_storage;
-        debug_assert!(store.0.concurrency_support());
-
-        let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            Params::flatten_count()
-        } else {
-            1
-        };
-        let max_results = if self.func.abi_async(store.0) {
-            MAX_FLAT_PARAMS
-        } else {
-            MAX_FLAT_RESULTS
-        };
-        concurrent::prepare_call(
-            store,
-            self.func,
-            param_count,
-            host_future_present,
-            move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
-            },
-            move |func, store, results| {
-                let result = if Return::flatten_count() <= max_results {
-                    func.with_lift_context(store, |cx, ty| {
-                        // SAFETY: Per the safety requiments documented for the
-                        // `ComponentType` trait, `Return::Lower` must be
-                        // compatible at the binary level with a `[ValRaw; N]`,
-                        // where `N` is `mem::size_of::<Return::Lower>() /
-                        // mem::size_of::<ValRaw>()`.  And since this function
-                        // is only used when `Return::flatten_count() <=
-                        // MAX_FLAT_RESULTS` and `MAX_FLAT_RESULTS == 1`, `N`
-                        // can only either be 0 or 1.
-                        //
-                        // See `ComponentInstance::exit_call` for where we use
-                        // the result count passed from
-                        // `wasmtime_environ::fact::trampoline`-generated code
-                        // to ensure the slice has the correct length, and also
-                        // `concurrent::start_call` for where we conservatively
-                        // use a slice length of 1 unconditionally.  Also note
-                        // that, as of this writing `slice_to_storage`
-                        // double-checks the slice length is sufficient.
-                        let results: &Return::Lower = unsafe { slice_to_storage(results) };
-                        Self::lift_stack_result(cx, ty, results)
-                    })?
-                } else {
-                    func.with_lift_context(store, |cx, ty| {
-                        Self::lift_heap_result(cx, ty, &results[0])
-                    })?
-                };
-                Ok(Box::new(result))
-            },
-        )
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
@@ -539,7 +324,7 @@ where
     ///
     /// This is only used when the result fits in the maximum number of stack
     /// slots.
-    fn lift_stack_result(
+    pub(crate) fn lift_stack_result(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         dst: &Return::Lower,
@@ -549,7 +334,7 @@ where
 
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
-    fn lift_heap_result(
+    pub(crate) fn lift_heap_result(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         dst: &ValRaw,

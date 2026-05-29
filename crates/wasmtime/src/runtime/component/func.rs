@@ -15,9 +15,6 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeTuple,
 };
 
-#[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, AsAccessor, PreparedCall};
-
 mod host;
 mod options;
 mod typed;
@@ -263,26 +260,24 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
 
         #[cfg(feature = "component-model-async")]
         if store.0.concurrency_support() {
+            let call = self.start_call_concurrent(&mut store, params, results)?;
             return store
                 .run_concurrent_trap_on_idle(async |store| {
-                    self.call_concurrent_dynamic(store, params, results)
-                        .await
-                        .map(drop)
+                    self.finish_call_concurrent(store, call).await
                 })
                 .await?;
         }
 
-        let mut store = store;
         store
             .on_fiber(|store| self.call_impl(store, params, results))
             .await?
     }
 
-    fn check_params_results<T>(
+    pub(crate) fn check_params_results<T>(
         &self,
         store: StoreContextMut<T>,
         params: &[Val],
@@ -306,165 +301,6 @@ impl Func {
         }
 
         Ok(())
-    }
-
-    /// Start a concurrent call to this function.
-    ///
-    /// Concurrency is achieved by relying on the [`Accessor`] argument, which
-    /// can be obtained by calling [`StoreContextMut::run_concurrent`].
-    ///
-    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
-    /// exclusive access to the store until the completion of the call), calls
-    /// made using this method may run concurrently with other calls to the same
-    /// instance.  In addition, the runtime will call the `post-return` function
-    /// (if any) automatically when the guest task completes.
-    ///
-    /// # Progress
-    ///
-    /// For the wasm task being created in `call_concurrent` to make progress it
-    /// must be run within the scope of [`run_concurrent`]. If there are no
-    /// active calls to [`run_concurrent`] then the wasm task will appear as
-    /// stalled. This is typically not a concern as an [`Accessor`] is bound
-    /// by default to a scope of [`run_concurrent`].
-    ///
-    /// One situation in which this can arise, for example, is that if a
-    /// [`run_concurrent`] computation finishes its async closure before all
-    /// wasm tasks have completed, then there will be no scope of
-    /// [`run_concurrent`] anywhere. In this situation the wasm tasks that have
-    /// not yet completed will not make progress until [`run_concurrent`] is
-    /// called again.
-    ///
-    /// Embedders will need to ensure that this future is `await`'d within the
-    /// scope of [`run_concurrent`] to ensure that the value can be produced
-    /// during the `await` call.
-    ///
-    /// # Cancellation
-    ///
-    /// Cancelling an async task created via `call_concurrent`, at this time, is
-    /// only possible by dropping the store that the computation runs within.
-    /// With [#11833] implemented then it will be possible to request
-    /// cancellation of a task, but that is not yet implemented. Hard-cancelling
-    /// a task will only ever be possible by dropping the entire store and it is
-    /// not possible to remove just one task from a store.
-    ///
-    /// This async function behaves more like a "spawn" than a normal Rust async
-    /// function. When this function is invoked then metadata for the function
-    /// call is recorded in the store connected to the `accessor` argument and
-    /// the wasm invocation is from then on connected to the store. If the
-    /// future created by this function is dropped it does not cancel the
-    /// in-progress execution of the wasm task. Dropping the future
-    /// relinquishes the host's ability to learn about the result of the task
-    /// but the task will still progress and invoke callbacks and such until
-    /// completion.
-    ///
-    /// This function will return an error if [`Config::concurrency_support`] is
-    /// disabled.
-    ///
-    /// [`Config::concurrency_support`]: crate::Config::concurrency_support
-    /// [`run_concurrent`]: crate::Store::run_concurrent
-    /// [#11833]: https://github.com/bytecodealliance/wasmtime/issues/11833
-    /// [`Accessor`]: crate::component::Accessor
-    ///
-    /// # Panics
-    ///
-    /// Panics if the store that the [`Accessor`] is derived from does not own
-    /// this function.
-    ///
-    /// # Example
-    ///
-    /// Using [`StoreContextMut::run_concurrent`] to get an [`Accessor`]:
-    ///
-    /// ```
-    /// # use {
-    /// #   wasmtime::{
-    /// #     error::{Result},
-    /// #     component::{Component, Linker, ResourceTable},
-    /// #     Config, Engine, Store
-    /// #   },
-    /// # };
-    /// #
-    /// # struct Ctx { table: ResourceTable }
-    /// #
-    /// # async fn foo() -> Result<()> {
-    /// # let mut config = Config::new();
-    /// # let engine = Engine::new(&config)?;
-    /// # let mut store = Store::new(&engine, Ctx { table: ResourceTable::new() });
-    /// # let mut linker = Linker::new(&engine);
-    /// # let component = Component::new(&engine, "")?;
-    /// # let instance = linker.instantiate_async(&mut store, &component).await?;
-    /// let my_func = instance.get_func(&mut store, "my_func").unwrap();
-    /// store.run_concurrent(async |accessor| -> wasmtime::Result<_> {
-    ///    my_func.call_concurrent(accessor, &[], &mut Vec::new()).await?;
-    ///    Ok(())
-    /// }).await??;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent(
-        self,
-        accessor: impl AsAccessor<Data: Send>,
-        params: &[Val],
-        results: &mut [Val],
-    ) -> Result<()> {
-        self.call_concurrent_dynamic(accessor, params, results)
-            .await
-    }
-
-    /// Internal helper function for `call_async` and `call_concurrent`.
-    #[cfg(feature = "component-model-async")]
-    async fn call_concurrent_dynamic(
-        self,
-        accessor: impl AsAccessor<Data: Send>,
-        params: &[Val],
-        results: &mut [Val],
-    ) -> Result<()> {
-        let result = accessor.as_accessor().with(|mut store| {
-            self.check_params_results(store.as_context_mut(), params, results)?;
-            let prepared = self.prepare_call_dynamic(store.as_context_mut(), params.to_vec())?;
-            concurrent::queue_call(store.as_context_mut(), prepared)
-        })?;
-
-        let run_results = result.await?;
-        assert_eq!(run_results.len(), results.len());
-        for (result, slot) in run_results.into_iter().zip(results) {
-            *slot = result;
-        }
-        Ok(())
-    }
-
-    /// Calls `concurrent::prepare_call` with monomorphized functions for
-    /// lowering the parameters and lifting the result.
-    #[cfg(feature = "component-model-async")]
-    fn prepare_call_dynamic<'a, T: Send + 'static>(
-        self,
-        mut store: StoreContextMut<'a, T>,
-        params: Vec<Val>,
-    ) -> Result<PreparedCall<Vec<Val>>> {
-        let store = store.as_context_mut();
-
-        concurrent::prepare_call(
-            store,
-            self,
-            MAX_FLAT_PARAMS,
-            false,
-            move |func, store, params_out| {
-                func.with_lower_context(store, |cx, ty| {
-                    Self::lower_args(cx, &params, ty, params_out)
-                })
-            },
-            move |func, store, results| {
-                let max_flat = if func.abi_async(store) {
-                    MAX_FLAT_PARAMS
-                } else {
-                    MAX_FLAT_RESULTS
-                };
-                let results = func.with_lift_context(store, |cx, ty| {
-                    Self::lift_results(cx, ty, results, max_flat)?.collect::<Result<Vec<_>>>()
-                })?;
-                Ok(Box::new(results))
-            },
-        )
     }
 
     fn call_impl(
@@ -728,7 +564,7 @@ impl Func {
         Ok(())
     }
 
-    fn lower_args<T>(
+    pub(crate) fn lower_args<T>(
         cx: &mut LowerContext<'_, T>,
         params: &[Val],
         params_ty: InterfaceType,
@@ -769,7 +605,7 @@ impl Func {
         Ok(())
     }
 
-    fn lift_results<'a, 'b>(
+    pub(crate) fn lift_results<'a, 'b>(
         cx: &'a mut LiftContext<'b>,
         results_ty: InterfaceType,
         src: &'a [ValRaw],
@@ -829,7 +665,7 @@ impl Func {
     /// The `lower` closure provided should perform the actual lowering and
     /// return the result of the lowering operation which is then returned from
     /// this function as well.
-    fn with_lower_context<T>(
+    pub(crate) fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
@@ -854,7 +690,7 @@ impl Func {
     ///
     /// The closure `lift` provided should actually perform the lift itself and
     /// the result of that closure is returned from this function call as well.
-    fn with_lift_context<R>(
+    pub(crate) fn with_lift_context<R>(
         self,
         store: &mut StoreOpaque,
         lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
