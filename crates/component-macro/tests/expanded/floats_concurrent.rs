@@ -368,6 +368,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f32,),
+                                (),
+                            >::new_unchecked(self.f32_param)
+                        }
+                    }
                     pub async fn call_f32_param<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -377,14 +387,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f32,),
-                                (),
-                            >::new_unchecked(self.f32_param)
-                        };
+                        let callee = self.func_f32_param();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f64,),
+                                (),
+                            >::new_unchecked(self.f64_param)
+                        }
                     }
                     pub async fn call_f64_param<_T, _D>(
                         &self,
@@ -395,14 +410,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f64,),
-                                (),
-                            >::new_unchecked(self.f64_param)
-                        };
+                        let callee = self.func_f64_param();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_f32_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f32,),
+                            >::new_unchecked(self.f32_result)
+                        }
                     }
                     pub async fn call_f32_result<_T, _D>(
                         &self,
@@ -412,14 +432,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f32,),
-                            >::new_unchecked(self.f32_result)
-                        };
+                        let callee = self.func_f32_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_f64_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f64,),
+                            >::new_unchecked(self.f64_result)
+                        }
                     }
                     pub async fn call_f64_result<_T, _D>(
                         &self,
@@ -429,12 +454,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f64,),
-                            >::new_unchecked(self.f64_result)
-                        };
+                        let callee = self.func_f64_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }

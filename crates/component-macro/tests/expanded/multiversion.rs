@@ -363,16 +363,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub fn call_x<S: wasmtime::AsContextMut>(
-                        &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.x)
-                        };
+                        }
+                    }
+                    pub fn call_x<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<()> {
+                        let callee = self.func_x();
                         let () = callee.call(store.as_context_mut(), ())?;
                         Ok(())
                     }
@@ -442,16 +445,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub fn call_x<S: wasmtime::AsContextMut>(
-                        &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.x)
-                        };
+                        }
+                    }
+                    pub fn call_x<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<()> {
+                        let callee = self.func_x();
                         let () = callee.call(store.as_context_mut(), ())?;
                         Ok(())
                     }

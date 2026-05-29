@@ -230,13 +230,16 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_y(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
+                }
+            }
             pub fn call_y<S: wasmtime::AsContextMut>(
                 &self,
                 mut store: S,
             ) -> wasmtime::Result<()> {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
-                };
+                let callee = self.func_y();
                 let () = callee.call(store.as_context_mut(), ())?;
                 Ok(())
             }

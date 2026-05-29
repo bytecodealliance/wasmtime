@@ -362,6 +362,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::__internal::String,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::__internal::String,),
+                                (),
+                            >::new_unchecked(self.a)
+                        }
+                    }
                     pub async fn call_a<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -371,14 +384,22 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::__internal::String,),
-                                (),
-                            >::new_unchecked(self.a)
-                        };
+                        let callee = self.func_a();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_b(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.b)
+                        }
                     }
                     pub async fn call_b<_T, _D>(
                         &self,
@@ -388,14 +409,28 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.b)
-                        };
+                        let callee = self.func_b();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_c(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::String,
+                        ),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    wasmtime::component::__internal::String,
+                                    wasmtime::component::__internal::String,
+                                ),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.c)
+                        }
                     }
                     pub async fn call_c<_T, _D>(
                         &self,
@@ -407,15 +442,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    wasmtime::component::__internal::String,
-                                    wasmtime::component::__internal::String,
-                                ),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.c)
-                        };
+                        let callee = self.func_c();
                         let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;

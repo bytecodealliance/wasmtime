@@ -219,6 +219,11 @@ const _: () = {
             foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_f(&self) -> wasmtime::component::TypedFunc<(), ((T, U, R),)> {
+            unsafe {
+                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
+            }
+        }
         pub async fn call_f<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -231,9 +236,7 @@ const _: () = {
                 tracing::Level::TRACE, "wit-bindgen export", module = "default", function
                 = "f",
             );
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
-            };
+            let callee = self.func_f();
             let (ret0,) = callee
                 .call_async(store.as_context_mut(), ())
                 .instrument(span.clone())

@@ -1977,6 +1977,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_e1_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(E1,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (E1,),
+                                (),
+                            >::new_unchecked(self.e1_arg)
+                        }
+                    }
                     pub async fn call_e1_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -1990,17 +2000,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "e1-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (E1,),
-                                (),
-                            >::new_unchecked(self.e1_arg)
-                        };
+                        let callee = self.func_e1_arg();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_e1_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (E1,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (E1,),
+                            >::new_unchecked(self.e1_result)
+                        }
                     }
                     pub async fn call_e1_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -2014,17 +2029,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "e1-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (E1,),
-                            >::new_unchecked(self.e1_result)
-                        };
+                        let callee = self.func_e1_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_v1_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&V1,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&V1,),
+                                (),
+                            >::new_unchecked(self.v1_arg)
+                        }
                     }
                     pub async fn call_v1_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -2039,17 +2059,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "v1-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&V1,),
-                                (),
-                            >::new_unchecked(self.v1_arg)
-                        };
+                        let callee = self.func_v1_arg();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_v1_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (V1,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (V1,),
+                            >::new_unchecked(self.v1_result)
+                        }
                     }
                     pub async fn call_v1_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -2063,17 +2088,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "v1-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (V1,),
-                            >::new_unchecked(self.v1_result)
-                        };
+                        let callee = self.func_v1_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_bool_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(bool,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (bool,),
+                                (),
+                            >::new_unchecked(self.bool_arg)
+                        }
                     }
                     pub async fn call_bool_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -2088,17 +2118,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "bool-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (bool,),
-                                (),
-                            >::new_unchecked(self.bool_arg)
-                        };
+                        let callee = self.func_bool_arg();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_bool_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (bool,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (bool,),
+                            >::new_unchecked(self.bool_result)
+                        }
                     }
                     pub async fn call_bool_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -2112,17 +2147,39 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "bool-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (bool,),
-                            >::new_unchecked(self.bool_result)
-                        };
+                        let callee = self.func_bool_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_option_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            Option<bool>,
+                            Option<()>,
+                            Option<u32>,
+                            Option<E1>,
+                            Option<f32>,
+                            Option<Option<bool>>,
+                        ),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    Option<bool>,
+                                    Option<()>,
+                                    Option<u32>,
+                                    Option<E1>,
+                                    Option<f32>,
+                                    Option<Option<bool>>,
+                                ),
+                                (),
+                            >::new_unchecked(self.option_arg)
+                        }
                     }
                     pub async fn call_option_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -2142,19 +2199,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "option-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    Option<bool>,
-                                    Option<()>,
-                                    Option<u32>,
-                                    Option<E1>,
-                                    Option<f32>,
-                                    Option<Option<bool>>,
-                                ),
-                                (),
-                            >::new_unchecked(self.option_arg)
-                        };
+                        let callee = self.func_option_arg();
                         let () = callee
                             .call_async(
                                 store.as_context_mut(),
@@ -2163,6 +2208,37 @@ pub mod exports {
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_option_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (
+                            (
+                                Option<bool>,
+                                Option<()>,
+                                Option<u32>,
+                                Option<E1>,
+                                Option<f32>,
+                                Option<Option<bool>>,
+                            ),
+                        ),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (
+                                    (
+                                        Option<bool>,
+                                        Option<()>,
+                                        Option<u32>,
+                                        Option<E1>,
+                                        Option<f32>,
+                                        Option<Option<bool>>,
+                                    ),
+                                ),
+                            >::new_unchecked(self.option_result)
+                        }
                     }
                     pub async fn call_option_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -2185,26 +2261,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "option-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (
-                                    (
-                                        Option<bool>,
-                                        Option<()>,
-                                        Option<u32>,
-                                        Option<E1>,
-                                        Option<f32>,
-                                        Option<Option<bool>>,
-                                    ),
-                                ),
-                            >::new_unchecked(self.option_result)
-                        };
+                        let callee = self.func_option_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_casts(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
+                        ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
+                                ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
+                            >::new_unchecked(self.casts)
+                        }
                     }
                     pub async fn call_casts<S: wasmtime::AsContextMut>(
                         &self,
@@ -2226,12 +2301,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "casts",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
-                                ((Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),),
-                            >::new_unchecked(self.casts)
-                        };
+                        let callee = self.func_casts();
                         let (ret0,) = callee
                             .call_async(
                                 store.as_context_mut(),
@@ -2240,6 +2310,33 @@ pub mod exports {
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_result_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            Result<(), ()>,
+                            Result<(), E1>,
+                            Result<E1, ()>,
+                            Result<(), ()>,
+                            Result<u32, &V1>,
+                            Result<&str, &[u8]>,
+                        ),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    Result<(), ()>,
+                                    Result<(), E1>,
+                                    Result<E1, ()>,
+                                    Result<(), ()>,
+                                    Result<u32, &V1>,
+                                    Result<&str, &[u8]>,
+                                ),
+                                (),
+                            >::new_unchecked(self.result_arg)
+                        }
                     }
                     pub async fn call_result_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -2259,19 +2356,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "result-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    Result<(), ()>,
-                                    Result<(), E1>,
-                                    Result<E1, ()>,
-                                    Result<(), ()>,
-                                    Result<u32, &V1>,
-                                    Result<&str, &[u8]>,
-                                ),
-                                (),
-                            >::new_unchecked(self.result_arg)
-                        };
+                        let callee = self.func_result_arg();
                         let () = callee
                             .call_async(
                                 store.as_context_mut(),
@@ -2280,6 +2365,43 @@ pub mod exports {
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_result_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (
+                            (
+                                Result<(), ()>,
+                                Result<(), E1>,
+                                Result<E1, ()>,
+                                Result<(), ()>,
+                                Result<u32, V1>,
+                                Result<
+                                    wasmtime::component::__internal::String,
+                                    wasmtime::component::__internal::Vec<u8>,
+                                >,
+                            ),
+                        ),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (
+                                    (
+                                        Result<(), ()>,
+                                        Result<(), E1>,
+                                        Result<E1, ()>,
+                                        Result<(), ()>,
+                                        Result<u32, V1>,
+                                        Result<
+                                            wasmtime::component::__internal::String,
+                                            wasmtime::component::__internal::Vec<u8>,
+                                        >,
+                                    ),
+                                ),
+                            >::new_unchecked(self.result_result)
+                        }
                     }
                     pub async fn call_result_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -2305,29 +2427,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "result-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (
-                                    (
-                                        Result<(), ()>,
-                                        Result<(), E1>,
-                                        Result<E1, ()>,
-                                        Result<(), ()>,
-                                        Result<u32, V1>,
-                                        Result<
-                                            wasmtime::component::__internal::String,
-                                            wasmtime::component::__internal::Vec<u8>,
-                                        >,
-                                    ),
-                                ),
-                            >::new_unchecked(self.result_result)
-                        };
+                        let callee = self.func_result_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_result_sugar(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Result<i32, MyErrno>,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Result<i32, MyErrno>,),
+                            >::new_unchecked(self.return_result_sugar)
+                        }
                     }
                     pub async fn call_return_result_sugar<S: wasmtime::AsContextMut>(
                         &self,
@@ -2341,17 +2456,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-result-sugar",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<i32, MyErrno>,),
-                            >::new_unchecked(self.return_result_sugar)
-                        };
+                        let callee = self.func_return_result_sugar();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_result_sugar2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Result<(), MyErrno>,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Result<(), MyErrno>,),
+                            >::new_unchecked(self.return_result_sugar2)
+                        }
                     }
                     pub async fn call_return_result_sugar2<S: wasmtime::AsContextMut>(
                         &self,
@@ -2365,17 +2485,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-result-sugar2",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<(), MyErrno>,),
-                            >::new_unchecked(self.return_result_sugar2)
-                        };
+                        let callee = self.func_return_result_sugar2();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_result_sugar3(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<MyErrno, MyErrno>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Result<MyErrno, MyErrno>,),
+                            >::new_unchecked(self.return_result_sugar3)
+                        }
                     }
                     pub async fn call_return_result_sugar3<S: wasmtime::AsContextMut>(
                         &self,
@@ -2389,17 +2517,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-result-sugar3",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<MyErrno, MyErrno>,),
-                            >::new_unchecked(self.return_result_sugar3)
-                        };
+                        let callee = self.func_return_result_sugar3();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_result_sugar4(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<(i32, u32), MyErrno>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Result<(i32, u32), MyErrno>,),
+                            >::new_unchecked(self.return_result_sugar4)
+                        }
                     }
                     pub async fn call_return_result_sugar4<S: wasmtime::AsContextMut>(
                         &self,
@@ -2413,17 +2549,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-result-sugar4",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<(i32, u32), MyErrno>,),
-                            >::new_unchecked(self.return_result_sugar4)
-                        };
+                        let callee = self.func_return_result_sugar4();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_option_sugar(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Option<i32>,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Option<i32>,),
+                            >::new_unchecked(self.return_option_sugar)
+                        }
                     }
                     pub async fn call_return_option_sugar<S: wasmtime::AsContextMut>(
                         &self,
@@ -2437,17 +2578,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-option-sugar",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Option<i32>,),
-                            >::new_unchecked(self.return_option_sugar)
-                        };
+                        let callee = self.func_return_option_sugar();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_return_option_sugar2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Option<MyErrno>,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Option<MyErrno>,),
+                            >::new_unchecked(self.return_option_sugar2)
+                        }
                     }
                     pub async fn call_return_option_sugar2<S: wasmtime::AsContextMut>(
                         &self,
@@ -2461,17 +2607,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "return-option-sugar2",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Option<MyErrno>,),
-                            >::new_unchecked(self.return_option_sugar2)
-                        };
+                        let callee = self.func_return_option_sugar2();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_result_simple(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Result<u32, i32>,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Result<u32, i32>,),
+                            >::new_unchecked(self.result_simple)
+                        }
                     }
                     pub async fn call_result_simple<S: wasmtime::AsContextMut>(
                         &self,
@@ -2485,17 +2636,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "result-simple",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<u32, i32>,),
-                            >::new_unchecked(self.result_simple)
-                        };
+                        let callee = self.func_result_simple();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_is_clone_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&IsClone,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&IsClone,),
+                                (),
+                            >::new_unchecked(self.is_clone_arg)
+                        }
                     }
                     pub async fn call_is_clone_arg<S: wasmtime::AsContextMut>(
                         &self,
@@ -2510,17 +2666,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "is-clone-arg",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&IsClone,),
-                                (),
-                            >::new_unchecked(self.is_clone_arg)
-                        };
+                        let callee = self.func_is_clone_arg();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_is_clone_return(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (IsClone,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (IsClone,),
+                            >::new_unchecked(self.is_clone_return)
+                        }
                     }
                     pub async fn call_is_clone_return<S: wasmtime::AsContextMut>(
                         &self,
@@ -2534,12 +2695,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/variants", function = "is-clone-return",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (IsClone,),
-                            >::new_unchecked(self.is_clone_return)
-                        };
+                        let callee = self.func_is_clone_return();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())

@@ -434,6 +434,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_a(&self) -> wasmtime::component::TypedFunc<(&str,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&str,),
+                                (),
+                            >::new_unchecked(self.a)
+                        }
+                    }
                     pub async fn call_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -447,17 +455,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/strings", function = "a",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&str,),
-                                (),
-                            >::new_unchecked(self.a)
-                        };
+                        let callee = self.func_a();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_b(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.b)
+                        }
                     }
                     pub async fn call_b<S: wasmtime::AsContextMut>(
                         &self,
@@ -471,17 +487,25 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/strings", function = "b",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.b)
-                        };
+                        let callee = self.func_b();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_c(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (&str, &str),
+                        (wasmtime::component::__internal::String,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&str, &str),
+                                (wasmtime::component::__internal::String,),
+                            >::new_unchecked(self.c)
+                        }
                     }
                     pub async fn call_c<S: wasmtime::AsContextMut>(
                         &self,
@@ -497,12 +521,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/strings", function = "c",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&str, &str),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.c)
-                        };
+                        let callee = self.func_c();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0, arg1))
                             .instrument(span.clone())
