@@ -17,7 +17,7 @@ use crate::opts::generated_code::SkeletonInstSimplification;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::take_and_replace::TakeAndReplace;
 use crate::trace;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use core::cmp::Ordering;
 use core::hash::Hasher;
 use cranelift_control::ControlPlane;
@@ -735,7 +735,7 @@ impl<'a> EgraphPass<'a> {
 
     /// Run the process.
     pub fn run(&mut self) {
-        let reachable_blocks = self.remove_pure_and_optimize();
+        self.remove_pure_and_optimize();
 
         trace!("egraph built:\n{}\n", self.func.display());
         if cfg!(feature = "trace-log") {
@@ -750,6 +750,11 @@ impl<'a> EgraphPass<'a> {
             }
         }
 
+        // Branch simplification could have mutated the CFG and made some blocks
+        // unreachable; recompute the CFG, find which blocks are still
+        // reachable, and remove those that aren't.
+        self.cfg.compute(self.func);
+        let reachable_blocks = self.find_reachable_blocks();
         crate::unreachable_code::eliminate_unreachable_code(self.func, self.cfg, |block| {
             reachable_blocks.contains(block)
         });
@@ -778,10 +783,8 @@ impl<'a> EgraphPass<'a> {
     /// because the eclass can continue to be updated and we need to
     /// only refer to its subset that exists at this stage, to
     /// maintain acyclicity.)
-    fn remove_pure_and_optimize(&mut self) -> EntitySet<Block> {
+    fn remove_pure_and_optimize(&mut self) {
         let mut cursor = FuncCursor::new(self.func);
-        let mut reachable_blocks = EntitySet::<Block>::with_capacity(cursor.func.dfg.num_blocks());
-        reachable_blocks.insert(cursor.func.layout.entry_block().unwrap());
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
 
@@ -941,19 +944,27 @@ impl<'a> EgraphPass<'a> {
                     }
                 }
             }
+        }
+    }
 
-            if reachable_blocks.contains(block) {
-                let terminator_inst = cursor.func.layout.last_inst(block).unwrap();
-                for dest in cursor.func.dfg.insts[terminator_inst].branch_destination(
-                    &cursor.func.dfg.jump_tables,
-                    &cursor.func.dfg.exception_tables,
-                ) {
-                    reachable_blocks.insert(dest.block(&cursor.func.dfg.value_lists));
+    /// Find the set of blocks reachable from the entry block by
+    /// traversing the current CFG.
+    ///
+    /// Must be called after branch simplification and the CFG has been
+    /// recomputed to reflect post-optimization control flow.
+    fn find_reachable_blocks(&self) -> EntitySet<Block> {
+        let mut reachable = EntitySet::<Block>::with_capacity(self.func.dfg.num_blocks());
+        let entry = self.func.layout.entry_block().unwrap();
+        let mut stack = vec![entry];
+        reachable.insert(entry);
+        while let Some(block) = stack.pop() {
+            for successor in self.cfg.succ_iter(block) {
+                if reachable.insert(successor) {
+                    stack.push(successor);
                 }
             }
         }
-
-        reachable_blocks
+        reachable
     }
 
     /// Execute a simplification of an instruction in the side-effectful
