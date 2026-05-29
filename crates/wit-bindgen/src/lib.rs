@@ -80,6 +80,8 @@ struct Wasmtime {
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
     used_with_opts: HashSet<String>,
+    // Modules generated for `named_imports` options.
+    named_import_modules: Vec<(String, InterfaceName)>,
     world_link_options: LinkOptionsBuilder,
     interface_link_options: HashMap<InterfaceId, LinkOptionsBuilder>,
 }
@@ -94,7 +96,7 @@ struct ImportInterface {
 #[derive(Default)]
 struct Exports {
     fields: BTreeMap<String, ExportField>,
-    modules: Vec<(InterfaceId, String, InterfaceName)>,
+    modules: Vec<(String, InterfaceName)>,
     funcs: Vec<String>,
 }
 
@@ -142,6 +144,10 @@ pub struct Opts {
     /// Remapping of interface names to rust module names.
     /// TODO: is there a better type to use for the value of this map?
     pub with: HashMap<String, String>,
+
+    /// Interfaces for which to generate an additional set of "named imports"
+    /// bindings.
+    pub named_imports: HashMap<String, String>,
 
     /// Additional derive attributes to add to generated types. If using in a CLI, this flag can be
     /// specified multiple times to add multiple attributes.
@@ -226,6 +232,13 @@ impl Opts {
     }
 }
 
+#[derive(Copy, Clone, PartialEq)]
+enum InterfaceKind {
+    Import,
+    Export,
+    Named,
+}
+
 impl Wasmtime {
     fn populate_world_and_interface_options(&mut self, resolve: &Resolve, world: WorldId) {
         self.world_link_options.add_world(resolve, &world);
@@ -241,16 +254,19 @@ impl Wasmtime {
             }
         }
     }
-    fn name_interface(
+
+    fn generate_interface_name(
         &mut self,
         resolve: &Resolve,
         id: InterfaceId,
         name: &WorldKey,
-        is_export: bool,
-    ) -> bool {
+        interface_kind: InterfaceKind,
+    ) -> Vec<String> {
         let mut path = Vec::new();
-        if is_export {
-            path.push("exports".to_string());
+        match interface_kind {
+            InterfaceKind::Import => {}
+            InterfaceKind::Export => path.push("exports".to_string()),
+            InterfaceKind::Named => path.push("named_imports".to_string()),
         }
         match name {
             WorldKey::Name(name) => {
@@ -264,13 +280,26 @@ impl Wasmtime {
                 path.push(to_rust_ident(iface.name.as_ref().unwrap()));
             }
         }
-        let entry = if let Some(name_at_root) = self.lookup_replacement(resolve, name, None) {
+        path
+    }
+
+    fn name_interface(
+        &mut self,
+        resolve: &Resolve,
+        id: InterfaceId,
+        name: &WorldKey,
+        interface_kind: InterfaceKind,
+    ) -> bool {
+        let local_path = self.generate_interface_name(resolve, id, name, interface_kind);
+        let entry = if !matches!(interface_kind, InterfaceKind::Named)
+            && let Some(name_at_root) = self.lookup_replacement(resolve, name, None)
+        {
             InterfaceName::Remapped {
                 name_at_root,
-                local_path: path,
+                local_path,
             }
         } else {
-            InterfaceName::Path(path)
+            InterfaceName::Path(local_path)
         };
 
         let remapped = matches!(entry, InterfaceName::Remapped { .. });
@@ -387,6 +416,17 @@ impl Wasmtime {
             *v = name;
         }
 
+        // Similarly bring the `named_imports` id types into scope under an
+        // anonymous name at the root so they can be referenced from the deeply
+        // nested `named_imports` module.
+        let mut named_imports = self.opts.named_imports.iter_mut().collect::<Vec<_>>();
+        named_imports.sort();
+        for (i, (_k, v)) in named_imports.into_iter().enumerate() {
+            let name = format!("__named_import_name{i}");
+            uwriteln!(self.src, "#[doc(hidden)]\npub use {v} as {name};");
+            *v = name;
+        }
+
         let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface { .. }) {
@@ -399,7 +439,77 @@ impl Wasmtime {
                 self.export(resolve, name, export);
             }
         }
+        self.generate_named_imports(resolve)?;
         self.finish(resolve, id)
+    }
+
+    /// Generates the extra "named imports" bindings requested via the
+    /// `named_imports` configuration option.
+    ///
+    /// For each configured interface this generates, into a body stored in
+    /// `named_import_modules`, a `Host`/`HostWithStore` trait whose methods take
+    /// an extra `&Id` parameter alongside a reflection-based `add_to_linker`.
+    /// These are emitted underneath a top-level `named_imports` module by
+    /// `finish`.
+    fn generate_named_imports(&mut self, resolve: &Resolve) -> anyhow::Result<()> {
+        // For all named imports see what interface that lines up with in the
+        // `Resolve` which will have bindings generated.
+        'outer: for (interface_name, id_type) in self.opts.named_imports.clone() {
+            for (id, _iface) in resolve.interfaces.iter() {
+                for (key, projection) in lookup_keys(
+                    resolve,
+                    &WorldKey::Interface(id),
+                    LookupItem::InterfaceNoPop,
+                ) {
+                    assert!(projection.is_empty());
+                    if key == interface_name {
+                        self.generate_named_import(resolve, id, &interface_name, &id_type)?;
+                        continue 'outer;
+                    }
+                }
+            }
+
+            bail!("named imports key {interface_name:?} not found")
+        }
+
+        Ok(())
+    }
+
+    fn generate_named_import(
+        &mut self,
+        resolve: &Resolve,
+        id: InterfaceId,
+        named_import_key: &str,
+        id_type: &str,
+    ) -> anyhow::Result<()> {
+        // Resources are not supported for named imports just yet, it's a bit
+        // weird with the resource traits.
+        if get_resources(resolve, id).next().is_some() {
+            bail!(
+                "the interface {named_import_key:?} was specified in \
+                `named_imports` but defines a resource, which is not \
+                supported"
+            );
+        }
+
+        let key = WorldKey::Interface(id);
+        let mut generator = InterfaceGenerator::new(self, resolve);
+        generator.current_interface = Some((id, &key, InterfaceKind::Named));
+        let path_to_root = generator.path_to_root();
+        generator.named_import_id = Some(format!("{path_to_root}{id_type}"));
+        let wt = generator.generator.wasmtime_path();
+        generator.src.push_str(&format!(
+            "#[allow(unused_imports)] use {wt}::component::__internal::Box;\n"
+        ));
+        let key_name = resolve.name_world_key(&key);
+        generator.generate_add_to_linker(id, &key_name);
+        let body = String::from(mem::take(&mut generator.src));
+        let interface_name = resolve.interfaces[id].name.as_ref().unwrap();
+        let body = format!("pub mod {interface_name} {{\n{body}\n}}");
+        let path = self.generate_interface_name(resolve, id, &key, InterfaceKind::Named);
+        self.named_import_modules
+            .push((body, InterfaceName::Path(path)));
+        Ok(())
     }
 
     fn import(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
@@ -448,7 +558,7 @@ impl Wasmtime {
     ) {
         let mut generator = InterfaceGenerator::new(self, resolve);
 
-        generator.current_interface = Some((id, name, false));
+        generator.current_interface = Some((id, name, InterfaceKind::Import));
         let snake = to_rust_ident(&match name {
             WorldKey::Name(s) => s.to_snake_case(),
             WorldKey::Interface(id) => resolve.interfaces[*id]
@@ -457,7 +567,10 @@ impl Wasmtime {
                 .unwrap()
                 .to_snake_case(),
         });
-        let module = if generator.generator.name_interface(resolve, id, name, false) {
+        let module = if generator
+            .generator
+            .name_interface(resolve, id, name, InterfaceKind::Import)
+        {
             // If this interface is remapped then that means that it was
             // provided via the `with` key in the bindgen configuration.
             // That means that bindings generation is skipped here. To
@@ -559,8 +672,10 @@ impl Wasmtime {
             }
             WorldItem::Type { .. } => unreachable!(),
             WorldItem::Interface { id, .. } => {
-                generator.generator.name_interface(resolve, *id, name, true);
-                generator.current_interface = Some((*id, name, true));
+                generator
+                    .generator
+                    .name_interface(resolve, *id, name, InterfaceKind::Export);
+                generator.current_interface = Some((*id, name, InterfaceKind::Export));
                 generator.types(*id);
                 let struct_name = "Guest";
                 let iface = &resolve.interfaces[*id];
@@ -719,7 +834,7 @@ pub fn new<_T>(
                 };
                 self.exports
                     .modules
-                    .push((*id, module, self.interface_names[id].clone()));
+                    .push((module, self.interface_names[id].clone()));
 
                 let (path, method_name) = match pkgname {
                     Some(pkgname) => (
@@ -1039,12 +1154,15 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         self.emit_modules(
             imports
                 .into_iter()
-                .map(|(id, i)| (id, i.contents, i.name))
+                .map(|(_, i)| (i.contents, i.name))
                 .collect(),
         );
 
         let exports = mem::take(&mut self.exports.modules);
         self.emit_modules(exports);
+
+        let named_imports = mem::take(&mut self.named_import_modules);
+        self.emit_modules(named_imports);
 
         let mut src = mem::take(&mut self.src);
         if self.opts.rustfmt {
@@ -1074,14 +1192,14 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         Ok(src.into())
     }
 
-    fn emit_modules(&mut self, modules: Vec<(InterfaceId, String, InterfaceName)>) {
+    fn emit_modules(&mut self, modules: Vec<(String, InterfaceName)>) {
         #[derive(Default)]
         struct Module {
             submodules: BTreeMap<String, Module>,
             contents: Vec<String>,
         }
         let mut map = Module::default();
-        for (_, module, name) in modules {
+        for (module, name) in modules {
             let path = match name {
                 InterfaceName::Remapped { local_path, .. } => local_path,
                 InterfaceName::Path(path) => path,
@@ -1622,8 +1740,11 @@ struct InterfaceGenerator<'a> {
     src: Source,
     generator: &'a mut Wasmtime,
     resolve: &'a Resolve,
-    current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
+    current_interface: Option<(InterfaceId, &'a WorldKey, InterfaceKind)>,
     all_func_flags: FunctionFlags,
+
+    /// The type that represents the embedder-chosen "id" for named imports.
+    named_import_id: Option<String>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
@@ -1634,13 +1755,14 @@ impl<'a> InterfaceGenerator<'a> {
             resolve,
             current_interface: None,
             all_func_flags: FunctionFlags::empty(),
+            named_import_id: None,
         }
     }
 
     fn types_imported(&self) -> bool {
         match self.current_interface {
-            Some((_, _, is_export)) => !is_export,
-            None => true,
+            Some((_, _, InterfaceKind::Export)) => false,
+            _ => true,
         }
     }
 
@@ -2401,11 +2523,19 @@ impl<'a> InterfaceGenerator<'a> {
             ""
         };
 
+        // For named imports the per-instance helper additionally accepts the
+        // host-chosen `id` (by value, cloned into each closure).
+        let id_param = match &self.named_import_id {
+            Some(named) => format!("id: {named},"),
+            None => String::new(),
+        };
+
         uwriteln!(
             self.src,
             "
                 pub fn add_to_linker_instance<T, D>(
                     inst: &mut {wt}::component::LinkerInstance<'_, T>,
+                    {id_param}
                     {options_param}
                     host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
@@ -2435,24 +2565,71 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
 
-        uwriteln!(
-            self.src,
+        match &self.named_import_id {
+            Some(id_ty) => {
+                let (id, _, _) = self.current_interface.unwrap();
+                let wit_name = self.resolve.id_of(id).unwrap();
+                uwriteln!(
+                    self.src,
+                    "
+pub fn add_to_linker<T, D>(
+    linker: &mut {wt}::component::Linker<T>,
+    component: &{wt}::component::Component,
+    mut lookup: impl FnMut(&str) -> {wt}::Result<{id_ty}>,
+    {options_param}
+    host_getter: fn(&mut T) -> D::Data<'_>,
+) -> {wt}::Result<()>
+    where
+        D: HostWithStore,
+        for<'a> D::Data<'a>: {sync_bounds},
+        T: 'static {opt_t_send_bound},
+{{
+    // Collect matching imports up front: iterating `imports`
+    // borrows the engine (via `linker`) immutably while
+    // `linker.instance(..)` needs a mutable borrow.
+    let engine = linker.engine().clone();
+    let component_ty = component.component_type();
+    let mut matched = {wt}::component::__internal::Vec::new();
+    for (name, item) in component_ty.imports(&engine) {{
+        if item.is_implements({wit_name:?}) {{
+            matched.push((name, lookup(name)?));
+        }}
+    }}
+    for (name, id) in matched {{
+        let mut inst = linker.instance(name)?;
+        add_to_linker_instance::<T, D>(
+            &mut inst,
+            id,
+            {options_param_forward}
+            host_getter,
+        )?;
+    }}
+    Ok(())
+}}
             "
-                pub fn add_to_linker<T, D>(
-                    linker: &mut {wt}::component::Linker<T>,
-                    {options_param}
-                    host_getter: fn(&mut T) -> D::Data<'_>,
-                ) -> {wt}::Result<()>
-                    where
-                        D: HostWithStore,
-                        for<'a> D::Data<'a>: {sync_bounds},
-                        T: 'static {opt_t_send_bound},
-                {{
-                    let mut inst = linker.instance(\"{name}\")?;
-                    add_to_linker_instance(&mut inst, {options_param_forward} host_getter)
-                }}
+                );
+            }
+            None => {
+                uwriteln!(
+                    self.src,
+                    "
+pub fn add_to_linker<T, D>(
+    linker: &mut {wt}::component::Linker<T>,
+    {options_param}
+    host_getter: fn(&mut T) -> D::Data<'_>,
+) -> {wt}::Result<()>
+    where
+        D: HostWithStore,
+        for<'a> D::Data<'a>: {sync_bounds},
+        T: 'static {opt_t_send_bound},
+{{
+    let mut inst = linker.instance(\"{name}\")?;
+    add_to_linker_instance(&mut inst, {options_param_forward} host_getter)
+}}
             "
-        );
+                );
+            }
+        }
     }
 
     fn import_resource_drop_flags(&mut self, name: &str) -> FunctionFlags {
@@ -2483,7 +2660,13 @@ impl<'a> InterfaceGenerator<'a> {
             },
             func.name
         );
+        if self.named_import_id.is_some() {
+            self.src.push_str("{ let id = id.clone(); ");
+        }
         self.generate_guest_import_closure(owner, func, flags);
+        if self.named_import_id.is_some() {
+            self.src.push_str("}\n");
+        }
         uwriteln!(self.src, ")?;");
         gate.close(&mut self.src);
     }
@@ -2544,6 +2727,9 @@ impl<'a> InterfaceGenerator<'a> {
                 },
                 func.name,
             );
+        }
+        if self.named_import_id.is_some() {
+            self.src.push_str("let id = id.clone(); ");
         }
 
         if flags.contains(FunctionFlags::ASYNC) {
@@ -2626,6 +2812,10 @@ impl<'a> InterfaceGenerator<'a> {
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
+        }
+
+        if self.named_import_id.is_some() {
+            self.src.push_str("id, ");
         }
 
         for (i, _) in func.params.iter().enumerate() {
@@ -2715,6 +2905,9 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "<T>(host: {wt}::component::Access<T, Self>, ");
         } else {
             self.push_str("(&mut self, ");
+        }
+        if let Some(id) = &self.named_import_id {
+            uwrite!(self.src, "id: {id}, ");
         }
         self.generate_function_params(func);
         self.push_str(")");
@@ -2937,7 +3130,11 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn path_to_root(&self) -> String {
         let mut path_to_root = String::new();
-        if let Some((_, key, is_export)) = self.current_interface {
+        if let Some((_, key, kind)) = self.current_interface {
+            match kind {
+                InterfaceKind::Export | InterfaceKind::Named => path_to_root.push_str("super::"),
+                InterfaceKind::Import => {}
+            }
             match key {
                 WorldKey::Name(_) => {
                     path_to_root.push_str("super::");
@@ -2945,9 +3142,6 @@ impl<'a> InterfaceGenerator<'a> {
                 WorldKey::Interface(_) => {
                     path_to_root.push_str("super::super::super::");
                 }
-            }
-            if is_export {
-                path_to_root.push_str("super::");
             }
         }
         path_to_root
@@ -3145,6 +3339,9 @@ fn convert_{snake}(&mut self, err: {root}{custom_name}) ->
                 "{trait_name}::{}(*self,",
                 rust_function_name(func)
             );
+            if self.named_import_id.is_some() {
+                self.src.push_str("id,");
+            }
             for param in func.params.iter() {
                 uwrite!(self.src, "{},", to_rust_ident(&param.name));
             }
@@ -3233,8 +3430,12 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
-        if let Some((cur, _, _)) = self.current_interface {
-            if cur == interface {
+        if let Some((cur, _, kind)) = self.current_interface {
+            // If `interface` is `cur`, then we're in the same module and need
+            // to path to the interface. If we're generating for a named import,
+            // however, that's not true since the types live elsewhere, so skip
+            // that case.
+            if cur == interface && kind != InterfaceKind::Named {
                 return None;
             }
         }
@@ -3262,9 +3463,9 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn is_imported_interface(&self, interface: InterfaceId) -> bool {
-        if let Some((cur, _, is_export)) = self.current_interface {
+        if let Some((cur, _, kind)) = self.current_interface {
             if cur == interface {
-                return !is_export;
+                return kind != InterfaceKind::Export;
             }
         }
         self.generator.import_interfaces.contains_key(&interface)

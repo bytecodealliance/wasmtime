@@ -290,7 +290,7 @@ impl NameMapIntern for StringPool {
 /// This alternate lookup key is intended to serve the purpose where a
 /// semver-compatible definition can be located, if one is defined, at perhaps
 /// either a newer or an older version.
-fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
+pub fn alternate_lookup_key(name: &str) -> Option<(&str, Version)> {
     let at = name.find('@')?;
     let version_string = &name[at + 1..];
     let version = Version::parse(version_string).ok()?;

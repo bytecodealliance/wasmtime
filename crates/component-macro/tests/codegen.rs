@@ -820,3 +820,68 @@ mod anyhow_with_custom_error {
 
     struct MyCustomError;
 }
+
+mod named_imports {
+
+    mod sync {
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface handler {
+                    handle: func(req: u32) -> u32;
+                    ping: func();
+                }
+
+                world the-world {
+                    import handler;
+                }
+            ",
+            named_imports: {
+                "foo:foo/handler": String,
+            },
+        });
+
+        struct MyHost;
+
+        // The normal trait is generated as usual...
+        impl foo::foo::handler::Host for MyHost {
+            fn handle(&mut self, req: u32) -> u32 {
+                req
+            }
+            fn ping(&mut self) {}
+        }
+
+        // ...and the named-imports trait has the extra id parameter.
+        impl named_imports::foo::foo::handler::Host for MyHost {
+            fn handle(&mut self, _id: String, req: u32) -> u32 {
+                req
+            }
+            fn ping(&mut self, _id: String) {}
+        }
+    }
+
+    mod async_store {
+        #[derive(Clone)]
+        pub struct MyId(u32);
+
+        wasmtime::component::bindgen!({
+            inline: "
+                package foo:foo;
+
+                interface handler {
+                    handle: func(req: u32) -> u32;
+                    ping: func();
+                }
+
+                world the-world {
+                    import handler;
+                }
+            ",
+            named_imports: {
+                "foo:foo/handler": MyId,
+            },
+            imports: { default: async | store },
+        });
+    }
+}

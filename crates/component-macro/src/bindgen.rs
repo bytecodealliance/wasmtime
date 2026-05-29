@@ -135,6 +135,7 @@ impl Parse for Config {
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
+                    Opt::NamedImports(val) => opts.named_imports.extend(val),
                     Opt::AdditionalDerives(paths) => {
                         opts.additional_derive_attributes = paths
                             .into_iter()
@@ -252,6 +253,7 @@ mod kw {
     syn::custom_keyword!(ownership);
     syn::custom_keyword!(interfaces);
     syn::custom_keyword!(with);
+    syn::custom_keyword!(named_imports);
     syn::custom_keyword!(except_imports);
     syn::custom_keyword!(only_imports);
     syn::custom_keyword!(additional_derives);
@@ -278,6 +280,7 @@ enum Opt {
     Ownership(Ownership),
     Interfaces(syn::LitStr),
     With(HashMap<String, String>),
+    NamedImports(HashMap<String, String>),
     AdditionalDerives(Vec<syn::Path>),
     Stringify(bool),
     SkipMutForwardingImpls(bool),
@@ -383,6 +386,14 @@ impl Parse for Opt {
             let fields: Punctuated<(String, String), Token![,]> =
                 contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields)))
+        } else if l.peek(kw::named_imports) {
+            input.parse::<kw::named_imports>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            let _lbrace = braced!(contents in input);
+            let fields: Punctuated<(String, String), Token![,]> =
+                contents.parse_terminated(with_field_parse, Token![,])?;
+            Ok(Opt::NamedImports(HashMap::from_iter(fields)))
         } else if l.peek(kw::additional_derives) {
             input.parse::<kw::additional_derives>()?;
             input.parse::<Token![:]>()?;
