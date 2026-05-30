@@ -718,7 +718,6 @@ where
         Opcode::Sdiv => binary_can_trap(DataValueExt::sdiv, arg(0), arg(1))?,
         Opcode::Urem => binary_can_trap(DataValueExt::urem, arg(0), arg(1))?,
         Opcode::Srem => binary_can_trap(DataValueExt::srem, arg(0), arg(1))?,
-        Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
         Opcode::UaddOverflow => {
             let (sum, carry) = arg(0).uadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])

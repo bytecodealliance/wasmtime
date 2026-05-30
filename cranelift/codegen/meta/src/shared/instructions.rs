@@ -1987,27 +1987,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "irsub_imm",
-            r#"
-        Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
-
-        The immediate operand is a sign extended 64 bit constant.
-
-        Also works as integer negation when `Y = 0`. Use `iadd_imm`
-        with a negative immediate operand for the reverse immediate
-        subtraction.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
             "sadd_overflow_cin",
             r#"
         Add signed integers with carry in and overflow out.

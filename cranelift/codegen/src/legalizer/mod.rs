@@ -203,12 +203,8 @@ fn expand_binary_imm64(
     let mut pos = FuncCursor::new(func);
     pos.goto_inst(inst);
 
-    let is_signed = match opcode {
-        ir::Opcode::IrsubImm => true,
-        _ => false,
-    };
-
-    let imm = imm_const(&mut pos, arg, imm, is_signed);
+    // All remaining `binary_imm64` opcodes zero-extend their immediate.
+    let imm = imm_const(&mut pos, arg, imm, false);
 
     let replace = pos.func.replace(inst);
     match opcode {
@@ -237,11 +233,6 @@ fn expand_binary_imm64(
         }
         ir::Opcode::UshrImm => {
             replace.ushr(arg, imm);
-        }
-        // math
-        ir::Opcode::IrsubImm => {
-            // note: arg order reversed
-            replace.isub(imm, arg);
         }
         _ => {}
     }
