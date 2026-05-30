@@ -640,7 +640,8 @@ block0:
 
 function %c_andi_f(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, 0xf
+  v2 = iconst.i64 0xf
+  v1 = band v0, v2
   return v1
 }
 
@@ -656,7 +657,8 @@ block0(v0: i64):
 
 function %c_andi_neg_16(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, -16
+  v2 = iconst.i64 -16
+  v1 = band v0, v2
   return v1
 }
 
@@ -672,7 +674,8 @@ block0(v0: i64):
 
 function %c_andi_zero(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, 0
+  v2 = iconst.i64 0
+  v1 = band v0, v2
   return v1
 }
 
