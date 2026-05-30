@@ -2471,7 +2471,18 @@ impl StoreOpaque {
                 )?;
             }
 
-            WriteState::HostReady { .. } => {}
+            WriteState::HostReady { .. } => {
+                // A host producer (e.g. one installed via `FutureReader::new`)
+                // is only driven when a reader pulls from it; it is never
+                // re-polled to observe the guest dropping the read end. The read
+                // end is already `Dropped` (set at the top of this function), so
+                // the produced value can never be consumed. Reclaim the transmit
+                // (state + both handles) here; otherwise it would leak for the
+                // lifetime of the instance. The producer is dropped along with
+                // the matched `HostReady` value.
+                log::trace!("host_drop_reader: finalize host producer, delete {transmit_id:?}");
+                state.delete_transmit(transmit_id)?;
+            }
 
             WriteState::Open => {
                 state.update_event(
@@ -2570,7 +2581,23 @@ impl StoreOpaque {
                 )?;
             }
 
-            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {}
+            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
+                // A host consumer (e.g. one registered via `StreamReader::pipe`)
+                // is only driven on guest writes; it is never re-polled to
+                // observe the guest dropping the write end. Reclaim the transmit
+                // (state + both handles) so it does not leak. Unlike
+                // `host_drop_reader`, the write end is not forced to `Dropped`
+                // earlier in this function, so only finalize once the writer is
+                // actually gone -- otherwise we would discard a still-live host
+                // writer. The consumer is dropped along with the matched value.
+                if matches!(
+                    self.concurrent_state_mut().get_mut(transmit_id)?.write,
+                    WriteState::Dropped
+                ) {
+                    log::trace!("host_drop_writer: finalize host consumer, delete {transmit_id:?}");
+                    self.concurrent_state_mut().delete_transmit(transmit_id)?;
+                }
+            }
 
             // If the read state is open, then there are no registered readers of the stream/future
             ReadState::Open => {

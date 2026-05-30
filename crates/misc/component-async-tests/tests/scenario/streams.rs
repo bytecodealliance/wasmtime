@@ -303,6 +303,123 @@ pub async fn async_closed_stream() -> Result<()> {
         .await?
 }
 
+mod host_consumer_drop {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "host-consumer-drop-guest",
+        exports: { default: store | async },
+    });
+}
+
+// Regression test: a host *consumer* registered via `StreamReader::pipe` must be
+// finalized when the guest drops the writable end *after* the consumer is
+// attached. The guest hands the host the readable end, keeps the writable end,
+// writes one byte once the consumer reads, then drops the writer. That reaches
+// `host_drop_writer` with the read side in `ReadState::HostReady`, which must
+// reclaim the transmit rather than leaving it stranded.
+#[tokio::test]
+pub async fn async_host_consumer_drop() -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_HOST_CONSUMER_DROP_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+    let guest = host_consumer_drop::HostConsumerDropGuest::new(&mut store, &instance)?;
+    store
+        .run_concurrent(async move |accessor| {
+            let stream = guest
+                .local_local_host_consumer_drop()
+                .call_get(accessor)
+                .await?;
+
+            let (tx, mut rx) = mpsc::channel(1);
+            accessor.with(move |store| stream.pipe(store, PipeConsumer::new(tx)))?;
+            assert_eq!(rx.next().await, Some(42));
+            assert!(rx.next().await.is_none());
+
+            wasmtime::error::Ok(())
+        })
+        .await??;
+
+    // The host consumer and both transmit handles must be gone now that the
+    // guest dropped its end.
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
+// Regression test: the symmetric host *producer* case. The host hands the guest
+// a `future` via `FutureReader::new` and the guest drops the read end without
+// reading it. That reaches `host_drop_reader` with the write side in
+// `WriteState::HostReady`, which must reclaim the transmit. The guest's
+// `read_future` reads `rx` but drops `rx_ignored`.
+#[tokio::test]
+pub async fn async_host_producer_drop() -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CLOSED_STREAMS_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+        },
+    );
+
+    let instance = linker.instantiate_async(&mut store, &component).await?;
+
+    let value = 42_u8;
+    let (tx, rx) = oneshot::channel();
+    let rx = FutureReader::new(&mut store, OneshotProducer::new(rx))?;
+    let (_, rx_ignored) = oneshot::channel();
+    let rx_ignored = FutureReader::new(&mut store, OneshotProducer::new(rx_ignored))?;
+
+    let closed_streams = closed_streams::bindings::ClosedStreams::new(&mut store, &instance)?;
+
+    store
+        .run_concurrent(async move |accessor| {
+            _ = tx.send(value);
+            closed_streams
+                .local_local_closed()
+                .call_read_future(accessor, rx, value, rx_ignored)
+                .await
+        })
+        .await??;
+
+    // The host producer behind `rx_ignored` and both transmit handles must be
+    // gone now that the guest dropped the read end without reading.
+    store.assert_concurrent_state_empty();
+
+    Ok(())
+}
+
 #[tokio::test]
 pub async fn async_cross_instance_source() -> Result<()> {
     let engine = Engine::new(&config())?;

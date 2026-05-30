@@ -31,7 +31,8 @@ use scenario::round_trip_many::{
     async_round_trip_many_synchronous, async_round_trip_many_wait,
 };
 use scenario::streams::{
-    async_closed_stream, async_closed_streams, async_cross_instance_source, async_short_reads,
+    async_closed_stream, async_closed_streams, async_cross_instance_source,
+    async_host_consumer_drop, async_short_reads,
 };
 use scenario::transmit::{
     async_cancel_callee, async_cancel_caller, async_cancel_transmit, async_intertask_communication,

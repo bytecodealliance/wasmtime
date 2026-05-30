@@ -187,6 +187,14 @@ interface closed-stream {
   get: func() -> stream<u8>;
 }
 
+interface host-consumer-drop {
+  // Returns the readable end of a fresh stream while the guest keeps the
+  // writable end. Once a consumer is attached the guest writes one byte and
+  // then drops the writer, so the host consumer observes a clean close while
+  // its read side is still `HostReady`.
+  get: async func() -> stream<u8>;
+}
+
 interface short-reads {
   resource thing {
     constructor(s: string);
@@ -367,6 +375,10 @@ world yield-post-return-caller {
 
 world closed-stream-guest {
   export closed-stream;
+}
+
+world host-consumer-drop-guest {
+  export host-consumer-drop;
 }
 
 world short-reads-guest {
