@@ -795,7 +795,6 @@ where
         Opcode::BxorNot => binary(DataValueExt::xor, arg(0), DataValueExt::not(arg(1))?)?,
         Opcode::Rotl => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Rotr => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
-        Opcode::RotrImm => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Ishl => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Ushr => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Sshr => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
