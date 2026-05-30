@@ -246,9 +246,6 @@ fn expand_binary_imm64(
         ir::Opcode::SremImm => {
             replace.srem(arg, imm);
         }
-        ir::Opcode::UremImm => {
-            replace.urem(arg, imm);
-        }
         _ => {}
     }
 

@@ -718,7 +718,6 @@ where
         Opcode::Sdiv => binary_can_trap(DataValueExt::sdiv, arg(0), arg(1))?,
         Opcode::Urem => binary_can_trap(DataValueExt::urem, arg(0), arg(1))?,
         Opcode::Srem => binary_can_trap(DataValueExt::srem, arg(0), arg(1))?,
-        Opcode::UremImm => binary_can_trap(DataValueExt::urem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::SremImm => binary_can_trap(DataValueExt::srem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
         Opcode::UaddOverflow => {
