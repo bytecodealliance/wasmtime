@@ -240,7 +240,8 @@ block0(v0: i64):
 
 function %sext128(i64) -> i128 {
 block0(v0: i64):
-    v1 = sshr_imm v0, 63
+    v3 = iconst.i64 63
+    v1 = sshr v0, v3
     v2 = iconcat v0, v1
     return v2
 }

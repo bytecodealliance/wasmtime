@@ -154,9 +154,7 @@ where
             | InstructionData::StackLoad { offset, .. }
             | InstructionData::StackStore { offset, .. } => DataValue::from(offset),
             // 64-bit.
-            InstructionData::UnaryImm { imm, .. } | InstructionData::BinaryImm64 { imm, .. } => {
-                DataValue::from(imm.bits())
-            }
+            InstructionData::UnaryImm { imm, .. } => DataValue::from(imm.bits()),
             InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
             _ => unreachable!(),
         }
@@ -798,7 +796,6 @@ where
         Opcode::Ishl => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Ushr => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Sshr => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
-        Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Bitrev => unary(DataValueExt::reverse_bits, arg(0))?,
         Opcode::Bswap => unary(DataValueExt::swap_bytes, arg(0))?,
         Opcode::Clz => unary(DataValueExt::leading_zeros, arg(0))?,

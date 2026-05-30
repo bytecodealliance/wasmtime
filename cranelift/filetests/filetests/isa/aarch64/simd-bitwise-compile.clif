@@ -306,7 +306,8 @@ block0(v0: i32):
 
 function %sshr_i8x16_imm(i8x16, i32) -> i8x16 {
 block0(v0: i8x16, v1: i32):
-    v2 = sshr_imm v0, 3
+    v3 = iconst.i8 3
+    v2 = sshr v0, v3
     return v2
 }
 

@@ -14,8 +14,6 @@
 //! from the encoding recipes, and solved later by the register allocator.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::immediates::Imm64;
-use crate::ir::types::{self, I64, I128};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlagsData, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
@@ -27,31 +25,6 @@ mod globalvalue;
 
 use self::branch_to_trap::BranchToTrap;
 use self::globalvalue::expand_global_value;
-
-fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
-    let ty = pos.func.dfg.value_type(arg);
-    match (ty, is_signed) {
-        (I128, true) => {
-            let imm = pos.ins().iconst(I64, imm);
-            pos.ins().sextend(I128, imm)
-        }
-        (I128, false) => {
-            let imm = pos.ins().iconst(I64, imm);
-            pos.ins().uextend(I128, imm)
-        }
-        _ => {
-            let bits = imm.bits();
-            let unsigned = match ty.lane_type() {
-                types::I8 => bits as u8 as i64,
-                types::I16 => bits as u16 as i64,
-                types::I32 => bits as u32 as i64,
-                types::I64 => bits,
-                _ => unreachable!(),
-            };
-            pos.ins().iconst(ty.lane_type(), unsigned)
-        }
-    }
-}
 
 /// A command describing how the walk over instructions should proceed.
 enum WalkCommand {
@@ -149,10 +122,6 @@ pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
             dynamic_stack_slot,
         } => expand_dynamic_stack_store(isa, func, inst, arg, dynamic_stack_slot),
 
-        InstructionData::BinaryImm64 { opcode, arg, imm } => {
-            expand_binary_imm64(func, inst, opcode, arg, imm)
-        }
-
         InstructionData::Binary { opcode, args } => expand_binary(func, inst, opcode, args),
 
         _ => WalkCommand::Continue,
@@ -186,31 +155,6 @@ fn expand_binary(
         ir::Opcode::BxorNot => {
             let neg = pos.ins().bnot(args[1]);
             pos.func.replace(inst).bxor(args[0], neg);
-        }
-        _ => {}
-    }
-
-    WalkCommand::Continue
-}
-
-fn expand_binary_imm64(
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    opcode: ir::Opcode,
-    arg: Value,
-    imm: Imm64,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func);
-    pos.goto_inst(inst);
-
-    // All remaining `binary_imm64` opcodes zero-extend their immediate.
-    let imm = imm_const(&mut pos, arg, imm, false);
-
-    let replace = pos.func.replace(inst);
-    match opcode {
-        // bitshifting
-        ir::Opcode::SshrImm => {
-            replace.sshr(arg, imm);
         }
         _ => {}
     }

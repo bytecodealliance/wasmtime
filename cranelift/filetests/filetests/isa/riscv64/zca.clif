@@ -406,7 +406,8 @@ block0(v0: i64):
 
 function %c_srai(i64) -> i64 {
 block0(v0: i64):
-  v1 = sshr_imm.i64 v0, 63
+  v2 = iconst.i64 63
+  v1 = sshr v0, v2
   return v1
 }
 
