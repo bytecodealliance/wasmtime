@@ -48,7 +48,8 @@ block0(v0: i64x2, v1: i32):
 
 function %ishl_imm_i64x2(i64x2) -> i64x2 {
 block0(v0: i64x2):
-    v2 = ishl_imm v0, 1
+    v3 = iconst.i64 1
+    v2 = ishl v0, v3
     return v2
 }
 ; run: %ishl_imm_i64x2([1 0]) == [2 0]

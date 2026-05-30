@@ -523,7 +523,8 @@ block0(v0: i64, v1: i32):
 
 function %load_scaled16(i64, i64) -> i8 {
 block0(v0: i64, v1: i64):
-  v2 = ishl_imm v1, 0
+  v5 = iconst.i64 0
+  v2 = ishl v1, v5
   v3 = iadd v0, v2
   v4 = load.i8 v3
   return v4
@@ -541,7 +542,8 @@ block0(v0: i64, v1: i64):
 
 function %load_scaled16(i64, i64) -> i16 {
 block0(v0: i64, v1: i64):
-  v2 = ishl_imm v1, 1
+  v5 = iconst.i64 1
+  v2 = ishl v1, v5
   v3 = iadd v0, v2
   v4 = load.i16 v3
   return v4
@@ -559,7 +561,8 @@ block0(v0: i64, v1: i64):
 
 function %load_scaled32(i64, i64) -> i32 {
 block0(v0: i64, v1: i64):
-  v2 = ishl_imm v1, 2
+  v5 = iconst.i64 2
+  v2 = ishl v1, v5
   v3 = iadd v0, v2
   v4 = load.i32 v3
   return v4
@@ -577,7 +580,8 @@ block0(v0: i64, v1: i64):
 
 function %load_scaled64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ishl_imm v1, 3
+  v5 = iconst.i64 3
+  v2 = ishl v1, v5
   v3 = iadd v0, v2
   v4 = load.i64 v3
   return v4
@@ -595,7 +599,8 @@ block0(v0: i64, v1: i64):
 
 function %load_not_scaled64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = ishl_imm v1, 2
+  v5 = iconst.i64 2
+  v2 = ishl v1, v5
   v3 = iadd v0, v2
   v4 = load.i64 v3
   return v4
@@ -616,7 +621,8 @@ block0(v0: i64, v1: i64):
 function %load_uextend_scaled16(i64, i32) -> i8 {
 block0(v0: i64, v1: i32):
   v2 = uextend.i64 v1
-  v3 = ishl_imm v2, 0
+  v6 = iconst.i64 0
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i8 v4
   return v5
@@ -635,7 +641,8 @@ block0(v0: i64, v1: i32):
 function %load_uextend_scaled16(i64, i32) -> i16 {
 block0(v0: i64, v1: i32):
   v2 = uextend.i64 v1
-  v3 = ishl_imm v2, 1
+  v6 = iconst.i64 1
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i16 v4
   return v5
@@ -654,7 +661,8 @@ block0(v0: i64, v1: i32):
 function %load_uextend_scaled32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
   v2 = uextend.i64 v1
-  v3 = ishl_imm v2, 2
+  v6 = iconst.i64 2
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i32 v4
   return v5
@@ -673,7 +681,8 @@ block0(v0: i64, v1: i32):
 function %load_uextend_scaled64(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
   v2 = uextend.i64 v1
-  v3 = ishl_imm v2, 3
+  v6 = iconst.i64 3
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i64 v4
   return v5
@@ -691,7 +700,8 @@ block0(v0: i64, v1: i32):
 
 function %load_not_extend_scaled64(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
-  v2 = ishl_imm v1, 3
+  v6 = iconst.i32 3
+  v2 = ishl v1, v6
   v3 = uextend.i64 v2
   v4 = iadd v0, v3
   v5 = load.i64 v4
@@ -713,7 +723,8 @@ block0(v0: i64, v1: i32):
 function %load_sextend_scaled8(i64, i32) -> i8 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
-  v3 = ishl_imm v2, 0
+  v6 = iconst.i64 0
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i8 v4
   return v5
@@ -732,7 +743,8 @@ block0(v0: i64, v1: i32):
 function %load_sextend_scaled16(i64, i32) -> i16 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
-  v3 = ishl_imm v2, 1
+  v6 = iconst.i64 1
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i16 v4
   return v5
@@ -751,7 +763,8 @@ block0(v0: i64, v1: i32):
 function %load_sextend_scaled32(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
-  v3 = ishl_imm v2, 2
+  v6 = iconst.i64 2
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i32 v4
   return v5
@@ -770,7 +783,8 @@ block0(v0: i64, v1: i32):
 function %load_sextend_scaled64(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
-  v3 = ishl_imm v2, 3
+  v6 = iconst.i64 3
+  v3 = ishl v2, v6
   v4 = iadd v0, v3
   v5 = load.i64 v4
   return v5
@@ -788,11 +802,13 @@ block0(v0: i64, v1: i32):
 
 function %no_panic(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v8 = ishl_imm v1, 100
+  v11 = iconst.i64 100
+  v8 = ishl v1, v11
   v9 = iadd v0, v8
   v10 = load.i64 v9
 
-  v5 = ishl_imm v1, 100
+  v12 = iconst.i64 100
+  v5 = ishl v1, v12
   v6 = iadd v5, v0
   v7 = load.i64 v6
   return v10

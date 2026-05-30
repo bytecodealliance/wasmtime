@@ -930,7 +930,6 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::UaddOverflowTrap),
                 (Opcode::UsubOverflowBin),
                 (Opcode::SsubOverflowBin),
-                (Opcode::IshlImm),
                 (Opcode::UshrImm),
                 (Opcode::SshrImm),
                 (Opcode::ScalarToVector),

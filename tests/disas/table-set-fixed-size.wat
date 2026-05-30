@@ -31,12 +31,12 @@
 ;; @0056                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
 ;; @0056                               v6 = uextend.i64 v3  ; v3 = 0
 ;; @0056                               v7 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v12 = iconst.i64 2
-;; @0056                               v8 = ishl v6, v12  ; v12 = 2
-;; @0056                               v9 = iadd v7, v8
-;; @0056                               v10 = iconst.i64 0
-;; @0056                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @0056                               store user6 aligned region0 v2, v11
+;; @0056                               v8 = iconst.i64 2
+;; @0056                               v9 = ishl v6, v8  ; v8 = 2
+;; @0056                               v10 = iadd v7, v9
+;; @0056                               v11 = iconst.i64 0
+;; @0056                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
+;; @0056                               store user6 aligned region0 v2, v12
 ;; @0058                               jump block1
 ;;
 ;;                                 block1:
@@ -57,12 +57,12 @@
 ;; @005f                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005f                               v6 = uextend.i64 v2
 ;; @005f                               v7 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v12 = iconst.i64 2
-;; @005f                               v8 = ishl v6, v12  ; v12 = 2
-;; @005f                               v9 = iadd v7, v8
-;; @005f                               v10 = iconst.i64 0
-;; @005f                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;; @005f                               store user6 aligned region0 v3, v11
+;; @005f                               v8 = iconst.i64 2
+;; @005f                               v9 = ishl v6, v8  ; v8 = 2
+;; @005f                               v10 = iadd v7, v9
+;; @005f                               v11 = iconst.i64 0
+;; @005f                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
+;; @005f                               store user6 aligned region0 v3, v12
 ;; @0061                               jump block1
 ;;
 ;;                                 block1:
