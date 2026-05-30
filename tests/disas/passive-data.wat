@@ -28,30 +28,30 @@
 ;; @003d                               v6 = load.i64 notrap aligned v0+64
 ;; @003d                               v7 = uextend.i64 v2
 ;; @003d                               v8 = uextend.i64 v4
-;;                                     v33 = iconst.i64 1
-;; @003d                               v9 = imul v8, v33  ; v33 = 1
-;; @003d                               v10 = iadd v7, v9
-;; @003d                               v11 = icmp ugt v10, v6
-;; @003d                               trapnz v11, heap_oob
-;; @003d                               v12 = load.i64 notrap aligned readonly can_move v0+56
-;; @003d                               v13 = uextend.i64 v2
-;;                                     v31 = iconst.i64 1
-;; @003d                               v14 = imul v13, v31  ; v31 = 1
-;; @003d                               v15 = iadd v12, v14
-;; @003d                               v17 = load.i32 notrap aligned v0+152
-;; @003d                               v18 = uextend.i64 v17
-;; @003d                               v19 = uextend.i64 v3
-;; @003d                               v20 = uextend.i64 v4
-;;                                     v30 = iconst.i64 1
-;; @003d                               v21 = imul v20, v30  ; v30 = 1
-;; @003d                               v22 = iadd v19, v21
-;; @003d                               v23 = icmp ugt v22, v18
-;; @003d                               trapnz v23, heap_oob
-;; @003d                               v25 = load.i64 notrap aligned v0+144
-;; @003d                               v26 = uextend.i64 v3
-;; @003d                               v27 = iadd v25, v26
-;; @003d                               v28 = uextend.i64 v4
-;; @003d                               call fn0(v0, v15, v27, v28)
+;; @003d                               v9 = iconst.i64 1
+;; @003d                               v10 = imul v8, v9  ; v9 = 1
+;; @003d                               v11 = iadd v7, v10
+;; @003d                               v12 = icmp ugt v11, v6
+;; @003d                               trapnz v12, heap_oob
+;; @003d                               v13 = load.i64 notrap aligned readonly can_move v0+56
+;; @003d                               v14 = uextend.i64 v2
+;; @003d                               v15 = iconst.i64 1
+;; @003d                               v16 = imul v14, v15  ; v15 = 1
+;; @003d                               v17 = iadd v13, v16
+;; @003d                               v19 = load.i32 notrap aligned v0+152
+;; @003d                               v20 = uextend.i64 v19
+;; @003d                               v21 = uextend.i64 v3
+;; @003d                               v22 = uextend.i64 v4
+;; @003d                               v23 = iconst.i64 1
+;; @003d                               v24 = imul v22, v23  ; v23 = 1
+;; @003d                               v25 = iadd v21, v24
+;; @003d                               v26 = icmp ugt v25, v20
+;; @003d                               trapnz v26, heap_oob
+;; @003d                               v28 = load.i64 notrap aligned v0+144
+;; @003d                               v29 = uextend.i64 v3
+;; @003d                               v30 = iadd v28, v29
+;; @003d                               v31 = uextend.i64 v4
+;; @003d                               call fn0(v0, v17, v30, v31)
 ;; @0041                               jump block1
 ;;
 ;;                                 block1:

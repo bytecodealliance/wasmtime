@@ -1839,7 +1839,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1978,23 +1979,6 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
         .side_effects_idempotent(),
-    );
-
-    ig.push(
-        Inst::new(
-            "imul_imm",
-            r#"
-        Integer multiplication by immediate constant.
-
-        Same as `imul`, but one operand is a sign extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(

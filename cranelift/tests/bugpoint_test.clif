@@ -820,12 +820,14 @@ block39:
 
 block40:
     v349 = iconst.i64 0
-    v350 = imul_imm v349, 16
+    v1152 = iconst.i64 16
+    v350 = imul v349, v1152
     v351 = iadd.i64 v35, v350
     v352 = load.i64 aligned v39
     v353 = load.i64 aligned v39+8
     v354 = iconst.i64 1
-    v355 = imul_imm v354, 16
+    v1153 = iconst.i64 16
+    v355 = imul v354, v1153
     v356 = iadd.i64 v35, v355
     v357 = load.i64 aligned v40
     v358 = load.i64 aligned v40+8
@@ -890,12 +892,14 @@ block46:
 
 block47:
     v389 = iconst.i64 0
-    v390 = imul_imm v389, 16
+    v1154 = iconst.i64 16
+    v390 = imul v389, v1154
     v391 = iadd.i64 v45, v390
     v392 = load.i64 aligned v49
     v393 = load.i64 aligned v49+8
     v394 = iconst.i64 1
-    v395 = imul_imm v394, 16
+    v1155 = iconst.i64 16
+    v395 = imul v394, v1155
     v396 = iadd.i64 v45, v395
     v397 = load.i64 aligned v50
     v398 = load.i64 aligned v50+8
@@ -1263,7 +1267,8 @@ block142:
 block70:
     v603 = load.i64 v3
     v604 = load.i64 v3+8
-    v606 = imul_imm.i64 v605, 1
+    v1156 = iconst.i64 1
+    v606 = imul v605, v1156
     v607 = iadd v603, v606
     v608 = load.i8 aligned v64
     v610 = iconst.i64 1
@@ -1448,12 +1453,14 @@ block85:
 
 block86:
     v727 = iconst.i64 0
-    v728 = imul_imm v727, 16
+    v1157 = iconst.i64 16
+    v728 = imul v727, v1157
     v729 = iadd.i64 v79, v728
     v730 = load.i64 aligned v83
     v731 = load.i64 aligned v83+8
     v732 = iconst.i64 1
-    v733 = imul_imm v732, 16
+    v1158 = iconst.i64 16
+    v733 = imul v732, v1158
     v734 = iadd.i64 v79, v733
     v735 = load.i64 aligned v84
     v736 = load.i64 aligned v84+8
@@ -1515,12 +1522,14 @@ block92:
 
 block93:
     v766 = iconst.i64 0
-    v767 = imul_imm v766, 16
+    v1159 = iconst.i64 16
+    v767 = imul v766, v1159
     v768 = iadd.i64 v89, v767
     v769 = load.i64 aligned v93
     v770 = load.i64 aligned v93+8
     v771 = iconst.i64 1
-    v772 = imul_imm v771, 16
+    v1160 = iconst.i64 16
+    v772 = imul v771, v1160
     v773 = iadd.i64 v89, v772
     v774 = load.i64 aligned v94
     v775 = load.i64 aligned v94+8
@@ -1778,7 +1787,8 @@ block127:
 block111:
     v915 = load.i64 v3
     v916 = load.i64 v3+8
-    v918 = imul_imm.i64 v917, 1
+    v1161 = iconst.i64 1
+    v918 = imul v917, v1161
     v919 = iadd v915, v918
     v920 = load.i8 aligned v102
     v922 = iconst.i64 1
