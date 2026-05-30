@@ -2338,7 +2338,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2354,23 +2355,6 @@ pub(crate) fn define(
         .operands_in(vec![
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "rotl_imm",
-            r#"
-        Rotate left by immediate.
-
-        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
         ])
         .operands_out(vec![Operand::new("a", Int)]),
     );

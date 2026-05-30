@@ -212,9 +212,6 @@ fn expand_binary_imm64(
         ir::Opcode::IshlImm => {
             replace.ishl(arg, imm);
         }
-        ir::Opcode::RotlImm => {
-            replace.rotl(arg, imm);
-        }
         ir::Opcode::RotrImm => {
             replace.rotr(arg, imm);
         }
