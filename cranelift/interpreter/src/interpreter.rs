@@ -620,7 +620,8 @@ mod tests {
         let code = "function %test() -> i8 {
         block0:
             v0 = iconst.i32 -2147483648
-            v1 = sdiv_imm.i32 v0, -1
+            v2 = iconst.i32 -1
+            v1 = sdiv v0, v2
             return v1
         }";
 
