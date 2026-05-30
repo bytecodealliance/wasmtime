@@ -209,9 +209,6 @@ fn expand_binary_imm64(
     let replace = pos.func.replace(inst);
     match opcode {
         // bitops
-        ir::Opcode::BorImm => {
-            replace.bor(arg, imm);
-        }
         ir::Opcode::BxorImm => {
             replace.bxor(arg, imm);
         }

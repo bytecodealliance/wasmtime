@@ -2253,7 +2253,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2320,23 +2321,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
         .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bor_imm",
-            r#"
-        Bitwise or with immediate.
-
-        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
     );
 
     ig.push(

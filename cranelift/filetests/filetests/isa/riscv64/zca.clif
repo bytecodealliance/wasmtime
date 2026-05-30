@@ -36,7 +36,8 @@ block0(v0: i64, v1: i64):
 
 function %c_mv_ori(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = bor_imm.i64 v1, 0
+  v3 = iconst.i64 0
+  v2 = bor v1, v3
   return v2
 }
 

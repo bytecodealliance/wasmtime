@@ -44,8 +44,8 @@
 ;;     v18 = iconst.i32 1
 ;;     store user2 little region0 v18, v4  ; v18 = 1
 ;;     v25 = iconst.i32 3
-;;     v13 = iconst.i64 16
-;;     v14 = iadd v4, v13  ; v13 = 16
-;;     store user2 little region0 v25, v14  ; v25 = 3
+;;     v15 = iconst.i64 16
+;;     v16 = iadd v4, v15  ; v15 = 16
+;;     store user2 little region0 v25, v16  ; v25 = 3
 ;;     return
 ;; }
