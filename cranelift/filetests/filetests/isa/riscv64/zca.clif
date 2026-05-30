@@ -422,7 +422,8 @@ block0(v0: i64):
 
 function %c_srli(i64) -> i64 {
 block0(v0: i64):
-  v1 = ushr_imm.i64 v0, 20
+  v2 = iconst.i64 20
+  v1 = ushr v0, v2
   return v1
 }
 

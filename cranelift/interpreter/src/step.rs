@@ -798,7 +798,6 @@ where
         Opcode::Ishl => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Ushr => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Sshr => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
-        Opcode::UshrImm => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Bitrev => unary(DataValueExt::reverse_bits, arg(0))?,
         Opcode::Bswap => unary(DataValueExt::swap_bytes, arg(0))?,

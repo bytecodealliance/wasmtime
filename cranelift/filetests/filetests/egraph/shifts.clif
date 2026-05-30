@@ -249,51 +249,56 @@ function %i32_shl_ushr_8_to_ireduce(i32) -> i32 {
 block0(v0: i32):
     v9 = iconst.i32 24
     v1 = ishl v0, v9
-    v2 = ushr_imm v1, 24
+    v15 = iconst.i32 24
+    v2 = ushr v1, v15
     return v2
-    ; check: v13 = ireduce.i8 v0
-    ; check: v14 = uextend.i32 v13
-    ; check: return v14
+    ; check: v18 = ireduce.i8 v0
+    ; check: v19 = uextend.i32 v18
+    ; check: return v19
 }
 function %i32_shl_ushr_16_to_ireduce(i32) -> i32 {
 block0(v0: i32):
     v9 = iconst.i32 16
     v1 = ishl v0, v9
-    v2 = ushr_imm v1, 16
+    v15 = iconst.i32 16
+    v2 = ushr v1, v15
     return v2
-    ; check: v13 = ireduce.i16 v0
-    ; check: v14 = uextend.i32 v13
-    ; check: return v14
+    ; check: v18 = ireduce.i16 v0
+    ; check: v19 = uextend.i32 v18
+    ; check: return v19
 }
 function %i64_shl_ushr_8_to_ireduce(i64) -> i64 {
 block0(v0: i64):
     v9 = iconst.i64 56
     v1 = ishl v0, v9
-    v2 = ushr_imm v1, 56
+    v15 = iconst.i64 56
+    v2 = ushr v1, v15
     return v2
-    ; check: v13 = ireduce.i8 v0
-    ; check: v14 = uextend.i64 v13
-    ; check: return v14
+    ; check: v18 = ireduce.i8 v0
+    ; check: v19 = uextend.i64 v18
+    ; check: return v19
 }
 function %i64_shl_ushr_16_to_ireduce(i64) -> i64 {
 block0(v0: i64):
     v9 = iconst.i64 48
     v1 = ishl v0, v9
-    v2 = ushr_imm v1, 48
+    v15 = iconst.i64 48
+    v2 = ushr v1, v15
     return v2
-    ; check: v13 = ireduce.i16 v0
-    ; check: v14 = uextend.i64 v13
-    ; check: return v14
+    ; check: v18 = ireduce.i16 v0
+    ; check: v19 = uextend.i64 v18
+    ; check: return v19
 }
 function %i64_shl_ushr_32_to_ireduce(i64) -> i64 {
 block0(v0: i64):
     v9 = iconst.i64 32
     v1 = ishl v0, v9
-    v2 = ushr_imm v1, 32
+    v15 = iconst.i64 32
+    v2 = ushr v1, v15
     return v2
-    ; check: v13 = ireduce.i32 v0
-    ; check: v14 = uextend.i64 v13
-    ; check: return v14
+    ; check: v18 = ireduce.i32 v0
+    ; check: v19 = uextend.i64 v18
+    ; check: return v19
 }
 function %ishl_amt_type_ireduce(i8, i16) -> i8 {
 block0(v0: i8, v1: i16):

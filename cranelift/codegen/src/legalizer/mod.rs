@@ -212,9 +212,6 @@ fn expand_binary_imm64(
         ir::Opcode::SshrImm => {
             replace.sshr(arg, imm);
         }
-        ir::Opcode::UshrImm => {
-            replace.ushr(arg, imm);
-        }
         _ => {}
     }
 

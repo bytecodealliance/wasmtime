@@ -34,24 +34,24 @@
 ;; @0022                               v13 = uextend.i64 v10
 ;;                                     v35 = iconst.i64 3
 ;;                                     v36 = ishl v13, v35  ; v35 = 3
-;;                                     v32 = iconst.i64 32
-;; @0022                               v15 = ushr v36, v32  ; v32 = 32
-;; @0022                               trapnz v15, user2
+;; @0022                               v15 = iconst.i64 32
+;; @0022                               v16 = ushr v36, v15  ; v15 = 32
+;; @0022                               trapnz v16, user2
 ;;                                     v45 = iconst.i32 3
 ;;                                     v46 = ishl v10, v45  ; v45 = 3
-;; @0022                               v17 = iconst.i32 32
-;; @0022                               v18 = uadd_overflow_trap v46, v17, user2  ; v17 = 32
-;; @0022                               v22 = uadd_overflow_trap v2, v18, user2
-;; @0022                               v23 = uextend.i64 v22
-;; @0022                               v25 = iadd v6, v23
+;; @0022                               v18 = iconst.i32 32
+;; @0022                               v19 = uadd_overflow_trap v46, v18, user2  ; v18 = 32
+;; @0022                               v23 = uadd_overflow_trap v2, v19, user2
+;; @0022                               v24 = uextend.i64 v23
+;; @0022                               v26 = iadd v6, v24
 ;;                                     v52 = ishl v3, v45  ; v45 = 3
-;; @0022                               v21 = iadd v52, v17  ; v17 = 32
-;; @0022                               v26 = isub v18, v21
-;; @0022                               v27 = uextend.i64 v26
-;; @0022                               v28 = isub v25, v27
-;; @0022                               v29 = load.i64 user2 little region0 v28
+;; @0022                               v22 = iadd v52, v18  ; v18 = 32
+;; @0022                               v27 = isub v19, v22
+;; @0022                               v28 = uextend.i64 v27
+;; @0022                               v29 = isub v26, v28
+;; @0022                               v30 = load.i64 user2 little region0 v29
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @0025                               return v29
+;; @0025                               return v30
 ;; }

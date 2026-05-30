@@ -35,32 +35,32 @@
 ;; @0024                               v15 = uextend.i64 v12
 ;;                                     v67 = iconst.i64 3
 ;;                                     v68 = ishl v15, v67  ; v67 = 3
-;;                                     v64 = iconst.i64 32
-;; @0024                               v17 = ushr v68, v64  ; v64 = 32
-;; @0024                               trapnz v17, user2
+;; @0024                               v17 = iconst.i64 32
+;; @0024                               v18 = ushr v68, v17  ; v17 = 32
+;; @0024                               trapnz v18, user2
 ;;                                     v77 = iconst.i32 3
 ;;                                     v78 = ishl v12, v77  ; v77 = 3
-;; @0024                               v19 = iconst.i32 16
-;; @0024                               v20 = uadd_overflow_trap v78, v19, user2  ; v19 = 16
-;; @0024                               v24 = uadd_overflow_trap v2, v20, user2
-;; @0024                               v25 = uextend.i64 v24
-;; @0024                               v27 = iadd v8, v25
+;; @0024                               v20 = iconst.i32 16
+;; @0024                               v21 = uadd_overflow_trap v78, v20, user2  ; v20 = 16
+;; @0024                               v25 = uadd_overflow_trap v2, v21, user2
+;; @0024                               v26 = uextend.i64 v25
+;; @0024                               v28 = iadd v8, v26
 ;;                                     v84 = ishl v3, v77  ; v77 = 3
-;; @0024                               v23 = iadd v84, v19  ; v19 = 16
-;; @0024                               v28 = isub v20, v23
-;; @0024                               v29 = uextend.i64 v28
-;; @0024                               v30 = isub v27, v29
-;; @0024                               v31 = load.i64 user2 little region0 v30
-;; @002b                               v38 = icmp ult v4, v12
-;; @002b                               trapz v38, user17
+;; @0024                               v24 = iadd v84, v20  ; v20 = 16
+;; @0024                               v29 = isub v21, v24
+;; @0024                               v30 = uextend.i64 v29
+;; @0024                               v31 = isub v28, v30
+;; @0024                               v32 = load.i64 user2 little region0 v31
+;; @002b                               v39 = icmp ult v4, v12
+;; @002b                               trapz v39, user17
 ;;                                     v86 = ishl v4, v77  ; v77 = 3
-;; @002b                               v48 = iadd v86, v19  ; v19 = 16
-;; @002b                               v53 = isub v20, v48
-;; @002b                               v54 = uextend.i64 v53
-;; @002b                               v55 = isub v27, v54
-;; @002b                               v56 = load.i64 user2 little region0 v55
+;; @002b                               v50 = iadd v86, v20  ; v20 = 16
+;; @002b                               v55 = isub v21, v50
+;; @002b                               v56 = uextend.i64 v55
+;; @002b                               v57 = isub v28, v56
+;; @002b                               v58 = load.i64 user2 little region0 v57
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;; @002e                               return v31, v56
+;; @002e                               return v32, v58
 ;; }
