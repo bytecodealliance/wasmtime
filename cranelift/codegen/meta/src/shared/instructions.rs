@@ -1981,23 +1981,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
-    );
-
-    ig.push(
-        Inst::new(
-            "srem_imm",
-            r#"
-        Signed integer remainder with immediate divisor.
-
-        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(

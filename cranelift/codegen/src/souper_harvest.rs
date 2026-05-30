@@ -101,7 +101,6 @@ fn harvest_candidate_lhs(
                 | ir::Opcode::Sdiv
                 | ir::Opcode::Urem
                 | ir::Opcode::Srem
-                | ir::Opcode::SremImm
                 | ir::Opcode::Band
                 | ir::Opcode::BandImm
                 | ir::Opcode::Bor
@@ -214,17 +213,6 @@ fn harvest_candidate_lhs(
                     (ir::Opcode::Srem, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Srem { a, b }.into()
-                    }
-                    (ir::Opcode::SremImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Srem { a, b }.into()
                     }
                     (ir::Opcode::Band, _) => {

@@ -642,15 +642,6 @@ impl InstructionData {
             Self::UnaryImm { opcode: _, imm } => {
                 *imm = imm.mask_to_width(bit_width);
             }
-            Self::BinaryImm64 {
-                opcode,
-                arg: _,
-                imm,
-            } => {
-                if *opcode == Opcode::SremImm {
-                    *imm = imm.mask_to_width(bit_width);
-                }
-            }
             _ => {}
         }
     }
