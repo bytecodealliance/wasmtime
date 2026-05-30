@@ -208,10 +208,6 @@ fn expand_binary_imm64(
 
     let replace = pos.func.replace(inst);
     match opcode {
-        // bitops
-        ir::Opcode::BxorImm => {
-            replace.bxor(arg, imm);
-        }
         // bitshifting
         ir::Opcode::IshlImm => {
             replace.ishl(arg, imm);

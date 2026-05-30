@@ -169,13 +169,6 @@ where
             .expect("instruction to have memory flags")
     };
 
-    // Retrieve the immediate value for an instruction and convert it to the controlling type of the
-    // instruction. For example, since `InstructionData` stores all integer immediates in a 64-bit
-    // size, this will attempt to convert `iconst.i8 ...` to an 8-bit size.
-    let imm_as_ctrl_ty = || -> Result<DataValue, ValueError> {
-        DataValue::convert(imm(), ValueConversionKind::Exact(ctrl_ty))
-    };
-
     // Indicate that the result of a step is to assign a single value to an instruction's results.
     let assign = |value: DataValue| ControlFlow::Assign(smallvec![value]);
 
@@ -800,7 +793,6 @@ where
         Opcode::BandNot => binary(DataValueExt::and, arg(0), DataValueExt::not(arg(1))?)?,
         Opcode::BorNot => binary(DataValueExt::or, arg(0), DataValueExt::not(arg(1))?)?,
         Opcode::BxorNot => binary(DataValueExt::xor, arg(0), DataValueExt::not(arg(1))?)?,
-        Opcode::BxorImm => binary(DataValueExt::xor, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::Rotl => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::Rotr => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
         Opcode::RotlImm => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, imm())?)?,
