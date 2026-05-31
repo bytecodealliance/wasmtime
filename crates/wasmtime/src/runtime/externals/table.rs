@@ -126,7 +126,18 @@ impl Table {
         ty: TableType,
         init: Ref,
     ) -> Result<Table> {
+        init.ensure_matches_ty(store, ty.element())
+            .context("type mismatch: value does not match table element type")?;
         let table = generate_table_export(store, limiter, &ty).await?;
+        // Tables are always allocated as all zeroes, so skip the fill below if
+        // the value being inserted is all zeros.
+        if init.is_zero_pattern() {
+            if cfg!(debug_assertions) {
+                let (table, _) = table.wasmtime_table(store, None);
+                table.debug_assert_all_zero();
+            }
+            return Ok(table);
+        }
         table._fill(store, 0, init, ty.minimum())?;
         Ok(table)
     }
@@ -604,6 +615,15 @@ impl Ref {
             },
 
             _ => unreachable!("checked that the value matches the type above"),
+        }
+    }
+
+    fn is_zero_pattern(&self) -> bool {
+        match self {
+            Ref::Extern(None) | Ref::Any(None) | Ref::Exn(None) | Ref::Func(None) => true,
+            Ref::Extern(Some(_)) | Ref::Any(Some(_)) | Ref::Exn(Some(_)) | Ref::Func(Some(_)) => {
+                false
+            }
         }
     }
 }
