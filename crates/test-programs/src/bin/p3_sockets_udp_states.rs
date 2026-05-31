@@ -85,16 +85,34 @@ fn test_udp_connected_state_invariants(family: IpAddressFamily) {
     assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
+async fn test_wrong_address_family(family: IpAddressFamily) {
+    let other_family = match family {
+        IpAddressFamily::Ipv4 => IpAddressFamily::Ipv6,
+        IpAddressFamily::Ipv6 => IpAddressFamily::Ipv4,
+    };
+    let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
+    let remote_address = IpSocketAddress::new(IpAddress::new_loopback(other_family), 54321);
+    let sock = UdpSocket::create(family).unwrap();
+    sock.bind(bind_address).unwrap();
+
+    assert!(matches!(
+        sock.send(b"test".into(), Some(remote_address)).await,
+        Err(ErrorCode::InvalidArgument)
+    ));
+}
+
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         test_udp_unbound_state_invariants(IpAddressFamily::Ipv4).await;
         test_udp_bound_state_invariants(IpAddressFamily::Ipv4);
         test_udp_connected_state_invariants(IpAddressFamily::Ipv4);
+        test_wrong_address_family(IpAddressFamily::Ipv4).await;
 
         if supports_ipv6() {
             test_udp_unbound_state_invariants(IpAddressFamily::Ipv6).await;
             test_udp_bound_state_invariants(IpAddressFamily::Ipv6);
             test_udp_connected_state_invariants(IpAddressFamily::Ipv6);
+            test_wrong_address_family(IpAddressFamily::Ipv6).await;
         }
         Ok(())
     }
