@@ -218,3 +218,12 @@ impl FuncEnvironment<'_> {
         disabled()
     }
 }
+
+pub fn intern_func_ref(
+    _func_env: &mut FuncEnvironment<'_>,
+    _builder: &mut FunctionBuilder<'_>,
+    _ref_type: WasmRefType,
+    _func_ref: ir::Value,
+) -> WasmResult<ir::Value> {
+    disabled()
+}

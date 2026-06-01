@@ -277,14 +277,12 @@ pub fn read_field_at_addr(
     Ok(value)
 }
 
-fn write_func_ref_at_addr(
+pub fn intern_func_ref(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     ref_type: WasmRefType,
-    flags: ir::MemFlagsData,
-    field_addr: ir::Value,
     func_ref: ir::Value,
-) -> WasmResult<()> {
+) -> WasmResult<ir::Value> {
     assert_eq!(ref_type.heap_type.top(), WasmHeapTopType::Func);
 
     let vmctx = func_env.vmctx_val(&mut builder.cursor());
@@ -313,7 +311,20 @@ fn write_func_ref_at_addr(
         .ins()
         .call(intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
     let func_ref_id = builder.func.dfg.first_result(call_inst);
-    let func_ref_id = builder.ins().ireduce(ir::types::I32, func_ref_id);
+    Ok(builder.ins().ireduce(ir::types::I32, func_ref_id))
+}
+
+fn write_func_ref_at_addr(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    ref_type: WasmRefType,
+    flags: ir::MemFlagsData,
+    field_addr: ir::Value,
+    func_ref: ir::Value,
+) -> WasmResult<()> {
+    // Convert the raw `funcref` into a `FuncRefTableId` for use in the
+    // GC heap.
+    let func_ref_id = intern_func_ref(func_env, builder, ref_type, func_ref)?;
 
     // Store the id in the field.
     builder.ins().store(flags, func_ref_id, field_addr, 0);
