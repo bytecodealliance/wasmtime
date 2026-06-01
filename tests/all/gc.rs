@@ -1,8 +1,10 @@
 use super::{async_functions::CountPending, gc_store, ref_types_module};
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
+use std::task::{Context, Poll};
 use wasmtime::*;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
@@ -3511,6 +3513,126 @@ async fn copying_collector_async_gc_yields() -> Result<()> {
         pending_count >= min_expected,
         "expected at least {min_expected} yields but got {pending_count}",
     );
+
+    Ok(())
+}
+
+// Cancel the wrapped future once a host-triggered collection is observed to be
+// `skip` pending-polls underway (so we are past root processing / the semispace
+// flip and into the actual copying), simulating an async cancellation that
+// drops a `call_async` future while a GC is in progress.
+struct CancelDuringGc<F> {
+    future: F,
+    in_gc: Arc<AtomicUsize>,
+    skip: u32,
+    seen_in_gc: u32,
+}
+
+impl<F: Future> Future for CancelDuringGc<F> {
+    type Output = Option<F::Output>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let me = unsafe { self.get_unchecked_mut() };
+        let future = unsafe { Pin::new_unchecked(&mut me.future) };
+        match future.poll(cx) {
+            Poll::Ready(val) => Poll::Ready(Some(val)),
+            Poll::Pending => {
+                if me.in_gc.load(SeqCst) != 0 {
+                    me.seen_in_gc += 1;
+                    if me.seen_in_gc >= me.skip {
+                        return Poll::Ready(None);
+                    }
+                }
+                Poll::Pending
+            }
+        }
+    }
+}
+
+// Test that cancelling a Wasm-execution future mid-collection and then calling
+// into Wasm again doesn't trigger or observe any GC heap corruption.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn issue_13516_copying_collector_cancellation_during_gc() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    if crate::no_hog_memory() {
+        return Ok(());
+    }
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::Copying);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // Build a linked list of `N` nodes rooted in a global so a collection has a
+    // non-trivial worklist to copy (giving a wide window in which to cancel),
+    // then trigger a host collection.
+    const N: i32 = 100_000;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "gc" (func $gc))
+
+                (type $node (struct (field (ref null $node))))
+
+                (global $list (mut (ref null $node)) (ref.null $node))
+
+                (func (export "run") (param $n i32)
+                    (block $done
+                        (loop $loop
+                            (br_if $done (i32.eqz (local.get $n)))
+                            (global.set $list (struct.new $node (global.get $list)))
+                            (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+                            (br $loop)
+                        )
+                    )
+                    (call $gc)
+                )
+            )
+        "#,
+    )?;
+
+    // A host function that performs an async collection, flagging while it runs.
+    let in_gc = Arc::new(AtomicUsize::new(0));
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap_async("", "gc", {
+        let in_gc = in_gc.clone();
+        move |mut caller: Caller<'_, ()>, _: ()| {
+            let in_gc = in_gc.clone();
+            Box::new(async move {
+                in_gc.fetch_add(1, SeqCst);
+                let r = caller.gc_async(None).await;
+                in_gc.store(0, SeqCst);
+                r
+            })
+        }
+    })?;
+
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let run = instance.get_typed_func::<i32, ()>(&mut store, "run")?;
+
+    // Drive a call that triggers a collection, then cancel it mid-collection.
+    let cancelled = CancelDuringGc {
+        future: run.call_async(&mut store, N),
+        in_gc: in_gc.clone(),
+        skip: 8,
+        seen_in_gc: 0,
+    }
+    .await
+    .is_none();
+    assert!(
+        cancelled,
+        "the collection should have been cancelled mid-flight"
+    );
+
+    // Reusing the store after a mid-collection cancellation must not corrupt the
+    // GC heap.
+    run.call_async(&mut store, N).await?;
 
     Ok(())
 }
