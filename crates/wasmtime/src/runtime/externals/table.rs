@@ -129,8 +129,17 @@ impl Table {
         init.ensure_matches_ty(store, ty.element())
             .context("type mismatch: value does not match table element type")?;
         let table = generate_table_export(store, limiter, &ty).await?;
+
         // Tables are always allocated as all zeroes, so skip the fill below if
         // the value being inserted is all zeros.
+        //
+        // Note that this is applicable for funcref tables when
+        // `tunables.table_lazy_init` is enabled as well. In that situation the
+        // null image means "go check the instance" and the instance created by
+        // `generate_table_export` says everything is null.
+        //
+        // In all cases a zero-initialized table will reflect all-null elements
+        // at runtime.
         if init.is_zero_pattern() {
             if cfg!(debug_assertions) {
                 let (table, _) = table.wasmtime_table(store, None);
