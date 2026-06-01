@@ -3832,41 +3832,8 @@ impl FuncEnvironment<'_> {
                     },
                 );
             }
-            CheckedEntity::Table { table, initialized } => {
-                self.emit_raw_array_or_table_fill(
-                    builder,
-                    entity,
-                    raw_dst_addr,
-                    val,
-                    len_ptr,
-                    &|env, builder, addr, value| {
-                        env.emit_table_set(
-                            builder,
-                            table,
-                            addr,
-                            ir::MemFlagsData::trusted(),
-                            value,
-                            initialized,
-                        )
-                    },
-                )?;
-            }
-            CheckedEntity::Array { initialized, .. } => {
-                let elem_ty = entity.storage_type(self);
-                self.emit_raw_array_or_table_fill(
-                    builder,
-                    entity,
-                    raw_dst_addr,
-                    val,
-                    len_ptr,
-                    &|env, builder, addr, value| {
-                        if initialized {
-                            gc::write_field_at_addr(env, builder, elem_ty, addr, value)
-                        } else {
-                            gc::init_field_at_addr(env, builder, elem_ty, addr, value)
-                        }
-                    },
-                )?;
+            CheckedEntity::Table { .. } | CheckedEntity::Array { .. } => {
+                self.emit_raw_array_or_table_fill(builder, entity, raw_dst_addr, val, len_ptr)?;
             }
             // Not allowed to be written to in wasm.
             CheckedEntity::Data { .. } | CheckedEntity::Elem(_) | CheckedEntity::RuntimeData(_) => {
@@ -3898,12 +3865,6 @@ impl FuncEnvironment<'_> {
         dst_elem_addr: ir::Value,
         value: ir::Value,
         copy_len: ir::Value,
-        emit_elem_write: &dyn Fn(
-            &mut Self,
-            &mut FunctionBuilder<'_>,
-            ir::Value,
-            ir::Value,
-        ) -> WasmResult<()>,
     ) -> WasmResult<()> {
         let pointer_ty = self.pointer_type();
 
@@ -3933,6 +3894,18 @@ impl FuncEnvironment<'_> {
             );
             return Ok(());
         }
+
+        // Funcref values are intern'd when stored on the GC heap, and the
+        // interning can be an expensive operation. Do it once up-front instead
+        // of each iteration in this case.
+        let (is_pre_interned_funcref, value) = match (entity, elem_ty) {
+            (CheckedEntity::Array { .. }, WasmStorageType::Val(WasmValType::Ref(r)))
+                if r.heap_type.top() == WasmHeapTopType::Func =>
+            {
+                (true, gc::intern_func_ref(self, builder, r, value)?)
+            }
+            _ => (false, value),
+        };
 
         // Loop to fill the elements, emitting the equivalent of the following
         // pseudo-CLIF:
@@ -3988,7 +3961,34 @@ impl FuncEnvironment<'_> {
             self.fuel_consumed += 1;
         }
         self.translate_loop_header(builder)?;
-        emit_elem_write(self, builder, elem_addr, value)?;
+        match entity {
+            CheckedEntity::Table { table, initialized } => {
+                assert!(!is_pre_interned_funcref);
+                self.emit_table_set(
+                    builder,
+                    table,
+                    elem_addr,
+                    ir::MemFlagsData::trusted(),
+                    value,
+                    initialized,
+                )?
+            }
+            CheckedEntity::Array { initialized, .. } => {
+                if is_pre_interned_funcref {
+                    builder.ins().store(
+                        ir::MemFlagsData::trusted().with_endianness(Endianness::Little),
+                        value,
+                        elem_addr,
+                        0,
+                    );
+                } else if initialized {
+                    gc::write_field_at_addr(self, builder, elem_ty, elem_addr, value)?
+                } else {
+                    gc::init_field_at_addr(self, builder, elem_ty, elem_addr, value)?
+                }
+            }
+            _ => unreachable!(),
+        }
         let next_elem_addr = builder.ins().iadd_imm(elem_addr, i64::from(elem_size));
         let done = builder.ins().icmp(IntCC::Equal, next_elem_addr, end_addr);
         builder.ins().brif(

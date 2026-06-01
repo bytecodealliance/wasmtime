@@ -11,8 +11,8 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::drc::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
-    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
+    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, drc::DrcTypeLayouts,
 };
 
 // The minimum over-approximated stack roots list size for which we will trigger
@@ -968,33 +968,15 @@ impl GcCompiler for DrcCompiler {
         field_addr: ir::Value,
         val: ir::Value,
     ) -> WasmResult<()> {
-        // Data inside GC objects is always little endian.
-        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
-
-        match ty {
-            WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
-                WasmHeapTopType::Func => {
-                    write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?
-                }
-                WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
-                    self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?
-                }
-                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
-            },
-            WasmStorageType::I8 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore8(flags, val, field_addr, 0);
-            }
-            WasmStorageType::I16 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore16(flags, val, field_addr, 0);
-            }
-            WasmStorageType::Val(_) => {
-                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty);
-                assert_eq!(builder.func.dfg.value_type(val).bytes(), size_of_access);
-                builder.ins().store(flags, val, field_addr, 0);
-            }
+        if let WasmStorageType::Val(WasmValType::Ref(r)) = ty
+            && r.is_vmgcref_type_and_not_i31()
+        {
+            // Data inside GC objects is always little endian.
+            let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+            return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
         }
+
+        write_field_at_addr(func_env, builder, ty, field_addr, val)?;
 
         Ok(())
     }
