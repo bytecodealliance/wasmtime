@@ -1185,6 +1185,32 @@ impl GarbageCollection<'_> for CopyingCollection<'_> {
     }
 }
 
+impl Drop for CopyingCollection<'_> {
+    fn drop(&mut self) {
+        // A collection is logically atomic with respect to the mutator: the
+        // mutator must never run while the heap is in a half-collected
+        // (half-flipped, half-forwarded) state. The collection only yields
+        // between increments to cooperate with the async runtime and
+        // `Future::poll`; it does not interleave with the mutator.
+        //
+        // However, the future driving an incremental collection can be dropped
+        // before the collection completes (e.g. when a `call_async` future is
+        // cancelled while a GC is in progress). If we did nothing here, the
+        // store would be left with a half-collected GC heap and reusing it
+        // (e.g. starting another `call_async`) would corrupt the GC heap. So,
+        // to uphold the logical atomicity of collection, we finish any
+        // in-progress collection here synchronously when dropped.
+        match self.phase {
+            CopyingCollectionPhase::ProcessWorklist | CopyingCollectionPhase::SweepExternRefs => {
+                if let Err(e) = self.collect() {
+                    log::error!("error finishing an interrupted copying collection: {e:?}");
+                }
+            }
+            CopyingCollectionPhase::ProcessRoots | CopyingCollectionPhase::Done => {}
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
