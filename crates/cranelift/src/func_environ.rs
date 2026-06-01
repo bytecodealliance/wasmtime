@@ -420,8 +420,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg_attr(
-        not(feature = "gc"),
-        allow(dead_code, reason = "used in upcoming commits")
+        not(any(feature = "gc-copying", feature = "gc-drc", feature = "gc-null")),
+        expect(dead_code, reason = "easier not to cfg off; used in upcoming commits")
     )]
     pub(crate) fn vmctx_alias_region(
         &mut self,

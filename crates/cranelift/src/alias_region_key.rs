@@ -12,7 +12,6 @@ use wasmtime_environ::{
 /// The key encodes into a single `u32` with the following layout:
 /// `[ kind: 4 bits | data: 28 bits ]`
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
 pub(crate) enum AliasRegionKey {
     /// A `VMContext` field access.
     VMContext {
@@ -22,6 +21,10 @@ pub(crate) enum AliasRegionKey {
     },
 
     /// A `VMStoreContext` field access.
+    #[cfg_attr(
+        not(feature = "component-model"),
+        expect(dead_code, reason = "easier not to cfg off")
+    )]
     VMStoreContext {
         /// The offset of the `VMStoreContext` field being accessed.
         offset: u32,
@@ -61,6 +64,10 @@ pub(crate) enum AliasRegionKey {
     },
 
     /// A GC heap access.
+    #[cfg_attr(
+        not(any(feature = "gc-drc", feature = "gc-copying")),
+        expect(dead_code, reason = "easier not to cfg off")
+    )]
     GcHeap,
 }
 
