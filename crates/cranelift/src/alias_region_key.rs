@@ -64,9 +64,9 @@ pub(crate) enum AliasRegionKey {
     },
 
     /// A GC heap access.
-    #[cfg_attr(
-        not(any(feature = "gc-drc", feature = "gc-copying")),
-        expect(dead_code, reason = "easier not to cfg off")
+    #[allow(
+        dead_code,
+        reason = "easier not to cfg off; exact feature set is wonky in workspace"
     )]
     GcHeap,
 }
