@@ -946,6 +946,21 @@ impl Table {
             }
         }
     }
+
+    pub fn debug_assert_all_zero(&self) {
+        match self.element_type() {
+            TableElementType::Func => {
+                let (funcrefs, _lazy_init) = self.funcrefs();
+                debug_assert!(funcrefs.iter().all(|f| f.0.is_none()));
+            }
+            TableElementType::GcRef => {
+                debug_assert!(self.gc_refs().iter().all(|r| r.is_none()));
+            }
+            TableElementType::Cont => {
+                debug_assert!(self.contrefs().iter().all(|c| c.is_none()));
+            }
+        }
+    }
 }
 
 // The default table representation is an empty funcref table that cannot grow.

@@ -22,6 +22,7 @@ pub async fn create_table(
     );
 
     let table_id = module.tables.push(wasmtime_table)?;
+    module.table_initialization.push(Default::default())?;
 
     // TODO: can this `exports.insert` get removed?
     let name = module.strings.insert("")?;
