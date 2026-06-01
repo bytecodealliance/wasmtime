@@ -61,18 +61,18 @@
 ;; @003b                               trapnz v31, user2
 ;; @003b                               v33 = call fn0(v0, v4)
 ;;                                     v54 = iconst.i64 0
-;; @003b                               v36 = icmp eq v14, v54  ; v54 = 0
+;; @003b                               v37 = icmp eq v14, v54  ; v54 = 0
 ;; @003b                               v34 = ireduce.i32 v33
 ;;                                     v47 = iconst.i64 4
 ;; @003b                               v35 = iadd v24, v59
-;; @003b                               brif v36, block3, block2(v24)
+;; @003b                               brif v37, block3, block2(v24)
 ;;
-;;                                 block2(v37: i64):
-;; @003b                               store.i32 notrap aligned little v34, v37
+;;                                 block2(v38: i64):
+;; @003b                               store.i32 notrap aligned little v34, v38
 ;;                                     v61 = iconst.i64 4
-;;                                     v62 = iadd v37, v61  ; v61 = 4
-;; @003b                               v39 = icmp eq v62, v35
-;; @003b                               brif v39, block3, block2(v62)
+;;                                     v62 = iadd v38, v61  ; v61 = 4
+;; @003b                               v40 = icmp eq v62, v35
+;; @003b                               brif v40, block3, block2(v62)
 ;;
 ;;                                 block3:
 ;; @003e                               jump block1
@@ -122,18 +122,18 @@
 ;; @0049                               trapnz v31, user2
 ;; @0045                               v5 = iconst.i64 0
 ;; @0049                               v33 = call fn0(v0, v5)  ; v5 = 0
-;; @0049                               v36 = icmp eq v14, v5  ; v5 = 0
+;; @0049                               v37 = icmp eq v14, v5  ; v5 = 0
 ;; @0049                               v34 = ireduce.i32 v33
 ;;                                     v47 = iconst.i64 4
 ;; @0049                               v35 = iadd v24, v58
-;; @0049                               brif v36, block3, block2(v24)
+;; @0049                               brif v37, block3, block2(v24)
 ;;
-;;                                 block2(v37: i64):
-;; @0049                               store.i32 notrap aligned little v34, v37
+;;                                 block2(v38: i64):
+;; @0049                               store.i32 notrap aligned little v34, v38
 ;;                                     v60 = iconst.i64 4
-;;                                     v61 = iadd v37, v60  ; v60 = 4
-;; @0049                               v39 = icmp eq v61, v35
-;; @0049                               brif v39, block3, block2(v61)
+;;                                     v61 = iadd v38, v60  ; v60 = 4
+;; @0049                               v40 = icmp eq v61, v35
+;; @0049                               brif v40, block3, block2(v61)
 ;;
 ;;                                 block3:
 ;; @004c                               jump block1
@@ -163,11 +163,11 @@
 ;;                                     store notrap v2, v62
 ;; @0053                               v5 = iconst.i32 3
 ;; @0053                               v7 = call fn0(v0, v5), stack_map=[i32 @ ss0+0]  ; v5 = 3
-;;                                     v44 = load.i32 notrap v62
-;; @0057                               trapz v44, user16
+;;                                     v45 = load.i32 notrap v62
+;; @0057                               trapz v45, user16
 ;; @0057                               v58 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0057                               v9 = load.i64 notrap aligned readonly can_move v58+32
-;; @0057                               v8 = uextend.i64 v44
+;; @0057                               v8 = uextend.i64 v45
 ;; @0057                               v10 = iadd v9, v8
 ;; @0057                               v11 = iconst.i64 16
 ;; @0057                               v12 = iadd v10, v11  ; v11 = 16
@@ -191,18 +191,18 @@
 ;; @0057                               trapnz v33, user2
 ;; @0057                               v35 = call fn1(v0, v7)
 ;;                                     v63 = iconst.i64 0
-;; @0057                               v38 = icmp eq v16, v63  ; v63 = 0
+;; @0057                               v39 = icmp eq v16, v63  ; v63 = 0
 ;; @0057                               v36 = ireduce.i32 v35
 ;;                                     v52 = iconst.i64 4
 ;; @0057                               v37 = iadd v26, v68
-;; @0057                               brif v38, block3, block2(v26)
+;; @0057                               brif v39, block3, block2(v26)
 ;;
-;;                                 block2(v39: i64):
-;; @0057                               store.i32 notrap aligned little v36, v39
+;;                                 block2(v40: i64):
+;; @0057                               store.i32 notrap aligned little v36, v40
 ;;                                     v70 = iconst.i64 4
-;;                                     v71 = iadd v39, v70  ; v70 = 4
-;; @0057                               v41 = icmp eq v71, v37
-;; @0057                               brif v41, block3, block2(v71)
+;;                                     v71 = iadd v40, v70  ; v70 = 4
+;; @0057                               v42 = icmp eq v71, v37
+;; @0057                               brif v42, block3, block2(v71)
 ;;
 ;;                                 block3:
 ;; @005a                               jump block1

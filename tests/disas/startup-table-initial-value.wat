@@ -51,13 +51,13 @@
 ;;     v29 = iconst.i64 4
 ;;     jump block1(v15)
 ;;
-;; block1(v23: i64):
+;; block1(v24: i64):
 ;;     v88 = iconst.i32 1
-;;     store notrap aligned v88, v23  ; v88 = 1
+;;     store notrap aligned v88, v24  ; v88 = 1
 ;;     v89 = iadd.i64 v15, v83  ; v83 = 36
-;;     v90 = icmp eq v23, v89
+;;     v90 = icmp eq v24, v89
 ;;     v91 = iconst.i64 4
-;;     v92 = iadd v23, v91  ; v91 = 4
+;;     v92 = iadd v24, v91  ; v91 = 4
 ;;     brif v90, block2, block1(v92)
 ;;
 ;; block2:

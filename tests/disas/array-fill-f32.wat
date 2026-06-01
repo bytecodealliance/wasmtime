@@ -55,17 +55,17 @@
 ;; @0030                               v31 = icmp ugt v30, v29
 ;; @0030                               trapnz v31, user2
 ;;                                     v51 = iconst.i64 0
-;; @0030                               v33 = icmp eq v14, v51  ; v51 = 0
+;; @0030                               v34 = icmp eq v14, v51  ; v51 = 0
 ;;                                     v44 = iconst.i64 4
 ;; @0030                               v32 = iadd v24, v56
-;; @0030                               brif v33, block3, block2(v24)
+;; @0030                               brif v34, block3, block2(v24)
 ;;
-;;                                 block2(v34: i64):
-;; @0030                               store.f32 user2 little region0 v4, v34
+;;                                 block2(v35: i64):
+;; @0030                               store.f32 user2 little region0 v4, v35
 ;;                                     v58 = iconst.i64 4
-;;                                     v59 = iadd v34, v58  ; v58 = 4
-;; @0030                               v36 = icmp eq v59, v32
-;; @0030                               brif v36, block3, block2(v59)
+;;                                     v59 = iadd v35, v58  ; v58 = 4
+;; @0030                               v37 = icmp eq v59, v32
+;; @0030                               brif v37, block3, block2(v59)
 ;;
 ;;                                 block3:
 ;; @0033                               jump block1
@@ -159,19 +159,19 @@
 ;; @0052                               v31 = icmp ugt v30, v29
 ;; @0052                               trapnz v31, user2
 ;;                                     v51 = iconst.i64 0
-;; @0052                               v33 = icmp eq v14, v51  ; v51 = 0
+;; @0052                               v34 = icmp eq v14, v51  ; v51 = 0
 ;; @004b                               v5 = f32const 0x1.000000p0
 ;;                                     v44 = iconst.i64 4
 ;; @0052                               v32 = iadd v24, v56
-;; @0052                               brif v33, block3, block2(v24)
+;; @0052                               brif v34, block3, block2(v24)
 ;;
-;;                                 block2(v34: i64):
+;;                                 block2(v35: i64):
 ;;                                     v58 = f32const 0x1.000000p0
-;; @0052                               store user2 little region0 v58, v34  ; v58 = 0x1.000000p0
+;; @0052                               store user2 little region0 v58, v35  ; v58 = 0x1.000000p0
 ;;                                     v59 = iconst.i64 4
-;;                                     v60 = iadd v34, v59  ; v59 = 4
-;; @0052                               v36 = icmp eq v60, v32
-;; @0052                               brif v36, block3, block2(v60)
+;;                                     v60 = iadd v35, v59  ; v59 = 4
+;; @0052                               v37 = icmp eq v60, v32
+;; @0052                               brif v37, block3, block2(v60)
 ;;
 ;;                                 block3:
 ;; @0055                               jump block1
