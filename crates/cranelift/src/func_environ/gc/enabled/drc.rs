@@ -31,13 +31,18 @@ impl DrcCompiler {
         builder: &mut FunctionBuilder,
     ) -> ir::Value {
         let ptr_ty = func_env.pointer_type();
+        let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
+        let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
         let vmctx = func_env.vmctx(&mut builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
         builder.ins().load(
             ptr_ty,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(vmctx_region)),
             vmctx,
-            i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
+            i32::try_from(gc_heap_data_offset).unwrap(),
         )
     }
 
@@ -59,7 +64,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder.ins().load(ir::types::I64, GC_MEMFLAGS, pointer, 0)
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().load(ir::types::I64, flags, pointer, 0)
     }
 
     /// Generate code to update the given GC reference's ref count to the new
@@ -82,7 +88,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, new_ref_count, pointer, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, new_ref_count, pointer, 0);
     }
 
     /// Generate code to increment or decrement the given GC reference's ref
@@ -122,9 +129,11 @@ impl DrcCompiler {
 
         let head = self.load_over_approximated_stack_roots_head(func_env, builder);
 
+        let flags = func_env.gc_memflags(&mut builder.func);
+
         // Load the current first list element, which will be our new next list
         // element.
-        let next = builder.ins().load(ir::types::I32, GC_MEMFLAGS, head, 0);
+        let next = builder.ins().load(ir::types::I32, flags, head, 0);
 
         // Update our object's header to point to `next` and consider itself part of the list.
         self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
@@ -134,7 +143,7 @@ impl DrcCompiler {
         self.mutate_ref_count(func_env, builder, gc_ref, 1);
 
         // Commit this object as the new head of the list.
-        builder.ins().store(GC_MEMFLAGS, gc_ref, head, 0);
+        builder.ins().store(flags, gc_ref, head, 0);
 
         // Increment the list's length.
         //
@@ -292,7 +301,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, next, ptr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, next, ptr, 0);
     }
 
     /// Set the in-over-approximated-stack-roots list bit in a `VMDrcHeader`'s
@@ -328,7 +338,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, new_reserved, ptr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, new_reserved, ptr, 0);
     }
 }
 
@@ -380,7 +391,8 @@ impl GcCompiler for DrcCompiler {
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
-        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, len, len_addr, 0);
         Ok(array_ref)
     }
 
@@ -629,7 +641,8 @@ impl GcCompiler for DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let reserved = builder.ins().load(ir::types::I32, GC_MEMFLAGS, ptr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        let reserved = builder.ins().load(ir::types::I32, flags, ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
@@ -972,7 +985,9 @@ impl GcCompiler for DrcCompiler {
             && r.is_vmgcref_type_and_not_i31()
         {
             // Data inside GC objects is always little endian.
-            let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+            let flags = func_env
+                .gc_memflags(&mut builder.func)
+                .with_endianness(ir::Endianness::Little);
             return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
         }
 

@@ -13,6 +13,7 @@
 )
 ;; function u0:0(i64 vmctx, i64, f32, i32, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -39,10 +40,10 @@
 ;; @002a                               v16 = iadd v14, v15
 ;;                                     v55 = iconst.i64 24
 ;; @002a                               v17 = iadd v16, v55  ; v55 = 24
-;; @002a                               store user2 little v2, v17
+;; @002a                               store user2 little region0 v2, v17
 ;;                                     v54 = iconst.i64 28
 ;; @002a                               v18 = iadd v16, v54  ; v54 = 28
-;; @002a                               istore8 user2 little v3, v18
+;; @002a                               istore8 user2 little region0 v3, v18
 ;;                                     v40 = load.i32 notrap v58
 ;;                                     v51 = iconst.i32 1
 ;; @002a                               v20 = band v40, v51  ; v51 = 1
@@ -57,17 +58,16 @@
 ;; @002a                               v26 = iadd.i64 v14, v24
 ;; @002a                               v27 = iconst.i64 8
 ;; @002a                               v28 = iadd v26, v27  ; v27 = 8
-;; @002a                               v29 = load.i64 user2 v28
+;; @002a                               v29 = load.i64 user2 region0 v28
 ;;                                     v45 = iconst.i64 1
 ;; @002a                               v30 = iadd v29, v45  ; v45 = 1
-;; @002a                               store user2 v30, v28
+;; @002a                               store user2 region0 v30, v28
 ;; @002a                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v36 = load.i32 notrap v58
 ;;                                     v53 = iconst.i64 32
 ;; @002a                               v19 = iadd.i64 v16, v53  ; v53 = 32
-;; @002a                               store user2 little v36, v19
+;; @002a                               store.i32 user2 little region0 v40, v19
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:

@@ -13,6 +13,8 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
+;;     region0 = 32 "VMContext+0x20"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -31,8 +33,8 @@
 ;;                                     store notrap v3, v144
 ;;                                     v143 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v143
-;; @0025                               v17 = load.i64 notrap aligned readonly v0+32
-;; @0025                               v18 = load.i32 user2 v17
+;; @0025                               v17 = load.i64 notrap aligned readonly region0 v0+32
+;; @0025                               v18 = load.i32 user2 region1 v17
 ;;                                     v163 = iconst.i32 7
 ;; @0025                               v21 = uadd_overflow_trap v18, v163, user18  ; v163 = 7
 ;;                                     v169 = iconst.i32 -8
@@ -51,15 +53,15 @@
 ;;                                     v268 = band.i32 v21, v169  ; v169 = -8
 ;;                                     v269 = uextend.i64 v268
 ;; @0025                               v33 = iadd v31, v269
-;; @0025                               store user2 v170, v33  ; v170 = -1476394984
+;; @0025                               store user2 region1 v170, v33  ; v170 = -1476394984
 ;; @0025                               v37 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0025                               v38 = load.i32 notrap aligned readonly can_move v37
-;; @0025                               store user2 v38, v33+4
-;; @0025                               store.i32 user2 v24, v17
+;; @0025                               store user2 region1 v38, v33+4
+;; @0025                               store.i32 user2 region1 v24, v17
 ;; @0025                               v6 = iconst.i32 3
 ;;                                     v136 = iconst.i64 8
 ;; @0025                               v39 = iadd v33, v136  ; v136 = 8
-;; @0025                               store user2 v6, v39  ; v6 = 3
+;; @0025                               store user2 region1 v6, v39  ; v6 = 3
 ;; @0025                               trapz v268, user16
 ;;                                     v270 = iconst.i32 24
 ;; @0025                               v58 = uadd_overflow_trap v268, v270, user2  ; v270 = 24
@@ -68,8 +70,8 @@
 ;; @0025                               v61 = iadd v31, v59
 ;;                                     v147 = iconst.i64 12
 ;; @0025                               v64 = isub v61, v147  ; v147 = 12
-;; @0025                               store user2 little v117, v64
-;; @0025                               v71 = load.i32 user2 readonly v39
+;; @0025                               store user2 little region1 v117, v64
+;; @0025                               v71 = load.i32 user2 readonly region1 v39
 ;; @0025                               v65 = iconst.i32 1
 ;;                                     v208 = icmp ugt v71, v65  ; v65 = 1
 ;; @0025                               trapz v208, user17
@@ -91,8 +93,8 @@
 ;; @0025                               v87 = isub v79, v230  ; v230 = 16
 ;; @0025                               v88 = uextend.i64 v87
 ;; @0025                               v89 = isub v86, v88
-;; @0025                               store user2 little v116, v89
-;; @0025                               v96 = load.i32 user2 readonly v39
+;; @0025                               store user2 little region1 v116, v89
+;; @0025                               v96 = load.i32 user2 readonly region1 v39
 ;;                                     v236 = icmp ugt v96, v187  ; v187 = 2
 ;; @0025                               trapz v236, user17
 ;; @0025                               v99 = uextend.i64 v96
@@ -109,7 +111,7 @@
 ;; @0025                               v112 = isub v104, v262  ; v262 = 20
 ;; @0025                               v113 = uextend.i64 v112
 ;; @0025                               v114 = isub v111, v113
-;; @0025                               store user2 little v115, v114
+;; @0025                               store user2 little region1 v115, v114
 ;; @0029                               jump block1
 ;;
 ;;                                 block3 cold:

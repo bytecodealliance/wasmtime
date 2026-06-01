@@ -70,16 +70,19 @@ impl NullCompiler {
         // Load the bump "pointer" (it is actually an index into the GC heap,
         // not a raw pointer).
         let pointer_type = func_env.pointer_type();
+        let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
+        let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         let ptr_to_next = builder.ins().load(
             pointer_type,
-            ir::MemFlagsData::trusted().with_readonly(),
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_alias_region(Some(vmctx_region)),
             vmctx,
-            i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
+            i32::try_from(gc_heap_data_offset).unwrap(),
         );
-        let next = builder
-            .ins()
-            .load(ir::types::I32, GC_MEMFLAGS, ptr_to_next, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        let next = builder.ins().load(ir::types::I32, flags, ptr_to_next, 0);
 
         // Increment the bump "pointer" to the requested alignment:
         //
@@ -156,21 +159,20 @@ impl NullCompiler {
                 i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
             ),
         };
+        let flags = func_env.gc_memflags(&mut builder.func);
         builder.ins().store(
-            GC_MEMFLAGS,
+            flags,
             kind_and_size,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
         );
         builder.ins().store(
-            GC_MEMFLAGS,
+            flags,
             ty,
             ptr_to_object,
             i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
         );
-        builder
-            .ins()
-            .store(GC_MEMFLAGS, end_of_object, ptr_to_next, 0);
+        builder.ins().store(flags, end_of_object, ptr_to_next, 0);
 
         log::trace!("emit_inline_alloc(..) -> ({aligned}, {ptr_to_object})");
         Ok((aligned, ptr_to_object))
@@ -222,7 +224,8 @@ impl GcCompiler for NullCompiler {
         // the result of the inline allocation is trusted and we aren't reading
         // any pointers or offsets out from the (untrusted) GC heap.
         let len_addr = builder.ins().iadd_imm(ptr_to_object, i64::from(len_offset));
-        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, len, len_addr, 0);
 
         Ok(gc_ref)
     }

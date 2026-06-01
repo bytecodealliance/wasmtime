@@ -127,7 +127,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -182,7 +182,7 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -237,7 +237,8 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail {
-;;     region0 = 1 "table"
+;;     region0 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
+;;     region1 = 1879048193 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(1))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -250,7 +251,7 @@
 ;; @00a0                               v10 = load.i64 user16 aligned readonly v9+8
 ;; @00a0                               v11 = load.i64 notrap aligned readonly v9+24
 ;; @00a0                               v12 = call_indirect sig0, v10(v11, v0, v2, v3, v4, v5)
-;; @00af                               v15 = load.i64 notrap aligned region0 v0+80
+;; @00af                               v15 = load.i64 notrap aligned region1 v0+80
 ;; @00b1                               v16 = load.i64 user16 aligned readonly v15+8
 ;; @00b1                               v17 = load.i64 notrap aligned readonly v15+24
 ;; @00b1                               v18 = call_indirect sig0, v16(v17, v0, v2, v3, v4, v5)

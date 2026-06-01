@@ -14,6 +14,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -31,7 +32,7 @@
 ;; @002f                               v8 = iadd v7, v6
 ;; @002f                               v9 = iconst.i64 16
 ;; @002f                               v10 = iadd v8, v9  ; v9 = 16
-;; @002f                               v11 = load.i32 user2 readonly v10
+;; @002f                               v11 = load.i32 user2 readonly region0 v10
 ;; @002f                               v13 = uextend.i64 v3
 ;; @002f                               v14 = uextend.i64 v5
 ;; @002f                               v16 = iadd v13, v14
@@ -56,7 +57,7 @@
 ;; @002f                               brif v33, block3, block2(v24)
 ;;
 ;;                                 block2(v34: i64):
-;; @002f                               store.i32 user2 little v4, v34
+;; @002f                               store.i32 user2 little region0 v4, v34
 ;;                                     v58 = iconst.i64 4
 ;;                                     v59 = iadd v34, v58  ; v58 = 4
 ;; @002f                               v36 = icmp eq v59, v32
@@ -70,6 +71,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -87,7 +89,7 @@
 ;; @003d                               v8 = iadd v7, v6
 ;; @003d                               v9 = iconst.i64 16
 ;; @003d                               v10 = iadd v8, v9  ; v9 = 16
-;; @003d                               v11 = load.i32 user2 readonly v10
+;; @003d                               v11 = load.i32 user2 readonly region0 v10
 ;; @003d                               v13 = uextend.i64 v3
 ;; @003d                               v14 = uextend.i64 v4
 ;; @003d                               v16 = iadd v13, v14
@@ -114,7 +116,7 @@
 ;;
 ;;                                 block2(v34: i64):
 ;;                                     v58 = iconst.i32 0
-;; @003d                               store user2 little v58, v34  ; v58 = 0
+;; @003d                               store user2 little region0 v58, v34  ; v58 = 0
 ;;                                     v59 = iconst.i64 4
 ;;                                     v60 = iadd v34, v59  ; v59 = 4
 ;; @003d                               v36 = icmp eq v60, v32

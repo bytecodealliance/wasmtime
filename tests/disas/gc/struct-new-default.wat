@@ -13,7 +13,8 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 2 "vmctx"
+;;     region0 = 32 "VMContext+0x20"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -69,18 +70,18 @@
 ;; @0023                               v3 = f32const 0.0
 ;;                                     v48 = iconst.i64 16
 ;; @0023                               v41 = iadd v40, v48  ; v48 = 16
-;; @0023                               store user2 little v3, v41  ; v3 = 0.0
+;; @0023                               store user2 little region1 v3, v41  ; v3 = 0.0
 ;; @0023                               v4 = iconst.i32 0
 ;;                                     v47 = iconst.i64 20
 ;; @0023                               v42 = iadd v40, v47  ; v47 = 20
-;; @0023                               istore8 user2 little v4, v42  ; v4 = 0
+;; @0023                               istore8 user2 little region1 v4, v42  ; v4 = 0
 ;;                                     v46 = iconst.i64 24
 ;; @0023                               v43 = iadd v40, v46  ; v46 = 24
-;; @0023                               store user2 little v4, v43  ; v4 = 0
+;; @0023                               store user2 little region1 v4, v43  ; v4 = 0
 ;; @0023                               v6 = vconst.i8x16 const0
 ;;                                     v45 = iconst.i64 32
 ;; @0023                               v44 = iadd v40, v45  ; v45 = 32
-;; @0023                               store user2 little v6, v44  ; v6 = const0
+;; @0023                               store user2 little region1 v6, v44  ; v6 = const0
 ;; @0026                               jump block1(v39)
 ;;
 ;;                                 block1(v2: i32):

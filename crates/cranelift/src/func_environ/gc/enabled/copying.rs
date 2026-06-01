@@ -154,7 +154,8 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
-            let vmctx_region = func_env.get_vmctx_alias_region(&mut builder.func);
+            let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
+            let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
             builder.ins().store(
                 ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                 end_of_object,
@@ -248,7 +249,8 @@ impl GcCompiler for CopyingCompiler {
             reserved_bits,
         )?;
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
-        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, len, len_addr, 0);
 
         Ok(array_ref)
     }
@@ -422,7 +424,9 @@ impl GcCompiler for CopyingCompiler {
         val: ir::Value,
     ) -> WasmResult<()> {
         // Data inside GC objects is always little endian.
-        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
+        let flags = func_env
+            .gc_memflags(&mut builder.func)
+            .with_endianness(ir::Endianness::Little);
 
         match ty {
             WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {

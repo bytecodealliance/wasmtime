@@ -21,6 +21,7 @@
   (elem declare func $hi)
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i64, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -40,7 +41,7 @@
 ;; @003b                               v8 = iadd v7, v6
 ;; @003b                               v9 = iconst.i64 16
 ;; @003b                               v10 = iadd v8, v9  ; v9 = 16
-;; @003b                               v11 = load.i32 user2 readonly v10
+;; @003b                               v11 = load.i32 user2 readonly region0 v10
 ;; @003b                               v13 = uextend.i64 v3
 ;; @003b                               v14 = uextend.i64 v5
 ;; @003b                               v16 = iadd v13, v14
@@ -81,6 +82,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -100,7 +102,7 @@
 ;; @0049                               v8 = iadd v7, v6
 ;; @0049                               v9 = iconst.i64 16
 ;; @0049                               v10 = iadd v8, v9  ; v9 = 16
-;; @0049                               v11 = load.i32 user2 readonly v10
+;; @0049                               v11 = load.i32 user2 readonly region0 v10
 ;; @0049                               v13 = uextend.i64 v3
 ;; @0049                               v14 = uextend.i64 v4
 ;; @0049                               v16 = iadd v13, v14
@@ -142,6 +144,7 @@
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32) tail {
 ;;     ss0 = explicit_slot 4, align = 4
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -168,7 +171,7 @@
 ;; @0057                               v10 = iadd v9, v8
 ;; @0057                               v11 = iconst.i64 16
 ;; @0057                               v12 = iadd v10, v11  ; v11 = 16
-;; @0057                               v13 = load.i32 user2 readonly v12
+;; @0057                               v13 = load.i32 user2 readonly region0 v12
 ;; @0057                               v15 = uextend.i64 v3
 ;; @0057                               v16 = uextend.i64 v4
 ;; @0057                               v18 = iadd v15, v16

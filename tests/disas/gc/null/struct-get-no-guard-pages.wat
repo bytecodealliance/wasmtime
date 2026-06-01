@@ -24,6 +24,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> f32 tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -47,7 +48,7 @@
 ;; @0033                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @0033                               v13 = iconst.i64 8
 ;; @0033                               v14 = iadd v12, v13  ; v13 = 8
-;; @0033                               v15 = load.f32 user2 little v14
+;; @0033                               v15 = load.f32 user2 little region0 v14
 ;; @0037                               jump block1
 ;;
 ;;                                 block1:
@@ -55,6 +56,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -78,7 +80,7 @@
 ;; @003c                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @003c                               v13 = iconst.i64 12
 ;; @003c                               v14 = iadd v12, v13  ; v13 = 12
-;; @003c                               v15 = load.i8 user2 little v14
+;; @003c                               v15 = load.i8 user2 little region0 v14
 ;; @0040                               jump block1
 ;;
 ;;                                 block1:
@@ -87,6 +89,7 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -110,7 +113,7 @@
 ;; @0045                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @0045                               v13 = iconst.i64 12
 ;; @0045                               v14 = iadd v12, v13  ; v13 = 12
-;; @0045                               v15 = load.i8 user2 little v14
+;; @0045                               v15 = load.i8 user2 little region0 v14
 ;; @0049                               jump block1
 ;;
 ;;                                 block1:
@@ -119,6 +122,7 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -142,7 +146,7 @@
 ;; @004e                               v12 = select_spectre_guard v8, v11, v10  ; v11 = 0
 ;; @004e                               v13 = iconst.i64 16
 ;; @004e                               v14 = iadd v12, v13  ; v13 = 16
-;; @004e                               v15 = load.i32 user2 little v14
+;; @004e                               v15 = load.i32 user2 little region0 v14
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:

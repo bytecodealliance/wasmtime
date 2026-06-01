@@ -13,6 +13,7 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -44,7 +45,7 @@
 ;; @0025                               v22 = iadd v20, v21
 ;;                                     v213 = iconst.i64 24
 ;; @0025                               v23 = iadd v22, v213  ; v213 = 24
-;; @0025                               store user2 v6, v23  ; v6 = 3
+;; @0025                               store user2 region0 v6, v23  ; v6 = 3
 ;; @0025                               trapz v19, user16
 ;; @0025                               v42 = uadd_overflow_trap v19, v232, user2  ; v232 = 40
 ;;                                     v161 = load.i32 notrap v220
@@ -62,10 +63,10 @@
 ;; @0025                               v55 = iadd.i64 v20, v53
 ;; @0025                               v56 = iconst.i64 8
 ;; @0025                               v57 = iadd v55, v56  ; v56 = 8
-;; @0025                               v58 = load.i64 user2 v57
+;; @0025                               v58 = load.i64 user2 region0 v57
 ;;                                     v200 = iconst.i64 1
 ;; @0025                               v59 = iadd v58, v200  ; v200 = 1
-;; @0025                               store user2 v59, v57
+;; @0025                               store user2 region0 v59, v57
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
@@ -74,9 +75,9 @@
 ;; @0025                               v45 = iadd.i64 v20, v43
 ;;                                     v222 = iconst.i64 12
 ;; @0025                               v48 = isub v45, v222  ; v222 = 12
-;; @0025                               store user2 little v157, v48
+;; @0025                               store user2 little region0 v157, v48
 ;;                                     v325 = iadd.i64 v22, v213  ; v213 = 24
-;; @0025                               v71 = load.i32 user2 readonly v325
+;; @0025                               v71 = load.i32 user2 readonly region0 v325
 ;;                                     v326 = iconst.i32 1
 ;;                                     v327 = icmp ugt v71, v326  ; v326 = 1
 ;; @0025                               trapz v327, user17
@@ -105,10 +106,10 @@
 ;; @0025                               v96 = iadd.i64 v20, v94
 ;;                                     v331 = iconst.i64 8
 ;; @0025                               v98 = iadd v96, v331  ; v331 = 8
-;; @0025                               v99 = load.i64 user2 v98
+;; @0025                               v99 = load.i64 user2 region0 v98
 ;;                                     v332 = iconst.i64 1
 ;; @0025                               v100 = iadd v99, v332  ; v332 = 1
-;; @0025                               store user2 v100, v98
+;; @0025                               store user2 region0 v100, v98
 ;; @0025                               jump block5
 ;;
 ;;                                 block5:
@@ -119,9 +120,9 @@
 ;; @0025                               v87 = isub.i32 v79, v287  ; v287 = 32
 ;; @0025                               v88 = uextend.i64 v87
 ;; @0025                               v89 = isub v86, v88
-;; @0025                               store user2 little v152, v89
+;; @0025                               store user2 little region0 v152, v89
 ;;                                     v333 = iadd.i64 v22, v213  ; v213 = 24
-;; @0025                               v112 = load.i32 user2 readonly v333
+;; @0025                               v112 = load.i32 user2 readonly region0 v333
 ;;                                     v334 = iconst.i32 2
 ;;                                     v335 = icmp ugt v112, v334  ; v334 = 2
 ;; @0025                               trapz v335, user17
@@ -150,10 +151,10 @@
 ;; @0025                               v137 = iadd.i64 v20, v135
 ;;                                     v346 = iconst.i64 8
 ;; @0025                               v139 = iadd v137, v346  ; v346 = 8
-;; @0025                               v140 = load.i64 user2 v139
+;; @0025                               v140 = load.i64 user2 region0 v139
 ;;                                     v347 = iconst.i64 1
 ;; @0025                               v141 = iadd v140, v347  ; v347 = 1
-;; @0025                               store user2 v141, v139
+;; @0025                               store user2 region0 v141, v139
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
@@ -164,7 +165,7 @@
 ;; @0025                               v128 = isub.i32 v120, v319  ; v319 = 36
 ;; @0025                               v129 = uextend.i64 v128
 ;; @0025                               v130 = isub v127, v129
-;; @0025                               store user2 little v147, v130
+;; @0025                               store user2 little region0 v147, v130
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:

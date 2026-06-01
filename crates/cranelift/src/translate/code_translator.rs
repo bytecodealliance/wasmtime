@@ -3666,11 +3666,11 @@ fn prepare_addr(
     let mut flags = MemFlagsData::new();
     flags.set_endianness(ir::Endianness::Little);
 
-    // The access occurs to the `heap` disjoint category of abstract
+    // The access occurs to a per-memory disjoint category of abstract
     // state. This may allow alias analysis to merge redundant loads,
     // etc. when heap accesses occur interleaved with other (table,
     // vmctx, stack) accesses.
-    let region = environ.get_heap_alias_region(builder.func);
+    let region = environ.memory_alias_region(builder.func, memory_index);
     flags.set_alias_region(Some(region));
 
     Ok(Reachability::Reachable((flags, index, addr)))
