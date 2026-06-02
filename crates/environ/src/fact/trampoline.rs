@@ -798,6 +798,14 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
             old_task_may_block
         } else if self.emit_resource_call {
+            assert!(!self.types[adapter.lift.ty].async_);
+            self.instruction(I32Const(
+                i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+            ));
+            self.instruction(I32Const(0));
+            self.instruction(I32Const(
+                i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+            ));
             let enter_sync_call = self.module.import_enter_sync_call();
             self.instruction(Call(enter_sync_call.as_u32()));
             None

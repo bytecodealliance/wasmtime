@@ -235,3 +235,36 @@ fn implements_shows_up() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13540_resources_in_adapter_no_concurrency() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    engine.precompile_component(
+        br#"
+(component
+  (component $A
+    (type $t' (resource (rep i32)))
+    (export $t "t" (type $t'))
+
+    (core module $m (func (export "r") (param i32)))
+    (core instance $i (instantiate $m))
+    (func (export "r") (param "a" (borrow $t)) (canon lift (core func $i "r")))
+  )
+  (component $B
+    (import "a" (instance $a
+      (export "t" (type $t (sub resource)))
+      (export "r" (func (param "a" (borrow $t))))
+    ))
+
+    (core func $r (canon lower (func $a "r")))
+  )
+  (instance $a (instantiate $A))
+  (instance $b (instantiate $B (with "a" (instance $a))))
+)
+    "#,
+    )?;
+    Ok(())
+}
