@@ -468,7 +468,7 @@ mod tests {
     #[test]
     #[cfg(feature = "component-model-async-bytes")]
     fn test_cursor_bytes_take() {
-        let mut buf = Cursor::new(Bytes::from(&b"123"[..]));
+        let mut buf = Bytes::from(&b"123"[..]);
         let mut dst = Vec::new();
         dst.reserve(1);
         dst.move_from(&mut buf, 1);
@@ -485,7 +485,7 @@ mod tests {
     #[test]
     #[cfg(feature = "component-model-async-bytes")]
     fn test_cursor_bytes_mut_take() {
-        let mut buf = Cursor::new(BytesMut::from(&b"123"[..]));
+        let mut buf = BytesMut::from(&b"123"[..]);
         let mut dst = Vec::new();
         dst.reserve(1);
         dst.move_from(&mut buf, 1);
