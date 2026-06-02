@@ -361,6 +361,7 @@ std = [
   "dep:rustix",
   "wasmtime-jit-icache-coherence",
   "wasmtime-jit-debug?/std",
+  "futures?/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
@@ -429,10 +430,8 @@ profile-pulley = [
 component-model-async = [
   "async",
   "component-model",
-  "std",
   "wasmtime-component-macro?/component-model-async",
   "dep:futures",
-  "futures/std",
 ]
 
 # Enables support for `stream` interop with the `bytes` crate.

@@ -17,17 +17,19 @@
 //! must be audited for the `unsafe` blocks contained within.
 
 use crate::runtime::vm::VMStore;
-use core::cell::Cell;
+use crate::vm::{component_async_tls_get, component_async_tls_set};
 use core::mem;
 use core::ptr::NonNull;
 
-std::thread_local! {
-    // Note that care is currently taken to minimize the size of this TLS
-    // variable as it's expected we'll refactor this in the future and have to
-    // plumb it to the platform abstraction layer of Wasmtime eventually where
-    // we want as minimal an impact as possible. Thus this TLS variable is
-    // a single pointer.
-    static STORAGE: Cell<Option<NonNull<SetStorage>>> = const { Cell::new(None) };
+fn tls_get() -> Option<NonNull<SetStorage>> {
+    NonNull::new(component_async_tls_get().cast())
+}
+
+fn tls_set(val: Option<NonNull<SetStorage>>) {
+    component_async_tls_set(match val {
+        Some(v) => v.as_ptr().cast(),
+        None => core::ptr::null_mut(),
+    })
 }
 
 enum SetStorage {
@@ -44,14 +46,15 @@ enum SetStorage {
 /// `f` is not allowed to access `store` via Rust's borrow checker.
 pub fn set<R>(store: &mut dyn VMStore, f: impl FnOnce() -> R) -> R {
     let mut storage = SetStorage::Present(NonNull::from(store));
-    let _reset = ResetTls(STORAGE.with(|s| s.replace(Some(NonNull::from(&mut storage)))));
+    let _reset = ResetTls(component_async_tls_get());
+    tls_set(Some(NonNull::from(&mut storage)));
     return f();
 
-    struct ResetTls(Option<NonNull<SetStorage>>);
+    struct ResetTls(*mut u8);
 
     impl Drop for ResetTls {
         fn drop(&mut self) {
-            STORAGE.with(|s| s.set(self.0));
+            component_async_tls_set(self.0);
         }
     }
 }
@@ -121,21 +124,21 @@ pub fn try_get<R>(f: impl FnOnce(TryGet<'_>) -> R) -> R {
     //   outside that closure. That means that once `f` is returned this
     //   function has exclusive access to the store again.
     //
-    // * If `STORAGE` is not set then that means `set` has not been configured,
+    // * If TLS is not set then that means `set` has not been configured,
     //   thus `TryGet::None` is yielded.
     //
-    // * If `STORAGE` is set then we're guaranteed it's set for the entire
+    // * If TLS is set then we're guaranteed it's set for the entire
     //   lifetime of this function call, and we're also guaranteed that the
     //   pointer stored in there is the same pointer we'll be modifying for
     //   this whole function call.
     //
-    // * The `STORAGE` pointer is read/written only in a scoped manner here and
+    // * The TLS pointer is read/written only in a scoped manner here and
     //   borrows of this value are not persisted for very long.
     //
     // With all of that put together it should make it such that this is a safe
     // reborrow of the store provided to `set` to pass to the closure `f` here.
     unsafe {
-        let storage = STORAGE.with(|s| s.get());
+        let storage = tls_get();
         let _reset;
         let val = match storage {
             Some(mut storage) => match mem::replace(storage.as_mut(), SetStorage::Taken) {
