@@ -610,8 +610,7 @@ mod test {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
-    #[cfg_attr(not(has_native_signals), ignore)]
+    #[cfg_attr(any(miri, not(has_native_signals)), ignore)]
     #[cfg(target_pointer_width = "64")] // different defaults on 32-bit platforms
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
