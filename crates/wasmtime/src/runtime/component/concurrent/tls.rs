@@ -18,7 +18,6 @@
 
 use crate::runtime::vm::VMStore;
 use crate::vm::{component_async_tls_get, component_async_tls_set};
-use core::cell::Cell;
 use core::mem;
 use core::ptr::NonNull;
 
