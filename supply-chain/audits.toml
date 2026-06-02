@@ -4063,6 +4063,12 @@ criteria = "safe-to-deploy"
 delta = "0.10.78 -> 0.10.79"
 notes = "Fixing known holes and binding minor new APIs."
 
+[[audits.openssl]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.79 -> 0.10.80"
+notes = "Minor updates, no unsafe changes"
+
 [[audits.openssl-macros]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -4079,6 +4085,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.9.114 -> 0.9.115"
 notes = "MSRV updates and other minor changes, all normal."
+
+[[audits.openssl-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.115 -> 0.9.116"
+notes = "Minor build system updates and versions"
 
 [[audits.openvino]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
@@ -4781,6 +4793,12 @@ criteria = "safe-to-deploy"
 delta = "0.25.6 -> 0.25.7"
 notes = "This is a minor bug-fix update."
 
+[[audits.tar]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.45 -> 0.4.46"
+notes = "Nothing awry, no changes to unsafe or such."
+
 [[audits.tch]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -4839,6 +4857,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.2 -> 0.4.3"
 notes = "Just a dependency bump"
+
+[[audits.terminal_size]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.3 -> 0.4.4"
+notes = "Minor dependency updates"
 
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
