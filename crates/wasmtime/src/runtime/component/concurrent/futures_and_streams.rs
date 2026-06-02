@@ -30,7 +30,6 @@ use futures::channel::oneshot;
 use futures::{FutureExt as _, stream};
 use std::any::{Any, TypeId};
 use std::boxed::Box;
-use std::io::Cursor;
 use std::string::String;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::vec::Vec;
@@ -337,11 +336,25 @@ pub(super) struct FlatAbi {
     pub(super) align: u32,
 }
 
+struct HostBuffer<'a> {
+    dst: &'a mut Vec<u8>,
+    marked_written: &'a mut usize,
+}
+
+impl HostBuffer<'_> {
+    fn reborrow(&mut self) -> HostBuffer<'_> {
+        HostBuffer {
+            dst: &mut *self.dst,
+            marked_written: &mut *self.marked_written,
+        }
+    }
+}
+
 /// Represents the buffer for a host- or guest-initiated stream read.
 pub struct Destination<'a, T, B> {
     id: TableId<TransmitState>,
     buffer: &'a mut B,
-    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
+    host_buffer: Option<HostBuffer<'a>>,
     _phantom: PhantomData<fn() -> T>,
 }
 
@@ -351,7 +364,7 @@ impl<'a, T, B> Destination<'a, T, B> {
         Destination {
             id: self.id,
             buffer: &mut *self.buffer,
-            host_buffer: self.host_buffer.as_deref_mut(),
+            host_buffer: self.host_buffer.as_mut().map(|b| b.reborrow()),
             _phantom: PhantomData,
         }
     }
@@ -435,11 +448,9 @@ impl<'a, B> Destination<'a, u8, B> {
         store: StoreContextMut<'a, D>,
         capacity: usize,
     ) -> DirectDestination<'a, D> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.set_position(0);
-            if buffer.get_mut().is_empty() {
-                buffer.get_mut().resize(capacity, 0);
-            }
+        if let Some(buffer) = &mut self.host_buffer {
+            *buffer.marked_written = 0;
+            buffer.dst.resize(capacity, 0);
         }
 
         DirectDestination {
@@ -454,7 +465,7 @@ impl<'a, B> Destination<'a, u8, B> {
 /// writer's buffer.
 pub struct DirectDestination<'a, D: 'static> {
     id: TableId<TransmitState>,
-    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
+    host_buffer: Option<HostBuffer<'a>>,
     store: StoreContextMut<'a, D>,
 }
 
@@ -482,8 +493,8 @@ impl<D: 'static> DirectDestination<'_, D> {
     }
 
     fn remaining_(&mut self) -> Result<&mut [u8]> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            return Ok(buffer.get_mut());
+        if let Some(buffer) = self.host_buffer.as_mut() {
+            return Ok(buffer.dst);
         }
         let transmit = self
             .store
@@ -531,15 +542,10 @@ impl<D: 'static> DirectDestination<'_, D> {
     }
 
     fn mark_written_(&mut self, count: usize) -> Result<()> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.set_position(
-                // Note that these `.unwrap`s are documented panic conditions of
-                // `mark_written`.
-                buffer
-                    .position()
-                    .checked_add(u64::try_from(count).unwrap())
-                    .unwrap(),
-            );
+        if let Some(buffer) = self.host_buffer.as_mut() {
+            // Note that this `.unwrap` is a documented panic condition of
+            // `mark_written`.
+            *buffer.marked_written = buffer.marked_written.checked_add(count).unwrap();
         } else {
             let transmit = self
                 .store
@@ -2641,9 +2647,10 @@ impl<T> StoreContextMut<'_, T> {
                                     bail_bug!("expected WriteState::HostReady")
                                 };
 
+                                let mut host_written = 0;
                                 let mut host_buffer =
                                     if let ReadState::HostToHost { buffer, .. } = &mut transmit.read {
-                                        Some(Cursor::new(mem::take(buffer)))
+                                        Some(mem::take(buffer))
                                     } else {
                                         None
                                     };
@@ -2654,7 +2661,12 @@ impl<T> StoreContextMut<'_, T> {
                                     Destination {
                                         id,
                                         buffer,
-                                        host_buffer: host_buffer.as_mut(),
+                                        host_buffer: host_buffer.as_mut().map(|b| {
+                                            HostBuffer {
+                                                dst: b,
+                                                marked_written: &mut host_written,
+                                            }
+                                        }),
                                         _phantom: PhantomData,
                                     },
                                     cancel,
@@ -2667,8 +2679,8 @@ impl<T> StoreContextMut<'_, T> {
                                     ReadState::HostToHost { buffer, limit, .. },
                                 ) = (host_buffer, &mut transmit.read)
                                 {
-                                    *limit = usize::try_from(host_buffer.position())?;
-                                    *buffer = host_buffer.into_inner();
+                                    *limit = host_written;
+                                    *buffer = host_buffer;
                                     *limit
                                 } else {
                                     0
