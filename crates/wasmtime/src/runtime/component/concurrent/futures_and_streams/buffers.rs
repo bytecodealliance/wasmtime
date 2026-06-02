@@ -440,7 +440,6 @@ fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
 
     #[test]
     fn test_vec_buffer_take() {

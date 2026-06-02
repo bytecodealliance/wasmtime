@@ -5007,7 +5007,7 @@ mod tests {
     use crate::{Engine, Store};
     use core::future::pending;
     use core::pin::pin;
-    use core::sync::LazyLock;
+    use std::sync::LazyLock;
 
     static ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
 
