@@ -1,6 +1,5 @@
 use crate::Error;
 use bytes::BytesMut;
-use std::io::Cursor;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -38,7 +37,7 @@ impl AsyncWrite for Closed {
 }
 impl<D> StreamProducer<D> for Closed {
     type Item = u8;
-    type Buffer = Cursor<BytesMut>;
+    type Buffer = BytesMut;
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,

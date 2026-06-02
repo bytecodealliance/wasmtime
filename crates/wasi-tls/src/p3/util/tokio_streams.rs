@@ -1,5 +1,4 @@
 use bytes::BytesMut;
-use std::io::Cursor;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -37,7 +36,7 @@ where
     IO: AsyncRead + Send + Unpin + 'static,
 {
     type Item = u8;
-    type Buffer = Cursor<BytesMut>;
+    type Buffer = BytesMut;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,

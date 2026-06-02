@@ -11,7 +11,6 @@ use core::iter;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use io_lifetimes::AsSocketlike as _;
-use std::io::Cursor;
 use std::net::{Shutdown, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -115,7 +114,7 @@ impl ReceiveStreamProducer {
 
 impl<D> StreamProducer<D> for ReceiveStreamProducer {
     type Item = u8;
-    type Buffer = Cursor<BytesMut>;
+    type Buffer = BytesMut;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
