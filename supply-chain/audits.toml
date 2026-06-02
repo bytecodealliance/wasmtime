@@ -4858,6 +4858,12 @@ criteria = "safe-to-deploy"
 delta = "0.4.2 -> 0.4.3"
 notes = "Just a dependency bump"
 
+[[audits.terminal_size]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.3 -> 0.4.4"
+notes = "Minor dependency updates"
+
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
