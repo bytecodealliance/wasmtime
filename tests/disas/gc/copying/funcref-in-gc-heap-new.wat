@@ -67,14 +67,14 @@
 ;;                                 block4(v36: i32, v37: i64):
 ;;                                     v45 = stack_addr.i64 ss0
 ;;                                     store notrap v36, v45
-;; @0020                               v40 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
-;; @0020                               v41 = ireduce.i32 v40
-;;                                     v44 = iconst.i64 16
-;; @0020                               v38 = iadd v37, v44  ; v44 = 16
-;; @0020                               store user2 little region1 v41, v38
-;;                                     v42 = load.i32 notrap v45
+;; @0020                               v41 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
+;; @0020                               v42 = ireduce.i32 v41
+;; @0020                               v38 = iconst.i64 16
+;; @0020                               v39 = iadd v37, v38  ; v38 = 16
+;; @0020                               store user2 little region1 v42, v39
+;;                                     v43 = load.i32 notrap v45
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;; @0023                               return v42
+;; @0023                               return v43
 ;; }

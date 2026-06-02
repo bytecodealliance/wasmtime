@@ -479,7 +479,8 @@ block0(v0: i64):
 
 function %i128_add_offset(i64) -> i128 {
 block0(v0: i64):
-  v1 = iadd_imm v0, 32
+  v3 = iconst.i64 32
+  v1 = iadd v0, v3
   v2 = load.i128 v1
   store.i128 v2, v1
   return v2
@@ -535,7 +536,8 @@ function %i128_32bit_sextend(i64, i32) -> i128 {
 block0(v0: i64, v1: i32):
   v2 = sextend.i64 v1
   v3 = iadd.i64 v0, v2
-  v4 = iadd_imm.i64 v3, 24
+  v6 = iconst.i64 24
+  v4 = iadd v3, v6
   v5 = load.i128 v4
   store.i128 v5, v4
   return v5

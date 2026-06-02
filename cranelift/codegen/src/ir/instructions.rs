@@ -1184,12 +1184,12 @@ mod tests {
         assert_eq!(x, y);
         assert_eq!(x.format(), InstructionFormat::Binary);
 
-        assert_eq!(format!("{:?}", Opcode::IaddImm), "IaddImm");
-        assert_eq!(Opcode::IaddImm.to_string(), "iadd_imm");
+        assert_eq!(format!("{:?}", Opcode::BandNot), "BandNot");
+        assert_eq!(Opcode::BandNot.to_string(), "band_not");
 
         // Check the matcher.
         assert_eq!("iadd".parse::<Opcode>(), Ok(Opcode::Iadd));
-        assert_eq!("iadd_imm".parse::<Opcode>(), Ok(Opcode::IaddImm));
+        assert_eq!("band_not".parse::<Opcode>(), Ok(Opcode::BandNot));
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));

@@ -42,38 +42,38 @@
 ;; @002a                               v18 = icmp ugt v17, v13
 ;; @002a                               trapnz v18, user17
 ;; @002a                               trapz v4, user16
-;; @002a                               v26 = uextend.i64 v4
-;; @002a                               v28 = iadd v8, v26
-;; @002a                               v30 = iadd v28, v10  ; v10 = 16
-;; @002a                               v31 = load.i32 user2 readonly region0 v30
-;; @002a                               v33 = uextend.i64 v5
-;; @002a                               v36 = iadd v33, v85  ; v85 = 7
-;; @002a                               v32 = uextend.i64 v31
-;; @002a                               v37 = icmp ugt v36, v32
-;; @002a                               trapnz v37, user17
-;; @002a                               v49 = load.i64 notrap aligned v83+40
-;;                                     v79 = iconst.i64 20
-;; @002a                               v22 = iadd v9, v79  ; v79 = 20
+;; @002a                               v27 = uextend.i64 v4
+;; @002a                               v29 = iadd v8, v27
+;; @002a                               v31 = iadd v29, v10  ; v10 = 16
+;; @002a                               v32 = load.i32 user2 readonly region0 v31
+;; @002a                               v34 = uextend.i64 v5
+;; @002a                               v37 = iadd v34, v85  ; v85 = 7
+;; @002a                               v33 = uextend.i64 v32
+;; @002a                               v38 = icmp ugt v37, v33
+;; @002a                               trapnz v38, user17
+;; @002a                               v51 = load.i64 notrap aligned v83+40
+;; @002a                               v22 = iconst.i64 20
+;; @002a                               v23 = iadd v9, v22  ; v22 = 20
 ;;                                     v93 = iconst.i64 2
 ;;                                     v94 = ishl v14, v93  ; v93 = 2
-;; @002a                               v25 = iadd v22, v94
+;; @002a                               v26 = iadd v23, v94
 ;;                                     v98 = iconst.i64 28
-;; @002a                               v51 = uadd_overflow_trap v25, v98, user2  ; v98 = 28
-;; @002a                               v50 = iadd v8, v49
-;; @002a                               v52 = icmp ugt v51, v50
-;; @002a                               trapnz v52, user2
-;; @002a                               v41 = iadd v28, v79  ; v79 = 20
-;;                                     v96 = ishl v33, v93  ; v93 = 2
-;; @002a                               v44 = iadd v41, v96
-;; @002a                               v56 = uadd_overflow_trap v44, v98, user2  ; v98 = 28
-;; @002a                               v57 = icmp ugt v56, v50
-;; @002a                               trapnz v57, user2
-;; @002a                               v58 = load.i8x16 notrap aligned little v44
-;; @002a                               v59 = load.i64 notrap aligned little v44+16
-;; @002a                               v60 = load.i32 notrap aligned little v44+24
-;; @002a                               store notrap aligned little v58, v25
-;; @002a                               store notrap aligned little v59, v25+16
-;; @002a                               store notrap aligned little v60, v25+24
+;; @002a                               v53 = uadd_overflow_trap v26, v98, user2  ; v98 = 28
+;; @002a                               v52 = iadd v8, v51
+;; @002a                               v54 = icmp ugt v53, v52
+;; @002a                               trapnz v54, user2
+;; @002a                               v43 = iadd v29, v22  ; v22 = 20
+;;                                     v96 = ishl v34, v93  ; v93 = 2
+;; @002a                               v46 = iadd v43, v96
+;; @002a                               v58 = uadd_overflow_trap v46, v98, user2  ; v98 = 28
+;; @002a                               v59 = icmp ugt v58, v52
+;; @002a                               trapnz v59, user2
+;; @002a                               v60 = load.i8x16 notrap aligned little v46
+;; @002a                               v61 = load.i64 notrap aligned little v46+16
+;; @002a                               v62 = load.i32 notrap aligned little v46+24
+;; @002a                               store notrap aligned little v60, v26
+;; @002a                               store notrap aligned little v61, v26+16
+;; @002a                               store notrap aligned little v62, v26+24
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:

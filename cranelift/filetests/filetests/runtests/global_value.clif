@@ -50,6 +50,7 @@ function %load_at_0_and_add(i64 vmctx) -> i64 {
 
 block0(v0: i64):
     v1 = global_value.i64 gv1
-    v2 = iadd_imm.i64 v1, 1
+    v3 = iconst.i64 1
+    v2 = iadd v1, v3
     return v2
 }

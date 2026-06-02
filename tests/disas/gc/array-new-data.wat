@@ -154,36 +154,36 @@
 ;;                                 block4(v54: i32, v55: i64):
 ;;                                     v121 = stack_addr.i64 ss0
 ;;                                     store notrap v54, v121
-;;                                     v120 = iconst.i64 16
-;; @0025                               v56 = iadd v55, v120  ; v120 = 16
-;; @0025                               store.i32 user2 region1 v3, v56
+;; @0025                               v56 = iconst.i64 16
+;; @0025                               v57 = iadd v55, v56  ; v56 = 16
+;; @0025                               store.i32 user2 region1 v3, v57
 ;; @0025                               trapz v54, user16
 ;;                                     v163 = load.i64 notrap aligned readonly can_move v0+8
 ;;                                     v164 = load.i64 notrap aligned readonly can_move v163+32
-;; @0025                               v58 = uextend.i64 v54
-;; @0025                               v60 = iadd v164, v58
-;; @0025                               v62 = iadd v60, v120  ; v120 = 16
-;; @0025                               v63 = load.i32 user2 readonly region1 v62
-;; @0025                               v64 = uextend.i64 v63
-;; @0025                               v69 = icmp.i64 ugt v9, v64
-;; @0025                               trapnz v69, user17
-;; @0025                               v78 = load.i32 notrap aligned v0+56
-;; @0025                               v79 = uextend.i64 v78
-;; @0025                               v84 = icmp.i64 ugt v11, v79
-;; @0025                               trapnz v84, heap_oob
-;; @0025                               v86 = load.i64 notrap aligned v0+48
-;; @0025                               v93 = load.i64 notrap aligned v163+40
-;;                                     v111 = iconst.i64 20
-;; @0025                               v73 = iadd v60, v111  ; v111 = 20
-;; @0025                               v95 = uadd_overflow_trap v73, v9, user2
-;; @0025                               v94 = iadd v164, v93
-;; @0025                               v96 = icmp ugt v95, v94
-;; @0025                               trapnz v96, user2
-;; @0025                               v88 = iadd v86, v8
-;; @0025                               call fn1(v0, v73, v88, v9), stack_map=[i32 @ ss0+0]
-;;                                     v98 = load.i32 notrap v121
+;; @0025                               v59 = uextend.i64 v54
+;; @0025                               v61 = iadd v164, v59
+;; @0025                               v63 = iadd v61, v56  ; v56 = 16
+;; @0025                               v64 = load.i32 user2 readonly region1 v63
+;; @0025                               v65 = uextend.i64 v64
+;; @0025                               v70 = icmp.i64 ugt v9, v65
+;; @0025                               trapnz v70, user17
+;; @0025                               v80 = load.i32 notrap aligned v0+56
+;; @0025                               v81 = uextend.i64 v80
+;; @0025                               v86 = icmp.i64 ugt v11, v81
+;; @0025                               trapnz v86, heap_oob
+;; @0025                               v88 = load.i64 notrap aligned v0+48
+;; @0025                               v95 = load.i64 notrap aligned v163+40
+;; @0025                               v74 = iconst.i64 20
+;; @0025                               v75 = iadd v61, v74  ; v74 = 20
+;; @0025                               v97 = uadd_overflow_trap v75, v9, user2
+;; @0025                               v96 = iadd v164, v95
+;; @0025                               v98 = icmp ugt v97, v96
+;; @0025                               trapnz v98, user2
+;; @0025                               v90 = iadd v88, v8
+;; @0025                               call fn1(v0, v75, v90, v9), stack_map=[i32 @ ss0+0]
+;;                                     v100 = load.i32 notrap v121
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               return v98
+;; @0029                               return v100
 ;; }

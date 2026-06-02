@@ -441,23 +441,24 @@ block9:
     brif v4, block11, block10
 
 block11:
-    v5 = iadd_imm.i8 v0, -10  ; v0 = 0
-    v6 = uextend.i32 v5
-    br_table v6, block0, [block5, block6, block7]
+    v5 = iconst.i8 -10
+    v6 = iadd.i8 v0, v5  ; v0 = 0, v5 = -10
+    v7 = uextend.i32 v6
+    br_table v7, block0, [block5, block6, block7]
 
 block10:
-    v7 = iconst.i8 7
-    v8 = icmp.i8 eq v0, v7  ; v0 = 0, v7 = 7
-    brif v8, block4, block0
+    v8 = iconst.i8 7
+    v9 = icmp.i8 eq v0, v8  ; v0 = 0, v8 = 7
+    brif v9, block4, block0
 
 block8:
-    v9 = iconst.i8 5
-    v10 = icmp.i8 eq v0, v9  ; v0 = 0, v9 = 5
-    brif v10, block3, block12
+    v10 = iconst.i8 5
+    v11 = icmp.i8 eq v0, v10  ; v0 = 0, v10 = 5
+    brif v11, block3, block12
 
 block12:
-    v11 = uextend.i32 v0  ; v0 = 0
-    br_table v11, block0, [block1, block2]"
+    v12 = uextend.i32 v0  ; v0 = 0
+    br_table v12, block0, [block1, block2]"
         );
     }
 

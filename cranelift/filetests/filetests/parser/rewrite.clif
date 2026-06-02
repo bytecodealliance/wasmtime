@@ -19,13 +19,15 @@ block100(v20: i32):
 ; Using values.
 function %use_value() {
 block100(v20: i32):
-    v1000 = iadd_imm v20, 5
+    v1001 = iconst.i32 5
+    v1000 = iadd v20, v1001
     v200 = iadd v20, v1000
     jump block100(v1000)
 }
 ; sameln: function %use_value() fast {
 ; nextln: block100(v20: i32):
-; nextln:     v1000 = iadd_imm v20, 5
+; nextln:     v1001 = iconst.i32 5
+; nextln:     v1000 = iadd v20, v1001  ; v1001 = 5
 ; nextln:     v200 = iadd v20, v1000
 ; nextln:     jump block100(v1000)
 ; nextln: }
