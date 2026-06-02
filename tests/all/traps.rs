@@ -1305,14 +1305,9 @@ fn div_plus_load_reported_right() -> Result<()> {
 fn wasm_fault_address_reported_by_default() -> Result<()> {
     let mut config = Config::new();
     config.signals_based_traps(true);
-    // This test requires a host that supports signals-based-traps to report the
-    // faulting address. If that configuration isn't supported by this host then
-    // skip the test.
-    let Ok(engine) = Engine::new(&config) else {
-        return Ok(());
-    };
+    let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
-    let module = Module::new(
+    let Ok(module) = Module::new(
         &engine,
         r#"
             (module
@@ -1324,7 +1319,12 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
                 (start $start)
             )
         "#,
-    )?;
+    ) else {
+        // This test requires a host that supports signals-based-traps to report
+        // the faulting address. If that configuration isn't supported by this
+        // host then skip the test.
+        return Ok(());
+    };
     let err = Instance::new(&mut store, &module, &[]).unwrap_err();
 
     // NB: at this time there's no programmatic access to the fault address
