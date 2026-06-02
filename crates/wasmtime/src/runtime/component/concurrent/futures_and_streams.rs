@@ -827,7 +827,7 @@ where
 #[cfg(feature = "component-model-async-bytes")]
 impl<D> StreamProducer<D> for bytes::Bytes {
     type Item = u8;
-    type Buffer = Cursor<Self>;
+    type Buffer = Self;
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
@@ -836,7 +836,7 @@ impl<D> StreamProducer<D> for bytes::Bytes {
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+        dst.set_buffer(mem::take(self.get_mut()));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
@@ -844,7 +844,7 @@ impl<D> StreamProducer<D> for bytes::Bytes {
 #[cfg(feature = "component-model-async-bytes")]
 impl<D> StreamProducer<D> for bytes::BytesMut {
     type Item = u8;
-    type Buffer = Cursor<Self>;
+    type Buffer = Self;
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
@@ -853,7 +853,7 @@ impl<D> StreamProducer<D> for bytes::BytesMut {
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+        dst.set_buffer(mem::take(self.get_mut()));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }

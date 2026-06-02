@@ -12,7 +12,7 @@ use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll, ready};
 use core::{iter, mem};
-use std::io::{self, Cursor};
+use std::io;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
@@ -160,7 +160,7 @@ impl ReadStreamProducer {
 
 impl<D> StreamProducer<D> for ReadStreamProducer {
     type Item = u8;
-    type Buffer = Cursor<BytesMut>;
+    type Buffer = BytesMut;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
@@ -196,7 +196,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
         // Lazily spawn a read task if one hasn't already been spawned yet.
         let me = &mut *self;
         let task = me.task.get_or_insert_with(|| {
-            let mut buf = dst.take_buffer().into_inner();
+            let mut buf = dst.take_buffer();
             buf.resize(DEFAULT_BUFFER_CAPACITY, 0);
             let file = Arc::clone(me.file.as_file());
             let offset = me.offset;
@@ -229,7 +229,7 @@ impl<D> StreamProducer<D> for ReadStreamProducer {
             }
             Ok(Ok(buf)) => {
                 let n = buf.len();
-                dst.set_buffer(Cursor::new(buf));
+                dst.set_buffer(buf);
                 Poll::Ready(Ok(self.complete_read(n)))
             }
             Ok(Err(err)) => {

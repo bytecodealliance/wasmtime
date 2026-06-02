@@ -1,7 +1,5 @@
 #[cfg(feature = "component-model-async-bytes")]
 use bytes::{Bytes, BytesMut};
-#[cfg(feature = "component-model-async-bytes")]
-use std::io::Cursor;
 use std::mem::{self, MaybeUninit};
 use std::slice;
 use std::vec::Vec;
@@ -377,52 +375,36 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Vec<T> {
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
 #[cfg(feature = "component-model-async-bytes")]
-unsafe impl WriteBuffer<u8> for Cursor<Bytes> {
+unsafe impl WriteBuffer<u8> for Bytes {
     fn remaining(&self) -> &[u8] {
-        &self.get_ref()[usize::try_from(self.position()).unwrap()..]
+        self
     }
 
     fn skip(&mut self, count: usize) {
-        assert!(
-            count <= self.remaining().len(),
-            "tried to skip {count} with {} remaining",
-            self.remaining().len()
-        );
-        self.set_position(
-            self.position()
-                .checked_add(u64::try_from(count).unwrap())
-                .unwrap(),
-        );
+        let _prefix = self.split_to(count);
     }
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
-        assert!(count <= self.remaining().len());
-        fun(unsafe_byte_slice(&self.remaining()[..count]));
-        self.skip(count);
+        let prefix = self.split_to(count);
+        fun(unsafe_byte_slice(&prefix));
     }
 }
 
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
 #[cfg(feature = "component-model-async-bytes")]
-unsafe impl WriteBuffer<u8> for Cursor<BytesMut> {
+unsafe impl WriteBuffer<u8> for BytesMut {
     fn remaining(&self) -> &[u8] {
-        &self.get_ref()[usize::try_from(self.position()).unwrap()..]
+        self
     }
 
     fn skip(&mut self, count: usize) {
-        assert!(count <= self.remaining().len());
-        self.set_position(
-            self.position()
-                .checked_add(u64::try_from(count).unwrap())
-                .unwrap(),
-        );
+        let _prefix = self.split_to(count);
     }
 
     fn take(&mut self, count: usize, fun: &mut dyn FnMut(&[MaybeUninit<u8>])) {
-        assert!(count <= self.remaining().len());
-        fun(unsafe_byte_slice(&self.remaining()[..count]));
-        self.skip(count);
+        let prefix = self.split_to(count);
+        fun(unsafe_byte_slice(&prefix));
     }
 }
 
