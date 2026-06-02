@@ -61,7 +61,8 @@ block0(v0: i64, v1: i64):
 
 function %icmp_sge_i8_imm(i8) -> i8 {
 block0(v0: i8):
-    v2 = icmp_imm sge v0, 10
+    v3 = iconst.i8 10
+    v2 = icmp sge v0, v3
     return v2
 }
 ; run: %icmp_sge_i8_imm(10) == 1
@@ -70,7 +71,8 @@ block0(v0: i8):
 
 function %icmp_sge_i16_imm(i16) -> i8 {
 block0(v0: i16):
-    v2 = icmp_imm sge v0, 10
+    v3 = iconst.i16 10
+    v2 = icmp sge v0, v3
     return v2
 }
 ; run: %icmp_sge_i16_imm(10) == 1
@@ -79,7 +81,8 @@ block0(v0: i16):
 
 function %icmp_sge_i32_imm(i32) -> i8 {
 block0(v0: i32):
-    v2 = icmp_imm sge v0, 10
+    v3 = iconst.i32 10
+    v2 = icmp sge v0, v3
     return v2
 }
 ; run: %icmp_sge_i32_imm(10) == 1
@@ -88,7 +91,8 @@ block0(v0: i32):
 
 function %icmp_sge_i64_imm(i64) -> i8 {
 block0(v0: i64):
-    v2 = icmp_imm sge v0, 10
+    v3 = iconst.i64 10
+    v2 = icmp sge v0, v3
     return v2
 }
 ; run: %icmp_sge_i64_imm(10) == 1

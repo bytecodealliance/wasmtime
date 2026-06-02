@@ -71,13 +71,16 @@ block0:
     v3 = bitselect v0, v1, v2
 
     v4 = extractlane v3, 0
-    v5 = icmp_imm eq v4, 42
+    v12 = iconst.i8 42
+    v5 = icmp eq v4, v12
 
     v6 = extractlane v3, 1
-    v7 = icmp_imm eq v6, 0
+    v13 = iconst.i8 0
+    v7 = icmp eq v6, v13
 
     v8 = extractlane v3, 15
-    v9 = icmp_imm eq v8, 42
+    v14 = iconst.i8 42
+    v9 = icmp eq v8, v14
 
     v10 = band v5, v7
     v11 = band v10, v9

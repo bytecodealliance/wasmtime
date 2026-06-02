@@ -95,21 +95,21 @@
 ;; @004a                               v9 = load.i32 user2 little region0 v8
 ;;                                     v58 = iconst.i32 1
 ;; @004a                               v10 = band v3, v58  ; v58 = 1
-;;                                     v57 = iconst.i32 0
-;; @004a                               v11 = icmp eq v3, v57  ; v57 = 0
-;; @004a                               v12 = uextend.i32 v11
-;; @004a                               v13 = bor v10, v12
-;; @004a                               brif v13, block3, block2
+;; @004a                               v11 = iconst.i32 0
+;; @004a                               v12 = icmp eq v3, v11  ; v11 = 0
+;; @004a                               v13 = uextend.i32 v12
+;; @004a                               v14 = bor v10, v13
+;; @004a                               brif v14, block3, block2
 ;;
 ;;                                 block2:
-;; @004a                               v14 = uextend.i64 v3
-;; @004a                               v16 = iadd.i64 v5, v14
-;; @004a                               v17 = iconst.i64 8
-;; @004a                               v18 = iadd v16, v17  ; v17 = 8
-;; @004a                               v19 = load.i64 user2 region0 v18
-;;                                     v54 = iconst.i64 1
-;; @004a                               v20 = iadd v19, v54  ; v54 = 1
-;; @004a                               store user2 region0 v20, v18
+;; @004a                               v15 = uextend.i64 v3
+;; @004a                               v17 = iadd.i64 v5, v15
+;; @004a                               v18 = iconst.i64 8
+;; @004a                               v19 = iadd v17, v18  ; v18 = 8
+;; @004a                               v20 = load.i64 user2 region0 v19
+;;                                     v55 = iconst.i64 1
+;; @004a                               v21 = iadd v20, v55  ; v55 = 1
+;; @004a                               store user2 region0 v21, v19
 ;; @004a                               jump block3
 ;;
 ;;                                 block3:
@@ -119,18 +119,18 @@
 ;;                                     v75 = band.i32 v9, v74  ; v74 = 1
 ;;                                     v76 = iconst.i32 0
 ;;                                     v77 = icmp.i32 eq v9, v76  ; v76 = 0
-;; @004a                               v28 = uextend.i32 v77
-;; @004a                               v29 = bor v75, v28
-;; @004a                               brif v29, block7, block4
+;; @004a                               v30 = uextend.i32 v77
+;; @004a                               v31 = bor v75, v30
+;; @004a                               brif v31, block7, block4
 ;;
 ;;                                 block4:
-;; @004a                               v30 = uextend.i64 v9
-;; @004a                               v32 = iadd.i64 v5, v30
+;; @004a                               v32 = uextend.i64 v9
+;; @004a                               v34 = iadd.i64 v5, v32
 ;;                                     v78 = iconst.i64 8
-;; @004a                               v34 = iadd v32, v78  ; v78 = 8
-;; @004a                               v35 = load.i64 user2 region0 v34
+;; @004a                               v36 = iadd v34, v78  ; v78 = 8
+;; @004a                               v37 = load.i64 user2 region0 v36
 ;;                                     v79 = iconst.i64 1
-;;                                     v71 = icmp eq v35, v79  ; v79 = 1
+;;                                     v71 = icmp eq v37, v79  ; v79 = 1
 ;; @004a                               brif v71, block5, block6
 ;;
 ;;                                 block5 cold:
@@ -138,10 +138,10 @@
 ;; @004a                               jump block7
 ;;
 ;;                                 block6:
-;;                                     v47 = iconst.i64 -1
-;; @004a                               v36 = iadd.i64 v35, v47  ; v47 = -1
-;;                                     v80 = iadd.i64 v32, v78  ; v78 = 8
-;; @004a                               store user2 region0 v36, v80
+;;                                     v49 = iconst.i64 -1
+;; @004a                               v38 = iadd.i64 v37, v49  ; v49 = -1
+;;                                     v80 = iadd.i64 v34, v78  ; v78 = 8
+;; @004a                               store user2 region0 v38, v80
 ;; @004a                               jump block7
 ;;
 ;;                                 block7:

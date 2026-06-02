@@ -36,7 +36,8 @@ block0:
 
 function %seq_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm eq v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp eq v0, v3
     return v2
 }
 
@@ -52,7 +53,8 @@ block0(v0: i64):
 
 function %sne_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ne v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp ne v0, v3
     return v2
 }
 
@@ -68,7 +70,8 @@ block0(v0: i64):
 
 function %slt_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm slt v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp slt v0, v3
     return v2
 }
 
@@ -84,7 +87,8 @@ block0(v0: i64):
 
 function %sgt_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sgt v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp sgt v0, v3
     return v2
 }
 
@@ -100,7 +104,8 @@ block0(v0: i64):
 
 function %ult_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ult v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp ult v0, v3
     return v2
 }
 
@@ -116,7 +121,8 @@ block0(v0: i64):
 
 function %ugt_const0(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ugt v0, 0
+    v3 = iconst.i64 0
+    v2 = icmp ugt v0, v3
     return v2
 }
 
@@ -132,7 +138,8 @@ block0(v0: i64):
 
 function %seq_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm eq v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp eq v0, v3
     return v2
 }
 
@@ -150,7 +157,8 @@ block0(v0: i64):
 
 function %sne_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ne v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp ne v0, v3
     return v2
 }
 
@@ -168,7 +176,8 @@ block0(v0: i64):
 
 function %slt_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm slt v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp slt v0, v3
     return v2
 }
 
@@ -184,7 +193,8 @@ block0(v0: i64):
 
 function %sgt_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sgt v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp sgt v0, v3
     return v2
 }
 
@@ -202,7 +212,8 @@ block0(v0: i64):
 
 function %ult_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ult v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp ult v0, v3
     return v2
 }
 
@@ -218,7 +229,8 @@ block0(v0: i64):
 
 function %ugt_const1(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ugt v0, 1
+    v3 = iconst.i64 1
+    v2 = icmp ugt v0, v3
     return v2
 }
 
@@ -236,7 +248,8 @@ block0(v0: i64):
 
 function %seq_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm eq v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp eq v0, v3
     return v2
 }
 
@@ -254,7 +267,8 @@ block0(v0: i64):
 
 function %sne_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ne v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp ne v0, v3
     return v2
 }
 
@@ -272,7 +286,8 @@ block0(v0: i64):
 
 function %slt_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm slt v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp slt v0, v3
     return v2
 }
 
@@ -288,7 +303,8 @@ block0(v0: i64):
 
 function %sgt_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sgt v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp sgt v0, v3
     return v2
 }
 
@@ -306,7 +322,8 @@ block0(v0: i64):
 
 function %ult_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ult v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp ult v0, v3
     return v2
 }
 
@@ -322,7 +339,8 @@ block0(v0: i64):
 
 function %ugt_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ugt v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp ugt v0, v3
     return v2
 }
 
@@ -340,7 +358,8 @@ block0(v0: i64):
 
 function %sle_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sle v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp sle v0, v3
     return v2
 }
 
@@ -360,7 +379,8 @@ block0(v0: i64):
 
 function %sle_const_2046(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sle v0, 2046
+    v3 = iconst.i64 2046
+    v2 = icmp sle v0, v3
     return v2
 }
 
@@ -380,7 +400,8 @@ block0(v0: i64):
 
 function %sle_const_2047(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sle v0, 2047
+    v3 = iconst.i64 2047
+    v2 = icmp sle v0, v3
     return v2
 }
 
@@ -400,7 +421,8 @@ block0(v0: i64):
 
 function %sge_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm sge v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp sge v0, v3
     return v2
 }
 
@@ -418,7 +440,8 @@ block0(v0: i64):
 
 function %ule_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm ule v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp ule v0, v3
     return v2
 }
 
@@ -438,7 +461,8 @@ block0(v0: i64):
 
 function %uge_const2(i64) -> i8 system_v {
 block0(v0: i64):
-    v2 = icmp_imm uge v0, 2
+    v3 = iconst.i64 2
+    v2 = icmp uge v0, v3
     return v2
 }
 

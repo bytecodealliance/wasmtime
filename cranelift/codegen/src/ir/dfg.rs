@@ -2,7 +2,6 @@
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
-use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
@@ -1012,11 +1011,6 @@ impl DataFlowGraph {
         result_tys.len()
     }
 
-    /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
-    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder<'_> {
-        ReplaceBuilder::new(self, inst)
-    }
-
     /// Clear the list of result values from `inst`.
     ///
     /// This leaves `inst` without any result values. New result values can be created by calling
@@ -1781,7 +1775,7 @@ mod tests {
         pos.func.stencil.dfg.results[iadd].remove(1, &mut pos.func.stencil.dfg.value_lists);
 
         // Replace `uadd_overflow` with a normal `iadd` and an `icmp`.
-        pos.func.dfg.replace(iadd).iadd(v1, arg0);
+        pos.func.replace(iadd).iadd(v1, arg0);
         let c2 = pos.ins().icmp(IntCC::Equal, s, v1);
         pos.func.dfg.change_to_alias(c, c2);
 

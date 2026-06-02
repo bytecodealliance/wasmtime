@@ -804,7 +804,7 @@ fn fixup_inst_that_returns(
                     .copied()
                     .map(|v| v.into()),
             );
-            func.dfg.replace(inlined_inst).jump(return_block, &rets);
+            func.replace(inlined_inst).jump(return_block, &rets);
         }
 
         //     return_call f(args...)
@@ -1253,7 +1253,7 @@ fn replace_call_with_jump(
     // other inlined blocks) so we can reference the arguments directly, and do
     // not need to add block parameters to the inlined entry block.
     let inlined_entry_block = entity_map.inlined_block(callee_entry_block);
-    func.dfg.replace(call_inst).jump(inlined_entry_block, &[]);
+    func.replace(call_inst).jump(inlined_entry_block, &[]);
     trace!(
         "  --> replaced with jump instruction: {call_inst:?}: {}",
         func.dfg.display_inst(call_inst)

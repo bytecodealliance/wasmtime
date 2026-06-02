@@ -75,6 +75,11 @@ pub(crate) struct InstructionContent {
     pub other_side_effects: bool,
     /// Despite having other side effects, is this instruction okay to GVN?
     pub side_effects_idempotent: bool,
+    /// Should the `InstBuilder` get an additional `{name}_imm` convenience
+    /// method for this instruction? The generated method takes its trailing
+    /// value operand as an `Into<Imm64>` immediate, materializes it with an
+    /// `iconst`, and then builds this instruction.
+    pub inst_builder_imm_method: bool,
 }
 
 impl InstructionContent {
@@ -136,6 +141,7 @@ pub(crate) struct InstructionBuilder {
     can_trap: bool,
     other_side_effects: bool,
     side_effects_idempotent: bool,
+    inst_builder_imm_method: bool,
 }
 
 impl InstructionBuilder {
@@ -156,6 +162,7 @@ impl InstructionBuilder {
             can_trap: false,
             other_side_effects: false,
             side_effects_idempotent: false,
+            inst_builder_imm_method: false,
         }
     }
 
@@ -227,6 +234,14 @@ impl InstructionBuilder {
         self
     }
 
+    /// Request that the `InstBuilder` get an additional `{name}_imm`
+    /// convenience method for this instruction. See
+    /// [`InstructionContent::inst_builder_imm_method`].
+    pub fn inst_builder_imm_method(mut self, enabled: bool) -> Self {
+        self.inst_builder_imm_method = enabled;
+        self
+    }
+
     fn build(self) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_default();
         let operands_out = self.operands_out.unwrap_or_default();
@@ -276,6 +291,7 @@ impl InstructionBuilder {
             can_trap: self.can_trap,
             other_side_effects: self.other_side_effects,
             side_effects_idempotent: self.side_effects_idempotent,
+            inst_builder_imm_method: self.inst_builder_imm_method,
         })
     }
 }

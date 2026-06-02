@@ -107,23 +107,23 @@
 ;; @001f                               trapnz v71, user2
 ;; @001f                               v44 = iconst.i64 0
 ;; @001f                               v73 = call fn1(v0, v44), stack_map=[i32 @ ss0+0]  ; v44 = 0
-;; @001f                               v76 = icmp.i64 eq v5, v44  ; v44 = 0
+;; @001f                               v77 = icmp.i64 eq v5, v44  ; v44 = 0
 ;; @001f                               v74 = ireduce.i32 v73
 ;;                                     v109 = iconst.i64 4
 ;; @001f                               v75 = iadd v61, v111
-;; @001f                               brif v76, block6, block5(v61)
+;; @001f                               brif v77, block6, block5(v61)
 ;;
-;;                                 block5(v77: i64):
-;; @001f                               store.i32 notrap aligned little v74, v77
+;;                                 block5(v78: i64):
+;; @001f                               store.i32 notrap aligned little v74, v78
 ;;                                     v156 = iconst.i64 4
-;;                                     v157 = iadd v77, v156  ; v156 = 4
-;; @001f                               v79 = icmp eq v157, v75
-;; @001f                               brif v79, block6, block5(v157)
+;;                                     v157 = iadd v78, v156  ; v156 = 4
+;; @001f                               v80 = icmp eq v157, v75
+;; @001f                               brif v80, block6, block5(v157)
 ;;
 ;;                                 block6:
-;;                                     v80 = load.i32 notrap v103
+;;                                     v81 = load.i32 notrap v103
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               return v80
+;; @0022                               return v81
 ;; }

@@ -2858,18 +2858,6 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
-            InstructionFormat::IntCompareImm => {
-                let cond = self.match_enum("expected intcc condition code")?;
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_imm64("expected immediate second operand")?;
-                InstructionData::IntCompareImm {
-                    opcode,
-                    cond,
-                    arg: lhs,
-                    imm: rhs,
-                }
-            }
             InstructionFormat::FloatCompare => {
                 let cond = self.match_enum("expected floatcc condition code")?;
                 let lhs = self.match_value("expected SSA value first operand")?;

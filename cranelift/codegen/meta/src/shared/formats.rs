@@ -18,7 +18,6 @@ pub(crate) struct Formats {
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
-    pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_add_trap: Rc<InstructionFormat>,
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
@@ -104,12 +103,6 @@ impl Formats {
                 .imm(&imm.intcc)
                 .value()
                 .value()
-                .build(),
-
-            int_compare_imm: Builder::new("IntCompareImm")
-                .imm(&imm.intcc)
-                .value()
-                .imm(&imm.imm64)
                 .build(),
 
             float_compare: Builder::new("FloatCompare")

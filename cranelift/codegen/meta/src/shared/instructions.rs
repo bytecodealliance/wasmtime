@@ -1766,29 +1766,8 @@ pub(crate) fn define(
             Operand::new("x", Int),
             Operand::new("y", Int),
         ])
-        .operands_out(vec![Operand::new("a", &Int.as_truthy())]),
-    );
-
-    ig.push(
-        Inst::new(
-            "icmp_imm",
-            r#"
-        Compare scalar integer to a constant.
-
-        This is the same as the `icmp` instruction, except one operand is
-        a sign extended 64 bit immediate constant.
-
-        This instruction can only compare scalars. Use `icmp` for
-        lane-wise vector comparisons.
-        "#,
-            &formats.int_compare_imm,
-        )
-        .operands_in(vec![
-            Operand::new("Cond", &imm.intcc),
-            Operand::new("x", iB),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", i8)]),
+        .operands_out(vec![Operand::new("a", &Int.as_truthy())])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(

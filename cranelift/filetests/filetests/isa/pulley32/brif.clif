@@ -267,7 +267,8 @@ block2:
 
 function %brif_icmp_i32_imm(i32) -> i8 {
 block0(v0: i32):
-  v2 = icmp_imm slt v0, 10
+  v5 = iconst.i32 10
+  v2 = icmp slt v0, v5
   brif v2, block1, block2
 
 block1:
@@ -298,7 +299,8 @@ block2:
 
 function %brif_icmp_i32_imm_big(i32) -> i8 {
 block0(v0: i32):
-  v2 = icmp_imm slt v0, 88888
+  v5 = iconst.i32 88888
+  v2 = icmp slt v0, v5
   brif v2, block1, block2
 
 block1:
@@ -329,7 +331,8 @@ block2:
 
 function %brif_icmp_i64_imm(i64) -> i8 {
 block0(v0: i64):
-  v2 = icmp_imm slt v0, 10
+  v5 = iconst.i64 10
+  v2 = icmp slt v0, v5
   brif v2, block1, block2
 
 block1:
@@ -360,7 +363,8 @@ block2:
 
 function %brif_icmp_i64_imm_big(i64) -> i8 {
 block0(v0: i64):
-  v2 = icmp_imm slt v0, 88888
+  v5 = iconst.i64 88888
+  v2 = icmp slt v0, v5
   brif v2, block1, block2
 
 block1:
