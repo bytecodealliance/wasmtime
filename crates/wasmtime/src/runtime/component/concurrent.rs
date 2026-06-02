@@ -50,12 +50,14 @@
 //! store.  This is equivalent to `StoreContextMut::spawn` but more convenient to use
 //! in host functions.
 
+use self::error_contexts::GlobalErrorContextRefCount;
 use crate::bail_bug;
 use crate::component::func::{self, Func, call_post_return};
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
@@ -63,25 +65,22 @@ use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
-use error_contexts::GlobalErrorContextRefCount;
+use alloc::borrow::ToOwned;
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use core::any::Any;
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::mem::{self, ManuallyDrop, MaybeUninit};
+use core::ops::DerefMut;
+use core::pin::{Pin, pin};
+use core::ptr::{self, NonNull};
+use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
 use futures::future::{self, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
-use std::any::Any;
-use std::borrow::ToOwned;
-use std::boxed::Box;
-use std::cell::UnsafeCell;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
-use std::fmt;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::mem::{self, ManuallyDrop, MaybeUninit};
-use std::ops::DerefMut;
-use std::pin::{Pin, pin};
-use std::ptr::{self, NonNull};
-use std::task::{Context, Poll, Waker};
-use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -293,7 +292,7 @@ where
 /// time so the store is effectively being passed between futures.
 ///
 /// Rust's `Future` trait, however, has no means of passing a `Store`
-/// temporarily between futures. The [`Context`](std::task::Context) type does
+/// temporarily between futures. The [`Context`](core::task::Context) type does
 /// not have the ability to attach arbitrary information to it at this time.
 /// This type, [`Accessor`], is used to bridge this expressivity gap.
 ///
@@ -576,7 +575,7 @@ where
 
 /// Represents a task which may be provided to `Accessor::spawn`,
 /// `Accessor::forward`, or `StorecContextMut::spawn`.
-// TODO: Replace this with `std::ops::AsyncFnOnce` when that becomes a viable
+// TODO: Replace this with `core::ops::AsyncFnOnce` when that becomes a viable
 // option.
 //
 // As of this writing, it's not possible to specify e.g. `Send` and `Sync`
@@ -4079,7 +4078,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         // SAFETY: The `wasmtime_cranelift`-generated code that calls
         // this method will have ensured that `storage` is a valid
         // pointer containing at least `storage_len` items.
-        let params = unsafe { std::slice::from_raw_parts(storage, storage_len) }.to_vec();
+        let params = unsafe { core::slice::from_raw_parts(storage, storage_len) }.to_vec();
 
         unsafe {
             instance.prepare_call(
@@ -4132,7 +4131,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                     // SAFETY: The `wasmtime_cranelift`-generated code that calls
                     // this method will have ensured that `storage` is a valid
                     // pointer containing at least `storage_len` items.
-                    Some(std::slice::from_raw_parts_mut(storage, storage_len)),
+                    Some(core::slice::from_raw_parts_mut(storage, storage_len)),
                 )
                 .map(drop)
         }
@@ -5605,7 +5604,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
                 Ok(r) => Ok(*r),
                 Err(_) => bail_bug!("wrong type of value produced"),
             },
-            Err(e) => Err(e.into()),
+            Err(oneshot::Canceled) => bail_bug!("channel erroneously dropped"),
         }),
     ))
 }

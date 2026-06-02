@@ -1,8 +1,8 @@
 use crate::component::Resource;
-use std::cmp::Ordering;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
+use core::cmp::Ordering;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
 
 /// Represents a `ResourceTable` entry for a `waitable` or `waitable-set`.
 ///
