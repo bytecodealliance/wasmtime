@@ -221,39 +221,31 @@ impl<'cache> ModuleCacheEntry<'cache> {
 
 impl<'cache> ModuleCacheEntryInner<'cache> {
     fn new(compiler_name: &str, cache: &'cache Cache) -> Self {
-        // If debug assertions are enabled then assume that we're some sort of
-        // local build. We don't want local builds to stomp over caches between
-        // builds, so just use a separate cache directory based on the mtime of
-        // our executable, which should roughly correlate with "you changed the
-        // source code so you get a different directory".
-        //
-        // Otherwise if this is a release build we use the `GIT_REV` env var
-        // which is either the git rev if installed from git or the crate
-        // version if installed from crates.io.
-        let compiler_dir = if cfg!(debug_assertions) {
-            fn self_mtime() -> Option<String> {
-                let path = std::env::current_exe().ok()?;
-                let metadata = path.metadata().ok()?;
-                let mtime = metadata.modified().ok()?;
-                Some(match mtime.duration_since(std::time::UNIX_EPOCH) {
-                    Ok(dur) => format!("{}", dur.as_millis()),
-                    Err(err) => format!("m{}", err.duration().as_millis()),
-                })
+        // For git builds (see `build.rs`), include the executable's mtime so
+        // successive local rebuilds don't share cached compilations from prior
+        // source states. crates.io builds rely on `COMPILER_VERSION` alone,
+        // which is stable across rebuilds.
+        let maybe_mtime = {
+            if env!("USE_MTIME") == "true" {
+                fn self_mtime() -> Option<String> {
+                    let path = std::env::current_exe().ok()?;
+                    let metadata = path.metadata().ok()?;
+                    let mtime = metadata.modified().ok()?;
+                    Some(match mtime.duration_since(std::time::UNIX_EPOCH) {
+                        Ok(dur) => format!("-{}", dur.as_millis()),
+                        Err(err) => format!("-m{}", err.duration().as_millis()),
+                    })
+                }
+                self_mtime().unwrap_or_else(|| "-no-mtime".to_string())
+            } else {
+                String::new()
             }
-            let self_mtime = self_mtime().unwrap_or("no-mtime".to_string());
-            format!(
-                "{comp_name}-{comp_ver}-{comp_mtime}",
-                comp_name = compiler_name,
-                comp_ver = env!("GIT_REV"),
-                comp_mtime = self_mtime,
-            )
-        } else {
-            format!(
-                "{comp_name}-{comp_ver}",
-                comp_name = compiler_name,
-                comp_ver = env!("GIT_REV"),
-            )
         };
+        let compiler_dir = format!(
+            "{comp_name}-{comp_ver}{maybe_mtime}",
+            comp_name = compiler_name,
+            comp_ver = env!("COMPILER_VERSION"),
+        );
         let root_path = cache.directory().join("modules").join(compiler_dir);
 
         Self { root_path, cache }
