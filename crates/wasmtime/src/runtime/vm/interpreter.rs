@@ -483,7 +483,7 @@ impl InterpreterRef<'_> {
                         }
 
                         // Not possible with our closure above returning `false`.
-                        #[cfg(has_host_compiler_backend)]
+                        #[cfg(has_native_signals)]
                         TrapTest::HandledByEmbedder => unreachable!(),
 
                         // Trap was handled, yay! Configure interpreter state

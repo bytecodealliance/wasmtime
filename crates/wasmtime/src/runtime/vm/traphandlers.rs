@@ -56,8 +56,7 @@ pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
     /// This trap was handled by the embedder via custom embedding APIs.
-    #[cfg(has_host_compiler_backend)]
-    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    #[cfg(all(has_native_signals, not(miri)))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
     Trap(Handler),
