@@ -24,7 +24,8 @@ fn main() {
 
     let has_native_signals = !miri
         && (supported_os || cfg!(feature = "custom-native-signals"))
-        && has_host_compiler_backend;
+        && has_host_compiler_backend
+        && !is_buggy_s390x_qemu_emulation();
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
     let has_custom_sync = !cfg!(feature = "std")
         && cfg!(feature = "custom-sync-primitives")
@@ -57,6 +58,21 @@ fn main() {
     if default_target_pulley {
         println!("cargo:rustc-cfg=feature=\"pulley\"");
     }
+}
+
+// Attempts to detect if we're running in Wasmtime's CI, testing s390x, and
+// testing s390x under QEMU. In this situation we're experiencing flaky
+// failures, more info in #10000, and current LLM-based analysis seems to point
+// to the signal handler state being corrupted in emulation. We're seeing
+// many spurious failures per week so this is a bit of a last-ditch attempt to
+// work around the issue. In this situation we pretend that native signals are
+// not available for s390x which forces disabling signals-based-traps which in
+// theory means we don't rely on signal handlers...
+fn is_buggy_s390x_qemu_emulation() -> bool {
+    std::env::var("CI").is_ok()
+        && std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
+        && std::env::var("QEMU_BUILD_VERSION").is_ok()
+        && std::env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
 }
 
 fn cfg(key: &str) -> bool {
