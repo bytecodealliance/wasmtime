@@ -204,9 +204,7 @@ fn expand_binary_imm64(
     pos.goto_inst(inst);
 
     let is_signed = match opcode {
-        ir::Opcode::IrsubImm | ir::Opcode::ImulImm | ir::Opcode::SdivImm | ir::Opcode::SremImm => {
-            true
-        }
+        ir::Opcode::IrsubImm | ir::Opcode::SdivImm | ir::Opcode::SremImm => true,
         _ => false,
     };
 
@@ -244,9 +242,6 @@ fn expand_binary_imm64(
         ir::Opcode::IrsubImm => {
             // note: arg order reversed
             replace.isub(imm, arg);
-        }
-        ir::Opcode::ImulImm => {
-            replace.imul(arg, imm);
         }
         ir::Opcode::SdivImm => {
             replace.sdiv(arg, imm);

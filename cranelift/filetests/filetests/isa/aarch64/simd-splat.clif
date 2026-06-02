@@ -103,7 +103,8 @@ block0(v0: i64, v1: i64):
 
 function %splat_load6(i64, i64) -> i64x2 {
 block0(v0: i64, v1: i64):
-    v2 = imul_imm v1, 2
+    v6 = iconst.i64 2
+    v2 = imul v1, v6
     v3 = iadd v0, v2
     v4 = load.i64 v3+100
     v5 = splat.i64x2 v4

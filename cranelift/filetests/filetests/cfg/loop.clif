@@ -30,7 +30,8 @@ block3:
     jump block1(v4)           ; unordered: block3:$JUMP3 -> block1
 
 block1(v5: i32):
-    v6 = imul_imm v5, 4
+    v102 = iconst.i32 4
+    v6 = imul v5, v102
     v7 = iadd v1, v6
     v8 = f32const 0.0
     v9 = f32const 0.0

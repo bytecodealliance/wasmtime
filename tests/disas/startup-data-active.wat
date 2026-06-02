@@ -51,10 +51,10 @@
 ;;     v8 = load.i32 notrap aligned v0+120
 ;;     v11 = load.i64 notrap aligned v0+64
 ;;     v13 = uextend.i64 v8
-;;     v16 = icmp ugt v13, v11
-;;     trapnz v16, heap_oob
-;;     v17 = load.i64 notrap aligned readonly can_move v0+56
-;;     call fn0(v0, v17, v3, v13)
+;;     v17 = icmp ugt v13, v11
+;;     trapnz v17, heap_oob
+;;     v18 = load.i64 notrap aligned readonly can_move v0+56
+;;     call fn0(v0, v18, v3, v13)
 ;;     jump block2
 ;;
 ;; block2:

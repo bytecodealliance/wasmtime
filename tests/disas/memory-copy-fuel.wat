@@ -38,65 +38,65 @@
 ;; @001e                               v15 = load.i64 notrap aligned v5
 ;; @001e                               jump block3(v15)
 ;;
-;;                                 block3(v43: i64):
+;;                                 block3(v47: i64):
 ;; @0025                               v20 = load.i64 notrap aligned v0+64
 ;; @0025                               v21 = uextend.i64 v2
 ;; @0025                               v22 = uextend.i64 v4
-;; @0025                               v24 = iadd v21, v22
-;; @0025                               v25 = icmp ugt v24, v20
-;; @0025                               trapnz v25, heap_oob
-;; @0025                               v32 = uextend.i64 v3
-;; @0025                               v35 = iadd v32, v22
-;; @0025                               v36 = icmp ugt v35, v20
-;; @0025                               trapnz v36, heap_oob
-;; @0025                               v46 = iconst.i64 0x0800_0000
-;; @0025                               v47 = icmp ugt v22, v46  ; v46 = 0x0800_0000
-;; @0025                               v26 = load.i64 notrap aligned readonly can_move v0+56
-;; @0025                               v29 = iadd v26, v21
-;; @0025                               v40 = iadd v26, v32
-;; @0025                               v44 = iconst.i64 4
-;; @0025                               v45 = iadd v43, v44  ; v44 = 4
-;; @0025                               brif v47, block4(v29, v40, v22, v45), block5(v29, v40, v22, v45)
+;; @0025                               v25 = iadd v21, v22
+;; @0025                               v26 = icmp ugt v25, v20
+;; @0025                               trapnz v26, heap_oob
+;; @0025                               v34 = uextend.i64 v3
+;; @0025                               v38 = iadd v34, v22
+;; @0025                               v39 = icmp ugt v38, v20
+;; @0025                               trapnz v39, heap_oob
+;; @0025                               v50 = iconst.i64 0x0800_0000
+;; @0025                               v51 = icmp ugt v22, v50  ; v50 = 0x0800_0000
+;; @0025                               v27 = load.i64 notrap aligned readonly can_move v0+56
+;; @0025                               v31 = iadd v27, v21
+;; @0025                               v44 = iadd v27, v34
+;; @0025                               v48 = iconst.i64 4
+;; @0025                               v49 = iadd v47, v48  ; v48 = 4
+;; @0025                               brif v51, block4(v31, v44, v22, v49), block5(v31, v44, v22, v49)
 ;;
-;;                                 block4(v48: i64, v49: i64, v50: i64, v51: i64):
+;;                                 block4(v52: i64, v53: i64, v54: i64, v55: i64):
 ;;                                     v97 = iconst.i64 0x0800_0000
-;;                                     v98 = iadd v51, v97  ; v97 = 0x0800_0000
+;;                                     v98 = iadd v55, v97  ; v97 = 0x0800_0000
 ;;                                     v99 = iconst.i64 0
 ;;                                     v100 = icmp sge v98, v99  ; v99 = 0
 ;; @0025                               brif v100, block6, block7(v98)
 ;;
-;;                                 block5(v64: i64, v65: i64, v66: i64, v67: i64):
-;; @0025                               v68 = iadd v67, v66
+;;                                 block5(v68: i64, v69: i64, v70: i64, v71: i64):
+;; @0025                               v72 = iadd v71, v70
 ;;                                     v106 = iconst.i64 0
-;;                                     v107 = icmp sge v68, v106  ; v106 = 0
-;; @0025                               brif v107, block8, block9(v68)
+;;                                     v107 = icmp sge v72, v106  ; v106 = 0
+;; @0025                               brif v107, block8, block9(v72)
 ;;
 ;;                                 block6:
 ;; @0025                               store.i64 notrap aligned v98, v5
-;; @0025                               v57 = call fn0(v0)
-;; @0025                               v59 = load.i64 notrap aligned v5
-;; @0025                               jump block7(v59)
+;; @0025                               v61 = call fn0(v0)
+;; @0025                               v63 = load.i64 notrap aligned v5
+;; @0025                               jump block7(v63)
 ;;
-;;                                 block7(v76: i64):
+;;                                 block7(v80: i64):
 ;;                                     v101 = iconst.i64 0x0800_0000
-;; @0025                               call fn1(v0, v48, v49, v101)  ; v101 = 0x0800_0000
-;;                                     v102 = isub.i64 v50, v101  ; v101 = 0x0800_0000
+;; @0025                               call fn1(v0, v52, v53, v101)  ; v101 = 0x0800_0000
+;;                                     v102 = isub.i64 v54, v101  ; v101 = 0x0800_0000
 ;;                                     v103 = icmp ugt v102, v101  ; v101 = 0x0800_0000
-;;                                     v104 = iadd.i64 v48, v101  ; v101 = 0x0800_0000
-;;                                     v105 = iadd.i64 v49, v101  ; v101 = 0x0800_0000
-;; @0025                               brif v103, block4(v104, v105, v102, v76), block5(v104, v105, v102, v76)
+;;                                     v104 = iadd.i64 v52, v101  ; v101 = 0x0800_0000
+;;                                     v105 = iadd.i64 v53, v101  ; v101 = 0x0800_0000
+;; @0025                               brif v103, block4(v104, v105, v102, v80), block5(v104, v105, v102, v80)
 ;;
 ;;                                 block8:
-;; @0025                               store.i64 notrap aligned v68, v5
-;; @0025                               v73 = call fn0(v0)
-;; @0025                               v75 = load.i64 notrap aligned v5
-;; @0025                               jump block9(v75)
+;; @0025                               store.i64 notrap aligned v72, v5
+;; @0025                               v77 = call fn0(v0)
+;; @0025                               v79 = load.i64 notrap aligned v5
+;; @0025                               jump block9(v79)
 ;;
-;;                                 block9(v78: i64):
-;; @0025                               call fn1(v0, v64, v65, v66)
+;;                                 block9(v82: i64):
+;; @0025                               call fn1(v0, v68, v69, v70)
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               store.i64 notrap aligned v78, v5
+;; @0029                               store.i64 notrap aligned v82, v5
 ;; @0029                               return
 ;; }
