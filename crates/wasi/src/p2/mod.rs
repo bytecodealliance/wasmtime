@@ -337,7 +337,6 @@ fn add_nonblocking_to_linker<'a, T: WasiView, O>(
 ) -> wasmtime::Result<()>
 where
     bindings::sockets::network::LinkOptions: From<&'a O>,
-    bindings::cli::exit::LinkOptions: From<&'a O>,
 {
     use crate::p2::bindings::{cli, clocks, filesystem, random, sockets};
 
@@ -348,7 +347,7 @@ where
     random::random::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
     random::insecure_seed::add_to_linker::<T, WasiRandom>(l, |t| &mut t.ctx().ctx.random)?;
-    cli::exit::add_to_linker::<T, WasiCli>(l, &options.into(), T::cli)?;
+    cli::exit::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::environment::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::stdin::add_to_linker::<T, WasiCli>(l, T::cli)?;
     cli::stdout::add_to_linker::<T, WasiCli>(l, T::cli)?;
