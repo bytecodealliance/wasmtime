@@ -79,3 +79,21 @@ impl<T> Drop for TryMutexGuard<'_, T> {
         self.mutex.state.store(UNLOCKED, Ordering::Release);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_mutex() {
+        let mutex = TryMutex::new(42);
+
+        let mut guard = mutex.try_lock().expect("should acquire lock");
+        assert_eq!(*guard, 42);
+        assert!(mutex.try_lock().is_none());
+        *guard = 43;
+        drop(guard);
+        let guard2 = mutex.try_lock().expect("should acquire lock again");
+        assert_eq!(*guard2, 43);
+    }
+}
