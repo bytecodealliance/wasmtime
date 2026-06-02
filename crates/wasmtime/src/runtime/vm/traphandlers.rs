@@ -1,6 +1,11 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
+#![cfg_attr(
+    all(not(has_native_signals), not(feature = "pulley")),
+    expect(unused, reason = "easier to not #[cfg] methods and all related types")
+)]
+
 mod backtrace;
 
 #[cfg(feature = "coredump")]
