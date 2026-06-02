@@ -1303,7 +1303,14 @@ fn div_plus_load_reported_right() -> Result<()> {
 
 #[test]
 fn wasm_fault_address_reported_by_default() -> Result<()> {
-    let engine = Engine::default();
+    let mut config = Config::new();
+    config.signals_based_traps(true);
+    // This test requires a host that supports signals-based-traps to report the
+    // faulting address. If that configuration isn't supported by this host then
+    // skip the test.
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
     let mut store = Store::new(&engine, ());
     let module = Module::new(
         &engine,
@@ -1329,15 +1336,12 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
     // It looks like the exact reported fault address may not be deterministic,
     // so assert that we have the right error message, but not the exact
     // address.
-    //
-    // Skip 32-bit platforms here which currently all use Pulley and don't use
-    // virtual memory for catching traps. This means that the trap error isn't
-    // available.
     let err = format!("{err:?}");
-    let contains_address = err.contains("memory fault at wasm address ")
-        && err.contains(" in linear memory of size 0x10000");
-    let address_expected = cfg!(target_pointer_width = "64");
-    assert_eq!(contains_address, address_expected, "bad error: {err}");
+    assert!(
+        err.contains("memory fault at wasm address ")
+            && err.contains(" in linear memory of size 0x10000"),
+        "bad error: {err}"
+    );
     Ok(())
 }
 

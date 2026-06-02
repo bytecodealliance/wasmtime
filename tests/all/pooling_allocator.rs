@@ -713,7 +713,13 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
             ) else {
                 // Ignore invalid configurations on 32-bit which can't run with
                 // signals-based-traps.
-                assert!(cfg!(target_pointer_width = "32") && signals_based_traps);
+                //
+                // Note that s390x in CI also skip this because it's not using
+                // signals-based-traps.
+                assert!(
+                    cfg!(target_arch = "s390x")
+                        || (cfg!(target_pointer_width = "32") && signals_based_traps)
+                );
                 continue;
             };
 
