@@ -1,6 +1,6 @@
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 use bytes::{Bytes, BytesMut};
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 use std::io::Cursor;
 use std::mem::{self, MaybeUninit};
 use std::slice;
@@ -376,7 +376,7 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Vec<T> {
 
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 unsafe impl WriteBuffer<u8> for Cursor<Bytes> {
     fn remaining(&self) -> &[u8] {
         &self.get_ref()[usize::try_from(self.position()).unwrap()..]
@@ -404,7 +404,7 @@ unsafe impl WriteBuffer<u8> for Cursor<Bytes> {
 
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 unsafe impl WriteBuffer<u8> for Cursor<BytesMut> {
     fn remaining(&self) -> &[u8] {
         &self.get_ref()[usize::try_from(self.position()).unwrap()..]
@@ -426,7 +426,7 @@ unsafe impl WriteBuffer<u8> for Cursor<BytesMut> {
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 impl ReadBuffer<u8> for BytesMut {
     fn extend<I: IntoIterator<Item = u8>>(&mut self, iter: I) {
         Extend::extend(self, iter)
@@ -448,7 +448,7 @@ impl ReadBuffer<u8> for BytesMut {
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
     // SAFETY: it's always safe to interpret a slice of items as a
     // possibly-initialized slice of items.
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "component-model-async-bytes")]
+    #[cfg(feature = "component-model-bytes")]
     fn test_cursor_bytes_take() {
         let mut buf = Cursor::new(Bytes::from(&b"123"[..]));
         let mut dst = Vec::new();
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "component-model-async-bytes")]
+    #[cfg(feature = "component-model-bytes")]
     fn test_cursor_bytes_mut_take() {
         let mut buf = Cursor::new(BytesMut::from(&b"123"[..]));
         let mut dst = Vec::new();

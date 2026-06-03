@@ -96,8 +96,6 @@ futures = { workspace = true, optional = true }
 rustix = { workspace = true, features = ["mm", "process"] }
 
 [dev-dependencies]
-# depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = ['default', 'anyhow', 'winch', 'pulley', 'all-arch', 'call-hook', 'memory-protection-keys', 'component-model-async', 'component-model-async-bytes', 'gc-copying'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
@@ -140,6 +138,22 @@ rand = { workspace = true }
 # `wasmtime::Error` integration and conversion. Otherwise, always prefer to use
 # `wasmtime::Error`.
 anyhow-for-testing = { workspace = true }
+
+# depend again on wasmtime to activate its default features for tests
+[dev-dependencies.wasmtime]
+workspace = true
+features = [
+  'default',
+  'anyhow',
+  'winch',
+  'pulley',
+  'all-arch',
+  'call-hook',
+  'memory-protection-keys',
+  'component-model-async',
+  'component-model-bytes',
+  'gc-copying'
+]
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }

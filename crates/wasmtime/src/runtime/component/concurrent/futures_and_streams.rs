@@ -824,7 +824,7 @@ where
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 impl<D> StreamProducer<D> for bytes::Bytes {
     type Item = u8;
     type Buffer = Cursor<Self>;
@@ -841,7 +841,7 @@ impl<D> StreamProducer<D> for bytes::Bytes {
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 impl<D> StreamProducer<D> for bytes::BytesMut {
     type Item = u8;
     type Buffer = Cursor<Self>;
