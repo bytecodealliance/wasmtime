@@ -22,7 +22,7 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w9, w4
-;;       orr     x10, xzr, #0xfffffffc
+;;       mov     x10, #0xfffffffc
 ;;       mov     x11, #0
 ;;       ldr     x12, [x2, #0x38]
 ;;       add     x12, x12, w4, uxtw
@@ -36,7 +36,7 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       mov     w9, w4
-;;       orr     x10, xzr, #0xfffffffc
+;;       mov     x10, #0xfffffffc
 ;;       mov     x11, #0
 ;;       ldr     x12, [x2, #0x38]
 ;;       add     x12, x12, w4, uxtw

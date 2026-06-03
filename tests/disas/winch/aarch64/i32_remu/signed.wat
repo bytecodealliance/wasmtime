@@ -26,8 +26,8 @@
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
-;;       orr     x0, xzr, #0xffffffff
-;;       orr     x1, xzr, #0xffffffff
+;;       mov     x0, #0xffffffff
+;;       mov     x1, #0xffffffff
 ;;       cbz     w0, #0x74
 ;;   4c: udiv    w16, w1, w0
 ;;       msub    w1, w0, w16, w1
@@ -38,5 +38,5 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   70: .byte   0x1f, 0xc1, 0x00, 0x00
-;;   74: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   70: udf     #0xc11f
+;;   74: udf     #0xc11f

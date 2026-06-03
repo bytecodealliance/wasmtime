@@ -30,8 +30,8 @@ block0(v0: i8, v1: i8):
 ;   b.vs #0x28
 ;   sdiv w0, w3, w5
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 
 function %div16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -62,8 +62,8 @@ block0(v0: i16, v1: i16):
 ;   b.vs #0x28
 ;   sdiv w0, w3, w5
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 
 function %div32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -88,8 +88,8 @@ block0(v0: i32, v1: i32):
 ;   b.vs #0x1c
 ;   sdiv w0, w0, w1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 
 function %div64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -114,6 +114,6 @@ block0(v0: i64, v1: i64):
 ;   b.vs #0x1c
 ;   sdiv x0, x0, x1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 

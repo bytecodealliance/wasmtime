@@ -2571,11 +2571,23 @@ criteria = "safe-to-deploy"
 delta = "0.12.0 -> 0.13.0"
 notes = "No new major features added here, mostly new architectures from a capstone update. No fundamental new `unsafe` code or anything suspicious"
 
+[[audits.capstone]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.13.0 -> 0.14.0"
+notes = "More features, more architectures, minor Rust idiom changes, nothing major."
+
 [[audits.capstone-sys]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.16.0 -> 0.17.0"
 notes = "Updates to the build process of capstone and adding some new architectures. Nothing major."
+
+[[audits.capstone-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.17.0 -> 0.18.0"
+notes = "Huge number of changes, but verified to be an expected update to the capstone library."
 
 [[audits.cargo-platform]]
 who = "Pat Hickey <phickey@fastly.com>"

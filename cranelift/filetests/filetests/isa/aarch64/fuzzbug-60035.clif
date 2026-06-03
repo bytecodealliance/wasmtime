@@ -32,8 +32,8 @@ block0:
 ; block1: ; offset 0xc
 ;   ldr x19, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 u1:7 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 u1:7 0
+;   udf #0
 ;   blr x19
 ;   blr x19
 ;   ldr x19, [sp], #0x10

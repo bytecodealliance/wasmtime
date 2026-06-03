@@ -76,7 +76,7 @@
 ;;       b.hi    #0x168
 ;;   d8: ldur    x5, [x9, #0x38]
 ;;       add     x5, x5, w2, uxtw
-;;       orr     x16, xzr, #0xfffff
+;;       mov     x16, #0xfffff
 ;;       add     x5, x5, x16, uxtx
 ;;       mov     x6, #0
 ;;       cmp     x4, x3, uxtx
@@ -104,10 +104,10 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  150: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  154: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  158: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  15c: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  160: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  164: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  168: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  150: udf     #0xc11f
+;;  154: udf     #0xc11f
+;;  158: udf     #0xc11f
+;;  15c: udf     #0xc11f
+;;  160: udf     #0xc11f
+;;  164: udf     #0xc11f
+;;  168: udf     #0xc11f

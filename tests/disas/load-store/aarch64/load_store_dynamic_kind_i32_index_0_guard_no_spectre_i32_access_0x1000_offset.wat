@@ -32,7 +32,7 @@
 ;;       str     w5, [x11, w4, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   34: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   34: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -48,4 +48,4 @@
 ;;       ldr     w2, [x10, w4, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   74: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   74: udf     #0xc11f

@@ -188,8 +188,8 @@ block0:
 ;   stur x26, [sp, #0x98]
 ;   ldr x0, #0xe0
 ;   b #0xe8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   udf #0
 ;   blr x0
 ;   sub sp, sp, #0xa0
 ;   add sp, sp, #0xa0
@@ -414,8 +414,8 @@ block0:
 ;   mov x8, sp
 ;   ldr x0, #0x2c
 ;   b #0x34
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %tail_callee_stack_rets 0
+;   udf #0
 ;   blr x0
 ;   ldur x9, [sp]
 ;   stur x9, [sp, #0xa0]
@@ -753,8 +753,8 @@ block0:
 ;   add x8, sp, #0xa0
 ;   ldr x11, #0xe4
 ;   b #0xec
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
+;   udf #0
 ;   blr x11
 ;   sub sp, sp, #0xa0
 ;   ldur x9, [sp, #0xa0]

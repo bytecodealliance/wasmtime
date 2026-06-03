@@ -68,7 +68,7 @@
 ;;       mov     sp, x28
 ;;       b       #0xe0
 ;;   d4: sub     sp, x28, #4
-;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;       udf     #0xc11f
 ;;       mov     sp, x28
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -76,4 +76,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   f8: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   f8: udf     #0xc11f

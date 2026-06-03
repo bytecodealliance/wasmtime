@@ -180,8 +180,8 @@ block0(v0: i64):
 ; block1: ; offset 0xac
 ;   ldr x2, #0xb4
 ;   b #0xbc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %libcall 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %libcall 0
+;   udf #0
 ;   blr x2
 ;   ldr q0, [sp], #0x10
 ;   ldr q1, [sp], #0x10

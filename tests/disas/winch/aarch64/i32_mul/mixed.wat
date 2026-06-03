@@ -25,7 +25,7 @@
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
-;;       orr     x0, xzr, #0xffffffff
+;;       mov     x0, #0xffffffff
 ;;       mov     x16, #1
 ;;       mul     w0, w0, w16
 ;;       add     x28, x28, #0x10
@@ -34,4 +34,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   64: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   64: udf     #0xc11f
