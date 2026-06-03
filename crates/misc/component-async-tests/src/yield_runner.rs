@@ -58,8 +58,8 @@ impl bindings::local::local::ready::HostThing for Ctx {
     }
 }
 
-impl bindings::local::local::ready::HostThingWithStore for Ctx {
-    async fn when_ready<T>(
+impl<T> bindings::local::local::ready::HostThingWithStore<T> for Ctx {
+    async fn when_ready(
         accessor: &Accessor<T, Self>,
         thing: Resource<Thing>,
     ) -> wasmtime::Result<()> {

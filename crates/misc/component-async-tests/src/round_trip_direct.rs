@@ -9,8 +9,8 @@ pub mod bindings {
     });
 }
 
-impl bindings::RoundTripDirectImportsWithStore for Ctx {
-    async fn foo<T>(_: &Accessor<T, Self>, s: String) -> String {
+impl<T> bindings::RoundTripDirectImportsWithStore<T> for Ctx {
+    async fn foo(_: &Accessor<T, Self>, s: String) -> String {
         yield_times(5).await;
         format!("{s} - entered host - exited host")
     }
