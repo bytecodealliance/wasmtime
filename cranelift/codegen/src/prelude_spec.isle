@@ -1,0 +1,85 @@
+;;;; Common spec macros ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Generic helpers
+
+; unspecified value.
+(macro (unspecified) (with (x) x))
+
+;; Boolean helpers
+
+; Exclusive or
+(macro (xor a b) (and (or a b) (not (and a b))))
+
+;; Bit-vector helpers
+
+; n-bit bitvector with value zero.
+(macro (bvzero n) (zero_ext n #b0))
+
+; n-bit bitvector with value one.
+(macro (bvone n) (zero_ext n #b1))
+
+; n-bit bitvector with value all ones.
+(macro (bvones n) (bvnot (bvzero! n)))
+
+; bit-vector shift left by an integer amount.
+(macro (bvshl_int x s) (bvshl x (int2bv (widthof x) s)))
+
+; bit-vector logical right shift by an integer amount.
+(macro (bvlshr_int x s) (bvlshr x (int2bv (widthof x) s)))
+
+; n-bit bitvector with low m bits set.
+(macro (low_bits_mask n m) (bvsub (bvshl (bvone! n) (int2bv n m)) (bvone! n)))
+
+; Shift mask for m bits (power of two), as an n-bit bitvector.
+(macro (shift_mask n m) (bvsub (int2bv n m) (bvone! n)))
+
+; bitvector zero test
+(macro (bv_is_zero x) (= x (bvzero! (widthof x))))
+
+; n-bit bitvector with the top bit set.
+(macro (bv_top_bit_set n) (bvnot (bvlshr_int! (bvones! n) 1)))
+
+; Convert a boolean to a single bit.
+(macro (bool2bit b) (if b #b1 #b0))
+
+; Convert number of bits to number of bytes.
+(macro (bits2bytes bits) (bvlshr_int! bits 3))
+
+;; Floating-point helpers
+
+; Whether two floating-point values have the same sign.
+(macro (fp_equal_sign x y) (= (fp.isPositive x) (fp.isPositive y)))
+
+; Whether two floating-point values have the opposite signs, without
+; using SMT function that are nondeterministic for NaN.
+(macro (fp_equal_sign_inc_nan x y)
+    (=
+        (bvand (bv_top_bit_set! (widthof x)) x)
+        (bvand (bv_top_bit_set! (widthof y)) y)
+    )
+)
+
+; Whether two floating-point values have the opposite signs.
+(macro (fp_opposite_sign x y) (not (fp_equal_sign! x y)))
+
+
+; Build a floating-point zero with the given sign and width.
+(macro (fp_signed_zero negative w) (if negative (fp.-zero w) (fp.+zero w)))
+
+; Build a floating-point infinity with the given sign and width.
+(macro (fp_signed_inf negative w) (if negative (fp.-oo w) (fp.+oo w)))
+
+; Magnitude of a floating-point value. (Clear the top sign bit.)
+(macro (fp_magnitude x) (bvlshr_int! (bvshl_int! x 1) 1))
+
+; Bit position of the top fraction bit in a floating-point value.
+(macro (fp_topfrac_bit w) (switch w (32 22) (64 51)))
+
+; Bit-vector with the top fraction bit set.
+(macro (fp_topfrac_bit_set w) (bvshl_int! (bvone! w) (fp_topfrac_bit! w)))
+
+; Bit position of the sign bit in a floating-point value.
+(macro (fp_sign_bit w) (switch w (32 31) (64 63)))
+
+; Bit-vector with the sign bit set.
+(macro (fp_sign_bit_set w) (bvshl_int! (bvone! w) (fp_sign_bit! w)))
