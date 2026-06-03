@@ -729,7 +729,11 @@ impl<T> Store<T> {
         let inner = StoreOpaque {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
-            vm_store_context: Default::default(),
+            vm_store_context: if engine.tunables().epoch_interruption_via_mmu {
+                VMStoreContext::with_interrupt_page()
+            } else {
+                Default::default()
+            },
             #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: PrimaryMap::new(),
