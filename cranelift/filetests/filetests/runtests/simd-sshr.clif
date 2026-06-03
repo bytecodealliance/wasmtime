@@ -58,14 +58,16 @@ block0(v0:i64x2, v1:i32):
 
 function %sshr_imm_i32x4(i32x4) -> i32x4 {
 block0(v0: i32x4):
-    v1 = sshr_imm v0, 1
+    v2 = iconst.i32 1
+    v1 = sshr v0, v2
     return v1
 }
 ; run: %sshr_imm_i32x4([1 2 4 -8]) == [0 1 2 -4]
 
 function %sshr_imm_i16x8(i16x8) -> i16x8 {
 block0(v0: i16x8):
-    v1 = sshr_imm v0, 1
+    v2 = iconst.i16 1
+    v1 = sshr v0, v2
     return v1
 }
 ; run: %sshr_imm_i16x8([1 2 4 -8 0 0 0 0]) == [0 1 2 -4 0 0 0 0]

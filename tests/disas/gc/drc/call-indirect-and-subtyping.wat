@@ -33,40 +33,40 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @005c                               v3 = iconst.i32 2
 ;; @005c                               v4 = icmp uge v2, v3  ; v3 = 2
-;; @005c                               v9 = iconst.i64 0
+;; @005c                               v10 = iconst.i64 0
 ;; @005c                               v6 = load.i64 notrap aligned readonly can_move v0+112
 ;; @005c                               v5 = uextend.i64 v2
-;;                                     v30 = iconst.i64 3
-;; @005c                               v7 = ishl v5, v30  ; v30 = 3
-;; @005c                               v8 = iadd v6, v7
-;; @005c                               v10 = select_spectre_guard v4, v9, v8  ; v9 = 0
-;; @005c                               v11 = load.i64 user6 aligned region0 v10
-;;                                     v29 = iconst.i64 -2
-;; @005c                               v12 = band v11, v29  ; v29 = -2
-;; @005c                               brif v11, block3(v12), block2
+;; @005c                               v7 = iconst.i64 3
+;; @005c                               v8 = ishl v5, v7  ; v7 = 3
+;; @005c                               v9 = iadd v6, v8
+;; @005c                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
+;; @005c                               v12 = load.i64 user6 aligned region0 v11
+;; @005c                               v13 = iconst.i64 -2
+;; @005c                               v14 = band v12, v13  ; v13 = -2
+;; @005c                               brif v12, block3(v14), block2
 ;;
 ;;                                 block2 cold:
-;; @005c                               v14 = iconst.i32 0
-;; @005c                               v17 = call fn0(v0, v14, v5)  ; v14 = 0
-;; @005c                               jump block3(v17)
+;; @005c                               v16 = iconst.i32 0
+;; @005c                               v19 = call fn0(v0, v16, v5)  ; v16 = 0
+;; @005c                               jump block3(v19)
 ;;
-;;                                 block3(v13: i64):
-;; @005c                               v21 = load.i32 user7 aligned readonly v13+16
-;; @005c                               v19 = load.i64 notrap aligned readonly can_move v0+40
-;; @005c                               v20 = load.i32 notrap aligned readonly can_move v19
-;; @005c                               v22 = icmp eq v21, v20
-;; @005c                               v23 = uextend.i32 v22
-;; @005c                               brif v23, block5(v23), block4
+;;                                 block3(v15: i64):
+;; @005c                               v23 = load.i32 user7 aligned readonly v15+16
+;; @005c                               v21 = load.i64 notrap aligned readonly can_move v0+40
+;; @005c                               v22 = load.i32 notrap aligned readonly can_move v21
+;; @005c                               v24 = icmp eq v23, v22
+;; @005c                               v25 = uextend.i32 v24
+;; @005c                               brif v25, block5(v25), block4
 ;;
 ;;                                 block4:
-;; @005c                               v25 = call fn1(v0, v21, v20)
-;; @005c                               jump block5(v25)
+;; @005c                               v27 = call fn1(v0, v23, v22)
+;; @005c                               jump block5(v27)
 ;;
-;;                                 block5(v26: i32):
-;; @005c                               trapz v26, user8
-;; @005c                               v27 = load.i64 notrap aligned readonly v13+8
-;; @005c                               v28 = load.i64 notrap aligned readonly v13+24
-;; @005c                               call_indirect sig0, v27(v28, v0)
+;;                                 block5(v28: i32):
+;; @005c                               trapz v28, user8
+;; @005c                               v29 = load.i64 notrap aligned readonly v15+8
+;; @005c                               v30 = load.i64 notrap aligned readonly v15+24
+;; @005c                               call_indirect sig0, v29(v30, v0)
 ;; @005f                               jump block1
 ;;
 ;;                                 block1:

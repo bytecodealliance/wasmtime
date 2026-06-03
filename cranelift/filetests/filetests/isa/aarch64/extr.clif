@@ -3,8 +3,10 @@ target aarch64
 
 function %a64_extr_i32_12(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = ushr_imm v0, 12
-    v3 = ishl_imm v1, 20
+    v6 = iconst.i32 12
+    v2 = ushr v0, v6
+    v5 = iconst.i32 20
+    v3 = ishl v1, v5
     v4 = bor v2, v3
     return v4
 }
@@ -21,8 +23,10 @@ block0(v0: i32, v1: i32):
 
 function %a64_extr_i32_12_swap(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = ishl_imm v0, 20
-    v3 = ushr_imm v1, 12
+    v5 = iconst.i32 20
+    v2 = ishl v0, v5
+    v6 = iconst.i32 12
+    v3 = ushr v1, v6
     v4 = bor v2, v3
     return v4
 }
@@ -39,8 +43,10 @@ block0(v0: i32, v1: i32):
 
 function %a64_extr_i32_28(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = ushr_imm v0, 4
-    v3 = ishl_imm v1, 28
+    v6 = iconst.i32 4
+    v2 = ushr v0, v6
+    v5 = iconst.i32 28
+    v3 = ishl v1, v5
     v4 = bor v2, v3
     return v4
 }
@@ -57,8 +63,10 @@ block0(v0: i32, v1: i32):
 
 function %a64_extr_i32_28_swap(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = ishl_imm v0, 4
-    v3 = ushr_imm v1, 28
+    v5 = iconst.i32 4
+    v2 = ishl v0, v5
+    v6 = iconst.i32 28
+    v3 = ushr v1, v6
     v4 = bor v2, v3
     return v4
 }
@@ -75,8 +83,10 @@ block0(v0: i32, v1: i32):
 
 function %a64_extr_i64_12(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = ushr_imm v0, 12
-    v3 = ishl_imm v1, 52
+    v6 = iconst.i64 12
+    v2 = ushr v0, v6
+    v5 = iconst.i64 52
+    v3 = ishl v1, v5
     v4 = bor v2, v3
     return v4
 }
@@ -93,8 +103,10 @@ block0(v0: i64, v1: i64):
 
 function %a64_extr_i64_12_swap(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = ishl_imm v0, 52
-    v3 = ushr_imm v1, 12
+    v5 = iconst.i64 52
+    v2 = ishl v0, v5
+    v6 = iconst.i64 12
+    v3 = ushr v1, v6
     v4 = bor v2, v3
     return v4
 }

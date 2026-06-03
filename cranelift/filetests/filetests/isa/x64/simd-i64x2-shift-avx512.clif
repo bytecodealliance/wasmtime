@@ -43,7 +43,8 @@ block0(v0: i64x2, v1: i64):
 
 function %sshr_imm(i64x2) -> i64x2 {
 block0(v0: i64x2):
-  v1 = sshr_imm v0, 31
+  v2 = iconst.i64 31
+  v1 = sshr v0, v2
   return v1
 }
 
@@ -69,7 +70,8 @@ block0(v0: i64x2):
 function %sshr_load_imm(i64) -> i64x2 {
 block0(v0: i64):
   v1 = load.i64x2 v0
-  v2 = sshr_imm v1, 31
+  v3 = iconst.i64 31
+  v2 = sshr v1, v3
   return v2
 }
 
@@ -95,7 +97,8 @@ block0(v0: i64):
 function %sshr_load2_imm(i64) -> i64x2 {
 block0(v0: i64):
   v1 = load.i64x2 v0+7
-  v2 = sshr_imm v1, 31
+  v3 = iconst.i64 31
+  v2 = sshr v1, v3
   return v2
 }
 
@@ -121,7 +124,8 @@ block0(v0: i64):
 function %sshr_load3_imm(i64) -> i64x2 {
 block0(v0: i64):
   v1 = load.i64x2 v0+16
-  v2 = sshr_imm v1, 31
+  v3 = iconst.i64 31
+  v2 = sshr v1, v3
   return v2
 }
 

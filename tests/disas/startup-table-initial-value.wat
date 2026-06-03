@@ -38,26 +38,26 @@
 ;;     gv2 = load.i64 notrap aligned gv0+56
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v7 = load.i64 notrap aligned v0+56
-;;     v8 = ireduce.i32 v7
-;;     v9 = uextend.i64 v8
+;;     v9 = load.i64 notrap aligned v0+56
+;;     v10 = ireduce.i32 v9
+;;     v11 = uextend.i64 v10
 ;;     v41 = iconst.i64 10
-;;     v53 = icmp ult v9, v41  ; v41 = 10
+;;     v53 = icmp ult v11, v41  ; v41 = 10
 ;;     trapnz v53, user6
-;;     v16 = load.i64 notrap aligned v0+48
-;;     v34 = iconst.i32 1
+;;     v18 = load.i64 notrap aligned v0+48
+;;     v3 = iconst.i32 1
 ;;     v83 = iconst.i64 36
-;;     v85 = iadd v16, v83  ; v83 = 36
-;;     v18 = iconst.i64 4
-;;     jump block1(v16)
+;;     v85 = iadd v18, v83  ; v83 = 36
+;;     v20 = iconst.i64 4
+;;     jump block1(v18)
 ;;
-;; block1(v27: i64):
+;; block1(v29: i64):
 ;;     v88 = iconst.i32 1
-;;     store notrap aligned v88, v27  ; v88 = 1
-;;     v89 = iadd.i64 v16, v83  ; v83 = 36
-;;     v90 = icmp eq v27, v89
+;;     store notrap aligned v88, v29  ; v88 = 1
+;;     v89 = iadd.i64 v18, v83  ; v83 = 36
+;;     v90 = icmp eq v29, v89
 ;;     v91 = iconst.i64 4
-;;     v92 = iadd v27, v91  ; v91 = 4
+;;     v92 = iadd v29, v91  ; v91 = 4
 ;;     brif v90, block2, block1(v92)
 ;;
 ;; block2:

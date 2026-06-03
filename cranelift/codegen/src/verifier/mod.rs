@@ -743,7 +743,6 @@ impl<'a> Verifier<'a> {
             | UnaryIeee64 { .. }
             | Binary { .. }
             | BinaryImm8 { .. }
-            | BinaryImm64 { .. }
             | Ternary { .. }
             | TernaryImm8 { .. }
             | Shuffle { .. }

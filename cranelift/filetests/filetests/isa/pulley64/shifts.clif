@@ -3,7 +3,8 @@ target pulley64
 
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
-  v2 = ishl_imm v0, 7
+  v3 = iconst.i32 7
+  v2 = ishl v0, v3
   return v2
 }
 
@@ -18,7 +19,8 @@ block0(v0: i32):
 
 function %i32_imm2(i32) -> i32 {
 block0(v0: i32):
-  v2 = ishl_imm v0, 0x187
+  v3 = iconst.i32 391
+  v2 = ishl v0, v3
   return v2
 }
 
@@ -33,7 +35,8 @@ block0(v0: i32):
 
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
-  v2 = ishl_imm v0, 7
+  v3 = iconst.i64 7
+  v2 = ishl v0, v3
   return v2
 }
 
@@ -48,7 +51,8 @@ block0(v0: i64):
 
 function %i64_imm2(i64) -> i64 {
 block0(v0: i64):
-  v2 = ishl_imm v0, 0x187
+  v3 = iconst.i64 0x187
+  v2 = ishl v0, v3
   return v2
 }
 
@@ -63,7 +67,8 @@ block0(v0: i64):
 
 function %i32_ushr_imm(i32) -> i32 {
 block0(v0: i32):
-  v2 = ushr_imm v0, 7
+  v3 = iconst.i32 7
+  v2 = ushr v0, v3
   return v2
 }
 
@@ -78,7 +83,8 @@ block0(v0: i32):
 
 function %i32_ushr_imm2(i32) -> i32 {
 block0(v0: i32):
-  v2 = ushr_imm v0, 0x187
+  v3 = iconst.i32 391
+  v2 = ushr v0, v3
   return v2
 }
 
@@ -93,7 +99,8 @@ block0(v0: i32):
 
 function %i64_ushr_imm(i64) -> i64 {
 block0(v0: i64):
-  v2 = ushr_imm v0, 7
+  v3 = iconst.i64 7
+  v2 = ushr v0, v3
   return v2
 }
 
@@ -108,7 +115,8 @@ block0(v0: i64):
 
 function %i64_ushr_imm2(i64) -> i64 {
 block0(v0: i64):
-  v2 = ushr_imm v0, 0x187
+  v3 = iconst.i64 0x187
+  v2 = ushr v0, v3
   return v2
 }
 
@@ -123,7 +131,8 @@ block0(v0: i64):
 
 function %i32_sshr_imm(i32) -> i32 {
 block0(v0: i32):
-  v2 = sshr_imm v0, 7
+  v3 = iconst.i32 7
+  v2 = sshr v0, v3
   return v2
 }
 
@@ -138,7 +147,8 @@ block0(v0: i32):
 
 function %i32_sshr_imm2(i32) -> i32 {
 block0(v0: i32):
-  v2 = sshr_imm v0, 0x187
+  v3 = iconst.i32 391
+  v2 = sshr v0, v3
   return v2
 }
 
@@ -153,7 +163,8 @@ block0(v0: i32):
 
 function %i64_sshr_imm(i64) -> i64 {
 block0(v0: i64):
-  v2 = sshr_imm v0, 7
+  v3 = iconst.i64 7
+  v2 = sshr v0, v3
   return v2
 }
 
@@ -168,7 +179,8 @@ block0(v0: i64):
 
 function %i64_sshr_imm2(i64) -> i64 {
 block0(v0: i64):
-  v2 = sshr_imm v0, 0x187
+  v3 = iconst.i64 0x187
+  v2 = sshr v0, v3
   return v2
 }
 

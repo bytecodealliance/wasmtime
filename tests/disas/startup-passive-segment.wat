@@ -41,11 +41,11 @@
 ;; block0(v0: i64, v1: i64):
 ;;     v3 = iconst.i32 0
 ;;     v4 = call fn0(v0, v3)  ; v3 = 0
-;;     v18 = iconst.i32 1
-;;     store user2 little region0 v18, v4  ; v18 = 1
+;;     v6 = iconst.i32 1
+;;     store user2 little region0 v6, v4  ; v6 = 1
 ;;     v25 = iconst.i32 3
-;;     v13 = iconst.i64 16
-;;     v14 = iadd v4, v13  ; v13 = 16
-;;     store user2 little region0 v25, v14  ; v25 = 3
+;;     v17 = iconst.i64 16
+;;     v18 = iadd v4, v17  ; v17 = 16
+;;     store user2 little region0 v25, v18  ; v25 = 3
 ;;     return
 ;; }

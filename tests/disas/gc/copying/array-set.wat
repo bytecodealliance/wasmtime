@@ -33,22 +33,22 @@
 ;; @0024                               v13 = uextend.i64 v10
 ;;                                     v34 = iconst.i64 3
 ;;                                     v35 = ishl v13, v34  ; v34 = 3
-;;                                     v31 = iconst.i64 32
-;; @0024                               v15 = ushr v35, v31  ; v31 = 32
-;; @0024                               trapnz v15, user2
+;; @0024                               v15 = iconst.i64 32
+;; @0024                               v16 = ushr v35, v15  ; v15 = 32
+;; @0024                               trapnz v16, user2
 ;;                                     v44 = iconst.i32 3
 ;;                                     v45 = ishl v10, v44  ; v44 = 3
-;; @0024                               v17 = iconst.i32 24
-;; @0024                               v18 = uadd_overflow_trap v45, v17, user2  ; v17 = 24
-;; @0024                               v22 = uadd_overflow_trap v2, v18, user2
-;; @0024                               v23 = uextend.i64 v22
-;; @0024                               v25 = iadd v6, v23
+;; @0024                               v18 = iconst.i32 24
+;; @0024                               v19 = uadd_overflow_trap v45, v18, user2  ; v18 = 24
+;; @0024                               v23 = uadd_overflow_trap v2, v19, user2
+;; @0024                               v24 = uextend.i64 v23
+;; @0024                               v26 = iadd v6, v24
 ;;                                     v51 = ishl v3, v44  ; v44 = 3
-;; @0024                               v21 = iadd v51, v17  ; v17 = 24
-;; @0024                               v26 = isub v18, v21
-;; @0024                               v27 = uextend.i64 v26
-;; @0024                               v28 = isub v25, v27
-;; @0024                               store user2 little region0 v4, v28
+;; @0024                               v22 = iadd v51, v18  ; v18 = 24
+;; @0024                               v27 = isub v19, v22
+;; @0024                               v28 = uextend.i64 v27
+;; @0024                               v29 = isub v26, v28
+;; @0024                               store user2 little region0 v4, v29
 ;; @0027                               jump block1
 ;;
 ;;                                 block1:

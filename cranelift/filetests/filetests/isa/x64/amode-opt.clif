@@ -170,7 +170,8 @@ function %amode_reg_reg_imm_scaled(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = iconst.i64 -1
     v3 = iadd v0, v2
-    v4 = ishl_imm v1, 3
+    v7 = iconst.i64 3
+    v4 = ishl v1, v7
     v5 = iadd v3, v4
     v6 = load.i64 v5
     return v6
@@ -199,7 +200,8 @@ function %amode_reg_reg_imm_uext_scaled(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
     v2 = iconst.i64 -1
     v3 = iadd v0, v2
-    v4 = ishl_imm v1, 3
+    v8 = iconst.i32 3
+    v4 = ishl v1, v8
     v5 = uextend.i64 v4
     v6 = iadd v3, v5
     v7 = load.i64 v6
@@ -232,7 +234,8 @@ block0(v0: i64, v1: i32, v2: i32):
     v3 = iconst.i64 -1
     v4 = iadd v0, v3
     v5 = iadd v1, v2
-    v6 = ishl_imm v5, 2
+    v10 = iconst.i32 2
+    v6 = ishl v5, v10
     v7 = uextend.i64 v6
     v8 = iadd v4, v7
     v9 = load.i64 v8
