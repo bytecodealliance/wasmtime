@@ -1,5 +1,5 @@
 use crate::prelude::*;
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 use bytes::{Bytes, BytesMut};
 use core::mem::{self, MaybeUninit};
 use core::slice;

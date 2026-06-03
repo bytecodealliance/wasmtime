@@ -434,7 +434,9 @@ component-model-async = [
   "dep:futures",
 ]
 
-# Enables support for lowering `list`s using the `bytes` crate.
+# Enables support and interop with the `Bytes` and `BytesMut` types contained
+# within the `bytes` crate. This enables lift/lower impls, for example, as well
+# as stream-related impls for `component-model-async` if that's enabled.
 component-model-bytes = [
   "dep:bytes",
 ]
