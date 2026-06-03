@@ -916,7 +916,7 @@
             ; Else if z is an infinity, then return that infinity negated.
             ; Else if z is a zero, then return that zero negated.
             ; Else return z negated.
-                (fp.neg x)) ; Remaining cases of the spec handled by SMT fp.neg)))
+                (fp.neg x))))) ; Remaining cases of the spec handled by SMT fp.neg
 (instantiate fneg
     ((args (named Type) (bv 32)) (ret (bv 32)))
     ((args (named Type) (bv 64)) (ret (bv 64))))
@@ -1209,7 +1209,7 @@
 ;;;; CLIF Instruction Tags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (attr select_spectre_guard (tag spectre))
-(attr fence (tag todo))
+(attr fence (tag TODO))
 
 ; Use Z3 solver for the following instructions.
 (attr fadd (tag solver_z3))

@@ -1203,7 +1203,7 @@
 )
 
 ;; Leaves currently without specs: excluded from verification via todo.
-(attr MInst.Udf (tag todo))
+(attr MInst.Udf (tag TODO))
 
 ;; An ALU operation. This can be paired with several instruction formats
 ;; below (see `Inst`) in any combination.
@@ -2306,7 +2306,7 @@
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
 
-(attr valid_atomic_transaction (tag todo))
+(attr valid_atomic_transaction (tag TODO))
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
 
@@ -3942,7 +3942,7 @@
 (extern constructor is_pic is_pic)
 
 ;; Helper loading an external name into a register via `MInst.LoadExt*`
-(attr load_ext_name (tag todo))
+(attr load_ext_name (tag TODO))
 (decl load_ext_name (BoxExternalName i64 RelocDistance) Reg)
 
 ;; When `is_pic` is true all names are referenced through the GOT. Note that
@@ -4466,18 +4466,18 @@
 (rule (mov_to_preg dst src)
       (SideEffectNoResult.Inst (MInst.MovToPReg dst src)))
 
-(attr preg_sp (tag todo))
+(attr preg_sp (tag TODO))
 (decl preg_sp () PReg)
 (extern constructor preg_sp preg_sp)
 
-(attr preg_fp (tag todo))
+(attr preg_fp (tag TODO))
 (decl preg_fp () PReg)
 (extern constructor preg_fp preg_fp)
 
 (decl preg_link () PReg)
 (extern constructor preg_link preg_link)
 
-(attr preg_pinned (tag todo))
+(attr preg_pinned (tag TODO))
 (decl preg_pinned () PReg)
 (extern constructor preg_pinned preg_pinned)
 
@@ -5666,28 +5666,29 @@
 (attr extract_vector (tag vector))
 
 
-(attr fence (tag todo))
-(attr bitrev (tag todo))
-(attr call (tag todo))
-(attr call_indirect (tag todo))
-(attr consumes_flags_concat (tag todo))
-(attr debugtrap (tag todo))
-(attr dynamic_stack_addr (tag todo))
-(attr f128const (tag todo))
-(attr f16const (tag todo))
-(attr fcvt_to_uint_sat (tag todo))
-(attr get_return_address (tag todo))
-(attr lower_bmask (tag todo))
-(attr nop (tag todo))
-(attr return (tag todo))
-(attr return_call (tag todo))
-(attr return_call_indirect (tag todo))
-(attr sadd_overflow (tag todo))
-(attr sequence_point (tag todo))
-(attr ssub_overflow (tag todo))
-(attr tls_model (tag todo))
-(attr u16_from_u32 (tag todo))
-(attr uadd_overflow (tag todo))
-(attr usub_overflow (tag todo))
-(attr vhigh_bits (tag todo))
-(attr with_flags (tag todo))
+(attr fence (tag TODO))
+(attr bitrev (tag TODO))
+(attr call (tag TODO))
+(attr call_indirect (tag TODO))
+(attr consumes_flags_concat (tag TODO))
+(attr debugtrap (tag TODO))
+(attr dynamic_stack_addr (tag TODO))
+(attr f128const (tag TODO))
+(attr f16const (tag TODO))
+(attr fcvt_to_uint_sat (tag TODO))
+(attr get_return_address (tag TODO))
+(attr lower_bmask (tag TODO))
+(attr nop (tag TODO))
+(attr return (tag TODO))
+(attr return_call (tag TODO))
+(attr return_call_indirect (tag TODO))
+(attr sadd_overflow (tag TODO))
+(attr sequence_point (tag TODO))
+(attr ssub_overflow (tag TODO))
+(attr tls_model (tag TODO))
+(attr u16_from_u32 (tag TODO))
+(attr uadd_overflow (tag TODO))
+(attr usub_overflow (tag TODO))
+(attr vhigh_bits (tag TODO))
+(attr with_flags (tag TODO))
+(attr get_exception_handler_address (tag TODO))
