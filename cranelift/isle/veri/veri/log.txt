@@ -1,0 +1,34 @@
+    Finished `release` profile [optimized] target(s) in 0.15s
+     Running `/Users/avh/research/wasmtime/target/release/veri --codegen-crate-dir ../../../codegen/ --work-dir /tmp --name aarch64 --num-threads 0 --no-skip-todo --filter 'include:tag:wasm_proposal_mvp' --filter 'exclude:tag:wasm_category_stack' --filter 'exclude:not:root:lower' --filter 'exclude:tag:vector' --filter 'exclude:tag:atomics' --filter 'exclude:tag:spectre' --filter 'exclude:tag:narrowfloat' --filter 'include:tag:clif_popcnt' --filter 'exclude:tag:amode_const' --filter 'exclude:tag:i128' --filter 'include:root:emit_side_effect' --filter 'include:root:operand_size' --filter 'include:root:scalar_size' --filter 'include:root:size_from_ty'`
+Writing generated file: /tmp/numerics.isle
+Writing generated file: /tmp/isle_numerics.rs
+Writing generated file: /tmp/clif_opt.isle
+Writing generated file: /tmp/clif_lower.isle
+#1010	uextend_load
+#1212	uextend_load
+#808	uextend_load
+#1111	uextend_load
+#9707	store_i8_aarch64_store8
+#416	udiv_fits_in_32
+#1617	sextend_load
+#606	uextend_load
+#203	../../../codegen/src/isa/aarch64/lower.isle line 461
+#0	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+	sqrt({bits: int}, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = success

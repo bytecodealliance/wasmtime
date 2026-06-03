@@ -1,0 +1,25 @@
+; Test case that requires type qualifier to satisfy type inference.
+
+; Value type of unspecified bit-vector width.
+(type Value (primitive Value))
+(model Value (type (bv)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Add then mask low byte.
+;
+; Note the (as ...) type qualifier. Without it, this test case would have
+; underconstrained type inference.
+(decl add_then_mask (Value Value) Value)
+(extern extractor add_then_mask add_then_mask)
+(spec (add_then_mask x y) (provide (= result (extract 7 0 (bvadd x (as y (bv 16)))))))
+
+; Mask low byte then add.
+(decl mask_then_add (Value Value) Value)
+(extern constructor mask_then_add mask_then_add)
+(spec (mask_then_add x y) (provide (= result (bvadd (extract 7 0 x) (extract 7 0 y)))))
+
+; Test rule swaps mask order.
+(rule test (test (add_then_mask x y)) (mask_then_add x y))

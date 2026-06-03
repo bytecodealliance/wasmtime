@@ -1,0 +1,143 @@
+:root {
+    font-size: 15px;
+
+    --invert-font-color: #fff;
+    --primary-color: #00a0ad;
+    --light-color: #bbb;
+}
+
+body {
+    width: 100%;
+    margin: 2em 0;
+    line-height: 1.6;
+    font-family: monospace;
+    font-size: 1rem;
+}
+
+body>header,
+body>main,
+body>footer {
+    width: 100%;
+    margin-right: auto;
+    margin-left: auto;
+    max-width: 950px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: sans-serif;
+    font-weight: 700;
+}
+
+h1 {
+    font-size: 2rem;
+    line-height: 1.125;
+}
+
+h2 {
+    font-size: 1.75rem;
+    line-height: 1.15;
+}
+
+h3 {
+    font-size: 1.5rem;
+    line-height: 1.175;
+}
+
+h4 {
+    font-size: 1.25rem;
+    line-height: 1.2;
+}
+
+h5 {
+    font-size: 1.125rem;
+    line-height: 1.225;
+}
+
+h6 {
+    font-size: 1rem;
+    line-height: 1.25;
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+a:hover {
+    background-color: var(--primary-color);
+    color: var(--invert-font-color);
+    text-decoration: none;
+}
+
+menu {
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--light-color);
+}
+
+menu li {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    border-bottom: 1px solid var(--light-color);
+}
+
+menu a {
+    display: block;
+    padding: 1rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+td,
+th {
+    padding: .2rem;
+    border-bottom: 1px solid var(--light-color);
+}
+
+th {
+    text-align: left;
+}
+
+table .id {
+    text-align: right;
+    width: 1em;
+    white-space: nowrap;
+}
+
+pre {
+    counter-reset: line;
+}
+
+pre code {
+    counter-increment: line;
+    position: relative;
+}
+
+pre code::before {
+    content: counter(line);
+    user-select: none;
+    color: var(--light-color);
+    display: inline-block;
+    position: absolute;
+    left: -5em;
+    width: 4em;
+    text-align: right;
+}
+
+pre code:target::before {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.id {
+    color: var(--light-color);
+}

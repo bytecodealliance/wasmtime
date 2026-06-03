@@ -1,0 +1,40 @@
+; Test case that relies on the assumption that enum types must equal one of the
+; variants.
+
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Operation type.
+(type Op (enum (Add) (Mul)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; op(x, y)
+(decl op_xy (Op Value Value) Value)
+(extern extractor op_xy op_xy)
+(spec (op_xy op x y)
+    (provide
+        (= result (match op
+            ((Add) (bvadd x y))
+            ((Mul) (bvmul x y))
+        ))
+    )
+)
+
+; op(y, x)
+(decl op_yx (Op Value Value) Value)
+(extern constructor op_yx op_yx)
+(spec (op_yx op x y)
+    (provide
+        (= result (match op
+            ((Add) (bvadd y x))
+            ((Mul) (bvmul y x))
+        ))
+    )
+)
+
+; Test rule commutes operands
+(rule test (test (op_xy op x y)) (op_yx op x y))

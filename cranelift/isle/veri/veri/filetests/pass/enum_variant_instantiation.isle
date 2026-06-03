@@ -1,0 +1,45 @@
+; Test case that requires type instantiation for enum variants.
+
+; Value type of unspecified bit-vector width.
+(type Value (primitive Value))
+(model Value (type (bv)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Add 42.
+(decl add42 (Value) Value)
+(extern extractor add42 add42)
+(spec (add42 x) (provide (= result (bvadd x #x2a))))
+
+; Operation type.
+(type Op
+    (enum
+        ; Addition of 42.
+        (Add42)
+
+        ; Deliberately unused variant. Type inference has no way to infer the
+        ; widths of the Value fields.
+        (Unused (val Value))
+    )
+)
+
+; Provide instantiations for the unused variant.
+(instantiate Op.Unused
+    ((args (bv 8)) (ret (named Op)))
+)
+
+; Evaluate operation on a value.
+(decl eval (Op Value) Value)
+(extern constructor eval eval)
+(spec (eval op x)
+    (provide
+        (= result (match op
+            ((Add42) (bvadd #x2a x))
+        ))
+    )
+)
+
+; Test rule lowers addition to an operation evaluation.
+(rule test (test (add42 x)) (eval (Op.Add42) x))

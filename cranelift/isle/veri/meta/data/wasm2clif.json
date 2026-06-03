@@ -1,0 +1,5436 @@
+{
+	"operators": [
+		{
+			"op": "Unreachable",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Nop",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Block",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Loop",
+			"proposal": "mvp"
+		},
+		{
+			"op": "If",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Else",
+			"proposal": "mvp"
+		},
+		{
+			"op": "TryTable",
+			"proposal": "exceptions"
+		},
+		{
+			"op": "Throw",
+			"proposal": "exceptions"
+		},
+		{
+			"op": "ThrowRef",
+			"proposal": "exceptions"
+		},
+		{
+			"op": "Try",
+			"proposal": "legacy_exceptions"
+		},
+		{
+			"op": "Catch",
+			"proposal": "legacy_exceptions"
+		},
+		{
+			"op": "Rethrow",
+			"proposal": "legacy_exceptions"
+		},
+		{
+			"op": "Delegate",
+			"proposal": "legacy_exceptions"
+		},
+		{
+			"op": "CatchAll",
+			"proposal": "legacy_exceptions"
+		},
+		{
+			"op": "End",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Br",
+			"proposal": "mvp"
+		},
+		{
+			"op": "BrIf",
+			"proposal": "mvp"
+		},
+		{
+			"op": "BrTable",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Return",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Call",
+			"proposal": "mvp"
+		},
+		{
+			"op": "CallIndirect",
+			"proposal": "mvp"
+		},
+		{
+			"op": "ReturnCall",
+			"proposal": "tail_call"
+		},
+		{
+			"op": "ReturnCallIndirect",
+			"proposal": "tail_call"
+		},
+		{
+			"op": "Drop",
+			"proposal": "mvp"
+		},
+		{
+			"op": "Select",
+			"proposal": "mvp"
+		},
+		{
+			"op": "TypedSelect",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "LocalGet",
+			"proposal": "mvp"
+		},
+		{
+			"op": "LocalSet",
+			"proposal": "mvp"
+		},
+		{
+			"op": "LocalTee",
+			"proposal": "mvp"
+		},
+		{
+			"op": "GlobalGet",
+			"proposal": "mvp"
+		},
+		{
+			"op": "GlobalSet",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Load",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Load",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Load",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Load8S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Load8U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Load16S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Load16U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load8S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load8U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load16S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load16U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Load32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Store",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Store",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Store",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Store",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Store8",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Store16",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Store8",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Store16",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Store32",
+			"proposal": "mvp"
+		},
+		{
+			"op": "MemorySize",
+			"proposal": "mvp"
+		},
+		{
+			"op": "MemoryGrow",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Const",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Const",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Const",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Const",
+			"proposal": "mvp"
+		},
+		{
+			"op": "RefNull",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "RefIsNull",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "RefFunc",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "RefEq",
+			"proposal": "gc"
+		},
+		{
+			"op": "I32Eqz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Eq",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Ne",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32LtS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32LtU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32GtS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32GtU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32LeS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32LeU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32GeS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32GeU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Eqz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Eq",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Ne",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64LtS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64LtU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64GtS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64GtU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64LeS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64LeU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64GeS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64GeU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Eq",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Ne",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Lt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Gt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Le",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Ge",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Eq",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Ne",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Lt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Gt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Le",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Ge",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Clz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Ctz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Popcnt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Add",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Sub",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Mul",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32DivS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32DivU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32RemS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32RemU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32And",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Or",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Xor",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Shl",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32ShrS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32ShrU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Rotl",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Rotr",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Clz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Ctz",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Popcnt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Add",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Sub",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Mul",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64DivS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64DivU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64RemS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64RemU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64And",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Or",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Xor",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Shl",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64ShrS",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64ShrU",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Rotl",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64Rotr",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Abs",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Neg",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Ceil",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Floor",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Trunc",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Nearest",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Sqrt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Add",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Sub",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Mul",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Div",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Min",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Max",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32Copysign",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Abs",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Neg",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Ceil",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Floor",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Trunc",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Nearest",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Sqrt",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Add",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Sub",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Mul",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Div",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Min",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Max",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64Copysign",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32WrapI64",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32TruncF32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32TruncF32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32TruncF64S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32TruncF64U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64ExtendI32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64ExtendI32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64TruncF32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64TruncF32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64TruncF64S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64TruncF64U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32ConvertI32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32ConvertI32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32ConvertI64S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32ConvertI64U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32DemoteF64",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64ConvertI32S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64ConvertI32U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64ConvertI64S",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64ConvertI64U",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64PromoteF32",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32ReinterpretF32",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I64ReinterpretF64",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F32ReinterpretI32",
+			"proposal": "mvp"
+		},
+		{
+			"op": "F64ReinterpretI64",
+			"proposal": "mvp"
+		},
+		{
+			"op": "I32Extend8S",
+			"proposal": "sign_extension"
+		},
+		{
+			"op": "I32Extend16S",
+			"proposal": "sign_extension"
+		},
+		{
+			"op": "I64Extend8S",
+			"proposal": "sign_extension"
+		},
+		{
+			"op": "I64Extend16S",
+			"proposal": "sign_extension"
+		},
+		{
+			"op": "I64Extend32S",
+			"proposal": "sign_extension"
+		},
+		{
+			"op": "StructNew",
+			"proposal": "gc"
+		},
+		{
+			"op": "StructNewDefault",
+			"proposal": "gc"
+		},
+		{
+			"op": "StructGet",
+			"proposal": "gc"
+		},
+		{
+			"op": "StructGetS",
+			"proposal": "gc"
+		},
+		{
+			"op": "StructGetU",
+			"proposal": "gc"
+		},
+		{
+			"op": "StructSet",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayNew",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayNewDefault",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayNewFixed",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayNewData",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayNewElem",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayGet",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayGetS",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayGetU",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArraySet",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayLen",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayFill",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayCopy",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayInitData",
+			"proposal": "gc"
+		},
+		{
+			"op": "ArrayInitElem",
+			"proposal": "gc"
+		},
+		{
+			"op": "RefTestNonNull",
+			"proposal": "gc"
+		},
+		{
+			"op": "RefTestNullable",
+			"proposal": "gc"
+		},
+		{
+			"op": "RefCastNonNull",
+			"proposal": "gc"
+		},
+		{
+			"op": "RefCastNullable",
+			"proposal": "gc"
+		},
+		{
+			"op": "BrOnCast",
+			"proposal": "gc"
+		},
+		{
+			"op": "BrOnCastFail",
+			"proposal": "gc"
+		},
+		{
+			"op": "AnyConvertExtern",
+			"proposal": "gc"
+		},
+		{
+			"op": "ExternConvertAny",
+			"proposal": "gc"
+		},
+		{
+			"op": "RefI31",
+			"proposal": "gc"
+		},
+		{
+			"op": "I31GetS",
+			"proposal": "gc"
+		},
+		{
+			"op": "I31GetU",
+			"proposal": "gc"
+		},
+		{
+			"op": "I32TruncSatF32S",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I32TruncSatF32U",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I32TruncSatF64S",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I32TruncSatF64U",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I64TruncSatF32S",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I64TruncSatF32U",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I64TruncSatF64S",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "I64TruncSatF64U",
+			"proposal": "saturating_float_to_int"
+		},
+		{
+			"op": "MemoryInit",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "DataDrop",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "MemoryCopy",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "MemoryFill",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "TableInit",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "ElemDrop",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "TableCopy",
+			"proposal": "bulk_memory"
+		},
+		{
+			"op": "TableFill",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "TableGet",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "TableSet",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "TableGrow",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "TableSize",
+			"proposal": "reference_types"
+		},
+		{
+			"op": "MemoryDiscard",
+			"proposal": "memory_control"
+		},
+		{
+			"op": "MemoryAtomicNotify",
+			"proposal": "threads"
+		},
+		{
+			"op": "MemoryAtomicWait32",
+			"proposal": "threads"
+		},
+		{
+			"op": "MemoryAtomicWait64",
+			"proposal": "threads"
+		},
+		{
+			"op": "AtomicFence",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicLoad",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicLoad",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicLoad8U",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicLoad16U",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicLoad8U",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicLoad16U",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicLoad32U",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicStore",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicStore",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicStore8",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicStore16",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicStore8",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicStore16",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicStore32",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwAdd",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwAdd",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8AddU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16AddU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8AddU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16AddU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32AddU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwSub",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwSub",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8SubU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16SubU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8SubU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16SubU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32SubU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwAnd",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwAnd",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8AndU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16AndU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8AndU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16AndU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32AndU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwOr",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwOr",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8OrU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16OrU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8OrU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16OrU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32OrU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwXor",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwXor",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8XorU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16XorU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8XorU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16XorU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32XorU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwXchg",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwXchg",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8XchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16XchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8XchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16XchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32XchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmwCmpxchg",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmwCmpxchg",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw8CmpxchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I32AtomicRmw16CmpxchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw8CmpxchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw16CmpxchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "I64AtomicRmw32CmpxchgU",
+			"proposal": "threads"
+		},
+		{
+			"op": "GlobalAtomicGet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicSet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwAdd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwSub",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwAnd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwOr",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwXor",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwXchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "GlobalAtomicRmwCmpxchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "TableAtomicGet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "TableAtomicSet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "TableAtomicRmwXchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "TableAtomicRmwCmpxchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicGet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicGetS",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicGetU",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicSet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwAdd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwSub",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwAnd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwOr",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwXor",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwXchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "StructAtomicRmwCmpxchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicGet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicGetS",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicGetU",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicSet",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwAdd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwSub",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwAnd",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwOr",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwXor",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwXchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "ArrayAtomicRmwCmpxchg",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "RefI31Shared",
+			"proposal": "shared_everything_threads"
+		},
+		{
+			"op": "V128Load",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load8x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load8x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load16x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load16x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load32x2S",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load32x2U",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load8Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load16Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load32Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load64Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load32Zero",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load64Zero",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Store",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load8Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load16Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load32Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Load64Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Store8Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Store16Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Store32Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Store64Lane",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Const",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Shuffle",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16ExtractLaneS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16ExtractLaneU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtractLaneS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtractLaneU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtractLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtractLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4ExtractLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2ExtractLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2ReplaceLane",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Swizzle",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Splat",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16LtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16LtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16GtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16GtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16LeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16LeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16GeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16GeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8LtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8LtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8GtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8GtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8LeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8LeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8GeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8GeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4LtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4LtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4GtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4GtU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4LeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4LeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4GeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4GeU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2LtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2GtS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2LeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2GeS",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Lt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Gt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Le",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Ge",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Eq",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Ne",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Lt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Gt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Le",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Ge",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Not",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128And",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128AndNot",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Or",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Xor",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128Bitselect",
+			"proposal": "simd"
+		},
+		{
+			"op": "V128AnyTrue",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Popcnt",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16AllTrue",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Bitmask",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16NarrowI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16NarrowI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Shl",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16ShrS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16ShrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16AddSatS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16AddSatU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16SubSatS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16SubSatU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16MinS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16MinU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16MaxS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16MaxU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16AvgrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtAddPairwiseI8x16S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtAddPairwiseI8x16U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Q15MulrSatS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8AllTrue",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Bitmask",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8NarrowI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8NarrowI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtendLowI8x16S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtendHighI8x16S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtendLowI8x16U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtendHighI8x16U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Shl",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ShrS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ShrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8AddSatS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8AddSatU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8SubSatS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8SubSatU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8Mul",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8MinS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8MinU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8MaxS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8MaxU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8AvgrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtMulLowI8x16S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtMulHighI8x16S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtMulLowI8x16U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I16x8ExtMulHighI8x16U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtAddPairwiseI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtAddPairwiseI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4AllTrue",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Bitmask",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtendLowI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtendHighI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtendLowI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtendHighI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Shl",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ShrS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ShrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4Mul",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4MinS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4MinU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4MaxS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4MaxU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4DotI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtMulLowI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtMulHighI16x8S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtMulLowI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4ExtMulHighI16x8U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2AllTrue",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Bitmask",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtendLowI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtendHighI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtendLowI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtendHighI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Shl",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ShrS",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ShrU",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2Mul",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtMulLowI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtMulHighI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtMulLowI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I64x2ExtMulHighI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Ceil",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Floor",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Trunc",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Nearest",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Sqrt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Mul",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Div",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Min",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4Max",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4PMin",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4PMax",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Ceil",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Floor",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Trunc",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Nearest",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Abs",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Neg",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Sqrt",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Add",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Sub",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Mul",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Div",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Min",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2Max",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2PMin",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2PMax",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4TruncSatF32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4TruncSatF32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4ConvertI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4ConvertI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4TruncSatF64x2SZero",
+			"proposal": "simd"
+		},
+		{
+			"op": "I32x4TruncSatF64x2UZero",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2ConvertLowI32x4S",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2ConvertLowI32x4U",
+			"proposal": "simd"
+		},
+		{
+			"op": "F32x4DemoteF64x2Zero",
+			"proposal": "simd"
+		},
+		{
+			"op": "F64x2PromoteLowF32x4",
+			"proposal": "simd"
+		},
+		{
+			"op": "I8x16RelaxedSwizzle",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedTruncF32x4S",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedTruncF32x4U",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedTruncF64x2SZero",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedTruncF64x2UZero",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F32x4RelaxedMadd",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F32x4RelaxedNmadd",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F64x2RelaxedMadd",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F64x2RelaxedNmadd",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I8x16RelaxedLaneselect",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I16x8RelaxedLaneselect",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedLaneselect",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I64x2RelaxedLaneselect",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F32x4RelaxedMin",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F32x4RelaxedMax",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F64x2RelaxedMin",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "F64x2RelaxedMax",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I16x8RelaxedQ15mulrS",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I16x8RelaxedDotI8x16I7x16S",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "I32x4RelaxedDotI8x16I7x16AddS",
+			"proposal": "relaxed_simd"
+		},
+		{
+			"op": "CallRef",
+			"proposal": "function_references"
+		},
+		{
+			"op": "ReturnCallRef",
+			"proposal": "function_references"
+		},
+		{
+			"op": "RefAsNonNull",
+			"proposal": "function_references"
+		},
+		{
+			"op": "BrOnNull",
+			"proposal": "function_references"
+		},
+		{
+			"op": "BrOnNonNull",
+			"proposal": "function_references"
+		}
+	],
+	"translations": [
+		{
+			"operators": [
+				"LocalGet"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"LocalSet"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"LocalTee"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"GlobalGet"
+			],
+			"instructions": [
+				"global_value",
+				"load"
+			]
+		},
+		{
+			"operators": [
+				"GlobalSet"
+			],
+			"instructions": [
+				"global_value",
+				"store"
+			]
+		},
+		{
+			"operators": [
+				"Drop"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Select"
+			],
+			"instructions": [
+				"select"
+			]
+		},
+		{
+			"operators": [
+				"TypedSelect"
+			],
+			"instructions": [
+				"select"
+			]
+		},
+		{
+			"operators": [
+				"Nop"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Unreachable"
+			],
+			"instructions": [
+				"trap"
+			]
+		},
+		{
+			"operators": [
+				"Block"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Loop"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"If"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Else"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"End"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Br"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"BrIf"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"BrTable"
+			],
+			"instructions": [
+				"br_table"
+			]
+		},
+		{
+			"operators": [
+				"Return"
+			],
+			"instructions": [
+				"return_"
+			]
+		},
+		{
+			"operators": [
+				"Try",
+				"Catch",
+				"Throw",
+				"Rethrow",
+				"Delegate",
+				"CatchAll"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"Call"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"CallIndirect"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"ReturnCall"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"ReturnCallIndirect"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"ReturnCallRef"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"MemoryGrow"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"MemorySize"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32Load8U"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"uadd_overflow_trap",
+				"uload8"
+			]
+		},
+		{
+			"operators": [
+				"I32Load16U"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"uadd_overflow_trap",
+				"uload16"
+			]
+		},
+		{
+			"operators": [
+				"I32Load8S"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"sload8",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I32Load16S"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"sload16",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Load8U"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"uadd_overflow_trap",
+				"uload8"
+			]
+		},
+		{
+			"operators": [
+				"I64Load16U"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"uadd_overflow_trap",
+				"uload16"
+			]
+		},
+		{
+			"operators": [
+				"I64Load8S"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"sload8",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Load16S"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"sload16",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Load32S"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"sload32",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Load32U"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"uadd_overflow_trap",
+				"uload32"
+			]
+		},
+		{
+			"operators": [
+				"I32Load"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"F32Load"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Load"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"F64Load"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Load"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Load8x8S"
+			],
+			"instructions": [
+				"sload8x8"
+			]
+		},
+		{
+			"operators": [
+				"V128Load8x8U"
+			],
+			"instructions": [
+				"uload8x8"
+			]
+		},
+		{
+			"operators": [
+				"V128Load16x4S"
+			],
+			"instructions": [
+				"sload16x4"
+			]
+		},
+		{
+			"operators": [
+				"V128Load16x4U"
+			],
+			"instructions": [
+				"uload16x4"
+			]
+		},
+		{
+			"operators": [
+				"V128Load32x2S"
+			],
+			"instructions": [
+				"sload32x2"
+			]
+		},
+		{
+			"operators": [
+				"V128Load32x2U"
+			],
+			"instructions": [
+				"uload32x2"
+			]
+		},
+		{
+			"operators": [
+				"I32Store",
+				"I64Store",
+				"F32Store",
+				"F64Store"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"store",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I32Store8",
+				"I64Store8"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"istore8",
+				"isub",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I32Store16",
+				"I64Store16"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"istore16",
+				"isub",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I64Store32"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"istore32",
+				"isub",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Store"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"store",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I32Const"
+			],
+			"instructions": [
+				"iconst"
+			]
+		},
+		{
+			"operators": [
+				"I64Const"
+			],
+			"instructions": [
+				"iconst"
+			]
+		},
+		{
+			"operators": [
+				"F32Const"
+			],
+			"instructions": [
+				"f32const"
+			]
+		},
+		{
+			"operators": [
+				"F64Const"
+			],
+			"instructions": [
+				"f64const"
+			]
+		},
+		{
+			"operators": [
+				"I32Clz",
+				"I64Clz"
+			],
+			"instructions": [
+				"clz"
+			]
+		},
+		{
+			"operators": [
+				"I32Ctz",
+				"I64Ctz"
+			],
+			"instructions": [
+				"ctz"
+			]
+		},
+		{
+			"operators": [
+				"I32Popcnt",
+				"I64Popcnt"
+			],
+			"instructions": [
+				"popcnt"
+			]
+		},
+		{
+			"operators": [
+				"I64ExtendI32S"
+			],
+			"instructions": [
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I64ExtendI32U"
+			],
+			"instructions": [
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32WrapI64"
+			],
+			"instructions": [
+				"ireduce"
+			]
+		},
+		{
+			"operators": [
+				"F32Sqrt",
+				"F64Sqrt"
+			],
+			"instructions": [
+				"sqrt"
+			]
+		},
+		{
+			"operators": [
+				"F32Ceil",
+				"F64Ceil"
+			],
+			"instructions": [
+				"ceil"
+			]
+		},
+		{
+			"operators": [
+				"F32Floor",
+				"F64Floor"
+			],
+			"instructions": [
+				"floor"
+			]
+		},
+		{
+			"operators": [
+				"F32Trunc",
+				"F64Trunc"
+			],
+			"instructions": [
+				"trunc"
+			]
+		},
+		{
+			"operators": [
+				"F32Nearest",
+				"F64Nearest"
+			],
+			"instructions": [
+				"nearest"
+			]
+		},
+		{
+			"operators": [
+				"F32Abs",
+				"F64Abs"
+			],
+			"instructions": [
+				"fabs"
+			]
+		},
+		{
+			"operators": [
+				"F32Neg",
+				"F64Neg"
+			],
+			"instructions": [
+				"fneg"
+			]
+		},
+		{
+			"operators": [
+				"F64ConvertI64U",
+				"F64ConvertI32U"
+			],
+			"instructions": [
+				"fcvt_from_uint"
+			]
+		},
+		{
+			"operators": [
+				"F64ConvertI64S",
+				"F64ConvertI32S"
+			],
+			"instructions": [
+				"fcvt_from_sint"
+			]
+		},
+		{
+			"operators": [
+				"F32ConvertI64S",
+				"F32ConvertI32S"
+			],
+			"instructions": [
+				"fcvt_from_sint"
+			]
+		},
+		{
+			"operators": [
+				"F32ConvertI64U",
+				"F32ConvertI32U"
+			],
+			"instructions": [
+				"fcvt_from_uint"
+			]
+		},
+		{
+			"operators": [
+				"F64PromoteF32"
+			],
+			"instructions": [
+				"fpromote"
+			]
+		},
+		{
+			"operators": [
+				"F32DemoteF64"
+			],
+			"instructions": [
+				"fdemote"
+			]
+		},
+		{
+			"operators": [
+				"I64TruncF64S",
+				"I64TruncF32S"
+			],
+			"instructions": [
+				"fcvt_to_sint"
+			]
+		},
+		{
+			"operators": [
+				"I32TruncF64S",
+				"I32TruncF32S"
+			],
+			"instructions": [
+				"fcvt_to_sint"
+			]
+		},
+		{
+			"operators": [
+				"I64TruncF64U",
+				"I64TruncF32U"
+			],
+			"instructions": [
+				"fcvt_to_uint"
+			]
+		},
+		{
+			"operators": [
+				"I32TruncF64U",
+				"I32TruncF32U"
+			],
+			"instructions": [
+				"fcvt_to_uint"
+			]
+		},
+		{
+			"operators": [
+				"I64TruncSatF64S",
+				"I64TruncSatF32S"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat"
+			]
+		},
+		{
+			"operators": [
+				"I32TruncSatF64S",
+				"I32TruncSatF32S"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat"
+			]
+		},
+		{
+			"operators": [
+				"I64TruncSatF64U",
+				"I64TruncSatF32U"
+			],
+			"instructions": [
+				"fcvt_to_uint_sat"
+			]
+		},
+		{
+			"operators": [
+				"I32TruncSatF64U",
+				"I32TruncSatF32U"
+			],
+			"instructions": [
+				"fcvt_to_uint_sat"
+			]
+		},
+		{
+			"operators": [
+				"F32ReinterpretI32"
+			],
+			"instructions": [
+				"bitcast"
+			]
+		},
+		{
+			"operators": [
+				"F64ReinterpretI64"
+			],
+			"instructions": [
+				"bitcast"
+			]
+		},
+		{
+			"operators": [
+				"I32ReinterpretF32"
+			],
+			"instructions": [
+				"bitcast"
+			]
+		},
+		{
+			"operators": [
+				"I64ReinterpretF64"
+			],
+			"instructions": [
+				"bitcast"
+			]
+		},
+		{
+			"operators": [
+				"I32Extend8S"
+			],
+			"instructions": [
+				"ireduce",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I32Extend16S"
+			],
+			"instructions": [
+				"ireduce",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I64Extend8S"
+			],
+			"instructions": [
+				"ireduce",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I64Extend16S"
+			],
+			"instructions": [
+				"ireduce",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I64Extend32S"
+			],
+			"instructions": [
+				"ireduce",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I32Add",
+				"I64Add"
+			],
+			"instructions": [
+				"iadd"
+			]
+		},
+		{
+			"operators": [
+				"I32And",
+				"I64And"
+			],
+			"instructions": [
+				"band"
+			]
+		},
+		{
+			"operators": [
+				"I32Or",
+				"I64Or"
+			],
+			"instructions": [
+				"bor"
+			]
+		},
+		{
+			"operators": [
+				"I32Xor",
+				"I64Xor"
+			],
+			"instructions": [
+				"bxor"
+			]
+		},
+		{
+			"operators": [
+				"I32Shl",
+				"I64Shl"
+			],
+			"instructions": [
+				"ishl"
+			]
+		},
+		{
+			"operators": [
+				"I32ShrS",
+				"I64ShrS"
+			],
+			"instructions": [
+				"sshr"
+			]
+		},
+		{
+			"operators": [
+				"I32ShrU",
+				"I64ShrU"
+			],
+			"instructions": [
+				"ushr"
+			]
+		},
+		{
+			"operators": [
+				"I32Rotl",
+				"I64Rotl"
+			],
+			"instructions": [
+				"rotl"
+			]
+		},
+		{
+			"operators": [
+				"I32Rotr",
+				"I64Rotr"
+			],
+			"instructions": [
+				"rotr"
+			]
+		},
+		{
+			"operators": [
+				"F32Add",
+				"F64Add"
+			],
+			"instructions": [
+				"fadd"
+			]
+		},
+		{
+			"operators": [
+				"I32Sub",
+				"I64Sub"
+			],
+			"instructions": [
+				"isub"
+			]
+		},
+		{
+			"operators": [
+				"F32Sub",
+				"F64Sub"
+			],
+			"instructions": [
+				"fsub"
+			]
+		},
+		{
+			"operators": [
+				"I32Mul",
+				"I64Mul"
+			],
+			"instructions": [
+				"imul"
+			]
+		},
+		{
+			"operators": [
+				"F32Mul",
+				"F64Mul"
+			],
+			"instructions": [
+				"fmul"
+			]
+		},
+		{
+			"operators": [
+				"F32Div",
+				"F64Div"
+			],
+			"instructions": [
+				"fdiv"
+			]
+		},
+		{
+			"operators": [
+				"I32DivS",
+				"I64DivS"
+			],
+			"instructions": [
+				"sdiv"
+			]
+		},
+		{
+			"operators": [
+				"I32DivU",
+				"I64DivU"
+			],
+			"instructions": [
+				"udiv"
+			]
+		},
+		{
+			"operators": [
+				"I32RemS",
+				"I64RemS"
+			],
+			"instructions": [
+				"srem"
+			]
+		},
+		{
+			"operators": [
+				"I32RemU",
+				"I64RemU"
+			],
+			"instructions": [
+				"urem"
+			]
+		},
+		{
+			"operators": [
+				"F32Min",
+				"F64Min"
+			],
+			"instructions": [
+				"fmin"
+			]
+		},
+		{
+			"operators": [
+				"F32Max",
+				"F64Max"
+			],
+			"instructions": [
+				"fmax"
+			]
+		},
+		{
+			"operators": [
+				"F32Copysign",
+				"F64Copysign"
+			],
+			"instructions": [
+				"fcopysign"
+			]
+		},
+		{
+			"operators": [
+				"I32LtS",
+				"I64LtS"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32LtU",
+				"I64LtU"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32LeS",
+				"I64LeS"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32LeU",
+				"I64LeU"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32GtS",
+				"I64GtS"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32GtU",
+				"I64GtU"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32GeS",
+				"I64GeS"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32GeU",
+				"I64GeU"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32Eqz",
+				"I64Eqz"
+			],
+			"instructions": [
+				"icmp_imm",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32Eq",
+				"I64Eq"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Eq",
+				"F64Eq"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32Ne",
+				"I64Ne"
+			],
+			"instructions": [
+				"icmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Ne",
+				"F64Ne"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Gt",
+				"F64Gt"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Ge",
+				"F64Ge"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Lt",
+				"F64Lt"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"F32Le",
+				"F64Le"
+			],
+			"instructions": [
+				"fcmp",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"RefNull"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"RefIsNull"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"RefFunc"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"MemoryAtomicWait32",
+				"MemoryAtomicWait64"
+			],
+			"instructions": [
+				"iconst"
+			]
+		},
+		{
+			"operators": [
+				"MemoryAtomicNotify"
+			],
+			"instructions": [
+				"iconst"
+			]
+		},
+		{
+			"operators": [
+				"I32AtomicLoad"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicLoad"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicLoad8U"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicLoad16U"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicLoad8U"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicLoad16U"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicLoad32U"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicStore"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicStore"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicStore8"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicStore16"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicStore8"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicStore16"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicStore32"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwAdd"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwAdd"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8AddU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16AddU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8AddU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16AddU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32AddU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwSub"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwSub"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8SubU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16SubU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8SubU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16SubU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32SubU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwAnd"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwAnd"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8AndU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16AndU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8AndU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16AndU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32AndU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwOr"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwOr"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8OrU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16OrU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8OrU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16OrU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32OrU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwXor"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwXor"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8XorU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16XorU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8XorU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16XorU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32XorU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwXchg"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwXchg"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8XchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16XchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8XchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16XchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32XchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmwCmpxchg"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmwCmpxchg"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw8CmpxchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I32AtomicRmw16CmpxchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw8CmpxchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw16CmpxchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I64AtomicRmw32CmpxchgU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"AtomicFence"
+			],
+			"instructions": [
+				"fence"
+			]
+		},
+		{
+			"operators": [
+				"MemoryCopy"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"MemoryFill"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"MemoryInit"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"DataDrop"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableSize"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableGrow"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableGet"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableSet"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableCopy"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableFill"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TableInit"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"ElemDrop"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"V128Const"
+			],
+			"instructions": [
+				"vconst"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Splat",
+				"I16x8Splat"
+			],
+			"instructions": [
+				"ireduce",
+				"splat"
+			]
+		},
+		{
+			"operators": [
+				"I32x4Splat",
+				"I64x2Splat",
+				"F32x4Splat",
+				"F64x2Splat"
+			],
+			"instructions": [
+				"splat"
+			]
+		},
+		{
+			"operators": [
+				"V128Load8Splat",
+				"V128Load16Splat",
+				"V128Load32Splat",
+				"V128Load64Splat"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"splat",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Load32Zero",
+				"V128Load64Zero"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"isub",
+				"load",
+				"scalar_to_vector",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Load8Lane",
+				"V128Load16Lane",
+				"V128Load32Lane",
+				"V128Load64Lane"
+			],
+			"instructions": [
+				"icmp",
+				"iconst",
+				"insertlane",
+				"isub",
+				"load",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"V128Store8Lane",
+				"V128Store16Lane",
+				"V128Store32Lane",
+				"V128Store64Lane"
+			],
+			"instructions": [
+				"extractlane",
+				"icmp",
+				"iconst",
+				"isub",
+				"store",
+				"uadd_overflow_trap"
+			]
+		},
+		{
+			"operators": [
+				"I8x16ExtractLaneS",
+				"I16x8ExtractLaneS"
+			],
+			"instructions": [
+				"extractlane",
+				"sextend"
+			]
+		},
+		{
+			"operators": [
+				"I8x16ExtractLaneU",
+				"I16x8ExtractLaneU"
+			],
+			"instructions": [
+				"extractlane",
+				"uextend"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtractLane",
+				"I64x2ExtractLane",
+				"F32x4ExtractLane",
+				"F64x2ExtractLane"
+			],
+			"instructions": [
+				"extractlane"
+			]
+		},
+		{
+			"operators": [
+				"I8x16ReplaceLane",
+				"I16x8ReplaceLane"
+			],
+			"instructions": [
+				"insertlane",
+				"ireduce"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ReplaceLane",
+				"I64x2ReplaceLane",
+				"F32x4ReplaceLane",
+				"F64x2ReplaceLane"
+			],
+			"instructions": [
+				"insertlane"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Shuffle"
+			],
+			"instructions": [
+				"shuffle"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Swizzle"
+			],
+			"instructions": [
+				"swizzle"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Add",
+				"I16x8Add",
+				"I32x4Add",
+				"I64x2Add"
+			],
+			"instructions": [
+				"iadd"
+			]
+		},
+		{
+			"operators": [
+				"I8x16AddSatS",
+				"I16x8AddSatS"
+			],
+			"instructions": [
+				"sadd_sat"
+			]
+		},
+		{
+			"operators": [
+				"I8x16AddSatU",
+				"I16x8AddSatU"
+			],
+			"instructions": [
+				"uadd_sat"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Sub",
+				"I16x8Sub",
+				"I32x4Sub",
+				"I64x2Sub"
+			],
+			"instructions": [
+				"isub"
+			]
+		},
+		{
+			"operators": [
+				"I8x16SubSatS",
+				"I16x8SubSatS"
+			],
+			"instructions": [
+				"ssub_sat"
+			]
+		},
+		{
+			"operators": [
+				"I8x16SubSatU",
+				"I16x8SubSatU"
+			],
+			"instructions": [
+				"usub_sat"
+			]
+		},
+		{
+			"operators": [
+				"I8x16MinS",
+				"I16x8MinS",
+				"I32x4MinS"
+			],
+			"instructions": [
+				"smin"
+			]
+		},
+		{
+			"operators": [
+				"I8x16MinU",
+				"I16x8MinU",
+				"I32x4MinU"
+			],
+			"instructions": [
+				"umin"
+			]
+		},
+		{
+			"operators": [
+				"I8x16MaxS",
+				"I16x8MaxS",
+				"I32x4MaxS"
+			],
+			"instructions": [
+				"smax"
+			]
+		},
+		{
+			"operators": [
+				"I8x16MaxU",
+				"I16x8MaxU",
+				"I32x4MaxU"
+			],
+			"instructions": [
+				"umax"
+			]
+		},
+		{
+			"operators": [
+				"I8x16AvgrU",
+				"I16x8AvgrU"
+			],
+			"instructions": [
+				"avg_round"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Neg",
+				"I16x8Neg",
+				"I32x4Neg",
+				"I64x2Neg"
+			],
+			"instructions": [
+				"ineg"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Abs",
+				"I16x8Abs",
+				"I32x4Abs",
+				"I64x2Abs"
+			],
+			"instructions": [
+				"iabs"
+			]
+		},
+		{
+			"operators": [
+				"I16x8Mul",
+				"I32x4Mul",
+				"I64x2Mul"
+			],
+			"instructions": [
+				"imul"
+			]
+		},
+		{
+			"operators": [
+				"V128Or"
+			],
+			"instructions": [
+				"bor"
+			]
+		},
+		{
+			"operators": [
+				"V128Xor"
+			],
+			"instructions": [
+				"bxor"
+			]
+		},
+		{
+			"operators": [
+				"V128And"
+			],
+			"instructions": [
+				"band"
+			]
+		},
+		{
+			"operators": [
+				"V128AndNot"
+			],
+			"instructions": [
+				"band_not"
+			]
+		},
+		{
+			"operators": [
+				"V128Not"
+			],
+			"instructions": [
+				"bnot"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Shl",
+				"I16x8Shl",
+				"I32x4Shl",
+				"I64x2Shl"
+			],
+			"instructions": [
+				"ishl"
+			]
+		},
+		{
+			"operators": [
+				"I8x16ShrU",
+				"I16x8ShrU",
+				"I32x4ShrU",
+				"I64x2ShrU"
+			],
+			"instructions": [
+				"ushr"
+			]
+		},
+		{
+			"operators": [
+				"I8x16ShrS",
+				"I16x8ShrS",
+				"I32x4ShrS",
+				"I64x2ShrS"
+			],
+			"instructions": [
+				"sshr"
+			]
+		},
+		{
+			"operators": [
+				"V128Bitselect"
+			],
+			"instructions": [
+				"bitselect"
+			]
+		},
+		{
+			"operators": [
+				"V128AnyTrue"
+			],
+			"instructions": [
+				"uextend",
+				"vany_true"
+			]
+		},
+		{
+			"operators": [
+				"I8x16AllTrue",
+				"I16x8AllTrue",
+				"I32x4AllTrue",
+				"I64x2AllTrue"
+			],
+			"instructions": [
+				"uextend",
+				"vall_true"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Bitmask",
+				"I16x8Bitmask",
+				"I32x4Bitmask",
+				"I64x2Bitmask"
+			],
+			"instructions": [
+				"vhigh_bits"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Eq",
+				"I16x8Eq",
+				"I32x4Eq",
+				"I64x2Eq"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16Ne",
+				"I16x8Ne",
+				"I32x4Ne",
+				"I64x2Ne"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16GtS",
+				"I16x8GtS",
+				"I32x4GtS",
+				"I64x2GtS"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16LtS",
+				"I16x8LtS",
+				"I32x4LtS",
+				"I64x2LtS"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16GtU",
+				"I16x8GtU",
+				"I32x4GtU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16LtU",
+				"I16x8LtU",
+				"I32x4LtU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16GeS",
+				"I16x8GeS",
+				"I32x4GeS",
+				"I64x2GeS"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16LeS",
+				"I16x8LeS",
+				"I32x4LeS",
+				"I64x2LeS"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I8x16GeU",
+				"I16x8GeU",
+				"I32x4GeU",
+				"I8x16LeU",
+				"I16x8LeU",
+				"I32x4LeU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Eq",
+				"F64x2Eq"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Ne",
+				"F64x2Ne"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Lt",
+				"F64x2Lt"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Gt",
+				"F64x2Gt"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Le",
+				"F64x2Le"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Ge",
+				"F64x2Ge"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4Add",
+				"F64x2Add"
+			],
+			"instructions": [
+				"fadd"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Sub",
+				"F64x2Sub"
+			],
+			"instructions": [
+				"fsub"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Mul",
+				"F64x2Mul"
+			],
+			"instructions": [
+				"fmul"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Div",
+				"F64x2Div"
+			],
+			"instructions": [
+				"fdiv"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Max",
+				"F64x2Max"
+			],
+			"instructions": [
+				"fmax"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Min",
+				"F64x2Min"
+			],
+			"instructions": [
+				"fmin"
+			]
+		},
+		{
+			"operators": [
+				"F32x4PMax",
+				"F64x2PMax"
+			],
+			"instructions": [
+				"bitselect",
+				"fcmp"
+			]
+		},
+		{
+			"operators": [
+				"F32x4PMin",
+				"F64x2PMin"
+			],
+			"instructions": [
+				"bitselect",
+				"fcmp"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Sqrt",
+				"F64x2Sqrt"
+			],
+			"instructions": [
+				"sqrt"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Neg",
+				"F64x2Neg"
+			],
+			"instructions": [
+				"fneg"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Abs",
+				"F64x2Abs"
+			],
+			"instructions": [
+				"fabs"
+			]
+		},
+		{
+			"operators": [
+				"F32x4ConvertI32x4S"
+			],
+			"instructions": [
+				"fcvt_from_sint"
+			]
+		},
+		{
+			"operators": [
+				"F32x4ConvertI32x4U"
+			],
+			"instructions": [
+				"fcvt_from_uint"
+			]
+		},
+		{
+			"operators": [
+				"F64x2ConvertLowI32x4S"
+			],
+			"instructions": [
+				"fcvt_from_sint",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"F64x2ConvertLowI32x4U"
+			],
+			"instructions": [
+				"fcvt_from_uint",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"F64x2PromoteLowF32x4"
+			],
+			"instructions": [
+				"fvpromote_low"
+			]
+		},
+		{
+			"operators": [
+				"F32x4DemoteF64x2Zero"
+			],
+			"instructions": [
+				"fvdemote"
+			]
+		},
+		{
+			"operators": [
+				"I32x4TruncSatF32x4S"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat"
+			]
+		},
+		{
+			"operators": [
+				"I32x4TruncSatF64x2SZero"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat",
+				"snarrow",
+				"vconst"
+			]
+		},
+		{
+			"operators": [
+				"I32x4RelaxedTruncF32x4U",
+				"I32x4TruncSatF32x4U"
+			],
+			"instructions": [
+				"fcvt_to_uint_sat"
+			]
+		},
+		{
+			"operators": [
+				"I32x4RelaxedTruncF64x2UZero",
+				"I32x4TruncSatF64x2UZero"
+			],
+			"instructions": [
+				"fcvt_to_uint_sat",
+				"uunarrow",
+				"vconst"
+			]
+		},
+		{
+			"operators": [
+				"I8x16NarrowI16x8S"
+			],
+			"instructions": [
+				"snarrow"
+			]
+		},
+		{
+			"operators": [
+				"I16x8NarrowI32x4S"
+			],
+			"instructions": [
+				"snarrow"
+			]
+		},
+		{
+			"operators": [
+				"I8x16NarrowI16x8U"
+			],
+			"instructions": [
+				"unarrow"
+			]
+		},
+		{
+			"operators": [
+				"I16x8NarrowI32x4U"
+			],
+			"instructions": [
+				"unarrow"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtendLowI8x16S"
+			],
+			"instructions": [
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtendHighI8x16S"
+			],
+			"instructions": [
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtendLowI8x16U"
+			],
+			"instructions": [
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtendHighI8x16U"
+			],
+			"instructions": [
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtendLowI16x8S"
+			],
+			"instructions": [
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtendHighI16x8S"
+			],
+			"instructions": [
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtendLowI16x8U"
+			],
+			"instructions": [
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtendHighI16x8U"
+			],
+			"instructions": [
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtendLowI32x4S"
+			],
+			"instructions": [
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtendHighI32x4S"
+			],
+			"instructions": [
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtendLowI32x4U"
+			],
+			"instructions": [
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtendHighI32x4U"
+			],
+			"instructions": [
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtAddPairwiseI8x16S"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"swiden_high",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtAddPairwiseI16x8S"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"swiden_high",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtAddPairwiseI8x16U"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"uwiden_high",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtAddPairwiseI16x8U"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"uwiden_high",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Ceil",
+				"F64x2Ceil"
+			],
+			"instructions": [
+				"ceil"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Floor",
+				"F64x2Floor"
+			],
+			"instructions": [
+				"floor"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Trunc",
+				"F64x2Trunc"
+			],
+			"instructions": [
+				"trunc"
+			]
+		},
+		{
+			"operators": [
+				"F32x4Nearest",
+				"F64x2Nearest"
+			],
+			"instructions": [
+				"nearest"
+			]
+		},
+		{
+			"operators": [
+				"I32x4DotI16x8S"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"imul",
+				"swiden_high",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I8x16Popcnt"
+			],
+			"instructions": [
+				"popcnt"
+			]
+		},
+		{
+			"operators": [
+				"I16x8Q15MulrSatS"
+			],
+			"instructions": [
+				"sqmul_round_sat"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtMulLowI8x16S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtMulHighI8x16S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtMulLowI8x16U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I16x8ExtMulHighI8x16U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtMulLowI16x8S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtMulHighI16x8S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtMulLowI16x8U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I32x4ExtMulHighI16x8U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtMulLowI32x4S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtMulHighI32x4S"
+			],
+			"instructions": [
+				"imul",
+				"swiden_high"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtMulLowI32x4U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_low"
+			]
+		},
+		{
+			"operators": [
+				"I64x2ExtMulHighI32x4U"
+			],
+			"instructions": [
+				"imul",
+				"uwiden_high"
+			]
+		},
+		{
+			"operators": [
+				"MemoryDiscard"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"F32x4RelaxedMax",
+				"F64x2RelaxedMax"
+			],
+			"instructions": [
+				"bitselect",
+				"fcmp",
+				"fmax"
+			]
+		},
+		{
+			"operators": [
+				"F32x4RelaxedMin",
+				"F64x2RelaxedMin"
+			],
+			"instructions": [
+				"bitselect",
+				"fcmp",
+				"fmin"
+			]
+		},
+		{
+			"operators": [
+				"I8x16RelaxedSwizzle"
+			],
+			"instructions": [
+				"swizzle",
+				"x86_pshufb"
+			]
+		},
+		{
+			"operators": [
+				"F32x4RelaxedMadd",
+				"F64x2RelaxedMadd"
+			],
+			"instructions": [
+				"fadd",
+				"fma",
+				"fmul"
+			]
+		},
+		{
+			"operators": [
+				"F32x4RelaxedNmadd",
+				"F64x2RelaxedNmadd"
+			],
+			"instructions": [
+				"fadd",
+				"fma",
+				"fmul",
+				"fneg"
+			]
+		},
+		{
+			"operators": [
+				"I8x16RelaxedLaneselect",
+				"I16x8RelaxedLaneselect",
+				"I32x4RelaxedLaneselect",
+				"I64x2RelaxedLaneselect"
+			],
+			"instructions": [
+				"bitselect",
+				"x86_blendv"
+			]
+		},
+		{
+			"operators": [
+				"I32x4RelaxedTruncF32x4S"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat",
+				"x86_cvtt2dq"
+			]
+		},
+		{
+			"operators": [
+				"I32x4RelaxedTruncF64x2SZero"
+			],
+			"instructions": [
+				"fcvt_to_sint_sat",
+				"snarrow",
+				"vconst",
+				"x86_cvtt2dq"
+			]
+		},
+		{
+			"operators": [
+				"I16x8RelaxedQ15mulrS"
+			],
+			"instructions": [
+				"sqmul_round_sat",
+				"x86_pmulhrsw"
+			]
+		},
+		{
+			"operators": [
+				"I16x8RelaxedDotI8x16I7x16S"
+			],
+			"instructions": [
+				"iadd_pairwise",
+				"imul",
+				"swiden_high",
+				"swiden_low",
+				"x86_pmaddubsw"
+			]
+		},
+		{
+			"operators": [
+				"I32x4RelaxedDotI8x16I7x16AddS"
+			],
+			"instructions": [
+				"iadd",
+				"iadd_pairwise",
+				"imul",
+				"swiden_high",
+				"swiden_low",
+				"x86_pmaddubsw"
+			]
+		},
+		{
+			"operators": [
+				"BrOnNull"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"BrOnNonNull"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"CallRef"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"RefAsNonNull"
+			],
+			"instructions": [
+				"trapnz"
+			]
+		},
+		{
+			"operators": [
+				"RefI31"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I31GetS"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"I31GetU"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"TryTable",
+				"ThrowRef"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"RefEq",
+				"RefTestNonNull",
+				"RefTestNullable",
+				"RefCastNonNull",
+				"RefCastNullable",
+				"BrOnCast",
+				"BrOnCastFail",
+				"AnyConvertExtern",
+				"ExternConvertAny",
+				"ArrayNew",
+				"ArrayNewDefault",
+				"ArrayNewFixed",
+				"ArrayNewData",
+				"ArrayNewElem",
+				"ArrayGet",
+				"ArrayGetU",
+				"ArrayGetS",
+				"ArraySet",
+				"ArrayLen",
+				"ArrayFill",
+				"ArrayCopy",
+				"ArrayInitData",
+				"ArrayInitElem",
+				"StructNew",
+				"StructNewDefault",
+				"StructGetS",
+				"StructGetU",
+				"StructSet",
+				"StructGet"
+			],
+			"instructions": []
+		},
+		{
+			"operators": [
+				"GlobalAtomicGet",
+				"GlobalAtomicSet",
+				"GlobalAtomicRmwAdd",
+				"GlobalAtomicRmwSub",
+				"GlobalAtomicRmwOr",
+				"GlobalAtomicRmwXor",
+				"GlobalAtomicRmwAnd",
+				"GlobalAtomicRmwXchg",
+				"GlobalAtomicRmwCmpxchg",
+				"TableAtomicGet",
+				"TableAtomicSet",
+				"TableAtomicRmwXchg",
+				"TableAtomicRmwCmpxchg",
+				"StructAtomicGet",
+				"StructAtomicGetS",
+				"StructAtomicGetU",
+				"StructAtomicSet",
+				"StructAtomicRmwAdd",
+				"StructAtomicRmwSub",
+				"StructAtomicRmwOr",
+				"StructAtomicRmwXor",
+				"StructAtomicRmwAnd",
+				"StructAtomicRmwXchg",
+				"StructAtomicRmwCmpxchg",
+				"ArrayAtomicGet",
+				"ArrayAtomicGetS",
+				"ArrayAtomicGetU",
+				"ArrayAtomicSet",
+				"ArrayAtomicRmwAdd",
+				"ArrayAtomicRmwSub",
+				"ArrayAtomicRmwOr",
+				"ArrayAtomicRmwXor",
+				"ArrayAtomicRmwAnd",
+				"ArrayAtomicRmwXchg",
+				"ArrayAtomicRmwCmpxchg",
+				"RefI31Shared"
+			],
+			"instructions": []
+		}
+	]
+}

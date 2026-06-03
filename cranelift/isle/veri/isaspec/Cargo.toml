@@ -1,0 +1,16 @@
+[package]
+name = "cranelift-isle-veri-isaspec"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+
+[dependencies]
+cranelift-isle-veri-aslp = { path = "../aslp" }
+cranelift-isle = { path = "../../isle", features = ["printer"] }
+cranelift-codegen = { workspace = true, features = ["all-arch"] }
+reqwest = { workspace = true }
+anyhow = { workspace = true, features = ['std', 'backtrace'] }
+clap = { workspace = true, features = ['default'] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+itertools = "0.12.0"

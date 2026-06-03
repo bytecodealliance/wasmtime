@@ -1,0 +1,118 @@
+aslt = _{ SOI ~ (stmt ~ (NEWLINE ~ stmt)* ~ NEWLINE?)? ~ EOI }
+
+// Statements
+
+stmt = {
+    stmt_assign
+  | stmt_constdecl
+  | stmt_vardecl
+  | stmt_vardeclsnoinit
+  | stmt_assert
+  | stmt_if
+  | stmt_tcall
+}
+
+stmt_assign         = { "Stmt_Assign(" ~ lexpr ~ "," ~ expr ~ ")" }
+stmt_constdecl      = { "Stmt_ConstDecl(" ~ ty ~ "," ~ ident ~ "," ~ expr ~ ")" }
+stmt_vardecl        = { "Stmt_VarDecl(" ~ ty ~ "," ~ ident ~ "," ~ expr ~ ")" }
+stmt_vardeclsnoinit = { "Stmt_VarDeclsNoInit(" ~ ty ~ "," ~ vars ~ ")" }
+stmt_assert         = { "Stmt_Assert(" ~ expr ~ ")" }
+stmt_if             = { "Stmt_If(" ~ expr ~ "," ~ stmts ~ "," ~ stmts ~ "," ~ stmts ~ ")" }
+stmt_tcall          = { "Stmt_TCall(" ~ func_ident ~ "," ~ exprs ~ "," ~ exprs ~ ")" }
+
+stmts = { "[" ~ (NEWLINE ~ stmt ~ (";" ~ NEWLINE ~ stmt)* ~ NEWLINE)? ~ "]" }
+
+// Left-hand-side Expressions
+
+lexpr = {
+    lexpr_array
+  | lexpr_field
+  | lexpr_var
+}
+
+lexpr_array = { "LExpr_Array(" ~ lexpr ~ "," ~ expr ~ ")" }
+lexpr_field = { "LExpr_Field(" ~ lexpr ~ "," ~ ident ~ ")" }
+lexpr_var   = { "LExpr_Var(" ~ var ~ ")" }
+
+// Expressions
+
+expr = {
+    expr_paren
+  | expr_array
+  | expr_field
+  | expr_var
+  | expr_tapply
+  | expr_slices
+  | expr_litint
+  | expr_litbits
+}
+
+expr_paren   = _{ "(" ~ expr ~ ")" }
+expr_array   =  { "Expr_Array(" ~ expr ~ "," ~ expr ~ ")" }
+expr_field   =  { "Expr_Field(" ~ expr ~ "," ~ ident ~ ")" }
+expr_var     =  { "Expr_Var(" ~ var ~ ")" }
+expr_tapply  =  { "Expr_TApply(" ~ func_ident ~ "," ~ exprs ~ "," ~ exprs ~ ")" }
+expr_slices  =  { "Expr_Slices(" ~ expr ~ "," ~ slices ~ ")" }
+expr_litint  =  { integer }
+expr_litbits =  { bits }
+
+exprs = { "[" ~ (expr ~ (";" ~ expr)*)? ~ "]" }
+
+// Slices
+
+slice = {
+    slice_paren
+  | slice_lowd
+}
+
+slice_paren = _{ "(" ~ slice ~ ")" }
+slice_lowd  =  { "Slice_LoWd(" ~ expr ~ "," ~ expr ~ ")" }
+
+slices = { "[" ~ (slice ~ (";" ~ slice)*)? ~ "]" }
+
+// Types
+
+ty = {
+    ty_bits
+  | ty_boolean
+}
+
+ty_bits    = { "Type_Bits(" ~ expr ~ ")" }
+ty_boolean = { "Type_Constructor(\"boolean\")" }
+
+// Variables
+
+var = {
+    var_paren
+  | var_ident
+}
+
+var_paren = _{ "(" ~ var ~ ")" }
+var_ident =  { ident }
+
+vars = { "[" ~ (var ~ (";" ~ var)*)? ~ "]" }
+
+// Identifiers
+
+func_ident = ${ "\"" ~ id ~ "." ~ decimal ~ "\"" }
+
+ident = @{ "\"" ~ id ~ "\"" }
+
+id = @{
+    name ~ "." ~ name
+  | name
+}
+
+name = @{
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+}
+
+// Literals
+
+integer = @{ decimal }
+
+bits = @{ "\'" ~ binary ~ "\'" }
+
+decimal = @{ ASCII_DIGIT+ }
+
+binary = @{ ASCII_BIN_DIGIT+ }

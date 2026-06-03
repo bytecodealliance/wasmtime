@@ -1,0 +1,250 @@
+{
+	"select": [
+		"wasm_category_stack",
+		"wasm_proposal_mvp"
+	],
+	"icmp": [
+		"wasm_category_comparison",
+		"wasm_category_loads",
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"iconst": [
+		"wasm_category_const",
+		"wasm_category_loads",
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"isub": [
+		"wasm_category_binary",
+		"wasm_category_loads",
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"uadd_overflow_trap": [
+		"wasm_category_loads",
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"uload8": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"uload16": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"sload8": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"sload16": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"sload32": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"uload32": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"load": [
+		"wasm_category_loads",
+		"wasm_proposal_mvp"
+	],
+	"store": [
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"istore8": [
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"istore16": [
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"istore32": [
+		"wasm_category_stores",
+		"wasm_proposal_mvp"
+	],
+	"f32const": [
+		"wasm_category_const",
+		"wasm_proposal_mvp"
+	],
+	"f64const": [
+		"wasm_category_const",
+		"wasm_proposal_mvp"
+	],
+	"clz": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"ctz": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"popcnt": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"sextend": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"uextend": [
+		"wasm_category_comparison",
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"ireduce": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"sqrt": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"ceil": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"floor": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"trunc": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"nearest": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fabs": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fneg": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fcvt_from_uint": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fcvt_from_sint": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fpromote": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fdemote": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fcvt_to_sint": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"fcvt_to_uint": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"bitcast": [
+		"wasm_category_unary",
+		"wasm_proposal_mvp"
+	],
+	"iadd": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"band": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"bor": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"bxor": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"ishl": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"sshr": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"ushr": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"rotl": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"rotr": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fadd": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fsub": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"imul": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fmul": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fdiv": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"sdiv": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"udiv": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"srem": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"urem": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fmin": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fmax": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fcopysign": [
+		"wasm_category_binary",
+		"wasm_proposal_mvp"
+	],
+	"fcmp": [
+		"wasm_category_comparison",
+		"wasm_proposal_mvp"
+	]
+}

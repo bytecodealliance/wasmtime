@@ -1,0 +1,22 @@
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Add using plain bvadd spec.
+(decl add_plain (Value Value) Value)
+(extern extractor add_plain add_plain)
+(spec (add_plain x y) (provide (= result (bvadd x y))))
+
+; Add using a nested macro.
+(macro (apply_op op x y) (op! x y))
+
+(decl add_with_macro (Value Value) Value)
+(extern constructor add_with_macro add_with_macro)
+(spec (add_with_macro x y) (provide (= result (apply_op! (macro (a b) (bvadd a b)) x y))))
+
+; Test rule checks plain and macro specs are equivalent.
+(rule test (test (add_plain x y)) (add_with_macro x y))

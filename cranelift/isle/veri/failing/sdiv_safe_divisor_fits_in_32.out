@@ -1,0 +1,42 @@
+#533	sdiv_safe_divisor_fits_in_32
+	iconst({bits: int}, bv 64) -> bv 8
+	sdiv({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+		applicability = applicable
+		verification = failure
+model:
+state: exec_trap = false
+state: clif_trap = false
+state: fpcr = #x0000000000000000
+state: isa_store = {active: false, size_bits: 1, addr: #x0000000000000000, value: #x0000000000000000}
+state: clif_load = {active: false, size_bits: 0, addr: #x0000000000000000}
+state: loaded_value = #x0000000000000000
+state: clif_store = {active: false, size_bits: 1, addr: #x0000000000000000, value: #x0000000000000000}
+state: isa_load = {active: false, size_bits: 0, addr: #x0000000000000000}
+has_type({bits: 8}, #x80) -> #x80
+fits_in_32({bits: 8}) -> {bits: 8}
+sdiv({bits: 0}, #x80, #x01) -> #x80
+def_inst(#x01) -> #x01
+iconst({bits: 0}, #x0000000000000001) -> #x01
+safe_divisor_from_imm64({bits: 8}, #x0000000000000001) -> #x0000000000000001
+temp_writable_reg({bits: 64}) -> #xffffffffffffffff
+writable_reg_to_reg(#xffffffffffffffff) -> #xffffffffffffffff
+value_reg(#xffffffffffffffff) -> {lo: #xffffffffffffffff, hi: #xffffffffffffffff}
+output({lo: #xffffffffffffffff, hi: #xffffffffffffffff}) -> #xff
+fits_in_32({bits: 8}) -> {bits: 8}
+integral_ty({bits: 8}) -> {bits: 8}
+operand_size({bits: 32}) -> Size32 {}
+load_constant_full({bits: 8}, Sign {}, Size32 {}, #x0000000000000001) -> #x0000000000000001
+value_type({bits: 8}) -> #x80
+fits_in_32({bits: 8}) -> {bits: 8}
+put_in_reg(#x80) -> #x0000000000000080
+ty_bits({bits: 8}) -> #x08
+temp_writable_reg({bits: 64}) -> #x00000000ffffff80
+MInst.Extend(#x00000000ffffff80, #x0000000000000080, true, #x08, #x20) -> {flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}
+emit({flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}) -> #b1
+writable_reg_to_reg(#x00000000ffffff80) -> #x00000000ffffff80
+operand_size({bits: 8}) -> Size32 {}
+MInst.AluRRR(SDiv {}, Size32 {}, #xffffffffffffffff, #x00000000ffffff80, #x0000000000000001) -> {flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}
+emit({flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}) -> #b1
+lower(#x80) -> #xff
+Error: verify expansion: 533

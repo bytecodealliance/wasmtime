@@ -1,0 +1,20 @@
+; 8-bit value type
+(type Value (primitive Value))
+(model Value (type (bv 8)))
+
+; Top-level test term asserts equality
+(decl test (Value) Value)
+(spec (test arg) (provide (= result arg)))
+
+; Add
+(decl add (Value Value) Value)
+(extern extractor add add)
+(spec (add x y) (provide (= result (bvadd x y))))
+
+; Double x
+(decl double (Value) Value)
+(extern constructor double double)
+(spec (double x) (provide (= result (bvadd x x))))
+
+; Broken rule maps add to double.
+(rule test (test (add x y)) (double x))

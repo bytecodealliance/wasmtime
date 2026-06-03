@@ -1,0 +1,846 @@
+#0	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#1	operand_size_32
+		type solution status = solved
+skip solver
+#2	operand_size_64
+		type solution status = solved
+skip solver
+#3	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#4	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#5	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#6	iconst
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#78	iadd_base_case
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#79	iadd_imm12_right
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#80	iadd_imm12_left
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#81	iadd_imm12_neg_right
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#82	iadd_imm12_neg_left
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#83	iadd_extend_right
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#84	iadd_extend_left
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 8, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 16, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 32, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	extended_value_from_value({val: bv 64, extend: enum(ExtendOp)}) -> bv _
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#85	iadd_ishl_right
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#86	iadd_ishl_left
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 8
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#87	iadd_imul_right
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#88	iadd_imul_left
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#89	isub_imul
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	isub({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	isub({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	isub({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 8, bv 8) -> bv 8
+	isub({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	isub({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	isub({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	isub({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 16, bv 16) -> bv 16
+	isub({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	isub({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	isub({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	isub({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = solved
+skip solver
+	imul({bits: int}, bv 32, bv 32) -> bv 32
+	isub({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	isub({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	isub({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	isub({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	imul({bits: int}, bv 64, bv 64) -> bv 64
+	isub({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+skip solver
+#105	iadd_i128
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = solved
+skip solver
+#156	iconcat_i128

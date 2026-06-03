@@ -1,0 +1,73 @@
+#2235	extr_32_or_64
+	ushr({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	ushr({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	ushr({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	bor({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	bor({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	bor({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	ushr({bits: int}, bv 64, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	bor({bits: int}, bv 64, bv 64) -> bv 64
+		type solution status = solved
+		applicability = applicable
+		verification = failure
+model:
+state: clif_load = {active: false, size_bits: 0, addr: #x0000000000000000}
+state: fpcr = #x0000000000000000
+state: loaded_value = #x0000000000000000
+state: isa_store = {active: false, size_bits: 1, addr: #x0000000000000000, value: #x0000000000000000}
+state: exec_trap = false
+state: isa_load = {active: false, size_bits: 0, addr: #x0000000000000000}
+state: clif_store = {active: false, size_bits: 1, addr: #x0000000000000000, value: #x0000000000000000}
+state: clif_trap = false
+has_type({bits: 64}, #x0000000000000000) -> #x0000000000000000
+bor({bits: 0}, #x0000000000000000, #x0000000000000000) -> #x0000000000000000
+def_inst(#x0000000000000000) -> #x0000000000000000
+def_inst(#x0000000000000000) -> #x0000000000000000
+ty_32_or_64({bits: 64}) -> {bits: 64}
+ishl({bits: 0}, #x0000000000000000, #x0000000000000020) -> #x0000000000000000
+u8_from_iconst(#x20) -> #x0000000000000020
+ushr({bits: 0}, #x0000000000000000, #x0000000000000020) -> #x0000000000000000
+u8_from_iconst(#x20) -> #x0000000000000020
+ty_bits({bits: 64}) -> #x40
+u8_into_u64(#x40) -> #x0000000000000040
+u8_into_u64(#x20) -> #x0000000000000020
+u8_into_u64(#x20) -> #x0000000000000020
+u64_wrapping_add(#x0000000000000020, #x0000000000000020) -> #x0000000000000040
+u64_eq(#x0000000000000040, #x0000000000000040) -> true
+u64_gt(#x0000000000000020, #x0000000000000000) -> true
+u64_gt(#x0000000000000020, #x0000000000000000) -> true
+put_in_reg(#x0000000000000000) -> #x0000000000000000
+put_in_reg(#x0000000000000000) -> #x0000000000000000
+imm_shift_from_u8(#x20) -> #b100000
+temp_writable_reg({bits: 64}) -> #xffffffffffffffff
+writable_reg_to_reg(#xffffffffffffffff) -> #xffffffffffffffff
+value_reg(#xffffffffffffffff) -> {lo: #xffffffffffffffff, hi: #xffffffffffffffff}
+output({lo: #xffffffffffffffff, hi: #xffffffffffffffff}) -> #xffffffffffffffff
+a64_extr_imm({bits: 64}, #b100000) -> {op: Lsr {}, amt: #x20}
+operand_size({bits: 64}) -> Size64 {}
+MInst.AluRRRShift(Extr {}, Size64 {}, #xffffffffffffffff, #x0000000000000000, #x0000000000000000, {op: Lsr {}, amt: #x20}) -> {flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}
+emit({flags_in: {N: #b0, Z: #b0, C: #b0, V: #b0}, flags_out: {N: #b0, Z: #b0, C: #b0, V: #b0}}) -> #b1
+lower(#x0000000000000000) -> #xffffffffffffffff
+Error: verify expansion: 2235

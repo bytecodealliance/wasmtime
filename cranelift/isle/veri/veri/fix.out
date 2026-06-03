@@ -1,0 +1,1476 @@
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> cranelift/codegen/meta/src/unique_table.rs:35:17
+   |
+35 |     pub fn iter(&self) -> slice::Iter<&'entries T> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+   = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+   |
+35 |     pub fn iter(&self) -> slice::Iter<'_, &'entries T> {
+   |                                       +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> cranelift/codegen/meta/src/unique_table.rs:80:17
+   |
+80 |     pub fn iter(&self) -> slice::Iter<T> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+80 |     pub fn iter(&self) -> slice::Iter<'_, T> {
+   |                                       +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> cranelift/isle/isle/src/codegen.rs:490:52
+    |
+490 |     fn validate_block(ret_kind: ReturnKind, block: &Block) -> Nested {
+    |                                                    ^^^^^^     ^^^^^^ the same lifetime is hidden here
+    |                                                    |
+    |                                                    the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+490 |     fn validate_block(ret_kind: ReturnKind, block: &Block) -> Nested<'_> {
+    |                                                                     ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> cranelift/isle/isle/src/serialize.rs:408:18
+    |
+408 |     fn new_block(&mut self) -> Decomposition {
+    |                  ^^^^^^^^^     ^^^^^^^^^^^^^ the same lifetime is hidden here
+    |                  |
+    |                  the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+    |
+408 |     fn new_block(&mut self) -> Decomposition<'_> {
+    |                                             ++++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> cranelift/isle/isle/src/stablemapset.rs:73:25
+   |
+73 |     pub(crate) fn entry(&mut self, k: K) -> Entry<K, V> {
+   |                         ^^^^^^^^^           ^^^^^^^^^^^ the same lifetime is hidden here
+   |                         |
+   |                         the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+73 |     pub(crate) fn entry(&mut self, k: K) -> Entry<'_, K, V> {
+   |                                                   +++
+
+warning: `cranelift-codegen-meta` (lib) generated 2 warnings (run `cargo fix --lib -p cranelift-codegen-meta` to apply 2 suggestions)
+warning: `cranelift-isle` (lib) generated 3 warnings (run `cargo fix --lib -p cranelift-isle` to apply 3 suggestions)
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> cranelift/isle/veri/veri/src/expand.rs:553:21
+    |
+553 |     pub fn chaining(&self) -> &Chaining {
+    |                     ^^^^^     ^^^^^^^^^
+    |                     |         ||
+    |                     |         |the same lifetime is hidden here
+    |                     |         the same lifetime is elided here
+    |                     the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+553 |     pub fn chaining(&self) -> &Chaining<'_> {
+    |                                        ++++
+
+warning: `cranelift-isle-veri` (lib) generated 1 warning (run `cargo fix --lib -p cranelift-isle-veri` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running `/Users/avh/research/wasmtime/target/debug/veri --codegen-crate-dir ../../../codegen/ --work-dir /var/folders/9r/4bqb01xs60b8kpv59bk68cpc0000gn/T/tmp.A17WrSFT --name aarch64 --log-dir output/log --solver z3 --filter 'rule:load_i32'`
+Writing generated file: /var/folders/9r/4bqb01xs60b8kpv59bk68cpc0000gn/T/tmp.A17WrSFT/clif_opt.isle
+Writing generated file: /var/folders/9r/4bqb01xs60b8kpv59bk68cpc0000gn/T/tmp.A17WrSFT/clif_lower.isle
+#3754	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3755	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3756	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3757	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3758	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3759	load_i32
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+#3760	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3761	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3762	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3763	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3764	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3765	load_i32
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3766	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3767	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3768	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3769	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3770	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3771	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3772	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3773	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3774	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3775	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3776	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3777	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3778	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3779	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3780	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3781	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3782	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3783	load_i32
+	uextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	uextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3784	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3785	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3786	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3787	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3788	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3789	load_i32
+	sextend({bits: int}, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 8) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 16) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+		verification = success
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 64
+		type solution status = inapplicable
+	sextend({bits: int}, bv 32) -> bv 64
+	iadd({bits: int}, bv 128, bv 128) -> bv 128
+		type solution status = inapplicable
+#3790	load_i32
+	iconst({bits: int}, bv 64) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 8, bv 8) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 16, bv 16) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 32, bv 32) -> bv 32
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 8
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 16
+		type solution status = inapplicable
+	iconst({bits: int}, bv 64) -> bv 64
+	ishl({bits: int}, bv 64, bv 64) -> bv 64
+	iadd({bits: int}, bv 64, bv 64) -> bv 64
+	load({bits: int}, {aligned: bool, trapcode: bv 4}, bv _, bv 32) -> bv 32
+		type solution status = solved
+		applicability = applicable
+Error: verify expansion: 3790
+
+Caused by:
+    unsupported smt literal: Unspecified!val!0

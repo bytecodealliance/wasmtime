@@ -1,0 +1,8 @@
+{
+  "name": "artifact",
+  "timestamp": "2026-04-15T18:55:57",
+  "timeout": "60",
+  "hostname": "MacBook-Pro-13",
+  "z3_version": "Z3 version 4.14.1 - 64 bit",
+  "cvc5_version": "This is cvc5 version 1.2.0 [git tag 1.2.0 branch HEAD]"
+}

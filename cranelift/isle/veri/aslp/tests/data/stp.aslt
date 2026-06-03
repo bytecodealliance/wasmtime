@@ -1,0 +1,3 @@
+Stmt_TCall("Mem.set.0",[8],[Expr_Array(Expr_Var("_R"),3);8;0;Expr_Array(Expr_Var("_R"),1)])
+Stmt_TCall("Mem.set.0",[8],[Expr_TApply("add_bits.0",[64],[Expr_Array(Expr_Var("_R"),3);'0000000000000000000000000000000000000000000000000000000000001000']);8;0;Expr_Array(Expr_Var("_R"),2)])
+Stmt_Assign(LExpr_Array(LExpr_Var("_R"),3),Expr_TApply("add_bits.0",[64],[Expr_Array(Expr_Var("_R"),3);'0000000000000000000000000000000000000000000000000000000010000000']))
