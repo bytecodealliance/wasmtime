@@ -31,7 +31,6 @@ cap-fs-ext = { workspace = true }
 cap-net-ext = { workspace = true }
 cap-time-ext = { workspace = true }
 io-lifetimes = { workspace = true }
-fs-set-times = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }

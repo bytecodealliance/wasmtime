@@ -14,6 +14,7 @@ use core::task::{Context, Poll, ready};
 use core::{iter, mem};
 use std::io;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
@@ -111,15 +112,11 @@ fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, Er
     }
 }
 
-fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
-    use fs_set_times::SystemTimeSpec;
+fn systemtimespec_from(t: NewTimestamp) -> Result<Option<SystemTime>, ErrorCode> {
     match t {
         NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => {
-            let st = systemtime_from(st)?;
-            Ok(Some(SystemTimeSpec::Absolute(st)))
-        }
+        NewTimestamp::Now => Ok(Some(SystemTime::now())),
+        NewTimestamp::Timestamp(st) => Ok(Some(systemtime_from(st)?)),
     }
 }
 
