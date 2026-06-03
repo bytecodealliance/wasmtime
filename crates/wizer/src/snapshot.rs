@@ -267,11 +267,11 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegmentRange>) {
     // smallest gaps together. Because they are the smallest gaps, this will
     // bloat the size of our data segment the least.
     let mut smallest_gaps = Vec::with_capacity(merged_data_segments.len() - 1);
-    for (index, w) in merged_data_segments.windows(2).enumerate() {
-        if w[0].memory_index != w[1].memory_index {
+    for (index, [w1, w2]) in merged_data_segments.array_windows().enumerate() {
+        if w1.memory_index != w2.memory_index {
             continue;
         }
-        let gap = match u32::try_from(w[0].gap(&w[1])) {
+        let gap = match u32::try_from(w1.gap(&w2)) {
             Ok(gap) => gap,
             // If the gap is larger than 4G then don't consider these two data
             // segments for merging and assume there's enough other data

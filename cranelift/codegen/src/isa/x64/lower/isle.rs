@@ -1664,7 +1664,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn palignr_imm_from_immediate(&mut self, imm: Immediate) -> Option<u8> {
         let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
 
-        if bytes.windows(2).all(|a| a[0] + 1 == a[1]) {
+        if bytes.array_windows().all(|[a, b]| *a + 1 == *b) {
             Some(bytes[0])
         } else {
             None

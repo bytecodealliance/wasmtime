@@ -260,7 +260,7 @@ fn test_grow_memory_in_multiple_threads() -> Result<()> {
 }
 
 fn is_sorted(data: &[u32]) -> bool {
-    data.windows(2).all(|d| d[0] <= d[1])
+    data.array_windows().all(|[a, b]| a <= b)
 }
 
 #[test]

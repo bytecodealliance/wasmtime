@@ -38,7 +38,7 @@ impl<F: Forest> NodePool<F> {
                 // Remove this node from the free list.
                 match self.nodes[node] {
                     NodeData::Free { next } => self.freelist = next,
-                    _ => panic!("Invalid {} on free list", node),
+                    _ => panic!("Invalid {node} on free list"),
                 }
                 self.nodes[node] = data;
                 Ok(node)
@@ -200,7 +200,7 @@ impl<F: Forest> NodePool<F> {
                         lower = upper;
                     }
                 }
-                NodeData::Free { .. } => panic!("Free {} reached", node),
+                NodeData::Free { .. } => panic!("Free {node} reached"),
             }
         }
     }

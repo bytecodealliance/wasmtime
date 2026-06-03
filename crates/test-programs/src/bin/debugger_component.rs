@@ -78,7 +78,7 @@ fn test_simple(d: &Debuggee) {
 
     // There should be five PCs and they should each be distinct from the previous.
     assert_eq!(pcs.len(), 5);
-    assert!(pcs.windows(2).all(|p| p[0] != p[1]));
+    assert!(pcs.array_windows().all(|[a, b]| a != b));
 
     eprintln!("OK");
 }
