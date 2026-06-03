@@ -47,8 +47,8 @@ impl<'a> bindings::tls::client::HostConnector for WasiTlsCtxView<'a> {
     }
 }
 
-impl bindings::tls::client::HostConnectorWithStore for WasiTls {
-    fn send<T: 'static>(
+impl<T> bindings::tls::client::HostConnectorWithStore<T> for WasiTls {
+    fn send(
         mut store: Access<'_, T, Self>,
         this: Resource<Connector>,
         mut cleartext: StreamReader<u8>,
@@ -110,7 +110,7 @@ impl bindings::tls::client::HostConnectorWithStore for WasiTls {
         ))
     }
 
-    fn receive<T: 'static>(
+    fn receive(
         mut store: Access<'_, T, Self>,
         this: Resource<Connector>,
         mut ciphertext: StreamReader<u8>,
@@ -176,7 +176,7 @@ impl bindings::tls::client::HostConnectorWithStore for WasiTls {
         ))
     }
 
-    async fn connect<T: Send>(
+    async fn connect(
         accessor: &Accessor<T, Self>,
         this: Resource<Connector>,
         server_name: String,

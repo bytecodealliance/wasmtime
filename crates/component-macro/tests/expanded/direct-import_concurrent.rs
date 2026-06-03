@@ -98,8 +98,8 @@ pub struct FooIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
-pub trait FooImportsWithStore: wasmtime::component::HasData + Send {
-    fn foo<T: Send>(
+pub trait FooImportsWithStore<T>: wasmtime::component::HasData + Send {
+    fn foo(
         accessor: &wasmtime::component::Accessor<T, Self>,
     ) -> impl ::core::future::Future<Output = ()> + Send;
 }
@@ -172,7 +172,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: FooImportsWithStore,
+            D: FooImportsWithStore<T>,
             for<'a> D::Data<'a>: FooImports,
             T: 'static + Send,
         {
@@ -183,7 +183,7 @@ const _: () = {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as FooImportsWithStore>::foo(host).await;
+                            let r = <D as FooImportsWithStore<T>>::foo(host).await;
                             Ok(r)
                         })
                     },
@@ -195,7 +195,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: FooImportsWithStore + Send,
+            D: FooImportsWithStore<T> + Send,
             for<'a> D::Data<'a>: FooImports + Send,
             T: 'static + Send,
         {

@@ -306,8 +306,8 @@ impl HostFields for WasiHttpCtxView<'_> {
     }
 }
 
-impl HostRequestWithStore for WasiHttp {
-    fn new<T>(
+impl<T> HostRequestWithStore<T> for WasiHttp {
+    fn new(
         mut store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
@@ -354,7 +354,7 @@ impl HostRequestWithStore for WasiHttp {
         ))
     }
 
-    fn consume_body<T>(
+    fn consume_body(
         mut store: Access<T, Self>,
         req: Resource<Request>,
         fut: FutureReader<Result<(), ErrorCode>>,
@@ -371,7 +371,7 @@ impl HostRequestWithStore for WasiHttp {
         body.consume(store, fut, getter)
     }
 
-    fn drop<T>(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
+    fn drop(mut store: Access<'_, T, Self>, req: Resource<Request>) -> wasmtime::Result<()> {
         let Request { body, .. } = store
             .get()
             .table
@@ -589,8 +589,8 @@ impl HostRequestOptions for WasiHttpCtxView<'_> {
     }
 }
 
-impl HostResponseWithStore for WasiHttp {
-    fn new<T>(
+impl<T> HostResponseWithStore<T> for WasiHttp {
+    fn new(
         mut store: Access<T, Self>,
         headers: Resource<Headers>,
         contents: Option<StreamReader<u8>>,
@@ -631,7 +631,7 @@ impl HostResponseWithStore for WasiHttp {
         ))
     }
 
-    fn consume_body<T>(
+    fn consume_body(
         mut store: Access<T, Self>,
         res: Resource<Response>,
         fut: FutureReader<Result<(), ErrorCode>>,
@@ -648,7 +648,7 @@ impl HostResponseWithStore for WasiHttp {
         body.consume(store, fut, getter)
     }
 
-    fn drop<T>(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
+    fn drop(mut store: Access<'_, T, Self>, res: Resource<Response>) -> wasmtime::Result<()> {
         let Response { body, .. } = store
             .get()
             .table

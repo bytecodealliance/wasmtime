@@ -165,7 +165,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: imports::HostWithStore + Send,
+            D: imports::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: imports::Host + Send,
             T: 'static + Send,
         {
@@ -178,8 +178,8 @@ const _: () = {
 pub mod imports {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::Box;
-    pub trait HostWithStore: wasmtime::component::HasData + Send {
-        fn y<T: Send>(
+    pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+        fn y(
             accessor: &wasmtime::component::Accessor<T, Self>,
         ) -> impl ::core::future::Future<Output = ()> + Send;
     }
@@ -190,7 +190,7 @@ pub mod imports {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {
@@ -199,7 +199,7 @@ pub mod imports {
             move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                 wasmtime::component::__internal::Box::pin(async move {
                     let host = &caller.with_getter(host_getter);
-                    let r = <D as HostWithStore>::y(host).await;
+                    let r = <D as HostWithStore<T>>::y(host).await;
                     Ok(r)
                 })
             },
@@ -211,7 +211,7 @@ pub mod imports {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {

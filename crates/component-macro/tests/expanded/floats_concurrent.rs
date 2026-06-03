@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::floats::HostWithStore + Send,
+            D: foo::foo::floats::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::floats::Host + Send,
             T: 'static + Send,
         {
@@ -191,19 +191,19 @@ pub mod foo {
         pub mod floats {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f32_param<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn f32_param(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: f32,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f64_param<T: Send>(
+                fn f64_param(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: f64,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn f32_result<T: Send>(
+                fn f32_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = f32> + Send;
-                fn f64_result<T: Send>(
+                fn f64_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = f64> + Send;
             }
@@ -214,7 +214,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -223,7 +223,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f32_param(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::f32_param(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -233,7 +233,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (f64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f64_param(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::f64_param(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -243,7 +243,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f32_result(host).await;
+                            let r = <D as HostWithStore<T>>::f32_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -253,7 +253,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f64_result(host).await;
+                            let r = <D as HostWithStore<T>>::f64_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -265,7 +265,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

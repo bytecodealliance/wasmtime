@@ -33,8 +33,8 @@ impl bindings::local::local::resource_stream::HostX for Ctx {
     }
 }
 
-impl bindings::local::local::resource_stream::HostWithStore for Ctx {
-    async fn foo<T: 'static>(
+impl<T> bindings::local::local::resource_stream::HostWithStore<T> for Ctx {
+    async fn foo(
         accessor: &Accessor<T, Self>,
         count: u32,
     ) -> wasmtime::Result<StreamReader<Resource<ResourceStreamX>>> {

@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::variants::HostWithStore + Send,
+            D: foo::foo::variants::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::variants::Host + Send,
             T: 'static + Send,
         {
@@ -463,29 +463,29 @@ pub mod foo {
                 assert!(12 == < IsClone as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < IsClone as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn e1_arg<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn e1_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: E1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn e1_result<T: Send>(
+                fn e1_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = E1> + Send;
-                fn v1_arg<T: Send>(
+                fn v1_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: V1,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn v1_result<T: Send>(
+                fn v1_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = V1> + Send;
-                fn bool_arg<T: Send>(
+                fn bool_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: bool,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn bool_result<T: Send>(
+                fn bool_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = bool> + Send;
-                fn option_arg<T: Send>(
+                fn option_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Option<bool>,
                     b: Option<()>,
@@ -494,7 +494,7 @@ pub mod foo {
                     e: Option<f32>,
                     g: Option<Option<bool>>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn option_result<T: Send>(
+                fn option_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -506,7 +506,7 @@ pub mod foo {
                         Option<Option<bool>>,
                     ),
                 > + Send;
-                fn casts<T: Send>(
+                fn casts(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Casts1,
                     b: Casts2,
@@ -517,7 +517,7 @@ pub mod foo {
                 ) -> impl ::core::future::Future<
                     Output = (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6),
                 > + Send;
-                fn result_arg<T: Send>(
+                fn result_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: Result<(), ()>,
                     b: Result<(), E1>,
@@ -529,7 +529,7 @@ pub mod foo {
                         wasmtime::component::__internal::Vec<u8>,
                     >,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn result_result<T: Send>(
+                fn result_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = (
@@ -544,36 +544,36 @@ pub mod foo {
                         >,
                     ),
                 > + Send;
-                fn return_result_sugar<T: Send>(
+                fn return_result_sugar(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<i32, MyErrno>> + Send;
-                fn return_result_sugar2<T: Send>(
+                fn return_result_sugar2(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), MyErrno>> + Send;
-                fn return_result_sugar3<T: Send>(
+                fn return_result_sugar3(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<MyErrno, MyErrno>,
                 > + Send;
-                fn return_result_sugar4<T: Send>(
+                fn return_result_sugar4(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = Result<(i32, u32), MyErrno>,
                 > + Send;
-                fn return_option_sugar<T: Send>(
+                fn return_option_sugar(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<i32>> + Send;
-                fn return_option_sugar2<T: Send>(
+                fn return_option_sugar2(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Option<MyErrno>> + Send;
-                fn result_simple<T: Send>(
+                fn result_simple(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<u32, i32>> + Send;
-                fn is_clone_arg<T: Send>(
+                fn is_clone_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: IsClone,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn is_clone_return<T: Send>(
+                fn is_clone_return(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = IsClone> + Send;
             }
@@ -584,7 +584,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -593,7 +593,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (E1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::e1_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::e1_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -603,7 +603,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::e1_result(host).await;
+                            let r = <D as HostWithStore<T>>::e1_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -613,7 +613,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (V1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::v1_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::v1_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -623,7 +623,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::v1_result(host).await;
+                            let r = <D as HostWithStore<T>>::v1_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -633,7 +633,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (bool,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::bool_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::bool_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -643,7 +643,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::bool_result(host).await;
+                            let r = <D as HostWithStore<T>>::bool_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -670,15 +670,9 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::option_arg(
-                                    host,
-                                    arg0,
-                                    arg1,
-                                    arg2,
-                                    arg3,
-                                    arg4,
-                                    arg5,
-                                )
+                            let r = <D as HostWithStore<
+                                T,
+                            >>::option_arg(host, arg0, arg1, arg2, arg3, arg4, arg5)
                                 .await;
                             Ok(r)
                         })
@@ -689,7 +683,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::option_result(host).await;
+                            let r = <D as HostWithStore<T>>::option_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -709,15 +703,9 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::casts(
-                                    host,
-                                    arg0,
-                                    arg1,
-                                    arg2,
-                                    arg3,
-                                    arg4,
-                                    arg5,
-                                )
+                            let r = <D as HostWithStore<
+                                T,
+                            >>::casts(host, arg0, arg1, arg2, arg3, arg4, arg5)
                                 .await;
                             Ok((r,))
                         })
@@ -748,15 +736,9 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::result_arg(
-                                    host,
-                                    arg0,
-                                    arg1,
-                                    arg2,
-                                    arg3,
-                                    arg4,
-                                    arg5,
-                                )
+                            let r = <D as HostWithStore<
+                                T,
+                            >>::result_arg(host, arg0, arg1, arg2, arg3, arg4, arg5)
                                 .await;
                             Ok(r)
                         })
@@ -767,7 +749,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::result_result(host).await;
+                            let r = <D as HostWithStore<T>>::result_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -777,7 +759,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar(host)
+                            let r = <D as HostWithStore<T>>::return_result_sugar(host)
                                 .await;
                             Ok((r,))
                         })
@@ -788,7 +770,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar2(host)
+                            let r = <D as HostWithStore<T>>::return_result_sugar2(host)
                                 .await;
                             Ok((r,))
                         })
@@ -799,7 +781,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar3(host)
+                            let r = <D as HostWithStore<T>>::return_result_sugar3(host)
                                 .await;
                             Ok((r,))
                         })
@@ -810,7 +792,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_result_sugar4(host)
+                            let r = <D as HostWithStore<T>>::return_result_sugar4(host)
                                 .await;
                             Ok((r,))
                         })
@@ -821,7 +803,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_option_sugar(host)
+                            let r = <D as HostWithStore<T>>::return_option_sugar(host)
                                 .await;
                             Ok((r,))
                         })
@@ -832,7 +814,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::return_option_sugar2(host)
+                            let r = <D as HostWithStore<T>>::return_option_sugar2(host)
                                 .await;
                             Ok((r,))
                         })
@@ -843,7 +825,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::result_simple(host).await;
+                            let r = <D as HostWithStore<T>>::result_simple(host).await;
                             Ok((r,))
                         })
                     },
@@ -856,7 +838,8 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::is_clone_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::is_clone_arg(host, arg0)
+                                .await;
                             Ok(r)
                         })
                     },
@@ -866,7 +849,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::is_clone_return(host).await;
+                            let r = <D as HostWithStore<T>>::is_clone_return(host).await;
                             Ok((r,))
                         })
                     },
@@ -878,7 +861,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

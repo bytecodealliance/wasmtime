@@ -29,8 +29,8 @@ fn get_socket_mut<'a>(
         .map_err(TrappableError::trap)
 }
 
-impl HostUdpSocketWithStore for WasiSockets {
-    async fn send<T>(
+impl<T> HostUdpSocketWithStore<T> for WasiSockets {
+    async fn send(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
         data: Vec<u8>,
@@ -54,7 +54,7 @@ impl HostUdpSocketWithStore for WasiSockets {
         Ok(())
     }
 
-    async fn receive<T>(
+    async fn receive(
         store: &Accessor<T, Self>,
         socket: Resource<UdpSocket>,
     ) -> SocketResult<(Vec<u8>, IpSocketAddress)> {

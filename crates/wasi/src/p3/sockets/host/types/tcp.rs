@@ -241,8 +241,8 @@ impl<D> StreamConsumer<D> for SendStreamConsumer {
     }
 }
 
-impl HostTcpSocketWithStore for WasiSockets {
-    async fn connect<T>(
+impl<T> HostTcpSocketWithStore<T> for WasiSockets {
+    async fn connect(
         store: &Accessor<T, Self>,
         socket: Resource<TcpSocket>,
         remote_address: IpSocketAddress,
@@ -267,7 +267,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         })
     }
 
-    fn listen<T: 'static>(
+    fn listen(
         mut store: Access<'_, T, Self>,
         socket: Resource<TcpSocket>,
     ) -> SocketResult<StreamReader<Resource<TcpSocket>>> {
@@ -290,7 +290,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         Ok(ret)
     }
 
-    fn send<T: 'static>(
+    fn send(
         mut store: Access<'_, T, Self>,
         socket: Resource<TcpSocket>,
         mut data: StreamReader<u8>,
@@ -315,7 +315,7 @@ impl HostTcpSocketWithStore for WasiSockets {
         }
     }
 
-    fn receive<T: 'static>(
+    fn receive(
         mut store: Access<T, Self>,
         socket: Resource<TcpSocket>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
