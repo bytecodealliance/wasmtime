@@ -191,8 +191,8 @@ impl terminal_stderr::Host for WasiCliCtxView<'_> {
     }
 }
 
-impl stdin::HostWithStore for WasiCli {
-    fn read_via_stream<U>(
+impl<U> stdin::HostWithStore<U> for WasiCli {
+    fn read_via_stream(
         mut store: Access<U, Self>,
     ) -> wasmtime::Result<(StreamReader<u8>, FutureReader<Result<(), ErrorCode>>)> {
         let rx = store.get().ctx.stdin.async_stream();
@@ -216,8 +216,8 @@ impl stdin::HostWithStore for WasiCli {
 
 impl stdin::Host for WasiCliCtxView<'_> {}
 
-impl stdout::HostWithStore for WasiCli {
-    fn write_via_stream<U>(
+impl<U> stdout::HostWithStore<U> for WasiCli {
+    fn write_via_stream(
         mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {
@@ -241,8 +241,8 @@ impl stdout::HostWithStore for WasiCli {
 
 impl stdout::Host for WasiCliCtxView<'_> {}
 
-impl stderr::HostWithStore for WasiCli {
-    fn write_via_stream<U>(
+impl<U> stderr::HostWithStore<U> for WasiCli {
+    fn write_via_stream(
         mut store: Access<'_, U, Self>,
         data: StreamReader<u8>,
     ) -> wasmtime::Result<FutureReader<Result<(), ErrorCode>>> {

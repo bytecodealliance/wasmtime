@@ -272,8 +272,8 @@ mod one_import_concurrent {
             type Data<'a> = &'a mut MyImports;
         }
 
-        impl foo::HostWithStore for MyImports {
-            async fn foo<T>(accessor: &Accessor<T, Self>) {
+        impl<T> foo::HostWithStore<T> for MyImports {
+            async fn foo(accessor: &Accessor<T, Self>) {
                 accessor.with(|mut view| view.get().hit = true);
             }
         }

@@ -34,8 +34,8 @@ async fn io_task_result(
     io_result_rx.await.unwrap_or(Ok(()))
 }
 
-impl HostWithStore for WasiHttp {
-    async fn send<T>(
+impl<T> HostWithStore<T> for WasiHttp {
+    async fn send(
         store: &Accessor<T, Self>,
         req: Resource<Request>,
     ) -> HttpResult<Resource<Response>> {

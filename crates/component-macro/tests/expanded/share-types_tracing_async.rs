@@ -171,7 +171,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::http_types::HostWithStore + http_fetch::HostWithStore + Send,
+            D: foo::foo::http_types::HostWithStore<T> + http_fetch::HostWithStore<T>
+                + Send,
             for<'a> D::Data<'a>: foo::foo::http_types::Host + http_fetch::Host + Send,
             T: 'static + Send,
         {
@@ -228,10 +229,10 @@ pub mod foo {
                     4 == < Response as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
@@ -240,7 +241,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -251,7 +252,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -275,10 +276,10 @@ pub mod http_fetch {
         assert!(8 == < Response as wasmtime::component::ComponentType >::SIZE32);
         assert!(4 == < Response as wasmtime::component::ComponentType >::ALIGN32);
     };
-    pub trait HostWithStore: wasmtime::component::HasData + Send {}
-    impl<_T: ?Sized> HostWithStore for _T
+    pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+    impl<H: ?Sized, T> HostWithStore<T> for H
     where
-        _T: wasmtime::component::HasData + Send,
+        H: wasmtime::component::HasData + Send,
     {}
     pub trait Host: Send {
         fn fetch_request(
@@ -299,7 +300,7 @@ pub mod http_fetch {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {
@@ -336,7 +337,7 @@ pub mod http_fetch {
         host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: Host,
         T: 'static + Send,
     {

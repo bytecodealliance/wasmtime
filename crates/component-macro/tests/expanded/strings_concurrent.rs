@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::strings::HostWithStore + Send,
+            D: foo::foo::strings::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::strings::Host + Send,
             T: 'static + Send,
         {
@@ -191,17 +191,17 @@ pub mod foo {
         pub mod strings {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn a<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn a(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: wasmtime::component::__internal::String,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn b<T: Send>(
+                fn b(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
                     Output = wasmtime::component::__internal::String,
                 > + Send;
-                fn c<T: Send>(
+                fn c(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     a: wasmtime::component::__internal::String,
                     b: wasmtime::component::__internal::String,
@@ -216,7 +216,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -228,7 +228,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::a(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::a(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -238,7 +238,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::b(host).await;
+                            let r = <D as HostWithStore<T>>::b(host).await;
                             Ok((r,))
                         })
                     },
@@ -257,7 +257,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::c(host, arg0, arg1).await;
+                            let r = <D as HostWithStore<T>>::c(host, arg0, arg1).await;
                             Ok((r,))
                         })
                     },
@@ -269,7 +269,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

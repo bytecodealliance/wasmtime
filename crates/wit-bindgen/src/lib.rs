@@ -1485,7 +1485,7 @@ impl Wasmtime {
             // don't necessarily know whether the other bindings generation
             // specified this flag or not. To handle that always assume that a
             // `HostWithStore` bound is needed.
-            with_store.push(format!("{path}::HostWithStore"));
+            with_store.push(format!("{path}::HostWithStore<T>"));
             with_store_async = with_store_async || flags.contains(FunctionFlags::ASYNC);
         }
         if let Some(world_trait) = world_trait {
@@ -1686,7 +1686,7 @@ impl Wasmtime {
                             {wt}::component::__internal::Box::pin(async move {{
                                 let accessor = &caller.with_getter(host_getter);
                                 {wt}::ToWasmtimeResult::to_wasmtime_result(
-                                    Host{camel}WithStore::drop(accessor, {wt}::component::Resource::new_own(rep)).await
+                                    Host{camel}WithStore::<T>::drop(accessor, {wt}::component::Resource::new_own(rep)).await
                                 )
                             }})
                         }},
@@ -1712,7 +1712,7 @@ impl Wasmtime {
             let (first_arg, trait_suffix) = if flags.contains(FunctionFlags::STORE) {
                 (
                     format!("{wt}::component::Access::new(store, host_getter)"),
-                    "WithStore",
+                    "WithStore::<T>",
                 )
             } else {
                 ("&mut host_getter(store.data_mut())".to_string(), "")
@@ -2540,7 +2540,7 @@ impl<'a> InterfaceGenerator<'a> {
                     host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
                     where
-                        D: HostWithStore,
+                        D: HostWithStore<T>,
                         for<'a> D::Data<'a>: {sync_bounds},
                         T: 'static {opt_t_send_bound},
                 {{
@@ -2580,7 +2580,7 @@ pub fn add_to_linker<T, D>(
     host_getter: fn(&mut T) -> D::Data<'_>,
 ) -> {wt}::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: {sync_bounds},
         T: 'static {opt_t_send_bound},
 {{
@@ -2619,7 +2619,7 @@ pub fn add_to_linker<T, D>(
     host_getter: fn(&mut T) -> D::Data<'_>,
 ) -> {wt}::Result<()>
     where
-        D: HostWithStore,
+        D: HostWithStore<T>,
         for<'a> D::Data<'a>: {sync_bounds},
         T: 'static {opt_t_send_bound},
 {{
@@ -2808,7 +2808,7 @@ pub fn add_to_linker<T, D>(
         if flags.contains(FunctionFlags::STORE) {
             uwrite!(
                 self.src,
-                "let r = <D as {host_trait}WithStore>::{func_name}(host, "
+                "let r = <D as {host_trait}WithStore<T>>::{func_name}(host, "
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
@@ -2897,12 +2897,9 @@ pub fn add_to_linker<T, D>(
         self.push_str("fn ");
         self.push_str(&rust_function_name(func));
         if flags.contains(FunctionFlags::STORE | FunctionFlags::ASYNC) {
-            uwrite!(
-                self.src,
-                "<T: Send>(accessor: &{wt}::component::Accessor<T, Self>, "
-            );
+            uwrite!(self.src, "(accessor: &{wt}::component::Accessor<T, Self>, ");
         } else if flags.contains(FunctionFlags::STORE) {
-            uwrite!(self.src, "<T>(host: {wt}::component::Access<T, Self>, ");
+            uwrite!(self.src, "(host: {wt}::component::Access<T, Self>, ");
         } else {
             self.push_str("(&mut self, ");
         }
@@ -3190,7 +3187,7 @@ pub fn add_to_linker<T, D>(
                 ret.all_func_flags |= *flags;
             }
             ret.all_func_flags |= self.import_resource_drop_flags(name);
-            with_store_supertraits.push(format!("Host{camel}WithStore"));
+            with_store_supertraits.push(format!("Host{camel}WithStore<T>"));
         }
         if ret.all_func_flags.contains(FunctionFlags::ASYNC) {
             with_store_supertraits.push("Send".to_string());
@@ -3199,10 +3196,10 @@ pub fn add_to_linker<T, D>(
 
         uwriteln!(
             self.src,
-            "pub trait {trait_name}WithStore: {} {{",
+            "pub trait {trait_name}WithStore<T>: {} {{",
             with_store_supertraits.join(" + "),
         );
-        ret.with_store_name = Some(format!("{trait_name}WithStore"));
+        ret.with_store_name = Some(format!("{trait_name}WithStore<T>"));
 
         let mut extra_with_store_function = false;
         for extra in extra_functions {
@@ -3218,7 +3215,7 @@ pub fn add_to_linker<T, D>(
                         uwrite!(
                             self.src,
                             "
-fn drop<T>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>)
+fn drop(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::Resource<{camel}>)
     -> impl ::core::future::Future<Output =
 "
                         );
@@ -3228,7 +3225,7 @@ fn drop<T>(accessor: &{wt}::component::Accessor<T, Self>, rep: {wt}::component::
                         uwrite!(
                             self.src,
                             "
-fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Resource<{camel}>)
+fn drop(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Resource<{camel}>)
     ->
 "
                         );
@@ -3251,12 +3248,11 @@ fn drop<T>(accessor: {wt}::component::Access<T, Self>, rep: {wt}::component::Res
         // If `*WithStore` is empty, generate a blanket impl for the trait since
         // it's otherwise not necessary to implement it manually.
         if partition.with_store.is_empty() && !extra_with_store_function {
-            uwriteln!(self.src, "impl<_T: ?Sized> {trait_name}WithStore for _T");
             uwriteln!(
                 self.src,
-                " where _T: {}",
-                with_store_supertraits.join(" + ")
+                "impl<H: ?Sized, T> {trait_name}WithStore<T> for H"
             );
+            uwriteln!(self.src, " where H: {}", with_store_supertraits.join(" + "));
 
             uwriteln!(self.src, "{{}}");
         }

@@ -201,7 +201,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::transitive_import::HostWithStore,
+            D: foo::foo::transitive_import::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host,
             T: 'static,
         {
@@ -235,10 +235,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub enum Y {}
-            pub trait HostYWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostYWithStore for _T
+            pub trait HostYWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostYWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostY {
                 fn drop(
@@ -254,10 +254,12 @@ pub mod foo {
                     HostY::drop(*self, rep)
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostYWithStore {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostYWithStore<T> {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostYWithStore,
+                H: wasmtime::component::HasData + HostYWithStore<T>,
             {}
             pub trait Host: HostY {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
@@ -266,7 +268,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -287,7 +289,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
