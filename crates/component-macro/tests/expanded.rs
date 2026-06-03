@@ -43,6 +43,11 @@ fn process_expanded(path: &str, suffix: &str, src: &str) -> Result<()> {
         Path::new("tests/expanded").join(stem).with_extension("rs")
     };
     if std::env::var("BINDGEN_TEST_BLESS").is_ok_and(|val| !val.is_empty()) {
+        if let Ok(prev) = std::fs::read(&expanded_path)
+            && prev == formatted_src.as_bytes()
+        {
+            return Ok(());
+        }
         std::fs::write(expanded_path, formatted_src)?;
     } else {
         match std::fs::read_to_string(&expanded_path) {

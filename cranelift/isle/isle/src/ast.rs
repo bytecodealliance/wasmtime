@@ -42,26 +42,55 @@ pub struct Type {
 }
 
 /// The actual type-value: a primitive or an enum with variants.
-///
-/// TODO: add structs as well?
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TypeValue {
     Primitive(Ident, Pos),
     Enum(Vec<Variant>, Pos),
+    Struct(Fields, Pos),
 }
 
 /// One variant of an enum type.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Variant {
     pub name: Ident,
-    pub fields: Vec<Field>,
+    pub fields: Fields,
     pub pos: Pos,
 }
 
-/// One field of an enum variant.
+/// The fields of a struct or enum variant, formatted as a struct or tuple.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Field {
+pub enum Fields {
+    Unit,
+    Struct(StructFields),
+    Tuple(TupleFields),
+}
+
+/// A List of named fields of a struct.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructFields {
+    pub fields: Vec<StructField>,
+    pub pos: Pos,
+}
+
+/// One named field of a struct or enum variant.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StructField {
     pub name: Ident,
+    pub ty: Ident,
+    pub pos: Pos,
+}
+
+/// A List of unnamed fields of a tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TupleFields {
+    pub fields: Vec<TupleField>,
+    pub pos: Pos,
+}
+
+/// One unnamed field of a tuple.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TupleField {
+    pub index: usize,
     pub ty: Ident,
     pub pos: Pos,
 }

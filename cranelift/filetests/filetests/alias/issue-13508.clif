@@ -1,0 +1,51 @@
+test interpret
+test run
+test alias-analysis
+
+set opt_level=speed
+
+target aarch64
+
+function %f(i64, i64, i64) -> i32, i32, i32 {
+    region0 = 2 "vmctx"
+
+block0(v0: i64, v1: i64, v2: i64):
+    ;; Initialize to `-1`.
+    v3 = iconst.i64 -1
+    store notrap v3, v0
+
+    ;; Memory fence nop.
+    v4 = atomic_cas v2, v0, v0
+
+    ;; Load with region (fills cache v5+4 -> v4).
+    v5 = load.i32 region0 v0
+    ; check: v5 = load.i32 region0 v0
+
+    ;; Load with region again (gets cached v4).
+    v6 = load.i32 region0 v0
+    ; check: v6 -> v5
+
+    ;; Store without region (clobbers cache).
+    v7 = iconst.i32 42
+    store notrap v7, v1
+
+    ;; Load with region (shouldn't get cached v4).
+    v8 = load.i32 region0 v0
+    ; check: v8 = load.i32 region0 v0
+
+    return v5, v6, v8
+}
+
+function %g() -> i32, i32, i32 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+    fn0 = %f(i64, i64, i64) -> i32, i32, i32
+
+block0:
+    v0 = stack_addr.i64 ss0
+    v1 = stack_addr.i64 ss1
+    v2, v3, v4 = call fn0(v0, v0, v1)
+    return v2, v3, v4
+}
+
+; run: %g() == [-1, -1, 42]

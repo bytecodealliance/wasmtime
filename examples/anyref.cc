@@ -1,14 +1,11 @@
 /*
 Example of using `anyref` values.
 
-You can build the example using CMake:
+You can build and run the example using CMake:
 
-mkdir build && (cd build && cmake .. && \
-  cmake --build . --target wasmtime-anyref-cpp)
-
-And then run it:
-
-build/wasmtime-anyref-cpp
+  cmake -B build -S examples
+  cmake --build build --target wasmtime-anyref-cpp
+  ./build/wasmtime-anyref-cpp
 */
 
 #include <fstream>

@@ -575,9 +575,11 @@ mod tests {
         let code = "function %test() -> i8 {
         block0:
             v0 = iconst.i32 1
-            v1 = iadd_imm v0, 1
+            v5 = iconst.i32 1
+            v1 = iadd v0, v5
             v2 = irsub_imm v1, 44  ; 44 - 2 == 42 (see irsub_imm's semantics)
-            v3 = icmp_imm eq v2, 42
+            v4 = iconst.i32 42
+            v3 = icmp eq v2, v4
             return v3
         }";
 
@@ -642,14 +644,16 @@ mod tests {
         let code = "
         function %child(i32) -> i32 {
         block0(v0: i32):
-            v1 = iadd_imm v0, -1
+            v2 = iconst.i32 -1
+            v1 = iadd v0, v2
             return v1
         }
 
         function %parent(i32) -> i32 {
             fn42 = %child(i32) -> i32
         block0(v0: i32):
-            v1 = iadd_imm v0, 1
+            v3 = iconst.i32 1
+            v1 = iadd v0, v3
             v2 = call fn42(v1)
             return v2
         }";
@@ -671,7 +675,8 @@ mod tests {
         let code = "function %test() -> i8 {
         block0:
             v0 = iconst.i32 1
-            v1 = iadd_imm v0, 1
+            v2 = iconst.i32 1
+            v1 = iadd v0, v2
             return v1
         }";
 
@@ -685,21 +690,21 @@ mod tests {
 
         assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(2)]));
 
-        // With 2 fuel, we should execute the iconst and iadd, but not the return thus giving a
-        // fuel exhausted error
+        // With 3 fuel, we should execute the two iconsts and the iadd, but not the return thus
+        // giving a fuel exhausted error
         let state = InterpreterState::default().with_function_store(env.clone());
         let result = Interpreter::new(state)
-            .with_fuel(Some(2))
+            .with_fuel(Some(3))
             .call_by_name("%test", &[]);
         match result {
             Err(InterpreterError::FuelExhausted) => {}
             _ => panic!("Expected Err(FuelExhausted), but got {result:?}"),
         }
 
-        // With 3 fuel, we should be able to execute the return instruction, and complete the test
+        // With 4 fuel, we should be able to execute the return instruction, and complete the test
         let state = InterpreterState::default().with_function_store(env.clone());
         let result = Interpreter::new(state)
-            .with_fuel(Some(3))
+            .with_fuel(Some(4))
             .call_by_name("%test", &[])
             .unwrap();
 

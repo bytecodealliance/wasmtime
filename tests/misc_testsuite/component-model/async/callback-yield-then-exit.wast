@@ -21,13 +21,13 @@
       (with "" (instance (export "task.return" (func $task.return))))
     ))
 
-    (func (export "foo") (param "p1" u32) (result u32)
+    (func (export "foo") async (param "p1" u32) (result u32)
       (canon lift (core func $i "foo") async (callback (func $i "callback")))
     )
   )
 
   (component $B
-    (import "a" (func $foo (param "p1" u32) (result u32)))
+    (import "a" (func $foo async (param "p1" u32) (result u32)))
     (core func $foo (canon lower (func $foo)))
     (core module $m
       (import "" "foo" (func $foo (param i32) (result i32)))
@@ -47,5 +47,5 @@
   (func (export "run") (alias export $B "run"))
 )
 
-(assert_return (invoke "run"))
-(assert_return (invoke "run"))
+(assert_trap (invoke "run") "wasm trap: cannot block a synchronous task before returning")
+(assert_trap (invoke "run") "wasm trap: cannot enter component instance")

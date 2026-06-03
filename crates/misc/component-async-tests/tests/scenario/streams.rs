@@ -258,6 +258,13 @@ mod closed_stream {
     });
 }
 
+mod cross_instance_source {
+    wasmtime::component::bindgen!({
+        path: "wit",
+        world: "cross-instance-source",
+    });
+}
+
 #[tokio::test]
 pub async fn async_closed_stream() -> Result<()> {
     let engine = Engine::new(&config())?;
@@ -294,6 +301,69 @@ pub async fn async_closed_stream() -> Result<()> {
             Ok(())
         })
         .await?
+}
+
+#[tokio::test]
+pub async fn async_cross_instance_source() -> Result<()> {
+    let engine = Engine::new(&config())?;
+
+    let source_component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CROSS_INSTANCE_SOURCE_COMPONENT],
+    )
+    .await?;
+    let sink_component = make_component(
+        &engine,
+        &[test_programs_artifacts::ASYNC_CLOSED_STREAMS_COMPONENT],
+    )
+    .await?;
+
+    let mut linker = Linker::new(&engine);
+
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let mut store = Store::new(
+        &engine,
+        Ctx {
+            wasi: WasiCtxBuilder::new().inherit_stdio().build(),
+            table: ResourceTable::default(),
+            continue_: false,
+        },
+    );
+
+    let source_instance = linker
+        .instantiate_async(&mut store, &source_component)
+        .await?;
+    let sink_instance = linker
+        .instantiate_async(&mut store, &sink_component)
+        .await?;
+
+    let source = cross_instance_source::CrossInstanceSource::new(&mut store, &source_instance)?;
+    let sink = closed_streams::bindings::ClosedStreams::new(&mut store, &sink_instance)?;
+
+    let stream_expected = vec![2_u8, 4, 6, 8, 9];
+    let future_expected = 10_u8;
+    let (_, ignored_future_rx) = oneshot::channel();
+    let ignored_future = FutureReader::new(&mut store, OneshotProducer::new(ignored_future_rx))?;
+
+    store
+        .run_concurrent(async move |accessor| {
+            let (stream, future) = source
+                .local_local_cross_instance()
+                .call_make(accessor)
+                .await?;
+
+            let closed = sink.local_local_closed();
+            let read_stream = closed.call_read_stream(accessor, stream, stream_expected);
+            let read_future =
+                closed.call_read_future(accessor, future, future_expected, ignored_future);
+
+            future::try_join(read_stream, read_future).await?;
+            wasmtime::error::Ok(())
+        })
+        .await??;
+
+    Ok(())
 }
 
 struct VecProducer<T> {

@@ -1265,6 +1265,10 @@ impl MachInst for Inst {
         44
     }
 
+    fn worst_case_island_growth() -> CodeOffset {
+        0
+    }
+
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::Int
     }
@@ -3549,7 +3553,7 @@ impl Inst {
                     base,
                     index,
                     disp: offset,
-                    flags,
+                    flags: flags.into(),
                 };
                 let mem = mem.pretty_print_default();
                 format!("{op} {rd}, {mem}")
@@ -3574,7 +3578,7 @@ impl Inst {
                     base,
                     index,
                     disp: offset,
-                    flags,
+                    flags: flags.into(),
                 };
                 let mem = mem.pretty_print_default();
                 format!("{op} {rd}, {mem}")

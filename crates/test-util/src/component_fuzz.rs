@@ -1708,6 +1708,28 @@ pub enum LowerAbi {
     Async,
 }
 
+impl LiftAbi {
+    fn is_async(self) -> bool {
+        !matches!(self, Self::Sync)
+    }
+
+    fn ensure_async(&mut self) {
+        if !self.is_async() {
+            *self = Self::AsyncStackful;
+        }
+    }
+}
+
+impl LowerAbi {
+    fn is_async(self) -> bool {
+        matches!(self, Self::Async)
+    }
+
+    fn ensure_async(&mut self) {
+        *self = Self::Async;
+    }
+}
+
 impl<'a> TestCase<'a> {
     pub fn generate(types: &'a [Type], u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
         let max_params = if types.len() > 0 { 5 } else { 0 };
@@ -1722,15 +1744,25 @@ impl<'a> TestCase<'a> {
 
         let mut options = u.arbitrary::<TestCaseOptions>()?;
 
-        // Sync tasks cannot call async functions via a sync lower, nor can they
-        // block in other ways (e.g. by calling `waitable-set.wait`, returning
-        // `CALLBACK_CODE_WAIT`, etc.) prior to returning.  Therefore,
-        // async-ness cascades to the callers:
-        if options.host_async {
+        // Keep each boundary self-consistent: async function types require async
+        // lowering/lifting, and async callees force their callers async too.
+        if options.host_async || options.callee_lower_abi.is_async() {
+            options.host_async = true;
+            options.callee_lower_abi.ensure_async();
             options.guest_callee_async = true;
         }
-        if options.guest_callee_async {
+        if options.guest_callee_async
+            || options.callee_lift_abi.is_async()
+            || options.caller_lower_abi.is_async()
+        {
+            options.guest_callee_async = true;
+            options.callee_lift_abi.ensure_async();
+            options.caller_lower_abi.ensure_async();
             options.guest_caller_async = true;
+        }
+        if options.guest_caller_async || options.caller_lift_abi.is_async() {
+            options.guest_caller_async = true;
+            options.caller_lift_abi.ensure_async();
         }
 
         Ok(Self {

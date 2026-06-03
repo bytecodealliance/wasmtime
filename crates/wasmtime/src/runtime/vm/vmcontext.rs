@@ -19,7 +19,6 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     DefinedTagIndex, NUM_COMPONENT_CONTEXT_SLOTS, VMCONTEXT_MAGIC, VMSharedTypeIndex,
-    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -599,86 +598,6 @@ impl VMGlobalDefinition {
         Self { storage: [0; 16] }
     }
 
-    /// Create a `VMGlobalDefinition` from a `ValRaw`.
-    ///
-    /// # Unsafety
-    ///
-    /// This raw value's type must match the given `WasmValType`.
-    pub unsafe fn from_val_raw(
-        store: &mut StoreOpaque,
-        wasm_ty: WasmValType,
-        raw: ValRaw,
-    ) -> Result<Self> {
-        let mut global = Self::new();
-        unsafe {
-            match wasm_ty {
-                WasmValType::I32 => *global.as_i32_mut() = raw.get_i32(),
-                WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
-                WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
-                WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
-                WasmValType::V128 => global.set_u128(raw.get_v128()),
-                WasmValType::Ref(r) => match r.heap_type.top() {
-                    WasmHeapTopType::Extern => {
-                        let r = VMGcRef::from_raw_u32(raw.get_externref());
-                        global.init_gc_ref(store, r.as_ref())
-                    }
-                    WasmHeapTopType::Any => {
-                        let r = VMGcRef::from_raw_u32(raw.get_anyref());
-                        global.init_gc_ref(store, r.as_ref())
-                    }
-                    WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                    WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
-                    WasmHeapTopType::Exn => {
-                        let r = VMGcRef::from_raw_u32(raw.get_exnref());
-                        global.init_gc_ref(store, r.as_ref())
-                    }
-                },
-            }
-        }
-        Ok(global)
-    }
-
-    /// Get this global's value as a `ValRaw`.
-    ///
-    /// # Unsafety
-    ///
-    /// This global's value's type must match the given `WasmValType`.
-    pub unsafe fn to_val_raw(
-        &self,
-        store: &mut StoreOpaque,
-        wasm_ty: WasmValType,
-    ) -> Result<ValRaw> {
-        unsafe {
-            Ok(match wasm_ty {
-                WasmValType::I32 => ValRaw::i32(*self.as_i32()),
-                WasmValType::I64 => ValRaw::i64(*self.as_i64()),
-                WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
-                WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
-                WasmValType::V128 => ValRaw::v128(self.get_u128()),
-                WasmValType::Ref(r) => match r.heap_type.top() {
-                    WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
-                        Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                        None => 0,
-                    }),
-                    WasmHeapTopType::Any => ValRaw::anyref({
-                        match self.as_gc_ref() {
-                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
-                        }
-                    }),
-                    WasmHeapTopType::Exn => ValRaw::exnref({
-                        match self.as_gc_ref() {
-                            Some(r) => store.clone_gc_ref(r).as_raw_u32(),
-                            None => 0,
-                        }
-                    }),
-                    WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
-                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
-                },
-            })
-        }
-    }
-
     /// Return a reference to the value as an i32.
     pub unsafe fn as_i32(&self) -> &i32 {
         unsafe { &*(self.storage.as_ref().as_ptr().cast::<i32>()) }
@@ -804,7 +723,11 @@ impl VMGlobalDefinition {
     }
 
     /// Initialize a global to the given GC reference.
-    pub unsafe fn init_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn init_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe {
             &mut *(self
                 .storage
@@ -817,7 +740,11 @@ impl VMGlobalDefinition {
     }
 
     /// Write a GC reference into this global value.
-    pub unsafe fn write_gc_ref(&mut self, store: &mut StoreOpaque, gc_ref: Option<&VMGcRef>) {
+    pub unsafe fn write_gc_ref(
+        &mut self,
+        store: &mut StoreOpaque,
+        gc_ref: Option<&VMGcRef>,
+    ) -> Result<()> {
         let dest = unsafe { &mut *(self.storage.as_mut().as_mut_ptr().cast::<Option<VMGcRef>>()) };
         store.write_gc_ref(dest, gc_ref)
     }
@@ -1211,7 +1138,7 @@ pub struct VMStoreContext {
     pub stack_limit: UnsafeCell<usize>,
 
     /// The `VMMemoryDefinition` for this store's GC heap.
-    pub gc_heap: VMMemoryDefinition,
+    pub gc_heap: UnsafeCell<VMMemoryDefinition>,
 
     /// The value of the frame pointer register in the trampoline used
     /// to call from Wasm to the host.
@@ -1372,10 +1299,10 @@ impl Default for VMStoreContext {
             epoch_deadline: UnsafeCell::new(0),
             execution_version: 0,
             stack_limit: UnsafeCell::new(usize::max_value()),
-            gc_heap: VMMemoryDefinition {
+            gc_heap: UnsafeCell::new(VMMemoryDefinition {
                 base: NonNull::dangling().into(),
                 current_length: AtomicUsize::new(0),
-            },
+            }),
             last_wasm_exit_trampoline_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),

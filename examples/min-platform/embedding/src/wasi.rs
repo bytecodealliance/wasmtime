@@ -212,7 +212,7 @@ pub fn add_to_linker_async(linker: &mut Linker<ExampleCtx>) -> Result<()> {
     wasi::clocks::monotonic_clock::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::clocks::wall_clock::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::cli::environment::add_to_linker::<_, Data>(linker, |t| t)?;
-    wasi::cli::exit::add_to_linker::<_, Data>(linker, &Default::default(), |t| t)?;
+    wasi::cli::exit::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::cli::stdin::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::cli::stdout::add_to_linker::<_, Data>(linker, |t| t)?;
     wasi::cli::stderr::add_to_linker::<_, Data>(linker, |t| t)?;

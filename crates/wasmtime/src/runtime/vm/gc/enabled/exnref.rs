@@ -1,4 +1,3 @@
-use super::structref::{initialize_field_impl, read_field_impl};
 use crate::{
     StorageType, Val,
     prelude::*,
@@ -41,8 +40,10 @@ impl VMGcRef {
             return false;
         }
 
-        let header = gc_heap.header(&self);
-        header.kind().matches(VMGcKind::ExnRef)
+        match gc_heap.header(&self) {
+            Ok(header) => header.kind().matches(VMGcKind::ExnRef),
+            Err(_) => false,
+        }
     }
 
     /// Create a new `VMExnRef` from the given `gc_ref`.
@@ -147,9 +148,9 @@ impl VMExnRef {
         layout: &GcStructLayout,
         ty: &StorageType,
         field: usize,
-    ) -> Val {
+    ) -> Result<Val> {
         let offset = layout.fields[field].offset;
-        read_field_impl(self.as_gc_ref(), store, ty, offset)
+        self.as_gc_ref().read_val(store, ty, offset)
     }
 
     /// Initialize a field in this exnref that is currently uninitialized.
@@ -178,7 +179,7 @@ impl VMExnRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
         let offset = layout.fields[field].offset;
-        initialize_field_impl(self.as_gc_ref(), store, ty, offset, val)
+        self.as_gc_ref().initialize_val(store, ty, offset, val)
     }
 
     /// Initialize the tag referenced by this exception object.
@@ -193,11 +194,11 @@ impl VMExnRef {
         let tag_offset = layouts.exception_tag_defined_offset();
         let store = store.require_gc_store_mut()?;
         store
-            .gc_object_data(&self.0)
-            .write_u32(instance_offset, instance.as_u32());
+            .gc_object_data(&self.0)?
+            .write_u32(instance_offset, instance.as_u32())?;
         store
-            .gc_object_data(&self.0)
-            .write_u32(tag_offset, tag.as_u32());
+            .gc_object_data(&self.0)?
+            .write_u32(tag_offset, tag.as_u32())?;
         Ok(())
     }
 
@@ -208,11 +209,11 @@ impl VMExnRef {
         let tag_offset = layouts.exception_tag_defined_offset();
         let instance = store
             .require_gc_store_mut()?
-            .gc_object_data(&self.0)
-            .read_u32(instance_offset);
+            .gc_object_data(&self.0)?
+            .read_u32(instance_offset)?;
         let instance = InstanceId::from_u32(instance);
         let store = store.require_gc_store_mut()?;
-        let tag = store.gc_object_data(&self.0).read_u32(tag_offset);
+        let tag = store.gc_object_data(&self.0)?.read_u32(tag_offset)?;
         let tag = DefinedTagIndex::from_u32(tag);
         Ok((instance, tag))
     }

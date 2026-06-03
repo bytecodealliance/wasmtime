@@ -557,6 +557,11 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                                     OperandKindFields::VariableArgs => {
                                         fmtln!(fmt, "{member}: mapper.map_value_list({member}),");
                                     }
+                                    OperandKindFields::ImmValue
+                                        if field.kind.rust_type == "ir::MemFlags" =>
+                                    {
+                                        fmtln!(fmt, "{member}: mapper.map_mem_flags({member}),");
+                                    }
                                     OperandKindFields::ImmValue |
                                     OperandKindFields::ImmEnum(_) |
                                     OperandKindFields::TypeVar(_) => fmtln!(fmt, "{member},"),
@@ -1153,7 +1158,14 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         } else {
             let t = if op.is_immediate() {
                 let t = format!("T{}", tmpl_types.len() + 1);
-                tmpl_types.push(format!("{}: Into<{}>", t, op.kind.rust_type));
+                // For memflags, the public API type is MemFlagsData (the data),
+                // while InstructionData stores MemFlags (the entity index).
+                let api_type = if op.kind.rust_type == "ir::MemFlags" {
+                    "ir::MemFlagsData"
+                } else {
+                    op.kind.rust_type
+                };
+                tmpl_types.push(format!("{t}: Into<{api_type}>"));
                 into_args.push(op.name);
                 t
             } else {
@@ -1164,9 +1176,13 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         }
     }
 
-    // We need to mutate `self` if this instruction accepts a value list, or will construct
-    // BlockCall values.
-    if format.has_value_list || !block_args.is_empty() {
+    // We need to mutate `self` if this instruction accepts a value list, will construct
+    // BlockCall values, or has memflags operands (which need DFG insertion).
+    let has_memflags = inst
+        .operands_in
+        .iter()
+        .any(|op| op.kind.rust_type == "ir::MemFlags");
+    if format.has_value_list || !block_args.is_empty() || has_memflags {
         args[0].push_str("mut self");
     } else {
         args[0].push_str("self");
@@ -1219,6 +1235,17 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         // Convert all of the `Into<>` arguments.
         for arg in into_args {
             fmtln!(fmt, "let {} = {}.into();", arg, arg);
+        }
+
+        // Insert memflags data into the DFG to get entity indices.
+        for op in &inst.operands_in {
+            if op.kind.rust_type == "ir::MemFlags" && op.is_immediate() {
+                fmtln!(
+                    fmt,
+                    "let {0} = self.data_flow_graph_mut().mem_flags.insert({0}).unwrap();",
+                    op.name
+                );
+            }
         }
 
         // Convert block references
@@ -1319,6 +1346,99 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     });
 }
 
+/// Emit an additional `{name}_imm` convenience method for `inst`, requested via
+/// `.inst_builder_imm_method(true)`.
+///
+/// The generated method has the same shape as `inst`'s normal builder method,
+/// except that its trailing value operand is taken as an `Into<Imm64>`
+/// immediate. That immediate is materialized as an `iconst` (sign- or
+/// zero-extended to the controlling type as needed, see
+/// `InstBuilder::build_imm_const`) and then `inst` is built with it.
+fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
+    // Only the simple, fixed-operand, single-result integer instructions that
+    // used to have a `binary_imm64`/`int_compare_imm` counterpart are
+    // supported.
+    assert!(
+        !inst.format.has_value_list,
+        "inst_builder_imm_method is not supported for {} (has a value list)",
+        inst.name
+    );
+    assert_eq!(
+        inst.value_results.len(),
+        1,
+        "inst_builder_imm_method is only supported for single-result instructions, not {}",
+        inst.name
+    );
+    assert!(
+        inst.value_opnums.len() >= 2,
+        "inst_builder_imm_method requires at least two value operands, but {} has {}",
+        inst.name,
+        inst.value_opnums.len()
+    );
+
+    // The immediate replaces the trailing value operand; the first value
+    // operand provides the controlling type for the synthesized `iconst`.
+    let imm_opnum = *inst.value_opnums.last().unwrap();
+    let ctrl_opnum = *inst.value_opnums.first().unwrap();
+    let imm_name = inst.operands_in[imm_opnum].name;
+    let ctrl_name = inst.operands_in[ctrl_opnum].name;
+
+    let mut args = vec!["mut self".to_string()];
+    let mut args_doc = Vec::new();
+    for (i, op) in inst.operands_in.iter().enumerate() {
+        if i == imm_opnum {
+            args.push(format!("{}: T", op.name));
+            args_doc.push(format!("- {}: an immediate integer constant", op.name));
+        } else if op.is_value() {
+            args.push(format!("{}: Value", op.name));
+            args_doc.push(format!("- {}: {}", op.name, op.doc()));
+        } else {
+            args.push(format!("{}: {}", op.name, op.kind.rust_type));
+            args_doc.push(format!("- {}: {}", op.name, op.doc()));
+        }
+    }
+
+    let proto = format!(
+        "{}_imm<T: Into<ir::immediates::Imm64>>({}) -> Value",
+        inst.snake_name(),
+        args.join(", "),
+    );
+
+    fmt.doc_comment(format!(
+        "Convenience method that is like [`{name}`][Self::{name}], but takes its \
+         trailing operand as an immediate integer constant which is materialized \
+         with an `iconst`.",
+        name = inst.snake_name(),
+    ));
+    fmt.line("///");
+    fmt.doc_comment("Inputs:");
+    fmt.line("///");
+    for doc_line in args_doc {
+        fmt.doc_comment(doc_line);
+    }
+
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(&format!("fn {proto}"), |fmt| {
+        fmtln!(fmt, "let {imm_name} = {imm_name}.into();");
+        fmtln!(
+            fmt,
+            "let imm_ty = self.data_flow_graph().value_type({ctrl_name});"
+        );
+        fmtln!(
+            fmt,
+            "let {imm_name} = self.build_imm_const(imm_ty, {imm_name}, Opcode::{});",
+            inst.camel_name
+        );
+        let call_args = inst
+            .operands_in
+            .iter()
+            .map(|op| op.name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        fmtln!(fmt, "self.{}({call_args})", inst.snake_name());
+    });
+}
+
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
@@ -1349,6 +1469,10 @@ fn gen_builder(
         for inst in instructions.iter() {
             gen_inst_builder(inst, &inst.format, fmt);
             fmt.empty_line();
+            if inst.inst_builder_imm_method {
+                gen_imm_inst_builder(inst, fmt);
+                fmt.empty_line();
+            }
         }
         for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);

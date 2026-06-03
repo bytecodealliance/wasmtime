@@ -1,0 +1,11 @@
+test verifier
+
+; Defining two regions with the same user_id is invalid.
+function %duplicate_user_id(i64) -> i32 {
+    region0 = 36 "first"
+    region1 = 36 "second"
+    ; error: duplicate alias region user_id 36
+block0(v0: i64):
+    v1 = load.i32 notrap region0 v0
+    return v1
+}

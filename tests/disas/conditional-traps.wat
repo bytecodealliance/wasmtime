@@ -45,10 +45,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v5 = iconst.i32 0
-;; @0038                               v3 = icmp eq v2, v5  ; v5 = 0
-;; @0038                               v4 = uextend.i32 v3
-;; @003b                               trapnz v4, user12
+;; @0038                               v3 = iconst.i32 0
+;; @0038                               v4 = icmp eq v2, v3  ; v3 = 0
+;; @0038                               v5 = uextend.i32 v4
+;; @003b                               trapnz v5, user12
 ;; @0039                               jump block3
 ;;
 ;;                                 block3:

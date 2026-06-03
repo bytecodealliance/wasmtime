@@ -270,6 +270,11 @@ generate_trap_type! {
         /// A read/write on a stream must be <2**28 items.
         StreamOpTooBig = "stream read/write count too large",
 
+        /// The guest either attempted to add a waitable to a waitable set while
+        /// it was being used in a synchronous operation or tried to use it in a
+        /// synchronous operation while it was added to a waitable set.
+        WaitableSyncAndAsync = "waitable cannot be used synchronously while added to a waitable set",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }

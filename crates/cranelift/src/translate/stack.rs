@@ -58,6 +58,9 @@ pub enum ControlStackFrame {
         original_stack_size: usize,
         exit_is_branched_to: bool,
         blocktype: wasmparser::BlockType,
+        /// Whether the `else` block, when allocated lazily, should be marked
+        /// cold (from a branch hint that the condition is likely true).
+        else_is_cold: bool,
         /// Was the head of the `if` reachable?
         head_is_reachable: bool,
         /// What was the reachability at the end of the consequent?
@@ -507,6 +510,7 @@ impl FuncTranslationStacks {
         num_param_types: usize,
         num_result_types: usize,
         blocktype: wasmparser::BlockType,
+        else_is_cold: bool,
     ) {
         debug_assert!(num_param_types <= self.stack.len());
         self.assert_debug_stack_is_synced();
@@ -541,6 +545,7 @@ impl FuncTranslationStacks {
             head_is_reachable: self.reachable,
             consequent_ends_reachable: None,
             blocktype,
+            else_is_cold,
         });
     }
 

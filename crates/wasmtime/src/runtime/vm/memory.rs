@@ -271,7 +271,7 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, limiter).await?;
         let pooled_memory = StaticMemory::new(base, base_capacity, minimum, maximum)?;
-        let allocation = Box::new(pooled_memory);
+        let allocation = try_new::<Box<_>>(pooled_memory)?;
 
         // Configure some defaults a bit differently for this memory within the
         // `LocalMemory` structure created, notably we already have

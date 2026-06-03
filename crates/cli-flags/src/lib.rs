@@ -451,6 +451,8 @@ wasmtime_option_group! {
         pub custom_page_sizes: Option<bool>,
         /// Configure support for the wide-arithmetic proposal.
         pub wide_arithmetic: Option<bool>,
+        /// Configure support for the branch-hinting proposal.
+        pub branch_hinting: Option<bool>,
         /// Configure support for the extended-const proposal.
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
@@ -460,6 +462,9 @@ wasmtime_option_group! {
         /// Component model support for fixed-length lists: this corresponds
         /// to the 🔧 emoji in the component model specification
         pub component_model_fixed_length_lists: Option<bool>,
+        /// Component model support for `(implements ...)`, corresponds to the
+        /// 🏷️ emoji in the upstream spec.
+        pub component_model_implements: Option<bool>,
         /// Whether or not any concurrency infrastructure in Wasmtime is
         /// enabled or not.
         pub concurrency_support: Option<bool>,
@@ -543,6 +548,8 @@ wasmtime_option_group! {
         pub inherit_stdout: Option<bool>,
         /// Inherit stderr from the parent process. On by default.
         pub inherit_stderr: Option<bool>,
+        /// Initial current working directory reported through `wasi:cli/environment`.
+        pub cwd: Option<String>,
         /// Pass a wasi config variable to the program.
         #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,
@@ -1197,6 +1204,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.wide_arithmetic.or(all) {
             config.wasm_wide_arithmetic(enable);
         }
+        // Not included in `all_proposals`: off by default until fuzzed.
+        if let Some(enable) = self.wasm.branch_hinting {
+            config.wasm_branch_hinting(enable);
+        }
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
@@ -1223,6 +1234,7 @@ impl CommonOptions {
             ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("component-model", component_model_map, wasm_component_model_map)
             ("component-model", component_model_fixed_length_lists, wasm_component_model_fixed_length_lists)
+            ("component-model", component_model_implements, wasm_component_model_implements)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)

@@ -14,7 +14,7 @@ use std::{
     task::{Context, Poll},
     time,
 };
-use wasmtime_core::error::{OutOfMemory, Result, bail};
+use wasmtime_core::error::{OutOfMemory, Result, bail, ensure};
 
 /// An allocator for use with `OomTest`.
 #[non_exhaustive]
@@ -41,10 +41,14 @@ enum OomState {
     OomOnAlloc {
         counter: u32,
         allow_alloc_after: bool,
+        alloc_succeeds_after: bool,
     },
 
     /// We are inside an OOM test and we already injected an OOM.
-    DidOom { allow_alloc: bool },
+    DidOom {
+        allow_alloc: bool,
+        alloc_succeeds_after: bool,
+    },
 }
 
 thread_local! {
@@ -125,12 +129,14 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                 OomState::OomOnAlloc {
                     counter: 0,
                     allow_alloc_after,
+                    alloc_succeeds_after,
                 } => {
-                    log::trace!(
+                    log::debug!(
                         "injecting OOM for allocation: {layout:?}\nAllocation backtrace:\n{bt}"
                     );
                     new_state = OomState::DidOom {
                         allow_alloc: allow_alloc_after,
+                        alloc_succeeds_after,
                     };
                     ptr = ptr::null_mut();
                 }
@@ -138,19 +144,31 @@ unsafe impl GlobalAlloc for OomTestAllocator {
                 OomState::OomOnAlloc {
                     counter: c,
                     allow_alloc_after,
+                    alloc_succeeds_after,
                 } => {
                     new_state = OomState::OomOnAlloc {
                         counter: c - 1,
                         allow_alloc_after,
+                        alloc_succeeds_after,
                     };
                     ptr = unsafe { std::alloc::System.alloc(layout) };
                 }
 
-                OomState::DidOom { allow_alloc } => {
+                OomState::DidOom {
+                    allow_alloc,
+                    alloc_succeeds_after,
+                } => {
                     log::trace!("Attempt to allocate {layout:?} after OOM:\n{bt}");
                     if allow_alloc {
-                        new_state = OomState::DidOom { allow_alloc: true };
-                        ptr = ptr::null_mut();
+                        new_state = OomState::DidOom {
+                            allow_alloc: true,
+                            alloc_succeeds_after,
+                        };
+                        ptr = if alloc_succeeds_after {
+                            unsafe { std::alloc::System.alloc(layout) }
+                        } else {
+                            ptr::null_mut()
+                        };
                     } else {
                         panic!(
                             "OOM test attempted to allocate after OOM: {layout:?}\n\
@@ -207,6 +225,9 @@ pub struct OomTest {
     max_iters: Option<u32>,
     max_duration: Option<time::Duration>,
     allow_alloc_after_oom: bool,
+    alloc_succeeds_after_oom: bool,
+    allow_missed_oom_errors: bool,
+    seed: u64,
 }
 
 impl OomTest {
@@ -226,6 +247,9 @@ impl OomTest {
             max_iters: None,
             max_duration: None,
             allow_alloc_after_oom: false,
+            alloc_succeeds_after_oom: false,
+            allow_missed_oom_errors: false,
+            seed: 0,
         }
     }
 
@@ -247,6 +271,33 @@ impl OomTest {
     /// The default is `false`.
     pub fn allow_alloc_after_oom(&mut self, allow: bool) -> &mut Self {
         self.allow_alloc_after_oom = allow;
+        self
+    }
+
+    /// Configure whether allocations after an OOM (assuming
+    /// `allow_alloc_after_oom(true)`) will succeed or will always return null.
+    ///
+    /// The default is `false`.
+    pub fn alloc_succeeds_after_oom(&mut self, succeeds: bool) -> &mut Self {
+        self.alloc_succeeds_after_oom = succeeds;
+        self
+    }
+
+    /// Configure whether to allow a test to pass if it does not return
+    /// `Err(OutOfMemory)` when a synthetic OOM was injected (perhaps because it
+    /// is exercising logic that is robust to OOM).
+    ///
+    /// The default is `false`.
+    pub fn allow_missed_oom_errors(&mut self, allow: bool) -> &mut Self {
+        self.allow_missed_oom_errors = allow;
+        self
+    }
+
+    /// Configure the seed for the RNG used in `fuzz` mode.
+    ///
+    /// The default is `0`.
+    pub fn seed(&mut self, seed: u64) -> &mut Self {
+        self.seed = seed;
         self
     }
 
@@ -280,7 +331,7 @@ impl OomTest {
             }
 
             log::trace!("=== Injecting OOM after {i} allocations ===");
-            Self::run_one_oom_injection(&test_func, i, self.allow_alloc_after_oom).await?;
+            self.run_one_oom_injection(&test_func, i).await?;
         }
 
         Ok(())
@@ -308,12 +359,12 @@ impl OomTest {
             return Ok(());
         }
 
-        let mut rng = SmallRng::seed_from_u64(0);
+        let mut rng = SmallRng::seed_from_u64(self.seed);
 
         for _ in 0..max_iters {
             let i = rng.random_range(0..total_allocs);
             log::trace!("=== Injecting OOM after {i} allocations (fuzz) ===");
-            Self::run_one_oom_injection(&test_func, i, self.allow_alloc_after_oom).await?;
+            self.run_one_oom_injection(&test_func, i).await?;
         }
 
         Ok(())
@@ -322,16 +373,17 @@ impl OomTest {
     /// Run the test function once, injecting OOM on the `i`th allocation, and
     /// check that the result correctly reflects whether an OOM was hit.
     async fn run_one_oom_injection(
+        &self,
         test_func: &impl AsyncFn() -> Result<()>,
         i: u32,
-        allow_alloc_after_oom: bool,
     ) -> Result<()> {
         let future = std::pin::pin!(test_func());
         let (result, oom_state) = OomTestFuture::new(
             future,
             OomState::OomOnAlloc {
                 counter: i,
-                allow_alloc_after: allow_alloc_after_oom,
+                allow_alloc_after: self.allow_alloc_after_oom,
+                alloc_succeeds_after: self.alloc_succeeds_after_oom,
             },
         )
         .await;
@@ -349,15 +401,26 @@ impl OomTest {
 
             // Missed OOMs.
             (Ok(()), OomState::DidOom { .. }) => {
-                bail!("OOM test function missed an OOM: returned Ok(())");
+                ensure!(
+                    self.allow_missed_oom_errors,
+                    "OOM test function missed an OOM: returned Ok(())"
+                );
             }
             (Err(e), OomState::DidOom { .. }) => {
-                return Err(e.context("OOM test function missed an OOM: returned non-OOM error"));
+                if !self.allow_missed_oom_errors {
+                    return Err(
+                        e.context("OOM test function missed an OOM: returned non-OOM error")
+                    );
+                }
             }
 
             // Unexpected error.
             (Err(e), OomState::OomOnAlloc { .. }) => {
-                return Err(e.context("OOM test function returned an error when there was no OOM"));
+                if !self.allow_missed_oom_errors {
+                    return Err(
+                        e.context("OOM test function returned an error when there was no OOM")
+                    );
+                }
             }
         }
 

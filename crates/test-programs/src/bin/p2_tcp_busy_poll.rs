@@ -11,8 +11,6 @@ use test_programs::wasi::sockets::tcp::TcpSocket;
 // prevent e.g. socket readiness from being delivered.  Here we verify that such
 // starvation does not happen.
 fn test_tcp_busy_poll(family: IpAddressFamily, address: IpSocketAddress) {
-    let zero_wait = monotonic_clock::subscribe_duration(0);
-
     let net = Network::default();
 
     let listener = TcpSocket::new(family).unwrap();
@@ -33,6 +31,7 @@ fn test_tcp_busy_poll(family: IpAddressFamily, address: IpSocketAddress) {
         let rx_ready = rx.subscribe();
         let mut counter = 0;
         loop {
+            let zero_wait = monotonic_clock::subscribe_duration(0);
             if counter > 1_000_000 {
                 panic!("socket still not ready!");
             }

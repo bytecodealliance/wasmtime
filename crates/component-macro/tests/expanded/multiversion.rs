@@ -213,6 +213,25 @@ pub mod my {
                     Host::x(*self)
                 }
             }
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                inst.func_wrap(
+                    "x",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::x(host);
+                        Ok(r)
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -223,15 +242,7 @@ pub mod my {
                 T: 'static,
             {
                 let mut inst = linker.instance("my:dep/a@0.1.0")?;
-                inst.func_wrap(
-                    "x",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::x(host);
-                        Ok(r)
-                    },
-                )?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }
@@ -253,6 +264,25 @@ pub mod my {
                     Host::x(*self)
                 }
             }
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                inst.func_wrap(
+                    "x",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::x(host);
+                        Ok(r)
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -263,15 +293,7 @@ pub mod my {
                 T: 'static,
             {
                 let mut inst = linker.instance("my:dep/a@0.2.0")?;
-                inst.func_wrap(
-                    "x",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::x(host);
-                        Ok(r)
-                    },
-                )?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }
@@ -309,7 +331,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -388,7 +410,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)

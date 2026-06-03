@@ -39,9 +39,9 @@ use wasmtime_environ::{
     Abi, AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
     DefinedFuncIndex, FlagValue, FrameInstPos, FrameStackShape, FrameStateSlotBuilder,
     FrameTableBuilder, FuncKey, FunctionBodyData, FunctionLoc, HostCall, Inlining,
-    InliningCompiler, ModulePC, ModuleTranslation, ModuleTypesBuilder, PtrSize, StackMapSection,
-    StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, WasmFuncType,
-    WasmValType, prelude::*,
+    InliningCompiler, ModulePC, ModuleStartup, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables,
+    WasmFuncType, WasmValType, prelude::*,
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
@@ -199,180 +199,6 @@ impl Compiler {
 
         builder.ins().call_indirect(sig, addr, args)
     }
-}
-
-fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sync> {
-    let b = box_dyn_any(f);
-    debug_assert!(b.is::<CompiledFunction>());
-    b
-}
-
-fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + Send + Sync> {
-    let b = box_dyn_any(ctx);
-    debug_assert!(b.is::<Option<CompilerContext>>());
-    b
-}
-
-fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
-    log::trace!(
-        "making Box<dyn Any + Send + Sync> of {}",
-        std::any::type_name_of_val(&x)
-    );
-    let b = Box::new(x);
-    let r: &(dyn Any + Sync + Send) = &*b;
-    log::trace!("  --> {r:#p}");
-    b
-}
-
-impl wasmtime_environ::Compiler for Compiler {
-    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
-        Some(self)
-    }
-
-    fn compile_function(
-        &self,
-        translation: &ModuleTranslation<'_>,
-        key: FuncKey,
-        input: FunctionBodyData<'_>,
-        types: &ModuleTypesBuilder,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        log::trace!("compiling Wasm function: {key:?} = {symbol:?}");
-
-        let isa = &*self.isa;
-        let module = &translation.module;
-
-        let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
-        debug_assert_eq!(translation.module_index(), module_index);
-
-        let func_index = module.func_index(def_func_index);
-        let sig = translation.module.functions[func_index]
-            .signature
-            .unwrap_module_type_index();
-        let wasm_func_ty = types[sig].unwrap_func();
-
-        let mut compiler = self.function_compiler();
-
-        let context = &mut compiler.cx.codegen_context;
-        context.func.signature = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
-        let (namespace, index) = key.into_raw_parts();
-        context.func.name = UserFuncName::User(UserExternalName { namespace, index });
-
-        if self.tunables.debug_native {
-            context.func.collect_debug_info();
-        }
-
-        let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty, key);
-
-        // The `stack_limit` global value below is the implementation of stack
-        // overflow checks in Wasmtime.
-        //
-        // The Wasm spec defines that stack overflows will raise a trap, and
-        // there's also an added constraint where as an embedder you frequently
-        // are running host-provided code called from wasm. WebAssembly and
-        // native code currently share the same call stack, so Wasmtime needs to
-        // make sure that host-provided code will have enough call-stack
-        // available to it.
-        //
-        // The way that stack overflow is handled here is by adding a prologue
-        // check to all functions for how much native stack is remaining. The
-        // `VMContext` pointer is the first argument to all functions, and the
-        // first field of this structure is `*const VMStoreContext` and the
-        // third field of that is the stack limit. Note that the stack limit in
-        // this case means "if the stack pointer goes below this, trap". Each
-        // function which consumes stack space or isn't a leaf function starts
-        // off by loading the stack limit, checking it against the stack
-        // pointer, and optionally traps.
-        //
-        // This manual check allows the embedder to give wasm a relatively
-        // precise amount of stack allocation. Using this scheme we reserve a
-        // chunk of stack for wasm code relative from where wasm code was
-        // called. This ensures that native code called by wasm should have
-        // native stack space to run, and the numbers of stack spaces here
-        // should all be configurable for various embeddings.
-        //
-        // Note that this check is independent of each thread's stack guard page
-        // here. If the stack guard page is reached that's still considered an
-        // abort for the whole program since the runtime limits configured by
-        // the embedder should cause wasm to trap before it reaches that
-        // (ensuring the host has enough space as well for its functionality).
-        if !isa.triple().is_pulley() {
-            let vmctx = context
-                .func
-                .create_global_value(ir::GlobalValueData::VMContext);
-            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: vmctx,
-                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
-                global_type: isa.pointer_type(),
-                flags: MemFlagsData::trusted().with_readonly(),
-            });
-            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: interrupts_ptr,
-                offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
-                global_type: isa.pointer_type(),
-                flags: MemFlagsData::trusted(),
-            });
-            if self.tunables.signals_based_traps {
-                context.func.stack_limit = Some(stack_limit);
-            } else {
-                func_env.stack_limit_at_function_entry = Some(stack_limit);
-            }
-        }
-        let FunctionBodyData { validator, body } = input;
-        let mut validator =
-            validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
-        compiler.cx.func_translator.translate_body(
-            &mut validator,
-            body.clone(),
-            &mut context.func,
-            &mut func_env,
-        )?;
-
-        if self.tunables.inlining != Inlining::No {
-            compiler
-                .cx
-                .codegen_context
-                .legalize(isa)
-                .map_err(|e| CompileError::Codegen(e.to_string()))?;
-        }
-
-        let needs_gc_heap = func_env.needs_gc_heap();
-
-        if let Some((_, slot_builder)) = func_env.state_slot {
-            compiler.cx.debug_slot_descriptor = Some(slot_builder);
-        }
-
-        let timing = cranelift_codegen::timing::take_current();
-        log::debug!("`{symbol}` translated to CLIF in {:?}", timing.total());
-        log::trace!("`{symbol}` timing info\n{timing}");
-
-        Ok(CompiledFunctionBody {
-            code: box_dyn_any_compiler_context(Some(compiler.cx)),
-            needs_gc_heap,
-        })
-    }
-
-    fn compile_array_to_wasm_trampoline(
-        &self,
-        translation: &ModuleTranslation<'_>,
-        types: &ModuleTypesBuilder,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        let (module_index, def_func_index) = key.unwrap_array_to_wasm_trampoline();
-        let func_index = translation.module.func_index(def_func_index);
-        let sig = translation.module.functions[func_index]
-            .signature
-            .unwrap_module_type_index();
-        self.array_to_wasm_trampoline(
-            key,
-            FuncKey::DefinedWasmFunction(module_index, def_func_index),
-            types[sig].unwrap_func(),
-            symbol,
-            self.isa.pointer_bytes().vmctx_store_context().into(),
-            wasmtime_environ::VMCONTEXT_MAGIC,
-        )
-    }
 
     fn compile_wasm_to_array_trampoline(
         &self,
@@ -476,6 +302,380 @@ impl wasmtime_environ::Compiler for Compiler {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
             needs_gc_heap: false,
         })
+    }
+
+    fn compile_wasm_to_builtin(
+        &self,
+        key: FuncKey,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling wasm-to-builtin trampoline: {key:?} = {symbol:?}");
+
+        let isa = &*self.isa;
+        let ptr_size = isa.pointer_bytes();
+        let pointer_type = isa.pointer_type();
+        let sigs = BuiltinFunctionSignatures::new(self);
+
+        let (builtin_func_index, wasm_sig) = match key {
+            FuncKey::WasmToBuiltinTrampoline(builtin) => (builtin, sigs.wasm_signature(builtin)),
+            FuncKey::PatchableToBuiltinTrampoline(builtin) => {
+                let mut sig = sigs.wasm_signature(builtin);
+                // Patchable functions cannot return anything. We
+                // raise any errors that occur below so this is fine.
+                sig.returns.clear();
+                sig.call_conv = CallConv::PreserveAll;
+                (builtin, sig)
+            }
+            _ => unreachable!(),
+        };
+        let host_sig = sigs.host_signature(builtin_func_index);
+
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(key_to_name(key), wasm_sig.clone());
+        let (mut builder, block0) = compiler.builder(func);
+        let vmctx = builder.block_params(block0)[0];
+
+        // Debug-assert that this is the right kind of vmctx, and then
+        // additionally perform the "routine of the exit trampoline" of saving
+        // fp/pc/etc.
+        self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        let vm_store_context = builder.ins().load(
+            pointer_type,
+            MemFlagsData::trusted(),
+            vmctx,
+            ptr_size.vmcontext_store_context(),
+        );
+        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, vm_store_context);
+
+        // Now it's time to delegate to the actual builtin. Forward all our own
+        // arguments to the libcall itself.
+        let args = builder.block_params(block0).to_vec();
+        let call = self.call_builtin(&mut builder, vmctx, &args, builtin_func_index, host_sig);
+        let results = builder.func.dfg.inst_results(call).to_vec();
+
+        // Libcalls do not explicitly jump/raise on traps but instead return a
+        // code indicating whether they trapped or not. This means that it's the
+        // responsibility of the trampoline to check for an trapping return
+        // value and raise a trap as appropriate. With the `results` above check
+        // what `index` is and for each libcall that has a trapping return value
+        // process it here.
+        match builtin_func_index.trap_sentinel() {
+            Some(TrapSentinel::Falsy) => {
+                self.raise_if_host_trapped(&mut builder, vmctx, results[0]);
+            }
+            Some(TrapSentinel::NegativeTwo) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let trapped = builder.ins().iconst(ty, -2);
+                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], trapped);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            Some(TrapSentinel::Negative) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let zero = builder.ins().iconst(ty, 0);
+                let succeeded =
+                    builder
+                        .ins()
+                        .icmp(IntCC::SignedGreaterThanOrEqual, results[0], zero);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            Some(TrapSentinel::NegativeOne) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let minus_one = builder.ins().iconst(ty, -1);
+                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], minus_one);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            None => {}
+        }
+
+        // And finally, return all the results of this libcall.
+        if !wasm_sig.returns.is_empty() {
+            builder.ins().return_(&results);
+        } else {
+            builder.ins().return_(&[]);
+        }
+        builder.finalize();
+
+        Ok(CompiledFunctionBody {
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: false,
+        })
+    }
+
+    fn compile_module_startup(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypesBuilder,
+        key: FuncKey,
+        ty: &WasmFuncType,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        let mut compiler = self.function_compiler();
+        let context = &mut compiler.cx.codegen_context;
+        context.func.signature = wasm_call_signature(&*self.isa, ty, &self.tunables);
+        let (namespace, index) = key.into_raw_parts();
+        context.func.name = UserFuncName::User(UserExternalName { namespace, index });
+        let mut func_env = FuncEnvironment::new(self, translation, types, ty, key, None, 0);
+        compiler
+            .cx
+            .func_translator
+            .translate_module_startup(&mut context.func, &mut func_env)?;
+        Ok(CompiledFunctionBody {
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap: func_env.needs_gc_heap(),
+        })
+    }
+}
+
+fn box_dyn_any_compiled_function(f: CompiledFunction) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(f);
+    debug_assert!(b.is::<CompiledFunction>());
+    b
+}
+
+fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + Send + Sync> {
+    let b = box_dyn_any(ctx);
+    debug_assert!(b.is::<Option<CompilerContext>>());
+    b
+}
+
+fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
+    log::trace!(
+        "making Box<dyn Any + Send + Sync> of {}",
+        std::any::type_name_of_val(&x)
+    );
+    let b = Box::new(x);
+    let r: &(dyn Any + Sync + Send) = &*b;
+    log::trace!("  --> {r:#p}");
+    b
+}
+
+impl wasmtime_environ::Compiler for Compiler {
+    fn inlining_compiler(&self) -> Option<&dyn wasmtime_environ::InliningCompiler> {
+        Some(self)
+    }
+
+    fn compile_function(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        key: FuncKey,
+        input: FunctionBodyData<'_>,
+        types: &ModuleTypesBuilder,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        log::trace!("compiling Wasm function: {key:?} = {symbol:?}");
+
+        let isa = &*self.isa;
+        let module = &translation.module;
+
+        let (module_index, def_func_index) = key.unwrap_defined_wasm_function();
+        debug_assert_eq!(translation.module_index(), module_index);
+
+        let func_index = module.func_index(def_func_index);
+        let sig = translation.module.functions[func_index]
+            .signature
+            .unwrap_module_type_index();
+        let wasm_func_ty = types[sig].unwrap_func();
+
+        let mut compiler = self.function_compiler();
+
+        let context = &mut compiler.cx.codegen_context;
+        context.func.signature = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
+        let (namespace, index) = key.into_raw_parts();
+        context.func.name = UserFuncName::User(UserExternalName { namespace, index });
+
+        if self.tunables.debug_native {
+            context.func.collect_debug_info();
+        }
+
+        // Branch hints are keyed by function-body-relative offset, so the body's
+        // module-relative start is needed to convert source locations later.
+        let FunctionBodyData { validator, body } = input;
+        let func_body_offset = body.get_binary_reader().original_position();
+
+        let mut func_env = FuncEnvironment::new(
+            self,
+            translation,
+            types,
+            wasm_func_ty,
+            key,
+            Some(func_index),
+            func_body_offset,
+        );
+
+        // The `stack_limit` global value below is the implementation of stack
+        // overflow checks in Wasmtime.
+        //
+        // The Wasm spec defines that stack overflows will raise a trap, and
+        // there's also an added constraint where as an embedder you frequently
+        // are running host-provided code called from wasm. WebAssembly and
+        // native code currently share the same call stack, so Wasmtime needs to
+        // make sure that host-provided code will have enough call-stack
+        // available to it.
+        //
+        // The way that stack overflow is handled here is by adding a prologue
+        // check to all functions for how much native stack is remaining. The
+        // `VMContext` pointer is the first argument to all functions, and the
+        // first field of this structure is `*const VMStoreContext` and the
+        // third field of that is the stack limit. Note that the stack limit in
+        // this case means "if the stack pointer goes below this, trap". Each
+        // function which consumes stack space or isn't a leaf function starts
+        // off by loading the stack limit, checking it against the stack
+        // pointer, and optionally traps.
+        //
+        // This manual check allows the embedder to give wasm a relatively
+        // precise amount of stack allocation. Using this scheme we reserve a
+        // chunk of stack for wasm code relative from where wasm code was
+        // called. This ensures that native code called by wasm should have
+        // native stack space to run, and the numbers of stack spaces here
+        // should all be configurable for various embeddings.
+        //
+        // Note that this check is independent of each thread's stack guard page
+        // here. If the stack guard page is reached that's still considered an
+        // abort for the whole program since the runtime limits configured by
+        // the embedder should cause wasm to trap before it reaches that
+        // (ensuring the host has enough space as well for its functionality).
+        if !isa.triple().is_pulley() {
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_flags = context
+                .func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted().with_readonly())
+                .unwrap();
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
+                global_type: isa.pointer_type(),
+                flags: interrupts_flags,
+            });
+            let stack_limit_flags = context
+                .func
+                .dfg
+                .mem_flags
+                .insert(MemFlagsData::trusted())
+                .unwrap();
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
+                global_type: isa.pointer_type(),
+                flags: stack_limit_flags,
+            });
+            if self.tunables.signals_based_traps {
+                context.func.stack_limit = Some(stack_limit);
+            } else {
+                func_env.stack_limit_at_function_entry = Some(stack_limit);
+            }
+        }
+        let mut validator =
+            validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
+        compiler.cx.func_translator.translate_body(
+            &mut validator,
+            body.clone(),
+            &mut context.func,
+            &mut func_env,
+        )?;
+
+        if self.tunables.inlining != Inlining::No {
+            compiler
+                .cx
+                .codegen_context
+                .legalize(isa)
+                .map_err(|e| CompileError::Codegen(e.to_string()))?;
+        }
+
+        let needs_gc_heap = func_env.needs_gc_heap();
+
+        if let Some((_, slot_builder)) = func_env.state_slot {
+            compiler.cx.debug_slot_descriptor = Some(slot_builder);
+        }
+
+        let timing = cranelift_codegen::timing::take_current();
+        log::debug!("`{symbol}` translated to CLIF in {:?}", timing.total());
+        log::trace!("`{symbol}` timing info\n{timing}");
+
+        Ok(CompiledFunctionBody {
+            code: box_dyn_any_compiler_context(Some(compiler.cx)),
+            needs_gc_heap,
+        })
+    }
+
+    fn compile_trampoline(
+        &self,
+        translation: Option<&ModuleTranslation<'_>>,
+        key: FuncKey,
+        types: &ModuleTypesBuilder,
+        symbol: &str,
+    ) -> Result<CompiledFunctionBody, CompileError> {
+        match key {
+            FuncKey::ArrayToWasmTrampoline(module_index, def_func_index) => {
+                let translation = translation.unwrap();
+                let func_index = translation.module.func_index(def_func_index);
+                let sig = translation.module.functions[func_index]
+                    .signature
+                    .unwrap_module_type_index();
+                self.array_to_wasm_trampoline(
+                    key,
+                    FuncKey::DefinedWasmFunction(module_index, def_func_index),
+                    types[sig].unwrap_func(),
+                    symbol,
+                    self.isa.pointer_bytes().vmctx_store_context().into(),
+                    wasmtime_environ::VMCONTEXT_MAGIC,
+                )
+            }
+
+            FuncKey::WasmToArrayTrampoline(ty) => {
+                let ty = types[ty].unwrap_func();
+                self.compile_wasm_to_array_trampoline(ty, key, symbol)
+            }
+            #[cfg(feature = "component-model")]
+            FuncKey::ResourceDropTrampoline => {
+                let ty = types.find_resource_drop_signature().unwrap();
+                let ty = types[ty].unwrap_func();
+                self.compile_wasm_to_array_trampoline(ty, key, symbol)
+            }
+
+            FuncKey::DefinedWasmFunction(..) => {
+                panic!("use `compile_function` instead")
+            }
+
+            FuncKey::WasmToBuiltinTrampoline(..) | FuncKey::PatchableToBuiltinTrampoline(_) => {
+                self.compile_wasm_to_builtin(key, symbol)
+            }
+
+            FuncKey::PulleyHostCall(_) => unreachable!(),
+
+            #[cfg(feature = "component-model")]
+            FuncKey::ComponentTrampoline(..) | FuncKey::UnsafeIntrinsic(..) => {
+                unreachable!()
+            }
+
+            FuncKey::ModuleStartup(abi, module) => {
+                let translation = translation.unwrap();
+                let ty = match translation.module.startup {
+                    ModuleStartup::None => unreachable!(),
+                    ModuleStartup::Always(t) | ModuleStartup::IfMemoriesNeedInit(t) => {
+                        t.unwrap_module_type_index()
+                    }
+                };
+                let ty = types[ty].unwrap_func();
+                match abi {
+                    // This is a thin array-to-wasm shim around the actual
+                    // implementation.
+                    Abi::Array => self.array_to_wasm_trampoline(
+                        key,
+                        FuncKey::ModuleStartup(Abi::Wasm, module),
+                        ty,
+                        symbol,
+                        self.isa.pointer_bytes().vmctx_store_context().into(),
+                        wasmtime_environ::VMCONTEXT_MAGIC,
+                    ),
+                    // Delegate to a helper to finish compiling this.
+                    Abi::Wasm => self.compile_module_startup(translation, types, key, ty),
+                    Abi::Patchable => unreachable!(),
+                }
+            }
+        }
     }
 
     fn append_code(
@@ -738,103 +938,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
-    }
-
-    fn compile_wasm_to_builtin(
-        &self,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError> {
-        log::trace!("compiling wasm-to-builtin trampoline: {key:?} = {symbol:?}");
-
-        let isa = &*self.isa;
-        let ptr_size = isa.pointer_bytes();
-        let pointer_type = isa.pointer_type();
-        let sigs = BuiltinFunctionSignatures::new(self);
-
-        let (builtin_func_index, wasm_sig) = match key {
-            FuncKey::WasmToBuiltinTrampoline(builtin) => (builtin, sigs.wasm_signature(builtin)),
-            FuncKey::PatchableToBuiltinTrampoline(builtin) => {
-                let mut sig = sigs.wasm_signature(builtin);
-                // Patchable functions cannot return anything. We
-                // raise any errors that occur below so this is fine.
-                sig.returns.clear();
-                sig.call_conv = CallConv::PreserveAll;
-                (builtin, sig)
-            }
-            _ => unreachable!(),
-        };
-        let host_sig = sigs.host_signature(builtin_func_index);
-
-        let mut compiler = self.function_compiler();
-        let func = ir::Function::with_name_signature(key_to_name(key), wasm_sig.clone());
-        let (mut builder, block0) = compiler.builder(func);
-        let vmctx = builder.block_params(block0)[0];
-
-        // Debug-assert that this is the right kind of vmctx, and then
-        // additionally perform the "routine of the exit trampoline" of saving
-        // fp/pc/etc.
-        self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
-        let vm_store_context = builder.ins().load(
-            pointer_type,
-            MemFlagsData::trusted(),
-            vmctx,
-            ptr_size.vmcontext_store_context(),
-        );
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, vm_store_context);
-
-        // Now it's time to delegate to the actual builtin. Forward all our own
-        // arguments to the libcall itself.
-        let args = builder.block_params(block0).to_vec();
-        let call = self.call_builtin(&mut builder, vmctx, &args, builtin_func_index, host_sig);
-        let results = builder.func.dfg.inst_results(call).to_vec();
-
-        // Libcalls do not explicitly jump/raise on traps but instead return a
-        // code indicating whether they trapped or not. This means that it's the
-        // responsibility of the trampoline to check for an trapping return
-        // value and raise a trap as appropriate. With the `results` above check
-        // what `index` is and for each libcall that has a trapping return value
-        // process it here.
-        match builtin_func_index.trap_sentinel() {
-            Some(TrapSentinel::Falsy) => {
-                self.raise_if_host_trapped(&mut builder, vmctx, results[0]);
-            }
-            Some(TrapSentinel::NegativeTwo) => {
-                let ty = builder.func.dfg.value_type(results[0]);
-                let trapped = builder.ins().iconst(ty, -2);
-                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], trapped);
-                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
-            }
-            Some(TrapSentinel::Negative) => {
-                let ty = builder.func.dfg.value_type(results[0]);
-                let zero = builder.ins().iconst(ty, 0);
-                let succeeded =
-                    builder
-                        .ins()
-                        .icmp(IntCC::SignedGreaterThanOrEqual, results[0], zero);
-                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
-            }
-            Some(TrapSentinel::NegativeOne) => {
-                let ty = builder.func.dfg.value_type(results[0]);
-                let minus_one = builder.ins().iconst(ty, -1);
-                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], minus_one);
-                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
-            }
-            None => {}
-        }
-
-        // And finally, return all the results of this libcall.
-        if !wasm_sig.returns.is_empty() {
-            builder.ins().return_(&results);
-        } else {
-            builder.ins().return_(&[]);
-        }
-        builder.finalize();
-
-        Ok(CompiledFunctionBody {
-            code: box_dyn_any_compiler_context(Some(compiler.cx)),
-            needs_gc_heap: false,
-        })
     }
 
     fn compiled_function_relocation_targets<'a>(

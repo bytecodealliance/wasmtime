@@ -103,6 +103,17 @@ where
                     continue;
                 }
                 ValueDef::Result(inst, _) if ctx.ctx.func.dfg.inst_results(inst).len() == 1 => {
+                    // Charge one unit of fuel per yielded match. When
+                    // fuel is exhausted, terminate iteration early:
+                    // returning no matches is always semantically valid
+                    // (we just skip would-be rewrites) and bounds work
+                    // per top-level ISLE invocation.
+                    if ctx.ctx.extractor_fuel == 0 {
+                        ctx.ctx.stats.rewrite_fuel_exhausted += 1;
+                        trace!(" -> rewrite fuel exhausted");
+                        return None;
+                    }
+                    ctx.ctx.extractor_fuel -= 1;
                     let ty = ctx.ctx.func.dfg.value_type(value);
                     trace!(" -> value of type {}", ty);
                     return Some((ty, ctx.ctx.func.dfg.insts[inst]));

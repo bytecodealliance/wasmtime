@@ -913,7 +913,7 @@ async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func
+            (type $t (func async
                 (param "p1" s8)              ;; offset  0, size 1
                 (param "p2" u64)             ;; offset  8, size 8
                 (param "p3" float32)         ;; offset 16, size 4
@@ -1384,7 +1384,7 @@ async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
                 (with "libc" (instance $libc))
             ))
 
-            (type $t (func (result $tuple)))
+            (type $t (func async (result $tuple)))
             (func (export "many-results") (type $t)
                 (canon lift
                     (core func $i "foo")

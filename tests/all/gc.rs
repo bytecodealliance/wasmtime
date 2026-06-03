@@ -1,8 +1,10 @@
-use super::{gc_store, ref_types_module};
+use super::{async_functions::CountPending, gc_store, ref_types_module};
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
+use std::task::{Context, Poll};
 use wasmtime::*;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
@@ -77,6 +79,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
     // Exiting the scope and unrooting `r` should have dropped the inner
     // `SetFlagOnDrop` value.
+    store.gc(None)?;
     assert!(inner_dropped.load(SeqCst));
 
     Ok(())
@@ -265,6 +268,7 @@ fn drop_externref_via_table_set() -> Result<()> {
     assert!(!bar_is_dropped.load(SeqCst));
 
     table_set.call(&mut store, &[Val::ExternRef(None)], &mut [])?;
+    store.gc(None)?;
     assert!(foo_is_dropped.load(SeqCst));
     assert!(bar_is_dropped.load(SeqCst));
 
@@ -371,6 +375,7 @@ fn table_drops_externref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn global_init_no_leak() -> Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -1155,6 +1160,7 @@ fn issue_9669() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn drc_transitive_drop_cons_list() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -1326,6 +1332,135 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     )?;
     let _instance = Instance::new(&mut store, &module, &[])?;
     store.gc(None)?;
+
+    Ok(())
+}
+
+// Regression test for a stack-map bug in `translate_per_element_copy` (used by
+// `array.copy` on arrays whose elements are GC references).
+//
+// The per-element loop derived raw `src_elem_addr` / `dst_elem_addr` pointers
+// once and used only those raw pointers inside the loop body. The source and
+// destination array gc-refs themselves were dead in CLIF inside the loop, so
+// they were absent from the stack maps at safe points there. Once the DRC
+// collector started firing `force_gc` from inside the read barrier (when the
+// over-approximated-stack-roots list grew past 1024 entries), a GC could run
+// mid-copy with neither array marked from any frame's stack map. Sweep could
+// then drop the arrays from OASR, freeing them and cascading dec-refs through
+// their elements, after which the rest of the copy read from freed memory.
+//
+// The fix passes the source and destination array gc-refs as block params
+// through the forward and backward iteration blocks so they stay live across
+// the per-element loop.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn drc_array_copy_keeps_arrays_alive_across_in_loop_gc() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+    // Keep the GC heap small so allocations cycle back through the free
+    // list quickly. This dramatically increases the chance that any slot
+    // freed mid-copy will be reused before the test's verify pass reads
+    // from it, making the bug observable.
+    config.gc_heap_reservation(128 * 1024);
+    config.gc_heap_reservation_for_growth(0);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "wasmtime" "gc" (func $gc))
+                (type $box (struct (field i32)))
+                (type $arr (array (mut (ref null $box))))
+
+                ;; Put the `array.copy` in a helper function so the source
+                ;; and destination gc-refs are visibly dead in CLIF inside
+                ;; the per-element loop -- they are function parameters
+                ;; that are only used at the top of the function to compute
+                ;; the initial address.
+                (func $do_copy
+                    (param $src (ref null $arr))
+                    (param $dst (ref null $arr))
+                    (param $len i32)
+                    (array.copy $arr $arr
+                        (local.get $dst) (i32.const 0)
+                        (local.get $src) (i32.const 0)
+                        (local.get $len)))
+
+                (func (export "test") (result i32)
+                    (local $src (ref null $arr))
+                    (local $dst (ref null $arr))
+                    (local $i i32)
+                    (local $sum i32)
+
+                    ;; N=2048 > 1024 so the per-element read barrier
+                    ;; definitely fires `force_gc` during the copy.
+                    (local.set $src (array.new $arr (ref.null $box) (i32.const 2048)))
+                    (local.set $i (i32.const 0))
+                    (loop $fill
+                        (array.set $arr (local.get $src) (local.get $i)
+                            (struct.new $box (local.get $i)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $fill (i32.lt_s (local.get $i) (i32.const 2048))))
+
+                    (local.set $dst (array.new $arr (ref.null $box) (i32.const 2048)))
+
+                    (call $gc)
+
+                    (call $do_copy (local.get $src) (local.get $dst) (i32.const 2048))
+
+                    ;; Drop the source local and force a GC so any
+                    ;; cascade-freed elements that should still be alive
+                    ;; via $dst would surface as either a trap (cast
+                    ;; failure / out-of-bounds) or wrong $dst contents.
+                    (local.set $src (ref.null $arr))
+                    (call $gc)
+
+                    ;; Heavily allocate to reuse any freed slots. Each
+                    ;; iteration allocates a $box with sentinel value -1;
+                    ;; if any element of $dst was a stale reference to a
+                    ;; cascade-freed $box, its slot gets reused here and
+                    ;; reading it back will see -1 rather than its
+                    ;; original index.
+                    (local.set $i (i32.const 0))
+                    (loop $churn
+                        (drop (struct.new $box (i32.const -1)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $churn (i32.lt_s (local.get $i) (i32.const 4096))))
+
+                    (call $gc)
+
+                    (local.set $i (i32.const 0))
+                    (local.set $sum (i32.const 0))
+                    (loop $verify
+                        (local.set $sum
+                            (i32.add (local.get $sum)
+                                (struct.get $box 0
+                                    (array.get $arr (local.get $dst) (local.get $i)))))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        (br_if $verify (i32.lt_s (local.get $i) (i32.const 2048))))
+
+                    (local.get $sum)))
+        "#,
+    )?;
+
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("wasmtime", "gc", |mut caller: Caller<_>| -> Result<()> {
+        caller.gc(None)?;
+        Ok(())
+    })?;
+    let instance = linker.instantiate(&mut store, &module)?;
+    let test = instance.get_typed_func::<(), i32>(&mut store, "test")?;
+    let result = test.call(&mut store, ())?;
+
+    // Sum of 0..2048 = 2048 * 2047 / 2.
+    assert_eq!(result, 2_096_128);
 
     Ok(())
 }
@@ -3178,5 +3313,326 @@ fn typed_option_noextern() -> Result<()> {
     let f =
         instance.get_typed_func::<Option<NoExtern>, Option<NoExtern>>(&mut store, "roundtrip")?;
     assert!(f.call(&mut store, None)?.is_none());
+    Ok(())
+}
+
+/// A test that performs a GC without actually compiling or running any Wasm
+/// functions so we can run this test under MIRI.
+#[test]
+// FIXME: need to fold this into other miri testing which precompiles
+#[cfg_attr(miri, ignore)]
+fn miri_gc_smoke_test() -> Result<()> {
+    for collector in [
+        Collector::Copying,
+        Collector::Null,
+        Collector::DeferredReferenceCounting,
+    ] {
+        eprintln!("===== Collector: {collector:?} =====");
+
+        let mut config = Config::new();
+        config.wasm_gc(true);
+        config.wasm_function_references(true);
+        config.wasm_exceptions(true);
+        config.collector(collector);
+
+        let engine = Engine::new(&config)?;
+
+        let struct_ty = StructType::new(
+            &engine,
+            [FieldType::new(Mutability::Const, StorageType::I8)],
+        )?;
+        let table_ty = TableType::new(RefType::ANYREF, 1, None);
+        let global_ty = GlobalType::new(RefType::ANYREF.into(), Mutability::Var);
+        let exn_ty = ExnType::new(&engine, [ValType::I32])?;
+        let func_ty = FuncType::new(&engine, Some(ValType::I32), None);
+        let tag_ty = TagType::new(func_ty);
+
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (type $s (struct (field i8)))
+
+                    (global (export "g") (ref null $s) (struct.new $s (i32.const 1)))
+
+                    (table $t (export "t") 1 (ref null $s))
+                    (elem (table $t) (i32.const 0) (ref null $s) (struct.new $s (i32.const 2)))
+
+                    ;; Can't actually do anything with this without running Wasm,
+                    ;; but have it here anyways in case it trips anything in MIRI.
+                    (elem anyref (struct.new $s (i32.const 0xff)))
+                )
+            "#,
+        )?;
+
+        let mut store = Store::new(&engine, ());
+
+        let pre = StructRefPre::new(&mut store, struct_ty);
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Host table root.
+        let table = {
+            let mut store = RootScope::new(&mut store);
+            let table = Table::new(&mut store, table_ty, Ref::Any(None))?;
+            let s = StructRef::new(&mut store, &pre, &[Val::I32(3)])?;
+            table.set(&mut store, 0, s.into())?;
+            table
+        };
+
+        // Host global root.
+        let global = {
+            let mut store = RootScope::new(&mut store);
+            let s = StructRef::new(&mut store, &pre, &[Val::I32(4)])?;
+            Global::new(&mut store, global_ty, s.into())?
+        };
+
+        // Rooted<T> root.
+        let rooted = StructRef::new(&mut store, &pre, &[Val::I32(5)])?;
+
+        // OwnedRooted<T> root.
+        let owned_rooted = {
+            let mut store = RootScope::new(&mut store);
+            StructRef::new(&mut store, &pre, &[Val::I32(6)])?.to_owned_rooted(&mut store)?
+        };
+
+        // Pending exception root.
+        {
+            let mut store = RootScope::new(&mut store);
+            let pre = ExnRefPre::new(&mut store, exn_ty);
+            let tag = Tag::new(&mut store, &tag_ty)?;
+            let e = ExnRef::new(&mut store, &pre, &tag, &[Val::I32(7)])?;
+            let _ = store.as_context_mut().throw::<()>(e);
+        }
+
+        // Do a GC!
+        store.gc(None)?;
+
+        let assert_field_value = |store: &mut Store<_>, val: Val, field: i32| -> Result<()> {
+            let s = val.anyref().unwrap().unwrap().unwrap_struct(&store)?;
+            let f = s.field(store, 0)?;
+            assert_eq!(f.unwrap_i32(), field);
+            Ok(())
+        };
+
+        // Instance global.
+        {
+            let global = instance.get_global(&mut store, "g").unwrap();
+            let global_val = global.get(&mut store);
+            assert_field_value(&mut store, global_val, 1)?;
+        }
+
+        // Instance table.
+        {
+            let table = instance.get_table(&mut store, "t").unwrap();
+            let table_val = table.get(&mut store, 0).unwrap();
+            assert_field_value(&mut store, table_val.into(), 2)?;
+        }
+
+        // Host table.
+        let table_val = table.get(&mut store, 0).unwrap();
+        assert_field_value(&mut store, table_val.into(), 3)?;
+
+        // Host global.
+        let global_val = global.get(&mut store);
+        assert_field_value(&mut store, global_val, 4)?;
+
+        // Rooted<T>.
+        assert_field_value(&mut store, rooted.into(), 5)?;
+
+        // OwnedRooted<T>.
+        let owned_rooted = owned_rooted.to_rooted(&mut store);
+        assert_field_value(&mut store, owned_rooted.into(), 6)?;
+
+        // Pending exception.
+        let e = store.take_pending_exception().unwrap();
+        let e_val = e.field(&mut store, 0)?;
+        assert_eq!(e_val.unwrap_i32(), 7);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn copying_collector_async_gc_yields() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    if crate::no_hog_memory() {
+        return Ok(());
+    }
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::Copying);
+
+    let engine = Engine::new(&config)?;
+
+    const NUM_OBJECTS: usize = 100_000;
+    const OBJECTS_PER_INCREMENT: usize = 16_384;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $node (struct (field i32) (field (ref null $node))))
+                (global $list (export "list") (mut (ref null $node)) (ref.null $node))
+
+                (func (export "build") (param $n i32)
+                    (local $i i32)
+                    (local.set $i (i32.const 0))
+                    (block $done
+                        (loop $loop
+                            (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+                            (global.set $list
+                                (struct.new $node
+                                    (local.get $i)
+                                    (global.get $list)
+                                )
+                            )
+                            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                            (br $loop)
+                        )
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let build = instance.get_typed_func::<i32, ()>(&mut store, "build")?;
+    build.call(&mut store, NUM_OBJECTS as i32)?;
+
+    let gc_future = store.gc_async(None);
+    let (result, pending_count) = CountPending::new(Box::pin(gc_future)).await;
+    result?;
+
+    let min_expected = NUM_OBJECTS / OBJECTS_PER_INCREMENT;
+    assert!(
+        pending_count >= min_expected,
+        "expected at least {min_expected} yields but got {pending_count}",
+    );
+
+    Ok(())
+}
+
+// Cancel the wrapped future once a host-triggered collection is observed to be
+// `skip` pending-polls underway (so we are past root processing / the semispace
+// flip and into the actual copying), simulating an async cancellation that
+// drops a `call_async` future while a GC is in progress.
+struct CancelDuringGc<F> {
+    future: F,
+    in_gc: Arc<AtomicUsize>,
+    skip: u32,
+    seen_in_gc: u32,
+}
+
+impl<F: Future> Future for CancelDuringGc<F> {
+    type Output = Option<F::Output>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let me = unsafe { self.get_unchecked_mut() };
+        let future = unsafe { Pin::new_unchecked(&mut me.future) };
+        match future.poll(cx) {
+            Poll::Ready(val) => Poll::Ready(Some(val)),
+            Poll::Pending => {
+                if me.in_gc.load(SeqCst) != 0 {
+                    me.seen_in_gc += 1;
+                    if me.seen_in_gc >= me.skip {
+                        return Poll::Ready(None);
+                    }
+                }
+                Poll::Pending
+            }
+        }
+    }
+}
+
+// Test that cancelling a Wasm-execution future mid-collection and then calling
+// into Wasm again doesn't trigger or observe any GC heap corruption.
+#[tokio::test]
+#[cfg_attr(miri, ignore)]
+async fn issue_13516_copying_collector_cancellation_during_gc() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    if crate::no_hog_memory() {
+        return Ok(());
+    }
+
+    let mut config = Config::new();
+    config.wasm_gc(true);
+    config.wasm_function_references(true);
+    config.collector(Collector::Copying);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // Build a linked list of `N` nodes rooted in a global so a collection has a
+    // non-trivial worklist to copy (giving a wide window in which to cancel),
+    // then trigger a host collection.
+    const N: i32 = 100_000;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "gc" (func $gc))
+
+                (type $node (struct (field (ref null $node))))
+
+                (global $list (mut (ref null $node)) (ref.null $node))
+
+                (func (export "run") (param $n i32)
+                    (block $done
+                        (loop $loop
+                            (br_if $done (i32.eqz (local.get $n)))
+                            (global.set $list (struct.new $node (global.get $list)))
+                            (local.set $n (i32.sub (local.get $n) (i32.const 1)))
+                            (br $loop)
+                        )
+                    )
+                    (call $gc)
+                )
+            )
+        "#,
+    )?;
+
+    // A host function that performs an async collection, flagging while it runs.
+    let in_gc = Arc::new(AtomicUsize::new(0));
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap_async("", "gc", {
+        let in_gc = in_gc.clone();
+        move |mut caller: Caller<'_, ()>, _: ()| {
+            let in_gc = in_gc.clone();
+            Box::new(async move {
+                in_gc.fetch_add(1, SeqCst);
+                let r = caller.gc_async(None).await;
+                in_gc.store(0, SeqCst);
+                r
+            })
+        }
+    })?;
+
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let run = instance.get_typed_func::<i32, ()>(&mut store, "run")?;
+
+    // Drive a call that triggers a collection, then cancel it mid-collection.
+    let cancelled = CancelDuringGc {
+        future: run.call_async(&mut store, N),
+        in_gc: in_gc.clone(),
+        skip: 8,
+        seen_in_gc: 0,
+    }
+    .await
+    .is_none();
+    assert!(
+        cancelled,
+        "the collection should have been cancelled mid-flight"
+    );
+
+    // Reusing the store after a mid-collection cancellation must not corrupt the
+    // GC heap.
+    run.call_async(&mut store, N).await?;
+
     Ok(())
 }

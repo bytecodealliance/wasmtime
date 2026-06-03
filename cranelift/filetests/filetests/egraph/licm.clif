@@ -125,8 +125,10 @@ block2(v11: i64):
     store.f64 v10, v15
 
     ;; loop breakout condition
-    v17 = iadd_imm v11, 1
-    v19 = icmp_imm ne v17, 100
+    v21 = iconst.i64 1
+    v17 = iadd v11, v21
+    v20 = iconst.i64 100
+    v19 = icmp ne v17, v20
     brif v19, block2(v17), block1
 
 block1:

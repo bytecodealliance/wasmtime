@@ -6,7 +6,7 @@ wit_bindgen::generate!({
     world: "bytecodealliance:wasmtime/debug-main",
     path: "../debugger/wit",
     with: {
-        "wasi:io/poll@0.2.6": wasip2::io::poll,
+        "wasi:io/poll@0.2.12": wasip2::io::poll,
     }
 });
 pub(crate) use bytecodealliance::wasmtime::debuggee::*;

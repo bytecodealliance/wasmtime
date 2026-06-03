@@ -9,9 +9,9 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
-    types::*,
+    AliasRegionData, AliasRegionSet, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness,
+    ExternalName, FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot,
+    UserExternalName, UserFuncName, Value, types::*,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -285,11 +285,13 @@ fn insert_load_store(
     let type_size = ctrl_type.bytes();
 
     let is_atomic = [Opcode::AtomicLoad, Opcode::AtomicStore].contains(&opcode);
-    let (address, flags, offset) =
+    let (address, flags_data, offset) =
         fgen.generate_address_and_memflags(builder, type_size, is_atomic)?;
 
     // The variable being loaded or stored into
     let var = fgen.get_variable_of_type(ctrl_type)?;
+
+    let flags = builder.func.dfg.mem_flags.insert(flags_data).unwrap();
 
     match opcode.format() {
         InstructionFormat::LoadNoOffset => {
@@ -922,10 +924,7 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::GetStackPointer),
                 (Opcode::GetReturnAddress),
                 (Opcode::Blendv),
-                (Opcode::IcmpImm),
                 (Opcode::X86Pmulhrsw),
-                (Opcode::IaddImm),
-                (Opcode::ImulImm),
                 (Opcode::UdivImm),
                 (Opcode::SdivImm),
                 (Opcode::UremImm),
@@ -1090,7 +1089,6 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::FuncAddr => todo!(),
         InstructionFormat::IntAddTrap => todo!(),
         InstructionFormat::IntCompare => insert_cmp,
-        InstructionFormat::IntCompareImm => todo!(),
         InstructionFormat::Load => insert_load_store,
         InstructionFormat::LoadNoOffset => insert_load_store,
         InstructionFormat::NullAry => insert_opcode,
@@ -1185,12 +1183,21 @@ impl AACategory {
         ]
     }
 
-    pub fn update_memflags(&self, flags: &mut MemFlagsData) {
+    pub fn update_memflags(&self, flags: &mut MemFlagsData, alias_regions: &mut AliasRegionSet) {
         flags.set_alias_region(match self {
             AACategory::Other => None,
-            AACategory::Heap => Some(AliasRegion::Heap),
-            AACategory::Table => Some(AliasRegion::Table),
-            AACategory::VmCtx => Some(AliasRegion::Vmctx),
+            AACategory::Heap => Some(alias_regions.insert(AliasRegionData {
+                user_id: 0,
+                description: "heap".into(),
+            })),
+            AACategory::Table => Some(alias_regions.insert(AliasRegionData {
+                user_id: 1,
+                description: "table".into(),
+            })),
+            AACategory::VmCtx => Some(alias_regions.insert(AliasRegionData {
+                user_id: 2,
+                description: "vmctx".into(),
+            })),
         })
     }
 }
@@ -1386,7 +1393,7 @@ where
             self.generate_load_store_address(builder, min_size, aligned)?;
 
         // Set the Alias Analysis bits on the memflags
-        category.update_memflags(&mut flags);
+        category.update_memflags(&mut flags, &mut builder.func.dfg.alias_regions);
 
         // Pick an offset to pass into the load/store.
         let offset = if aligned {
@@ -1683,7 +1690,7 @@ where
                 // correct memflags for it. So we can't use `stack_store` directly.
                 let mut flags = MemFlagsData::new();
                 flags.set_notrap();
-                category.update_memflags(&mut flags);
+                category.update_memflags(&mut flags, &mut builder.func.dfg.alias_regions);
 
                 builder.ins().store(flags, val, addr, 0);
 
@@ -1920,7 +1927,6 @@ where
 
         for (ty, value) in vars.into_iter() {
             let var = builder.declare_var(ty);
-            builder.def_var(var, value);
 
             // Randomly declare variables as needing a stack map.
             // We limit these to only types that have fewer than 16 bytes
@@ -1928,6 +1934,8 @@ where
             if ty.bytes() <= 16 && self.u.arbitrary()? {
                 builder.declare_var_needs_stack_map(var);
             }
+
+            builder.def_var(var, value);
 
             self.resources
                 .vars

@@ -20,6 +20,7 @@
 //! format.
 
 use crate::entity::entity_impl;
+use crate::ir::AliasRegion;
 use core::fmt;
 use core::u32;
 #[cfg(feature = "enable-serde")]
@@ -391,6 +392,8 @@ pub enum AnyEntity {
     SigRef(SigRef),
     /// An exception table.
     ExceptionTable(ExceptionTable),
+    /// An alias region.
+    AliasRegion(AliasRegion),
     /// A function's stack limit
     StackLimit,
 }
@@ -411,6 +414,7 @@ impl fmt::Display for AnyEntity {
             Self::FuncRef(r) => r.fmt(f),
             Self::SigRef(r) => r.fmt(f),
             Self::ExceptionTable(r) => r.fmt(f),
+            Self::AliasRegion(r) => r.fmt(f),
             Self::StackLimit => write!(f, "stack_limit"),
         }
     }
@@ -491,6 +495,12 @@ impl From<SigRef> for AnyEntity {
 impl From<ExceptionTable> for AnyEntity {
     fn from(r: ExceptionTable) -> Self {
         Self::ExceptionTable(r)
+    }
+}
+
+impl From<AliasRegion> for AnyEntity {
+    fn from(r: AliasRegion) -> Self {
+        Self::AliasRegion(r)
     }
 }
 

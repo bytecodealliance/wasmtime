@@ -68,13 +68,14 @@ struct Wasmtime {
     src: Source,
     opts: Opts,
     /// A list of all interfaces which were imported by this world.
-    import_interfaces: Vec<ImportInterface>,
-    import_functions: Vec<Function>,
+    import_interfaces: IndexMap<InterfaceId, ImportInterface>,
+    world_import_functions: Vec<Function>,
+    world_implements_interfaces: Vec<(String, InterfaceId)>,
+    interfaces_for_implements: HashMap<InterfaceId, InterfaceId>,
     exports: Exports,
     types: Types,
     sizes: SizeAlign,
     interface_names: HashMap<InterfaceId, InterfaceName>,
-    interface_last_seen_as_import: HashMap<InterfaceId, bool>,
     trappable_errors: IndexMap<TypeId, String>,
     // Track the with options that were used. Remapped interfaces provided via `with`
     // are required to be used.
@@ -84,10 +85,10 @@ struct Wasmtime {
 }
 
 struct ImportInterface {
-    id: InterfaceId,
     contents: String,
     name: InterfaceName,
     all_func_flags: FunctionFlags,
+    in_world: bool,
 }
 
 #[derive(Default)]
@@ -201,7 +202,8 @@ pub struct TrappableError {
 }
 
 impl Opts {
-    pub fn generate(&self, resolve: &Resolve, world: WorldId) -> anyhow::Result<String> {
+    pub fn generate(&self, resolve: &mut Resolve, world: WorldId) -> anyhow::Result<String> {
+        resolve.generate_nominal_type_ids(world);
         // TODO: Should we refine this test to inspect only types reachable from
         // the specified world?
         if !cfg!(feature = "component-model-async")
@@ -272,7 +274,8 @@ impl Wasmtime {
         };
 
         let remapped = matches!(entry, InterfaceName::Remapped { .. });
-        self.interface_names.insert(id, entry);
+        let prev = self.interface_names.insert(id, entry);
+        assert!(prev.is_none());
         remapped
     }
 
@@ -400,94 +403,118 @@ impl Wasmtime {
     }
 
     fn import(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
-        let mut generator = InterfaceGenerator::new(self, resolve);
         match item {
             WorldItem::Function(func) => {
-                self.import_functions.push(func.clone());
+                self.world_import_functions.push(func.clone());
             }
             WorldItem::Interface { id, .. } => {
-                generator
-                    .generator
-                    .interface_last_seen_as_import
-                    .insert(*id, true);
-                generator.current_interface = Some((*id, name, false));
-                let snake = to_rust_ident(&match name {
-                    WorldKey::Name(s) => s.to_snake_case(),
-                    WorldKey::Interface(id) => resolve.interfaces[*id]
-                        .name
-                        .as_ref()
-                        .unwrap()
-                        .to_snake_case(),
-                });
-                let module = if generator
-                    .generator
-                    .name_interface(resolve, *id, name, false)
+                if let WorldKey::Name(kebab) = name
+                    && resolve.interfaces[*id].name.is_some()
                 {
-                    // If this interface is remapped then that means that it was
-                    // provided via the `with` key in the bindgen configuration.
-                    // That means that bindings generation is skipped here. To
-                    // accommodate future bindgens depending on this bindgen
-                    // though we still generate a module which reexports the
-                    // original module. This helps maintain the same output
-                    // structure regardless of whether `with` is used.
-                    let name_at_root = match &generator.generator.interface_names[id] {
-                        InterfaceName::Remapped { name_at_root, .. } => name_at_root,
-                        InterfaceName::Path(_) => unreachable!(),
+                    let og_interface = resolve.interfaces[*id].clone_of.unwrap_or(*id);
+                    let implements = match self.interfaces_for_implements.get(&og_interface) {
+                        Some(id) => *id,
+                        None => {
+                            self.interfaces_for_implements.insert(og_interface, *id);
+                            self.import_interface(resolve, &WorldKey::Interface(*id), *id, false);
+                            *id
+                        }
                     };
-                    let path_to_root = generator.path_to_root();
-                    format!(
-                        "
-                            pub mod {snake} {{
-                                #[allow(unused_imports)]
-                                pub use {path_to_root}{name_at_root}::*;
-                            }}
-                        "
-                    )
+                    self.world_implements_interfaces
+                        .push((kebab.to_string(), implements));
                 } else {
-                    // If this interface is not remapped then it's time to
-                    // actually generate bindings here.
-                    generator.generator.interface_link_options[id].write_struct(&mut generator.src);
-                    generator.types(*id);
-                    let key_name = resolve.name_world_key(name);
-                    generator.generate_add_to_linker(*id, &key_name);
-
-                    let module = &generator.src[..];
-                    let wt = generator.generator.wasmtime_path();
-
-                    format!(
-                        "
-                            #[allow(clippy::all)]
-                            pub mod {snake} {{
-                                #[allow(unused_imports)]
-                                use {wt}::component::__internal::Box;
-
-                                {module}
-                            }}
-                        "
-                    )
-                };
-                let all_func_flags = generator.all_func_flags;
-                self.import_interfaces.push(ImportInterface {
-                    id: *id,
-                    contents: module,
-                    name: self.interface_names[id].clone(),
-                    all_func_flags,
-                });
-
-                let interface_path = self.import_interface_path(id);
-                self.interface_link_options[id]
-                    .write_impl_from_world(&mut self.src, &interface_path);
+                    self.import_interface(resolve, name, *id, true);
+                }
             }
             WorldItem::Type { id, .. } => {
                 let name = match name {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => unreachable!(),
                 };
+                let mut generator = InterfaceGenerator::new(self, resolve);
                 generator.define_type(name, *id);
                 let body = mem::take(&mut generator.src);
                 self.src.push_str(&body);
             }
         };
+    }
+
+    fn import_interface(
+        &mut self,
+        resolve: &Resolve,
+        name: &WorldKey,
+        id: InterfaceId,
+        in_world: bool,
+    ) {
+        let mut generator = InterfaceGenerator::new(self, resolve);
+
+        generator.current_interface = Some((id, name, false));
+        let snake = to_rust_ident(&match name {
+            WorldKey::Name(s) => s.to_snake_case(),
+            WorldKey::Interface(id) => resolve.interfaces[*id]
+                .name
+                .as_ref()
+                .unwrap()
+                .to_snake_case(),
+        });
+        let module = if generator.generator.name_interface(resolve, id, name, false) {
+            // If this interface is remapped then that means that it was
+            // provided via the `with` key in the bindgen configuration.
+            // That means that bindings generation is skipped here. To
+            // accommodate future bindgens depending on this bindgen
+            // though we still generate a module which reexports the
+            // original module. This helps maintain the same output
+            // structure regardless of whether `with` is used.
+            let name_at_root = match &generator.generator.interface_names[&id] {
+                InterfaceName::Remapped { name_at_root, .. } => name_at_root,
+                InterfaceName::Path(_) => unreachable!(),
+            };
+            let path_to_root = generator.path_to_root();
+            format!(
+                "
+                    pub mod {snake} {{
+                        #[allow(unused_imports)]
+                        pub use {path_to_root}{name_at_root}::*;
+                    }}
+                "
+            )
+        } else {
+            // If this interface is not remapped then it's time to
+            // actually generate bindings here.
+            generator.generator.interface_link_options[&id].write_struct(&mut generator.src);
+            generator.types(id);
+            let key_name = resolve.name_world_key(name);
+            generator.generate_add_to_linker(id, &key_name);
+
+            let module = &generator.src[..];
+            let wt = generator.generator.wasmtime_path();
+
+            format!(
+                "
+                    #[allow(clippy::all)]
+                    pub mod {snake} {{
+                        #[allow(unused_imports)]
+                        use {wt}::component::__internal::Box;
+
+                        {module}
+                    }}
+                "
+            )
+        };
+        let all_func_flags = generator.all_func_flags;
+        let prev = self.import_interfaces.insert(
+            id,
+            ImportInterface {
+                contents: module,
+                name: self.interface_names[&id].clone(),
+                all_func_flags,
+                in_world,
+            },
+        );
+        assert!(prev.is_none());
+
+        let interface_path = self.import_interface_path(&id);
+        self.interface_link_options[&id].write_impl_from_world(&mut self.src, &interface_path);
     }
 
     fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
@@ -532,10 +559,6 @@ impl Wasmtime {
             }
             WorldItem::Type { .. } => unreachable!(),
             WorldItem::Interface { id, .. } => {
-                generator
-                    .generator
-                    .interface_last_seen_as_import
-                    .insert(*id, false);
                 generator.generator.name_interface(resolve, *id, name, true);
                 generator.current_interface = Some((*id, name, true));
                 generator.types(*id);
@@ -583,7 +606,7 @@ pub fn new<_T>(
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
         .ok_or_else(|| {wt}::format_err!(\"no exported instance named `{instance_name}`\"))?;
-    let mut lookup = move |name| {{
+    let mut lookup = move |name: &str| {{
         _instance_pre.component().get_export_index(Some(&instance), name).ok_or_else(|| {{
             {wt}::format_err!(
                 \"instance export `{instance_name}` does \\
@@ -1016,7 +1039,7 @@ impl<_T: Send + 'static> {camel}Pre<_T> {{
         self.emit_modules(
             imports
                 .into_iter()
-                .map(|i| (i.id, i.contents, i.name))
+                .map(|(id, i)| (id, i.contents, i.name))
                 .collect(),
         );
 
@@ -1275,7 +1298,7 @@ fn lookup_keys(
 
 impl Wasmtime {
     fn has_world_imports_trait(&self, resolve: &Resolve, world: WorldId) -> bool {
-        !self.import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
+        !self.world_import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
     }
 
     fn world_imports_trait(&mut self, resolve: &Resolve, world: WorldId) -> Option<GeneratedTrait> {
@@ -1285,7 +1308,7 @@ impl Wasmtime {
 
         let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
 
-        let functions = self.import_functions.clone();
+        let functions = self.world_import_functions.clone();
         let mut generator = InterfaceGenerator::new(self, resolve);
         let generated_trait = generator.generate_trait(
             &format!("{world_camel}Imports"),
@@ -1301,16 +1324,17 @@ impl Wasmtime {
         Some(generated_trait)
     }
 
-    fn import_interface_paths(&self) -> Vec<(InterfaceId, String)> {
+    fn import_interface_paths(&self) -> Vec<(InterfaceId, String, Option<String>)> {
         self.import_interfaces
             .iter()
-            .map(|i| {
-                let path = match &i.name {
-                    InterfaceName::Path(path) => path.join("::"),
-                    InterfaceName::Remapped { name_at_root, .. } => name_at_root.clone(),
-                };
-                (i.id, path)
-            })
+            .filter(|(_, i)| i.in_world)
+            .map(|(id, _)| (*id, None))
+            .chain(
+                self.world_implements_interfaces
+                    .iter()
+                    .map(|(name, id)| (*id, Some(name.clone()))),
+            )
+            .map(|(id, name_override)| (id, self.import_interface_path(&id), name_override))
             .collect()
     }
 
@@ -1322,14 +1346,7 @@ impl Wasmtime {
     }
 
     fn import_interface_all_func_flags(&self, id: InterfaceId) -> FunctionFlags {
-        for i in self.import_interfaces.iter() {
-            if id != i.id {
-                continue;
-            }
-
-            return i.all_func_flags;
-        }
-        unreachable!()
+        self.import_interfaces[&id].all_func_flags
     }
 
     fn world_host_traits(
@@ -1340,7 +1357,7 @@ impl Wasmtime {
         let mut without_store_async = false;
         let mut with_store = Vec::new();
         let mut with_store_async = false;
-        for (id, path) in self.import_interface_paths() {
+        for (id, path, _) in self.import_interface_paths() {
             without_store.push(format!("{path}::Host"));
             let flags = self.import_interface_all_func_flags(id);
             without_store_async = without_store_async || flags.contains(FunctionFlags::ASYNC);
@@ -1394,7 +1411,7 @@ impl Wasmtime {
         if let Some(world_trait) = world_trait {
             all_func_flags |= world_trait.all_func_flags;
         }
-        for i in self.import_interfaces.iter() {
+        for i in self.import_interfaces.values() {
             all_func_flags |= i.all_func_flags;
         }
 
@@ -1435,7 +1452,7 @@ impl Wasmtime {
             for (ty, _name) in get_world_resources(resolve, world) {
                 self.generate_add_resource_to_linker(None, None, "linker", resolve, ty);
             }
-            for f in self.import_functions.clone() {
+            for f in self.world_import_functions.clone() {
                 let mut generator = InterfaceGenerator::new(self, resolve);
                 generator.generate_add_function_to_linker(TypeOwner::World(world), &f, "linker");
                 let src = String::from(generator.src);
@@ -1477,7 +1494,7 @@ impl Wasmtime {
                 "Self::add_to_linker_imports::<T, D>(linker {options_arg}, host_getter)?;"
             );
         }
-        for (interface_id, path) in self.import_interface_paths() {
+        for (interface_id, path, name_override) in self.import_interface_paths() {
             let options_arg = if self.interface_link_options[&interface_id].has_any() {
                 ", &options.into()"
             } else {
@@ -1497,10 +1514,26 @@ impl Wasmtime {
                 .unwrap_or(Stability::Unknown);
 
             let gate = FeatureGate::open(&mut self.src, &import_stability);
-            uwriteln!(
-                self.src,
-                "{path}::add_to_linker::<T, D>(linker {options_arg}, host_getter)?;"
-            );
+            match &name_override {
+                Some(name) => {
+                    uwriteln!(
+                        self.src,
+                        "{path}::add_to_linker_instance::<T, D>(
+                            &mut linker.instance({name:?})?
+                            {options_arg},
+                            host_getter,
+                        )?;"
+                    );
+                }
+                None => {
+                    uwriteln!(
+                        self.src,
+                        "{path}::add_to_linker::<T, D>(
+                            linker {options_arg}, host_getter,
+                        )?;"
+                    );
+                }
+            }
             gate.close(&mut self.src);
         }
         gate.close(&mut self.src);
@@ -2362,12 +2395,17 @@ impl<'a> InterfaceGenerator<'a> {
         } else {
             ""
         };
+        let options_param_forward = if self.generator.interface_link_options[&id].has_any() {
+            "options,"
+        } else {
+            ""
+        };
 
         uwriteln!(
             self.src,
             "
-                pub fn add_to_linker<T, D>(
-                    linker: &mut {wt}::component::Linker<T>,
+                pub fn add_to_linker_instance<T, D>(
+                    inst: &mut {wt}::component::LinkerInstance<'_, T>,
                     {options_param}
                     host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
@@ -2380,8 +2418,6 @@ impl<'a> InterfaceGenerator<'a> {
         );
 
         let gate = FeatureGate::open(&mut self.src, &iface.stability);
-        uwriteln!(self.src, "let mut inst = linker.instance(\"{name}\")?;");
-
         for (ty, _name) in get_resources(self.resolve, id) {
             self.generator.generate_add_resource_to_linker(
                 self.current_interface.map(|p| p.1),
@@ -2398,6 +2434,25 @@ impl<'a> InterfaceGenerator<'a> {
         gate.close(&mut self.src);
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
+
+        uwriteln!(
+            self.src,
+            "
+                pub fn add_to_linker<T, D>(
+                    linker: &mut {wt}::component::Linker<T>,
+                    {options_param}
+                    host_getter: fn(&mut T) -> D::Data<'_>,
+                ) -> {wt}::Result<()>
+                    where
+                        D: HostWithStore,
+                        for<'a> D::Data<'a>: {sync_bounds},
+                        T: 'static {opt_t_send_bound},
+                {{
+                    let mut inst = linker.instance(\"{name}\")?;
+                    add_to_linker_instance(&mut inst, {options_param_forward} host_getter)
+                }}
+            "
+        );
     }
 
     fn import_resource_drop_flags(&mut self, name: &str) -> FunctionFlags {
@@ -3207,7 +3262,12 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn is_imported_interface(&self, interface: InterfaceId) -> bool {
-        self.generator.interface_last_seen_as_import[&interface]
+        if let Some((cur, _, is_export)) = self.current_interface {
+            if cur == interface {
+                return !is_export;
+            }
+        }
+        self.generator.import_interfaces.contains_key(&interface)
     }
 
     fn wasmtime_path(&self) -> String {

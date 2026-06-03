@@ -10,6 +10,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i64) tail {
+;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -18,7 +19,7 @@
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
-;;     fn0 = colocated u805306368:28 sig0
+;;     fn0 = colocated u805306368:25 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
@@ -31,7 +32,7 @@
 ;; @0022                               v6 = iadd v5, v4
 ;; @0022                               v7 = iconst.i64 24
 ;; @0022                               v8 = iadd v6, v7  ; v7 = 24
-;; @0022                               store user2 little v11, v8
+;; @0022                               store user2 little region0 v11, v8
 ;; @0026                               jump block1
 ;;
 ;;                                 block1:

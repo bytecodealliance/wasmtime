@@ -8,12 +8,14 @@ mod disabled;
 #[cfg(not(feature = "gc"))]
 pub use disabled::*;
 
+mod data;
 mod func_ref;
 mod gc_ref;
 mod gc_runtime;
 mod host_data;
 mod i31;
 
+pub use data::*;
 pub use func_ref::*;
 pub use gc_ref::*;
 pub use gc_runtime::*;
@@ -107,24 +109,25 @@ impl GcStore {
         asyncness: Asyncness,
         roots: GcRootsIter<'_>,
         yield_fn: impl AsyncFn(),
-    ) {
+    ) -> Result<()> {
         let collection = self.gc_heap.gc(roots, &mut self.host_data_table);
-        collect_async(collection, asyncness, yield_fn).await;
+        collect_async(collection, asyncness, yield_fn).await?;
         self.last_post_gc_allocated_bytes = Some({
             let size = self.gc_heap.allocated_bytes();
             log::trace!("After collection, GC heap's allocated bytes = {size:#x} bytes");
             size
         });
+        Ok(())
     }
 
     /// Get the kind of the given GC reference.
-    pub fn kind(&self, gc_ref: &VMGcRef) -> VMGcKind {
+    pub fn kind(&self, gc_ref: &VMGcRef) -> Result<VMGcKind> {
         debug_assert!(!gc_ref.is_i31());
-        self.header(gc_ref).kind()
+        Ok(self.header(gc_ref)?.kind())
     }
 
     /// Get the header of the given GC reference.
-    pub fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader {
+    pub fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {
         debug_assert!(!gc_ref.is_i31());
         self.gc_heap.header(gc_ref)
     }
@@ -144,11 +147,11 @@ impl GcStore {
         &mut self,
         destination: &mut MaybeUninit<Option<VMGcRef>>,
         source: Option<&VMGcRef>,
-    ) {
+    ) -> Result<()> {
         // Initialize the destination to `None`, at which point the regular GC
         // write barrier is safe to reuse.
         let destination = destination.write(None);
-        self.write_gc_ref(destination, source);
+        self.write_gc_ref(destination, source)
     }
 
     /// Dynamically tests whether a `init_gc_ref` is needed to write `gc_ref`
@@ -180,26 +183,32 @@ impl GcStore {
         store: Option<&mut Self>,
         dest: &mut Option<VMGcRef>,
         gc_ref: Option<&VMGcRef>,
-    ) {
+    ) -> Result<()> {
         if Self::needs_write_barrier(dest, gc_ref) {
             store.unwrap().write_gc_ref(dest, gc_ref)
         } else {
             *dest = gc_ref.map(|r| r.copy_i31());
+            Ok(())
         }
     }
 
     /// Write the `source` GC reference into the `destination` slot, performing
     /// write barriers as necessary.
-    pub fn write_gc_ref(&mut self, destination: &mut Option<VMGcRef>, source: Option<&VMGcRef>) {
+    pub fn write_gc_ref(
+        &mut self,
+        destination: &mut Option<VMGcRef>,
+        source: Option<&VMGcRef>,
+    ) -> Result<()> {
         // If neither the source nor destination actually point to a GC object
         // (that is, they are both either null or `i31ref`s) then we can skip
         // the GC barrier.
         if Self::needs_write_barrier(destination, source) {
             self.gc_heap
-                .write_gc_ref(&mut self.host_data_table, destination, source);
+                .write_gc_ref(&mut self.host_data_table, destination, source)?;
         } else {
             *destination = source.map(|s| s.copy_i31());
         }
+        Ok(())
     }
 
     /// Drop the given GC reference, performing drop barriers as necessary.
@@ -214,13 +223,13 @@ impl GcStore {
     /// Returns the raw representation of this GC ref, ready to be passed to
     /// Wasm.
     #[must_use]
-    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> NonZeroU32 {
+    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> Result<NonZeroU32> {
         let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
-            self.gc_heap.expose_gc_ref_to_wasm(gc_ref);
+            self.gc_heap.expose_gc_ref_to_wasm(gc_ref)?;
         }
-        raw
+        Ok(raw)
     }
 
     /// Allocate a new `externref`.
@@ -241,7 +250,7 @@ impl GcStore {
         let host_data_id = self.host_data_table.alloc(value);
         match self.gc_heap.alloc_externref(host_data_id)? {
             Ok(x) => Ok(Ok(x)),
-            Err(n) => Ok(Err((self.host_data_table.dealloc(host_data_id), n))),
+            Err(n) => Ok(Err((self.host_data_table.dealloc(host_data_id)?, n))),
         }
     }
 
@@ -250,8 +259,8 @@ impl GcStore {
     /// Passing invalid `VMExternRef`s (eg garbage values or `externref`s
     /// associated with a different heap is memory safe but will lead to general
     /// incorrectness such as panics and wrong results.
-    pub fn externref_host_data(&self, externref: &VMExternRef) -> &(dyn Any + Send + Sync) {
-        let host_data_id = self.gc_heap.externref_host_data(externref);
+    pub fn externref_host_data(&self, externref: &VMExternRef) -> Result<&(dyn Any + Send + Sync)> {
+        let host_data_id = self.gc_heap.externref_host_data(externref)?;
         self.host_data_table.get(host_data_id)
     }
 
@@ -263,8 +272,8 @@ impl GcStore {
     pub fn externref_host_data_mut(
         &mut self,
         externref: &VMExternRef,
-    ) -> &mut (dyn Any + Send + Sync) {
-        let host_data_id = self.gc_heap.externref_host_data(externref);
+    ) -> Result<&mut (dyn Any + Send + Sync)> {
+        let host_data_id = self.gc_heap.externref_host_data(externref)?;
         self.host_data_table.get_mut(host_data_id)
     }
 
@@ -313,27 +322,15 @@ impl GcStore {
     }
 
     /// Deallocate an uninitialized struct.
-    pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
+    pub fn dealloc_uninit_struct(&mut self, structref: VMStructRef) -> Result<()> {
         self.gc_heap.dealloc_uninit_struct_or_exn(structref.into())
     }
 
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
+    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcObjectData> {
         self.gc_heap.gc_object_data_mut(gc_ref)
-    }
-
-    /// Get the object datas for the given pair of object references.
-    ///
-    /// Panics if `a` and `b` are the same reference or either is out of bounds.
-    pub fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
-        assert_ne!(a, b);
-        self.gc_heap.gc_object_data_pair(a, b)
     }
 
     /// Allocate an uninitialized array with the given type index.
@@ -352,12 +349,12 @@ impl GcStore {
     }
 
     /// Deallocate an uninitialized array.
-    pub fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) {
-        self.gc_heap.dealloc_uninit_array(arrayref);
+    pub fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) -> Result<()> {
+        self.gc_heap.dealloc_uninit_array(arrayref)
     }
 
     /// Get the length of the given array.
-    pub fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
+    pub fn array_len(&self, arrayref: &VMArrayRef) -> Result<u32> {
         self.gc_heap.array_len(arrayref)
     }
 
@@ -379,8 +376,8 @@ impl GcStore {
     }
 
     /// Deallocate an uninitialized exception object.
-    pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) {
-        self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into());
+    pub fn dealloc_uninit_exn(&mut self, exnref: VMExnRef) -> Result<()> {
+        self.gc_heap.dealloc_uninit_struct_or_exn(exnref.into())
     }
 
     #[cfg(feature = "gc")]

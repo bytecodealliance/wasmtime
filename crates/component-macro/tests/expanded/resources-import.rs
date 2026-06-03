@@ -665,8 +665,8 @@ pub mod foo {
                     Host::func_with_handle_typedef(*self, x)
                 }
             }
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -674,7 +674,6 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource(
                     "bar",
                     wasmtime::component::ResourceType::host::<Bar>(),
@@ -938,6 +937,18 @@ pub mod foo {
                 )?;
                 Ok(())
             }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/resources")?;
+                add_to_linker_instance(&mut inst, host_getter)
+            }
         }
         #[allow(clippy::all)]
         pub mod long_use_chain1 {
@@ -970,8 +981,8 @@ pub mod foo {
             {}
             pub trait Host: HostA {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -979,7 +990,6 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource(
                     "a",
                     wasmtime::component::ResourceType::host::<A>(),
@@ -991,6 +1001,18 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker.instance("foo:foo/long-use-chain1")?;
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1005,6 +1027,17 @@ pub mod foo {
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -1015,7 +1048,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1030,6 +1063,17 @@ pub mod foo {
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -1040,7 +1084,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1061,6 +1105,25 @@ pub mod foo {
                     Host::foo(*self)
                 }
             }
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                inst.func_wrap(
+                    "foo",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = Host::foo(host);
+                        Ok((r,))
+                    },
+                )?;
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -1071,15 +1134,7 @@ pub mod foo {
                 T: 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
-                inst.func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host::foo(host);
-                        Ok((r,))
-                    },
-                )?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -1113,8 +1168,8 @@ pub mod foo {
             {}
             pub trait Host: HostFoo {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -1122,8 +1177,6 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
-                let mut inst = linker
-                    .instance("foo:foo/transitive-interface-with-resource")?;
                 inst.resource(
                     "foo",
                     wasmtime::component::ResourceType::host::<Foo>(),
@@ -1135,6 +1188,19 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                let mut inst = linker
+                    .instance("foo:foo/transitive-interface-with-resource")?;
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }
@@ -1173,7 +1239,7 @@ pub mod exports {
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)

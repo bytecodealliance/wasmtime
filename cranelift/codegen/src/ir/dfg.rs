@@ -2,14 +2,13 @@
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
 use crate::ir;
-use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
-    Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType, ExceptionTables,
-    ExtFuncData, FuncRef, Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type,
-    Value, ValueLabelAssignments, ValueList, ValueListPool, types,
+    AliasRegionSet, Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType,
+    ExceptionTables, ExtFuncData, FuncRef, Immediate, Inst, JumpTables, MemFlagsSet, RelSourceLoc,
+    SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList, ValueListPool, types,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -164,6 +163,12 @@ pub struct DataFlowGraph {
 
     /// Exception tables used in this function.
     pub exception_tables: ExceptionTables,
+
+    /// Memory operation flags used in this function.
+    pub mem_flags: MemFlagsSet,
+
+    /// Alias regions used in this function.
+    pub alias_regions: AliasRegionSet,
 }
 
 impl DataFlowGraph {
@@ -184,6 +189,8 @@ impl DataFlowGraph {
             immediates: PrimaryMap::new(),
             jump_tables: JumpTables::new(),
             exception_tables: ExceptionTables::new(),
+            mem_flags: MemFlagsSet::new(),
+            alias_regions: AliasRegionSet::new(),
         }
     }
 
@@ -202,6 +209,8 @@ impl DataFlowGraph {
         self.constants.clear();
         self.immediates.clear();
         self.jump_tables.clear();
+        self.mem_flags.clear();
+        self.alias_regions.clear();
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
@@ -1002,11 +1011,6 @@ impl DataFlowGraph {
         result_tys.len()
     }
 
-    /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
-    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder<'_> {
-        ReplaceBuilder::new(self, inst)
-    }
-
     /// Clear the list of result values from `inst`.
     ///
     /// This leaves `inst` without any result values. New result values can be created by calling
@@ -1771,7 +1775,7 @@ mod tests {
         pos.func.stencil.dfg.results[iadd].remove(1, &mut pos.func.stencil.dfg.value_lists);
 
         // Replace `uadd_overflow` with a normal `iadd` and an `icmp`.
-        pos.func.dfg.replace(iadd).iadd(v1, arg0);
+        pos.func.replace(iadd).iadd(v1, arg0);
         let c2 = pos.ins().icmp(IntCC::Equal, s, v1);
         pos.func.dfg.change_to_alias(c, c2);
 

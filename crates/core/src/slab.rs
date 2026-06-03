@@ -390,15 +390,11 @@ impl<T> Slab<T> {
     ///
     /// Returns `None` if the value has since been deallocated.
     ///
-    /// If `id` comes from a different `Slab` instance, this method may panic,
-    /// return `None`, or return an arbitrary value.
+    /// If `id` comes from a different `Slab` instance, this method may return
+    /// `None`, or return an arbitrary value.
     #[inline]
     pub fn get(&self, id: Id) -> Option<&T> {
-        match self
-            .entries
-            .get(id.0.index())
-            .expect("id from different slab")
-        {
+        match self.entries.get(id.0.index())? {
             Entry::Occupied(x) => Some(x),
             Entry::Free { .. } => None,
         }
@@ -408,15 +404,11 @@ impl<T> Slab<T> {
     ///
     /// Returns `None` if the value has since been deallocated.
     ///
-    /// If `id` comes from a different `Slab` instance, this method may panic,
-    /// return `None`, or return an arbitrary value.
+    /// If `id` comes from a different `Slab` instance, this method may return
+    /// `None`, or return an arbitrary value.
     #[inline]
     pub fn get_mut(&mut self, id: Id) -> Option<&mut T> {
-        match self
-            .entries
-            .get_mut(id.0.index())
-            .expect("id from different slab")
-        {
+        match self.entries.get_mut(id.0.index())? {
             Entry::Occupied(x) => Some(x),
             Entry::Free { .. } => None,
         }

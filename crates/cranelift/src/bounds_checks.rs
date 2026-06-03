@@ -618,7 +618,15 @@ fn explicit_check_oob_condition_and_compute_addr(
 /// It is the caller's responsibility to ensure that any necessary bounds and
 /// overflow checks are emitted, and that the resulting address is never used
 /// unless they succeed.
-fn compute_addr(
+///
+/// Arguments are:
+///
+/// * `pos` - where to generate instructions
+/// * `heap` - the memory being accessed
+/// * `addr_ty` - the host's pointer type
+/// * `index` - the raw wasm index, of type `addr_ty`
+/// * `offset` - a static offset to add to `index`
+pub fn compute_addr(
     pos: &mut FuncCursor,
     heap: &HeapData,
     addr_ty: ir::Type,

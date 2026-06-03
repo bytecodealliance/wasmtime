@@ -19,9 +19,9 @@
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               v7 = iconst.i32 1
-;;                                     v9 = iconst.i32 0
-;;                                     v14 = select v2, v7, v9  ; v7 = 1, v9 = 0
+;; @0022                               v8 = iconst.i32 1
+;; @0022                               v4 = iconst.i32 0
+;;                                     v14 = select v2, v8, v4  ; v8 = 1, v4 = 0
 ;; @0025                               return v14
 ;; }
 ;;

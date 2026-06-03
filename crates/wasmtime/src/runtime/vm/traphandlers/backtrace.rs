@@ -37,7 +37,7 @@ use wasmtime_unwinder::FrameCursor;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
-pub struct Backtrace(Vec<Frame>);
+pub struct Backtrace(TryVec<Frame>);
 
 /// One activation: information sufficient to trace an activation on a
 /// frame as long as that frame remains alive.
@@ -66,7 +66,7 @@ impl Activation {
 impl Backtrace {
     /// Returns an empty backtrace
     pub fn empty() -> Backtrace {
-        Backtrace(Vec::new())
+        Backtrace(TryVec::new())
     }
 
     /// Capture the current Wasm stack in a backtrace.
@@ -77,7 +77,7 @@ impl Backtrace {
             Some(state) => unsafe {
                 Self::new_with_trap_state(vm_store_context, unwind, state, None)
             },
-            None => Backtrace(vec![]),
+            None => Backtrace(TryVec::new()),
         })
     }
 
@@ -92,16 +92,16 @@ impl Backtrace {
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
-        let mut frames = vec![];
+        let mut frames = TryVec::new();
         let f = |activation: Activation| unsafe {
             wasmtime_unwinder::visit_frames(
                 unwind,
                 activation.exit_pc,
                 activation.exit_fp,
                 activation.entry_trampoline_fp,
-                |frame| {
-                    frames.push(frame);
-                    ControlFlow::Continue(())
+                |frame| match frames.push(frame) {
+                    Ok(()) => ControlFlow::Continue(()),
+                    Err(_) => ControlFlow::Break(()),
                 },
             )
         };

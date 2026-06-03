@@ -4051,7 +4051,7 @@
 (rule 1 (constant_f64 (u64_low32_bits_unset n))
         (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
 (rule (constant_f64 n)
-      (fpu_load64 (AMode.Const (emit_u64_le_const n)) (mem_flags_trusted)))
+      (fpu_load64 (AMode.Const (emit_u64_le_const n)) (mem_flags_trusted_data)))
 
 ;; Tests whether the low 32 bits in the input are all zero.
 (decl u64_low32_bits_unset (u64) u64)
@@ -4074,7 +4074,7 @@
 
 ;; Base case is to load the constant from memory.
 (rule (constant_f128 n)
-      (fpu_load128 (AMode.Const (emit_u128_le_const n)) (mem_flags_trusted)))
+      (fpu_load128 (AMode.Const (emit_u128_le_const n)) (mem_flags_trusted_data)))
 
 ;; Lower a vector splat with a constant parameter.
 ;;
@@ -4292,7 +4292,7 @@
             ;; the stack; the presence of the record is guaranteed by the
             ;; `preserve_frame_pointers` setting.
             (addr AMode (AMode.FPOffset 8))
-            (_ Unit (emit (MInst.ULoad64 dst addr (mem_flags_trusted)))))
+            (_ Unit (emit (MInst.ULoad64 dst addr (mem_flags_trusted_data)))))
            dst))
 
 (rule (aarch64_link)
@@ -4303,7 +4303,7 @@
       ;; before returning.
       (let ((addr AMode (AMode.FPOffset 8))
             (lr WritableReg (writable_link_reg))
-            (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted))))
+            (_ Unit (emit (MInst.ULoad64 lr addr (mem_flags_trusted_data))))
             (_ Unit (emit (MInst.Xpaclri))))
            (mov_from_preg (preg_link))))
 

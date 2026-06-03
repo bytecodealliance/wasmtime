@@ -10,8 +10,8 @@ use crate::component::{
 };
 use crate::store::StoreOpaque;
 use crate::{AsContextMut, Result, bail, error::Context};
-use std::any::TypeId;
-use std::mem::MaybeUninit;
+use core::any::TypeId;
+use core::mem::MaybeUninit;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, InterfaceType, TypeFutureTableIndex, TypeStreamTableIndex,
 };

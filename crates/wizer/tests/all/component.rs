@@ -637,7 +637,7 @@ async fn export_is_removed() -> Result<()> {
                 wasmparser::Payload::ComponentExportSection(s) => Some(s),
                 _ => None,
             })
-            .flat_map(|section| section.into_iter().map(|e| e.unwrap().name.0))
+            .flat_map(|section| section.into_iter().map(|e| e.unwrap().name.name))
             .collect()
     }
 }

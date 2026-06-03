@@ -9,7 +9,9 @@ use crate::component::{
     AsAccessor, ComponentInstanceId, ComponentType, FutureAny, Instance, Lift, Lower, StreamAny,
     Val, WasmList,
 };
+use crate::prelude::*;
 use crate::store::{StoreOpaque, StoreToken};
+use crate::try_mutex::{TryMutex, TryMutexGuard};
 use crate::vm::component::{ComponentInstance, HandleTable, TransmitLocalState};
 use crate::vm::{AlwaysMut, VMStore};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
@@ -17,7 +19,9 @@ use crate::{
     Error, Result, Trap, bail, bail_bug, ensure,
     error::{Context as _, format_err},
 };
+use alloc::sync::Arc;
 use buffers::{Extender, SliceBuffer, UntypedWriteBuffer};
+use core::any::{Any, TypeId};
 use core::fmt;
 use core::future;
 use core::iter;
@@ -28,12 +32,6 @@ use core::pin::Pin;
 use core::task::{Context, Poll, Waker, ready};
 use futures::channel::oneshot;
 use futures::{FutureExt as _, stream};
-use std::any::{Any, TypeId};
-use std::boxed::Box;
-use std::io::Cursor;
-use std::string::String;
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::vec::Vec;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, OptionsIndex, RuntimeComponentInstanceIndex,
     TypeComponentGlobalErrorContextTableIndex, TypeComponentLocalErrorContextTableIndex,
@@ -186,7 +184,7 @@ impl PartialEq<u32> for ItemCount {
 }
 
 impl PartialOrd<u32> for ItemCount {
-    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &u32) -> Option<core::cmp::Ordering> {
         self.raw.partial_cmp(other)
     }
 }
@@ -337,11 +335,25 @@ pub(super) struct FlatAbi {
     pub(super) align: u32,
 }
 
+struct HostBuffer<'a> {
+    dst: &'a mut Vec<u8>,
+    marked_written: &'a mut usize,
+}
+
+impl HostBuffer<'_> {
+    fn reborrow(&mut self) -> HostBuffer<'_> {
+        HostBuffer {
+            dst: &mut *self.dst,
+            marked_written: &mut *self.marked_written,
+        }
+    }
+}
+
 /// Represents the buffer for a host- or guest-initiated stream read.
 pub struct Destination<'a, T, B> {
     id: TableId<TransmitState>,
     buffer: &'a mut B,
-    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
+    host_buffer: Option<HostBuffer<'a>>,
     _phantom: PhantomData<fn() -> T>,
 }
 
@@ -351,7 +363,7 @@ impl<'a, T, B> Destination<'a, T, B> {
         Destination {
             id: self.id,
             buffer: &mut *self.buffer,
-            host_buffer: self.host_buffer.as_deref_mut(),
+            host_buffer: self.host_buffer.as_mut().map(|b| b.reborrow()),
             _phantom: PhantomData,
         }
     }
@@ -435,11 +447,9 @@ impl<'a, B> Destination<'a, u8, B> {
         store: StoreContextMut<'a, D>,
         capacity: usize,
     ) -> DirectDestination<'a, D> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.set_position(0);
-            if buffer.get_mut().is_empty() {
-                buffer.get_mut().resize(capacity, 0);
-            }
+        if let Some(buffer) = &mut self.host_buffer {
+            *buffer.marked_written = 0;
+            buffer.dst.resize(capacity, 0);
         }
 
         DirectDestination {
@@ -454,10 +464,11 @@ impl<'a, B> Destination<'a, u8, B> {
 /// writer's buffer.
 pub struct DirectDestination<'a, D: 'static> {
     id: TableId<TransmitState>,
-    host_buffer: Option<&'a mut Cursor<Vec<u8>>>,
+    host_buffer: Option<HostBuffer<'a>>,
     store: StoreContextMut<'a, D>,
 }
 
+#[cfg(feature = "std")]
 impl<D: 'static> std::io::Write for DirectDestination<'_, D> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let rem = self.remaining();
@@ -482,8 +493,8 @@ impl<D: 'static> DirectDestination<'_, D> {
     }
 
     fn remaining_(&mut self) -> Result<&mut [u8]> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            return Ok(buffer.get_mut());
+        if let Some(buffer) = self.host_buffer.as_mut() {
+            return Ok(buffer.dst);
         }
         let transmit = self
             .store
@@ -531,15 +542,10 @@ impl<D: 'static> DirectDestination<'_, D> {
     }
 
     fn mark_written_(&mut self, count: usize) -> Result<()> {
-        if let Some(buffer) = self.host_buffer.as_deref_mut() {
-            buffer.set_position(
-                // Note that these `.unwrap`s are documented panic conditions of
-                // `mark_written`.
-                buffer
-                    .position()
-                    .checked_add(u64::try_from(count).unwrap())
-                    .unwrap(),
-            );
+        if let Some(buffer) = self.host_buffer.as_mut() {
+            // Note that this `.unwrap` is a documented panic condition of
+            // `mark_written`.
+            *buffer.marked_written = buffer.marked_written.checked_add(count).unwrap();
         } else {
             let transmit = self
                 .store
@@ -827,7 +833,7 @@ where
 #[cfg(feature = "component-model-bytes")]
 impl<D> StreamProducer<D> for bytes::Bytes {
     type Item = u8;
-    type Buffer = Cursor<Self>;
+    type Buffer = Self;
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
@@ -836,7 +842,7 @@ impl<D> StreamProducer<D> for bytes::Bytes {
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+        dst.set_buffer(mem::take(self.get_mut()));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
@@ -844,7 +850,7 @@ impl<D> StreamProducer<D> for bytes::Bytes {
 #[cfg(feature = "component-model-bytes")]
 impl<D> StreamProducer<D> for bytes::BytesMut {
     type Item = u8;
-    type Buffer = Cursor<Self>;
+    type Buffer = Self;
 
     fn poll_produce<'a>(
         self: Pin<&mut Self>,
@@ -853,7 +859,7 @@ impl<D> StreamProducer<D> for bytes::BytesMut {
         mut dst: Destination<'a, Self::Item, Self::Buffer>,
         _: bool,
     ) -> Poll<Result<StreamResult>> {
-        dst.set_buffer(Cursor::new(mem::take(self.get_mut())));
+        dst.set_buffer(mem::take(self.get_mut()));
         Poll::Ready(Ok(StreamResult::Dropped))
     }
 }
@@ -976,6 +982,7 @@ pub struct DirectSource<'a, D: 'static> {
     store: StoreContextMut<'a, D>,
 }
 
+#[cfg(feature = "std")]
 impl<D: 'static> std::io::Read for DirectSource<'_, D> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let rem = self.remaining();
@@ -2641,9 +2648,10 @@ impl<T> StoreContextMut<'_, T> {
                                     bail_bug!("expected WriteState::HostReady")
                                 };
 
+                                let mut host_written = 0;
                                 let mut host_buffer =
                                     if let ReadState::HostToHost { buffer, .. } = &mut transmit.read {
-                                        Some(Cursor::new(mem::take(buffer)))
+                                        Some(mem::take(buffer))
                                     } else {
                                         None
                                     };
@@ -2654,7 +2662,12 @@ impl<T> StoreContextMut<'_, T> {
                                     Destination {
                                         id,
                                         buffer,
-                                        host_buffer: host_buffer.as_mut(),
+                                        host_buffer: host_buffer.as_mut().map(|b| {
+                                            HostBuffer {
+                                                dst: b,
+                                                marked_written: &mut host_written,
+                                            }
+                                        }),
                                         _phantom: PhantomData,
                                     },
                                     cancel,
@@ -2667,8 +2680,8 @@ impl<T> StoreContextMut<'_, T> {
                                     ReadState::HostToHost { buffer, limit, .. },
                                 ) = (host_buffer, &mut transmit.read)
                                 {
-                                    *limit = usize::try_from(host_buffer.position())?;
-                                    *buffer = host_buffer.into_inner();
+                                    *limit = host_written;
+                                    *buffer = host_buffer;
                                     *limit
                                 } else {
                                     0
@@ -3072,14 +3085,17 @@ async fn write<D: 'static, P: Send + 'static, T: func::Lower + 'static, B: Write
                                 },
                             ))))
                     });
-                    rx.await?
+                    match rx.await {
+                        Ok(r) => r,
+                        Err(oneshot::Canceled) => bail_bug!("work cancelled"),
+                    }
                 } else {
                     // Optimize flat payloads (i.e. those which do not
                     // require calling the guest's realloc function) by
                     // lowering directly instead of using a oneshot::channel
                     // and background task.
                     tls::get(|store| accept(token.as_context_mut(store)))?
-                };
+                }
             }
 
             tls::get(|store| {
@@ -3269,13 +3285,14 @@ impl Instance {
     /// Copy `count` items from `read_address` to `write_address` for the
     /// specified stream or future.
     fn copy<T: 'static>(
-        self,
         store: StoreContextMut<T>,
         flat_abi: Option<FlatAbi>,
+        write_instance: Instance,
         write_caller_instance: RuntimeComponentInstanceIndex,
         write_ty: TransmitIndex,
         write_options: OptionsIndex,
         write_address: usize,
+        read_instance: Instance,
         read_caller_instance: RuntimeComponentInstanceIndex,
         read_caller_thread: QualifiedThreadId,
         read_ty: TransmitIndex,
@@ -3284,15 +3301,17 @@ impl Instance {
         count: ItemCount,
         rep: u32,
     ) -> Result<()> {
-        let (component, mut store) = self.component_and_store_mut(store.0);
-        let types = component.types();
+        let (write_component, store) = write_instance.component_and_store_mut(store.0);
+        let (read_component, mut store) = read_instance.component_and_store_mut(store);
+        let write_types = write_component.types();
+        let read_types = read_component.types();
         let count = count.as_usize();
 
         // Validate `write_ty` w.r.t. `write_address` to ensure it's properly
         // aligned and in-bounds.
-        let write_payload_ty = write_ty.payload(types);
+        let write_payload_ty = write_ty.payload(write_types);
         let write_abi = match write_payload_ty {
-            Some(ty) => types.canonical_abi(ty),
+            Some(ty) => write_types.canonical_abi(ty),
             None => &CanonicalAbiInfo::ZERO,
         };
         let write_length_in_bytes = match flat_abi {
@@ -3303,15 +3322,16 @@ impl Instance {
             if write_address % usize::try_from(write_abi.align32)? != 0 {
                 bail!("write pointer not aligned");
             }
-            self.options_memory(store, write_options)
+            write_instance
+                .options_memory(store, write_options)
                 .get(write_address..)
                 .and_then(|b| b.get(..write_length_in_bytes))
                 .ok_or_else(|| crate::format_err!("write pointer out of bounds"))?;
         }
 
-        let read_payload_ty = read_ty.payload(types);
+        let read_payload_ty = read_ty.payload(read_types);
         let read_abi = match read_payload_ty {
-            Some(ty) => types.canonical_abi(ty),
+            Some(ty) => read_types.canonical_abi(ty),
             None => &CanonicalAbiInfo::ZERO,
         };
         let read_length_in_bytes = match flat_abi {
@@ -3322,7 +3342,8 @@ impl Instance {
             if read_address % usize::try_from(read_abi.align32)? != 0 {
                 bail!("read pointer not aligned");
             }
-            self.options_memory(store, read_options)
+            read_instance
+                .options_memory(store, read_options)
                 .get(read_address..)
                 .and_then(|b| b.get(..read_length_in_bytes))
                 .ok_or_else(|| crate::format_err!("read pointer out of bounds"))?;
@@ -3344,7 +3365,7 @@ impl Instance {
 
                 let val = write_payload_ty
                     .map(|ty| {
-                        let lift = &mut LiftContext::new(store, write_options, self);
+                        let lift = &mut LiftContext::new(store, write_options, write_instance);
                         let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                         Val::load(lift, *ty, bytes)
                     })
@@ -3355,7 +3376,8 @@ impl Instance {
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
                     let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let lower =
+                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let ptr = func::validate_inbounds_dynamic(
                         read_abi,
                         lower.as_slice_mut(),
@@ -3387,19 +3409,23 @@ impl Instance {
 
                     assert_eq!(read_length_in_bytes, write_length_in_bytes);
 
-                    if self.options_memory(store_opaque, read_options).as_ptr()
-                        == self.options_memory(store_opaque, write_options).as_ptr()
+                    if read_instance
+                        .options_memory(store_opaque, read_options)
+                        .as_ptr()
+                        == write_instance
+                            .options_memory(store_opaque, write_options)
+                            .as_ptr()
                     {
-                        let memory = self.options_memory_mut(store_opaque, read_options);
+                        let memory = read_instance.options_memory_mut(store_opaque, read_options);
                         memory.copy_within(
                             write_address..write_address + write_length_in_bytes,
                             read_address,
                         );
                     } else {
-                        let src = self.options_memory(store_opaque, write_options)[write_address..]
-                            [..write_length_in_bytes]
+                        let src = write_instance.options_memory(store_opaque, write_options)
+                            [write_address..][..write_length_in_bytes]
                             .as_ptr();
-                        let dst = self.options_memory_mut(store_opaque, read_options)
+                        let dst = read_instance.options_memory_mut(store_opaque, read_options)
                             [read_address..][..read_length_in_bytes]
                             .as_mut_ptr();
 
@@ -3418,7 +3444,7 @@ impl Instance {
                     }
                 } else {
                     let store_opaque = store.store_opaque_mut();
-                    let lift = &mut LiftContext::new(store_opaque, write_options, self);
+                    let lift = &mut LiftContext::new(store_opaque, write_options, write_instance);
                     let bytes = &lift.memory()[write_address..][..write_length_in_bytes];
                     lift.consume_fuel_array(count, size_of::<Val>())?;
 
@@ -3436,7 +3462,8 @@ impl Instance {
                     // set the guest's thread context in case realloc requires it, and restore the original
                     // thread context after the copy is complete.
                     let old_thread = store.set_thread(read_caller_thread)?;
-                    let lower = &mut LowerContext::new(store.as_context_mut(), read_options, self);
+                    let lower =
+                        &mut LowerContext::new(store.as_context_mut(), read_options, read_instance);
                     let mut ptr = read_address;
                     for value in values {
                         value.store(lower, *read_payload_ty, ptr)?;
@@ -3602,13 +3629,15 @@ impl Instance {
 
                 let count = count.min(read_count);
 
-                self.copy(
+                Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
+                    self,
                     caller,
                     ty,
                     options,
                     address,
+                    read_instance,
                     read_caller_instance,
                     read_caller_thread,
                     read_ty,
@@ -3618,9 +3647,9 @@ impl Instance {
                     rep,
                 )?;
 
-                let instance = self.id().get_mut(store.0);
+                let instance = read_instance.id().get(store.0);
                 let types = instance.component().types();
-                let item_size = match ty.payload(types) {
+                let item_size = match read_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
@@ -3809,7 +3838,7 @@ impl Instance {
 
         let mut result = match mem::replace(&mut transmit.write, new_state) {
             WriteState::GuestReady {
-                instance: _,
+                instance: write_instance,
                 ty: write_ty,
                 flat_abi: write_flat_abi,
                 options: write_options,
@@ -3838,13 +3867,15 @@ impl Instance {
 
                 let count = count.min(write_count);
 
-                self.copy(
+                Instance::copy(
                     store.as_context_mut(),
                     flat_abi,
+                    write_instance,
                     write_caller,
                     write_ty,
                     write_options,
                     write_address,
+                    self,
                     caller_instance,
                     caller_thread,
                     ty,
@@ -3854,9 +3885,9 @@ impl Instance {
                     rep,
                 )?;
 
-                let instance = self.id().get_mut(store.0);
+                let instance = write_instance.id().get(store.0);
                 let types = instance.component().types();
-                let item_size = match ty.payload(types) {
+                let item_size = match write_ty.payload(types) {
                     Some(ty) => usize::try_from(types.canonical_abi(ty).size32)?,
                     None => 0,
                 };
@@ -3886,7 +3917,7 @@ impl Instance {
                 if write_buffer_remaining {
                     let transmit = concurrent_state.get_mut(transmit_id)?;
                     transmit.write = WriteState::GuestReady {
-                        instance: self,
+                        instance: write_instance,
                         caller: write_caller,
                         ty: write_ty,
                         flat_abi: write_flat_abi,
@@ -4872,14 +4903,14 @@ fn allow_intra_component_read_write(ty: Option<&InterfaceType>) -> bool {
 /// contains an
 /// `Option<T>`
 struct LockedState<T> {
-    inner: Mutex<Option<T>>,
+    inner: TryMutex<Option<T>>,
 }
 
 impl<T> LockedState<T> {
     /// Creates a new initial state with `value` stored.
     fn new(value: T) -> Self {
         Self {
-            inner: Mutex::new(Some(value)),
+            inner: TryMutex::new(Some(value)),
         }
     }
 
@@ -4891,10 +4922,10 @@ impl<T> LockedState<T> {
     /// As-used in this file there should never actually be contention on this
     /// lock nor recursive access so failing to acquire the lock is a fatal
     /// error that gets propagated upwards.
-    fn try_lock(&self) -> Result<MutexGuard<'_, Option<T>>> {
+    fn try_lock(&self) -> Result<TryMutexGuard<'_, Option<T>>> {
         match self.inner.try_lock() {
-            Ok(lock) => Ok(lock),
-            Err(_) => bail_bug!("should not have contention on state lock"),
+            Some(lock) => Ok(lock),
+            None => bail_bug!("should not have contention on state lock"),
         }
     }
 

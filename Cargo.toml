@@ -91,6 +91,7 @@ hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+pin-project-lite = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "process"] }
@@ -314,7 +315,7 @@ pulley-macros = { path = 'pulley/macros', version = "=46.0.0" }
 
 # Cranelift crates in this workspace
 cranelift-assembler-x64 = { path = "cranelift/assembler-x64", version = "0.133.0" }
-cranelift-codegen = { path = "cranelift/codegen", version = "0.133.0", default-features = false, features = ["std", "unwind"] }
+cranelift-codegen = { path = "cranelift/codegen", version = "0.133.0", default-features = false, features = ["unwind"] }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.133.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.133.0" }
 cranelift-native = { path = "cranelift/native", version = "0.133.0" }
@@ -336,7 +337,7 @@ winch-codegen = { path = "winch/codegen", version = "=46.0.0" }
 
 # Internal crates not published to crates.io used in testing, builds, etc
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
-wasmtime-fuzzing = { path = "crates/fuzzing" }
+wasmtime-fuzzing = { path = "crates/fuzzing", default-features = false }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 wasmtime-test-util = { path = "crates/test-util" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
@@ -365,18 +366,18 @@ wit-bindgen = { version = "0.57.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.57.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.248.0", default-features = false, features = ['simd'] }
-wat = "1.248.0"
-wast = "248.0.0"
-wasmprinter = "0.248.0"
-wasm-encoder = "0.248.0"
-wasm-smith = "0.248.0"
-wasm-mutate = "0.248.0"
-wit-parser = "0.248.0"
-wit-component = "0.248.0"
-wasm-wave = "0.248.0"
-wasm-compose = { version = "0.248.0", default-features = false }
-json-from-wast = "0.248.0"
+wasmparser = { version = "0.251.0", default-features = false, features = ['simd'] }
+wat = "1.251.0"
+wast = "251.0.0"
+wasmprinter = "0.251.0"
+wasm-encoder = "0.251.0"
+wasm-smith = "0.251.0"
+wasm-mutate = "0.251.0"
+wit-parser = "0.251.0"
+wit-component = "0.251.0"
+wasm-wave = "0.251.0"
+wasm-compose = { version = "0.251.0", default-features = false }
+json-from-wast = "0.251.0"
 
 wstd = "0.6.5"
 wasip2 = "1.0"
@@ -451,8 +452,8 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "tls1
 tokio-native-tls = "0.3.1"
 native-tls = "0.2.11"
 tokio-openssl = "0.6.5"
-openssl = "0.10.79"
-openssl-sys = "0.9.115"
+openssl = "0.10.80"
+openssl-sys = "0.9.116"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
@@ -610,6 +611,7 @@ serve = [
   "component-model",
   "dep:http-body-util",
   "dep:http",
+  "dep:pin-project-lite",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
 ]

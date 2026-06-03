@@ -18,7 +18,7 @@ use wasmparser::component_types::{
     ComponentFuncTypeId, ComponentInstanceTypeId, ComponentValType,
 };
 use wasmparser::types::Types;
-use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
+use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
 
 mod adapt;
 pub use self::adapt::*;
@@ -159,7 +159,7 @@ struct Translation<'data> {
 
     /// The list of exports from this component, as pairs of names and an
     /// index into an index space of what's being exported.
-    exports: IndexMap<&'data str, ComponentItem>,
+    exports: IndexMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
 
     /// Type information produced by `wasmparser` for this component.
     ///
@@ -176,7 +176,7 @@ struct Translation<'data> {
 // is straight from `wasmparser`'s passes.
 enum LocalInitializer<'data> {
     // imports
-    Import(ComponentImportName<'data>, ComponentEntityType),
+    Import(ComponentExternName<'data>, ComponentEntityType),
 
     // An import of an intrinsic for compile-time builtins.
     IntrinsicsImport,
@@ -355,7 +355,10 @@ enum LocalInitializer<'data> {
         HashMap<&'data str, ComponentItem>,
         ComponentInstanceTypeId,
     ),
-    ComponentSynthetic(HashMap<&'data str, ComponentItem>, ComponentInstanceTypeId),
+    ComponentSynthetic(
+        HashMap<&'data str, (ComponentItem, wasmparser::ComponentExternName<'data>)>,
+        ComponentInstanceTypeId,
+    ),
 
     // alias section
     AliasExportFunc(ModuleInstanceIndex, &'data str),
@@ -768,11 +771,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let import = import?;
                     let types = self.validator.types(0).unwrap();
                     let ty = types
-                        .component_entity_type_of_import(import.name.0)
-                        .unwrap();
+                        .component_item_for_import(import.name.name)
+                        .unwrap()
+                        .ty;
 
-                    if self.is_unsafe_intrinsics_import(import.name.0) {
-                        self.check_unsafe_intrinsics_import(import.name.0, ty)?;
+                    if self.is_unsafe_intrinsics_import(import.name.name) {
+                        self.check_unsafe_intrinsics_import(import.name.name, ty)?;
                         self.result
                             .initializers
                             .push(LocalInitializer::IntrinsicsImport);
@@ -1309,7 +1313,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for export in s {
                     let export = export?;
                     let item = self.kind_to_item(export.kind, export.index)?;
-                    let prev = self.result.exports.insert(export.name.0, item);
+                    let prev = self
+                        .result
+                        .exports
+                        .insert(export.name.name, (item, export.name));
                     assert!(prev.is_none());
                     self.result
                         .initializers
@@ -1451,7 +1458,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         let mut map = HashMap::with_capacity(exports.len());
         for export in exports {
             let idx = self.kind_to_item(export.kind, export.index)?;
-            map.insert(export.name.0, idx);
+            map.insert(export.name.name, (idx, export.name));
         }
 
         Ok(LocalInitializer::ComponentSynthetic(map, ty))
@@ -1662,13 +1669,13 @@ impl<'a, 'data> Translator<'a, 'data> {
         );
 
         for (name, ty) in &instance_ty.exports {
-            let ComponentEntityType::Func(func_ty) = ty else {
+            let ComponentEntityType::Func(func_ty) = ty.ty else {
                 bail!(
                     "bad unsafe intrinsics import: imported instance `{import}` must \
                      only export functions"
                 )
             };
-            let func_ty = &types[*func_ty];
+            let func_ty = &types[func_ty];
 
             fn ty_eq(a: &InterfaceType, b: &wasmparser::component_types::ComponentValType) -> bool {
                 use wasmparser::{PrimitiveValType as P, component_types::ComponentValType as C};

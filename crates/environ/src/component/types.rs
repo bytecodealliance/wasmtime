@@ -449,6 +449,22 @@ where
     }
 }
 
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentExtern {
+    /// TODO
+    pub data: ComponentExternData,
+    /// TODO
+    pub ty: TypeDef,
+}
+
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentExternData {
+    /// TODO
+    pub implements: Option<String>,
+}
+
 /// Types of imports and exports in the component model.
 ///
 /// These types are what's available for import and export in components. Note
@@ -549,9 +565,9 @@ impl TypeTrace for TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, TypeDef>,
+    pub imports: IndexMap<String, ComponentExtern>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, ComponentExtern>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -561,7 +577,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, TypeDef>,
+    pub exports: IndexMap<String, ComponentExtern>,
 }
 
 /// A component function type in the component model.

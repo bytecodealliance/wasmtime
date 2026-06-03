@@ -820,7 +820,7 @@ impl<I: VCodeInst> VCode<I> {
         };
         let mut total_bb_padding = 0;
 
-        for (block_order_idx, &block) in final_order.iter().enumerate() {
+        for &block in final_order.iter() {
             trace!("emitting block {:?}", block);
 
             // Call the new block hook for state
@@ -844,6 +844,17 @@ impl<I: VCodeInst> VCode<I> {
                     writeln!(disasm, "  {}", inst.pretty_print_inst(&mut s)).unwrap();
                 }
                 inst.emit(buffer, &self.emit_info, state);
+                // The buffer maintains its deadline invariant per-`MachInst`:
+                // after each instruction, ensure that the worst-case end of
+                // any island the buffer might emit lies before the soonest
+                // deadline, even after the next instruction.
+                let lookahead = I::worst_case_size() + I::worst_case_island_growth();
+                if buffer.island_needed(lookahead) {
+                    let jump_around = buffer.get_label();
+                    I::gen_jump(jump_around).emit(buffer, &self.emit_info, state);
+                    buffer.emit_island(0, state.ctrl_plane_mut());
+                    buffer.bind_label(jump_around, state.ctrl_plane_mut());
+                }
             };
 
             // Is this the first block? Emit the prologue directly if so.
@@ -1080,27 +1091,6 @@ impl<I: VCodeInst> VCode<I> {
                 cur_srcloc = None;
             }
 
-            // Do we need an island? Get the worst-case size of the next BB, add
-            // it to the optional padding behind the block, and pass this to the
-            // `MachBuffer` to determine if an island is necessary.
-            let worst_case_next_bb = if block_order_idx < final_order.len() - 1 {
-                let next_block = final_order[block_order_idx + 1];
-                let next_block_range = self.block_ranges.get(next_block.index());
-                let next_block_size = next_block_range.len() as u32;
-                let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
-                I::worst_case_size() * (next_block_size + next_block_ra_insertions)
-            } else {
-                0
-            };
-            let padding = if bb_padding.is_empty() {
-                0
-            } else {
-                bb_padding.len() as u32 + I::LabelUse::ALIGN - 1
-            };
-            if buffer.island_needed(padding + worst_case_next_bb) {
-                buffer.emit_island(padding + worst_case_next_bb, ctrl_plane);
-            }
-
             // Insert padding, if configured, to stress the `MachBuffer`'s
             // relocation and island calculations.
             //
@@ -1110,6 +1100,18 @@ impl<I: VCodeInst> VCode<I> {
             // test case generating a GB+ memory footprint in Cranelift for
             // example.
             if !bb_padding.is_empty() {
+                // The padding bytes go directly into the buffer without
+                // passing through `do_emit`, so check the deadline invariant
+                // *before* writing them: if the padding would push the
+                // worst-case end of an island past any pending deadline,
+                // drain pending fixups via an island now. We're between
+                // blocks, so no jump-around is needed.
+                let padding_len = bb_padding.len() as u32 + I::LabelUse::ALIGN - 1;
+                let lookahead = I::worst_case_size() + I::worst_case_island_growth();
+                if buffer.island_needed(padding_len + lookahead) {
+                    buffer.emit_island(padding_len + lookahead, ctrl_plane);
+                }
+
                 buffer.put_data(&bb_padding);
                 buffer.align_to(I::LabelUse::ALIGN);
                 total_bb_padding += bb_padding.len();

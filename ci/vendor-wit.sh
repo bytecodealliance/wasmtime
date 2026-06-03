@@ -35,7 +35,7 @@ get_github() {
   cp -r $cached_extracted_dir/${prefix}/* $path
 }
 
-p2=0.2.6
+p2=0.2.12
 p3=0.3.0-rc-2026-03-15
 
 rm -rf crates/wasi-io/wit/deps
@@ -66,6 +66,7 @@ rm -rf crates/wasi-tls/wit/deps
 mkdir -p crates/wasi-tls/wit/deps
 wkg get --format wit --overwrite "wasi:io@$p2" -o "crates/wasi-tls/wit/deps/io.wit"
 get_github wasi-tls v0.2.0-draft+505fc98 crates/wasi-tls/wit/deps/tls
+sed -i 's/0.2.6/0.2.12/' crates/wasi-tls/wit/deps/tls/types.wit
 
 rm -rf crates/wasi-tls/src/p3/wit/deps
 mkdir -p crates/wasi-tls/src/p3/wit/deps

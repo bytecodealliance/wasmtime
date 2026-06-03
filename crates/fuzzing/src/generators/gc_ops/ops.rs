@@ -20,10 +20,13 @@ struct WasmEncodingBases {
     struct_type_base: u32,
     typed_first_func_index: u32,
     struct_local_idx: u32,
+    eq_local_idx: u32,
     typed_local_base: u32,
     struct_global_idx: u32,
+    eq_global_idx: u32,
     typed_global_base: u32,
     struct_table_idx: u32,
+    eq_table_idx: u32,
     typed_table_base: u32,
 }
 
@@ -103,6 +106,18 @@ impl GcOps {
             vec![],
         );
 
+        // 5: `take_eq`
+        types.ty().function(
+            vec![ValType::Ref(RefType {
+                nullable: true,
+                heap_type: wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Eq,
+                },
+            })],
+            vec![],
+        );
+
         let struct_type_base: u32 = types.len();
 
         // Build the type-id-to-wasm-index map from the pre-computed
@@ -174,6 +189,7 @@ impl GcOps {
         imports.import("", "take_refs", EntityType::Function(2));
         imports.import("", "make_refs", EntityType::Function(3));
         imports.import("", "take_struct", EntityType::Function(4));
+        imports.import("", "take_eq", EntityType::Function(5));
 
         // For each of our concrete struct types, define a function
         // import that takes an argument of that concrete type.
@@ -204,6 +220,15 @@ impl GcOps {
                     ty: wasm_encoder::AbstractHeapType::Struct,
                 },
             },
+            minimum: u64::from(self.limits.table_size),
+            maximum: None,
+            table64: false,
+            shared: false,
+        });
+
+        let eq_table_idx = tables.len();
+        tables.table(TableType {
+            element_type: RefType::EQREF,
             minimum: u64::from(self.limits.table_size),
             maximum: None,
             table64: false,
@@ -258,6 +283,20 @@ impl GcOps {
             }),
         );
 
+        // Add exactly one (ref.null eq) global.
+        let eq_global_idx = globals.len();
+        globals.global(
+            wasm_encoder::GlobalType {
+                val_type: ValType::Ref(RefType::EQREF),
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::ref_null(wasm_encoder::HeapType::Abstract {
+                shared: false,
+                ty: wasm_encoder::AbstractHeapType::Eq,
+            }),
+        );
+
         // Add one typed (ref <type>) global per struct type.
         let typed_global_base = globals.len();
         for i in 0..struct_count {
@@ -301,7 +340,10 @@ impl GcOps {
             }),
         ));
 
-        let typed_local_base: u32 = struct_local_idx + 1;
+        let eq_local_idx = struct_local_idx + 1;
+        local_decls.push((1, ValType::Ref(RefType::EQREF)));
+
+        let typed_local_base: u32 = eq_local_idx + 1;
         for i in 0..struct_count {
             let concrete = struct_type_base + i;
             local_decls.push((
@@ -317,10 +359,13 @@ impl GcOps {
             struct_type_base,
             typed_first_func_index,
             struct_local_idx,
+            eq_local_idx,
             typed_local_base,
             struct_global_idx,
+            eq_global_idx,
             typed_global_base,
             struct_table_idx,
+            eq_table_idx,
             typed_table_base,
         };
 
@@ -600,6 +645,48 @@ macro_rules! for_each_gc_op {
             NullStruct,
 
             #[operands([])]
+            #[results([Eq])]
+            NullEq,
+
+            #[operands([Some(Eq)])]
+            #[results([])]
+            TakeEqCall,
+
+            #[operands([Some(Eq)])]
+            #[results([])]
+            EqLocalSet,
+
+            #[operands([])]
+            #[results([Eq])]
+            EqLocalGet,
+
+            #[operands([Some(Eq)])]
+            #[results([])]
+            EqGlobalSet,
+
+            #[operands([])]
+            #[results([Eq])]
+            EqGlobalGet,
+
+            #[operands([Some(Eq)])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            EqTableSet { elem_index: u32 },
+
+            #[operands([])]
+            #[results([Eq])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            EqTableGet { elem_index: u32 },
+
+            #[operands([])]
             #[results([Struct(Some(type_index))])]
             #[fixup(|_limits, num_types| {
                 type_index = type_index.checked_rem(num_types)?;
@@ -825,6 +912,7 @@ impl GcOp {
         let take_refs_func_idx = 1;
         let make_refs_func_idx = 2;
         let take_structref_idx = 3;
+        let take_eqref_idx = 4;
 
         match *self {
             Self::Gc => {
@@ -869,6 +957,38 @@ impl GcOp {
                     shared: false,
                     ty: wasm_encoder::AbstractHeapType::Struct,
                 }));
+            }
+            Self::NullEq => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Abstract {
+                    shared: false,
+                    ty: wasm_encoder::AbstractHeapType::Eq,
+                }));
+            }
+            Self::TakeEqCall => {
+                func.instruction(&Instruction::Call(take_eqref_idx));
+            }
+            Self::EqLocalGet => {
+                func.instruction(&Instruction::LocalGet(encoding_bases.eq_local_idx));
+            }
+            Self::EqLocalSet => {
+                func.instruction(&Instruction::LocalSet(encoding_bases.eq_local_idx));
+            }
+            Self::EqGlobalGet => {
+                func.instruction(&Instruction::GlobalGet(encoding_bases.eq_global_idx));
+            }
+            Self::EqGlobalSet => {
+                func.instruction(&Instruction::GlobalSet(encoding_bases.eq_global_idx));
+            }
+            Self::EqTableGet { elem_index } => {
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::TableGet(encoding_bases.eq_table_idx));
+            }
+            Self::EqTableSet { elem_index } => {
+                // Use eq_local_idx (eqref) to temporarily store the value before table.set.
+                func.instruction(&Instruction::LocalSet(encoding_bases.eq_local_idx));
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::LocalGet(encoding_bases.eq_local_idx));
+                func.instruction(&Instruction::TableSet(encoding_bases.eq_table_idx));
             }
             Self::NullTypedStruct { type_index } => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::Concrete(

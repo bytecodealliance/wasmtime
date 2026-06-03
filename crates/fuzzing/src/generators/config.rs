@@ -138,6 +138,7 @@ impl Config {
             tail_call,
             extended_const,
             wide_arithmetic,
+            branch_hinting,
             component_model_async,
             component_model_more_async_builtins,
             component_model_async_stackful,
@@ -146,6 +147,7 @@ impl Config {
             component_model_gc,
             component_model_map,
             component_model_fixed_length_lists,
+            component_model_implements,
             simd,
             exceptions,
             legacy_exceptions: _,
@@ -174,7 +176,9 @@ impl Config {
         self.module_config.component_model_map = component_model_map.unwrap_or(false);
         self.module_config.component_model_fixed_length_lists =
             component_model_fixed_length_lists.unwrap_or(false);
+        self.module_config.component_model_implements = component_model_implements.unwrap_or(false);
         self.module_config.stack_switching = stack_switching.unwrap_or(false);
+        self.wasmtime.branch_hinting = branch_hinting.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -326,6 +330,7 @@ impl Config {
         cfg.wasm.component_model_map = Some(self.module_config.component_model_map);
         cfg.wasm.component_model_fixed_length_lists =
             Some(self.module_config.component_model_fixed_length_lists);
+        cfg.wasm.component_model_implements = Some(self.module_config.component_model_implements);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
@@ -343,6 +348,7 @@ impl Config {
         cfg.wasm.shared_everything_threads =
             Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
+        cfg.wasm.branch_hinting = Some(self.wasmtime.branch_hinting);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
         cfg.wasm.stack_switching = Some(self.module_config.stack_switching);
         cfg.wasm.shared_memory = Some(self.module_config.shared_memory);
@@ -605,6 +611,10 @@ pub struct WasmtimeConfig {
     table_lazy_init: bool,
     metadata_for_internal_asserts: bool,
     metadata_for_gc_heap_corruption: bool,
+    /// Whether the branch-hinting proposal is enabled. wasm-smith does not emit
+    /// `metadata.code.branch_hint` sections, so for generated modules this only
+    /// toggles the (otherwise no-op) parsing path.
+    branch_hinting: bool,
 
     /// Configuration for whether wasm is invoked in an async fashion and how
     /// it's cooperatively time-sliced.

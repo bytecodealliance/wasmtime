@@ -191,6 +191,25 @@ pub mod imports {
             Host::y(*self)
         }
     }
+    pub fn add_to_linker_instance<T, D>(
+        inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+        host_getter: fn(&mut T) -> D::Data<'_>,
+    ) -> wasmtime::Result<()>
+    where
+        D: HostWithStore,
+        for<'a> D::Data<'a>: Host,
+        T: 'static,
+    {
+        inst.func_wrap(
+            "y",
+            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                let host = &mut host_getter(caller.data_mut());
+                let r = Host::y(host);
+                Ok(r)
+            },
+        )?;
+        Ok(())
+    }
     pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
         host_getter: fn(&mut T) -> D::Data<'_>,
@@ -201,14 +220,6 @@ pub mod imports {
         T: 'static,
     {
         let mut inst = linker.instance("imports")?;
-        inst.func_wrap(
-            "y",
-            move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                let host = &mut host_getter(caller.data_mut());
-                let r = Host::y(host);
-                Ok(r)
-            },
-        )?;
-        Ok(())
+        add_to_linker_instance(&mut inst, host_getter)
     }
 }

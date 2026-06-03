@@ -91,7 +91,7 @@ pub unsafe extern "C" fn wasmtime_context_set_exception(
     let Err(thrown) = scope
         .as_context_mut()
         .throw::<std::convert::Infallible>(rooted);
-    Some(Box::new(wasm_trap_t::new(wasmtime::Error::new(thrown))))
+    Some(Box::new(wasm_trap_t::new(thrown)))
 }
 
 #[unsafe(no_mangle)]

@@ -9,7 +9,6 @@ use core::task::{Context, Poll, ready};
 use http_body::Body as _;
 use http_body_util::combinators::UnsyncBoxBody;
 use std::any::{Any, TypeId};
-use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::PollSender;
@@ -466,7 +465,7 @@ where
     D: 'static,
 {
     type Item = u8;
-    type Buffer = Cursor<Bytes>;
+    type Buffer = Bytes;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,
@@ -513,7 +512,7 @@ where
                                     let cap = cap.into();
                                     if n > cap {
                                         // data frame does not fit in destination, fill it and buffer the rest
-                                        dst.set_buffer(Cursor::new(frame.split_off(cap)));
+                                        dst.set_buffer(frame.split_off(cap));
                                         let mut dst = dst.as_direct(store, cap);
                                         dst.remaining().copy_from_slice(&frame);
                                         dst.mark_written(cap);
@@ -524,7 +523,7 @@ where
                                         dst.mark_written(n);
                                     }
                                 } else {
-                                    dst.set_buffer(Cursor::new(frame));
+                                    dst.set_buffer(frame);
                                 }
                                 return Poll::Ready(Ok(StreamResult::Completed));
                             }

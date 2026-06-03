@@ -7,6 +7,7 @@ block0(v0: i8):
     v1 = iconst.i64 0
     v2 = iconst.i64 1
     v3 = select v0, v1, v2
-    v4 = icmp_imm eq v3, 1
+    v5 = iconst.i64 1
+    v4 = icmp eq v3, v5
     return v4
 }

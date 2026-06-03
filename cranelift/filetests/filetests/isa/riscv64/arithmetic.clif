@@ -806,7 +806,8 @@ block0(v0: i8):
 
 function %imul_i8_const(i8) -> i8 {
 block0(v0: i8):
-    v3 = imul_imm v0, 97
+    v4 = iconst.i8 97
+    v3 = imul v0, v4
     return v3
 }
 
@@ -824,7 +825,8 @@ block0(v0: i8):
 
 function %imul_i16_const(i16) -> i16 {
 block0(v0: i16):
-    v3 = imul_imm v0, 97
+    v4 = iconst.i16 97
+    v3 = imul v0, v4
     return v3
 }
 
@@ -842,7 +844,8 @@ block0(v0: i16):
 
 function %imul_i32_const(i32) -> i32 {
 block0(v0: i32):
-    v3 = imul_imm v0, 97
+    v4 = iconst.i32 97
+    v3 = imul v0, v4
     return v3
 }
 
@@ -860,7 +863,8 @@ block0(v0: i32):
 
 function %imul_i64_const(i64) -> i64 {
 block0(v0: i64):
-    v3 = imul_imm v0, 97
+    v4 = iconst.i64 97
+    v3 = imul v0, v4
     return v3
 }
 

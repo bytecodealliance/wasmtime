@@ -1,4 +1,6 @@
 ;;! bulk_memory = true
+;;! multi_memory = true
+;;! memory64 = true
 
 (module
   (memory 1 1)
@@ -124,3 +126,149 @@
 (assert_return
   (invoke "is olleh?" (i32.const 2000))
   (i32.const 1))
+
+;; test trapping boundary behavior
+(module
+  (memory $m32_a 1)
+  (memory $m32_b 1)
+  (memory $m64_a i64 1)
+  (memory $m64_b i64 1)
+
+  (func (export "m32_to_same") (param i32 i32 i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m32_a $m32_a
+  )
+
+  (func (export "m32_to_m32") (param i32 i32 i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m32_b $m32_a
+  )
+
+  (func (export "m32_to_m64") (param i64 i32 i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m64_a $m32_a
+  )
+
+  (func (export "m64_to_same") (param i64 i64 i64)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m64_a $m64_a
+  )
+
+  (func (export "m64_to_m64") (param i64 i64 i64)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m64_b $m64_a
+  )
+
+  (func (export "m64_to_m32") (param i32 i64 i32)
+    local.get 0
+    local.get 1
+    local.get 2
+    memory.copy $m32_a $m64_a
+  )
+)
+
+(assert_return (invoke "m32_to_same" (i32.const 0) (i32.const 0) (i32.const 0)))
+(assert_return (invoke "m32_to_same" (i32.const 0) (i32.const 0) (i32.const 65536)))
+(assert_trap (invoke "m32_to_same" (i32.const 0) (i32.const 0) (i32.const 65537)) "out of bounds")
+(assert_return (invoke "m32_to_same" (i32.const 100) (i32.const 200) (i32.const 65336)))
+(assert_return (invoke "m32_to_same" (i32.const 200) (i32.const 100) (i32.const 65336)))
+(assert_trap (invoke "m32_to_same" (i32.const 201) (i32.const 100) (i32.const 65336)) "out of bounds")
+(assert_return (invoke "m32_to_same" (i32.const 200) (i32.const 101) (i32.const 65336)))
+(assert_trap (invoke "m32_to_same" (i32.const 200) (i32.const 100) (i32.const 65337)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const -1) (i32.const 0) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const 0) (i32.const -1) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const 0) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const 100) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const 0) (i32.const 100) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const -1) (i32.const 0) (i32.const 100)) "out of bounds")
+(assert_trap (invoke "m32_to_same" (i32.const 0) (i32.const -1) (i32.const 100)) "out of bounds")
+
+(assert_return (invoke "m32_to_m32" (i32.const 0) (i32.const 0) (i32.const 0)))
+(assert_return (invoke "m32_to_m32" (i32.const 0) (i32.const 0) (i32.const 65536)))
+(assert_trap (invoke "m32_to_m32" (i32.const 0) (i32.const 0) (i32.const 65537)) "out of bounds")
+(assert_return (invoke "m32_to_m32" (i32.const 100) (i32.const 200) (i32.const 65336)))
+(assert_return (invoke "m32_to_m32" (i32.const 200) (i32.const 100) (i32.const 65336)))
+(assert_trap (invoke "m32_to_m32" (i32.const 201) (i32.const 100) (i32.const 65336)) "out of bounds")
+(assert_return (invoke "m32_to_m32" (i32.const 200) (i32.const 101) (i32.const 65336)))
+(assert_trap (invoke "m32_to_m32" (i32.const 200) (i32.const 100) (i32.const 65337)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const -1) (i32.const 0) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const 0) (i32.const -1) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const 0) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const 100) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const 0) (i32.const 100) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const -1) (i32.const 0) (i32.const 100)) "out of bounds")
+(assert_trap (invoke "m32_to_m32" (i32.const 0) (i32.const -1) (i32.const 100)) "out of bounds")
+
+(assert_return (invoke "m32_to_m64" (i64.const 0) (i32.const 0) (i32.const 0)))
+(assert_return (invoke "m32_to_m64" (i64.const 0) (i32.const 0) (i32.const 65536)))
+(assert_trap (invoke "m32_to_m64" (i64.const 0) (i32.const 0) (i32.const 65537)) "out of bounds")
+(assert_return (invoke "m32_to_m64" (i64.const 100) (i32.const 200) (i32.const 65336)))
+(assert_return (invoke "m32_to_m64" (i64.const 200) (i32.const 100) (i32.const 65336)))
+(assert_trap (invoke "m32_to_m64" (i64.const 201) (i32.const 100) (i32.const 65336)) "out of bounds")
+(assert_return (invoke "m32_to_m64" (i64.const 200) (i32.const 101) (i32.const 65336)))
+(assert_trap (invoke "m32_to_m64" (i64.const 200) (i32.const 100) (i32.const 65337)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const -1) (i32.const 0) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const 0) (i32.const -1) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const 0) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const 100) (i32.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const 0) (i32.const 100) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const -1) (i32.const 0) (i32.const 100)) "out of bounds")
+(assert_trap (invoke "m32_to_m64" (i64.const 0) (i32.const -1) (i32.const 100)) "out of bounds")
+
+(assert_return (invoke "m64_to_same" (i64.const 0) (i64.const 0) (i64.const 0)))
+(assert_return (invoke "m64_to_same" (i64.const 0) (i64.const 0) (i64.const 65536)))
+(assert_trap (invoke "m64_to_same" (i64.const 0) (i64.const 0) (i64.const 65537)) "out of bounds")
+(assert_return (invoke "m64_to_same" (i64.const 100) (i64.const 200) (i64.const 65336)))
+(assert_return (invoke "m64_to_same" (i64.const 200) (i64.const 100) (i64.const 65336)))
+(assert_trap (invoke "m64_to_same" (i64.const 201) (i64.const 100) (i64.const 65336)) "out of bounds")
+(assert_return (invoke "m64_to_same" (i64.const 200) (i64.const 101) (i64.const 65336)))
+(assert_trap (invoke "m64_to_same" (i64.const 200) (i64.const 100) (i64.const 65337)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const -1) (i64.const 0) (i64.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const 0) (i64.const -1) (i64.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const 0) (i64.const 0) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const 100) (i64.const 0) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const 0) (i64.const 100) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const -1) (i64.const 0) (i64.const 100)) "out of bounds")
+(assert_trap (invoke "m64_to_same" (i64.const 0) (i64.const -1) (i64.const 100)) "out of bounds")
+
+(assert_return (invoke "m64_to_m64" (i64.const 0) (i64.const 0) (i64.const 0)))
+(assert_return (invoke "m64_to_m64" (i64.const 0) (i64.const 0) (i64.const 65536)))
+(assert_trap (invoke "m64_to_m64" (i64.const 0) (i64.const 0) (i64.const 65537)) "out of bounds")
+(assert_return (invoke "m64_to_m64" (i64.const 100) (i64.const 200) (i64.const 65336)))
+(assert_return (invoke "m64_to_m64" (i64.const 200) (i64.const 100) (i64.const 65336)))
+(assert_trap (invoke "m64_to_m64" (i64.const 201) (i64.const 100) (i64.const 65336)) "out of bounds")
+(assert_return (invoke "m64_to_m64" (i64.const 200) (i64.const 101) (i64.const 65336)))
+(assert_trap (invoke "m64_to_m64" (i64.const 200) (i64.const 100) (i64.const 65337)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const -1) (i64.const 0) (i64.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const 0) (i64.const -1) (i64.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const 0) (i64.const 0) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const 100) (i64.const 0) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const 0) (i64.const 100) (i64.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const -1) (i64.const 0) (i64.const 100)) "out of bounds")
+(assert_trap (invoke "m64_to_m64" (i64.const 0) (i64.const -1) (i64.const 100)) "out of bounds")
+
+(assert_return (invoke "m64_to_m32" (i32.const 0) (i64.const 0) (i32.const 0)))
+(assert_return (invoke "m64_to_m32" (i32.const 0) (i64.const 0) (i32.const 65536)))
+(assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const 0) (i32.const 65537)) "out of bounds")
+(assert_return (invoke "m64_to_m32" (i32.const 100) (i64.const 200) (i32.const 65336)))
+(assert_return (invoke "m64_to_m32" (i32.const 200) (i64.const 100) (i32.const 65336)))
+(assert_trap (invoke "m64_to_m32" (i32.const 201) (i64.const 100) (i32.const 65336)) "out of bounds")
+(assert_return (invoke "m64_to_m32" (i32.const 200) (i64.const 101) (i32.const 65336)))
+(assert_trap (invoke "m64_to_m32" (i32.const 200) (i64.const 100) (i32.const 65337)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const -1) (i64.const 0) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const -1) (i32.const 0)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const 100) (i64.const 0) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const 100) (i32.const -1)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const -1) (i64.const 0) (i32.const 100)) "out of bounds")
+(assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const -1) (i32.const 100)) "out of bounds")

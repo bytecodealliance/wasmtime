@@ -9,6 +9,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32, f32) -> i32 tail {
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -16,7 +17,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, f32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u805306368:9 sig1
+;;     fn0 = colocated u805306368:7 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: f32):
@@ -29,7 +30,7 @@
 ;; @0033                               v10 = iadd v8, v9
 ;; @0033                               v11 = iconst.i64 0
 ;; @0033                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
-;; @0033                               v13 = load.i64 user6 aligned table v12
+;; @0033                               v13 = load.i64 user6 aligned region0 v12
 ;;                                     v28 = iconst.i64 -2
 ;; @0033                               v14 = band v13, v28  ; v28 = -2
 ;; @0033                               brif v13, block3(v14), block2

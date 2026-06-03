@@ -14,7 +14,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+    (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
 )
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
 
@@ -50,7 +50,7 @@
         ))
         (with "libc" (instance $libc))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async (callback (func $i "callback"))))
+    (func (export "foo") async (canon lift (core func $i "foo") async (callback (func $i "callback"))))
 )
 
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
@@ -85,7 +85,7 @@
         ))
         (with "libc" (instance $libc))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async))
+    (func (export "foo") async (canon lift (core func $i "foo") async))
 )
 
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
@@ -99,7 +99,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async))
+    (func (export "foo") async (canon lift (core func $i "foo") async))
 )
 (assert_trap (invoke "foo") "async-lifted export failed to produce a result")
 
@@ -112,7 +112,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async))
+    (func (export "foo") async (canon lift (core func $i "foo") async))
 )
 
 (assert_trap (invoke "foo")
@@ -129,7 +129,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async))
+    (func (export "foo") async (canon lift (core func $i "foo") async))
 )
 
 (assert_trap (invoke "foo")
@@ -144,7 +144,7 @@
     (core instance $i (instantiate $m
         (with "" (instance (export "task.return" (func $task-return))))
     ))
-    (func (export "foo") (canon lift (core func $i "foo") async))
+    (func (export "foo") async (canon lift (core func $i "foo") async))
 )
 
 (assert_trap (invoke "foo")

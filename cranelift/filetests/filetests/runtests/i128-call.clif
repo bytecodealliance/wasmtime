@@ -13,7 +13,9 @@ target s390x
 
 function %callee_i128(i128) -> i128 {
 block0(v0: i128):
-    v1 = iadd_imm.i128 v0, 10
+    v2 = iconst.i64 10
+    v3 = sextend.i128 v2
+    v1 = iadd v0, v3
     return v1
 }
 

@@ -10,7 +10,7 @@ pub trait ComponentCompiler: Send + Sync {
     /// Each trampoline is a member of the `Trampoline` enumeration and has a
     /// unique purpose and is translated differently. See the implementation of
     /// this trait for Cranelift for more information.
-    fn compile_trampoline(
+    fn compile_component_trampoline(
         &self,
         component: &ComponentTranslation,
         types: &ComponentTypesBuilder,

@@ -6,13 +6,13 @@ use super::{
     regs::{self, rbp, rsp, scratch_fpr_bitset, scratch_gpr_bitset},
 };
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm, Imm as I,
-    IntCmpKind, IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind,
-    OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, Scratch, ScratchType,
-    ShiftKind, SplatKind, StoreKind, TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS,
-    V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind,
-    V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
-    VectorCompareKind, VectorEqualityKind, Zero,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm as I, IntCmpKind,
+    IntScratch, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
+    RemKind, ReplaceLaneKind, RmwOp, RoundingMode, Scratch, ScratchType, ShiftKind, SplatKind,
+    StoreKind, TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind,
+    V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind,
+    V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind,
+    VectorEqualityKind, Zero,
 };
 use crate::{
     Result,
@@ -513,11 +513,11 @@ impl Masm for MacroAssembler {
         &mut self,
         dst: WritableReg,
         lhs: Reg,
-        rhs: Imm,
+        rhs: RegImm,
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()> {
-        self.add(dst, lhs, RegImm::Imm(rhs), size)?;
+        self.add(dst, lhs, rhs, size)?;
         self.asm.trapif(CC::B, trap);
         Ok(())
     }

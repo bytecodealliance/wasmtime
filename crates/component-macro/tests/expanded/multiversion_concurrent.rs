@@ -207,8 +207,8 @@ pub mod my {
             }
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -216,7 +216,6 @@ pub mod my {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("my:dep/a@0.1.0")?;
                 inst.func_wrap_concurrent(
                     "x",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
@@ -228,6 +227,18 @@ pub mod my {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("my:dep/a@0.1.0")?;
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }
@@ -243,8 +254,8 @@ pub mod my {
             }
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -252,7 +263,6 @@ pub mod my {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("my:dep/a@0.2.0")?;
                 inst.func_wrap_concurrent(
                     "x",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
@@ -264,6 +274,18 @@ pub mod my {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("my:dep/a@0.2.0")?;
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }
@@ -301,7 +323,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)
@@ -384,7 +406,7 @@ pub mod exports {
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
-                        let mut lookup = move |name| {
+                        let mut lookup = move |name: &str| {
                             _instance_pre
                                 .component()
                                 .get_export_index(Some(&instance), name)

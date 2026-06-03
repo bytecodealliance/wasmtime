@@ -50,12 +50,14 @@
 //! store.  This is equivalent to `StoreContextMut::spawn` but more convenient to use
 //! in host functions.
 
+use self::error_contexts::GlobalErrorContextRefCount;
 use crate::bail_bug;
 use crate::component::func::{self, Func, call_post_return};
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
@@ -63,25 +65,22 @@ use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
-use error_contexts::GlobalErrorContextRefCount;
+use alloc::borrow::ToOwned;
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use core::any::Any;
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::mem::{self, ManuallyDrop, MaybeUninit};
+use core::ops::DerefMut;
+use core::pin::{Pin, pin};
+use core::ptr::{self, NonNull};
+use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
 use futures::future::{self, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
-use std::any::Any;
-use std::borrow::ToOwned;
-use std::boxed::Box;
-use std::cell::UnsafeCell;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
-use std::fmt;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::mem::{self, ManuallyDrop, MaybeUninit};
-use std::ops::DerefMut;
-use std::pin::{Pin, pin};
-use std::ptr::{self, NonNull};
-use std::task::{Context, Poll, Waker};
-use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -293,7 +292,7 @@ where
 /// time so the store is effectively being passed between futures.
 ///
 /// Rust's `Future` trait, however, has no means of passing a `Store`
-/// temporarily between futures. The [`Context`](std::task::Context) type does
+/// temporarily between futures. The [`Context`](core::task::Context) type does
 /// not have the ability to attach arbitrary information to it at this time.
 /// This type, [`Accessor`], is used to bridge this expressivity gap.
 ///
@@ -576,7 +575,7 @@ where
 
 /// Represents a task which may be provided to `Accessor::spawn`,
 /// `Accessor::forward`, or `StorecContextMut::spawn`.
-// TODO: Replace this with `std::ops::AsyncFnOnce` when that becomes a viable
+// TODO: Replace this with `core::ops::AsyncFnOnce` when that becomes a viable
 // option.
 //
 // As of this writing, it's not possible to specify e.g. `Send` and `Sync`
@@ -634,6 +633,7 @@ enum SuspendReason {
     /// chance to run.
     Yielding {
         thread: QualifiedThreadId,
+        cancellable: bool,
         skip_may_block_check: bool,
     },
     /// The fiber was explicitly suspended with a call to `thread.suspend` or `thread.switch-to`.
@@ -1434,7 +1434,7 @@ impl<T> StoreContextMut<'_, T> {
                 self.0.resume_fiber(fiber).await?;
             }
             WorkItem::ResumeThread(_, thread) => {
-                if let GuestThreadState::Ready(fiber) = mem::replace(
+                if let GuestThreadState::Ready { fiber, .. } = mem::replace(
                     &mut self.0.concurrent_state_mut().get_mut(thread.thread)?.state,
                     GuestThreadState::Running,
                 ) {
@@ -1898,8 +1898,13 @@ impl StoreOpaque {
                         fiber.dispose(self);
                     }
                 }
-                SuspendReason::Yielding { thread, .. } => {
-                    state.get_mut(thread.thread)?.state = GuestThreadState::Ready(fiber);
+                SuspendReason::Yielding {
+                    thread,
+                    cancellable,
+                    ..
+                } => {
+                    state.get_mut(thread.thread)?.state =
+                        GuestThreadState::Ready { fiber, cancellable };
                     let instance = state.get_mut(thread.task)?.instance.index;
                     state.push_low_priority(WorkItem::ResumeThread(instance, thread));
                 }
@@ -1985,8 +1990,12 @@ impl StoreOpaque {
 
     fn wait_for_event(&mut self, waitable: Waitable) -> Result<()> {
         let state = self.concurrent_state_mut();
+
+        if waitable.common(state)?.set.is_some() {
+            bail!(Trap::WaitableSyncAndAsync);
+        }
+
         let caller = state.current_guest_thread()?;
-        let old_set = waitable.common(state)?.set;
         let set = state.get_mut(caller.thread)?.sync_call_set;
         waitable.join(state, Some(set))?;
         self.suspend(SuspendReason::Waiting {
@@ -1995,7 +2004,7 @@ impl StoreOpaque {
             skip_may_block_check: false,
         })?;
         let state = self.concurrent_state_mut();
-        waitable.join(state, old_set)
+        waitable.join(state, None)
     }
 
     /// Cleans up the data structures backing the `guest_thread` specified,
@@ -3263,6 +3272,13 @@ impl Instance {
                 .handle_table()
                 .waitable_set_rep(set_handle)?;
 
+            let state = store.concurrent_state_mut();
+            if let Some(old) = waitable.common(state)?.set
+                && state.get_mut(old)?.is_sync_call_set
+            {
+                bail!(Trap::WaitableSyncAndAsync);
+            }
+
             Some(TableId::<WaitableSet>::new(set))
         };
 
@@ -3509,9 +3525,9 @@ impl Instance {
                     .concurrent_state_mut()
                     .push_work_item(WorkItem::ResumeFiber(fiber), high_priority);
             }
-            GuestThreadState::Ready(fiber) if allow_ready => {
+            GuestThreadState::Ready { fiber, cancellable } if allow_ready => {
                 log::trace!("resuming thread {thread_id:?} that was ready");
-                thread.state = GuestThreadState::Ready(fiber);
+                thread.state = GuestThreadState::Ready { fiber, cancellable };
                 store
                     .concurrent_state_mut()
                     .promote_thread_work_item(guest_thread);
@@ -3590,6 +3606,7 @@ impl Instance {
         let reason = if yielding {
             SuspendReason::Yielding {
                 thread: guest_thread,
+                cancellable,
                 // Tell `StoreOpaque::suspend` it's okay to suspend here since
                 // we're handling a `thread.yield-to-suspended` call; otherwise it would
                 // panic if we called it in a non-blocking context.
@@ -3789,11 +3806,9 @@ impl Instance {
                         task: guest_task,
                         thread,
                     };
-                    if let Some(set) = concurrent_state
-                        .get_mut(thread.thread)?
-                        .wake_on_cancel
-                        .take()
-                    {
+                    let thread_mut = concurrent_state.get_mut(thread.thread)?;
+                    if let Some(set) = thread_mut.wake_on_cancel.take() {
+                        // The thread is in a cancellable wait, so wake it up:
                         let item = match concurrent_state.get_mut(set)?.waiting.remove(&thread) {
                             Some(WaitMode::Fiber(fiber)) => WorkItem::ResumeFiber(fiber),
                             Some(WaitMode::Callback(instance)) => WorkItem::GuestCall(
@@ -3813,8 +3828,23 @@ impl Instance {
                         let caller = concurrent_state.current_guest_thread()?;
                         store.suspend(SuspendReason::Yielding {
                             thread: caller,
+                            cancellable: false,
                             // `subtask.cancel` is not allowed to be called in a
                             // sync context, so we cannot skip the may-block check.
+                            skip_may_block_check: false,
+                        })?;
+                        break;
+                    } else if let GuestThreadState::Ready {
+                        cancellable: true, ..
+                    } = &thread_mut.state
+                    {
+                        // The thread is in a cancellable yield, so yield back
+                        // to it.
+                        let caller = concurrent_state.current_guest_thread()?;
+                        concurrent_state.promote_thread_work_item(thread);
+                        store.suspend(SuspendReason::Yielding {
+                            thread: caller,
+                            cancellable: false,
                             skip_may_block_check: false,
                         })?;
                         break;
@@ -4048,7 +4078,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         // SAFETY: The `wasmtime_cranelift`-generated code that calls
         // this method will have ensured that `storage` is a valid
         // pointer containing at least `storage_len` items.
-        let params = unsafe { std::slice::from_raw_parts(storage, storage_len) }.to_vec();
+        let params = unsafe { core::slice::from_raw_parts(storage, storage_len) }.to_vec();
 
         unsafe {
             instance.prepare_call(
@@ -4101,7 +4131,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                     // SAFETY: The `wasmtime_cranelift`-generated code that calls
                     // this method will have ensured that `storage` is a valid
                     // pointer containing at least `storage_len` items.
-                    Some(std::slice::from_raw_parts_mut(storage, storage_len)),
+                    Some(core::slice::from_raw_parts_mut(storage, storage_len)),
                 )
                 .map(drop)
         }
@@ -4466,7 +4496,10 @@ enum GuestThreadState {
     ),
     Running,
     Suspended(StoreFiber<'static>),
-    Ready(StoreFiber<'static>),
+    Ready {
+        fiber: StoreFiber<'static>,
+        cancellable: bool,
+    },
     Completed,
 }
 pub struct GuestThread {
@@ -4502,7 +4535,10 @@ impl GuestThread {
     }
 
     fn new_implicit(state: &mut ConcurrentState, parent_task: TableId<GuestTask>) -> Result<Self> {
-        let sync_call_set = state.push(WaitableSet::default())?;
+        let sync_call_set = state.push(WaitableSet {
+            is_sync_call_set: true,
+            ..WaitableSet::default()
+        })?;
         Ok(Self {
             context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
@@ -4520,7 +4556,10 @@ impl GuestThread {
             dyn FnOnce(&mut dyn VMStore, QualifiedThreadId) -> Result<()> + Send + Sync,
         >,
     ) -> Result<Self> {
-        let sync_call_set = state.push(WaitableSet::default())?;
+        let sync_call_set = state.push(WaitableSet {
+            is_sync_call_set: true,
+            ..WaitableSet::default()
+        })?;
         Ok(Self {
             context: [0; NUM_COMPONENT_CONTEXT_SLOTS],
             parent_task,
@@ -4762,7 +4801,7 @@ impl Waitable {
     /// remove it from any set it may currently belong to (when `set` is
     /// `None`).
     fn join(&self, state: &mut ConcurrentState, set: Option<TableId<WaitableSet>>) -> Result<()> {
-        log::trace!("waitable {self:?} join set {set:?}",);
+        log::trace!("waitable {self:?} join set {set:?}");
 
         let old = mem::replace(&mut self.common(state)?.set, set);
 
@@ -4894,6 +4933,9 @@ struct WaitableSet {
     ready: BTreeSet<Waitable>,
     /// Which guest threads are currently waiting on this set, if any.
     waiting: BTreeMap<QualifiedThreadId, WaitMode>,
+    /// Whether this set is a synthetic, internal one meant for handling
+    /// synchronous calls.
+    is_sync_call_set: bool,
 }
 
 impl TableDebug for WaitableSet {
@@ -5087,7 +5129,7 @@ impl ConcurrentState {
                     }
                 }
             } else if let Some(thread) = entry.downcast_mut::<GuestThread>() {
-                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready(fiber) =
+                if let GuestThreadState::Suspended(fiber) | GuestThreadState::Ready { fiber, .. } =
                     mem::replace(&mut thread.state, GuestThreadState::Completed)
                 {
                     fibers.push(fiber);
@@ -5562,7 +5604,7 @@ pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
                 Ok(r) => Ok(*r),
                 Err(_) => bail_bug!("wrong type of value produced"),
             },
-            Err(e) => Err(e.into()),
+            Err(oneshot::Canceled) => bail_bug!("channel erroneously dropped"),
         }),
     ))
 }

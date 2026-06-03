@@ -30,6 +30,7 @@ pulley-interpreter-fuzz = { workspace = true }
 smallvec = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = ["winch"] }
+wasmtime-core = { workspace = true }
 wasmtime-fuzzing = { workspace = true }
 wasmtime-test-util = { workspace = true }
 log = { workspace = true }
@@ -47,8 +48,9 @@ wasmtime = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
 
 [features]
-default = ['fuzz-spec-interpreter']
+default = ['fuzz-spec-interpreter', 'v8']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
+v8 = ['wasmtime-fuzzing/v8']
 chaos = ["cranelift-control/chaos"]
 
 [[bin]]
@@ -125,3 +127,9 @@ path = "fuzz_targets/gc_ops.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "oom"
+path = "fuzz_targets/oom.rs"
+test = false
+doc = false

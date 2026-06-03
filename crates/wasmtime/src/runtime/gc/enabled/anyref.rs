@@ -1,11 +1,11 @@
 //! Implementation of `anyref` in Wasmtime.
 
-use super::{ExternRef, RootedGcRefImpl};
+use super::ExternRef;
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
     ArrayRef, ArrayType, AsContext, AsContextMut, EqRef, GcRefImpl, GcRootIndex, HeapType, I31,
-    OwnedRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
+    OwnedRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, bail_bug,
     store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::mem;
@@ -298,11 +298,13 @@ impl AnyRef {
                 || store
                     .unwrap_gc_store()
                     .header(&gc_ref)
+                    .unwrap()
                     .kind()
                     .matches(VMGcKind::AnyRef)
                 || store
                     .unwrap_gc_store()
                     .header(&gc_ref)
+                    .unwrap()
                     .kind()
                     .matches(VMGcKind::ExternRef)
         );
@@ -332,13 +334,7 @@ impl AnyRef {
     }
 
     pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = if gc_ref.is_i31() {
-            gc_ref.as_raw_non_zero_u32()
-        } else {
-            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
-        };
-        Ok(raw.get())
+        self.inner.expose_gc_ref_to_wasm(store).map(|r| r.get())
     }
 
     /// Get the type of this reference.
@@ -360,7 +356,7 @@ impl AnyRef {
             return Ok(HeapType::I31);
         }
 
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
 
         if header.kind().matches(VMGcKind::ExternRef) {
             return Ok(HeapType::Any);
@@ -368,21 +364,25 @@ impl AnyRef {
 
         debug_assert!(header.kind().matches(VMGcKind::AnyRef));
         debug_assert!(header.kind().matches(VMGcKind::EqRef));
+        let ty = match header.ty() {
+            Some(ty) => ty,
+            None => bail_bug!("ty should be present"),
+        };
 
         if header.kind().matches(VMGcKind::StructRef) {
             return Ok(HeapType::ConcreteStruct(
-                StructType::from_shared_type_index(store.engine(), header.ty().unwrap()),
+                StructType::from_shared_type_index(store.engine(), ty),
             ));
         }
 
         if header.kind().matches(VMGcKind::ArrayRef) {
             return Ok(HeapType::ConcreteArray(ArrayType::from_shared_type_index(
                 store.engine(),
-                header.ty().unwrap(),
+                ty,
             )));
         }
 
-        unreachable!("no other kinds of `anyref`s")
+        bail_bug!("no other kinds of `anyref`s")
     }
 
     /// Does this `anyref` match the given type?
@@ -436,7 +436,7 @@ impl AnyRef {
         Ok(gc_ref.is_i31()
             || store
                 .require_gc_store()?
-                .kind(gc_ref)
+                .kind(gc_ref)?
                 .matches(VMGcKind::EqRef))
     }
 
@@ -564,7 +564,7 @@ impl AnyRef {
         Ok(!gc_ref.is_i31()
             && store
                 .require_gc_store()?
-                .kind(gc_ref)
+                .kind(gc_ref)?
                 .matches(VMGcKind::StructRef))
     }
 
@@ -632,7 +632,7 @@ impl AnyRef {
         Ok(!gc_ref.is_i31()
             && store
                 .require_gc_store()?
-                .kind(gc_ref)
+                .kind(gc_ref)?
                 .matches(VMGcKind::ArrayRef))
     }
 

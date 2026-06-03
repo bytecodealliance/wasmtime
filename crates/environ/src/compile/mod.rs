@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::prelude::*;
 use crate::{
     DefinedFuncIndex, FlagValue, FuncKey, FunctionLoc, ObjectKind, PrimaryMap, StaticModuleIndex,
-    TripleExt, Tunables, WasmError, WasmFuncType, obj,
+    TripleExt, Tunables, WasmError, obj,
 };
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
@@ -261,38 +261,11 @@ pub trait Compiler: Send + Sync {
     ///
     /// The trampoline should save the necessary state to record the
     /// host-to-Wasm transition (e.g. registers used for fast stack walking).
-    fn compile_array_to_wasm_trampoline(
+    fn compile_trampoline(
         &self,
-        translation: &ModuleTranslation<'_>,
+        translation: Option<&ModuleTranslation<'_>>,
+        key: FuncKey,
         types: &ModuleTypesBuilder,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError>;
-
-    /// Compile a trampoline for a Wasm caller calling a array callee with the
-    /// given signature.
-    ///
-    /// The trampoline should save the necessary state to record the
-    /// Wasm-to-host transition (e.g. registers used for fast stack walking).
-    fn compile_wasm_to_array_trampoline(
-        &self,
-        wasm_func_ty: &WasmFuncType,
-        key: FuncKey,
-        symbol: &str,
-    ) -> Result<CompiledFunctionBody, CompileError>;
-
-    /// Creates a trampoline that can be used to call Wasmtime's implementation
-    /// of the builtin function specified by `index`.
-    ///
-    /// The trampoline created can technically have any ABI but currently has
-    /// the native ABI. This will then perform all the necessary duties of an
-    /// exit trampoline from wasm and then perform the actual dispatch to the
-    /// builtin function. Builtin functions in Wasmtime are stored in an array
-    /// in all `VMContext` pointers, so the call to the host is an indirect
-    /// call.
-    fn compile_wasm_to_builtin(
-        &self,
-        key: FuncKey,
         symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 

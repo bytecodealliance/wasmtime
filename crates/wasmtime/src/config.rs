@@ -893,6 +893,20 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly [branch-hinting] proposal is enabled.
+    ///
+    /// When enabled, the `metadata.code.branch_hint` custom section is parsed
+    /// and used to lay out cold code paths during compilation. The hints are
+    /// advisory and never affect execution semantics.
+    ///
+    /// This is `false` by default until the proposal has been fuzzed.
+    ///
+    /// [branch-hinting]: https://github.com/WebAssembly/branch-hinting
+    pub fn wasm_branch_hinting(&mut self, enable: bool) -> &mut Self {
+        self.tunables.branch_hinting = Some(enable);
+        self
+    }
+
     /// Configures whether the WebAssembly custom-page-sizes proposal will be
     /// enabled for compilation or not.
     ///
@@ -1311,6 +1325,16 @@ impl Config {
     #[cfg(feature = "component-model")]
     pub fn wasm_component_model_fixed_length_lists(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::CM_FIXED_LENGTH_LISTS, enable);
+        self
+    }
+
+    /// This corresponds to the 🏷️ emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is a work in
+    /// progress.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_implements(&mut self, enable: bool) -> &mut Self {
+        self.wasm_features(WasmFeatures::CM_IMPLEMENTS, enable);
         self
     }
 
@@ -2326,7 +2350,8 @@ impl Config {
             | WasmFeatures::CM_ERROR_CONTEXT
             | WasmFeatures::CM_GC
             | WasmFeatures::CM_MAP
-            | WasmFeatures::CM_FIXED_LENGTH_LISTS;
+            | WasmFeatures::CM_FIXED_LENGTH_LISTS
+            | WasmFeatures::CM_IMPLEMENTS;
 
         #[allow(unused_mut, reason = "easier to avoid #[cfg]")]
         let mut unsupported = !features_known_to_wasmtime;
@@ -3383,9 +3408,9 @@ impl Strategy {
 ///
 /// | Collector                   | Collects Garbage[^1]  | Latency[^2] | Throughput[^3] | Allocation Speed[^4] | Heap Utilization[^5] |
 /// |-----------------------------|-----------------------|-------------|----------------|----------------------|----------------------|
+/// | `Copying`                   | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
 /// | `DeferredReferenceCounting` | Yes, but not cycles   | 🙂         | 🙁             | 😐                   | 😐                  |
 /// | `Null`                      | No                    | 🙂         | 🙂             | 🙂                   | 🙂                  |
-/// | `Copying`[^copying]         | Yes, including cycles | 🙁         | 🙂             | 🙂                   | 🙁                  |
 ///
 /// [^1]: Whether or not the collector is capable of collecting garbage and cyclic garbage.
 ///
@@ -3405,9 +3430,6 @@ impl Strategy {
 ///       require? Less space taken up by metadata means more space for
 ///       additional objects. Reference counts are larger than mark bits and
 ///       free lists are larger than bump pointers, for example.
-///
-/// [^copying]: The copying collector is still under construction and is not yet
-///             functional.
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Collector {
@@ -3416,10 +3438,10 @@ pub enum Collector {
     ///
     /// This is generally what you want for most projects and indicates that the
     /// `wasmtime` crate itself should make the decision about what the best
-    /// collector for a wasm module is.
+    /// collector to use is.
     ///
-    /// Currently this always defaults to the deferred reference-counting
-    /// collector, but the default value may change over time.
+    /// Currently this always defaults to the copying collector, but the default
+    /// value may change over time.
     Auto,
 
     /// The deferred reference-counting collector.
@@ -3480,7 +3502,9 @@ impl Collector {
     fn not_auto(&self) -> Option<Collector> {
         match self {
             Collector::Auto => {
-                if cfg!(feature = "gc-drc") {
+                if cfg!(feature = "gc-copying") {
+                    Some(Collector::Copying)
+                } else if cfg!(feature = "gc-drc") {
                     Some(Collector::DeferredReferenceCounting)
                 } else if cfg!(feature = "gc-null") {
                     Some(Collector::Null)

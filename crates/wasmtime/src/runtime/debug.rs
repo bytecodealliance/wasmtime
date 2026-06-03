@@ -645,10 +645,10 @@ impl FrameDataCache {
                 // module that actually contains the physical PC
                 // (i.e., the outermost function that inlined the
                 // others).
-                let (module, frames) = VirtualFrame::decode(registry, frame.pc());
+                let (store_code, frames) = VirtualFrame::decode(registry, frame.pc());
                 let frames = frames
                     .into_iter()
-                    .map(|frame| FrameData::compute(frame, &module))
+                    .map(|frame| FrameData::compute(frame, store_code))
                     .collect::<Vec<_>>();
                 v.insert(frames)
             }
@@ -672,18 +672,17 @@ struct VirtualFrame {
 impl VirtualFrame {
     /// Return virtual frames corresponding to a physical frame, from
     /// outermost to innermost.
-    fn decode(registry: &ModuleRegistry, pc: usize) -> (Module, Vec<VirtualFrame>) {
-        let (module_with_code, pc) = registry
-            .module_and_code_by_pc(pc)
+    fn decode(registry: &ModuleRegistry, pc: usize) -> (&StoreCode, Vec<VirtualFrame>) {
+        let (store_code, pc) = registry
+            .store_code_by_pc(pc)
             .expect("Wasm frame PC does not correspond to a module");
-        let module = module_with_code.module();
-        let table = module.frame_table().unwrap();
+        let table = store_code.code_memory().frame_table().unwrap();
         let pc = u32::try_from(pc).expect("PC offset too large");
         let program_points = table.find_program_point(pc, FrameInstPos::Post)
             .expect("There must be a program point record in every frame when debug instrumentation is enabled");
 
         (
-            module.clone(),
+            store_code,
             program_points
                 .map(|(wasm_pc, frame_descriptor, stack_shape)| VirtualFrame {
                     wasm_pc,
@@ -719,8 +718,8 @@ struct FrameData {
 }
 
 impl FrameData {
-    fn compute(frame: VirtualFrame, module: &Module) -> Self {
-        let frame_table = module.frame_table().unwrap();
+    fn compute(frame: VirtualFrame, store_code: &StoreCode) -> Self {
+        let frame_table = store_code.code_memory().frame_table().unwrap();
         // Parse the frame descriptor.
         let (data, slot_to_fp_offset) = frame_table
             .frame_descriptor(frame.frame_descriptor)

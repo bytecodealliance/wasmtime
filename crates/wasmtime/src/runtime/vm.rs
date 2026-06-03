@@ -53,7 +53,6 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 mod always_mut;
 #[cfg(feature = "component-model")]
 pub mod component;
-mod const_expr;
 mod export;
 mod gc;
 mod imports;
@@ -91,6 +90,9 @@ pub(crate) mod interpreter_disabled;
 #[cfg(not(feature = "pulley"))]
 pub(crate) use interpreter_disabled as interpreter;
 
+#[cfg(feature = "component-model-async")]
+pub(crate) use sys::{component_async_tls_get, component_async_tls_set};
+
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
@@ -100,7 +102,7 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex, initialize_instance,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
@@ -151,9 +153,9 @@ mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
 
-#[cfg(feature = "gc-null")]
+#[allow(unused, reason = "hard to cfg on/off, weird feature interactions")]
 mod send_sync_unsafe_cell;
-#[cfg(feature = "gc-null")]
+#[allow(unused, reason = "hard to cfg on/off, weird feature interactions")]
 pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
 cfg_if::cfg_if! {

@@ -10,7 +10,7 @@ use crate::p3::cli::{TerminalInput, TerminalOutput};
 use bytes::BytesMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use std::io::{self, Cursor};
+use std::io;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::oneshot;
 use wasmtime::component::{
@@ -36,7 +36,7 @@ fn io_error_to_error_code(err: io::Error) -> ErrorCode {
 
 impl<D> StreamProducer<D> for InputStreamProducer {
     type Item = u8;
-    type Buffer = Cursor<BytesMut>;
+    type Buffer = BytesMut;
 
     fn poll_produce<'a>(
         mut self: Pin<&mut Self>,

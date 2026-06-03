@@ -9,11 +9,9 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::ops::{Add, Range, Sub};
 use wasmtime_core::error::OutOfMemory;
-use wasmtime_environ::DefinedFuncIndex;
-use wasmtime_environ::ModuleTypes;
-use wasmtime_environ::StaticModuleIndex;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
+use wasmtime_environ::{FuncKey, ModuleTypes, StaticModuleIndex};
 
 macro_rules! define_pc_kind {
     ($ty:ident) => {
@@ -215,12 +213,6 @@ impl EngineCode {
         self.original_code.exception_tables()
     }
 
-    /// Returns the encoded frame-tables section to pass to
-    /// `wasmtime_environ::FrameTable::parse`.
-    pub fn frame_tables(&self) -> &[u8] {
-        self.original_code.frame_tables()
-    }
-
     /// Returns the data in the `ELF_NAME_DATA` section.
     #[inline]
     pub fn func_name_data(&self) -> &[u8] {
@@ -261,6 +253,12 @@ impl EngineCode {
 
     pub(crate) fn module_memory_image_source(&self) -> &Arc<impl ModuleMemoryImageSource> {
         &self.original_code
+    }
+
+    /// See [`CodeMemory::frame_table`].
+    #[cfg(feature = "debug")]
+    pub(crate) fn frame_table<'a>(&'a self) -> Option<wasmtime_environ::FrameTable<'a>> {
+        self.original_code.frame_table()
     }
 }
 
@@ -430,64 +428,11 @@ impl<'a> ModuleWithCode<'a> {
         self.module
     }
 
-    /// Provide the StoreCode wrapped in this tuple.
-    pub fn store_code(&self) -> &'a StoreCode {
-        self.store_code
-    }
-
-    /// Returns an iterator over all functions defined within this module with
-    /// their index and their raw pointer.
-    #[inline]
-    pub fn finished_functions(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.module
-            .env_module()
-            .defined_func_indices()
-            .map(|i| (i, self.finished_function(i)))
-    }
-
     /// Returns the slice in the text section of the function that
-    /// `index` points to.
+    /// `key` points to.
     #[inline]
-    pub fn finished_function(&self, def_func_index: DefinedFuncIndex) -> &[u8] {
-        let range = self
-            .module
-            .compiled_module()
-            .finished_function_range(def_func_index);
+    pub fn function(&self, key: FuncKey) -> &[u8] {
+        let range = self.module.compiled_module().function_range(key);
         &self.store_code.text()[range]
-    }
-
-    /// Get the array-to-Wasm trampoline for the function `index`
-    /// points to, as a slice of raw code that can be converted to a
-    /// callable function pointer.
-    ///
-    /// If the function `index` points to does not escape, then `None` is
-    /// returned.
-    ///
-    /// These trampolines are used for array callers (e.g. `Func::new`)
-    /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline(&self, def_func_index: DefinedFuncIndex) -> Option<&[u8]> {
-        let range = self
-            .module
-            .compiled_module()
-            .array_to_wasm_trampoline_range(def_func_index)?;
-        Some(&self.store_code.text()[range])
-    }
-
-    /// Get the text offset (relative PC) for a given absolute PC in
-    /// this module.
-    #[cfg(feature = "gc")]
-    pub(crate) fn text_offset(&self, pc: usize) -> Option<u32> {
-        StoreCodePC::offset_of(self.store_code.text_range(), pc)
-            .map(|offset| u32::try_from(offset).expect("Module larger than 4GiB"))
-    }
-
-    /// Lookup the stack map at a program counter value.
-    #[cfg(feature = "gc")]
-    pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<wasmtime_environ::StackMap<'_>> {
-        let text_offset = self.text_offset(pc)?;
-        let info = self.module.engine_code().stack_map_data();
-        wasmtime_environ::StackMap::lookup(text_offset, info)
     }
 }

@@ -30,7 +30,8 @@ block1:
 ;; Another iteration of the loop. Decrement the loop counter and, if this was
 ;; our first iteration, grab the initial SP.
 block2:
-    v4 = iadd_imm v0, -1
+    v7 = iconst.i64 -1
+    v4 = iadd v0, v7
     brif v1, block4(v1), block3
 
 ;; Grab the initial SP.
@@ -63,7 +64,8 @@ block1:
 ;; Another iteration of the loop. Decrement the loop counter and, if this was
 ;; our first iteration, grab the initial SP.
 block2:
-    v28 = iadd_imm v0, -1
+    v31 = iconst.i64 -1
+    v28 = iadd v0, v31
     brif v25, block4(v25), block3
 
 ;; Grab the initial SP.
@@ -112,7 +114,8 @@ function %mutual_loop_2(i64, i64) -> i8 tail {
     fn0 = %mutual_loop_1(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i8 tail
 
 block0(v0: i64, v1: i64):
-    v2 = iadd_imm v0, -1
+    v4 = iconst.i64 -1
+    v2 = iadd v0, v4
     v3 = iconst.i64 42
     return_call fn0(v2, v1, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3, v3)
 }
@@ -141,7 +144,8 @@ block0(v0: i64):
 function %indirect_continue(i64) -> i8 tail {
     fn0 = %indirect_main(i64) -> i8 tail
 block0(v0: i64):
-    v1 = iadd_imm v0, -1
+    v2 = iconst.i64 -1
+    v1 = iadd v0, v2
     return_call fn0(v1)
 }
 

@@ -5,8 +5,9 @@ use crate::store::StoreOpaque;
 use crate::{AsContext, Module, bug};
 use core::fmt;
 use core::num::NonZeroUsize;
+use wasmtime_core::alloc::TryVec;
 use wasmtime_environ::{
-    CompiledTrap, FilePos, demangle_function_name, demangle_function_name_or_index,
+    CompiledTrap, FilePos, FuncKey, demangle_function_name, demangle_function_name_or_index,
 };
 
 /// Representation of a WebAssembly trap and what caused it to occur.
@@ -313,7 +314,16 @@ impl WasmBacktrace {
                 _runtime_trace: crate::runtime::vm::Backtrace::empty(),
             };
         };
-        let mut wasm_trace = Vec::<FrameInfo>::with_capacity(max_frames.get());
+        let mut wasm_trace = match TryVec::with_capacity(max_frames.get()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Self {
+                    wasm_trace: Vec::new(),
+                    hint_wasm_backtrace_details_env: false,
+                    _runtime_trace: crate::runtime::vm::Backtrace::empty(),
+                };
+            }
+        };
         let mut hint_wasm_backtrace_details_env = false;
         let wasm_backtrace_details_env_used =
             store.engine().config().wasm_backtrace_details_env_used;
@@ -366,7 +376,10 @@ impl WasmBacktrace {
             // and we ignore frames from modules that were not registered in
             // this store's module registry.
             if let Some((info, module)) = store.modules().lookup_frame_info(pc_to_lookup) {
-                wasm_trace.push(info);
+                if wasm_trace.push(info).is_err() {
+                    // Better to return a partial backtrace than none.
+                    break;
+                }
 
                 // If this frame has unparsed debug information and the
                 // store's configuration indicates that we were
@@ -386,7 +399,7 @@ impl WasmBacktrace {
         }
 
         Self {
-            wasm_trace,
+            wasm_trace: wasm_trace.into(),
             _runtime_trace: runtime_trace,
             hint_wasm_backtrace_details_env,
         }
@@ -488,7 +501,8 @@ impl FrameInfo {
     pub(crate) fn new(module: Module, text_offset: usize) -> Option<FrameInfo> {
         let compiled_module = module.compiled_module();
         let index = compiled_module.func_by_text_offset(text_offset)?;
-        let func_start = compiled_module.func_start_srcloc(index);
+        let key = FuncKey::DefinedWasmFunction(compiled_module.module().module_index, index);
+        let func_start = compiled_module.func_start_srcloc(key);
         let instr =
             wasmtime_environ::lookup_file_pos(module.engine_code().address_map_data(), text_offset);
         let index = compiled_module.module().func_index(index);

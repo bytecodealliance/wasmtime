@@ -26,7 +26,8 @@ block0:
     v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
     v2 = band_not v0, v1
     v3 = extractlane v2, 0
-    v4 = icmp_imm eq v3, 1
+    v5 = iconst.i16 1
+    v4 = icmp eq v3, v5
     return v4
 }
 ; run
@@ -108,7 +109,8 @@ block0:
     v0 = vconst.i32x4 [0 0 0 0]
     v1 = vany_true v0
     v2 = uextend.i32 v1
-    v3 = icmp_imm eq v2, 0
+    v4 = iconst.i32 0
+    v3 = icmp eq v2, v4
     return v3
 }
 ; run
@@ -118,7 +120,8 @@ block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vall_true v0
     v2 = uextend.i32 v1
-    v3 = icmp_imm eq v2, 0
+    v4 = iconst.i32 0
+    v3 = icmp eq v2, v4
     return v3
 }
 ; run

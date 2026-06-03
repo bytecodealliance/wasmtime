@@ -62,7 +62,8 @@ block0:
     v2 = icmp ne v0, v1
     v3 = vall_true v2
     v4 = uextend.i32 v3
-    v5 = icmp_imm eq v4, 0
+    v6 = iconst.i32 0
+    v5 = icmp eq v4, v6
     return v5
 }
 ; run: %icmp_ne_const_i16x8() == 1

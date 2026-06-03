@@ -1,6 +1,6 @@
 use super::HashMap;
 use crate::frontend::FunctionBuilder;
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
 
@@ -390,8 +390,9 @@ mod tests {
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 1  ; v0 = 0
-    brif v1, block1, block0"
+    v1 = iconst.i8 1
+    v2 = icmp eq v0, v1  ; v0 = 0, v1 = 1
+    brif v2, block1, block0"
         );
     }
 
@@ -414,8 +415,9 @@ mod tests {
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 2  ; v0 = 0
-    brif v1, block2, block3
+    v1 = iconst.i8 2
+    v2 = icmp eq v0, v1  ; v0 = 0, v1 = 2
+    brif v2, block2, block3
 
 block3:
     brif.i8 v0, block0, block1  ; v0 = 0"
@@ -429,29 +431,34 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm uge v0, 7  ; v0 = 0
-    brif v1, block9, block8
+    v1 = iconst.i8 7
+    v2 = icmp uge v0, v1  ; v0 = 0, v1 = 7
+    brif v2, block9, block8
 
 block9:
-    v2 = icmp_imm.i8 uge v0, 10  ; v0 = 0
-    brif v2, block11, block10
+    v3 = iconst.i8 10
+    v4 = icmp.i8 uge v0, v3  ; v0 = 0, v3 = 10
+    brif v4, block11, block10
 
 block11:
-    v3 = iadd_imm.i8 v0, -10  ; v0 = 0
-    v4 = uextend.i32 v3
-    br_table v4, block0, [block5, block6, block7]
+    v5 = iconst.i8 -10
+    v6 = iadd.i8 v0, v5  ; v0 = 0, v5 = -10
+    v7 = uextend.i32 v6
+    br_table v7, block0, [block5, block6, block7]
 
 block10:
-    v5 = icmp_imm.i8 eq v0, 7  ; v0 = 0
-    brif v5, block4, block0
+    v8 = iconst.i8 7
+    v9 = icmp.i8 eq v0, v8  ; v0 = 0, v8 = 7
+    brif v9, block4, block0
 
 block8:
-    v6 = icmp_imm.i8 eq v0, 5  ; v0 = 0
-    brif v6, block3, block12
+    v10 = iconst.i8 5
+    v11 = icmp.i8 eq v0, v10  ; v0 = 0, v10 = 5
+    brif v11, block3, block12
 
 block12:
-    v7 = uextend.i32 v0  ; v0 = 0
-    br_table v7, block0, [block1, block2]"
+    v12 = uextend.i32 v0  ; v0 = 0
+    br_table v12, block0, [block1, block2]"
         );
     }
 
@@ -462,12 +469,14 @@ block12:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, -128  ; v0 = 0
-    brif v1, block1, block3
+    v1 = iconst.i8 -128
+    v2 = icmp eq v0, v1  ; v0 = 0, v1 = -128
+    brif v2, block1, block3
 
 block3:
-    v2 = icmp_imm.i8 eq v0, 1  ; v0 = 0
-    brif v2, block2, block0"
+    v3 = iconst.i8 1
+    v4 = icmp.i8 eq v0, v3  ; v0 = 0, v3 = 1
+    brif v4, block2, block0"
         );
     }
 
@@ -478,12 +487,14 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, 127  ; v0 = 0
-    brif v1, block1, block3
+    v1 = iconst.i8 127
+    v2 = icmp eq v0, v1  ; v0 = 0, v1 = 127
+    brif v2, block1, block3
 
 block3:
-    v2 = icmp_imm.i8 eq v0, 1  ; v0 = 0
-    brif v2, block2, block0"
+    v3 = iconst.i8 1
+    v4 = icmp.i8 eq v0, v3  ; v0 = 0, v3 = 1
+    brif v4, block2, block0"
         )
     }
 
@@ -494,12 +505,13 @@ block3:
             func,
             "block0:
     v0 = iconst.i8 0
-    v1 = icmp_imm eq v0, -1  ; v0 = 0
-    brif v1, block1, block4
+    v1 = iconst.i8 -1
+    v2 = icmp eq v0, v1  ; v0 = 0, v1 = -1
+    brif v2, block1, block4
 
 block4:
-    v2 = uextend.i32 v0  ; v0 = 0
-    br_table v2, block0, [block2, block3]"
+    v3 = uextend.i32 v0  ; v0 = 0
+    br_table v3, block0, [block2, block3]"
         );
     }
 
@@ -586,12 +598,13 @@ block4:
             func,
             "block0:
     v0 = iconst.i64 0
-    v1 = icmp_imm ugt v0, 0xffff_ffff  ; v0 = 0
-    brif v1, block3, block4
+    v1 = iconst.i64 0xffff_ffff
+    v2 = icmp ugt v0, v1  ; v0 = 0, v1 = 0xffff_ffff
+    brif v2, block3, block4
 
 block4:
-    v2 = ireduce.i32 v0  ; v0 = 0
-    br_table v2, block3, [block2, block1]"
+    v3 = ireduce.i32 v0  ; v0 = 0
+    br_table v3, block3, [block2, block1]"
         );
     }
 
@@ -623,12 +636,14 @@ block4:
             "block0:
     v0 = iconst.i64 0
     v1 = uextend.i128 v0  ; v0 = 0
-    v2 = icmp_imm ugt v1, 0xffff_ffff
-    brif v2, block3, block4
+    v2 = iconst.i64 0xffff_ffff
+    v3 = sextend.i128 v2  ; v2 = 0xffff_ffff
+    v4 = icmp ugt v1, v3
+    brif v4, block3, block4
 
 block4:
-    v3 = ireduce.i32 v1
-    br_table v3, block3, [block2, block1]"
+    v5 = ireduce.i32 v1
+    br_table v5, block3, [block2, block1]"
         );
     }
 

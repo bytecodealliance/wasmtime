@@ -7,7 +7,7 @@ use crate::{
     abi::vmctx,
     codegen::{CodeGenContext, Emission},
     isa::reg::{Reg, writable},
-    masm::{Imm, IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm, TrapCode},
+    masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
 use wasmtime_environ::WasmValType;
@@ -140,7 +140,7 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
             masm.checked_uadd(
                 writable!(index.as_typed_reg().into()),
                 index.as_typed_reg().into(),
-                Imm::i64(offset as i64),
+                RegImm::i64(offset as i64),
                 heap_ty_size,
                 TrapCode::HEAP_OUT_OF_BOUNDS,
             )?;

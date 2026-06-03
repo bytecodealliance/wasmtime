@@ -591,6 +591,14 @@ where
         22
     }
 
+    fn worst_case_island_growth() -> CodeOffset {
+        // A single instruction may add an embedded constant, a deferred
+        // trap, and a few fixup records. Pulley's label-uses all have
+        // ~2 GiB range and don't support veneers, so this just covers
+        // constants and trap bytes; we pick a conservative bound.
+        32
+    }
+
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
         RegClass::Int
     }

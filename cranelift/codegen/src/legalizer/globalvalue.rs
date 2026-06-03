@@ -34,7 +34,15 @@ pub fn expand_global_value(
             offset,
             global_type,
             flags,
-        } => load_addr(inst, func, base, offset, global_type, flags, isa),
+        } => load_addr(
+            inst,
+            func,
+            base,
+            offset,
+            global_type,
+            func.dfg.mem_flags[flags],
+            isa,
+        ),
         ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, global_value, isa, tls),
         ir::GlobalValueData::DynScaleTargetConst { vector_type } => {
             const_vector_scale(inst, func, vector_type, isa)
@@ -55,7 +63,7 @@ fn const_vector_scale(
     let scale = (isa.dynamic_vector_bytes(ty) / base_bytes) as i64;
     assert!(scale > 0);
     let pos = FuncCursor::new(func).at_inst(inst);
-    pos.func.dfg.replace(inst).iconst(isa.pointer_type(), scale);
+    pos.func.replace(inst).iconst(isa.pointer_type(), scale);
 
     WalkCommand::Continue
 }
@@ -102,7 +110,7 @@ fn iadd_imm_addr(
     let constant = pos.ins().iconst(global_type, offset);
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    pos.func.dfg.replace(inst).iadd(lhs, constant);
+    pos.func.replace(inst).iadd(lhs, constant);
 
     // Need to legalize the `global_value` that we emitted.
     WalkCommand::Revisit
@@ -131,7 +139,6 @@ fn load_addr(
 
     // Perform the load.
     pos.func
-        .dfg
         .replace(inst)
         .load(global_type, flags, base_addr, offset);
 
@@ -150,9 +157,9 @@ fn symbol(
     let ptr_ty = isa.pointer_type();
 
     if tls {
-        func.dfg.replace(inst).tls_value(ptr_ty, gv);
+        func.replace(inst).tls_value(ptr_ty, gv);
     } else {
-        func.dfg.replace(inst).symbol_value(ptr_ty, gv);
+        func.replace(inst).symbol_value(ptr_ty, gv);
     }
 
     WalkCommand::Continue

@@ -11,9 +11,13 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::drc::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
-    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
+    GcTypeLayouts, PtrSize, TypeIndex, VMGcKind, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, drc::DrcTypeLayouts,
 };
+
+// The minimum over-approximated stack roots list size for which we will trigger
+// a GC.
+const MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD: i64 = 1024;
 
 #[derive(Default)]
 pub struct DrcCompiler {
@@ -21,6 +25,27 @@ pub struct DrcCompiler {
 }
 
 impl DrcCompiler {
+    /// Load the pointer to the `VMDrcHeapData` from vmctx.
+    fn load_vmdrc_heap_data_ptr(
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+    ) -> ir::Value {
+        let ptr_ty = func_env.pointer_type();
+        let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
+        let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
+        let vmctx = func_env.vmctx(&mut builder.func);
+        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
+        builder.ins().load(
+            ptr_ty,
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(vmctx_region)),
+            vmctx,
+            i32::try_from(gc_heap_data_offset).unwrap(),
+        )
+    }
+
     /// Generate code to load the given GC reference's ref count.
     ///
     /// Assumes that the given `gc_ref` is a non-null, non-i31 GC reference.
@@ -39,7 +64,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder.ins().load(ir::types::I64, GC_MEMFLAGS, pointer, 0)
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().load(ir::types::I64, flags, pointer, 0)
     }
 
     /// Generate code to update the given GC reference's ref count to the new
@@ -62,7 +88,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, new_ref_count, pointer, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, new_ref_count, pointer, 0);
     }
 
     /// Generate code to increment or decrement the given GC reference's ref
@@ -102,9 +129,11 @@ impl DrcCompiler {
 
         let head = self.load_over_approximated_stack_roots_head(func_env, builder);
 
+        let flags = func_env.gc_memflags(&mut builder.func);
+
         // Load the current first list element, which will be our new next list
         // element.
-        let next = builder.ins().load(ir::types::I32, GC_MEMFLAGS, head, 0);
+        let next = builder.ins().load(ir::types::I32, flags, head, 0);
 
         // Update our object's header to point to `next` and consider itself part of the list.
         self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
@@ -114,7 +143,18 @@ impl DrcCompiler {
         self.mutate_ref_count(func_env, builder, gc_ref, 1);
 
         // Commit this object as the new head of the list.
-        builder.ins().store(GC_MEMFLAGS, gc_ref, head, 0);
+        builder.ins().store(flags, gc_ref, head, 0);
+
+        // Increment the list's length.
+        //
+        // Can't overflow because the list's max length is the number of objects
+        // in the GC heap and the GC heap's max byte size is `u32::MAX` but the
+        // smallest GC object has a `VMGcHeader` which is multiple bytes large,
+        // meaning that there are always fewer objects in the GC heap than
+        // `u32::MAX`.
+        let current_len = self.load_current_over_approximated_stack_roots_len(func_env, builder);
+        let new_current_len = builder.ins().iadd_imm(current_len, 1);
+        self.store_current_over_approximated_stack_roots_len(func_env, builder, new_current_len);
     }
 
     /// Load a pointer to the first element of the DRC heap's
@@ -124,15 +164,121 @@ impl DrcCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
     ) -> ir::Value {
-        let ptr_ty = func_env.pointer_type();
-        let vmctx = func_env.vmctx(&mut builder.func);
-        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
+        let ptr = Self::load_vmdrc_heap_data_ptr(func_env, builder);
+        let offset = i64::from(
+            func_env
+                .offsets
+                .ptr
+                .vmdrc_heap_data_over_approximated_stack_roots(),
+        );
+        if offset == 0 {
+            ptr
+        } else {
+            builder.ins().iadd_imm(ptr, offset)
+        }
+    }
+
+    /// Load the current size of the over-approximated-stack-roots list.
+    fn load_current_over_approximated_stack_roots_len(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+    ) -> ir::Value {
+        let ptr = Self::load_vmdrc_heap_data_ptr(func_env, builder);
         builder.ins().load(
-            ptr_ty,
-            ir::MemFlagsData::trusted().with_readonly(),
-            vmctx,
-            i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
+            ir::types::I32,
+            ir::MemFlagsData::trusted(),
+            ptr,
+            i32::from(
+                func_env
+                    .offsets
+                    .ptr
+                    .vmdrc_heap_data_current_over_approximated_stack_roots_len(),
+            ),
         )
+    }
+
+    /// Load the over-approximated-stack-roots list size after the last GC.
+    fn load_over_approximated_stack_roots_len_after_last_gc(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+    ) -> ir::Value {
+        let ptr = Self::load_vmdrc_heap_data_ptr(func_env, builder);
+        builder.ins().load(
+            ir::types::I32,
+            ir::MemFlagsData::trusted(),
+            ptr,
+            i32::from(
+                func_env
+                    .offsets
+                    .ptr
+                    .vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(),
+            ),
+        )
+    }
+
+    /// Store the current size of the over-approximated-stack-roots list.
+    fn store_current_over_approximated_stack_roots_len(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        len: ir::Value,
+    ) {
+        let ptr = Self::load_vmdrc_heap_data_ptr(func_env, builder);
+        builder.ins().store(
+            ir::MemFlagsData::trusted(),
+            len,
+            ptr,
+            i32::from(
+                func_env
+                    .offsets
+                    .ptr
+                    .vmdrc_heap_data_current_over_approximated_stack_roots_len(),
+            ),
+        );
+    }
+
+    /// Trigger a GC when the over-approximated-stack-roots list has doubled
+    /// since the last collection, subject to a minimum threshold.
+    fn emit_maybe_force_gc(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+    ) {
+        let current_block = builder.current_block().unwrap();
+        let gc_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(gc_block, current_block);
+        builder.insert_block_after(continue_block, gc_block);
+
+        let current_len = self.load_current_over_approximated_stack_roots_len(func_env, builder);
+        let last_len = self.load_over_approximated_stack_roots_len_after_last_gc(func_env, builder);
+        let doubled_last_len = builder.ins().iadd(last_len, last_len);
+        let min_threshold = builder
+            .ins()
+            .iconst(ir::types::I32, MIN_OVER_APPROX_STACK_ROOTS_GC_THRESHOLD);
+        let threshold = builder.ins().umax(doubled_last_len, min_threshold);
+        let should_gc =
+            builder
+                .ins()
+                .icmp(IntCC::UnsignedGreaterThanOrEqual, current_len, threshold);
+        builder
+            .ins()
+            .brif(should_gc, gc_block, &[], continue_block, &[]);
+
+        builder.switch_to_block(gc_block);
+        builder.seal_block(gc_block);
+        builder.set_cold_block(gc_block);
+        let force_gc = func_env.builtin_functions.force_gc(builder.func);
+        let vmctx = func_env.vmctx_val(&mut builder.cursor());
+        builder.ins().call(force_gc, &[vmctx]);
+        builder.ins().jump(continue_block, &[]);
+
+        builder.switch_to_block(continue_block);
+        builder.seal_block(continue_block);
     }
 
     /// Set the `VMDrcHeader::next_over_approximated_stack_root` field.
@@ -155,7 +301,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, next, ptr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, next, ptr, 0);
     }
 
     /// Set the in-over-approximated-stack-roots list bit in a `VMDrcHeader`'s
@@ -191,150 +338,8 @@ impl DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        builder.ins().store(GC_MEMFLAGS, new_reserved, ptr, 0);
-    }
-
-    /// Write to an uninitialized field or element inside a GC object.
-    fn init_field(
-        &mut self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder<'_>,
-        field_addr: ir::Value,
-        ty: WasmStorageType,
-        val: ir::Value,
-    ) -> WasmResult<()> {
-        // Data inside GC objects is always little endian.
-        let flags = GC_MEMFLAGS.with_endianness(ir::Endianness::Little);
-
-        match ty {
-            WasmStorageType::Val(WasmValType::Ref(r)) => match r.heap_type.top() {
-                WasmHeapTopType::Func => {
-                    write_func_ref_at_addr(func_env, builder, r, flags, field_addr, val)?
-                }
-                WasmHeapTopType::Extern | WasmHeapTopType::Any | WasmHeapTopType::Exn => {
-                    self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags)?
-                }
-                WasmHeapTopType::Cont => return super::stack_switching_unsupported(),
-            },
-            WasmStorageType::I8 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore8(flags, val, field_addr, 0);
-            }
-            WasmStorageType::I16 => {
-                assert_eq!(builder.func.dfg.value_type(val), ir::types::I32);
-                builder.ins().istore16(flags, val, field_addr, 0);
-            }
-            WasmStorageType::Val(_) => {
-                let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty);
-                assert_eq!(builder.func.dfg.value_type(val).bytes(), size_of_access);
-                builder.ins().store(flags, val, field_addr, 0);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Write to an uninitialized GC reference field, initializing it.
-    ///
-    /// ```text
-    /// *dst = new_val
-    /// ```
-    ///
-    /// Doesn't need to do a full write barrier: we don't have an old reference
-    /// that is being overwritten and needs its refcount decremented, just a new
-    /// reference whose count should be incremented.
-    fn translate_init_gc_reference(
-        &mut self,
-        func_env: &mut FuncEnvironment<'_>,
-        builder: &mut FunctionBuilder,
-        ty: WasmRefType,
-        dst: ir::Value,
-        new_val: ir::Value,
-        flags: ir::MemFlagsData,
-    ) -> WasmResult<()> {
-        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
-
-        // Special case for references to uninhabited bottom types: see
-        // `translate_write_gc_reference` for details.
-        if let WasmHeapType::None = ty.heap_type {
-            if ty.nullable {
-                let null = builder.ins().iconst(ref_ty, 0);
-                builder.ins().store(flags, null, dst, 0);
-            } else {
-                let zero = builder.ins().iconst(ir::types::I32, 0);
-                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
-            }
-            return Ok(());
-        };
-
-        // Special case for `i31ref`s: no need for any barriers.
-        if let WasmHeapType::I31 = ty.heap_type {
-            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
-        }
-
-        // Our initialization barrier for GC references being copied out of the
-        // stack and initializing a table/global/struct field/etc... is roughly
-        // equivalent to the following pseudo-CLIF:
-        //
-        // ```
-        // current_block:
-        //     ...
-        //     let new_val_is_null_or_i31 = ...
-        //     brif new_val_is_null_or_i31, continue_block, inc_ref_block
-        //
-        // inc_ref_block:
-        //     let ref_count = load new_val.ref_count
-        //     let new_ref_count = iadd_imm ref_count, 1
-        //     store new_val.ref_count, new_ref_count
-        //     jump check_old_val_block
-        //
-        // continue_block:
-        //     store dst, new_val
-        //     ...
-        // ```
-        //
-        // This write barrier is responsible for ensuring that the new value's
-        // ref count is incremented now that the table/global/struct/etc... is
-        // holding onto it.
-
-        let current_block = builder.current_block().unwrap();
-        let inc_ref_block = builder.create_block();
-        let continue_block = builder.create_block();
-
-        builder.ensure_inserted_block();
-        builder.insert_block_after(inc_ref_block, current_block);
-        builder.insert_block_after(continue_block, inc_ref_block);
-
-        // Current block: check whether the new value is non-null and
-        // non-i31. If so, branch to the `inc_ref_block`.
-        log::trace!("DRC initialization barrier: check if the value is null or i31");
-        let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
-        builder.ins().brif(
-            new_val_is_null_or_i31,
-            continue_block,
-            &[],
-            inc_ref_block,
-            &[],
-        );
-
-        // Block to increment the ref count of the new value when it is non-null
-        // and non-i31.
-        builder.switch_to_block(inc_ref_block);
-        builder.seal_block(inc_ref_block);
-        log::trace!("DRC initialization barrier: increment the ref count of the initial value");
-        self.mutate_ref_count(func_env, builder, new_val, 1);
-        builder.ins().jump(continue_block, &[]);
-
-        // Join point after we're done with the GC barrier: do the actual store
-        // to initialize the field.
-        builder.switch_to_block(continue_block);
-        builder.seal_block(continue_block);
-        log::trace!(
-            "DRC initialization barrier: finally, store into {dst:?} to initialize the field"
-        );
-        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
-
-        Ok(())
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, new_reserved, ptr, 0);
     }
 }
 
@@ -343,26 +348,26 @@ impl GcCompiler for DrcCompiler {
         &self.layouts
     }
 
-    fn alloc_array(
+    fn is_moving_collector(&self) -> bool {
+        false
+    }
+
+    fn alloc_uninit_array(
         &mut self,
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder<'_>,
         array_type_index: TypeIndex,
-        init: super::ArrayInit<'_>,
+        len: ir::Value,
     ) -> WasmResult<ir::Value> {
         let interned_type_index =
             func_env.module.types[array_type_index].unwrap_module_type_index();
-        let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
-        let array_layout = func_env.array_layout(interned_type_index).clone();
-        let base_size = array_layout.base_size;
+        let array_layout = func_env.array_layout(interned_type_index)?.clone();
         let align = array_layout.align;
-        let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let len = init.len(&mut builder.cursor());
         let size = emit_array_size(func_env, builder, &array_layout, len);
 
         // Second, now that we have the array object's total size, call the
@@ -374,34 +379,20 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             size,
             align,
+            0,
         );
 
         // Write the array's length into the appropriate slot.
         //
         // Note: we don't need to bounds-check the GC ref access here, since we
         // trust the results of the allocation libcall.
-        let base = func_env.get_gc_heap_base(builder);
+        let base = func_env.get_gc_heap_base(builder)?;
         let extended_array_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
         let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
-        let len = init.len(&mut builder.cursor());
-        builder.ins().store(GC_MEMFLAGS, len, len_addr, 0);
-
-        // Finally, initialize the elements.
-        let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));
-        let elems_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
-        init.initialize(
-            func_env,
-            builder,
-            interned_type_index,
-            base_size,
-            size,
-            elems_addr,
-            |func_env, builder, elem_ty, elem_addr, val| {
-                self.init_field(func_env, builder, elem_addr, elem_ty, val)
-            },
-        )?;
+        let flags = func_env.gc_memflags(&mut builder.func);
+        builder.ins().store(flags, len, len_addr, 0);
         Ok(array_ref)
     }
 
@@ -431,13 +422,14 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             struct_size_val,
             struct_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated struct's fields.
         //
         // Note: we don't need to bounds-check the GC ref access here, since we
         // trust the results of the allocation libcall.
-        let base = func_env.get_gc_heap_base(builder);
+        let base = func_env.get_gc_heap_base(builder)?;
         let extended_struct_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), struct_ref);
         let raw_ptr_to_struct = builder.ins().iadd(base, extended_struct_ref);
@@ -447,9 +439,6 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             raw_ptr_to_struct,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
-            },
         )?;
 
         Ok(struct_ref)
@@ -484,6 +473,7 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             exn_size_val,
             exn_align,
+            0,
         );
 
         // Second, initialize each of the newly-allocated exception
@@ -491,7 +481,7 @@ impl GcCompiler for DrcCompiler {
         //
         // Note: we don't need to bounds-check the GC ref access here, since we
         // trust the results of the allocation libcall.
-        let base = func_env.get_gc_heap_base(builder);
+        let base = func_env.get_gc_heap_base(builder)?;
         let extended_exn_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), exn_ref);
         let raw_ptr_to_exn = builder.ins().iadd(base, extended_exn_ref);
@@ -501,9 +491,6 @@ impl GcCompiler for DrcCompiler {
             interned_type_index,
             raw_ptr_to_exn,
             field_vals,
-            |func_env, builder, ty, field_addr, val| {
-                self.init_field(func_env, builder, field_addr, ty, val)
-            },
         )?;
 
         // Finally, initialize the tag fields.
@@ -513,8 +500,8 @@ impl GcCompiler for DrcCompiler {
         self.init_field(
             func_env,
             builder,
-            instance_id_addr,
             WasmStorageType::Val(WasmValType::I32),
+            instance_id_addr,
             instance_id,
         )?;
         let tag_addr = builder
@@ -523,8 +510,8 @@ impl GcCompiler for DrcCompiler {
         self.init_field(
             func_env,
             builder,
-            tag_addr,
             WasmStorageType::Val(WasmValType::I32),
+            tag_addr,
             tag,
         )?;
 
@@ -654,7 +641,8 @@ impl GcCompiler for DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let reserved = builder.ins().load(ir::types::I32, GC_MEMFLAGS, ptr, 0);
+        let flags = func_env.gc_memflags(&mut builder.func);
+        let reserved = builder.ins().load(ir::types::I32, flags, ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
@@ -672,6 +660,7 @@ impl GcCompiler for DrcCompiler {
             "DRC read barrier: push the object onto the over-approximated-stack-roots list"
         );
         self.push_onto_over_approximated_stack_roots(func_env, builder, gc_ref, reserved);
+        self.emit_maybe_force_gc(func_env, builder);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier.
@@ -877,6 +866,133 @@ impl GcCompiler for DrcCompiler {
         builder.switch_to_block(continue_block);
         builder.seal_block(continue_block);
         log::trace!("DRC write barrier: finished");
+        Ok(())
+    }
+
+    /// Write to an uninitialized GC reference field, initializing it.
+    ///
+    /// ```text
+    /// *dst = new_val
+    /// ```
+    ///
+    /// Doesn't need to do a full write barrier: we don't have an old reference
+    /// that is being overwritten and needs its refcount decremented, just a new
+    /// reference whose count should be incremented.
+    fn translate_init_gc_reference(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder,
+        ty: WasmRefType,
+        dst: ir::Value,
+        new_val: ir::Value,
+        flags: ir::MemFlagsData,
+    ) -> WasmResult<()> {
+        let (ref_ty, _) = func_env.reference_type(ty.heap_type);
+
+        // Special case for references to uninhabited bottom types: see
+        // `translate_write_gc_reference` for details.
+        if let WasmHeapType::None = ty.heap_type {
+            if ty.nullable {
+                let null = builder.ins().iconst(ref_ty, 0);
+                builder.ins().store(flags, null, dst, 0);
+            } else {
+                let zero = builder.ins().iconst(ir::types::I32, 0);
+                builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
+            }
+            return Ok(());
+        };
+
+        // Special case for `i31ref`s: no need for any barriers.
+        if let WasmHeapType::I31 = ty.heap_type {
+            return unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags);
+        }
+
+        // Our initialization barrier for GC references being copied out of the
+        // stack and initializing a table/global/struct field/etc... is roughly
+        // equivalent to the following pseudo-CLIF:
+        //
+        // ```
+        // current_block:
+        //     ...
+        //     let new_val_is_null_or_i31 = ...
+        //     brif new_val_is_null_or_i31, continue_block, inc_ref_block
+        //
+        // inc_ref_block:
+        //     let ref_count = load new_val.ref_count
+        //     let new_ref_count = iadd_imm ref_count, 1
+        //     store new_val.ref_count, new_ref_count
+        //     jump check_old_val_block
+        //
+        // continue_block:
+        //     store dst, new_val
+        //     ...
+        // ```
+        //
+        // This write barrier is responsible for ensuring that the new value's
+        // ref count is incremented now that the table/global/struct/etc... is
+        // holding onto it.
+
+        let current_block = builder.current_block().unwrap();
+        let inc_ref_block = builder.create_block();
+        let continue_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(inc_ref_block, current_block);
+        builder.insert_block_after(continue_block, inc_ref_block);
+
+        // Current block: check whether the new value is non-null and
+        // non-i31. If so, branch to the `inc_ref_block`.
+        log::trace!("DRC initialization barrier: check if the value is null or i31");
+        let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
+        builder.ins().brif(
+            new_val_is_null_or_i31,
+            continue_block,
+            &[],
+            inc_ref_block,
+            &[],
+        );
+
+        // Block to increment the ref count of the new value when it is non-null
+        // and non-i31.
+        builder.switch_to_block(inc_ref_block);
+        builder.seal_block(inc_ref_block);
+        log::trace!("DRC initialization barrier: increment the ref count of the initial value");
+        self.mutate_ref_count(func_env, builder, new_val, 1);
+        builder.ins().jump(continue_block, &[]);
+
+        // Join point after we're done with the GC barrier: do the actual store
+        // to initialize the field.
+        builder.switch_to_block(continue_block);
+        builder.seal_block(continue_block);
+        log::trace!(
+            "DRC initialization barrier: finally, store into {dst:?} to initialize the field"
+        );
+        unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
+
+        Ok(())
+    }
+
+    /// Write to an uninitialized field or element inside a GC object.
+    fn init_field(
+        &mut self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        ty: WasmStorageType,
+        field_addr: ir::Value,
+        val: ir::Value,
+    ) -> WasmResult<()> {
+        if let WasmStorageType::Val(WasmValType::Ref(r)) = ty
+            && r.is_vmgcref_type_and_not_i31()
+        {
+            // Data inside GC objects is always little endian.
+            let flags = func_env
+                .gc_memflags(&mut builder.func)
+                .with_endianness(ir::Endianness::Little);
+            return self.translate_init_gc_reference(func_env, builder, r, field_addr, val, flags);
+        }
+
+        write_field_at_addr(func_env, builder, ty, field_addr, val)?;
+
         Ok(())
     }
 }

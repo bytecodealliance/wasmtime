@@ -24,6 +24,7 @@
   - [Memory Protection Keys](./examples-mpk.md)
   - [Async Host Functions](./examples-async.md)
   - [Debugging WebAssembly](./examples-debugging.md)
+    - [Guest Debugging with `lldb`](./examples-debugging-guest.md)
     - [Debugging with `gdb` and `lldb`](./examples-debugging-native-debugger.md)
     - [Debugging with Core Dumps](./examples-debugging-core-dumps.md)
   - [Profiling WebAssembly](./examples-profiling.md)

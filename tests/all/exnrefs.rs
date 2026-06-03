@@ -85,6 +85,7 @@ fn exn_objects() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_exnref_has_trace_info_for_gc() -> Result<()> {
     for collector in [Collector::Copying, Collector::DeferredReferenceCounting] {
         println!("Using GC collector: {collector:?}");

@@ -191,7 +191,9 @@ block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12
-    v10 = icmp_imm.i128 eq v1, 0x0
+    v13 = iconst.i64 0x0
+    v14 = sextend.i128 v13
+    v10 = icmp eq v1, v14
     return v10
 }
 
@@ -202,7 +204,9 @@ block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
     v1 = iconcat v11, v12
-    v10 = icmp_imm.i128 ne v1, 0x1
+    v13 = iconst.i64 0x1
+    v14 = sextend.i128 v13
+    v10 = icmp ne v1, v14
     return v10
 }
 

@@ -14,14 +14,15 @@ use super::VMArrayRef;
 use super::trace_info::{TraceInfo, TraceInfos};
 use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
-    VMMemoryDefinition,
+    GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMExternRef, VMGcHeader,
+    VMGcRef, VMMemoryDefinition,
 };
-use crate::{Engine, prelude::*};
-use core::sync::atomic::AtomicUsize;
-use core::{alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull};
+use crate::{Engine, bail_bug, prelude::*};
+use core::{
+    alloc::Layout, any::Any, mem, num::NonZeroU32, ptr::NonNull, sync::atomic::AtomicUsize,
+};
 use wasmtime_environ::copying::{
-    ALIGN, ARRAY_LENGTH_OFFSET, CopyingTypeLayouts, HEADER_COPIED_BIT,
+    ALIGN, ARRAY_LENGTH_OFFSET, CopyingTypeLayouts, HEADER_COPIED_BIT, HEADER_SIZE, InlineTraceInfo,
 };
 use wasmtime_environ::{
     GcArrayLayout, GcStructLayout, GcTypeLayouts, POISON, VMGcKind, VMSharedTypeIndex, gc_assert,
@@ -82,6 +83,12 @@ impl VMCopyingHeader {
         let reserved = self.header.reserved_u26();
         self.header.set_reserved_u26(reserved | HEADER_COPIED_BIT);
     }
+
+    /// Decode the inline trace info from this header's reserved bits.
+    #[inline]
+    fn inline_trace_info(&self) -> InlineTraceInfo {
+        InlineTraceInfo::decode(self.header.reserved_u26())
+    }
 }
 
 /// A copying collector header together with a forwarding reference.
@@ -107,21 +114,19 @@ unsafe impl GcHeapObject for VMCopyingHeaderAndForwardingRef {
 impl VMCopyingHeaderAndForwardingRef {
     /// Get the forwarding reference for this object, if it has been copied
     /// during the current collection.
-    fn forwarding_ref(&self) -> Option<VMGcRef> {
+    fn forwarding_ref(&self) -> Result<Option<VMGcRef>> {
         debug_assert!(
             self.header.object_size()
                 >= u32::try_from(mem::size_of::<VMCopyingHeaderAndForwardingRef>()).unwrap()
         );
-        if self.header.copied() {
-            Some(
-                self.forwarding_ref
-                    .as_ref()
-                    .expect("should always have a forwarding ref if the copied bit is set")
-                    .unchecked_copy(),
-            )
+        Ok(if self.header.copied() {
+            match self.forwarding_ref.as_ref() {
+                Some(r) => Some(r.unchecked_copy()),
+                None => bail_bug!("should always have a forwarding ref if the copied bit is set"),
+            }
         } else {
             None
-        }
+        })
     }
 
     /// Set the forwarding reference for this object and mark it as copied.
@@ -175,12 +180,39 @@ unsafe impl GcHeapObject for VMCopyingExternRef {
 ///
 /// NB: Layout is defined by constants in `wasmtime_environ::copying`. Keep in
 /// sync!
+#[derive(Default)]
 #[repr(C)]
-struct VMCopyingHeapData {
+struct VMCopyingHeapDataInner {
     /// Current bump pointer (index into the GC heap).
     bump_ptr: u32,
     /// End of the active semi-space.
     active_space_end: u32,
+}
+
+#[derive(Default)]
+#[repr(transparent)]
+struct VMCopyingHeapData {
+    inner: SendSyncUnsafeCell<VMCopyingHeapDataInner>,
+}
+
+impl VMCopyingHeapData {
+    fn bump_ptr(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).bump_ptr }
+    }
+
+    fn set_bump_ptr(&mut self, val: u32) {
+        self.inner.get_mut().bump_ptr = val;
+    }
+
+    fn active_space_end(&self) -> u32 {
+        // Safety: `inner` is valid to read from.
+        unsafe { (*self.inner.get()).active_space_end }
+    }
+
+    fn set_active_space_end(&mut self, val: u32) {
+        self.inner.get_mut().active_space_end = val;
+    }
 }
 
 /// Get a typed reference to a copying-collector object from a raw `VMGcRef`.
@@ -264,10 +296,7 @@ impl CopyingHeap {
             no_gc_count: 0,
             memory: None,
             vmmemory: None,
-            vmctx_data: VMCopyingHeapData {
-                bump_ptr: 0,
-                active_space_end: 0,
-            },
+            vmctx_data: VMCopyingHeapData::default(),
             active_space_start: 0,
             idle_space_start: 0,
             idle_space_end: 0,
@@ -278,19 +307,19 @@ impl CopyingHeap {
     }
 
     fn bump_ptr(&self) -> u32 {
-        self.vmctx_data.bump_ptr
+        self.vmctx_data.bump_ptr()
     }
 
     fn set_bump_ptr(&mut self, val: u32) {
-        self.vmctx_data.bump_ptr = val;
+        self.vmctx_data.set_bump_ptr(val);
     }
 
     fn active_space_end(&self) -> u32 {
-        self.vmctx_data.active_space_end
+        self.vmctx_data.active_space_end()
     }
 
     fn set_active_space_end(&mut self, val: u32) {
-        self.vmctx_data.active_space_end = val;
+        self.vmctx_data.set_active_space_end(val);
     }
 
     fn capacity(&self) -> u32 {
@@ -424,7 +453,7 @@ impl CopyingHeap {
 
     /// Pop the next item off the worklist, or return `None` if the worklist is
     /// empty.
-    fn worklist_pop(&mut self) -> Option<VMGcRef> {
+    fn worklist_pop(&mut self) -> Result<Option<VMGcRef>> {
         debug_assert!(
             self.is_in_active_space(self.worklist_ptr)
                 || self.worklist_ptr == self.active_space_end()
@@ -435,158 +464,213 @@ impl CopyingHeap {
         debug_assert!(self.worklist_ptr <= self.bump_ptr());
 
         if self.worklist_ptr == self.bump_ptr() {
-            return None;
+            return Ok(None);
         }
 
         let result = self.worklist_ptr;
-        let result = NonZeroU32::new(result).unwrap();
-        let result = VMGcRef::from_heap_index(result).unwrap();
+        let result = match NonZeroU32::new(result) {
+            Some(result) => result,
+            None => bail_bug!("worklist ptr is zero"),
+        };
+        let result = match VMGcRef::from_heap_index(result) {
+            Some(result) => result,
+            None => bail_bug!("corrupt worklist_ptr"),
+        };
 
-        let obj_size = self.index(copying_ref(&result)).object_size();
+        let obj_size = self.index(copying_ref(&result))?.object_size();
 
         self.worklist_ptr += obj_size;
         debug_assert!(self.worklist_ptr <= self.bump_ptr());
 
-        Some(result)
+        Ok(Some(result))
     }
 
     /// Insert `gc_ref`, which points to a grey object, into the worklist.
-    fn worklist_insert(&self, gc_ref: &VMGcRef) {
+    fn worklist_insert(&self, gc_ref: &VMGcRef) -> Result<()> {
         // This is a no-op: insertion happens implicitly in `copy` when
         // allocating space for the copied object and advancing the
         // `bump_ptr`. But we still define and call this method just for the
         // debug assertions.
         if !cfg!(debug_assertions) {
-            return;
+            return Ok(());
         }
 
-        let index = gc_ref.as_heap_index().unwrap().get();
+        let index = gc_ref.heap_index()?.get();
         debug_assert!(self.is_in_active_space(index));
-        let obj_size = self.index(copying_ref(gc_ref)).object_size();
+        let obj_size = self.index(copying_ref(gc_ref))?.object_size();
         debug_assert_eq!(index + obj_size, self.bump_ptr());
         debug_assert!(self.worklist_ptr <= index);
+        Ok(())
     }
 
     /// Get-or-create the location of this idle-space ref in the new active
     /// semi-space.
-    fn forward(&mut self, from_ref: &VMGcRef) -> VMGcRef {
+    fn forward(&mut self, from_ref: &VMGcRef) -> Result<VMGcRef> {
         debug_assert!(!from_ref.is_i31());
-        debug_assert!(self.is_in_idle_space(from_ref.as_heap_index().unwrap().get()));
+        debug_assert!(self.is_in_idle_space(from_ref.heap_index()?.get()));
 
         if let Some(to_ref) = self
-            .index(header_and_forwarding_ref(from_ref))
-            .forwarding_ref()
+            .index(header_and_forwarding_ref(from_ref))?
+            .forwarding_ref()?
         {
-            return to_ref;
+            return Ok(to_ref);
         }
         self.copy(from_ref)
     }
 
     /// Copy this idle-space ref into the new active semi-space and return its
     /// new location.
-    fn copy(&mut self, from_ref: &VMGcRef) -> VMGcRef {
+    fn copy(&mut self, from_ref: &VMGcRef) -> Result<VMGcRef> {
         debug_assert!(!from_ref.is_i31());
-        let from_index = from_ref.as_heap_index().unwrap().get();
+        let from_index = from_ref.heap_index()?.get();
         debug_assert!(self.is_in_idle_space(from_index));
-        debug_assert!(!self.index(copying_ref(from_ref)).copied());
+        debug_assert!(!self.index(copying_ref(from_ref))?.copied());
 
-        let size = self.index(copying_ref(from_ref)).object_size();
-        let to_index = self.allocate(size).expect(
-            "there should always be enough room in the active semi-space for objects that \
-             survived collection, since the active space is the same size as the idle space",
-        );
+        let size = self.index(copying_ref(from_ref))?.object_size();
+        let to_index = match self.allocate(size) {
+            Some(i) => i,
+            None => {
+                bail_bug!(
+                    "\
+there should always be enough room in the active semi-space for objects that \
+survived collection, since the active space is the same size as the idle space",
+                )
+            }
+        };
         debug_assert!(self.is_in_active_space(to_index));
 
-        let to_ref =
-            VMGcRef::from_heap_index(NonZeroU32::new(to_index).unwrap()).expect("valid heap index");
+        let to_ref = match NonZeroU32::new(to_index).and_then(VMGcRef::from_heap_index) {
+            Some(r) => r,
+            None => bail_bug!("invalid to_index"),
+        };
 
         // Copy the object bytes.
-        let from_start = usize::try_from(from_index).unwrap();
-        let to_start = usize::try_from(to_index).unwrap();
-        let size_usize = usize::try_from(size).unwrap();
-        self.heap_slice_mut()
-            .copy_within(from_start..from_start + size_usize, to_start);
+        let from_start = usize::try_from(from_index)?;
+        let to_start = usize::try_from(to_index)?;
+        let size_usize = usize::try_from(size)?;
+        let heap = self.heap_slice_mut();
+        if heap
+            .get(from_start..)
+            .and_then(|s| s.get(..size_usize))
+            .is_none()
+            || heap
+                .get(to_start..)
+                .and_then(|s| s.get(..size_usize))
+                .is_none()
+        {
+            bail_bug!("corrupt gc heap");
+        }
+        heap.copy_within(from_start..from_start + size_usize, to_start);
 
         // Set the forwarding ref in the old (idle-space) object.
-        self.index_mut(header_and_forwarding_ref(from_ref))
+        self.index_mut(header_and_forwarding_ref(from_ref))?
             .set_forwarding_ref(to_ref.unchecked_copy());
 
         // If this is an externref, insert it into the active externref list.
         if self
-            .index(copying_ref(&to_ref))
+            .index(copying_ref(&to_ref))?
             .header
             .kind()
             .matches(VMGcKind::ExternRef)
         {
             let old_head = self.active_extern_ref_set_head.take();
-            self.index_mut::<VMCopyingExternRef>(to_ref.as_typed_unchecked())
+            self.index_mut::<VMCopyingExternRef>(to_ref.as_typed_unchecked())?
                 .next_extern_ref = old_head;
             self.active_extern_ref_set_head =
                 Some(to_ref.unchecked_copy().into_externref_unchecked());
         }
 
-        self.worklist_insert(&to_ref);
-        to_ref
+        self.worklist_insert(&to_ref)?;
+        Ok(to_ref)
     }
 
     /// Trace a grey object's outgoing edges, copying their referents into the
     /// new semi-space if necessary, and updating the object's references with
     /// their forwarded locations in the new semi-space.
-    fn scan(&mut self, gc_ref: &VMGcRef, trace_infos: &TraceInfos) {
+    fn scan(&mut self, gc_ref: &VMGcRef, trace_infos: &TraceInfos) -> Result<()> {
         debug_assert!(!gc_ref.is_i31());
-        let index = gc_ref.as_heap_index().unwrap().get();
+        let index = gc_ref.heap_index()?.get();
         debug_assert!(self.is_in_active_space(index));
 
-        let ty = self.index(copying_ref(gc_ref)).header.ty();
+        let inline_info = self.index(copying_ref(gc_ref))?.inline_trace_info();
+        let object_start = usize::try_from(index)?;
 
-        // `externref`s have no GC edges.
-        let Some(ty) = ty else {
-            return;
-        };
-
-        let object_start = usize::try_from(index).unwrap();
-        match trace_infos.trace_info(&ty) {
-            TraceInfo::Struct { gc_ref_offsets } => {
-                for &offset in gc_ref_offsets {
-                    self.scan_field(object_start, offset);
+        match inline_info {
+            InlineTraceInfo::Struct { gc_ref_bitmap } => {
+                let mut remaining = gc_ref_bitmap;
+                while remaining != 0 {
+                    let slot = remaining.trailing_zeros();
+                    self.scan_field(object_start, HEADER_SIZE + slot * 4)?;
+                    remaining &= remaining - 1;
                 }
             }
-            TraceInfo::Array { gc_ref_elems } => {
-                if *gc_ref_elems {
+            InlineTraceInfo::Array { elems_are_gc_refs } => {
+                if elems_are_gc_refs {
                     let array_ref = gc_ref.as_arrayref_unchecked();
-                    let len = self.array_len(array_ref);
+                    let len = self.array_len(array_ref)?;
 
                     for i in 0..len {
-                        let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
-                            + i * u32::try_from(mem::size_of::<u32>()).unwrap();
-                        self.scan_field(object_start, elem_offset);
+                        let elem_offset = match i
+                            .checked_mul(u32::try_from(mem::size_of::<u32>())?)
+                            .and_then(|i| i.checked_add(GC_REF_ARRAY_ELEMS_OFFSET))
+                        {
+                            Some(i) => i,
+                            None => bail_bug!("array element offset overflow"),
+                        };
+                        self.scan_field(object_start, elem_offset)?;
+                    }
+                }
+            }
+            InlineTraceInfo::OutOfLine => {
+                let ty = self.index(copying_ref(gc_ref))?.header.ty();
+                let Some(ty) = ty else {
+                    bail_bug!("out-of-line trace info but no type index");
+                };
+                match trace_infos.trace_info(&ty) {
+                    TraceInfo::Struct { gc_ref_offsets } => {
+                        for &offset in gc_ref_offsets {
+                            self.scan_field(object_start, offset)?;
+                        }
+                    }
+                    TraceInfo::Array { .. } => {
+                        bail_bug!("arrays should always have inline trace info");
                     }
                 }
             }
         }
+        Ok(())
     }
 
     #[inline]
-    fn scan_field(&mut self, object_start: usize, offset: u32) {
-        let offset = usize::try_from(offset).unwrap();
-        let field_start = object_start + offset;
+    fn scan_field(&mut self, object_start: usize, offset: u32) -> Result<()> {
+        let offset = usize::try_from(offset)?;
+        let field_start = match object_start.checked_add(offset) {
+            Some(start) => start,
+            None => bail_bug!("field offset overflow"),
+        };
         let field_end = field_start + mem::size_of::<u32>();
 
-        let raw: [u8; 4] = self.heap_slice()[field_start..field_end]
-            .try_into()
-            .unwrap();
-        let raw = u32::from_le_bytes(raw);
+        let raw = match self
+            .heap_slice()
+            .get(field_start..)
+            .and_then(|s| s.first_chunk())
+        {
+            Some(raw) => u32::from_le_bytes(*raw),
+            None => bail_bug!("corrupt gc heap"),
+        };
 
         if let Some(child) = VMGcRef::from_raw_u32(raw)
             && !child.is_i31()
         {
-            debug_assert!(self.is_in_idle_space(child.as_heap_index().unwrap().get()));
-            let new_ref = self.forward(&child);
-            debug_assert!(self.is_in_active_space(new_ref.as_heap_index().unwrap().get()));
+            debug_assert!(self.is_in_idle_space(child.heap_index()?.get()));
+            let new_ref = self.forward(&child)?;
+            debug_assert!(self.is_in_active_space(new_ref.heap_index()?.get()));
             // Write the new reference back.
             let new_raw = new_ref.as_raw_u32().to_le_bytes();
             self.heap_slice_mut()[field_start..field_end].copy_from_slice(&new_raw);
         }
+
+        Ok(())
     }
 }
 
@@ -625,10 +709,7 @@ unsafe impl GcHeap for CopyingHeap {
             worklist_ptr,
             active_extern_ref_set_head,
             idle_extern_ref_set_head,
-            // NB: we will only ever be reused with the same engine, so no need
-            // to clear out our tracing info just to fill it back in with the
-            // same exact stuff.
-            trace_infos: _,
+            trace_infos,
         } = self;
 
         *no_gc_count = 0;
@@ -639,6 +720,7 @@ unsafe impl GcHeap for CopyingHeap {
         *worklist_ptr = 0;
         *active_extern_ref_set_head = None;
         *idle_extern_ref_set_head = None;
+        trace_infos.clear();
 
         memory.take().unwrap()
     }
@@ -674,15 +756,17 @@ unsafe impl GcHeap for CopyingHeap {
         _host_data_table: &mut ExternRefHostDataTable,
         destination: &mut Option<VMGcRef>,
         source: Option<&VMGcRef>,
-    ) {
+    ) -> Result<()> {
         // The copying collector doesn't use reference counting; writes are
         // simple overwrites.
         *destination = source.map(|s| s.unchecked_copy());
+        Ok(())
     }
 
-    fn expose_gc_ref_to_wasm(&mut self, _gc_ref: VMGcRef) {
+    fn expose_gc_ref_to_wasm(&mut self, _gc_ref: VMGcRef) -> Result<()> {
         // The copying collector doesn't need any special handling when exposing
         // a GC ref to Wasm. There is no over-approximated-stack-roots list.
+        Ok(())
     }
 
     fn alloc_externref(
@@ -692,16 +776,15 @@ unsafe impl GcHeap for CopyingHeap {
         let align = usize::try_from(ALIGN).unwrap();
         let size = core::mem::size_of::<VMCopyingExternRef>();
         let size = (size + align - 1) & !(align - 1);
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::externref(),
-            Layout::from_size_align(size, align).unwrap(),
-        )? {
+        let mut header = VMGcHeader::externref();
+        header.set_reserved_u26(InlineTraceInfo::NO_GC_EDGES.encode());
+        let gc_ref = match self.alloc_raw(header, Layout::from_size_align(size, align)?)? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,
         };
         // Take the old list head before borrowing self mutably through index_mut.
         let old_head = self.active_extern_ref_set_head.take();
-        let externref_obj = self.index_mut::<VMCopyingExternRef>(gc_ref.as_typed_unchecked());
+        let externref_obj = self.index_mut::<VMCopyingExternRef>(gc_ref.as_typed_unchecked())?;
         externref_obj.host_data = host_data;
         externref_obj.next_extern_ref = old_head;
         let externref = gc_ref.into_externref_unchecked();
@@ -709,13 +792,13 @@ unsafe impl GcHeap for CopyingHeap {
         Ok(Ok(externref))
     }
 
-    fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId {
+    fn externref_host_data(&self, externref: &VMExternRef) -> Result<ExternRefHostDataId> {
         let typed_ref = externref_to_copying(externref);
-        self.index(typed_ref).host_data
+        Ok(self.index(typed_ref)?.host_data)
     }
 
-    fn header(&self, gc_ref: &VMGcRef) -> &VMGcHeader {
-        let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked());
+    fn header(&self, gc_ref: &VMGcRef) -> Result<&VMGcHeader> {
+        let header: &VMGcHeader = self.index(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
             VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
@@ -723,11 +806,11 @@ unsafe impl GcHeap for CopyingHeap {
             header.kind().as_u32(),
         );
 
-        header
+        Ok(header)
     }
 
-    fn header_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcHeader {
-        let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked());
+    fn header_mut(&mut self, gc_ref: &VMGcRef) -> Result<&mut VMGcHeader> {
+        let header: &mut VMGcHeader = self.index_mut(gc_ref.as_typed_unchecked())?;
 
         debug_assert!(
             VMGcKind::try_from_u32(header.kind().as_u32()).is_some(),
@@ -735,11 +818,13 @@ unsafe impl GcHeap for CopyingHeap {
             header.kind().as_u32(),
         );
 
-        header
+        Ok(header)
     }
 
-    fn object_size(&self, gc_ref: &VMGcRef) -> usize {
-        usize::try_from(self.index(copying_ref(gc_ref)).object_size()).unwrap()
+    fn object_size(&self, gc_ref: &VMGcRef) -> Result<usize> {
+        Ok(usize::try_from(
+            self.index(copying_ref(gc_ref))?.object_size(),
+        )?)
     }
 
     fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
@@ -756,7 +841,7 @@ unsafe impl GcHeap for CopyingHeap {
             0,
             "bump_ptr is not aligned to ALIGN"
         );
-        debug_assert_eq!(header.reserved_u26(), 0);
+        debug_assert_eq!(header.reserved_u26() & HEADER_COPIED_BIT, 0);
 
         // We must have trace info for every GC type that we allocate in this
         // heap. Trace info is eagerly registered during module instantiation
@@ -778,7 +863,11 @@ unsafe impl GcHeap for CopyingHeap {
             .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
         let gc_ref = match self.allocate(size) {
-            None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
+            None => {
+                // Multiply by two because we need capacity in both semi-spaces.
+                let bytes_needed = u64::try_from(layout.size()).unwrap().saturating_mul(2);
+                return Ok(Err(bytes_needed));
+            }
             Some(index) => {
                 debug_assert_ne!(index, 0, "index 0 is reserved; bump_ptr should skip it");
                 VMGcRef::from_heap_index(NonZeroU32::new(index).unwrap()).unwrap()
@@ -788,7 +877,7 @@ unsafe impl GcHeap for CopyingHeap {
         // Assert that the newly-allocated memory is still filled with the
         // poison pattern.
         if cfg!(gc_zeal) {
-            let start = usize::try_from(gc_ref.as_heap_index().unwrap().get()).unwrap();
+            let start = usize::try_from(gc_ref.heap_index()?.get()).unwrap();
             let slice = &self.heap_slice()[start..][..layout.size()];
             gc_assert!(
                 slice.iter().all(|&b| b == POISON),
@@ -798,7 +887,7 @@ unsafe impl GcHeap for CopyingHeap {
         }
 
         let object_size = size;
-        *self.index_mut(copying_ref(&gc_ref)) = VMCopyingHeader {
+        *self.index_mut(copying_ref(&gc_ref))? = VMCopyingHeader {
             header,
             object_size,
         };
@@ -815,18 +904,20 @@ unsafe impl GcHeap for CopyingHeap {
         } else {
             VMGcKind::StructRef
         };
-        let gc_ref =
-            match self.alloc_raw(VMGcHeader::from_kind_and_index(kind, ty), layout.layout())? {
-                Err(n) => return Ok(Err(n)),
-                Ok(gc_ref) => gc_ref,
-            };
+        let mut header = VMGcHeader::from_kind_and_index(kind, ty);
+        header.set_reserved_u26(InlineTraceInfo::r#struct(layout).encode());
+        let gc_ref = match self.alloc_raw(header, layout.layout())? {
+            Err(n) => return Ok(Err(n)),
+            Ok(gc_ref) => gc_ref,
+        };
 
         Ok(Ok(gc_ref))
     }
 
-    fn dealloc_uninit_struct_or_exn(&mut self, _gcref: VMGcRef) {
+    fn dealloc_uninit_struct_or_exn(&mut self, _gcref: VMGcRef) -> Result<()> {
         // The copying collector doesn't support individual deallocation; memory
         // is reclaimed during collection.
+        Ok(())
     }
 
     fn alloc_uninit_array(
@@ -835,33 +926,34 @@ unsafe impl GcHeap for CopyingHeap {
         length: u32,
         layout: &GcArrayLayout,
     ) -> Result<Result<VMArrayRef, u64>> {
+        let mut header = VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty);
+        header.set_reserved_u26(InlineTraceInfo::array(layout).encode());
         let layout = layout
             .layout(length)
             .ok_or_else(|| crate::Trap::AllocationTooLarge)?;
 
-        let gc_ref = match self.alloc_raw(
-            VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
-            layout,
-        )? {
+        let gc_ref = match self.alloc_raw(header, layout)? {
             Err(n) => return Ok(Err(n)),
             Ok(gc_ref) => gc_ref,
         };
 
-        self.index_mut(gc_ref.as_typed_unchecked::<VMCopyingArrayHeader>())
+        self.index_mut(gc_ref.as_typed_unchecked::<VMCopyingArrayHeader>())?
             .length = length;
 
         Ok(Ok(gc_ref.into_arrayref_unchecked()))
     }
 
-    fn dealloc_uninit_array(&mut self, _arrayref: VMArrayRef) {
+    fn dealloc_uninit_array(&mut self, _arrayref: VMArrayRef) -> Result<()> {
         // The copying collector doesn't support individual deallocation; memory
         // is reclaimed during collection.
+        Ok(())
     }
 
-    fn array_len(&self, arrayref: &VMArrayRef) -> u32 {
+    fn array_len(&self, arrayref: &VMArrayRef) -> Result<u32> {
         debug_assert!(arrayref.as_gc_ref().is_typed::<VMCopyingArrayHeader>(self));
-        self.index::<VMCopyingArrayHeader>(arrayref.as_gc_ref().as_typed_unchecked())
-            .length
+        Ok(self
+            .index::<VMCopyingArrayHeader>(arrayref.as_gc_ref().as_typed_unchecked())?
+            .length)
     }
 
     fn allocated_bytes(&self) -> usize {
@@ -878,13 +970,12 @@ unsafe impl GcHeap for CopyingHeap {
             roots: Some(roots),
             host_data_table,
             heap: self,
-            phase: CopyingCollectionPhase::Collect,
+            phase: CopyingCollectionPhase::ProcessRoots,
         })
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        let ptr: *const VMCopyingHeapData = &self.vmctx_data;
-        NonNull::new(ptr as *mut u8).unwrap()
+        NonNull::from(&self.vmctx_data).cast::<u8>()
     }
 
     fn take_memory(&mut self) -> crate::vm::Memory {
@@ -937,6 +1028,8 @@ unsafe impl GcHeap for CopyingHeap {
     }
 }
 
+const OBJECTS_PER_INCREMENT: usize = 16_384;
+
 struct CopyingCollection<'a> {
     roots: Option<GcRootsIter<'a>>,
     host_data_table: &'a mut ExternRefHostDataTable,
@@ -945,121 +1038,175 @@ struct CopyingCollection<'a> {
 }
 
 enum CopyingCollectionPhase {
-    Collect,
+    ProcessRoots,
+    ProcessWorklist,
+    SweepExternRefs,
     Done,
 }
 
 impl CopyingCollection<'_> {
     /// Forward all GC roots from the idle space to the active space.
-    fn process_roots(&mut self) {
+    fn process_roots(&mut self) -> Result<()> {
         log::trace!("Begin processing GC roots");
         let roots = self.roots.take().unwrap();
         for mut root in roots {
-            let gc_ref = root.get();
+            let gc_ref = root.get()?;
             if gc_ref.is_i31() {
                 continue;
             }
-            let old_index = gc_ref.as_heap_index().unwrap().get();
+            let old_index = gc_ref.heap_index()?.get();
             debug_assert!(self.heap.is_in_idle_space(old_index));
-            let new_ref = self.heap.forward(&gc_ref);
+            let new_ref = self.heap.forward(&gc_ref)?;
             root.set(new_ref);
         }
         log::trace!("End processing GC roots");
+        Ok(())
     }
 
-    /// Scan all grey objects until the worklist is empty.
-    fn process_worklist(&mut self) {
-        log::trace!("Begin processing worklist");
+    /// Handle the `ProcessRoots` phase: flip semi-spaces, initialize the
+    /// worklist, forward all roots, then transition to `ProcessWorklist`.
+    fn begin_collection(&mut self) -> Result<GcProgress> {
+        log::trace!("Begin copying collection: processing roots");
+
+        assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+        assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
+        assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
+        assert!(
+            self.heap.active_space_end() <= self.heap.idle_space_start
+                || self.heap.idle_space_end <= self.heap.active_space_start
+        );
+
+        self.heap.flip();
+        self.heap.initialize_worklist();
+
+        self.process_roots()?;
+
+        self.phase = CopyingCollectionPhase::ProcessWorklist;
+        Ok(GcProgress::Continue)
+    }
+
+    /// Scan up to `OBJECTS_PER_INCREMENT` grey objects from the worklist.
+    ///
+    /// When the worklist is fully drained, transitions to `SweepExternRefs`.
+    /// Always returns `GcProgress::Continue` so the caller yields after each
+    /// increment regardless of whether the worklist still has items.
+    fn process_worklist_increment(&mut self) -> Result<GcProgress> {
+        log::trace!("Begin processing worklist increment");
         let trace_infos = mem::take(&mut self.heap.trace_infos);
-        while let Some(gc_ref) = self.heap.worklist_pop() {
-            debug_assert!(
-                self.heap
-                    .is_in_active_space(gc_ref.as_heap_index().unwrap().get())
-            );
-            self.heap.scan(&gc_ref, &trace_infos);
-        }
+        let mut count = 0;
+        let has_more = loop {
+            if count >= OBJECTS_PER_INCREMENT {
+                break true;
+            }
+            match self.heap.worklist_pop()? {
+                Some(gc_ref) => {
+                    debug_assert!(self.heap.is_in_active_space(gc_ref.heap_index()?.get()));
+                    self.heap.scan(&gc_ref, &trace_infos)?;
+                    count += 1;
+                }
+                None => break false,
+            }
+        };
         self.heap.trace_infos = trace_infos;
-        log::trace!("End processing worklist");
+        if !has_more {
+            self.phase = CopyingCollectionPhase::SweepExternRefs;
+        }
+        log::trace!("End processing worklist increment (has_more={has_more})");
+        Ok(GcProgress::Continue)
     }
 
     /// Clean up dead externrefs by iterating the idle semi-space's externref
     /// linked list and deallocating host data for any that were not forwarded.
-    fn sweep_extern_refs(&mut self) {
+    fn sweep_extern_refs(&mut self) -> Result<()> {
         log::trace!("Begin sweeping `externref`s");
         let mut link = self.heap.idle_extern_ref_set_head.take();
         while let Some(externref) = link {
             let gc_ref = externref.as_gc_ref();
-            debug_assert!(
-                self.heap
-                    .is_in_idle_space(gc_ref.as_heap_index().unwrap().get())
-            );
-            let header = self.heap.index(copying_ref(gc_ref));
+            debug_assert!(self.heap.is_in_idle_space(gc_ref.heap_index()?.get()));
+            let header = self.heap.index(copying_ref(gc_ref))?;
             if !header.copied() {
                 let typed: &TypedGcRef<VMCopyingExternRef> = gc_ref.as_typed_unchecked();
-                let host_data_id = self.heap.index(typed).host_data;
-                self.host_data_table.dealloc(host_data_id);
+                let host_data_id = self.heap.index(typed)?.host_data;
+                self.host_data_table.dealloc(host_data_id)?;
             }
             link = self
                 .heap
-                .index::<VMCopyingExternRef>(gc_ref.as_typed_unchecked())
+                .index::<VMCopyingExternRef>(gc_ref.as_typed_unchecked())?
                 .next_extern_ref
                 .as_ref()
                 .map(|e| e.unchecked_copy());
         }
         log::trace!("End sweeping `externref`s");
+        Ok(())
+    }
+
+    /// Handle the `SweepExternRefs` phase: sweep dead externrefs, resize
+    /// semi-spaces, and transition to `Done`.
+    fn finish_collection(&mut self) -> Result<GcProgress> {
+        log::trace!("Copying collection: sweeping externrefs");
+
+        assert!(self.heap.active_space_start <= self.heap.bump_ptr());
+        assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
+        assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
+        assert!(
+            self.heap.active_space_end() <= self.heap.idle_space_start
+                || self.heap.idle_space_end <= self.heap.active_space_start
+        );
+
+        self.sweep_extern_refs()?;
+        self.heap.resize_semi_spaces();
+
+        debug_assert_eq!(
+            self.heap.active_space_end() - self.heap.active_space_start,
+            self.heap.idle_space_end - self.heap.idle_space_start,
+            "the active and idle spaces should be the same size"
+        );
+
+        if cfg!(gc_zeal) {
+            let idle_start = usize::try_from(self.heap.idle_space_start).unwrap();
+            let idle_end = usize::try_from(self.heap.idle_space_end).unwrap();
+            self.heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
+        }
+
+        log::trace!("End copying collection");
+        self.phase = CopyingCollectionPhase::Done;
+        Ok(GcProgress::Complete)
     }
 }
 
 impl GarbageCollection<'_> for CopyingCollection<'_> {
-    fn collect_increment(&mut self) -> GcProgress {
+    fn collect_increment(&mut self) -> Result<GcProgress> {
         match self.phase {
-            CopyingCollectionPhase::Collect => {
-                log::trace!("Begin copying collection");
+            CopyingCollectionPhase::ProcessRoots => self.begin_collection(),
+            CopyingCollectionPhase::ProcessWorklist => self.process_worklist_increment(),
+            CopyingCollectionPhase::SweepExternRefs => self.finish_collection(),
+            CopyingCollectionPhase::Done => Ok(GcProgress::Complete),
+        }
+    }
+}
 
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
-                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
-                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
-                assert!(
-                    self.heap.active_space_end() <= self.heap.idle_space_start
-                        || self.heap.idle_space_end <= self.heap.active_space_start
-                );
-
-                // Flip the semi-spaces.
-                self.heap.flip();
-                self.heap.initialize_worklist();
-
-                self.process_roots();
-                self.process_worklist();
-
-                assert!(self.heap.active_space_start <= self.heap.bump_ptr());
-                assert!(self.heap.bump_ptr() <= self.heap.active_space_end());
-                assert!(self.heap.idle_space_start <= self.heap.idle_space_end);
-                assert!(
-                    self.heap.active_space_end() <= self.heap.idle_space_start
-                        || self.heap.idle_space_end <= self.heap.active_space_start
-                );
-
-                self.sweep_extern_refs();
-                self.heap.resize_semi_spaces();
-
-                debug_assert_eq!(
-                    self.heap.active_space_end() - self.heap.active_space_start,
-                    self.heap.idle_space_end - self.heap.idle_space_start,
-                    "the active and idle spaces should be the same size"
-                );
-
-                // Poison the idle space so stale accesses are detectable.
-                if cfg!(gc_zeal) {
-                    let idle_start = usize::try_from(self.heap.idle_space_start).unwrap();
-                    let idle_end = usize::try_from(self.heap.idle_space_end).unwrap();
-                    self.heap.heap_slice_mut()[idle_start..idle_end].fill(POISON);
+impl Drop for CopyingCollection<'_> {
+    fn drop(&mut self) {
+        // A collection is logically atomic with respect to the mutator: the
+        // mutator must never run while the heap is in a half-collected
+        // (half-flipped, half-forwarded) state. The collection only yields
+        // between increments to cooperate with the async runtime and
+        // `Future::poll`; it does not interleave with the mutator.
+        //
+        // However, the future driving an incremental collection can be dropped
+        // before the collection completes (e.g. when a `call_async` future is
+        // cancelled while a GC is in progress). If we did nothing here, the
+        // store would be left with a half-collected GC heap and reusing it
+        // (e.g. starting another `call_async`) would corrupt the GC heap. So,
+        // to uphold the logical atomicity of collection, we finish any
+        // in-progress collection here synchronously when dropped.
+        match self.phase {
+            CopyingCollectionPhase::ProcessWorklist | CopyingCollectionPhase::SweepExternRefs => {
+                if let Err(e) = self.collect() {
+                    log::error!("error finishing an interrupted copying collection: {e:?}");
                 }
-
-                log::trace!("End copying collection");
-                self.phase = CopyingCollectionPhase::Done;
-                GcProgress::Complete
             }
-            CopyingCollectionPhase::Done => GcProgress::Complete,
+            CopyingCollectionPhase::ProcessRoots | CopyingCollectionPhase::Done => {}
         }
     }
 }
@@ -1123,7 +1270,7 @@ mod tests {
     fn vm_copying_heap_data_bump_ptr_offset() {
         assert_eq!(
             HostPtr.vmcopying_heap_data_bump_ptr() as usize,
-            core::mem::offset_of!(VMCopyingHeapData, bump_ptr),
+            core::mem::offset_of!(VMCopyingHeapDataInner, bump_ptr),
         );
     }
 
@@ -1131,7 +1278,7 @@ mod tests {
     fn vm_copying_heap_data_active_space_end_offset() {
         assert_eq!(
             HostPtr.vmcopying_heap_data_active_space_end() as usize,
-            core::mem::offset_of!(VMCopyingHeapData, active_space_end),
+            core::mem::offset_of!(VMCopyingHeapDataInner, active_space_end),
         );
     }
 
@@ -1141,6 +1288,10 @@ mod tests {
             HostPtr.size_of_vmcopying_heap_data() as usize,
             core::mem::size_of::<VMCopyingHeapData>(),
         );
+        assert_eq!(
+            HostPtr.size_of_vmcopying_heap_data() as usize,
+            core::mem::size_of::<VMCopyingHeapDataInner>(),
+        );
     }
 
     #[test]
@@ -1148,6 +1299,10 @@ mod tests {
         assert_eq!(
             HostPtr.align_of_vmcopying_heap_data() as usize,
             core::mem::align_of::<VMCopyingHeapData>(),
+        );
+        assert_eq!(
+            HostPtr.align_of_vmcopying_heap_data() as usize,
+            core::mem::align_of::<VMCopyingHeapDataInner>(),
         );
     }
 }

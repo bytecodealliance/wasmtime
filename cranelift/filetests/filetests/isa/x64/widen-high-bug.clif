@@ -2,8 +2,10 @@ test compile precise-output
 target x86_64 sse41
 
 function u0:0(i64 vmctx, i8x16) -> i16x8 fast {
+    region0 = 0 "table"
+
 block0(v0: i64, v2: i8x16):
-    v5 = load.i8x16 notrap aligned table v0+80
+    v5 = load.i8x16 notrap aligned region0 v0+80
     v6 = uwiden_high v5
     return v6
 }

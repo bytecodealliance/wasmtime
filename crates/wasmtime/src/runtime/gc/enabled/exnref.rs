@@ -6,8 +6,8 @@ use crate::store::{Asyncness, StoreId, StoreResourceLimiter};
 use crate::vm::VMStore;
 use crate::vm::{self, VMExnRef, VMGcHeader};
 use crate::{
-    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Result,
-    Rooted, Val, ValRaw, ValType, WasmTy,
+    AsContext, AsContextMut, GcRefImpl, GcRootIndex, HeapType, OwnedRooted, RefType, Rooted, Val,
+    ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
 };
 use crate::{ExnType, FieldType, GcHeapOutOfMemory, StoreContextMut, Tag, prelude::*};
@@ -360,7 +360,7 @@ impl ExnRef {
         })() {
             Ok(()) => Ok(Rooted::new(&mut store, exnref.into())),
             Err(e) => {
-                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref);
+                store.require_gc_store_mut()?.dealloc_uninit_exn(exnref)?;
                 Err(e)
             }
         }
@@ -368,7 +368,7 @@ impl ExnRef {
 
     pub(crate) fn type_index(&self, store: &StoreOpaque) -> Result<VMSharedTypeIndex> {
         let gc_ref = self.inner.try_gc_ref(store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
         Ok(header.ty().expect("exnrefs should have concrete types"))
     }
@@ -386,8 +386,8 @@ impl ExnRef {
         debug_assert!(
             store
                 .unwrap_gc_store()
-                .header(&gc_ref)
-                .kind()
+                .kind(&gc_ref)
+                .unwrap()
                 .matches(VMGcKind::ExnRef)
         );
         Rooted::new(store, gc_ref)
@@ -416,13 +416,7 @@ impl ExnRef {
     }
 
     pub(crate) fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
-        let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = if gc_ref.is_i31() {
-            gc_ref.as_raw_non_zero_u32()
-        } else {
-            store.require_gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
-        };
-        Ok(raw.get())
+        self.inner.expose_gc_ref_to_wasm(store).map(|r| r.get())
     }
 
     /// Get the type of this reference.
@@ -500,7 +494,7 @@ impl ExnRef {
         let store = AutoAssertNoGc::new(store);
 
         let gc_ref = self.inner.try_gc_ref(&store)?;
-        let header = store.require_gc_store()?.header(gc_ref);
+        let header = store.require_gc_store()?.header(gc_ref)?;
         debug_assert!(header.kind().matches(VMGcKind::ExnRef));
 
         let index = header.ty().expect("exnrefs should have concrete types");
@@ -532,7 +526,7 @@ impl ExnRef {
                     return None;
                 }
                 self.index += 1;
-                Some(self.exnref._field(&mut self.store, i).unwrap())
+                self.exnref._field(&mut self.store, i).ok()
             }
 
             #[inline]
@@ -553,7 +547,7 @@ impl ExnRef {
     fn header<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMGcHeader> {
         assert!(self.comes_from_same_store(&store));
         let gc_ref = self.inner.try_gc_ref(store)?;
-        Ok(store.require_gc_store()?.header(gc_ref))
+        Ok(store.require_gc_store()?.header(gc_ref)?)
     }
 
     fn exnref<'a>(&self, store: &'a AutoAssertNoGc<'_>) -> Result<&'a VMExnRef> {
@@ -608,7 +602,7 @@ impl ExnRef {
         let exnref = self.exnref(store)?.unchecked_copy();
         let field_ty = self.field_ty(store, index)?;
         let layout = self.layout(store)?;
-        Ok(exnref.read_field(store, &layout, field_ty.element_type(), index))
+        exnref.read_field(store, &layout, field_ty.element_type(), index)
     }
 
     /// Get this exception object's associated tag.

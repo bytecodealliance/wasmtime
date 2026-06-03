@@ -859,6 +859,14 @@ impl MachInst for Inst {
         84
     }
 
+    fn worst_case_island_growth() -> CodeOffset {
+        // Conservative upper bound on per-instruction additions to the
+        // buffer's pending-island state: several embedded constants, a
+        // deferred trap, and a handful of fixups whose worst-case veneers
+        // are 8 bytes apiece. Sized comfortably to cover real cases.
+        128
+    }
+
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
         RegClass::Int
     }

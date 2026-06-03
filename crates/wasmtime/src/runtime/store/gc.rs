@@ -1,8 +1,149 @@
 //! GC-related methods for stores.
 
-use super::*;
-use crate::runtime::vm::VMGcRef;
+use crate::error::Context;
+use crate::store::{
+    Asyncness, AutoAssertNoGc, InstanceId, StoreOpaque, StoreResourceLimiter, yield_now,
+};
+use crate::type_registry::RegisteredType;
+use crate::vm::{self, Backtrace, Frame, GcRootsList, GcStore, SendSyncPtr, VMGcRef};
+use crate::{
+    ExnRef, GcHeapOutOfMemory, Result, Rooted, Store, StoreContextMut, ThrownException, bail,
+};
+use core::fmt;
+use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
+use core::ops::{Deref, DerefMut};
+use core::ptr::NonNull;
+use wasmtime_environ::DefinedTagIndex;
+
+impl<T> Store<T> {
+    /// Perform garbage collection.
+    ///
+    /// Note that it is not required to actively call this function. GC will
+    /// automatically happen according to various internal heuristics. This is
+    /// provided if fine-grained control over the GC is desired.
+    ///
+    /// If you are calling this method after an attempted allocation failed, you
+    /// may pass in the [`GcHeapOutOfMemory`][crate::GcHeapOutOfMemory] error.
+    /// When you do so, this method will attempt to create enough space in the
+    /// GC heap for that allocation, so that it will succeed on the next
+    /// attempt.
+    ///
+    /// # Errors
+    ///
+    /// This method will fail if an [async limiter is
+    /// configured](Store::limiter_async) in which case [`Store::gc_async`] must
+    /// be used instead.
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()> {
+        StoreContextMut(&mut self.inner).gc(why)
+    }
+
+    /// Returns the current capacity of the GC heap in bytes, or 0 if the GC
+    /// heap has not been initialized yet.
+    pub fn gc_heap_capacity(&self) -> usize {
+        self.inner.gc_heap_capacity()
+    }
+
+    /// Set an exception as the currently pending exception, and
+    /// return an error that propagates the throw.
+    ///
+    /// This method takes an exception object and stores it in the
+    /// `Store` as the currently pending exception. This is a special
+    /// rooted slot that holds the exception as long as it is
+    /// propagating. This method then returns a `ThrownException`
+    /// error, which is a special type that indicates a pending
+    /// exception exists. When this type propagates as an error
+    /// returned from a Wasm-to-host call, the pending exception is
+    /// thrown within the Wasm context, and either caught or
+    /// propagated further to the host-to-Wasm call boundary. If an
+    /// exception is thrown out of Wasm (or across Wasm from a
+    /// hostcall) back to the host-to-Wasm call boundary, *that*
+    /// invocation returns a `ThrownException`, and the pending
+    /// exception slot is again set. In other words, the
+    /// `ThrownException` error type should propagate upward exactly
+    /// and only when a pending exception is set.
+    ///
+    /// To take the pending exception, use [`Self::take_pending_exception`].
+    ///
+    /// This method is parameterized over `R` for convenience, but
+    /// will always return an `Err`.
+    ///
+    /// If there is already a pending exception in the store then the previous
+    /// one will be overwritten.
+    ///
+    /// # Errors
+    ///
+    /// This method will return an error if `exception` is unrooted. Otherwise
+    /// this method will always return `ThrownException`.
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        self.inner.throw_impl(exception)
+    }
+
+    /// Take the currently pending exception, if any, and return it,
+    /// removing it from the "pending exception" slot.
+    ///
+    /// If there is no pending exception, returns `None`.
+    ///
+    /// Note: the returned exception is a LIFO root (see
+    /// [`crate::Rooted`]), rooted in the current handle scope. Take
+    /// care to ensure that it is re-rooted or otherwise does not
+    /// escape this scope! It is usually best to allow an exception
+    /// object to be rooted in the store's "pending exception" slot
+    /// until the final consumer has taken it, rather than root it and
+    /// pass it up the callstack in some other way.
+    ///
+    /// This method is useful to implement ad-hoc exception plumbing
+    /// in various ways, but for the most idiomatic handling, see
+    /// [`StoreContextMut::throw`].
+    pub fn take_pending_exception(&mut self) -> Option<Rooted<ExnRef>> {
+        self.inner.take_pending_exception_rooted()
+    }
+}
+
+impl<'a, T> StoreContextMut<'a, T> {
+    /// Perform garbage collection.
+    ///
+    /// Same as [`Store::gc`].
+    pub fn gc(&mut self, why: Option<&GcHeapOutOfMemory<()>>) -> Result<()> {
+        let (mut limiter, store) = self.0.validate_sync_resource_limiter_and_store_opaque()?;
+        vm::assert_ready(store.gc(
+            limiter.as_mut(),
+            None,
+            why.map(|e| e.bytes_needed()),
+            Asyncness::No,
+        ))?;
+        Ok(())
+    }
+
+    /// Set an exception as the currently pending exception, and
+    /// return an error that propagates the throw.
+    ///
+    /// See [`Store::throw`] for more details.
+    #[cfg(feature = "gc")]
+    pub fn throw<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        self.0.inner.throw_impl(exception)
+    }
+
+    /// Take the currently pending exception, if any, and return it,
+    /// removing it from the "pending exception" slot.
+    ///
+    /// See [`Store::take_pending_exception`] for more details.
+    #[cfg(feature = "gc")]
+    pub fn take_pending_exception(&mut self) -> Option<Rooted<ExnRef>> {
+        self.0.inner.take_pending_exception_rooted()
+    }
+}
+
+#[derive(Debug)]
+struct GcHeapGrowthFailed;
+
+impl fmt::Display for GcHeapGrowthFailed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("GC heap growth failed")
+    }
+}
+
+impl core::error::Error for GcHeapGrowthFailed {}
 
 impl StoreOpaque {
     /// Perform any growth or GC needed to allocate `bytes_needed` bytes.
@@ -21,7 +162,7 @@ impl StoreOpaque {
         root: Option<VMGcRef>,
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
-    ) -> Option<VMGcRef> {
+    ) -> Result<Option<VMGcRef>> {
         let mut scope = crate::OpaqueRootScope::new(self);
         scope.trim_gc_liveness_flags(true);
         let store_id = scope.id();
@@ -29,15 +170,15 @@ impl StoreOpaque {
 
         scope
             .collect_and_maybe_grow_gc_heap(limiter, bytes_needed, asyncness)
-            .await;
+            .await?;
 
-        root.map(|r| {
+        Ok(root.map(|r| {
             let r = r
                 .get_gc_ref(&scope)
                 .expect("still in scope")
                 .unchecked_copy();
             scope.clone_gc_ref(&r)
-        })
+        }))
     }
 
     // This lives on the Store because it must simultaneously borrow
@@ -57,18 +198,25 @@ impl StoreOpaque {
         limiter: Option<&mut StoreResourceLimiter<'_>>,
         bytes_needed: Option<u64>,
         asyncness: Asyncness,
-    ) {
+    ) -> Result<()> {
         log::trace!("collect_and_maybe_grow_gc_heap(bytes_needed = {bytes_needed:#x?})");
-        self.do_gc(asyncness).await;
+        self.do_gc(asyncness).await?;
         if let Some(n) = bytes_needed
-            && n > u64::try_from(self.gc_heap_capacity())
-                .unwrap()
-                .saturating_sub(self.gc_store.as_ref().map_or(0, |gc| {
+            && n > u64::try_from(self.gc_heap_capacity())?.saturating_sub(
+                self.gc_store.as_ref().map_or(0, |gc| {
                     u64::try_from(gc.last_post_gc_allocated_bytes.unwrap_or(0)).unwrap()
-                }))
+                }),
+            )
         {
-            let _ = self.grow_gc_heap(limiter, n, asyncness).await;
+            if let Err(e) = self.grow_gc_heap(limiter, n, asyncness).await {
+                if e.is::<GcHeapGrowthFailed>() {
+                    log::trace!("ignoring GC heap growth failure: {e}");
+                } else {
+                    return Err(e);
+                }
+            }
         }
+        Ok(())
     }
 
     /// Attempt to grow the GC heap by `bytes_needed` bytes.
@@ -93,7 +241,7 @@ impl StoreOpaque {
             .as_ref()
             .map_or(false, |gc| gc.gc_heap.needs_gc_before_next_growth())
         {
-            self.do_gc(asyncness).await;
+            self.do_gc(asyncness).await?;
             debug_assert!(
                 !self
                     .gc_store
@@ -109,7 +257,7 @@ impl StoreOpaque {
         // grow it, then replace it.
         let mut heap = TakenGcHeap::new(self);
 
-        let current_size_in_bytes = u64::try_from(heap.memory.byte_size()).unwrap();
+        let current_size_in_bytes = u64::try_from(heap.memory.byte_size())?;
         let current_size_in_pages = current_size_in_bytes / page_size;
 
         // Aim to double the heap size, amortizing the cost of growth.
@@ -144,12 +292,13 @@ impl StoreOpaque {
         unsafe {
             heap.memory
                 .grow(delta_pages_for_alloc, limiter)
-                .await?
-                .ok_or_else(|| format_err!("failed to grow GC heap"))?;
+                .await
+                .context(GcHeapGrowthFailed)?
+                .ok_or(GcHeapGrowthFailed)?;
         }
-        heap.store.vm_store_context.gc_heap = heap.memory.vmmemory();
+        *heap.store.vm_store_context.gc_heap.get_mut() = heap.memory.vmmemory();
 
-        let new_size_in_bytes = u64::try_from(heap.memory.byte_size()).unwrap();
+        let new_size_in_bytes = u64::try_from(heap.memory.byte_size())?;
         assert!(new_size_in_bytes > current_size_in_bytes);
         heap.delta_bytes_grown = new_size_in_bytes - current_size_in_bytes;
         let delta_bytes_for_alloc = delta_pages_for_alloc.checked_mul(page_size).unwrap();
@@ -254,7 +403,7 @@ impl StoreOpaque {
                         );
                         store
                             .gc(limiter.as_deref_mut(), None, None, asyncness)
-                            .await;
+                            .await?;
 
                         match alloc_func(&mut store, value) {
                             Ok(x) => Ok(x),
@@ -284,7 +433,7 @@ impl StoreOpaque {
                             .await
                         {
                             log::trace!("growing GC heap failed: {e}");
-                            store.gc(limiter, None, None, asyncness).await;
+                            store.gc(limiter, None, None, asyncness).await?;
                         }
 
                         alloc_func(&mut store, value)
@@ -293,6 +442,354 @@ impl StoreOpaque {
                 Err(e) => Err(e),
             },
         }
+    }
+
+    /// Set a pending exception.
+    ///
+    /// The `exnref` is cloned internally and held on this store to be fetched
+    /// later by an unwind. This method does *not* set up an unwind request on
+    /// the TLS call state; that must be done separately.
+    ///
+    /// GC barriers are not required by the caller of this function.
+    pub(crate) fn set_pending_exception(&mut self, exnref: &VMGcRef) -> crate::Error {
+        debug_assert!(exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        let gc_store = self.gc_store.as_mut().unwrap();
+        match gc_store.write_gc_ref(&mut self.pending_exception, Some(exnref)) {
+            Ok(()) => ThrownException.into(),
+            Err(e) => e,
+        }
+    }
+
+    /// Takes the pending exception from this store, if any, and exposes it to
+    /// WebAssembly, returning the raw representation.
+    pub(crate) fn expose_pending_exception_to_wasm(&mut self) -> Option<NonZeroU32> {
+        let exnref = self.pending_exception.take()?;
+        let gc_store = self.unwrap_gc_store_mut();
+        debug_assert!(exnref.is_exnref(&*gc_store.gc_heap));
+        Some(gc_store.expose_gc_ref_to_wasm(exnref).unwrap())
+    }
+
+    /// Takes the pending exception of the store, yielding ownership of its
+    /// reference to the `Rooted` that's returned.
+    fn take_pending_exception_rooted(&mut self) -> Option<Rooted<ExnRef>> {
+        let vmexnref = self.pending_exception.take()?;
+        debug_assert!(vmexnref.is_exnref(&*self.unwrap_gc_store().gc_heap));
+        let mut nogc = AutoAssertNoGc::new(self);
+        Some(Rooted::new(&mut nogc, vmexnref))
+    }
+
+    /// Returns the (instance,tag) pair that the pending exception in this
+    /// store, if any, references.
+    pub(crate) fn pending_exception_tag_and_instance(
+        &mut self,
+    ) -> Option<(InstanceId, DefinedTagIndex)> {
+        let pending_exnref = self.pending_exception.as_ref()?.unchecked_copy();
+        debug_assert!(pending_exnref.is_exnref(&*self.unwrap_gc_store_mut().gc_heap));
+        let mut store = AutoAssertNoGc::new(self);
+
+        // Note that if the GC heap is corrupt this will return an error, and in
+        // such as situation we return `None` here pretending that there's no
+        // pending exception. This defers the GC heap corruption to get detected
+        // later. This method is primarily called right now to determine if
+        // there's a handler for an exception, and by returning `None` here this
+        // turns into just any old embedder error.
+        pending_exnref.into_exnref_unchecked().tag(&mut store).ok()
+    }
+
+    /// Get an owned rooted reference to the pending exception,
+    /// without taking it off the store.
+    #[cfg(feature = "debug")]
+    pub(crate) fn pending_exception_owned_rooted(
+        &mut self,
+    ) -> Result<Option<crate::OwnedRooted<ExnRef>>, crate::OutOfMemory> {
+        let pending = match &self.pending_exception {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+        let cloned = self.gc_store.as_mut().unwrap().clone_gc_ref(pending);
+        let mut nogc = AutoAssertNoGc::new(self);
+        Ok(Some(crate::OwnedRooted::new(&mut nogc, cloned)?))
+    }
+
+    /// Stores `exception` within the store to later get thrown.
+    ///
+    /// Delegates to `self.set_pending_exception` after accessing the internal
+    /// exception pointer.
+    fn throw_impl<R>(&mut self, exception: Rooted<ExnRef>) -> Result<R> {
+        let exception = exception.try_gc_ref(self)?.unchecked_copy();
+        Err(self.set_pending_exception(&exception))
+    }
+
+    /// Helper method to require that a `GcStore` was previously allocated for
+    /// this store, failing if it has not yet been allocated.
+    ///
+    /// Note that this should only be used in a context where allocation of a
+    /// `GcStore` is sure to have already happened prior, otherwise this may
+    /// return a confusing error to embedders which is a bug in Wasmtime.
+    ///
+    /// Some situations where it's safe to call this method:
+    ///
+    /// * There's already a non-null and non-i31 `VMGcRef` in scope. By existing
+    ///   this shows proof that the `GcStore` was previously allocated.
+    /// * During instantiation and instance's `needs_gc_heap` flag will be
+    ///   handled and instantiation will automatically create a GC store.
+    #[inline]
+    pub(crate) fn require_gc_store(&self) -> Result<&GcStore> {
+        match &self.gc_store {
+            Some(gc_store) => Ok(gc_store),
+            None => bail!("GC heap not initialized yet"),
+        }
+    }
+
+    /// Same as [`Self::require_gc_store`], but mutable.
+    #[inline]
+    pub(crate) fn require_gc_store_mut(&mut self) -> Result<&mut GcStore> {
+        match &mut self.gc_store {
+            Some(gc_store) => Ok(gc_store),
+            None => bail!("GC heap not initialized yet"),
+        }
+    }
+
+    /// Returns the current capacity of the GC heap in bytes, or 0 if the GC
+    /// heap has not been initialized yet.
+    pub(crate) fn gc_heap_capacity(&self) -> usize {
+        match self.gc_store.as_ref() {
+            Some(gc_store) => gc_store.gc_heap_capacity(),
+            None => 0,
+        }
+    }
+
+    async fn do_gc(&mut self, asyncness: Asyncness) -> Result<()> {
+        // If the GC heap hasn't been initialized, there is nothing to collect.
+        if self.gc_store.is_none() {
+            return Ok(());
+        }
+
+        log::trace!("============ Begin GC ===========");
+
+        // Take the GC roots out of `self` so we can borrow it mutably but still
+        // call mutable methods on `self`.
+        let mut roots = core::mem::take(&mut self.gc_roots_list);
+
+        self.trace_roots(&mut roots, asyncness).await;
+        self.unwrap_gc_store_mut()
+            .gc(
+                asyncness,
+                unsafe { roots.iter() },
+                // TODO: Once `Config` has an optional `AsyncFn` field for
+                // yielding to the current async runtime
+                // (e.g. `tokio::task::yield_now`), use that if set; otherwise
+                // fall back to the runtime-agnostic code.
+                yield_now,
+            )
+            .await?;
+
+        // Restore the GC roots for the next GC.
+        roots.clear();
+        self.gc_roots_list = roots;
+
+        log::trace!("============ End GC ===========");
+        Ok(())
+    }
+
+    async fn trace_roots(&mut self, gc_roots_list: &mut GcRootsList, asyncness: Asyncness) {
+        log::trace!("Begin trace GC roots");
+
+        // We shouldn't have any leftover, stale GC roots.
+        assert!(gc_roots_list.is_empty());
+
+        self.trace_wasm_stack_roots(gc_roots_list);
+        if asyncness != Asyncness::No {
+            self.yield_now().await;
+        }
+
+        #[cfg(feature = "stack-switching")]
+        {
+            self.trace_wasm_continuation_roots(gc_roots_list);
+            if asyncness != Asyncness::No {
+                self.yield_now().await;
+            }
+        }
+
+        self.trace_vmctx_roots(gc_roots_list);
+        if asyncness != Asyncness::No {
+            self.yield_now().await;
+        }
+
+        self.trace_instance_roots(gc_roots_list);
+        if asyncness != Asyncness::No {
+            self.yield_now().await;
+        }
+
+        self.trace_user_roots(gc_roots_list);
+        if asyncness != Asyncness::No {
+            self.yield_now().await;
+        }
+
+        self.trace_pending_exception_roots(gc_roots_list);
+
+        log::trace!("End trace GC roots")
+    }
+
+    fn trace_wasm_stack_frame(&self, gc_roots_list: &mut GcRootsList, frame: Frame) {
+        let pc = frame.pc();
+        debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
+
+        let fp = frame.fp() as *mut usize;
+        debug_assert!(
+            !fp.is_null(),
+            "we should always get a valid frame pointer for Wasm frames"
+        );
+
+        let (store_code, offset) = self
+            .modules()
+            .store_code_by_pc(pc)
+            .expect("should have store code for Wasm frame");
+        let offset = u32::try_from(offset).unwrap();
+
+        let stack_map =
+            wasmtime_environ::StackMap::lookup(offset, store_code.code_memory().stack_map_data());
+
+        if let Some(stack_map) = stack_map {
+            log::trace!(
+                "We have a stack map that maps {} bytes in this Wasm frame",
+                stack_map.frame_size()
+            );
+
+            let sp = unsafe { stack_map.sp(fp) };
+            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+
+        #[cfg(feature = "debug")]
+        if let Some(frame_table) = store_code.code_memory().frame_table() {
+            for stack_slot in crate::debug::gc_refs_in_frame(frame_table, offset, fp) {
+                unsafe {
+                    self.trace_wasm_stack_slot(gc_roots_list, stack_slot);
+                }
+            }
+        }
+    }
+
+    unsafe fn trace_wasm_stack_slot(&self, gc_roots_list: &mut GcRootsList, stack_slot: *mut u32) {
+        let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+        log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+        let gc_ref = vm::VMGcRef::from_raw_u32(raw);
+        if gc_ref.is_some() {
+            unsafe {
+                gc_roots_list
+                    .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+            }
+        }
+    }
+
+    fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: Wasm stack");
+
+        Backtrace::trace(self, |frame| {
+            self.trace_wasm_stack_frame(gc_roots_list, frame);
+            core::ops::ControlFlow::Continue(())
+        });
+
+        log::trace!("End trace GC roots :: Wasm stack");
+    }
+
+    #[cfg(feature = "stack-switching")]
+    fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::vm::VMStackState;
+
+        log::trace!("Begin trace GC roots :: continuations");
+
+        for continuation in &self.continuations {
+            let state = continuation.common_stack_information.state;
+
+            // FIXME(frank-emrich) In general, it is not enough to just trace
+            // through the stacks of continuations; we also need to look through
+            // their `cont.bind` arguments. However, we don't currently have
+            // enough RTTI information to check if any of the values in the
+            // buffers used by `cont.bind` are GC values. As a workaround, note
+            // that we currently disallow cont.bind-ing GC values altogether.
+            // This way, it is okay not to check them here.
+            match state {
+                VMStackState::Suspended => {
+                    Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
+                        self.trace_wasm_stack_frame(gc_roots_list, frame);
+                        core::ops::ControlFlow::Continue(())
+                    });
+                }
+                VMStackState::Running => {
+                    // Handled by `trace_wasm_stack_roots`.
+                }
+                VMStackState::Parent => {
+                    // We don't know whether our child is suspended or running, but in
+                    // either case things should be handled correctly when traversing
+                    // further along in the chain, nothing required at this point.
+                }
+                VMStackState::Fresh | VMStackState::Returned => {
+                    // Fresh/Returned continuations have no gc values on their stack.
+                }
+            }
+        }
+
+        log::trace!("End trace GC roots :: continuations");
+    }
+
+    fn trace_vmctx_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: vmctx");
+        self.for_each_global(|store, global| global.trace_root(store, gc_roots_list));
+        self.for_each_table(|store, table| table.trace_roots(store, gc_roots_list));
+        log::trace!("End trace GC roots :: vmctx");
+    }
+
+    fn trace_instance_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: instance");
+        for (_id, instance) in &mut self.instances {
+            // SAFETY: the instance's GC roots will remain valid for the
+            // duration of this GC cycle.
+            unsafe {
+                instance
+                    .handle
+                    .get_mut()
+                    .trace_element_segment_roots(gc_roots_list);
+            }
+        }
+        log::trace!("End trace GC roots :: instance");
+    }
+
+    fn trace_user_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: user");
+        self.gc_roots.trace_roots(gc_roots_list);
+        log::trace!("End trace GC roots :: user");
+    }
+
+    fn trace_pending_exception_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        log::trace!("Begin trace GC roots :: pending exception");
+        if let Some(pending_exception) = self.pending_exception.as_mut() {
+            unsafe {
+                gc_roots_list.add_vmgcref_root(pending_exception.into(), "Pending exception");
+            }
+        }
+        log::trace!("End trace GC roots :: pending exception");
+    }
+
+    /// Insert a host-allocated GC type into this store.
+    ///
+    /// This makes it suitable for the embedder to allocate instances of this
+    /// type in this store, and we don't have to worry about the type being
+    /// reclaimed (since it is possible that none of the Wasm modules in this
+    /// store are holding it alive).
+    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
+        // If a GC heap is already allocated, eagerly register trace info
+        // now. Otherwise, trace info will be registered when the GC heap
+        // is allocated in `StoreOpaque::allocate_gc_store`.
+        if let Some(gc_store) = self.optional_gc_store_mut() {
+            gc_store.ensure_trace_info(ty.index());
+        }
+        self.gc_host_alloc_types.insert(ty);
     }
 }
 

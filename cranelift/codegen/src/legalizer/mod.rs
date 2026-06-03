@@ -153,13 +153,6 @@ pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
             expand_binary_imm64(func, inst, opcode, arg, imm)
         }
 
-        InstructionData::IntCompareImm {
-            opcode: ir::Opcode::IcmpImm,
-            cond,
-            arg,
-            imm,
-        } => expand_icmp_imm(func, inst, cond, arg, imm),
-
         InstructionData::Binary { opcode, args } => expand_binary(func, inst, opcode, args),
 
         _ => WalkCommand::Continue,
@@ -184,34 +177,18 @@ fn expand_binary(
     match opcode {
         ir::Opcode::BandNot => {
             let neg = pos.ins().bnot(args[1]);
-            pos.func.dfg.replace(inst).band(args[0], neg);
+            pos.func.replace(inst).band(args[0], neg);
         }
         ir::Opcode::BorNot => {
             let neg = pos.ins().bnot(args[1]);
-            pos.func.dfg.replace(inst).bor(args[0], neg);
+            pos.func.replace(inst).bor(args[0], neg);
         }
         ir::Opcode::BxorNot => {
             let neg = pos.ins().bnot(args[1]);
-            pos.func.dfg.replace(inst).bxor(args[0], neg);
+            pos.func.replace(inst).bxor(args[0], neg);
         }
         _ => {}
     }
-
-    WalkCommand::Continue
-}
-
-fn expand_icmp_imm(
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    cond: ir::condcodes::IntCC,
-    arg: Value,
-    imm: Imm64,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func);
-    pos.goto_inst(inst);
-
-    let imm = imm_const(&mut pos, arg, imm, true);
-    pos.func.dfg.replace(inst).icmp(cond, arg, imm);
 
     WalkCommand::Continue
 }
@@ -227,17 +204,13 @@ fn expand_binary_imm64(
     pos.goto_inst(inst);
 
     let is_signed = match opcode {
-        ir::Opcode::IaddImm
-        | ir::Opcode::IrsubImm
-        | ir::Opcode::ImulImm
-        | ir::Opcode::SdivImm
-        | ir::Opcode::SremImm => true,
+        ir::Opcode::IrsubImm | ir::Opcode::SdivImm | ir::Opcode::SremImm => true,
         _ => false,
     };
 
     let imm = imm_const(&mut pos, arg, imm, is_signed);
 
-    let replace = pos.func.dfg.replace(inst);
+    let replace = pos.func.replace(inst);
     match opcode {
         // bitops
         ir::Opcode::BandImm => {
@@ -266,15 +239,9 @@ fn expand_binary_imm64(
             replace.ushr(arg, imm);
         }
         // math
-        ir::Opcode::IaddImm => {
-            replace.iadd(arg, imm);
-        }
         ir::Opcode::IrsubImm => {
             // note: arg order reversed
             replace.isub(imm, arg);
-        }
-        ir::Opcode::ImulImm => {
-            replace.imul(arg, imm);
         }
         ir::Opcode::SdivImm => {
             replace.sdiv(arg, imm);
@@ -316,7 +283,7 @@ fn expand_dynamic_stack_store(
     mflags.set_notrap();
     mflags.set_aligned();
 
-    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
+    pos.func.replace(inst).store(mflags, arg, addr, 0);
 
     WalkCommand::Continue
 }
@@ -339,7 +306,7 @@ fn expand_dynamic_stack_load(
     // Stack slots are required to be accessible and aligned.
     let mflags = MemFlagsData::trusted();
 
-    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+    pos.func.replace(inst).load(ty, mflags, addr, 0);
 
     WalkCommand::Continue
 }
@@ -363,7 +330,7 @@ fn expand_stack_store(
     let mut mflags = MemFlagsData::new();
     mflags.set_notrap();
 
-    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
+    pos.func.replace(inst).store(mflags, arg, addr, 0);
 
     WalkCommand::Continue
 }
@@ -388,7 +355,7 @@ fn expand_stack_load(
     let mut mflags = MemFlagsData::new();
     mflags.set_notrap();
 
-    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+    pos.func.replace(inst).load(ty, mflags, addr, 0);
 
     WalkCommand::Continue
 }

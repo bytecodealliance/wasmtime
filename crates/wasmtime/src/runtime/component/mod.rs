@@ -116,7 +116,7 @@ mod storage;
 pub(crate) mod store;
 pub mod types;
 mod values;
-pub use self::component::{Component, ComponentExportIndex};
+pub use self::component::{Component, ComponentExportIndex, ExportLookup};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
@@ -128,7 +128,7 @@ pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
 pub use self::has_data::*;
-pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
+pub use self::instance::{Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
 pub use self::resources::{Resource, ResourceAny, ResourceDynamic};
@@ -143,6 +143,11 @@ pub(crate) use self::store::{ComponentInstanceId, RuntimeInstance};
 // tracked separately from wasmtime.
 #[cfg(feature = "wave")]
 pub use wasm_wave;
+
+// Re-export wit-parser crate so the compatible version of this dep doesn't have to be
+// tracked separately from wasmtime.
+#[cfg(feature = "wit-parser")]
+pub use wit_parser;
 
 // These items are used by `#[derive(ComponentType, Lift, Lower)]`, but they are not part of
 // Wasmtime's API stability guarantees

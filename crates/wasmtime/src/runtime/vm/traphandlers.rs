@@ -1,6 +1,11 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
+#![cfg_attr(
+    all(not(has_native_signals), not(feature = "pulley")),
+    expect(unused, reason = "easier to not #[cfg] methods and all related types")
+)]
+
 mod backtrace;
 
 #[cfg(feature = "coredump")]
@@ -51,8 +56,7 @@ pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
     /// This trap was handled by the embedder via custom embedding APIs.
-    #[cfg(has_host_compiler_backend)]
-    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    #[cfg(all(has_native_signals, not(miri)))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
     Trap(Handler),
@@ -199,6 +203,7 @@ host_result_no_catch! {
     u64,
     f32,
     f64,
+    usize,
     i8x16,
     f32x4,
     f64x2,
@@ -244,7 +249,11 @@ where
         // generate the return value of this function. This is the
         // conditionally, below, passed to `catch_unwind`.
         let f = move || match f(store) {
-            Ok(ret) => (ret.into_abi(), None),
+            Ok(ret) => {
+                let abi = ret.into_abi();
+                debug_assert!(abi != T::SENTINEL);
+                (abi, None)
+            }
             Err(reason) => (T::SENTINEL, Some(UnwindReason::from(reason))),
         };
 
@@ -280,7 +289,7 @@ where
 /// `into_abi` function.
 pub unsafe trait HostResultHasUnwindSentinel {
     /// The Cranelift-understood ABI of this value (should not be `Self`).
-    type Abi: Copy;
+    type Abi: Copy + PartialEq;
 
     /// A value that indicates that an unwind should happen and is tested for in
     /// Cranelift-generated code.
@@ -337,6 +346,14 @@ unsafe impl HostResultHasUnwindSentinel for bool {
     const SENTINEL: Self::Abi = u32::MAX;
     fn into_abi(self) -> Self::Abi {
         u32::from(self)
+    }
+}
+
+unsafe impl HostResultHasUnwindSentinel for *mut u8 {
+    type Abi = *mut u8;
+    const SENTINEL: Self::Abi = ptr::without_provenance_mut(usize::MAX);
+    fn into_abi(self) -> Self::Abi {
+        self
     }
 }
 
@@ -820,18 +837,14 @@ impl CallThreadState {
                     // required by its stack-walking logic.
                     #[cfg(feature = "gc")]
                     if err.is::<ThrownException>()
-                        && store.has_pending_exception()
-                        && let Some(catch) = unsafe { compute_handler(store) }
+                        && let Some((instance, tag)) = store.pending_exception_tag_and_instance()
+                        && let Some(catch) = unsafe { compute_handler(store, instance, tag) }
                     {
                         handler = catch;
                         // Take the pending exception at this time and use it as
                         // payload.
                         payload1 = usize::try_from(
-                            store
-                                .take_pending_exception()
-                                .unwrap()
-                                .as_gc_ref()
-                                .as_raw_u32(),
+                            store.expose_pending_exception_to_wasm().unwrap().get(),
                         )
                         .expect("GC ref does not fit in usize");
                         payload2 = 0;

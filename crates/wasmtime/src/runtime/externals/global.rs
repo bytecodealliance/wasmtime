@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{self, VMGlobalDefinition, VMGlobalKind, VMOpaqueContext};
 use crate::{
     AnyRef, AsContext, AsContextMut, ExnRef, ExternRef, Func, GlobalType, HeapType, Mutability,
-    Ref, RootedGcRefImpl, Val, ValType,
+    Ref, Val, ValType,
     store::{AutoAssertNoGc, InstanceId, StoreId, StoreInstanceId, StoreOpaque},
     trampoline::generate_global_export,
 };
@@ -270,7 +270,7 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::AnyRef(a) => {
                     let new = match a {
@@ -278,7 +278,7 @@ impl Global {
                         Some(a) => Some(a.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::ExnRef(e) => {
                     let new = match e {
@@ -286,11 +286,11 @@ impl Global {
                         Some(e) => Some(e.try_gc_ref(&store)?.unchecked_copy()),
                     };
                     let new = new.as_ref();
-                    definition.write_gc_ref(&mut store, new);
+                    definition.write_gc_ref(&mut store, new)?;
                 }
                 Val::ContRef(None) => {
                     // Allow null continuation references for globals - these are just placeholders
-                    definition.write_gc_ref(&mut store, None);
+                    definition.write_gc_ref(&mut store, None)?;
                 }
                 Val::ContRef(Some(_)) => {
                     // TODO(#10248): Implement non-null global continuation reference handling

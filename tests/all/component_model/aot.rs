@@ -1,7 +1,7 @@
 use wasmtime::Result;
 use wasmtime::component::types::ComponentItem;
 use wasmtime::component::{Component, Linker, Type};
-use wasmtime::{Engine, Module, Precompiled, Store};
+use wasmtime::{Config, Engine, Module, Precompiled, Store};
 
 #[test]
 fn module_component_mismatch() -> Result<()> {
@@ -152,11 +152,11 @@ fn reflect_resource_import() -> Result<()> {
     let mut imports = ty.imports(&engine);
     let (_, x) = imports.next().unwrap();
     let (_, y) = imports.next().unwrap();
-    let x = match x {
+    let x = match x.ty {
         ComponentItem::Resource(t) => t,
         _ => unreachable!(),
     };
-    let y = match y {
+    let y = match y.ty {
         ComponentItem::ComponentFunc(t) => t,
         _ => unreachable!(),
     };
@@ -206,5 +206,65 @@ fn truncated_component_binaries_dont_panic() -> Result<()> {
         let _ = Component::from_binary(&engine, &binary[0..i]);
     }
 
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn implements_shows_up() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_component_model_implements(true);
+    let engine = Engine::new(&config)?;
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "a" (implements "a1:b1/c1") (instance $a))
+                (export "b" (implements "a2:b2/c2") (instance $a))
+            )
+        "#,
+    )?;
+
+    let ty = component.component_type();
+    let mut imports = ty.imports(&engine);
+    let (_, a) = imports.next().unwrap();
+    assert_eq!(a.implements.as_deref(), Some("a1:b1/c1"));
+    let mut exports = ty.exports(&engine);
+    let (_, b) = exports.next().unwrap();
+    assert_eq!(b.implements.as_deref(), Some("a2:b2/c2"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13540_resources_in_adapter_no_concurrency() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    engine.precompile_component(
+        br#"
+(component
+  (component $A
+    (type $t' (resource (rep i32)))
+    (export $t "t" (type $t'))
+
+    (core module $m (func (export "r") (param i32)))
+    (core instance $i (instantiate $m))
+    (func (export "r") (param "a" (borrow $t)) (canon lift (core func $i "r")))
+  )
+  (component $B
+    (import "a" (instance $a
+      (export "t" (type $t (sub resource)))
+      (export "r" (func (param "a" (borrow $t))))
+    ))
+
+    (core func $r (canon lower (func $a "r")))
+  )
+  (instance $a (instantiate $A))
+  (instance $b (instantiate $B (with "a" (instance $a))))
+)
+    "#,
+    )?;
     Ok(())
 }

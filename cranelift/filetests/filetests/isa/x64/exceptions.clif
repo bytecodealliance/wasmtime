@@ -15,7 +15,8 @@ function %f0(i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v10 = iconst.i32 1
+        v8 = iadd v7, v10
         v9 = f32const 0x0.0        
         return v8, v9, v2
 }
@@ -127,7 +128,8 @@ function %f1(i32) -> i32, f32, f64 {
 
     block4(v9: i64):
         v10 = ireduce.i32 v9
-        v11 = iadd_imm.i32 v10, 1
+        v14 = iconst.i32 1
+        v11 = iadd v10, v14
         v12 = f32const 0x0.0
         v13 = bitcast.f64 v9
         return v11, v12, v13
@@ -275,7 +277,8 @@ function %f2(i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v11 = iconst.i32 1
+        v8 = iadd v7, v11
         v9 = f32const 0x0.0        
         return v8, v9, v2
 }
@@ -415,7 +418,8 @@ function %f4(i64, i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v10 = iconst.i32 1
+        v8 = iadd v7, v10
         v9 = f32const 0x0.0        
         return v8, v9, v2
 

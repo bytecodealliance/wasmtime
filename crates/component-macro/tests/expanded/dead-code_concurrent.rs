@@ -212,8 +212,8 @@ pub mod a {
             }
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-            pub fn add_to_linker<T, D>(
-                linker: &mut wasmtime::component::Linker<T>,
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
@@ -221,7 +221,6 @@ pub mod a {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap_concurrent(
                     "f",
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
@@ -233,6 +232,18 @@ pub mod a {
                     },
                 )?;
                 Ok(())
+            }
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("a:b/interface-with-live-type")?;
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
         #[allow(clippy::all)]
@@ -296,6 +307,17 @@ pub mod a {
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker_instance<T, D>(
+                inst: &mut wasmtime::component::LinkerInstance<'_, T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: HostWithStore,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
+                Ok(())
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -306,7 +328,7 @@ pub mod a {
                 T: 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
-                Ok(())
+                add_to_linker_instance(&mut inst, host_getter)
             }
         }
     }

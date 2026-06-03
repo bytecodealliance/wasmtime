@@ -305,6 +305,14 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
  */
 WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 
+/**
+ * \brief Configures whether the WebAssembly branch-hinting proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_branch_hinting, bool)
+
 #ifdef WASMTIME_FEATURE_GC
 
 /**

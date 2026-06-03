@@ -95,10 +95,8 @@ fn harvest_candidate_lhs(
     let should_trace = |val| match func.dfg.value_def(val) {
         ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst].opcode() {
                 ir::Opcode::Iadd
-                | ir::Opcode::IaddImm
                 | ir::Opcode::IrsubImm
                 | ir::Opcode::Imul
-                | ir::Opcode::ImulImm
                 | ir::Opcode::Udiv
                 | ir::Opcode::UdivImm
                 | ir::Opcode::Sdiv
@@ -185,17 +183,6 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::Add { a, b }.into()
                     }
-                    (ir::Opcode::IaddImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Add { a, b }.into()
-                    }
                     (ir::Opcode::IrsubImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
                         let b = arg(allocs, 0);
                         let value: i64 = (*imm).into();
@@ -210,17 +197,6 @@ fn harvest_candidate_lhs(
                     (ir::Opcode::Imul, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Mul { a, b }.into()
-                    }
-                    (ir::Opcode::ImulImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Mul { a, b }.into()
                     }
                     (ir::Opcode::Udiv, _) => {
@@ -440,8 +416,7 @@ fn harvest_candidate_lhs(
                         let a = arg(allocs, 0);
                         ast::Instruction::Trunc { a }.into()
                     }
-                    (ir::Opcode::Icmp, ir::InstructionData::IntCompare { cond, .. })
-                    | (ir::Opcode::IcmpImm, ir::InstructionData::IntCompare { cond, .. }) => {
+                    (ir::Opcode::Icmp, ir::InstructionData::IntCompare { cond, .. }) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
                         let cmp = match cond {

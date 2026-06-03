@@ -10,6 +10,8 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
+;;     region0 = 32 "VMContext+0x20"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -19,13 +21,13 @@
 ;;     gv6 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     sig0 = (i64 vmctx, i64) -> i8 tail
 ;;     sig1 = (i64 vmctx, i64) -> i64 tail
-;;     fn0 = colocated u805306368:26 sig0
-;;     fn1 = colocated u805306368:28 sig1
+;;     fn0 = colocated u805306368:23 sig0
+;;     fn1 = colocated u805306368:25 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0020                               v9 = load.i64 notrap aligned readonly v0+32
-;; @0020                               v10 = load.i32 user2 v9
+;; @0020                               v9 = load.i64 notrap aligned readonly region0 v0+32
+;; @0020                               v10 = load.i32 user2 region1 v9
 ;;                                     v46 = iconst.i32 7
 ;; @0020                               v13 = uadd_overflow_trap v10, v46, user18  ; v46 = 7
 ;;                                     v52 = iconst.i32 -8
@@ -44,16 +46,16 @@
 ;;                                     v59 = band.i32 v13, v52  ; v52 = -8
 ;;                                     v60 = uextend.i64 v59
 ;; @0020                               v25 = iadd v23, v60
-;; @0020                               store user2 v53, v25  ; v53 = -1342177264
+;; @0020                               store user2 region1 v53, v25  ; v53 = -1342177264
 ;; @0020                               v29 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0020                               v30 = load.i32 notrap aligned readonly can_move v29
-;; @0020                               store user2 v30, v25+4
-;; @0020                               store.i32 user2 v16, v9
-;; @0020                               v33 = call fn1(v0, v2)
-;; @0020                               v34 = ireduce.i32 v33
-;;                                     v35 = iconst.i64 8
-;; @0020                               v31 = iadd v25, v35  ; v35 = 8
-;; @0020                               store user2 little v34, v31
+;; @0020                               store user2 region1 v30, v25+4
+;; @0020                               store.i32 user2 region1 v16, v9
+;; @0020                               v34 = call fn1(v0, v2)
+;; @0020                               v35 = ireduce.i32 v34
+;; @0020                               v31 = iconst.i64 8
+;; @0020                               v32 = iadd v25, v31  ; v31 = 8
+;; @0020                               store user2 little region1 v35, v32
 ;; @0023                               jump block1
 ;;
 ;;                                 block3 cold:

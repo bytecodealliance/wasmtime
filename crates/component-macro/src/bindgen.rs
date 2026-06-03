@@ -20,8 +20,8 @@ pub struct Config {
     include_generated_code_from_file: bool,
 }
 
-pub fn expand(input: &Config) -> Result<TokenStream> {
-    let mut src = match input.opts.generate(&input.resolve, input.world) {
+pub fn expand(input: &mut Config) -> Result<TokenStream> {
+    let mut src = match input.opts.generate(&mut input.resolve, input.world) {
         Ok(s) => s,
         Err(e) => return Err(Error::new(Span::call_site(), e.to_string())),
     };

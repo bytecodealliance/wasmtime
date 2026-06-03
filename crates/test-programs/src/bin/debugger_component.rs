@@ -11,7 +11,7 @@ mod api {
         world: "bytecodealliance:wasmtime/debug-main",
         path: "../../crates/debugger/wit",
         with: {
-            "wasi:io/poll@0.2.6": wasip2::io::poll,
+            "wasi:io/poll@0.2.12": wasip2::io::poll,
         }
     });
 }

@@ -11,9 +11,8 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use core::str;
 use wasmtime_environ::{
-    CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, EntityRef, FilePos, FuncIndex,
-    FuncKey, FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex,
-    StaticModuleIndex,
+    CompiledFunctionsTable, CompiledModuleInfo, DefinedFuncIndex, FilePos, FuncIndex, FuncKey,
+    FunctionLoc, FunctionName, Metadata, Module, ModuleInternedTypeIndex, StaticModuleIndex,
 };
 
 /// A compiled wasm module, ready to be instantiated.
@@ -116,38 +115,20 @@ impl CompiledModule {
     pub fn finished_function_ranges(
         &self,
     ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, Range<usize>)> + '_ {
-        self.module
-            .defined_func_indices()
-            .map(|i| (i, self.finished_function_range(i)))
+        self.module.defined_func_indices().map(|i| {
+            let key = FuncKey::DefinedWasmFunction(self.module_index(), i);
+            (i, self.function_range(key))
+        })
     }
 
-    /// Returns the offset in the text section of the function that `index` points to.
+    /// Returns the offset in the text section of the function that `key`
+    /// points to.
     #[inline]
-    pub fn finished_function_range(&self, def_func_index: DefinedFuncIndex) -> Range<usize> {
-        let loc = self.func_loc(def_func_index);
+    pub fn function_range(&self, key: FuncKey) -> Range<usize> {
+        let loc = self.func_loc(key);
         let start = usize::try_from(loc.start).unwrap();
         let end = usize::try_from(loc.start + loc.length).unwrap();
         start..end
-    }
-
-    /// Get the array-to-Wasm trampoline for the function `index`
-    /// points to, as a range in the text segment.
-    ///
-    /// If the function `index` points to does not escape, then `None` is
-    /// returned.
-    ///
-    /// These trampolines are used for array callers (e.g. `Func::new`)
-    /// calling Wasm callees.
-    pub fn array_to_wasm_trampoline_range(
-        &self,
-        def_func_index: DefinedFuncIndex,
-    ) -> Option<Range<usize>> {
-        assert!(def_func_index.index() < self.module.num_defined_funcs());
-        let key = FuncKey::ArrayToWasmTrampoline(self.module_index(), def_func_index);
-        let loc = self.index.func_loc(key)?;
-        let start = usize::try_from(loc.start).unwrap();
-        let end = usize::try_from(loc.start + loc.length).unwrap();
-        Some(start..end)
     }
 
     /// Get the Wasm-to-array trampoline for the given signature, as a
@@ -156,15 +137,10 @@ impl CompiledModule {
     /// These trampolines are used for filling in
     /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
-    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> Option<&[u8]> {
+    pub fn wasm_to_array_trampoline(&self, signature: ModuleInternedTypeIndex) -> &[u8] {
         let key = FuncKey::WasmToArrayTrampoline(signature);
-        let loc = self.index.func_loc(key)?;
-        let start = usize::try_from(loc.start).unwrap();
-        let end = usize::try_from(loc.start + loc.length).unwrap();
-        Some(
-            self.engine_code
-                .raw_wasm_to_array_trampoline_data(start..end),
-        )
+        let range = self.function_range(key);
+        self.engine_code.raw_wasm_to_array_trampoline_data(range)
     }
 
     /// Lookups a defined function by a program counter value.
@@ -190,9 +166,7 @@ impl CompiledModule {
     }
 
     /// Gets the function location information for a given function index.
-    pub fn func_loc(&self, def_func_index: DefinedFuncIndex) -> &FunctionLoc {
-        assert!(def_func_index.index() < self.module.num_defined_funcs());
-        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+    pub fn func_loc(&self, key: FuncKey) -> &FunctionLoc {
         self.index
             .func_loc(key)
             .expect("defined function should be present")
@@ -200,9 +174,7 @@ impl CompiledModule {
 
     /// Returns the original binary offset in the file that `index` was defined
     /// at.
-    pub fn func_start_srcloc(&self, def_func_index: DefinedFuncIndex) -> FilePos {
-        assert!(def_func_index.index() < self.module.num_defined_funcs());
-        let key = FuncKey::DefinedWasmFunction(self.module_index(), def_func_index);
+    pub fn func_start_srcloc(&self, key: FuncKey) -> FilePos {
         self.index
             .src_loc(key)
             .expect("defined function should be present")
@@ -266,6 +238,10 @@ impl CompiledModule {
     pub fn bytecode(&self) -> Option<&[u8]> {
         self.engine_code
             .wasm_bytecode_for_module(self.module.module_index)
+    }
+
+    pub(crate) fn index(&self) -> &Arc<CompiledFunctionsTable> {
+        &self.index
     }
 }
 

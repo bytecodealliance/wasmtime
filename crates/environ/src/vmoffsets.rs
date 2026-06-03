@@ -31,11 +31,15 @@
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      tags: [VMTagDefinition; module.num_defined_tags],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
+//      startup_func_ref: [VMFuncRef; module.has_startup_func ? 1 : 0],
+//      runtime_data_bases: [*const u8; module.num_runtime_data],
+//      runtime_data_lengths: [u32; module.num_runtime_data],
 // }
 
 use crate::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, FuncIndex,
-    FuncRefIndex, GlobalIndex, MemoryIndex, Module, OwnedMemoryIndex, TableIndex, TagIndex,
+    FuncRefIndex, GlobalIndex, MemoryIndex, Module, OwnedMemoryIndex, RuntimeDataIndex, TableIndex,
+    TagIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
 
@@ -87,6 +91,10 @@ pub struct VMOffsets<P> {
     /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
+    /// The number of runtime data segments in the module.
+    pub num_runtime_data: u32,
+    /// Whether or not the module has a start function.
+    pub has_startup_func: bool,
 
     // precalculated offsets of various member fields
     imported_functions: u32,
@@ -100,6 +108,9 @@ pub struct VMOffsets<P> {
     defined_globals: u32,
     defined_tags: u32,
     defined_func_refs: u32,
+    startup_func_ref: u32,
+    runtime_data_bases: u32,
+    runtime_data_lengths: u32,
     size: u32,
 }
 
@@ -480,6 +491,40 @@ pub trait PtrSize {
         self.vmctx_epoch_ptr() + self.size()
     }
 
+    /// Return the offset of the `over_approximated_stack_roots` field within
+    /// `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_over_approximated_stack_roots(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of the `current_over_approximated_stack_roots_len`
+    /// field within `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_current_over_approximated_stack_roots_len(&self) -> u8 {
+        4
+    }
+
+    /// Return the offset of the
+    /// `over_approximated_stack_roots_len_after_last_gc` field within
+    /// `VMDrcHeapData`.
+    #[inline]
+    fn vmdrc_heap_data_over_approximated_stack_roots_len_after_last_gc(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMDrcHeapData`.
+    #[inline]
+    fn size_of_vmdrc_heap_data(&self) -> u8 {
+        12
+    }
+
+    /// Return the alignment of `VMDrcHeapData`.
+    #[inline]
+    fn align_of_vmdrc_heap_data(&self) -> u8 {
+        4
+    }
+
     /// Return the offset of the `bump_ptr` field within `VMCopyingHeapData`.
     #[inline]
     fn vmcopying_heap_data_bump_ptr(&self) -> u8 {
@@ -566,6 +611,10 @@ pub struct VMOffsetsFields<P> {
     /// The number of escaped functions in the module, the size of the function
     /// references array.
     pub num_escaped_funcs: u32,
+    /// The number of runtime data segments in the module.
+    pub num_runtime_data: u32,
+    /// Whether or not the module has a start function.
+    pub has_startup_func: bool,
 }
 
 impl<P: PtrSize> VMOffsets<P> {
@@ -592,6 +641,8 @@ impl<P: PtrSize> VMOffsets<P> {
             num_defined_globals: cast_to_u32(module.globals.len() - module.num_imported_globals),
             num_defined_tags: cast_to_u32(module.tags.len() - module.num_imported_tags),
             num_escaped_funcs: cast_to_u32(module.num_escaped_funcs),
+            num_runtime_data: cast_to_u32(module.runtime_data.len()),
+            has_startup_func: !module.startup.is_none(),
         })
     }
 
@@ -623,6 +674,8 @@ impl<P: PtrSize> VMOffsets<P> {
                     num_defined_tags: _,
                     num_owned_memories: _,
                     num_escaped_funcs: _,
+                    num_runtime_data: _,
+                    has_startup_func: _,
 
                     // used as the initial size below
                     size,
@@ -651,6 +704,9 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
+            runtime_data_lengths: "runtime data lengths",
+            runtime_data_bases: "runtime data base pointers",
+            startup_func_ref: "startup funcref",
             defined_func_refs: "module functions",
             defined_tags: "defined tags",
             defined_globals: "defined globals",
@@ -681,6 +737,8 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_globals: fields.num_defined_globals,
             num_defined_tags: fields.num_defined_tags,
             num_escaped_funcs: fields.num_escaped_funcs,
+            num_runtime_data: fields.num_runtime_data,
+            has_startup_func: fields.has_startup_func,
             imported_functions: 0,
             imported_tables: 0,
             imported_memories: 0,
@@ -692,6 +750,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             defined_globals: 0,
             defined_tags: 0,
             defined_func_refs: 0,
+            startup_func_ref: 0,
+            runtime_data_bases: 0,
+            runtime_data_lengths: 0,
             size: 0,
         };
 
@@ -750,6 +811,13 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
                 ret.num_escaped_funcs,
                 ret.ptr.size_of_vm_func_ref(),
             ),
+            size(startup_func_ref) = if ret.has_startup_func {
+                ret.ptr.size_of_vm_func_ref()
+            } else {
+                0
+            },
+            size(runtime_data_bases) = cmul(ret.num_runtime_data, ret.ptr.size()),
+            size(runtime_data_lengths) = cmul(ret.num_runtime_data, 4),
         }
 
         ret.size = next_field_offset;
@@ -998,6 +1066,18 @@ impl<P: PtrSize> VMOffsets<P> {
         self.defined_func_refs
     }
 
+    /// The offset of the `runtime_data_bases` array.
+    #[inline]
+    pub fn vmctx_runtime_data_bases_begin(&self) -> u32 {
+        self.runtime_data_bases
+    }
+
+    /// The offset of the `runtime_data_lengths` array.
+    #[inline]
+    pub fn vmctx_runtime_data_lengths_begin(&self) -> u32 {
+        self.runtime_data_lengths
+    }
+
     /// Return the size of the `VMContext` allocation.
     #[inline]
     pub fn size_of_vmctx(&self) -> u32 {
@@ -1088,6 +1168,31 @@ impl<P: PtrSize> VMOffsets<P> {
         assert!(!index.is_reserved_value());
         assert!(index.as_u32() < self.num_escaped_funcs);
         self.vmctx_func_refs_begin() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
+    }
+
+    /// Returns the offset to the `VMFuncRef` for the module startup function.
+    ///
+    /// Panics if this module does not have a startup function.
+    #[inline]
+    pub fn vmctx_startup_func_ref(&self) -> u32 {
+        assert!(self.has_startup_func);
+        self.startup_func_ref
+    }
+
+    /// Return the offset to the base of the runtime data segment at `index`.
+    #[inline]
+    pub fn vmctx_runtime_data_base(&self, index: RuntimeDataIndex) -> u32 {
+        assert!(!index.is_reserved_value());
+        assert!(index.as_u32() < self.num_runtime_data);
+        self.vmctx_runtime_data_bases_begin() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// Return the offset to the length of the runtime data segment at `index`.
+    #[inline]
+    pub fn vmctx_runtime_data_length(&self, index: RuntimeDataIndex) -> u32 {
+        assert!(!index.is_reserved_value());
+        assert!(index.as_u32() < self.num_runtime_data);
+        self.vmctx_runtime_data_lengths_begin() + index.as_u32() * 4
     }
 
     /// Return the offset to the `wasm_call` field in `*const VMFunctionBody` index `index`.

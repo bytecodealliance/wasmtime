@@ -25,11 +25,13 @@ block9(v7: i32):
 ; Using a function argument in an unreachable block is ok.
 function %arg(i32) -> i32 {
 block0(v0: i32):
-    v1 = iadd_imm v0, 1
+    v11 = iconst.i32 1
+    v1 = iadd v0, v11
     return v1
 
 block1:
-    v10 = iadd_imm v0, 10
+    v12 = iconst.i32 10
+    v10 = iadd v0, v12
     return v10
 }
 

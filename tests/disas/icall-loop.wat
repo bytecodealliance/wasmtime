@@ -23,6 +23,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -30,7 +31,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u805306368:9 sig1
+;;     fn0 = colocated u805306368:7 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -50,7 +51,7 @@
 ;; @0027                               jump block2
 ;;
 ;;                                 block2:
-;; @002b                               v12 = load.i64 user6 aligned table v11
+;; @002b                               v12 = load.i64 user6 aligned region0 v11
 ;;                                     v31 = iconst.i64 -2
 ;;                                     v32 = band v12, v31  ; v31 = -2
 ;; @002b                               brif v12, block5(v32), block4
@@ -71,6 +72,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) tail {
+;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -78,7 +80,7 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     fn0 = colocated u805306368:9 sig1
+;;     fn0 = colocated u805306368:7 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -94,7 +96,7 @@
 ;;
 ;;                                 block2:
 ;;                                     v37 = iadd.i64 v6, v36  ; v36 = 8
-;; @0038                               v11 = load.i64 user6 aligned table v37
+;; @0038                               v11 = load.i64 user6 aligned region0 v37
 ;;                                     v38 = iconst.i64 -2
 ;;                                     v39 = band v11, v38  ; v38 = -2
 ;; @0038                               brif v11, block5(v39), block4

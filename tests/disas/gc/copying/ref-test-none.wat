@@ -33,8 +33,8 @@
 ;; @0027                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v6 = iconst.i32 0
-;; @0024                               v4 = icmp.i32 eq v2, v6  ; v6 = 0
-;; @0024                               v5 = uextend.i32 v4
-;; @0027                               return v5
+;; @0024                               v4 = iconst.i32 0
+;; @0024                               v5 = icmp.i32 eq v2, v4  ; v4 = 0
+;; @0024                               v6 = uextend.i32 v5
+;; @0027                               return v6
 ;; }

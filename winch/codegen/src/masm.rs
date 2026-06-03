@@ -1665,7 +1665,7 @@ pub(crate) trait MacroAssembler {
         &mut self,
         dst: WritableReg,
         lhs: Reg,
-        rhs: Imm,
+        rhs: RegImm,
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()>;

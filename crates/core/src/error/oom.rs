@@ -13,7 +13,7 @@ use core::{fmt, mem, ptr::NonNull};
 /// # Out-of-Memory Handling in Wasmtime
 ///
 /// Wasmtime performs out-of-memory (OOM) error handling on a **best-effort
-/// basis**. OOM handling does not have [tier 1
+/// basis**. OOM handling does _not_ have [tier 1
 /// support](https://docs.wasmtime.dev/stability-tiers.html) at this time and,
 /// therefore, while failure to handle OOM at some allocation site may be
 /// considered a bug, and might be a potential denial-of-service vector, it
@@ -42,26 +42,28 @@ use core::{fmt, mem, ptr::NonNull};
 /// should generally document this fact by listing `OutOfMemory` as one of the
 /// potential errors returned.
 ///
-/// | **Where**                                       | **Handles OOM?**                |
-/// |-------------------------------------------------|---------------------------------|
-/// | **Compiler**                                    | **No**                          |
-/// | &emsp;`wasmtime::Module::new`                   | No                              |
-/// | &emsp;`wasmtime::Component::new`                | No                              |
-/// | &emsp;`wasmtime::CodeBuilder`                   | No                              |
-/// | &emsp;Other compilation APIs...                 | No                              |
-/// | **Runtime**                                     | **Yes**                         |
-/// | &emsp;`wasmtime::Store`                         | Yes                             |
-/// | &emsp;`wasmtime::Linker`                        | Yes                             |
-/// | &emsp;`wasmtime::Module::deserialize`           | Yes                             |
-/// | &emsp;`wasmtime::Instance`                      | Yes                             |
-/// | &emsp;`wasmtime::Func::call`                    | Yes                             |
-/// | &emsp;Component Model concurrency/async APIs    | Not yet                         |
-/// | &emsp;Other instantiation and execution APIs... | Yes                             |
-/// | **WASI Implementations and Host APIs**          | **Depends**                     |
-/// | &emsp;`wasmtime_wasi`                           | No                              |
-/// | &emsp;`wasmtime_wasi_http`                      | No                              |
-/// | &emsp;`wasmtime_wasi_*`                         | No                              |
-/// | &emsp;Your embedding's APIs                     | If *you* implement OOM handling |
+/// | **Where**                                         | **Handles OOM?**                |
+/// |---------------------------------------------------|---------------------------------|
+/// | **Compiler**                                      | **No**                          |
+/// | &emsp;`wasmtime::Module::new`                     | No                              |
+/// | &emsp;`wasmtime::Component::new`                  | No                              |
+/// | &emsp;`wasmtime::CodeBuilder`                     | No                              |
+/// | &emsp;Other compilation APIs...                   | No                              |
+/// | **Runtime**                                       | **Yes**                         |
+/// | &emsp;`wasmtime::Store`                           | Yes                             |
+/// | &emsp;`wasmtime::Linker`                          | Yes                             |
+/// | &emsp;`wasmtime::Module::deserialize`             | Yes                             |
+/// | &emsp;`wasmtime::Instance`                        | Yes                             |
+/// | &emsp;`wasmtime::Func::call`                      | Yes                             |
+/// | &emsp;Wasm execution                              | Yes                             |
+/// | &emsp;Garbage collector and related APIs          | Not yet                         |
+/// | &emsp;Component Model concurrency/async APIs      | Not yet                         |
+/// | &emsp;Other instantiation and execution APIs...   | Yes                             |
+/// | **WASI Implementations and Host APIs**            | **Depends**                     |
+/// | &emsp;`wasmtime_wasi`                             | No                              |
+/// | &emsp;`wasmtime_wasi_http`                        | No                              |
+/// | &emsp;`wasmtime_wasi_*`                           | No                              |
+/// | &emsp;Your embedding's APIs / WASI implementation | If *you* implement OOM handling |
 ///
 /// If you encounter an unhandled OOM inside Wasmtime, and it is within a
 /// portion of code where it should be handled, then please [file an

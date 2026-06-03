@@ -163,11 +163,11 @@ impl TypeChecker<'_> {
             // Interface types may be exported from a component in order to give them a name, but
             // they don't have a definition in the sense that this search is interested in, so
             // ignore them.
-            if let TypeDef::Interface(_) = expected {
+            if let TypeDef::Interface(_) = expected.ty {
                 continue;
             }
             let actual = actual.and_then(|actual| actual.get(name, self.strings));
-            self.definition(expected, actual)
+            self.definition(&expected.ty, actual)
                 .with_context(|| format!("instance export `{name}` has the wrong type"))?;
         }
         Ok(())

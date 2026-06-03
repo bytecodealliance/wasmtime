@@ -289,7 +289,7 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if let Ok(final_offset) = i32::try_from(final_offset) {
                         let base = put_input_in_reg(ctx, add_inputs[1 - input]);
-                        return Amode::imm_reg(final_offset, base).with_flags(flags);
+                        return Amode::imm_reg(final_offset, base).with_flags(flags.into());
                     }
                 }
             }
@@ -307,11 +307,11 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
             Gpr::unwrap_new(index),
             shift,
         )
-        .with_flags(flags);
+        .with_flags(flags.into());
     }
 
     let input = put_input_in_reg(ctx, spec);
-    Amode::imm_reg(offset, input).with_flags(flags)
+    Amode::imm_reg(offset, input).with_flags(flags.into())
 }
 
 //=============================================================================

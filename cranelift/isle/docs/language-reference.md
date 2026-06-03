@@ -1491,11 +1491,18 @@ The grammar accepted by the parser is as follows:
 
 <type-body> ::= "(" "primitive" <ident> ")"
               | "(" "enum" <enum-variant>* ")"
+              | "(" "struct" <fields> ")"
 
 <enum-variant> ::= <ident>
-                 | "(" <ident> <variant-field>* ")"
+                 | "(" <ident> <fields> ")"
 
-<variant-field> ::= "(" <ident> <ty> ")"
+<fields> ::= <struct-fields> | <tuple-fields>
+
+<struct-fields> ::= <struct-field>*
+<struct-field> ::= "(" <ident> <ty> ")"
+
+<tuple-fields> ::= <tuple-field>*
+<tuple-field> ::= <ty>
 
 <ty> ::= <ident>
 
