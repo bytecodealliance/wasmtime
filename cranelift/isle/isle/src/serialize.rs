@@ -829,8 +829,8 @@ fn group_by_mut<T: Eq>(
             None
         } else {
             let mid = xs
-                .windows(2)
-                .position(|w| !pred(&w[0], &w[1]))
+                .array_windows()
+                .position(|[a, b]| !pred(a, b))
                 .map_or(xs.len(), |x| x + 1);
             let slice = std::mem::take(&mut xs);
             let (group, rest) = slice.split_at_mut(mid);

@@ -641,11 +641,10 @@ the use case.
         if cfg!(debug_assertions) {
             let mut symbols: Vec<_> = raw_outputs.iter().map(|i| &i.symbol).collect();
             symbols.sort();
-            for w in symbols.windows(2) {
+            for [a, b] in symbols.array_windows() {
                 assert_ne!(
-                    w[0], w[1],
-                    "should never have duplicate symbols, but found two functions with the symbol `{}`",
-                    w[0]
+                    a, b,
+                    "should never have duplicate symbols, but found two functions with the symbol `{a}`",
                 );
             }
         }
