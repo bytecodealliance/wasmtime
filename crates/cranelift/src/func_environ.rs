@@ -814,9 +814,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
-        let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
-        let base = builder.ins().global_value(pointer_type, vmctx);
+        let base = self.vmctx_val(&mut builder.cursor());
         let offset = i32::from(self.offsets.ptr.vmctx_epoch_ptr());
         let epoch_ptr = builder
             .ins()
