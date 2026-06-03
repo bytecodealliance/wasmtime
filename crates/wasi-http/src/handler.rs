@@ -4,7 +4,7 @@
 #[cfg(feature = "p2")]
 use crate::p2::bindings::http::types as p2_types;
 #[cfg(feature = "p3")]
-use crate::p3;
+use crate::p3::{self, BodyExt as _};
 use bytes::Bytes;
 use futures::{
     channel::oneshot,
@@ -831,6 +831,15 @@ where
                             }
                         }
 
+                        // A clean exit via `wasi:cli/exit(ok)` is a
+                        // guest-controlled signal that the instance is done (not a trap).
+                        Poll::Ready(Some(Err(ref e)))
+                            if e.downcast_ref::<wasmtime_wasi::I32Exit>()
+                                .map_or(false, |e| e.0 == 0) =>
+                        {
+                            break Poll::Ready(Ok(()));
+                        }
+
                         // Instance trapped.
                         Poll::Ready(Some(Err(error))) => {
                             break Poll::Ready(Err(error));
@@ -1193,7 +1202,10 @@ async fn handle<T: Send>(
             let (request, body) = request.into_parts();
             let body = body.map_err(p3_types::ErrorCode::from);
             let request = http::Request::from_parts(request, body);
-            let (request, request_io_result) = p3::Request::from_http(request);
+
+            // there isn't anything meaningful the host can do with i/o errors
+            // on the body read from the guest, so we just drop that future
+            let (request, _request_io_result) = p3::Request::from_http(request);
 
             let request = accessor.with(|mut store| {
                 Ok::<_, wasmtime::Error>(view(store.data_mut()).table.push(request)?)
@@ -1205,16 +1217,23 @@ async fn handle<T: Send>(
                     .call_handle(accessor, request)
                     .await?;
 
+                // channel that notifies the guest that the response has been transmitted
+                let (notify_tx, notify_rx) = oneshot::channel::<()>();
                 let response = accessor.with(|mut store| {
                     let response = view(store.get()).table.delete(response?)?;
                     Ok::<_, wasmtime::Error>(response.into_http_with_getter(
                         &mut store,
-                        request_io_result,
+                        notify_rx.map(|_| Ok(())),
                         view,
                     )?)
                 })?;
 
-                Ok(response.map(move |body| body.map_err(wasmtime::Error::from).boxed_unsync()))
+                Ok(response.map(move |body| {
+                    // on drop, notify_tx channel will be closed indicating
+                    // to the guest that the response has been transmitted.
+                    let body = body.map_err(wasmtime::Error::from);
+                    body.with_state(notify_tx).boxed_unsync()
+                }))
             });
 
             // TODO: We should also use `oneshot::Sender::poll_close` to be

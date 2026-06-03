@@ -16,6 +16,8 @@ mod proxy;
 mod request;
 mod response;
 
+pub(crate) use body::BodyExt;
+
 #[cfg(feature = "default-send-request")]
 pub use request::default_send_request;
 pub use request::{Request, RequestOptions};
