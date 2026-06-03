@@ -598,7 +598,8 @@ mod tests {
         let code = "function %test() -> i32 {
         block0:
             v0 = iconst.i32 1
-            v1 = udiv_imm.i32 v0, 0
+            v2 = iconst.i32 0
+            v1 = udiv v0, v2
             return v1
         }";
 
