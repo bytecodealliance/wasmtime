@@ -1479,9 +1479,9 @@ impl TranslateTrap for FuncEnvironment<'_> {
     }
 
     fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(&mut pos.func);
-        pos.ins().global_value(pointer_type, vmctx)
+        pos.func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("Missing vmctx parameter")
     }
 
     fn builtin_funcref(

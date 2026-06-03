@@ -46,26 +46,26 @@
 ;;
 ;;                                 block2 cold:
 ;; @005c                               v16 = iconst.i32 0
-;; @005c                               v19 = call fn0(v0, v16, v5)  ; v16 = 0
-;; @005c                               jump block3(v19)
+;; @005c                               v18 = call fn0(v0, v16, v5)  ; v16 = 0
+;; @005c                               jump block3(v18)
 ;;
 ;;                                 block3(v15: i64):
-;; @005c                               v23 = load.i32 user7 aligned readonly v15+16
-;; @005c                               v21 = load.i64 notrap aligned readonly can_move v0+40
-;; @005c                               v22 = load.i32 notrap aligned readonly can_move v21
-;; @005c                               v24 = icmp eq v23, v22
-;; @005c                               v25 = uextend.i32 v24
-;; @005c                               brif v24, block5(v25), block4
+;; @005c                               v21 = load.i32 user7 aligned readonly v15+16
+;; @005c                               v19 = load.i64 notrap aligned readonly can_move v0+40
+;; @005c                               v20 = load.i32 notrap aligned readonly can_move v19
+;; @005c                               v22 = icmp eq v21, v20
+;; @005c                               v23 = uextend.i32 v22
+;; @005c                               brif v22, block5(v23), block4
 ;;
 ;;                                 block4:
-;; @005c                               v27 = call fn1(v0, v23, v22)
-;; @005c                               jump block5(v27)
+;; @005c                               v24 = call fn1(v0, v21, v20)
+;; @005c                               jump block5(v24)
 ;;
-;;                                 block5(v28: i32):
-;; @005c                               trapz v28, user8
-;; @005c                               v29 = load.i64 notrap aligned readonly v15+8
-;; @005c                               v30 = load.i64 notrap aligned readonly v15+24
-;; @005c                               call_indirect sig0, v29(v30, v0)
+;;                                 block5(v25: i32):
+;; @005c                               trapz v25, user8
+;; @005c                               v26 = load.i64 notrap aligned readonly v15+8
+;; @005c                               v27 = load.i64 notrap aligned readonly v15+24
+;; @005c                               call_indirect sig0, v26(v27, v0)
 ;; @005f                               jump block1
 ;;
 ;;                                 block1:

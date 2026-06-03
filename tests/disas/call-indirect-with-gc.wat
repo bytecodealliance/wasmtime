@@ -40,20 +40,20 @@
 ;;
 ;;                                 block2 cold:
 ;; @0035                               v19 = iconst.i32 0
-;; @0035                               v22 = call fn0(v0, v19, v8)  ; v19 = 0
-;; @0035                               jump block3(v22)
+;; @0035                               v21 = call fn0(v0, v19, v8)  ; v19 = 0
+;; @0035                               jump block3(v21)
 ;;
 ;;                                 block3(v18: i64):
-;; @0035                               v26 = load.i32 user7 aligned readonly v18+16
-;; @0035                               v24 = load.i64 notrap aligned readonly can_move v0+40
-;; @0035                               v25 = load.i32 notrap aligned readonly can_move v24+4
-;; @0035                               v27 = icmp eq v26, v25
-;; @0035                               trapz v27, user8
-;; @0035                               v29 = load.i64 notrap aligned readonly v18+8
-;; @0035                               v30 = load.i64 notrap aligned readonly v18+24
-;; @0035                               v31 = call_indirect sig0, v29(v30, v0, v2)
+;; @0035                               v24 = load.i32 user7 aligned readonly v18+16
+;; @0035                               v22 = load.i64 notrap aligned readonly can_move v0+40
+;; @0035                               v23 = load.i32 notrap aligned readonly can_move v22+4
+;; @0035                               v25 = icmp eq v24, v23
+;; @0035                               trapz v25, user8
+;; @0035                               v27 = load.i64 notrap aligned readonly v18+8
+;; @0035                               v28 = load.i64 notrap aligned readonly v18+24
+;; @0035                               v29 = call_indirect sig0, v27(v28, v0, v2)
 ;; @0038                               jump block1
 ;;
 ;;                                 block1:
-;; @0038                               return v31
+;; @0038                               return v29
 ;; }

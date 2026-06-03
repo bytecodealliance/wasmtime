@@ -23,26 +23,26 @@
 ;; @0016                               brif v7, block3, block2(v6)
 ;;
 ;;                                 block3 cold:
-;; @0016                               v9 = call fn0(v0)
-;; @0016                               jump block2(v9)
+;; @0016                               v8 = call fn0(v0)
+;; @0016                               jump block2(v8)
 ;;
-;;                                 block2(v21: i64):
-;; @0017                               jump block4(v21)
+;;                                 block2(v19: i64):
+;; @0017                               jump block4(v19)
 ;;
-;;                                 block4(v12: i64):
-;; @0017                               v11 = load.i64 notrap aligned v3
-;; @0017                               v13 = icmp uge v11, v12
-;; @0017                               brif v13, block7, block6(v12)
+;;                                 block4(v11: i64):
+;; @0017                               v10 = load.i64 notrap aligned v3
+;; @0017                               v12 = icmp uge v10, v11
+;; @0017                               brif v12, block7, block6(v11)
 ;;
 ;;                                 block7 cold:
-;; @0017                               v15 = load.i64 notrap aligned v5+8
-;; @0017                               v16 = icmp.i64 uge v11, v15
-;; @0017                               brif v16, block8, block6(v15)
+;; @0017                               v14 = load.i64 notrap aligned v5+8
+;; @0017                               v15 = icmp.i64 uge v10, v14
+;; @0017                               brif v15, block8, block6(v14)
 ;;
 ;;                                 block8 cold:
-;; @0017                               v18 = call fn0(v0)
-;; @0017                               jump block6(v18)
+;; @0017                               v16 = call fn0(v0)
+;; @0017                               jump block6(v16)
 ;;
-;;                                 block6(v22: i64):
-;; @0019                               jump block4(v22)
+;;                                 block6(v20: i64):
+;; @0019                               jump block4(v20)
 ;; }
