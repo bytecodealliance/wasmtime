@@ -1659,13 +1659,13 @@ This section documents the verification-specific extensions to ISLE.
 
 These extensions allow ISLE definitions to be translated into logical formulas and verified using an SMT solver.
 
-At the top level of a verification-enabled ISLE file, the following definition forms are supported:
+At the top level of an ISLE file, the following definition forms are supported:
 
 1. `(model ...)` — specifies which SMT construct is used to model an ISLE type
-2. `(form ...)` — defines a reusable, named collection of verification signatures
-3. `(instantiate ...)` — specifies which concrete type instantiations (e.g. monomorphizations to specific bit-widths) are verified for a term
+2. `(form ...)` — defines a reusable, named collection of instantiations  (e.g. monomorphizations to specific bit-widths)
+3. `(instantiate ...)` — specifies which concrete type instantiations are verified for a term
 4. `(spec ...)` — provides a specification of a term using logical expressions, including `provide` and `require` blocks
-5. `(state ...)` — declares a program-state variable (e.g. a memory model) with a type and default value
+5. `(state ...)` — declares a program-state variable (e.g. modeling memory or traps) with a type and default value
 6. `(attr ...)` — annotates a term or rule with a verification attribute (`(veri chain)`, `(veri priority)`, or `(tag ...)`)
 7. `(macro ...)` — defines a reusable spec-expression macro, primarily for complex numeric logic such as floating-point reasoning
 
@@ -1731,7 +1731,7 @@ This maps an ISLE type directly to an SMT sort (e.g. a bitvector).
 ```
 
 This encodes an ISLE type as a composite SMT structure with fixed fields. Unlike
-enums, structs do not have variants — every instance has all the specified
+enums, structs do not have variants—every instance has all the specified
 fields. Note that the `struct` is nested inside `(type ...)`.
 
 3. Enumeration Model
@@ -1754,8 +1754,7 @@ Each variant becomes a constructor of a finite SMT datatype.
 (model UImm5 (type (bv 5)))
 ```
 
-**Explanation**: This example models the ISLE type `UImm5` as a 5-bit SMT bitvector.
-Such types are commonly used to represent small immediates in instruction encodings.
+**Explanation**: This example models the ISLE type `UImm5` as a 5-bit SMT bitvector, in this case to represent small immediates in instruction encodings.
 The `model` declaration ensures that the SMT solver interprets values of this type as bitvectors of width 5.
 
 **Example 2**: composite (struct) type
@@ -1766,10 +1765,7 @@ The `model` declaration ensures that the SMT solver interprets values of this ty
   (type
     (struct
       (bits (bv 12))
-      (shift12 Bool)
-    )
-  )
-)
+      (shift12 Bool))))
 ```
 
 **Explanation**: This example models `Imm12` as a composite SMT structure.
@@ -1779,7 +1775,7 @@ The model contains two fields:
 - `bits` — a 12-bit bitvector representing the immediate value
 - `shift12` — a Boolean flag indicating whether the value is shifted
 
-Composite models allow ISLE types to map to structured SMT datatypes rather than primitive values.
+Composite models allow ISLE types to map to structured datatypes rather than primitive values.
 
 **Example 3**: Enumeration Type
 
@@ -1800,14 +1796,15 @@ Composite models allow ISLE types to map to structured SMT datatypes rather than
 Each variant corresponds to a possible value of the ISLE type.
 This allows the SMT solver to reason about which variant of the enum is active during verification.
 
-**Example 4**: Parametric enum (variants carry fields)
+For many ISLE enums, the verifier derives types for that enum without an explicit `model`.
+
+**Example 4**: Parametric enum (variants that carry fields)
 ```lisp
 (type CondBrKind extern
   (enum
     (Zero (r Reg))
     (NotZero (r Reg))
-    (Cond (cc Cond))
-))
+    (Cond (cc Cond))))
 ```
 
 **Explanation**: Variants of an enum may also carry additional data.
@@ -1862,10 +1859,7 @@ Each instantiation produces a separate SMT verification obligation.
 Two forms of instantiation exists:
 
 1. Direct Signature Instantiation: concrete signatures written explicitly
-
-
 2. Form-based Instantiation: a previously defined `form` is used
-
 
 #### 2.3 Signature Definitions
 
@@ -1905,21 +1899,20 @@ For example, many binary operations on integers can be expressed as taking two b
 
 #### 2.5.3 Example (form)
 ```lisp
-(form fcvt
-  ((args (named Type) (bv 32)) (ret (bv 32)))
-  ((args (named Type) (bv 32)) (ret (bv 64)))
-  ((args (named Type) (bv 64)) (ret (bv 32)))
-  ((args (named Type) (bv 64)) (ret (bv 64))))
+(form
+    bv_binary_8_to_64
+    ((args (named Type) (bv  8) (bv  8)) (ret (bv  8)))
+    ((args (named Type) (bv 16) (bv 16)) (ret (bv 16)))
+    ((args (named Type) (bv 32) (bv 32)) (ret (bv 32)))
+    ((args (named Type) (bv 64) (bv 64)) (ret (bv 64))))
 ```
 
 **Explanation:**
-This declares that `fcvt` supports four types of combinations:
-    - 32 -> 32
-    - 32 -> 64
-    - 64 -> 32
-    - 64 -> 64
-
-The verifier checks that any use of `fcvt` conforms to one of these signatures.
+This declares that `bv_binary_8_to_64` supports four types of monomorphizations:
+    - 8 x 8 -> 8
+    - 16 x 16 -> 16
+    - 32 x 32 -> 32
+    - 64 x 64 -> 64
 
 
 #### 2.6 Example (instantiation)
@@ -1987,9 +1980,9 @@ In other words,
 
 **Semantic Roles:**
 
-- The `<spec-head>` identifies the term and its formal parameters.
-- A `(require ...)` clause encodes preconditions.
+- The `spec` identifies the term and its formal parameters.
 - A `(provide ...)` clause encodes postconditions.
+- A `(require ...)` clause encodes preconditions.
 - If `require` is omitted, it defaults to `true`.
 - `(match ...)` supports pattern-related constraints
 - `(modifies ...)` describes state mutation effects
@@ -2089,7 +2082,7 @@ Operators include:
 - Control (`if`, `switch`)
 - Floating point (`fp.add`, `fp.sqrt`, `to_fp`, `fp.isNaN`, etc.)
 
-These map directly to SMT operators.
+In most cases, these map directly to SMT operators.
 
 ##### 3.4.3 Semantics
 `spec-expr` defines a first-order term language over:
@@ -2120,7 +2113,15 @@ and a default value (a `<spec-expr>`). A spec mutates state via its `(modifies
 <state> [<cond>])` clause.
 
 ```lisp
-(state mem (type (bv 64)) (default #x0000000000000000))
+; Parameters of a CLIF load operation.
+(state clif_load
+    (type
+        (struct
+            (active Bool)
+            (size_bits Int)
+            (addr (bv 64))))
+    (default
+        (not (:active clif_load))))
 ```
 
 #### 4.2 Attributes: `(attr ...)`
@@ -2148,12 +2149,12 @@ free-form tag.
 
 A `macro` defines a named, parameterized `spec-expr` template that can be
 expanded inside other spec expressions using the `name!` invocation form (see
-the `<spec-expr>` grammar). Macros are primarily used to factor out complex
+the `<spec-expr>` grammar). We use macros primarily to factor out complex
 numeric logic such as floating-point reasoning.
 
 ### Summary
 
-The ISLE verification subset introduces:
+The ISLE verification subset includes:
 - Logical specification (`spec`)
 - SMT type interpretation (`model`)
 - Reusable verification signatures (`form`)
