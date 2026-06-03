@@ -4,6 +4,10 @@
 ;; register(s) within which the lowered instruction's result values live.
 (spec (lower arg)
       (provide (= result arg)))
+
+;;;; Verification terms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(spec (lower arg)
+      (provide (= result arg)))
 (decl partial lower (Inst) InstOutput)
 
 ;; A variant of the main lowering constructor term, used for branches.
@@ -514,7 +518,6 @@
   (if-let true (u64_gt ys 0))
   (x64_shld ty x y xs))
 
-
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
@@ -966,7 +969,6 @@
 (rule -1 (lower (has_type (fits_in_64 ty) (rotl _ src amt)))
         (x64_rotl ty src (put_masked_in_imm8_gpr amt ty)))
 
-
 ;; `i128`.
 
 (rule (lower (has_type $I128 (rotl _ src amt)))
@@ -986,7 +988,6 @@
 
 (rule -1 (lower (has_type (fits_in_64 ty) (rotr _ src amt)))
         (x64_rotr ty src (put_masked_in_imm8_gpr amt ty)))
-
 
 ;; `i128`.
 
@@ -1456,7 +1457,6 @@
         ;; Extract only the output of the sbb instruction
         (value_reg (value_regs_get out 1))))
 
-
 ;; If the input type is I128 we can `or` the registers, and recurse to the general case.
 (rule 1
       (lower_bmask (fits_in_64 out_ty) $I128 val)
@@ -1472,7 +1472,6 @@
             (res Gpr (value_regs_get_gpr res 0)))
         (value_regs res res)))
 
-
 ;; Call the lower_bmask rule that does all the procssing
 (rule (lower (has_type out_ty (bmask _ x @ (value_type in_ty))))
       (lower_bmask out_ty in_ty x))
@@ -1484,7 +1483,6 @@
 (rule -2 (lower (has_type ty (bnot _ x)))
       (if (ty_int_ref_scalar_64 ty))
       (x64_not ty x))
-
 
 ;; `i128`.
 
@@ -1564,7 +1562,7 @@
             (b ValueRegs (and_i128 (not_i128 c) f)))
         (or_i128 a b)))
 
-(rule 4 (lower (has_type (ty_int_ref_scalar_64 ty) (bitselect _ c t f)))
+(rule 4 (lower (has_type (ty_int_ref_scalar_64_extract ty) (bitselect _ c t f)))
       (let ((a Gpr (x64_and ty c t))
             (b Gpr (x64_and ty (x64_not ty c) f)))
         (x64_or ty a b)))
@@ -1647,7 +1645,6 @@
 (rule (insert_i8x16_lane_pshufd_imm 1) 0b01_01_00_01)
 (rule (insert_i8x16_lane_pshufd_imm 2) 0b01_00_01_01)
 (rule (insert_i8x16_lane_pshufd_imm 3) 0b00_01_01_01)
-
 
 ;; i16x8.replace_lane
 (rule (lower (insertlane _ vec @ (value_type $I16X8) val (u8_from_uimm8 idx)))
@@ -1764,7 +1761,7 @@
 ;;;; Rules for `smin`, `smax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.
-
+(attr cmp_and_choose (veri chain))
 (decl cmp_and_choose (Type CC Value Value) ValueRegs)
 (rule (cmp_and_choose (fits_in_64 ty) cc x y)
       (let( ;; We need to put x and y in registers explicitly because
@@ -2283,7 +2280,6 @@
             (clz Gpr (do_clz $I64 $I64 extended)))
         (x64_sub $I64 clz (RegMemImm.Imm (u32_wrapping_sub 64 (ty_bits ty))))))
 
-
 (rule 0 (lower
        (has_type $I128
                  (clz _ src)))
@@ -2476,12 +2472,10 @@
             (final Gpr (x64_shrl_mi mul 24)))
         final))
 
-
 (rule 2 (lower (has_type $I8X16 (popcnt _ src)))
       (if-let true (has_avx512vl))
       (if-let true (has_avx512bitalg))
       (x64_vpopcntb src))
-
 
 ;; For SSE 4.2 we use Mula's algorithm (https://arxiv.org/pdf/1611.07612.pdf):
 ;;
@@ -2501,7 +2495,6 @@
 ;; lookup process, and adds together the results.
 ;;
 ;; __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
-
 
 (rule 1 (lower (has_type $I8X16 (popcnt _ src)))
       (if-let true (has_ssse3))
@@ -2597,6 +2590,7 @@
                             hi16)))
         swap16))
 
+(attr do_bitrev64 (veri chain))
 (decl do_bitrev64 (Type Gpr) Gpr)
 (rule (do_bitrev64 ty @ $I64 src)
       (let ((src_ Gpr (do_bitrev32 ty src))
@@ -3000,7 +2994,6 @@
         )
         (x64_movlhps x0 x1)))
 
-
 ;; Special case for when the `fma` feature is active and a native instruction
 ;; can be used.
 (rule 1 (lower (has_type ty (fma _ x y z)))
@@ -3031,7 +3024,6 @@
 (rule 1 (fnmadd ty x @ (sinkable_load _) y z) (x64_vfnmadd132 ty y z x))
 (rule 2 (fnmadd ty x y @ (sinkable_load _) z) (x64_vfnmadd132 ty x z y))
 
-
 (rule 2 (lower (has_type ty (fma _ x y (fneg _ z))))
       (if-let true (use_fma))
       (fmsub ty x y z))
@@ -3057,7 +3049,6 @@
 (rule (fnmsub ty x y z) (x64_vfnmsub213 ty x y z))
 (rule 1 (fnmsub ty x @ (sinkable_load _) y z) (x64_vfnmsub132 ty y z x))
 (rule 2 (fnmsub ty x y @ (sinkable_load _) z) (x64_vfnmsub132 ty x z y))
-
 
 ;; Rules for `load*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4003,7 +3994,6 @@
         )
         (x64_paddb evens odds)))
 
-
 (rule 1 (lower (has_type $I16X8 (iadd_pairwise _ x y)))
         (if-let true (has_ssse3))
         (x64_phaddw x y))
@@ -4289,7 +4279,6 @@
           (val Xmm (x64_pshufhw val 0b00_00_10_00))
         )
         (x64_pshufd val 0b00_00_10_00)))
-
 
 ;; We're missing a `unarrow` case for $I64X2
 ;; https://github.com/bytecodealliance/wasmtime/issues/4734
@@ -4712,7 +4701,6 @@
 (extern extractor shufps_imm shufps_imm)
 (decl shufps_rev_imm(u8) Immediate)
 (extern extractor shufps_rev_imm shufps_rev_imm)
-
 
 ;; If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
 ;; register. We statically build `constructed_mask` to zero out any unknown lane
@@ -5184,7 +5172,7 @@
 
 ;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (get_exception_handler_address _ (u64_from_imm64 idx) block))
+(rule (lower (get_exception_handler_address _ block (u64_from_imm64 idx)))
       (let ((succ_label MachLabel (block_exn_successor_label block idx)))
         (x64_label_address succ_label)))
 
@@ -5198,3 +5186,7 @@
 (rule (lower (sequence_point))
       (side_effect
        (x64_sequence_point)))
+
+(attr lower_select_icmp (veri chain))
+
+(attr cmp_zero_i128 (veri chain))

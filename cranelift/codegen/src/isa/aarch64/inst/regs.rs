@@ -175,6 +175,7 @@ fn show_reg(reg: Reg) -> String {
     }
 }
 
+/// Pretty print reg
 pub fn pretty_print_reg(reg: Reg) -> String {
     show_reg(reg)
 }
@@ -187,6 +188,7 @@ fn show_reg_sized(reg: Reg, size: OperandSize) -> String {
     }
 }
 
+/// Pretty print register with size
 pub fn pretty_print_reg_sized(reg: Reg, size: OperandSize) -> String {
     show_reg_sized(reg, size)
 }
@@ -264,18 +266,22 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
     format!("{s}{suffix}[{idx}]")
 }
 
+/// Pretty print ireg
 pub fn pretty_print_ireg(reg: Reg, size: OperandSize) -> String {
     show_ireg_sized(reg, size)
 }
 
+/// Pretty print vreg scalar
 pub fn pretty_print_vreg_scalar(reg: Reg, size: ScalarSize) -> String {
     show_vreg_scalar(reg, size)
 }
 
+/// Pretty print vreg vector
 pub fn pretty_print_vreg_vector(reg: Reg, size: VectorSize) -> String {
     show_vreg_vector(reg, size)
 }
 
+/// Pretty print vreg element
 pub fn pretty_print_vreg_element(reg: Reg, idx: usize, size: ScalarSize) -> String {
     show_vreg_element(reg, idx as u8, size)
 }

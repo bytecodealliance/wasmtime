@@ -1919,7 +1919,7 @@
 
 ;; Rules for `get_exception_handler_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (get_exception_handler_address _ (u64_from_imm64 idx) block))
+(rule (lower (get_exception_handler_address _ block (u64_from_imm64 idx)))
       (let ((succ_label MachLabel (block_exn_successor_label block idx)))
         (pulley_label_address succ_label)))
 

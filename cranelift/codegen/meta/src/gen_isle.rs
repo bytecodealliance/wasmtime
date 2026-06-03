@@ -341,18 +341,13 @@ fn gen_common_isle(
                 .unwrap();
             }
 
-            // Immediates.
-            let imm_operands: Vec<_> = inst
-                .operands_in
-                .iter()
-                .filter(|o| {
-                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
-                })
-                .collect();
-            assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
-            for op in imm_operands {
-                write!(&mut s, " {}", op.name).unwrap();
-            }
+            // Blocks, raw blocks, and immediates must be emitted in the same
+            // order as the `InstructionData` variant declares its fields (see
+            // the variant-decl generation above): blocks, then raw blocks, then
+            // immediates. `get_exception_handler_address` is the only
+            // instruction that mixes a raw block with an immediate, so emitting
+            // immediates last keeps the extractor body consistent with the
+            // term's declared signature.
 
             // Blocks.
             let block_operands: Vec<_> = inst
@@ -385,6 +380,19 @@ fn gen_common_isle(
                     write!(&mut s, " block").unwrap();
                 }
                 _ => panic!("Too many raw block arguments"),
+            }
+
+            // Immediates.
+            let imm_operands: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| {
+                    !o.is_value() && !o.is_varargs() && !o.kind.is_block() && !o.kind.is_raw_block()
+                })
+                .collect();
+            assert_eq!(imm_operands.len(), inst.format.imm_fields.len(),);
+            for op in imm_operands {
+                write!(&mut s, " {}", op.name).unwrap();
             }
 
             s.push_str("))");

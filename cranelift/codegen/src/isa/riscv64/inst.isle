@@ -3038,8 +3038,8 @@
 (rule 7 (gen_bitcast r (ty_supported_float_min src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
 (rule 6 (gen_bitcast r (ty_supported_vec _) (ty_supported_float_min dst_ty)) (rv_vfmv_fs r dst_ty))
 
-(rule 5 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
-(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
+(rule 5 (gen_bitcast r (ty_int_ref_scalar_64_extract src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
+(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64_extract dst_ty)) (rv_vmv_xs r dst_ty))
 (rule 3 (gen_bitcast r (ty_supported_float_min $F16) $I16) (rv_fmvxh r))
 (rule 2 (gen_bitcast r (ty_supported_float_size $F16) $I16) (rv_fmvxw r))
 (rule 2 (gen_bitcast r (ty_supported_float_size $F32) $I32) (rv_fmvxw r))
@@ -3053,7 +3053,7 @@
 (rule 0 (gen_bitcast r $I32 (ty_supported_float_size $F32)) (rv_fmvwx r))
 (rule 0 (gen_bitcast r $I64 (ty_supported_float_size $F64)) (rv_fmvdx r))
 (rule -1 (gen_bitcast r (ty_supported_float_size _) (ty_supported_float_size _)) r)
-(rule -2 (gen_bitcast r (ty_int_ref_scalar_64 _) (ty_int_ref_scalar_64 _)) r)
+(rule -2 (gen_bitcast r (ty_int_ref_scalar_64_extract _) (ty_int_ref_scalar_64_extract _)) r)
 (rule -3 (gen_bitcast r (ty_supported_vec _) (ty_supported_vec _)) r)
 
 (decl move_f_to_x (FReg Type) XReg)
