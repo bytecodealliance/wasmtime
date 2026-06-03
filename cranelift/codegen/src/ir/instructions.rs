@@ -647,7 +647,7 @@ impl InstructionData {
                 arg: _,
                 imm,
             } => {
-                if *opcode == Opcode::SdivImm || *opcode == Opcode::SremImm {
+                if *opcode == Opcode::SremImm {
                     *imm = imm.mask_to_width(bit_width);
                 }
             }

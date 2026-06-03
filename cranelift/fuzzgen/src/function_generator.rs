@@ -925,7 +925,6 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::GetReturnAddress),
                 (Opcode::Blendv),
                 (Opcode::X86Pmulhrsw),
-                (Opcode::SdivImm),
                 (Opcode::UremImm),
                 (Opcode::SremImm),
                 (Opcode::IrsubImm),
