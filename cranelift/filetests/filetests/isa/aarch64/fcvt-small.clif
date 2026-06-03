@@ -107,9 +107,9 @@ block0(v0: f32):
 ;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: bad_toint
+;   udf #0xc11f ; trap: int_ovf
+;   udf #0xc11f ; trap: int_ovf
 
 function u0:0(f64) -> i8 {
 block0(v0: f64):
@@ -144,9 +144,9 @@ block0(v0: f64):
 ;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: bad_toint
+;   udf #0xc11f ; trap: int_ovf
+;   udf #0xc11f ; trap: int_ovf
 
 function u0:0(f32) -> i16 {
 block0(v0: f32):
@@ -181,9 +181,9 @@ block0(v0: f32):
 ;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: bad_toint
+;   udf #0xc11f ; trap: int_ovf
+;   udf #0xc11f ; trap: int_ovf
 
 function u0:0(f64) -> i16 {
 block0(v0: f64):
@@ -218,7 +218,7 @@ block0(v0: f64):
 ;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: bad_toint
+;   udf #0xc11f ; trap: int_ovf
+;   udf #0xc11f ; trap: int_ovf
 

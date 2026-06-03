@@ -29,8 +29,8 @@ block0(v0: i64):
 ; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -59,8 +59,8 @@ block0(v0: i32):
 ; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -102,8 +102,8 @@ block0(v0: i32):
 ; block1: ; offset 0x8
 ;   ldr x3, #0x10
 ;   b #0x18
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -160,8 +160,8 @@ block0(v0: i8):
 ;   sturb w0, [sp]
 ;   ldr x8, #0x1c
 ;   b #0x24
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   mov x0, x7
 ;   mov x1, x7
 ;   mov x2, x7
@@ -261,43 +261,43 @@ block0:
 ; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g0 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x20]
 ;   ldr x9, #0x2c
 ;   b #0x34
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g1 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x10]
 ;   ldr x9, #0x44
 ;   b #0x4c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g1 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp]
 ;   ldr x9, #0x5c
 ;   b #0x64
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g2 0
+;   udf #0
 ;   blr x9
 ;   ldr x10, #0x70
 ;   b #0x78
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g3 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g3 0
+;   udf #0
 ;   ldur q0, [sp, #0x20]
 ;   blr x10
 ;   ldr x11, #0x88
 ;   b #0x90
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g4 0
+;   udf #0
 ;   ldur q0, [sp, #0x10]
 ;   blr x11
 ;   ldr x12, #0xa0
 ;   b #0xa8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g4 0
+;   udf #0
 ;   ldur q0, [sp]
 ;   blr x12
 ;   add sp, sp, #0x30
@@ -357,43 +357,43 @@ block0:
 ; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g0 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x20]
 ;   ldr x9, #0x2c
 ;   b #0x34
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g0 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x10]
 ;   ldr x9, #0x44
 ;   b #0x4c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g0 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp]
 ;   ldr x9, #0x5c
 ;   b #0x64
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g1 0
+;   udf #0
 ;   blr x9
 ;   ldr x10, #0x70
 ;   b #0x78
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g2 0
+;   udf #0
 ;   ldur q0, [sp, #0x20]
 ;   blr x10
 ;   ldr x11, #0x88
 ;   b #0x90
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g2 0
+;   udf #0
 ;   ldur q0, [sp, #0x10]
 ;   blr x11
 ;   ldr x12, #0xa0
 ;   b #0xa8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g2 0
+;   udf #0
 ;   ldur q0, [sp]
 ;   blr x12
 ;   add sp, sp, #0x30
@@ -457,43 +457,43 @@ block0:
 ; block1: ; offset 0xc
 ;   ldr x9, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g0 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x20]
 ;   ldr x9, #0x2c
 ;   b #0x34
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g1 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp, #0x10]
 ;   ldr x9, #0x44
 ;   b #0x4c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g2 0
+;   udf #0
 ;   blr x9
 ;   stur q0, [sp]
 ;   ldr x9, #0x5c
 ;   b #0x64
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g3 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g3 0
+;   udf #0
 ;   blr x9
 ;   ldr x10, #0x70
 ;   b #0x78
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g4 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g4 0
+;   udf #0
 ;   ldur q0, [sp, #0x20]
 ;   blr x10
 ;   ldr x11, #0x88
 ;   b #0x90
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g5 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g5 0
+;   udf #0
 ;   ldur q0, [sp, #0x10]
 ;   blr x11
 ;   ldr x12, #0xa0
 ;   b #0xa8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g6 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g6 0
+;   udf #0
 ;   ldur q0, [sp]
 ;   blr x12
 ;   add sp, sp, #0x30
@@ -546,8 +546,8 @@ block0(v0: i64):
 ;   mov x2, #0x2a
 ;   ldr x4, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f11 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %f11 0
+;   udf #0
 ;   mov x1, x0
 ;   mov x0, x2
 ;   blr x4
@@ -600,8 +600,8 @@ block0(v0: i64):
 ;   mov x3, #0x2a
 ;   ldr x4, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f12 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %f12 0
+;   udf #0
 ;   mov x2, x0
 ;   mov x0, x3
 ;   blr x4
@@ -654,8 +654,8 @@ block0(v0: i64):
 ;   mov x2, #0x2a
 ;   ldr x4, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f13 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %f13 0
+;   udf #0
 ;   mov x1, x0
 ;   mov x0, x2
 ;   blr x4
@@ -722,8 +722,8 @@ block0(v0: i128, v1: i64):
 ;   stur x1, [sp, #8]
 ;   ldr x8, #0x1c
 ;   b #0x24
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f14 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %f14 0
+;   udf #0
 ;   mov x4, x0
 ;   mov x5, x1
 ;   mov x6, x2
@@ -794,8 +794,8 @@ block0(v0: i128, v1: i64):
 ;   stur x1, [sp, #8]
 ;   ldr x8, #0x1c
 ;   b #0x24
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f15 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %f15 0
+;   udf #0
 ;   mov x4, x0
 ;   mov x5, x1
 ;   mov x6, x2
@@ -856,8 +856,8 @@ block0(v0: i64):
 ;   mov x19, x0
 ;   ldr x2, #0x18
 ;   b #0x20
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   mov x8, x19
 ;   blr x2
 ;   mov x0, x19
@@ -895,8 +895,8 @@ block0(v0: i64):
 ;   mov x19, x8
 ;   ldr x2, #0x18
 ;   b #0x20
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x2
 ;   mov x8, x19
 ;   ldr x19, [sp], #0x10
@@ -927,8 +927,8 @@ block0:
 ; block1: ; offset 0x8
 ;   ldr x0, #0x10
 ;   b #0x18
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret

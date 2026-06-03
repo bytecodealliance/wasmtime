@@ -109,8 +109,8 @@ function %f0() -> i64 {
 ; block2: ; offset 0x38
 ;   ldr x5, #0x40
 ;   b #0x48
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x5
 ; block3: ; offset 0x4c
 ;   ldur x0, [sp]
@@ -263,8 +263,8 @@ function %f0() -> i64 {
 ; block2: ; offset 0x38
 ;   ldr x5, #0x40
 ;   b #0x48
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x5
 ; block3: ; offset 0x4c
 ;   ldur x0, [sp]

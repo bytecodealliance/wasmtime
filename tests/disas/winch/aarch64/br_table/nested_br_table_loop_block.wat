@@ -46,7 +46,7 @@
 ;;       add     x16, x16, x1
 ;;       br      x16
 ;;   68: .byte   0xdc, 0xff, 0xff, 0xff
-;;       .byte   0x0c, 0x00, 0x00, 0x00
+;;       udf     #0xc
 ;;       b       #0x44
 ;;   74: mov     x0, #0
 ;;       stur    w0, [x28, #4]
@@ -59,7 +59,7 @@
 ;;       ldrsw   x1, [x16, w1, uxtw #2]
 ;;       add     x16, x16, x1
 ;;       br      x16
-;;   a0: .byte   0x08, 0x00, 0x00, 0x00
+;;   a0: udf     #8
 ;;       .byte   0xdc, 0xff, 0xff, 0xff
 ;;       mov     x0, #3
 ;;       add     x28, x28, #0x18
@@ -68,4 +68,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   c4: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   c4: udf     #0xc11f

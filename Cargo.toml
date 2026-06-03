@@ -400,7 +400,7 @@ log = { version = "0.4.28", default-features = false }
 clap = { version = "4.5.48", default-features = false, features = ["std", "derive"] }
 clap_complete = "4.5.58"
 hashbrown = { version = "0.17", default-features = false }
-capstone = "0.13.0"
+capstone = { version = "0.14.0", default-features = false, features = ['full', 'arch_x86', 'arch_riscv', 'arch_arm64', 'arch_sysz'] }
 smallvec = { version = "1.15.1", features = ["union"] }
 tracing = { version = "0.1.41", default-features = false }
 bitflags = "2.9.4"

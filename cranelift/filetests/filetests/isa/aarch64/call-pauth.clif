@@ -28,8 +28,8 @@ block0(v0: i64):
 ; block1: ; offset 0xc
 ;   ldr x3, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
 ;   autiasp
@@ -79,8 +79,8 @@ block0(v0: i64):
 ; block1: ; offset 0xc
 ;   ldr x3, #0x14
 ;   b #0x1c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   mov x0, x2
 ;   blr x3
 ;   mov x2, x0
@@ -104,7 +104,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   br x1
 

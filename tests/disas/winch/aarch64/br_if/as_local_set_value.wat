@@ -36,11 +36,11 @@
 ;;       b.ne    #0x6c
 ;;       b       #0x64
 ;;   64: stur    w0, [x28, #4]
-;;       orr     x0, xzr, #0xffffffff
+;;       mov     x0, #0xffffffff
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   84: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   84: udf     #0xc11f

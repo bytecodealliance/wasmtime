@@ -193,7 +193,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   orr x2, xzr, #0xfff000
+;   mov x2, #0xfff000
 ;   ldr w0, [x0, x2] ; trap: heap_oob
 ;   ret
 

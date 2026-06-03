@@ -23,9 +23,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   mov v31.16b, v1.16b
 ;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0
+;   udf #0
+;   udf #0
 ;   adc w3, w0, wzr
 ;   add w4, w16, w12, lsl #1
 ;   orr z23.b, p3/m, z23.b, z8.b
@@ -554,9 +554,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   mov v31.16b, v1.16b
 ;   tbl v0.16b, {v30.16b, v31.16b}, v3.16b
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0
+;   udf #0
+;   udf #0
 ;   sbfiz w16, w8, #0xe, #5
 ;   b #0xfffffffffc585474
 ;   madd w24, w8, w26, w6

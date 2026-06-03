@@ -105,8 +105,8 @@ block0(v0: i64, v1: i64):
 ;   b.vs #0x1c
 ;   sdiv x0, x0, x1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 
 function %f7(i64) -> i64 {
 block0(v0: i64):
@@ -144,7 +144,7 @@ block0(v0: i64, v1: i64):
 ;   cbz x1, #0xc
 ;   udiv x0, x0, x1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f9(i64) -> i64 {
 block0(v0: i64):
@@ -184,7 +184,7 @@ block0(v0: i64, v1: i64):
 ;   sdiv x4, x0, x1
 ;   msub x0, x4, x1, x0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f11(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -205,7 +205,7 @@ block0(v0: i64, v1: i64):
 ;   udiv x4, x0, x1
 ;   msub x0, x4, x1, x0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f12(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -230,8 +230,8 @@ block0(v0: i32, v1: i32):
 ;   b.vs #0x1c
 ;   sdiv w0, w0, w1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_divz
+;   udf #0xc11f ; trap: int_ovf
 
 function %f13(i32) -> i32 {
 block0(v0: i32):
@@ -269,7 +269,7 @@ block0(v0: i32, v1: i32):
 ;   cbz w1, #0xc
 ;   udiv w0, w0, w1
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f15(i32) -> i32 {
 block0(v0: i32):
@@ -309,7 +309,7 @@ block0(v0: i32, v1: i32):
 ;   sdiv w4, w0, w1
 ;   msub w0, w4, w1, w0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f17(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -330,7 +330,7 @@ block0(v0: i32, v1: i32):
 ;   udiv w4, w0, w1
 ;   msub w0, w4, w1, w0
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_divz
+;   udf #0xc11f ; trap: int_divz
 
 function %f18(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -779,7 +779,7 @@ block0(v0: i64):
 ;   b.vs #0x18
 ;   sdiv x0, x0, x2
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   udf #0xc11f ; trap: int_ovf
 
 function %sdiv_i16_const(i16) -> i16 {
 block0(v0: i16):

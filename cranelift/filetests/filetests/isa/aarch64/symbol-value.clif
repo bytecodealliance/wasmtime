@@ -19,8 +19,8 @@ block0:
 ; block0: ; offset 0x0
 ;   ldr x0, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %func0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %func0 0
+;   udf #0
 ;   ret
 
 function %colocated_func_addr() -> i64 {
@@ -59,8 +59,8 @@ block0:
 ; block0: ; offset 0x0
 ;   ldr x0, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %global0 0
+;   udf #0
 ;   ret
 
 function %symbol_value_plus_offset() -> i64 {
@@ -80,8 +80,8 @@ block0:
 ; block0: ; offset 0x0
 ;   ldr x0, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 123
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %global0 123
+;   udf #0
 ;   ret
 
 function %symbol_value_minus_offset() -> i64 {
@@ -101,8 +101,8 @@ block0:
 ; block0: ; offset 0x0
 ;   ldr x0, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %global0 -123
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %global0 -123
+;   udf #0
 ;   ret
 
 function %colocated_symbol_value() -> i64 {
