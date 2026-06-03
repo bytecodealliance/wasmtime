@@ -962,7 +962,11 @@ pub unsafe trait Lift: Sized + ComponentType {
 // these wrappers only implement lowering because lifting native Rust types
 // cannot be done.
 macro_rules! forward_type_impls {
-    ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
+    ($(
+        $(#[$attr:meta])*
+        ($($generics:tt)*) $a:ty => $b:ty,
+    )*) => ($(
+        $(#[$attr])*
         unsafe impl <$($generics)*> ComponentType for $a {
             type Lower = <$b as ComponentType>::Lower;
 
@@ -983,10 +987,18 @@ forward_type_impls! {
     (T: ComponentType + ?Sized) alloc::sync::Arc<T> => T,
     () String => str,
     (T: ComponentType) Vec<T> => [T],
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::Bytes => [u8],
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::BytesMut => [u8],
 }
 
 macro_rules! forward_lowers {
-    ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
+    ($(
+        $(#[$attr:meta])*
+        ($($generics:tt)*) $a:ty => $b:ty,
+    )*) => ($(
+        $(#[$attr])*
         unsafe impl <$($generics)*> Lower for $a {
             fn linear_lower_to_flat<U>(
                 &self,
@@ -1015,6 +1027,10 @@ forward_lowers! {
     (T: Lower + ?Sized) alloc::sync::Arc<T> => T,
     () String => str,
     (T: Lower) Vec<T> => [T],
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::Bytes => [u8],
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::BytesMut => [u8],
 }
 
 macro_rules! forward_string_lifts {
@@ -1044,25 +1060,39 @@ forward_string_lifts! {
 }
 
 macro_rules! forward_list_lifts {
-    ($($a:ty,)*) => ($(
-        unsafe impl <T: Lift> Lift for $a {
+    ($(
+        $(#[$attr:meta])*
+        ($($generics:tt)*) $a:ty => WasmList<$b:ty> $(( $via:ident $c:ty ))?,
+    )*) => ($(
+        $(#[$attr])*
+        unsafe impl <$($generics)*> Lift for $a {
             fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                let list = <WasmList::<T> as Lift>::linear_lift_from_flat(cx, ty, src)?;
-                Ok(T::linear_lift_list_from_memory(cx, &list)?.into())
+                let list = <WasmList::<$b> as Lift>::linear_lift_from_flat(cx, ty, src)?;
+                let vec = <$b>::linear_lift_list_from_memory(cx, &list)?;
+                $(let vec = <$c>::from(vec);)?
+                Ok(Self::from(vec))
             }
 
             fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                let list = <WasmList::<T> as Lift>::linear_lift_from_memory(cx, ty, bytes)?;
-                Ok(T::linear_lift_list_from_memory(cx, &list)?.into())
+                let list = <WasmList::<$b> as Lift>::linear_lift_from_memory(cx, ty, bytes)?;
+                let vec = <$b>::linear_lift_list_from_memory(cx, &list)?;
+                $(let vec = <$c>::from(vec);)?
+                Ok(Self::from(vec))
             }
         }
     )*)
 }
 
 forward_list_lifts! {
-    Box<[T]>,
-    alloc::sync::Arc<[T]>,
-    Vec<T>,
+    (T: Lift) Box<[T]> => WasmList<T>,
+    (T: Lift) alloc::sync::Arc<[T]> => WasmList<T>,
+    (T: Lift) Vec<T> => WasmList<T>,
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::Bytes => WasmList<u8>,
+    // Note that `From<Vec<u8>> for BytesMut` is missing from the `bytes` crate
+    // and this is the subject of tokio-rs/bytes#615
+    #[cfg(feature = "component-model-bytes")]
+    () bytes::BytesMut => WasmList<u8> (via bytes::Bytes),
 }
 
 // Macro to help generate `ComponentType` implementations for primitive types
