@@ -35,6 +35,11 @@ impl Pos {
         Self { file, offset }
     }
 
+    /// Report whether the position is unknown.
+    pub fn is_unknown(&self) -> bool {
+        *self == Self::default()
+    }
+
     /// Print this source position as `file.isle line 12`.
     pub fn pretty_print_line(&self, files: &Files) -> String {
         format!(

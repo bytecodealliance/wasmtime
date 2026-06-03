@@ -7,7 +7,7 @@ macro_rules! declare_id {
             $name:ident
     ) => {
         $(#[$attr])*
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(pub usize);
         impl $name {
             /// Get the index of this id.

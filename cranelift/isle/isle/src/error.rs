@@ -5,13 +5,16 @@ use std::sync::Arc;
 use crate::{files::Files, lexer::Pos};
 
 /// A collection of errors from attempting to compile some ISLE source files.
+#[derive(Debug)]
 pub struct Errors {
     /// The individual errors.
     pub errors: Vec<Error>,
     pub(crate) files: Arc<Files>,
 }
 
-impl std::fmt::Debug for Errors {
+impl std::error::Error for Errors {}
+
+impl std::fmt::Display for Errors {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if self.errors.is_empty() {
             return Ok(());
@@ -224,6 +227,41 @@ impl Errors {
             writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+/// Builder for the `isle::Errors`.
+pub struct ErrorsBuilder(Errors);
+
+impl ErrorsBuilder {
+    /// Start building an [Errors] object.
+    pub fn new() -> Self {
+        Self(Errors {
+            errors: Vec::new(),
+            files: Arc::new(Files::default()),
+        })
+    }
+
+    /// Return the built [Errors] object.
+    pub fn build(self) -> Errors {
+        self.0
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object.
+    pub fn errors(mut self, errors: Vec<Error>) -> Self {
+        self.0.errors = errors;
+        self
+    }
+
+    /// Set the `errors` field of the under-construction [Errors] object to a single error.
+    pub fn error(self, error: Error) -> Self {
+        self.errors(vec![error])
+    }
+
+    /// Set the [Errors::files] field of the under-construction [Errors] object.
+    pub fn files(mut self, files: Arc<Files>) -> Self {
+        self.0.files = files;
+        self
     }
 }
 

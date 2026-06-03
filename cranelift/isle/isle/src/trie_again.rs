@@ -3,7 +3,7 @@
 use crate::disjointsets::DisjointSets;
 use crate::error::{Error, Span};
 use crate::lexer::Pos;
-use crate::sema;
+use crate::sema::{self, RuleId, TermEnv, TermId, TypeEnv};
 use crate::stablemapset::StableSet;
 use std::collections::{HashMap, hash_map::Entry};
 
@@ -210,6 +210,8 @@ pub enum Constraint {
 /// contains this rule.
 #[derive(Debug, Default)]
 pub struct Rule {
+    /// Identifier of the source rule.
+    pub id: RuleId,
     /// Where was this rule defined?
     pub pos: Pos,
     /// All of these bindings must match the given constraints for this rule to apply. Note that
@@ -223,6 +225,8 @@ pub struct Rule {
     /// If other rules apply along with this one, the one with the highest numeric priority is
     /// evaluated. If multiple applicable rules have the same priority, that's an overlap error.
     pub prio: i64,
+    /// Rule name. Used for tracing.
+    pub name: Option<sema::Sym>,
     /// If this rule applies, these side effects should be evaluated before returning.
     pub impure: Vec<BindingId>,
     /// If this rule applies, the top-level term should evaluate to this expression.
@@ -304,6 +308,28 @@ impl Binding {
             Binding::MatchTuple { source, .. } => std::slice::from_ref(source),
         }
     }
+
+    /// Returns the term referenced by this binding.
+    pub fn term(&self, tyenv: &TypeEnv, termenv: &TermEnv) -> Option<TermId> {
+        match self {
+            Binding::ConstInt { .. } => None,
+            Binding::ConstBool { .. } => None,
+            Binding::ConstPrim { .. } => None,
+            Binding::Argument { .. } => None,
+            Binding::Extractor { term, .. } => Some(*term),
+            Binding::Constructor { term, .. } => Some(*term),
+            Binding::Iterator { .. } => None,
+            Binding::MakeVariant { ty, variant, .. } => {
+                Some(termenv.get_variant_term(tyenv, *ty, *variant))
+            }
+            Binding::MatchVariant { .. } => None,
+            Binding::MakeStruct { .. } => None,
+            Binding::ExtractStruct { .. } => None,
+            Binding::MakeSome { .. } => None,
+            Binding::MatchSome { .. } => None,
+            Binding::MatchTuple { .. } => None,
+        }
+    }
 }
 
 impl Constraint {
@@ -329,6 +355,28 @@ impl Constraint {
                 .map(TupleIndex)
                 .map(|field| Binding::ExtractStruct { source, field })
                 .collect(),
+        }
+    }
+
+    /// Determine if this constraint could be compatible with a given binding.
+    pub fn compatible(&self, binding: &Binding) -> bool {
+        match (self, binding) {
+            (
+                Constraint::Variant {
+                    ty: tc,
+                    variant: vc,
+                    ..
+                },
+                Binding::MakeVariant {
+                    ty: tb,
+                    variant: vb,
+                    ..
+                },
+            ) => tb == tc && vb == vc,
+            (Constraint::ConstInt { val: vc, ty: tc }, Binding::ConstInt { val: vb, ty: tb }) => {
+                vc == vb && tc == tb
+            }
+            _ => true,
         }
     }
 }
@@ -437,8 +485,10 @@ struct RuleSetBuilder {
 impl RuleSetBuilder {
     fn add_rule(&mut self, rule: &sema::Rule, termenv: &sema::TermEnv, errors: &mut Vec<Error>) {
         self.impure_instance = 0;
+        self.current_rule.id = rule.id;
         self.current_rule.pos = rule.pos;
         self.current_rule.prio = rule.prio;
+        self.current_rule.name = rule.name;
         self.current_rule.result = rule.visit(self, termenv);
         if termenv.terms[rule.root_term.index()].is_partial() {
             self.current_rule.result = self.dedup_binding(Binding::MakeSome {
