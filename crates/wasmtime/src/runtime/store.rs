@@ -1178,6 +1178,12 @@ impl<T> Store<T> {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
 
+    /// Iff epoch_interruption_via_mmu() is on, end the current epoch, causing
+    /// Wasm code belonging to this store to yield to a different task.
+    pub fn end_mmu_epoch(&self) {
+        self.inner.vm_store_context().protect_interrupt_page();
+    }
+
     /// Set an exception as the currently pending exception, and
     /// return an error that propagates the throw.
     ///

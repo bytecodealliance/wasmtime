@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use object::{LittleEndian, Object, ObjectSection, U32Bytes};
-use wasmtime::{Config, Engine};
+use wasmtime::{Config, Engine, Instance, Module, Store};
 use wasmtime_environ::obj::ELF_WASMTIME_EPOCH_CHECKS;
 
 /// Asserts that each epoch-check offset encoded into the binary points to the
@@ -59,4 +59,40 @@ fn epoch_check_offsets() {
         vec![0],
         "Neither check's load instruction uses R12 of RSP as its source, so all length bits should be 0."
     );
+}
+
+#[test]
+fn epoch_mmu_trap_via_signal_handler() {
+/// Runs a wasm function with MMU-based epoch interruption enabled and the epoch
+/// ended. Make sure the function returns happily after the interruption.
+    let mut config = Config::new();
+    config.epoch_interruption_via_mmu(true);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(
+        &engine,
+        r#"(module
+             (memory 0)
+             (func (export "answer") (result i32)
+                i32.const 42
+             )
+           )"#,
+    )
+    .unwrap();
+
+    // Trap as soon as the first epoch check is encountered, in the function
+    // prologue. Recall that MMU-based epochs don't operate based on a numeric
+    // deadline but on an external entity protecting the memory page, typically
+    // on a timer.
+    let mut store = Store::new(&engine, ());
+    store.epoch_deadline_trap(); // Allegedly the default.
+    // Protect that page:
+    store.end_mmu_epoch();
+
+    let instance = Instance::new(&mut store, &module, &[]).unwrap();
+    let func = instance
+        .get_typed_func::<(), i32>(&mut store, "answer")
+        .unwrap();
+
+    let result = func.call(&mut store, ()).unwrap();
+    assert_eq!(result, 42);
 }

@@ -1,7 +1,9 @@
 //! Trap handling on Unix based on POSIX signals.
 
 use crate::prelude::*;
+use crate::runtime::module::lookup_code;
 use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
+use core::arch::naked_asm;
 use std::cell::RefCell;
 use std::io;
 use std::mem;
@@ -18,6 +20,10 @@ static mut PREV_SIGBUS: libc::sigaction = UNINIT_SIGACTION;
 static mut PREV_SIGILL: libc::sigaction = UNINIT_SIGACTION;
 static mut PREV_SIGFPE: libc::sigaction = UNINIT_SIGACTION;
 
+// From signal.h. Not yet exposed in libc. Value is valid for Linux and Mac; not
+// sure about elsewhere.
+#[cfg(all(target_os = "linux"))]
+const SEGV_ACCERR: libc::c_int = 2;
 pub struct TrapHandler;
 
 impl TrapHandler {
@@ -128,6 +134,26 @@ now.
     }
 }
 
+/// Switches tasks in response to a signal thrown under MMU-based epoch
+/// interruption.
+///
+/// Saves register state, makes a host call to switch tasks, restores state, and
+/// returns.
+#[unsafe(naked)]
+unsafe extern "C" fn task_switch_trampoline(_vmctx: usize) {
+    naked_asm!(
+        "
+        // Save regs.
+        // Call hostcall to do task switch, passing in vmctx.
+        // Restore regs (including r10).
+
+        // Resume right after the load instruction that triggered the signal
+        // handler.
+        jmp r10
+        "
+    );
+}
+
 unsafe extern "C" fn trap_handler(
     signum: libc::c_int,
     siginfo: *mut libc::siginfo_t,
@@ -147,6 +173,37 @@ unsafe extern "C" fn trap_handler(
             Some(info) => info,
             None => return false,
         };
+
+        // Check for segfaults meant as cues to end an epoch.
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        if signum == libc::SIGSEGV && unsafe { (*siginfo).si_code } == SEGV_ACCERR {
+            // Compare it with the offsets of epoch-check instructions as stored
+            // in the object file.
+            let ucontext = unsafe { &mut *(context as *mut libc::ucontext_t) };
+            let pc = ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] as usize;
+            // Now things get expensive: we call lookup_code(), which takes a global lock.
+            if let Some((code_memory, offset_within_code)) = lookup_code(pc) {
+                // We're within a 'target_arch = "x86_64"', so we can just treat
+                // the stored little-endians as native u32s.
+                if let Some(return_address) = code_memory.return_address_for_epoch_check(
+                    offset_within_code
+                        .try_into()
+                        .expect("epoch-check location should fit in 32 bits"),
+                ) {
+                    // It is an epoch check. Arrange to resume at asm trampoline
+                    // after signal handler exits:
+                    ucontext.uc_mcontext.gregs[libc::REG_RIP as usize] =
+                        task_switch_trampoline as *const () as i64;
+                    // Put original resumption address in R10:
+                    ucontext.uc_mcontext.gregs[libc::REG_R10 as usize] = return_address as i64;
+                    // Trampoline can expect the vmctx in RDI.
+
+                    return true;
+                }
+            }
+            // Else it is an ordinary trap or the epochchecks section is somehow
+            // missing from the binary; continue on.
+        }
 
         // If we hit an exception while handling a previous trap, that's
         // quite bad, so bail out and let the system handle this

@@ -311,6 +311,18 @@ impl CodeMemory {
         &self.mmap[self.trap_data.clone()]
     }
 
+    /// Returns the address at which to resume after the given epoch check.
+    pub fn return_address_for_epoch_check(&self, check_offset: u32) -> Option<*const ()> {
+        let section = unsafe {
+            std::slice::from_raw_parts(
+                self.mmap[self.epoch_check_data.clone()].as_ptr() as *const u8,
+                self.epoch_check_data.len(),
+            )
+        };
+        return_offset_for_epoch_check(section, check_offset)
+            .map(|offset| (self.text().as_ptr().addr() + offset as usize) as *const ())
+    }
+
     /// Publishes the internal ELF image to be ready for execution.
     ///
     /// This method can only be when the image is not published (its
