@@ -30,8 +30,9 @@ pub(crate) enum AliasRegionKey {
         offset: u32,
     },
 
-    /// An imported memory access (shared across all imported memories).
-    ImportedMemory,
+    /// An imported or exported memory access (shared across all
+    /// imported/exported memories).
+    PublicMemory,
 
     /// A defined memory access.
     DefinedMemory {
@@ -41,8 +42,9 @@ pub(crate) enum AliasRegionKey {
         index: DefinedMemoryIndex,
     },
 
-    /// An imported table access (shared across all imported tables).
-    ImportedTable,
+    /// An imported or exported table access (shared across all
+    /// imported/exported tables).
+    PublicTable,
 
     /// A defined table access.
     DefinedTable {
@@ -52,8 +54,9 @@ pub(crate) enum AliasRegionKey {
         index: DefinedTableIndex,
     },
 
-    /// An imported global access (shared across all imported globals).
-    ImportedGlobal,
+    /// An imported or exported global access (shared across all
+    /// imported/exported globals).
+    PublicGlobal,
 
     /// A defined global access.
     DefinedGlobal {
@@ -111,7 +114,7 @@ impl AliasRegionKey {
                 debug_assert_eq!(offset & Self::KIND_MASK, 0);
                 Self::VM_STORE_CONTEXT_KIND | (offset & Self::OFFSET_MASK)
             }
-            AliasRegionKey::ImportedMemory => Self::IMPORTED_MEMORY_KIND,
+            AliasRegionKey::PublicMemory => Self::IMPORTED_MEMORY_KIND,
             AliasRegionKey::DefinedMemory { module, index } => {
                 debug_assert_eq!(
                     module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
@@ -122,7 +125,7 @@ impl AliasRegionKey {
                     | (module.as_u32() << Self::MODULE_OFFSET)
                     | index.as_u32()
             }
-            AliasRegionKey::ImportedTable => Self::IMPORTED_TABLE_KIND,
+            AliasRegionKey::PublicTable => Self::IMPORTED_TABLE_KIND,
             AliasRegionKey::DefinedTable { module, index } => {
                 debug_assert_eq!(
                     module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
@@ -131,7 +134,7 @@ impl AliasRegionKey {
                 debug_assert_eq!(index.as_u32() & !Self::INDEX_MASK, 0);
                 Self::DEFINED_TABLE_KIND | (module.as_u32() << Self::MODULE_OFFSET) | index.as_u32()
             }
-            AliasRegionKey::ImportedGlobal => Self::IMPORTED_GLOBAL_KIND,
+            AliasRegionKey::PublicGlobal => Self::IMPORTED_GLOBAL_KIND,
             AliasRegionKey::DefinedGlobal { module, index } => {
                 debug_assert_eq!(
                     module.as_u32() & !Self::MODULE_MASK >> Self::MODULE_OFFSET,
@@ -152,15 +155,15 @@ impl fmt::Debug for AliasRegionKey {
         match self {
             AliasRegionKey::VMContext { offset } => write!(f, "VMContext+{offset:#x}"),
             AliasRegionKey::VMStoreContext { offset } => write!(f, "VMStoreContext+{offset:#x}"),
-            AliasRegionKey::ImportedMemory => write!(f, "ImportedMemory"),
+            AliasRegionKey::PublicMemory => write!(f, "PublicMemory"),
             AliasRegionKey::DefinedMemory { module, index } => {
                 write!(f, "DefinedMemory({module:?}, {index:?})")
             }
-            AliasRegionKey::ImportedTable => write!(f, "ImportedTable"),
+            AliasRegionKey::PublicTable => write!(f, "PublicTable"),
             AliasRegionKey::DefinedTable { module, index } => {
                 write!(f, "DefinedTable({module:?}, {index:?})")
             }
-            AliasRegionKey::ImportedGlobal => write!(f, "ImportedGlobal"),
+            AliasRegionKey::PublicGlobal => write!(f, "PublicGlobal"),
             AliasRegionKey::DefinedGlobal { module, index } => {
                 write!(f, "DefinedGlobal({module:?}, {index:?})")
             }

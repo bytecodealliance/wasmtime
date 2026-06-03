@@ -379,27 +379,23 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         memory: MemoryIndex,
     ) -> ir::AliasRegion {
-        let key = if self
-            .module
-            .exports
-            .values()
-            .any(|entity| *entity == memory.into())
-        {
+        let key = if self.module.is_exported_memory(memory) {
             // A function that operates on an exported defined memory can be
-            // inlined into another module that imports that exported memory.
-            // That caller will access the memory with
-            // `AliasRegionKey::ImportedMemory`, so we must also conservatively
-            // do the same here, because memory accessed with two different
-            // alias regions must not actually alias, or else we will get
-            // miscompiles.
-            AliasRegionKey::ImportedMemory
+            // inlined into a different module caller, where that that caller's
+            // module also imports that exported memory. That caller will access
+            // the memory with `AliasRegionKey::PublicMemory`, so we must also
+            // conservatively do the same here, even though we potentially know
+            // the precise static module index and defined memory index, because
+            // memory accessed with two different alias regions must not
+            // actually alias, or else we will get miscompiles.
+            AliasRegionKey::PublicMemory
         } else {
             match self.module.defined_memory_index(memory) {
                 Some(def) => AliasRegionKey::DefinedMemory {
                     module: self.translation.module_index(),
                     index: def,
                 },
-                None => AliasRegionKey::ImportedMemory,
+                None => AliasRegionKey::PublicMemory,
             }
         };
         self.alias_region(func, key)
@@ -410,21 +406,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         table: TableIndex,
     ) -> ir::AliasRegion {
-        let key = if self
-            .module
-            .exports
-            .values()
-            .any(|entity| *entity == table.into())
-        {
+        let key = if self.module.is_exported_table(table) {
             // See the comment in `memory_alias_region` for details.
-            AliasRegionKey::ImportedTable
+            AliasRegionKey::PublicTable
         } else {
             match self.module.defined_table_index(table) {
                 Some(def) => AliasRegionKey::DefinedTable {
                     module: self.translation.module_index(),
                     index: def,
                 },
-                None => AliasRegionKey::ImportedTable,
+                None => AliasRegionKey::PublicTable,
             }
         };
         self.alias_region(func, key)
@@ -435,21 +426,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         global: GlobalIndex,
     ) -> ir::AliasRegion {
-        let key = if self
-            .module
-            .exports
-            .values()
-            .any(|entity| *entity == global.into())
-        {
+        let key = if self.module.is_exported_global(global) {
             // See the comment in `memory_alias_region` for details.
-            AliasRegionKey::ImportedGlobal
+            AliasRegionKey::PublicGlobal
         } else {
             match self.module.defined_global_index(global) {
                 Some(def) => AliasRegionKey::DefinedGlobal {
                     module: self.translation.module_index(),
                     index: def,
                 },
-                None => AliasRegionKey::ImportedGlobal,
+                None => AliasRegionKey::PublicGlobal,
             }
         };
         self.alias_region(func, key)
