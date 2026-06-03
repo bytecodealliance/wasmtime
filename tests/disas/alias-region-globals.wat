@@ -15,7 +15,7 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 1610612736 "ImportedGlobal"
+;;     region0 = 1610612736 "PublicGlobal"
 ;;     region1 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8

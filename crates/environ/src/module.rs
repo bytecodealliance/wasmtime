@@ -370,6 +370,12 @@ impl Module {
         }
     }
 
+    /// Test whether the given table index is for an exported table.
+    #[inline]
+    pub fn is_exported_table(&self, index: TableIndex) -> bool {
+        self.exports.values().any(|entity| *entity == index.into())
+    }
+
     /// Test whether the given table index is for an imported table.
     #[inline]
     pub fn is_imported_table(&self, index: TableIndex) -> bool {
@@ -417,6 +423,12 @@ impl Module {
         OwnedMemoryIndex::new(owned_memory_index)
     }
 
+    /// Test whether the given memory index is for an exported memory.
+    #[inline]
+    pub fn is_exported_memory(&self, index: MemoryIndex) -> bool {
+        self.exports.values().any(|entity| *entity == index.into())
+    }
+
     /// Test whether the given memory index is for an imported memory.
     #[inline]
     pub fn is_imported_memory(&self, index: MemoryIndex) -> bool {
@@ -440,6 +452,12 @@ impl Module {
                 global.index() - self.num_imported_globals,
             ))
         }
+    }
+
+    /// Test whether the given global index is for an exported global.
+    #[inline]
+    pub fn is_exported_global(&self, index: GlobalIndex) -> bool {
+        self.exports.values().any(|entity| *entity == index.into())
     }
 
     /// Test whether the given global index is for an imported global.
