@@ -50,13 +50,11 @@ wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
-wasi-common = { workspace = true, default-features = true, features = ["exit", "tokio"], optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-config = { workspace = true, optional = true }
 wasmtime-wasi-tls = { workspace = true, optional = true }
 wasmtime-wasi-keyvalue = { workspace = true, optional = true }
-wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
 wasmtime-unwinder = { workspace = true }
 wasmtime-wizer = { workspace = true, optional = true, features = ['clap', 'wasmtime'] }
@@ -65,7 +63,6 @@ gdbstub-component-artifact = { workspace = true, optional = true }
 clap = { workspace = true }
 clap_complete = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
-listenfd = { version = "1.0.0", optional = true }
 wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
@@ -274,7 +271,6 @@ wasmtime-wasi-http = { path = "crates/wasi-http", version = "46.0.0", default-fe
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "46.0.0" }
 wasmtime-wasi-config = { path = "crates/wasi-config", version = "46.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "46.0.0" }
-wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "46.0.0" }
 wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "46.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=46.0.0" }
 
@@ -309,7 +305,6 @@ wasmtime-wizer = { path = "crates/wizer", version = "46.0.0" }
 wiggle = { path = "crates/wiggle", version = "=46.0.0", default-features = false }
 wiggle-macro = { path = "crates/wiggle/macro", version = "=46.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=46.0.0" }
-wasi-common = { path = "crates/wasi-common", version = "=46.0.0", default-features = false }
 pulley-interpreter = { path = 'pulley', version = "=46.0.0" }
 pulley-macros = { path = 'pulley/macros', version = "=46.0.0" }
 
@@ -498,7 +493,6 @@ default = [
 
   # On-by-default WASI features
   "wasi-nn",
-  "wasi-threads",
   "wasi-http",
   "wasi-config",
   "wasi-keyvalue",
@@ -572,7 +566,6 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-tls = ["dep:wasmtime-wasi-tls"]
-wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http/default-send-request"]
 wasi-config = ["dep:wasmtime-wasi-config"]
 wasi-keyvalue = ["dep:wasmtime-wasi-keyvalue"]
@@ -623,8 +616,6 @@ run = [
   "dep:wasmtime-wasi",
   "wasmtime/runtime",
   "wasmtime/wave",
-  "dep:listenfd",
-  "dep:wasi-common",
   "dep:tokio",
   "wasmtime-cli-flags/async",
   "wasmtime-wasi-http?/p2",
@@ -647,7 +638,6 @@ hot-blocks = [
 wizer = [
   "wasmtime-wizer",
   "dep:wasmtime-wasi",
-  "dep:wasi-common",
   "dep:tokio",
   "wasmtime/wave",
 ]
@@ -666,7 +656,6 @@ harness = false
 
 [[example]]
 name = "tokio"
-required-features = ["wasi-common/tokio"]
 
 [[bench]]
 name = "compile"
