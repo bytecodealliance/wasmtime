@@ -1192,7 +1192,8 @@ where
 ///
 /// Right now this is a bit gross since it has to type out a bunch of types by
 /// hand.
-enum Prepared<'a, T: 'static> {
+pub enum Prepared<'a, T: 'static> {
+    #[doc(hidden)]
     #[cfg(feature = "p2")]
     P2 {
         guest: &'a p2::bindings::Proxy,
@@ -1206,6 +1207,7 @@ enum Prepared<'a, T: 'static> {
         >,
         tx: Arc<Mutex<Option<oneshot::Sender<Result<Response, wasmtime::Error>>>>>,
     },
+    #[doc(hidden)]
     #[cfg(feature = "p3")]
     P3 {
         guest: &'a p3::bindings::Service,
@@ -1221,7 +1223,8 @@ enum Prepared<'a, T: 'static> {
 }
 
 impl<'a, T: Send> Prepared<'a, T> {
-    fn new(
+    /// Creates a new prepared request.
+    pub fn new(
         mut store: StoreContextMut<'_, T>,
         proxy: &'a Proxy,
         request: Request,
@@ -1299,7 +1302,8 @@ impl<'a, T: Send> Prepared<'a, T> {
         }
     }
 
-    async fn run(
+    /// Executes this request to completion.
+    pub async fn run(
         self,
         accessor: &Accessor<T>,
         expiration: impl Future<Output = ()>,
