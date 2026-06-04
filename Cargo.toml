@@ -566,6 +566,7 @@ pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-a
 backtrace = ["wasmtime/backtrace"]
 component-model = [
   "wasmtime/component-model",
+  "wasmtime/wit-parser",
   "wasmtime-wast?/component-model",
   "wasmtime-cli-flags/component-model",
   "wasmtime-wizer?/component-model",

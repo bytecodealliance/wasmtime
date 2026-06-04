@@ -796,28 +796,19 @@ impl RunCommand {
                 )
         })?;
 
-        let name = untyped_call.name();
-        let matches =
-            Self::search_component_funcs(store.engine(), component.component_type(), name);
-        let (names, func_type) = match matches.len() {
-            0 => bail!("No exported func named `{name}` in component."),
-            1 => &matches[0],
-            _ => bail!(
-                "Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"
-            ),
-        };
+        let name = untyped_call.item_name().map_err(|e| {
+            wasmtime::Error::from_anyhow(e).context(format!(
+                "parsing `{}` as a wit item name",
+                untyped_call.name()
+            ))
+        })?;
 
-        let param_types = WasmFunc::params(func_type).collect::<Vec<_>>();
+        let (export, func_type) = Self::search_component_funcs(store, &component, &name)?;
+
+        let param_types = WasmFunc::params(&func_type).collect::<Vec<_>>();
         let params = untyped_call
             .to_wasm_params(&param_types)
             .with_context(|| format!("while interpreting parameters in invoke \"{invoke}\""))?;
-
-        let export = names
-            .iter()
-            .fold(None, |instance, name| {
-                component.get_export_index(instance.as_ref(), name)
-            })
-            .expect("export has at least one name");
 
         let instance = linker.instantiate_async(&mut *store, component).await?;
 
@@ -944,47 +935,81 @@ impl RunCommand {
 
     #[cfg(feature = "component-model")]
     fn search_component_funcs(
-        engine: &Engine,
-        component: wasmtime::component::types::Component,
-        name: &str,
-    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentFunc)> {
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        item_name: &wasmtime::component::wit_parser::ItemName,
+    ) -> Result<(
+        wasmtime::component::ComponentExportIndex,
+        wasmtime::component::types::ComponentFunc,
+    )> {
         use wasmtime::component::types::ComponentItem as CItem;
-        fn collect_exports(
-            engine: &Engine,
-            item: CItem,
-            basename: Vec<String>,
-        ) -> Vec<(Vec<String>, CItem)> {
-            match item {
-                CItem::Component(c) => c
-                    .exports(engine)
-                    .flat_map(move |(name, item)| {
-                        let mut names = basename.clone();
-                        names.push(name.to_string());
-                        collect_exports(engine, item.ty, names)
-                    })
-                    .collect::<Vec<_>>(),
-                CItem::ComponentInstance(c) => c
-                    .exports(engine)
-                    .flat_map(move |(name, item)| {
-                        let mut names = basename.clone();
-                        names.push(name.to_string());
-                        collect_exports(engine, item.ty, names)
-                    })
-                    .collect::<Vec<_>>(),
-                _ => vec![(basename, item)],
+        // Start by looking up the item name directly.
+        // Only match this as the search if it provides a function - it may
+        // provide an instance of the same name, in which case we want the
+        // below to search through it.
+        match component.get_export(None, item_name) {
+            Some((CItem::ComponentFunc(func), index)) => return Ok((index.clone(), func.clone())),
+            _ => {}
+        }
+        if item_name.interface.is_some() || item_name.package.is_some() {
+            // If the item name specified a package or interface, and the
+            // ItemName based lookup failed to find it, we do not consider
+            // that it may be exported under an instance and terminate the
+            // search immediately:
+            bail!("No exported func named `{item_name}` in component.")
+        }
+        // If the item name does not specify a package or interface, and it
+        // wasn't found in the root of the component above, then we search all
+        // instance exports for a function by that name.
+        let needle = item_name.to_string();
+        let mut search = component
+            .component_type()
+            .exports(store.engine())
+            .filter_map(|(instname, item)| match item.ty {
+                CItem::ComponentInstance(inst) => {
+                    inst.exports(store.engine())
+                        .find_map(|(leafname, item)| match item.ty {
+                            CItem::ComponentFunc(func) => {
+                                if leafname == needle {
+                                    // The type::Component traversal
+                                    // didn't give us an export index, get
+                                    // that now:
+                                    let (_item, inst_index) = component
+                                        .get_export(None, instname)
+                                        .expect("found exported component instance");
+                                    let (_item, index) = component
+                                        .get_export(Some(&inst_index), leafname)
+                                        .expect("found func");
+                                    Some((index, func.clone(), instname.to_string()))
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => None,
+                        })
+                }
+
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        match search.len() {
+            0 => bail!("No exported func named `{needle}` in component."),
+            1 => {
+                let (index, func, _instname) = search.pop().unwrap();
+                Ok((index, func))
+            }
+            _ => {
+                let candidates = search
+                    .into_iter()
+                    .map(|(_index, _func, instname)| format!("`{instname}.{needle}`"))
+                    .collect::<Vec<_>>();
+                bail!(
+                    "Multiple instances contained funcs named `{needle}`, retry with a more specific name: {}",
+                    candidates.join(", ")
+                )
             }
         }
-
-        collect_exports(engine, CItem::Component(component), Vec::new())
-            .into_iter()
-            .filter_map(|(names, item)| {
-                let CItem::ComponentFunc(func) = item else {
-                    return None;
-                };
-                let func_name = names.last().expect("at least one name");
-                (func_name == name).then_some((names, func))
-            })
-            .collect()
     }
 
     async fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
