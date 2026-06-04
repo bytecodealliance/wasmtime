@@ -153,21 +153,17 @@ pub struct FuncEnvironment<'module_environment> {
     /// Translation state at the given point.
     pub(crate) stacks: FuncTranslationStacks,
 
-    #[cfg(feature = "gc")]
     ty_to_gc_layout: std::collections::HashMap<
         wasmtime_environ::ModuleInternedTypeIndex,
         wasmtime_environ::GcLayout,
     >,
 
-    #[cfg(feature = "gc")]
     gc_heap: Option<Heap>,
 
     /// The Cranelift global holding the GC heap's base address.
-    #[cfg(feature = "gc")]
     gc_heap_base: Option<ir::GlobalValue>,
 
     /// The Cranelift global holding the GC heap's base address.
-    #[cfg(feature = "gc")]
     gc_heap_bound: Option<ir::GlobalValue>,
 
     translation: &'module_environment ModuleTranslation<'module_environment>,
@@ -285,13 +281,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             entities: WasmEntities::default(),
             stacks: FuncTranslationStacks::new(),
 
-            #[cfg(feature = "gc")]
             ty_to_gc_layout: std::collections::HashMap::new(),
-            #[cfg(feature = "gc")]
             gc_heap: None,
-            #[cfg(feature = "gc")]
             gc_heap_base: None,
-            #[cfg(feature = "gc")]
             gc_heap_bound: None,
 
             heaps: PrimaryMap::default(),
@@ -441,10 +433,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.alias_region(func, key)
     }
 
-    #[cfg_attr(
-        not(any(feature = "gc-copying", feature = "gc-drc", feature = "gc-null")),
-        expect(dead_code, reason = "easier not to cfg off; used in upcoming commits")
-    )]
     pub(crate) fn vmctx_alias_region(
         &mut self,
         func: &mut Function,
@@ -453,7 +441,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.alias_region(func, AliasRegionKey::VMContext { offset })
     }
 
-    #[cfg(feature = "threads")]
     fn get_memory_atomic_wait(&mut self, func: &mut Function, ty: ir::Type) -> ir::FuncRef {
         match ty {
             I32 => self.builtin_functions.memory_atomic_wait32(func),
@@ -773,7 +760,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check_full(builder, cur_epoch_value, continuation_block);
     }
 
-    #[cfg(feature = "wmemcheck")]
     fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[ir::Value]) {
         let check_malloc = self.builtin_functions.check_malloc(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -796,7 +782,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.ins().call(check_malloc, &[vmctx, retval, len]);
     }
 
-    #[cfg(feature = "wmemcheck")]
     fn hook_free_exit(&mut self, builder: &mut FunctionBuilder) {
         let check_free = self.builtin_functions.check_free(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -1078,21 +1063,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         result_param
     }
 
-    #[cfg(feature = "wmemcheck")]
     fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
         let malloc_start = self.builtin_functions.malloc_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         builder.ins().call(malloc_start, &[vmctx]);
     }
 
-    #[cfg(feature = "wmemcheck")]
     fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
         let free_start = self.builtin_functions.free_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
         builder.ins().call(free_start, &[vmctx]);
     }
 
-    #[cfg(feature = "wmemcheck")]
     fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
         let func_index = match &builder.func.name {
             ir::UserFuncName::User(user) => FuncIndex::from_u32(user.index),
@@ -1665,7 +1647,6 @@ impl FuncEnvironment<'_> {
         let key = match self.translation.known_imported_functions[func_index] {
             Some(key @ FuncKey::DefinedWasmFunction(..)) => key,
 
-            #[cfg(feature = "component-model")]
             Some(key @ FuncKey::UnsafeIntrinsic(..)) => key,
 
             Some(key) => {
@@ -1866,7 +1847,6 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the type index associated with an exception object.
-    #[cfg(feature = "gc")]
     pub(crate) fn exception_type_from_tag(&self, tag: TagIndex) -> EngineOrModuleTypeIndex {
         self.module.tags[tag].exception
     }
@@ -1883,7 +1863,6 @@ impl FuncEnvironment<'_> {
 
     /// Get the runtime instance ID and defined-tag ID in that
     /// instance for a particular static tag ID.
-    #[cfg(feature = "gc")]
     pub(crate) fn get_instance_and_tag(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -2042,7 +2021,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // The import is always a compile-time builtin intrinsic. Make a
             // direct call to that function (presumably it will eventually be
             // inlined).
-            #[cfg(feature = "component-model")]
             Some(FuncKey::UnsafeIntrinsic(abi, intrinsic)) => {
                 let callee = self
                     .env
@@ -2097,7 +2075,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// intrinsics. The fallback of issuing a `call` to the intrinsic is always
     /// suitable to do and is used in situations where the call instruction may
     /// have extra context.
-    #[cfg(feature = "component-model")]
     fn can_directly_inline_unsafe_intrinsic(&self, abi: wasmtime_environ::Abi) -> bool {
         abi == wasmtime_environ::Abi::Wasm && !self.tail && !self.env.tunables.debug_guest
     }
@@ -2303,15 +2280,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
         let matches = if features.gc() {
-            #[cfg(feature = "gc")]
-            {
-                self.env
-                    .is_subtype(self.builder, callee_sig_id, caller_sig_id)
-            }
-            #[cfg(not(feature = "gc"))]
-            {
-                unreachable!()
-            }
+            self.env
+                .is_subtype(self.builder, callee_sig_id, caller_sig_id)
         } else {
             self.builder
                 .ins()
@@ -5085,30 +5055,20 @@ impl FuncEnvironment<'_> {
         expected: ir::Value,
         timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        #[cfg(feature = "threads")]
-        {
-            let mut pos = builder.cursor();
-            let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
-            let implied_ty = pos.func.dfg.value_type(expected);
-            let wait_func = self.get_memory_atomic_wait(&mut pos.func, implied_ty);
+        let mut pos = builder.cursor();
+        let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
+        let implied_ty = pos.func.dfg.value_type(expected);
+        let wait_func = self.get_memory_atomic_wait(&mut pos.func, implied_ty);
 
-            let (memory_vmctx, defined_memory_index) =
-                self.memory_vmctx_and_defined_index(&mut pos, memory_index);
+        let (memory_vmctx, defined_memory_index) =
+            self.memory_vmctx_and_defined_index(&mut pos, memory_index);
 
-            let call_inst = pos.ins().call(
-                wait_func,
-                &[memory_vmctx, defined_memory_index, addr, expected, timeout],
-            );
-            let ret = pos.func.dfg.inst_results(call_inst)[0];
-            Ok(builder.ins().ireduce(ir::types::I32, ret))
-        }
-        #[cfg(not(feature = "threads"))]
-        {
-            let _ = (builder, memory_index, addr, expected, timeout);
-            Err(wasmtime_environ::WasmError::Unsupported(
-                "threads support disabled at compile time".to_string(),
-            ))
-        }
+        let call_inst = pos.ins().call(
+            wait_func,
+            &[memory_vmctx, defined_memory_index, addr, expected, timeout],
+        );
+        let ret = pos.func.dfg.inst_results(call_inst)[0];
+        Ok(builder.ins().ireduce(ir::types::I32, ret))
     }
 
     pub fn translate_atomic_notify(
@@ -5119,28 +5079,18 @@ impl FuncEnvironment<'_> {
         addr: ir::Value,
         count: ir::Value,
     ) -> WasmResult<ir::Value> {
-        #[cfg(feature = "threads")]
-        {
-            let mut pos = builder.cursor();
-            let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
-            let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
+        let mut pos = builder.cursor();
+        let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
+        let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
 
-            let (memory_vmctx, defined_memory_index) =
-                self.memory_vmctx_and_defined_index(&mut pos, memory_index);
-            let call_inst = pos.ins().call(
-                atomic_notify,
-                &[memory_vmctx, defined_memory_index, addr, count],
-            );
-            let ret = pos.func.dfg.inst_results(call_inst)[0];
-            Ok(builder.ins().ireduce(ir::types::I32, ret))
-        }
-        #[cfg(not(feature = "threads"))]
-        {
-            let _ = (builder, memory_index, addr, count);
-            Err(wasmtime_environ::WasmError::Unsupported(
-                "threads support disabled at compile time".to_string(),
-            ))
-        }
+        let (memory_vmctx, defined_memory_index) =
+            self.memory_vmctx_and_defined_index(&mut pos, memory_index);
+        let call_inst = pos.ins().call(
+            atomic_notify,
+            &[memory_vmctx, defined_memory_index, addr, count],
+        );
+        let ret = pos.func.dfg.inst_results(call_inst)[0];
+        Ok(builder.ins().ireduce(ir::types::I32, ret))
     }
 
     pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
@@ -5223,7 +5173,6 @@ impl FuncEnvironment<'_> {
             self.epoch_function_entry(builder);
         }
 
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
@@ -5375,7 +5324,6 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
@@ -5384,8 +5332,6 @@ impl FuncEnvironment<'_> {
                 self.hook_free_exit(builder);
             }
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = (retvals, builder);
     }
 
     pub fn before_load(
@@ -5395,7 +5341,6 @@ impl FuncEnvironment<'_> {
         addr: ir::Value,
         offset: u64,
     ) {
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             let check_load = self.builtin_functions.check_load(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -5405,8 +5350,6 @@ impl FuncEnvironment<'_> {
                 .ins()
                 .call(check_load, &[vmctx, num_bytes, addr, offset_val]);
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = (builder, val_size, addr, offset);
     }
 
     pub fn before_store(
@@ -5416,7 +5359,6 @@ impl FuncEnvironment<'_> {
         addr: ir::Value,
         offset: u64,
     ) {
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             let check_store = self.builtin_functions.check_store(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -5426,8 +5368,6 @@ impl FuncEnvironment<'_> {
                 .ins()
                 .call(check_store, &[vmctx, num_bytes, addr, offset_val]);
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = (builder, val_size, addr, offset);
     }
 
     pub fn update_global(
@@ -5436,7 +5376,6 @@ impl FuncEnvironment<'_> {
         global_index: GlobalIndex,
         value: ir::Value,
     ) {
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck {
             if global_index.index() == 0 {
                 // We are making the assumption that global 0 is the auxiliary stack pointer.
@@ -5446,8 +5385,6 @@ impl FuncEnvironment<'_> {
                 builder.ins().call(update_stack_pointer, &[vmctx, value]);
             }
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = (builder, global_index, value);
     }
 
     pub fn before_memory_grow(
@@ -5456,14 +5393,11 @@ impl FuncEnvironment<'_> {
         num_pages: ir::Value,
         mem_index: MemoryIndex,
     ) {
-        #[cfg(feature = "wmemcheck")]
         if self.compiler.wmemcheck && mem_index.as_u32() == 0 {
             let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             builder.ins().call(update_mem_size, &[vmctx, num_pages]);
         }
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = (builder, num_pages, mem_index);
     }
 
     /// If the ISA has rounding instructions, let Cranelift use them. But if

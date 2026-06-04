@@ -21,10 +21,6 @@ pub(crate) enum AliasRegionKey {
     },
 
     /// A `VMStoreContext` field access.
-    #[cfg_attr(
-        not(feature = "component-model"),
-        expect(dead_code, reason = "easier not to cfg off")
-    )]
     VMStoreContext {
         /// The offset of the `VMStoreContext` field being accessed.
         offset: u32,

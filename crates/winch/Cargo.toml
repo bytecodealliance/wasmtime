@@ -23,15 +23,4 @@ gimli = { workspace = true, features = ['std'] }
 log = { workspace = true }
 
 [features]
-component-model = [
-    "wasmtime-environ/component-model",
-    "wasmtime-cranelift/component-model",
-]
 all-arch = ["winch-codegen/all-arch"]
-gc = ['winch-codegen/gc']
-gc-drc = ['winch-codegen/gc-drc']
-gc-null = ['winch-codegen/gc-null']
-gc-copying = ['winch-codegen/gc-copying']
-stack-switching = ['winch-codegen/stack-switching']
-threads = ['winch-codegen/threads']
-wmemcheck = ['winch-codegen/wmemcheck']

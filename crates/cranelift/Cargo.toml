@@ -16,8 +16,7 @@ workspace = true
 
 [dependencies]
 log = { workspace = true }
-wasmtime-environ = { workspace = true, features = ['compile'] }
-cranelift-codegen = { workspace = true, features = ["host-arch", "timing"] }
+cranelift-codegen = { workspace = true, features = ["host-arch", "timing", "incremental-cache"] }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
@@ -35,17 +34,20 @@ pulley-interpreter = { workspace = true, optional = true }
 wasmtime-core = { workspace = true }
 wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
 
+[dependencies.wasmtime-environ]
+workspace = true
+features = [
+  "compile",
+  "component-model",
+  "gc-drc",
+  "gc-null",
+  "gc-copying",
+  "stack-switching",
+  "threads",
+]
+
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
 host-arch = ["cranelift-codegen/host-arch"]
 pulley = ["cranelift-codegen/pulley", "dep:pulley-interpreter"]
 trace-log = ["cranelift-codegen/trace-log"]
-component-model = ["wasmtime-environ/component-model"]
-incremental-cache = ["cranelift-codegen/incremental-cache"]
-wmemcheck = ["wasmtime-environ/wmemcheck"]
-gc = ["wasmtime-environ/gc"]
-gc-drc = ["gc", "wasmtime-environ/gc-drc"]
-gc-null = ["gc", "wasmtime-environ/gc-null"]
-gc-copying = ["gc", "wasmtime-environ/gc-copying"]
-stack-switching = []
-threads = ["wasmtime-environ/threads"]

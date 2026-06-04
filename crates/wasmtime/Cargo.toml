@@ -188,7 +188,7 @@ pulley = [
 ]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
-incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
+incremental-cache = ["std"]
 
 # Enables support for profiling guest modules.
 profiling = [
@@ -231,8 +231,6 @@ all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch", "pulley"
 # testing purposes.
 component-model = [
   "wasmtime-environ/component-model",
-  "wasmtime-cranelift?/component-model",
-  "wasmtime-winch?/component-model",
   "dep:wasmtime-component-macro",
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
@@ -241,8 +239,6 @@ component-model = [
 
 wmemcheck = [
   "dep:wasmtime-wmemcheck",
-  "wasmtime-cranelift?/wmemcheck",
-  "wasmtime-winch?/wmemcheck",
   "wasmtime-environ/wmemcheck",
   "std",
 ]
@@ -293,49 +289,24 @@ runtime = [
 #
 # You can additionally configure which GC implementations are enabled via the
 # `gc-drc`, `gc-null`, and `gc-copying` features.
-gc = [
-  "wasmtime-environ/gc",
-  "wasmtime-cranelift?/gc",
-  "wasmtime-winch?/gc",
-]
+gc = ["wasmtime-environ/gc"]
 
 # Enable the deferred reference counting garbage collector.
-gc-drc = [
-  "gc",
-  "wasmtime-environ/gc-drc",
-  "wasmtime-cranelift?/gc-drc",
-  "wasmtime-winch?/gc-drc",
-]
+gc-drc = ["gc", "wasmtime-environ/gc-drc"]
 
 # Enable the null garbage collector.
-gc-null = [
-  "gc",
-  "wasmtime-environ/gc-null",
-  "wasmtime-cranelift?/gc-null",
-  "wasmtime-winch?/gc-null",
-]
+gc-null = ["gc", "wasmtime-environ/gc-null"]
 
 # Enable the copying garbage collector.
-gc-copying = [
-  "gc",
-  "wasmtime-environ/gc-copying",
-  "wasmtime-cranelift?/gc-copying",
-  "wasmtime-winch?/gc-copying",
-]
+gc-copying = ["gc", "wasmtime-environ/gc-copying"]
 
 # Enable runtime support for the WebAssembly threads proposal.
-threads = [
-  "wasmtime-cranelift?/threads",
-  "wasmtime-winch?/threads",
-  "std",
-]
+threads = ["std"]
 
 stack-switching = [
   "runtime",
   "std",
   "wasmtime-environ/stack-switching",
-  "wasmtime-cranelift?/stack-switching",
-  "wasmtime-winch?/stack-switching",
 ]
 
 # Controls whether backtraces will attempt to parse DWARF information in

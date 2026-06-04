@@ -957,7 +957,6 @@ fn is_inlining_function(key: FuncKey) -> bool {
         FuncKey::DefinedWasmFunction(..) => true,
 
         // Intrinsics can be inlined into other functions.
-        #[cfg(feature = "component-model")]
         FuncKey::UnsafeIntrinsic(..) => true,
 
         // Trampolines cannot participate in inlining since our
@@ -968,7 +967,6 @@ fn is_inlining_function(key: FuncKey) -> bool {
         | FuncKey::WasmToBuiltinTrampoline(..)
         | FuncKey::PatchableToBuiltinTrampoline(..)
         | FuncKey::ModuleStartup(..) => false,
-        #[cfg(feature = "component-model")]
         FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
 
         FuncKey::PulleyHostCall(_) => {
