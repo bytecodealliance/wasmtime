@@ -11,7 +11,6 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "debug")]
 use std::pin::Pin;
-use std::sync::Arc;
 use std::thread;
 use wasmtime::{
     Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
@@ -290,7 +289,8 @@ impl RunCommand {
                         move |store| {
                             Box::pin(async move {
                                 let engine_clone = store.engine().clone();
-                                let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                                let cancel =
+                                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                                 let cancel_clone = cancel.clone();
                                 let epoch_thread = thread::spawn(move || {
                                     while !cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
