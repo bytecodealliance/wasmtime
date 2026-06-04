@@ -6,14 +6,14 @@ use wasmtime::*;
 fn wasm_export_tags() -> Result<()> {
     let source = r#"
             (module
-                (tag (export "t1") (param i32) (result i32))
-                (tag (export "t2") (param i32) (result i32))
-                (tag (export "t3") (param i64) (result i32))
+                (tag (export "t1") (param i32))
+                (tag (export "t2") (param i32))
+                (tag (export "t3") (param i64))
             )
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_exceptions(true).wasm_stack_switching(true);
+    config.wasm_exceptions(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(&engine, source)?;
@@ -50,19 +50,19 @@ fn wasm_export_tags() -> Result<()> {
 fn wasm_import_tags() -> Result<()> {
     let m1_src = r#"
             (module
-                (tag (export "t1") (param i32) (result i32))
+                (tag (export "t1") (param i32))
             )
         "#;
     let m2_src = r#"
             (module
-                (tag (export "t1_2") (import "" "") (param i32) (result i32))
-                (tag (export "t1_22") (import "" "") (param i32) (result i32))
-                (tag (export "t2") (param i32) (result i32))
+                (tag (export "t1_2") (import "" "") (param i32))
+                (tag (export "t1_22") (import "" "") (param i32))
+                (tag (export "t2") (param i32))
             )
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_exceptions(true).wasm_stack_switching(true);
+    config.wasm_exceptions(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let m1 = Module::new(&engine, m1_src)?;
