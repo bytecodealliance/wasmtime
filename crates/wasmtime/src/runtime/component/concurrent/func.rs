@@ -447,7 +447,7 @@ where
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
                     func.with_lift_context(store, |cx, ty| {
-                        // SAFETY: Per the safety requiments documented for the
+                        // SAFETY: Per the safety requirements documented for the
                         // `ComponentType` trait, `Return::Lower` must be
                         // compatible at the binary level with a `[ValRaw; N]`,
                         // where `N` is `mem::size_of::<Return::Lower>() /
