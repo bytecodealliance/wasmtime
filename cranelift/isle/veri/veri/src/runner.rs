@@ -596,8 +596,7 @@ impl Runner {
         };
 
         if !verification_failures.is_empty() {
-            let mut summary =
-                Self::open_log_file(self.log_dir.clone(), "failures.out").ok();
+            let mut summary = Self::open_log_file(self.log_dir.clone(), "failures.out").ok();
             eprintln!(
                 "=== VERIFICATION FAILURES ({n}) ===",
                 n = verification_failures.len()
@@ -828,9 +827,7 @@ impl Runner {
 
             // Verify.
             if self.skip_solver {
-                log::debug!(
-                        "Skipping solver"
-                );
+                log::debug!("Skipping solver");
                 continue;
             }
 

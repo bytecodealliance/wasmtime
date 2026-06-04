@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, ffi::OsStr, fs, path::PathBuf, str::FromStr
 use proc_macro::TokenStream;
 use proc_macro_error::{abort_call_site, proc_macro_error};
 use quote::quote;
-use syn::{parse_macro_input, punctuated::Punctuated, Expr, ExprLit, ItemFn, Lit, Meta};
+use syn::{Expr, ExprLit, ItemFn, Lit, Meta, parse_macro_input, punctuated::Punctuated};
 
 #[proc_macro_error]
 #[proc_macro_attribute]

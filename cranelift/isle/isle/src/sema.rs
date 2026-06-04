@@ -301,7 +301,7 @@ impl Type {
     /// Get the ID of this `Type`.
     pub fn id(&self) -> TypeId {
         match self {
-            Self::Primitive(id, _, _) | Self::Enum { id, .. } | Self::Struct{ id, ..} => *id,
+            Self::Primitive(id, _, _) | Self::Enum { id, .. } | Self::Struct { id, .. } => *id,
             Self::Builtin(b) => TypeId::builtin(*b),
         }
     }
@@ -2988,7 +2988,6 @@ mod test {
     use crate::ast::Ident;
     use crate::lexer::Lexer;
     use crate::parser::parse;
-    use std::sync::Arc;
 
     #[test]
     fn build_type_env() {
@@ -2996,11 +2995,7 @@ mod test {
             (type UImm8 (primitive UImm8))
             (type A extern (enum (B (f1 u32) (f2 u32)) (C (f1 u32))))
         ";
-        let files = Arc::new(Files::from_names_and_contents(vec![(
-            "test.isle".to_string(),
-            text.to_string(),
-        )]));
-        let ast = parse(Lexer::new(0, text).unwrap(), files).expect("should parse");
+        let ast = parse(Lexer::new(0, text).unwrap()).expect("should parse");
         let tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
 
         let sym_a = tyenv
@@ -3064,7 +3059,7 @@ mod test {
                                 },
                             ],
                         }),
-                                                pos: Pos {
+                        pos: Pos {
                             file: 0,
                             offset: 77,
                         },
@@ -3080,7 +3075,7 @@ mod test {
                                 ty: TypeId::U32,
                             }],
                         }),
-                                                pos: Pos {
+                        pos: Pos {
                             file: 0,
                             offset: 99,
                         },

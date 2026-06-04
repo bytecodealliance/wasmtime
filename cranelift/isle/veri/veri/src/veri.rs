@@ -1465,8 +1465,7 @@ impl<'a> ConditionsBuilder<'a> {
         let variant_type = self.prog.tyenv.get_variant(*ty, variant);
         let variant_name = self.prog.tyenv.syms[variant_type.name.index()].as_str();
 
-        let field_name =
-            field_name_by_index(&variant_type.fields, field.index(), &self.prog.tyenv);
+        let field_name = field_name_by_index(&variant_type.fields, field.index(), &self.prog.tyenv);
 
         // Destination binding.
         let v = self.binding_value[&id].clone();
@@ -1930,15 +1929,18 @@ impl<'a> ConditionsBuilder<'a> {
                     .ok_or(self.error(format!("unknown enum type {name}", name = name.0)))?;
 
                 // Determine type model.
-                let model = self.prog.specenv.type_model.get(&type_id).ok_or(self.error(
-                    format!(
+                let model = self
+                    .prog
+                    .specenv
+                    .type_model
+                    .get(&type_id)
+                    .ok_or(self.error(format!(
                         "unspecified model for type `{name}`: this enum type is being \
                          constructed here, but has no `(model ...)` declaration. Add a \
                          `(model {name} (enum ...))` form in a spec file listing its variants \
                          so the verifier knows its representation.",
                         name = name.0
-                    ),
-                ))?;
+                    )))?;
 
                 // Should be an enum.
                 let e = model.as_enum().ok_or(
@@ -2414,14 +2416,19 @@ impl<'a> ConditionsBuilder<'a> {
     fn alloc_model(&mut self, type_id: TypeId, name: String) -> Result<Symbolic> {
         let type_name = self.prog.type_name(type_id);
         let term_name = self.prog.term_name(self.expansion.term);
-        let ty = self.prog.specenv.type_model.get(&type_id).ok_or(self.error(format!(
-            "unspecified model for type `{type_name}`: while building verification \
+        let ty = self
+            .prog
+            .specenv
+            .type_model
+            .get(&type_id)
+            .ok_or(self.error(format!(
+                "unspecified model for type `{type_name}`: while building verification \
              conditions for term `{term_name}`, the binding `{name}` has type `{type_name}`, \
              but that type has no `(model ...)` declaration. Add a `(model {type_name} ...)` \
              form in a spec file describing its representation (for example a bitvector of \
              some width, or an enum listing its variants) so the verifier can allocate a \
              symbolic value for it."
-        )))?;
+            )))?;
         self.alloc_value(ty, name)
     }
 

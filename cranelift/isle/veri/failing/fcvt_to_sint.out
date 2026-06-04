@@ -1,9 +1,0 @@
-#275	../../../codegen/src/isa/aarch64/lower.isle line 630
-	fcvt_to_sint({bits: int}, bv 32) -> bv 32
-		type solution status = inapplicable
-	fcvt_to_sint({bits: int}, bv 32) -> bv 64
-		type solution status = inapplicable
-	fcvt_to_sint({bits: int}, bv 64) -> bv 32
-		type solution status = solved
-		applicability = applicable
-		verification = failure

@@ -6,7 +6,7 @@ edition.workspace = true
 
 [dependencies]
 cranelift-isle-veri-aslp = { path = "../aslp" }
-cranelift-isle = { path = "../../isle", features = ["printer"] }
+cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { workspace = true, features = ["all-arch"] }
 reqwest = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }

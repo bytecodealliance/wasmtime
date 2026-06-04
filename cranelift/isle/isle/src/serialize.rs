@@ -21,7 +21,6 @@
 
 use crate::disjointsets::DisjointSets;
 use crate::lexer::Pos;
-use crate::sema::Sym;
 use crate::trie_again::{Binding, BindingId, Constraint, Rule, RuleSet};
 use std::cmp::Reverse;
 
@@ -108,8 +107,6 @@ pub enum ControlFlow {
         /// What is the result expression which should be returned if this
         /// rule matched?
         result: BindingId,
-        /// Name of the rule that matched.
-        name: Option<Sym>,
     },
 }
 
@@ -488,7 +485,6 @@ impl<'a> Decomposition<'a> {
                 pos,
                 result,
                 ref impure,
-                name,
                 ..
             } = &self.rules.rules[idx];
 
@@ -499,7 +495,7 @@ impl<'a> Decomposition<'a> {
             }
             self.use_expr(result);
 
-            let check = ControlFlow::Return { pos, result, name };
+            let check = ControlFlow::Return { pos, result };
             let bind_order = std::mem::take(&mut self.bind_order);
             self.block.steps.push(EvalStep { bind_order, check });
         }

@@ -919,7 +919,7 @@
 ;;  xtn tmp2.2s, rm.2d
 ;;  shll rd.2d, rd.2s, #32
 ;;  umlal rd.2d, tmp2.2s, tmp1.2s
-(rule -1 (lower (has_type $I64X2 (imul _ x y)))
+(rule -1 (lower (imul $I64X2 x y))
       (let ((rn Reg x)
             (rm Reg y)
             ;; Reverse the 32-bit elements in the 64-bit words.
@@ -2048,25 +2048,25 @@
 ;;     if ty == i128:
 ;;         mov out_hi, 0
 
-(rule popcnt_8 (lower (has_type $I8 (popcnt _ x)))
+(rule popcnt_8 (lower (popcnt $I8 x))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8))))
         (mov_from_vec nbits 0 (ScalarSize.Size8))))
 
 ;; Note that this uses `addp` instead of `addv` as it's usually cheaper.
-(rule popcnt_16 (lower (has_type $I16 (popcnt _ x)))
+(rule popcnt_16 (lower (popcnt $I16 x))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addp nbits nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule popcnt_32 (lower (has_type $I32 (popcnt _ x)))
+(rule popcnt_32 (lower (popcnt $I32 x))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size32)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
         (mov_from_vec added 0 (ScalarSize.Size8))))
 
-(rule popcnt_64 (lower (has_type $I64 (popcnt _ x)))
+(rule popcnt_64 (lower (popcnt $I64 x))
       (let ((tmp Reg (mov_to_fpu x (ScalarSize.Size64)))
             (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
             (added Reg (addv nbits (VectorSize.Size8x8))))
@@ -2575,16 +2575,16 @@
 ;;;; Rules for loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule load_i8_aarch64_uload8 (lower
-       (has_type $I8 (load _ (little_or_native_endian flags) address offset)))
+       (load $I8 (little_or_native_endian flags) address offset))
       (aarch64_uload8 (amode $I8 address offset) flags))
 (rule load_i16_aarch64_uload16 (lower
-       (has_type $I16 (load _ (little_or_native_endian flags) address offset)))
+       (load $I16 (little_or_native_endian flags) address offset))
       (aarch64_uload16 (amode $I16 address offset) flags))
 (rule load_i32_aarch64_uload32 (lower
-       (has_type $I32 (load _ (little_or_native_endian flags) address offset)))
+       (load $I32 (little_or_native_endian flags) address offset))
       (aarch64_uload32 (amode $I32 address offset) flags))
 (rule load_i64_aarch64_uload64 (lower
-       (has_type $I64 (load _ (little_or_native_endian flags) address offset)))
+       (load $I64 (little_or_native_endian flags) address offset))
       (aarch64_uload64 (amode $I64 address offset) flags))
 
 (attr rule load_i128 (tag i128))

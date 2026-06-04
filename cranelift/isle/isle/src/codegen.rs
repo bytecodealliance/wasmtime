@@ -813,7 +813,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                             stack.push((Self::validate_block(ret_kind, body), "", scope));
                         }
 
-                        &ControlFlow::Return { pos, result, name: _ } => {
+                        &ControlFlow::Return { pos, result } => {
                             writeln!(
                                 ctx.out,
                                 "{}// Rule at {}.",

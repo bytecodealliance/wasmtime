@@ -443,9 +443,7 @@ fn define_alu_rrr_shift() -> Result<SpecConfig> {
                                             alu_rrr_shift_sizes(*alu_op, *shiftop, &sizes)
                                                 .into_iter()
                                                 .map(|size| {
-                                                    alu_rrr_shift_size_case(
-                                                        *alu_op, size, *shiftop,
-                                                    )
+                                                    alu_rrr_shift_size_case(*alu_op, size, *shiftop)
                                                 })
                                                 .collect::<Result<_>>()?,
                                         ),
@@ -1206,7 +1204,8 @@ where
         .reads
         .insert(simm9, Mapping::require(spec_var("simm9".to_string())));
 
-    let unscaled_template = amode_unscaled_template(xreg(5), |amode| inst(amode, MemFlagsData::new()))?;
+    let unscaled_template =
+        amode_unscaled_template(xreg(5), |amode| inst(amode, MemFlagsData::new()))?;
 
     let unscaled = Arm {
         variant: "Unscaled".to_string(),

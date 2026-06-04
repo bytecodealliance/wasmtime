@@ -1,10 +1,10 @@
 use cranelift_codegen::{
     MachBuffer, MachInstEmit,
+    isa::aarch64,
     isa::aarch64::inst::{
         Inst,
         emit::{EmitInfo, EmitState},
     },
-    isa::aarch64,
     settings,
 };
 

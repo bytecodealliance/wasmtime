@@ -1,26 +1,23 @@
 //! Parser for ISLE language.
 
-#![allow(missing_docs, reason = "internal crate, docs not required")]
+use crate::ast::*;
 
 use crate::error::{Error, Span};
-use crate::files::Files;
 use crate::lexer::{Lexer, Pos, Token};
-use crate::ast::*;
-use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, Error>;
 
 /// Parse the top-level ISLE definitions and return their AST.
-pub fn parse(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
-    let mut parser = Parser::new(lexer, files);
+pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
+    let mut parser = Parser::new(lexer);
     let result = parser.parse_defs()?;
     Ok(result)
 }
 
 /// Parse without positional information. Provided mainly to support testing, to
 /// enable equality testing on structure alone.
-pub fn parse_without_pos(lexer: Lexer, files: Arc<Files>) -> Result<Vec<Def>> {
-    let mut parser = Parser::new_without_pos_tracking(lexer, files);
+pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
+    let mut parser = Parser::new_without_pos_tracking(lexer);
     parser.parse_defs()
 }
 
@@ -43,14 +40,14 @@ enum IfLetOrExpr {
 
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
-    pub fn new(lexer: Lexer<'a>, _files: Arc<Files>) -> Parser<'a> {
+    pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
         Parser {
             lexer,
             disable_pos: false,
         }
     }
 
-    fn new_without_pos_tracking(lexer: Lexer<'a>, _files: Arc<Files>) -> Parser<'a> {
+    fn new_without_pos_tracking(lexer: Lexer<'a>) -> Parser<'a> {
         Parser {
             lexer,
             disable_pos: true,

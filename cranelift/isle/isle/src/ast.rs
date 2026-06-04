@@ -483,7 +483,7 @@ pub enum ModelType {
     Auto,
     /// SMT-LIB Int
     Int,
-    /// SMT-LIB Int
+    /// SMT-LIB Bool
     Bool,
     /// Unit type.
     Unit,

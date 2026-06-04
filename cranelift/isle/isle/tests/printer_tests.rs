@@ -1,22 +1,16 @@
 //! Auto-generated ISLE printer tests.
 
-use cranelift_isle::files::Files;
 use cranelift_isle::lexer;
 use cranelift_isle::parser;
 use cranelift_isle::printer;
 use std::io::BufWriter;
 use std::iter::zip;
-use std::sync::Arc;
 
 pub fn run_print(isle_filename: &str) {
     // Parse.
     let original_src = std::fs::read_to_string(isle_filename).unwrap();
     let lexer = lexer::Lexer::new(0, &original_src).unwrap();
-    let files = Arc::new(Files::from_names_and_contents(vec![(
-        isle_filename.to_string(),
-        original_src.clone(),
-    )]));
-    let original = parser::parse_without_pos(lexer, files).unwrap();
+    let original = parser::parse_without_pos(lexer).unwrap();
 
     // Print.
     let mut buf = BufWriter::new(Vec::new());
@@ -26,11 +20,7 @@ pub fn run_print(isle_filename: &str) {
 
     // Round trip.
     let lexer = lexer::Lexer::new(0, &printed_src).unwrap();
-    let files = Arc::new(Files::from_names_and_contents(vec![(
-        isle_filename.to_string(),
-        printed_src.clone(),
-    )]));
-    let round_trip = parser::parse_without_pos(lexer, files).unwrap();
+    let round_trip = parser::parse_without_pos(lexer).unwrap();
 
     // Ensure equal.
     assert_eq!(original.len(), round_trip.len());

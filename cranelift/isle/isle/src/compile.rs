@@ -56,7 +56,7 @@ pub fn from_files<P: AsRef<Path>>(
             Err(err) => return Err(Errors::new(vec![err], files)),
         };
 
-        match crate::parser::parse(lexer, files.clone()) {
+        match crate::parser::parse(lexer) {
             Ok(mut ds) => defs.append(&mut ds),
             Err(err) => return Err(Errors::new(vec![err], files)),
         }
