@@ -367,57 +367,77 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f32,),
+                                (),
+                            >::new_unchecked(self.f32_param)
+                        }
+                    }
                     pub fn call_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f32,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f32,),
-                                (),
-                            >::new_unchecked(self.f32_param)
-                        };
+                        let callee = self.func_f32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f64,),
+                                (),
+                            >::new_unchecked(self.f64_param)
+                        }
                     }
                     pub fn call_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f64,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f64,),
-                                (),
-                            >::new_unchecked(self.f64_param)
-                        };
+                        let callee = self.func_f64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_f32_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f32,),
+                            >::new_unchecked(self.f32_result)
+                        }
                     }
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f32> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f32,),
-                            >::new_unchecked(self.f32_result)
-                        };
+                        let callee = self.func_f32_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_f64_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f64,),
+                            >::new_unchecked(self.f64_result)
+                        }
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f64> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f64,),
-                            >::new_unchecked(self.f64_result)
-                        };
+                        let callee = self.func_f64_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }

@@ -413,13 +413,13 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub fn call_option_test<S: wasmtime::AsContextMut>(
+                    pub fn func_option_test(
                         &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<
-                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<Option<wasmtime::component::__internal::String>, Error>,),
                     > {
-                        let callee = unsafe {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (
@@ -429,7 +429,15 @@ pub mod exports {
                                     >,
                                 ),
                             >::new_unchecked(self.option_test)
-                        };
+                        }
+                    }
+                    pub fn call_option_test<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<
+                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    > {
+                        let callee = self.func_option_test();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }

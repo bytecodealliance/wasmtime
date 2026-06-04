@@ -219,13 +219,16 @@ const _: () = {
             foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_f(&self) -> wasmtime::component::TypedFunc<(), ((T, U, R),)> {
+            unsafe {
+                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
+            }
+        }
         pub fn call_f<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
         ) -> wasmtime::Result<(T, U, R)> {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
-            };
+            let callee = self.func_f();
             let (ret0,) = callee.call(store.as_context_mut(), ())?;
             Ok(ret0)
         }

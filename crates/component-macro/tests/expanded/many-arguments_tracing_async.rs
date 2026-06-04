@@ -682,6 +682,53 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_many_args(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                        ),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                ),
+                                (),
+                            >::new_unchecked(self.many_args)
+                        }
+                    }
                     pub async fn call_many_args<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -710,29 +757,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/manyarg", function = "many-args",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                ),
-                                (),
-                            >::new_unchecked(self.many_args)
-                        };
+                        let callee = self.func_many_args();
                         let () = callee
                             .call_async(
                                 store.as_context_mut(),
@@ -759,6 +784,16 @@ pub mod exports {
                             .await?;
                         Ok(())
                     }
+                    pub fn func_big_argument(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&BigStruct,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&BigStruct,),
+                                (),
+                            >::new_unchecked(self.big_argument)
+                        }
+                    }
                     pub async fn call_big_argument<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -772,12 +807,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/manyarg", function = "big-argument",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&BigStruct,),
-                                (),
-                            >::new_unchecked(self.big_argument)
-                        };
+                        let callee = self.func_big_argument();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())

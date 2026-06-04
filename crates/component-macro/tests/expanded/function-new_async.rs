@@ -180,6 +180,9 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
         }
+        pub fn func_new(&self) -> wasmtime::component::TypedFunc<(), ()> {
+            unsafe { wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new) }
+        }
         pub async fn call_new<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -187,9 +190,7 @@ const _: () = {
         where
             <S as wasmtime::AsContext>::Data: Send,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new)
-            };
+            let callee = self.func_new();
             let () = callee.call_async(store.as_context_mut(), ()).await?;
             Ok(())
         }

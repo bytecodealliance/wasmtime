@@ -230,6 +230,11 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_y(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
+                }
+            }
             pub async fn call_y<_T, _D>(
                 &self,
                 accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -238,9 +243,7 @@ pub mod exports {
                 _T: Send,
                 _D: wasmtime::component::HasData,
             {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
-                };
+                let callee = self.func_y();
                 let () = callee.call_concurrent(accessor, ()).await?;
                 Ok(())
             }

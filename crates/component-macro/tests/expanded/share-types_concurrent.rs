@@ -394,6 +394,16 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_handle_request(
+                &self,
+            ) -> wasmtime::component::TypedFunc<(Request,), (Response,)> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<
+                        (Request,),
+                        (Response,),
+                    >::new_unchecked(self.handle_request)
+                }
+            }
             pub async fn call_handle_request<_T, _D>(
                 &self,
                 accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -403,12 +413,7 @@ pub mod exports {
                 _T: Send,
                 _D: wasmtime::component::HasData,
             {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<
-                        (Request,),
-                        (Response,),
-                    >::new_unchecked(self.handle_request)
-                };
+                let callee = self.func_handle_request();
                 let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                 Ok(ret0)
             }

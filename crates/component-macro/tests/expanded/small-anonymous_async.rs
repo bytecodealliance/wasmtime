@@ -425,16 +425,13 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub async fn call_option_test<S: wasmtime::AsContextMut>(
+                    pub fn func_option_test(
                         &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<
-                        Result<Option<wasmtime::component::__internal::String>, Error>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
-                        let callee = unsafe {
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<Option<wasmtime::component::__internal::String>, Error>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (
@@ -444,7 +441,18 @@ pub mod exports {
                                     >,
                                 ),
                             >::new_unchecked(self.option_test)
-                        };
+                        }
+                    }
+                    pub async fn call_option_test<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<
+                        Result<Option<wasmtime::component::__internal::String>, Error>,
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
+                        let callee = self.func_option_test();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .await?;

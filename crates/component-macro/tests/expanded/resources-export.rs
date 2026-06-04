@@ -402,43 +402,64 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub fn func_constructor(
                         &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
-                        let callee = unsafe {
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        }
+                    }
+                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_static_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (u32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u32,),
+                            >::new_unchecked(self.funcs.static_a_static_a)
+                        }
                     }
                     pub fn call_static_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<u32> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u32,),
-                            >::new_unchecked(self.funcs.static_a_static_a)
-                        };
+                        let callee = self.func_static_a();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_method_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::ResourceAny,),
+                        (u32,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::ResourceAny,),
+                                (u32,),
+                            >::new_unchecked(self.funcs.method_a_method_a)
+                        }
                     }
                     pub fn call_method_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::ResourceAny,
                     ) -> wasmtime::Result<u32> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::ResourceAny,),
-                                (u32,),
-                            >::new_unchecked(self.funcs.method_a_method_a)
-                        };
+                        let callee = self.func_method_a();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(ret0)
                     }
@@ -548,40 +569,59 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Y>,),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Y>,),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_a_constructor)
+                        }
+                    }
                     pub fn call_constructor<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::Resource<Y>,
                     ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Y>,),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(ret0)
+                    }
+                    pub fn func_static_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::Resource<Y>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::Resource<Y>,),
+                            >::new_unchecked(self.funcs.static_a_static_a)
+                        }
                     }
                     pub fn call_static_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<wasmtime::component::Resource<Y>> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::Resource<Y>,),
-                            >::new_unchecked(self.funcs.static_a_static_a)
-                        };
+                        let callee = self.func_static_a();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }
-                    pub fn call_method_a<S: wasmtime::AsContextMut>(
+                    pub fn func_method_a(
                         &self,
-                        mut store: S,
-                        arg0: wasmtime::component::ResourceAny,
-                        arg1: wasmtime::component::Resource<Y>,
-                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>> {
-                        let callee = unsafe {
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            wasmtime::component::ResourceAny,
+                            wasmtime::component::Resource<Y>,
+                        ),
+                        (wasmtime::component::Resource<Y>,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
                                     wasmtime::component::ResourceAny,
@@ -589,7 +629,15 @@ pub mod exports {
                                 ),
                                 (wasmtime::component::Resource<Y>,),
                             >::new_unchecked(self.funcs.method_a_method_a)
-                        };
+                        }
+                    }
+                    pub fn call_method_a<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                        arg0: wasmtime::component::ResourceAny,
+                        arg1: wasmtime::component::Resource<Y>,
+                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>> {
+                        let callee = self.func_method_a();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0, arg1))?;
                         Ok(ret0)
                     }
@@ -671,16 +719,24 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
-                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                    pub fn func_constructor(
                         &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
-                        let callee = unsafe {
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (wasmtime::component::ResourceAny,),
                             >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        }
+                    }
+                    pub fn call_constructor<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }
@@ -763,17 +819,25 @@ pub mod exports {
                     }
                 }
                 impl GuestB<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::ResourceAny,),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::ResourceAny,),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_b_constructor)
+                        }
+                    }
                     pub fn call_constructor<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::ResourceAny,
                     ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::ResourceAny,),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_b_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(ret0)
                     }

@@ -332,32 +332,42 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_take_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(char,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (char,),
+                                (),
+                            >::new_unchecked(self.take_char)
+                        }
+                    }
                     /// A function that accepts a character
                     pub fn call_take_char<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: char,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (char,),
-                                (),
-                            >::new_unchecked(self.take_char)
-                        };
+                        let callee = self.func_take_char();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_return_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (char,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (char,),
+                            >::new_unchecked(self.return_char)
+                        }
                     }
                     /// A function that returns a character
                     pub fn call_return_char<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<char> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (char,),
-                            >::new_unchecked(self.return_char)
-                        };
+                        let callee = self.func_return_char();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }

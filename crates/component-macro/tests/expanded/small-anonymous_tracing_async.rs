@@ -438,6 +438,24 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_option_test(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<Option<wasmtime::component::__internal::String>, Error>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (
+                                    Result<
+                                        Option<wasmtime::component::__internal::String>,
+                                        Error,
+                                    >,
+                                ),
+                            >::new_unchecked(self.option_test)
+                        }
+                    }
                     pub async fn call_option_test<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -452,17 +470,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/anon", function = "option-test",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (
-                                    Result<
-                                        Option<wasmtime::component::__internal::String>,
-                                        Error,
-                                    >,
-                                ),
-                            >::new_unchecked(self.option_test)
-                        };
+                        let callee = self.func_option_test();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())

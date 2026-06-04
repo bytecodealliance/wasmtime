@@ -180,6 +180,9 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
         }
+        pub fn func_y(&self) -> wasmtime::component::TypedFunc<(), ()> {
+            unsafe { wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y) }
+        }
         pub async fn call_y<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -192,9 +195,7 @@ const _: () = {
                 tracing::Level::TRACE, "wit-bindgen export", module = "default", function
                 = "y",
             );
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
-            };
+            let callee = self.func_y();
             let () = callee
                 .call_async(store.as_context_mut(), ())
                 .instrument(span.clone())

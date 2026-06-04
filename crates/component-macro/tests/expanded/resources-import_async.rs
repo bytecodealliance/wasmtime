@@ -386,6 +386,19 @@ const _: () = {
             >(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_some_world_func2(
+            &self,
+        ) -> wasmtime::component::TypedFunc<
+            (),
+            (wasmtime::component::Resource<WorldResource>,),
+        > {
+            unsafe {
+                wasmtime::component::TypedFunc::<
+                    (),
+                    (wasmtime::component::Resource<WorldResource>,),
+                >::new_unchecked(self.some_world_func2)
+            }
+        }
         pub async fn call_some_world_func2<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -393,12 +406,7 @@ const _: () = {
         where
             <S as wasmtime::AsContext>::Data: Send,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<
-                    (),
-                    (wasmtime::component::Resource<WorldResource>,),
-                >::new_unchecked(self.some_world_func2)
-            };
+            let callee = self.func_some_world_func2();
             let (ret0,) = callee.call_async(store.as_context_mut(), ()).await?;
             Ok(ret0)
         }
@@ -1468,6 +1476,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_handle(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Foo>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Foo>,),
+                                (),
+                            >::new_unchecked(self.handle)
+                        }
+                    }
                     pub async fn call_handle<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -1476,12 +1497,7 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Foo>,),
-                                (),
-                            >::new_unchecked(self.handle)
-                        };
+                        let callee = self.func_handle();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;

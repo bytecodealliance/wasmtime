@@ -325,6 +325,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_take_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(char,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (char,),
+                                (),
+                            >::new_unchecked(self.take_char)
+                        }
+                    }
                     /// A function that accepts a character
                     pub async fn call_take_char<_T, _D>(
                         &self,
@@ -335,14 +345,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (char,),
-                                (),
-                            >::new_unchecked(self.take_char)
-                        };
+                        let callee = self.func_take_char();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_return_char(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (char,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (char,),
+                            >::new_unchecked(self.return_char)
+                        }
                     }
                     /// A function that returns a character
                     pub async fn call_return_char<_T, _D>(
@@ -353,12 +368,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (char,),
-                            >::new_unchecked(self.return_char)
-                        };
+                        let callee = self.func_return_char();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }

@@ -410,6 +410,24 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_option_test(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (Result<Option<wasmtime::component::__internal::String>, Error>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (
+                                    Result<
+                                        Option<wasmtime::component::__internal::String>,
+                                        Error,
+                                    >,
+                                ),
+                            >::new_unchecked(self.option_test)
+                        }
+                    }
                     pub async fn call_option_test<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -420,17 +438,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (
-                                    Result<
-                                        Option<wasmtime::component::__internal::String>,
-                                        Error,
-                                    >,
-                                ),
-                            >::new_unchecked(self.option_test)
-                        };
+                        let callee = self.func_option_test();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
