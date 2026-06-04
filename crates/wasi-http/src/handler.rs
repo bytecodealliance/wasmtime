@@ -1109,6 +1109,20 @@ where
     /// In other failure cases (e.g. `wasi:http/types#error-code` return values
     /// and/or traps when executing synchronous WASIp2 handler functions), the
     /// original error returned by the handler will be returned.
+    ///
+    /// # Backpressure
+    ///
+    /// Note that this API does not implement any form of backpressure to limit
+    /// the number of in-flight `Request`s being processed. This function
+    /// may spawn new tokio tasks, instantiate new modules under new stores, and
+    /// queue up pending `Request`s while waiting for previous instances. In all
+    /// of these situations invoking this function will consume some host-side
+    /// resources until the request is done.
+    ///
+    /// Embedders using this API must ensure to take this into account. If an
+    /// infinite number of requests can be fed into this function then it's
+    /// recommended to take a semaphore, for example, around this function call
+    /// to limit the number of concurrent requests that are being processed.
     pub async fn handle(
         &self,
         id: <S::WorkerState as WorkerState>::RequestId,

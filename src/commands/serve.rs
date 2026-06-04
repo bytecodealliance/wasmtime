@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::io::{self, AsyncWrite};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 use wasmtime::component::{Component, GuestTaskId, Linker};
 use wasmtime::error::Context as _;
 use wasmtime::{
@@ -169,6 +169,15 @@ pub struct ServeCommand {
     /// one header per line.
     #[arg(short = 'H', long = "header", value_name = "HEADER")]
     headers: Vec<String>,
+
+    /// Maximum number of concurrent requests that can be processed at any one
+    /// point in time.
+    #[arg(long)]
+    max_concurrent_requests: Option<usize>,
+    /// Maximum number of concurrent connections that can be held at any one
+    /// point in time.
+    #[arg(long)]
+    max_concurrent_connections: Option<usize>,
 }
 
 impl ServeCommand {
@@ -679,8 +688,12 @@ impl ServeCommand {
         } else {
             1
         };
+        let sem_connections = Arc::new(Semaphore::new(
+            self.max_concurrent_connections.unwrap_or(1000),
+        ));
 
         let handler = ProxyHandler::new(HostHandlerState {
+            sem_requests: Semaphore::new(self.max_concurrent_requests.unwrap_or(1000)),
             cmd: self,
             engine,
             component,
@@ -699,9 +712,13 @@ impl ServeCommand {
             // Wait for a socket, but also "race" against shutdown to break out
             // of this loop. Once the graceful shutdown signal is received then
             // this loop exits immediately.
-            let (stream, _) = tokio::select! {
+            let (connection_permit, stream) = tokio::select! {
                 _ = shutdown.requested.notified() => break,
-                v = listener.accept() => v?,
+                v = async {
+                    let permit = sem_connections.clone().acquire_owned().await?;
+                    let (stream, _) = listener.accept().await?;
+                    wasmtime::error::Ok((permit, stream))
+                } => v?,
             };
 
             // The Nagle algorithm can impose a significant latency penalty
@@ -764,8 +781,12 @@ impl ServeCommand {
                     eprintln!("error: {e:?}");
                 }
                 drop(shutdown_guard);
+                drop(connection_permit);
             });
         }
+
+        // Don't allow any further requests to get picked up.
+        handler.state().sem_requests.close();
 
         drop(handler);
 
@@ -883,6 +904,7 @@ struct HostHandlerState {
     instance: ProxyPre<Host>,
     next_instance_id: AtomicU64,
     next_request_id: AtomicU64,
+    sem_requests: Semaphore,
     _shutdown_guard: Box<dyn std::any::Any + Send + Sync>,
 }
 
@@ -1255,6 +1277,11 @@ async fn handle_request(
     mut req: Request,
 ) -> Result<hyper::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>> {
     use wasmtime_wasi_http::p3::bindings::http::types::ErrorCode;
+
+    // This is used to throttle the maximum number of concurrent requests that
+    // can be processed at any one point in time before delegating to
+    // `handler.handle(...)` below.
+    let _request_permit = handler.state().sem_requests.acquire().await?;
 
     handler.state().request_headers.apply(req.headers_mut());
 
