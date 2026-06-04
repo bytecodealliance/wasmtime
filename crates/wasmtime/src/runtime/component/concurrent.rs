@@ -5458,6 +5458,8 @@ enum WaitableCheck {
 /// [`TypedFunc::start_call_concurrent`] and then using the
 /// [`FuncCallConcurrent::task`] accessor, for example. This can then be
 /// reflected on with [`StoreContextMut::async_call_stack`].
+///
+/// [`TypedFunc::start_call_concurrent`]: crate::component::TypedFunc::start_call_concurrent
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct GuestTaskId(TableId<GuestTask>);
 
