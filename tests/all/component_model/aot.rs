@@ -221,6 +221,8 @@ fn implements_shows_up() -> Result<()> {
             (component
                 (import "a" (implements "a1:b1/c1") (instance $a))
                 (export "b" (implements "a2:b2/c2") (instance $a))
+
+                (import "v" (implements "a:b/c@1.2.0") (instance))
             )
         "#,
     )?;
@@ -229,9 +231,52 @@ fn implements_shows_up() -> Result<()> {
     let mut imports = ty.imports(&engine);
     let (_, a) = imports.next().unwrap();
     assert_eq!(a.implements.as_deref(), Some("a1:b1/c1"));
+    assert!(a.is_implements("a1:b1/c1"));
+    assert!(!a.is_implements("a:b/c"));
+    assert!(!a.is_implements("a1:b1/c1@1.0.0"));
     let mut exports = ty.exports(&engine);
     let (_, b) = exports.next().unwrap();
     assert_eq!(b.implements.as_deref(), Some("a2:b2/c2"));
 
+    let (_, a) = imports.next().unwrap();
+    assert_eq!(a.implements.as_deref(), Some("a:b/c@1.2.0"));
+    assert!(!a.is_implements("a:b/c"));
+    assert!(a.is_implements("a:b/c@1.2.0"));
+    assert!(a.is_implements("a:b/c@1.3.0"));
+    assert!(a.is_implements("a:b/c@1.0.0"));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_13540_resources_in_adapter_no_concurrency() -> Result<()> {
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    let engine = Engine::new(&config)?;
+    engine.precompile_component(
+        br#"
+(component
+  (component $A
+    (type $t' (resource (rep i32)))
+    (export $t "t" (type $t'))
+
+    (core module $m (func (export "r") (param i32)))
+    (core instance $i (instantiate $m))
+    (func (export "r") (param "a" (borrow $t)) (canon lift (core func $i "r")))
+  )
+  (component $B
+    (import "a" (instance $a
+      (export "t" (type $t (sub resource)))
+      (export "r" (func (param "a" (borrow $t))))
+    ))
+
+    (core func $r (canon lower (func $a "r")))
+  )
+  (instance $a (instantiate $A))
+  (instance $b (instantiate $B (with "a" (instance $a))))
+)
+    "#,
+    )?;
     Ok(())
 }

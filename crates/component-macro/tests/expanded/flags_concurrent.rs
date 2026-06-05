@@ -171,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::flegs::HostWithStore + Send,
+            D: foo::foo::flegs::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
             T: 'static + Send,
         {
@@ -303,32 +303,32 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn roundtrip_flag1<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn roundtrip_flag1(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag1,
                 ) -> impl ::core::future::Future<Output = Flag1> + Send;
-                fn roundtrip_flag2<T: Send>(
+                fn roundtrip_flag2(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag2,
                 ) -> impl ::core::future::Future<Output = Flag2> + Send;
-                fn roundtrip_flag4<T: Send>(
+                fn roundtrip_flag4(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag4,
                 ) -> impl ::core::future::Future<Output = Flag4> + Send;
-                fn roundtrip_flag8<T: Send>(
+                fn roundtrip_flag8(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag8,
                 ) -> impl ::core::future::Future<Output = Flag8> + Send;
-                fn roundtrip_flag16<T: Send>(
+                fn roundtrip_flag16(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag16,
                 ) -> impl ::core::future::Future<Output = Flag16> + Send;
-                fn roundtrip_flag32<T: Send>(
+                fn roundtrip_flag32(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag32,
                 ) -> impl ::core::future::Future<Output = Flag32> + Send;
-                fn roundtrip_flag64<T: Send>(
+                fn roundtrip_flag64(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Flag64,
                 ) -> impl ::core::future::Future<Output = Flag64> + Send;
@@ -340,7 +340,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -349,7 +349,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag1,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag1(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag1(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -360,7 +360,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag2,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag2(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag2(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -371,7 +371,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag4,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag4(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag4(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -382,7 +382,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag8,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag8(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag8(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -393,7 +393,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag16,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag16(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag16(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -404,7 +404,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag32,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag32(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag32(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -415,7 +415,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Flag64,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::roundtrip_flag64(host, arg0)
+                            let r = <D as HostWithStore<T>>::roundtrip_flag64(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -428,7 +428,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -725,6 +725,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_roundtrip_flag1(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag1,), (Flag1,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag1,),
+                                (Flag1,),
+                            >::new_unchecked(self.roundtrip_flag1)
+                        }
+                    }
                     pub async fn call_roundtrip_flag1<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -734,14 +744,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag1,),
-                                (Flag1,),
-                            >::new_unchecked(self.roundtrip_flag1)
-                        };
+                        let callee = self.func_roundtrip_flag1();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag2,), (Flag2,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag2,),
+                                (Flag2,),
+                            >::new_unchecked(self.roundtrip_flag2)
+                        }
                     }
                     pub async fn call_roundtrip_flag2<_T, _D>(
                         &self,
@@ -752,14 +767,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag2,),
-                                (Flag2,),
-                            >::new_unchecked(self.roundtrip_flag2)
-                        };
+                        let callee = self.func_roundtrip_flag2();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag4(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag4,), (Flag4,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag4,),
+                                (Flag4,),
+                            >::new_unchecked(self.roundtrip_flag4)
+                        }
                     }
                     pub async fn call_roundtrip_flag4<_T, _D>(
                         &self,
@@ -770,14 +790,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag4,),
-                                (Flag4,),
-                            >::new_unchecked(self.roundtrip_flag4)
-                        };
+                        let callee = self.func_roundtrip_flag4();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag8(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag8,), (Flag8,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag8,),
+                                (Flag8,),
+                            >::new_unchecked(self.roundtrip_flag8)
+                        }
                     }
                     pub async fn call_roundtrip_flag8<_T, _D>(
                         &self,
@@ -788,14 +813,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag8,),
-                                (Flag8,),
-                            >::new_unchecked(self.roundtrip_flag8)
-                        };
+                        let callee = self.func_roundtrip_flag8();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag16(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag16,), (Flag16,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag16,),
+                                (Flag16,),
+                            >::new_unchecked(self.roundtrip_flag16)
+                        }
                     }
                     pub async fn call_roundtrip_flag16<_T, _D>(
                         &self,
@@ -806,14 +836,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag16,),
-                                (Flag16,),
-                            >::new_unchecked(self.roundtrip_flag16)
-                        };
+                        let callee = self.func_roundtrip_flag16();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag32(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag32,), (Flag32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag32,),
+                                (Flag32,),
+                            >::new_unchecked(self.roundtrip_flag32)
+                        }
                     }
                     pub async fn call_roundtrip_flag32<_T, _D>(
                         &self,
@@ -824,14 +859,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag32,),
-                                (Flag32,),
-                            >::new_unchecked(self.roundtrip_flag32)
-                        };
+                        let callee = self.func_roundtrip_flag32();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag64(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag64,), (Flag64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag64,),
+                                (Flag64,),
+                            >::new_unchecked(self.roundtrip_flag64)
+                        }
                     }
                     pub async fn call_roundtrip_flag64<_T, _D>(
                         &self,
@@ -842,12 +882,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag64,),
-                                (Flag64,),
-                            >::new_unchecked(self.roundtrip_flag64)
-                        };
+                        let callee = self.func_roundtrip_flag64();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }

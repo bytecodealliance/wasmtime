@@ -641,11 +641,10 @@ the use case.
         if cfg!(debug_assertions) {
             let mut symbols: Vec<_> = raw_outputs.iter().map(|i| &i.symbol).collect();
             symbols.sort();
-            for w in symbols.windows(2) {
+            for [a, b] in symbols.array_windows() {
                 assert_ne!(
-                    w[0], w[1],
-                    "should never have duplicate symbols, but found two functions with the symbol `{}`",
-                    w[0]
+                    a, b,
+                    "should never have duplicate symbols, but found two functions with the symbol `{a}`",
                 );
             }
         }
@@ -958,7 +957,6 @@ fn is_inlining_function(key: FuncKey) -> bool {
         FuncKey::DefinedWasmFunction(..) => true,
 
         // Intrinsics can be inlined into other functions.
-        #[cfg(feature = "component-model")]
         FuncKey::UnsafeIntrinsic(..) => true,
 
         // Trampolines cannot participate in inlining since our
@@ -969,7 +967,6 @@ fn is_inlining_function(key: FuncKey) -> bool {
         | FuncKey::WasmToBuiltinTrampoline(..)
         | FuncKey::PatchableToBuiltinTrampoline(..)
         | FuncKey::ModuleStartup(..) => false,
-        #[cfg(feature = "component-model")]
         FuncKey::ComponentTrampoline(..) | FuncKey::ResourceDropTrampoline => false,
 
         FuncKey::PulleyHostCall(_) => {

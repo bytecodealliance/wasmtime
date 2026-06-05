@@ -165,7 +165,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::a::HostWithStore + Send,
+            D: foo::foo::a::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::a::Host + Send,
             T: 'static + Send,
         {
@@ -208,8 +208,8 @@ pub mod foo {
                 assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn g<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn g(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Result<(), Error>> + Send;
             }
@@ -220,7 +220,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -229,7 +229,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::g(host).await;
+                            let r = <D as HostWithStore<T>>::g(host).await;
                             Ok((r,))
                         })
                     },
@@ -241,7 +241,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {

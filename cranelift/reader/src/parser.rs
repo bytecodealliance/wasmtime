@@ -2751,16 +2751,6 @@ impl<'a> Parser<'a> {
                 let imm = self.match_uimm8("expected unsigned 8-bit immediate")?;
                 InstructionData::BinaryImm8 { opcode, arg, imm }
             }
-            InstructionFormat::BinaryImm64 => {
-                let lhs = self.match_value("expected SSA value first operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let rhs = self.match_imm64("expected immediate integer second operand")?;
-                InstructionData::BinaryImm64 {
-                    opcode,
-                    arg: lhs,
-                    imm: rhs,
-                }
-            }
             InstructionFormat::Ternary => {
                 // Names here refer to the `select` instruction.
                 // This format is also use by `fma`.
@@ -3108,7 +3098,8 @@ mod tests {
                                            block0:
                                              v4 = iconst.i8 6
                                              v3 -> v4
-                                             v1 = iadd_imm v3, 17
+                                             v5 = iconst.i8 17
+                                             v1 = iadd v3, v5
                                            }",
         )
         .parse_function()

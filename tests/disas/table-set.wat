@@ -17,7 +17,7 @@
     table.set 0))
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
-;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -33,12 +33,12 @@
 ;; @0055                               v6 = icmp uge v3, v5  ; v3 = 0
 ;; @0055                               v7 = uextend.i64 v3  ; v3 = 0
 ;; @0055                               v8 = load.i64 notrap aligned v0+48
-;;                                     v13 = iconst.i64 2
-;; @0055                               v9 = ishl v7, v13  ; v13 = 2
-;; @0055                               v10 = iadd v8, v9
-;; @0055                               v11 = iconst.i64 0
-;; @0055                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
-;; @0055                               store user6 aligned region0 v2, v12
+;; @0055                               v9 = iconst.i64 2
+;; @0055                               v10 = ishl v7, v9  ; v9 = 2
+;; @0055                               v11 = iadd v8, v10
+;; @0055                               v12 = iconst.i64 0
+;; @0055                               v13 = select_spectre_guard v6, v12, v11  ; v12 = 0
+;; @0055                               store user6 aligned region0 v2, v13
 ;; @0057                               jump block1
 ;;
 ;;                                 block1:
@@ -46,7 +46,7 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32) tail {
-;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -61,12 +61,12 @@
 ;; @005e                               v6 = icmp uge v2, v5
 ;; @005e                               v7 = uextend.i64 v2
 ;; @005e                               v8 = load.i64 notrap aligned v0+48
-;;                                     v13 = iconst.i64 2
-;; @005e                               v9 = ishl v7, v13  ; v13 = 2
-;; @005e                               v10 = iadd v8, v9
-;; @005e                               v11 = iconst.i64 0
-;; @005e                               v12 = select_spectre_guard v6, v11, v10  ; v11 = 0
-;; @005e                               store user6 aligned region0 v3, v12
+;; @005e                               v9 = iconst.i64 2
+;; @005e                               v10 = ishl v7, v9  ; v9 = 2
+;; @005e                               v11 = iadd v8, v10
+;; @005e                               v12 = iconst.i64 0
+;; @005e                               v13 = select_spectre_guard v6, v12, v11  ; v12 = 0
+;; @005e                               store user6 aligned region0 v3, v13
 ;; @0060                               jump block1
 ;;
 ;;                                 block1:

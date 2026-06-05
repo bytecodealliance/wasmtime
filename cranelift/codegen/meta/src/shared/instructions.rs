@@ -1782,7 +1782,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1838,7 +1839,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", Int), Operand::new("y", Int)])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1925,7 +1927,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1944,7 +1947,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1960,7 +1964,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -1976,128 +1981,8 @@ pub(crate) fn define(
         .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
         .operands_out(vec![Operand::new("a", iB)])
         .can_trap()
-        .side_effects_idempotent(),
-    );
-
-    ig.push(
-        Inst::new(
-            "iadd_imm",
-            r#"
-        Add immediate integer.
-
-        Same as `iadd`, but one operand is a sign extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "imul_imm",
-            r#"
-        Integer multiplication by immediate constant.
-
-        Same as `imul`, but one operand is a sign extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "udiv_imm",
-            r#"
-        Unsigned integer division by an immediate constant.
-
-        Same as `udiv`, but one operand is a zero extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "sdiv_imm",
-            r#"
-        Signed integer division by an immediate constant.
-
-        Same as `sdiv`, but one operand is a sign extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero, or if the result is not
-        representable in `B` bits two's complement. This only happens
-        when `x = -2^{B-1}, Y = -1`.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "urem_imm",
-            r#"
-        Unsigned integer remainder with immediate divisor.
-
-        Same as `urem`, but one operand is a zero extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "srem_imm",
-            r#"
-        Signed integer remainder with immediate divisor.
-
-        Same as `srem`, but one operand is a sign extended 64 bit immediate constant.
-
-        This operation traps if the divisor is zero.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "irsub_imm",
-            r#"
-        Immediate reverse wrapping subtraction: `a := Y - x \pmod{2^B}`.
-
-        The immediate operand is a sign extended 64 bit constant.
-
-        Also works as integer negation when `Y = 0`. Use `iadd_imm`
-        with a negative immediate operand for the reverse immediate
-        subtraction.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
+        .side_effects_idempotent()
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2355,7 +2240,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2367,7 +2253,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2379,7 +2266,8 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
+        .operands_out(vec![Operand::new("a", bits)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2438,57 +2326,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "band_imm",
-            r#"
-        Bitwise and with immediate.
-
-        Same as `band`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bor_imm",
-            r#"
-        Bitwise or with immediate.
-
-        Same as `bor`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bxor_imm",
-            r#"
-        Bitwise xor with immediate.
-
-        Same as `bxor`, but one operand is a zero extended 64 bit immediate constant.
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("Y", &imm.imm64)])
-        .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
             "rotl",
             r#"
         Rotate left.
@@ -2501,7 +2338,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2518,41 +2356,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "rotl_imm",
-            r#"
-        Rotate left by immediate.
-
-        Same as `rotl`, but one operand is a zero extended 64 bit immediate constant.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "rotr_imm",
-            r#"
-        Rotate right by immediate.
-
-        Same as `rotr`, but one operand is a zero extended 64 bit immediate constant.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2577,7 +2382,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2603,7 +2409,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(
@@ -2622,58 +2429,8 @@ pub(crate) fn define(
             Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
             Operand::new("y", iB).with_doc("Number of bits to shift"),
         ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ishl_imm",
-            r#"
-        Integer shift left by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ushr_imm",
-            r#"
-        Unsigned shift right by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "sshr_imm",
-            r#"
-        Signed shift right by immediate.
-
-        The shift amount is masked to the size of ``x``.
-        "#,
-            &formats.binary_imm64,
-        )
-        .operands_in(vec![
-            Operand::new("x", Int).with_doc("Scalar or vector value to shift"),
-            Operand::new("Y", &imm.imm64),
-        ])
-        .operands_out(vec![Operand::new("a", Int)]),
+        .operands_out(vec![Operand::new("a", Int)])
+        .inst_builder_imm_method(true),
     );
 
     ig.push(

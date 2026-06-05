@@ -165,8 +165,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: a::b::interface_with_live_type::HostWithStore
-                + a::b::interface_with_dead_type::HostWithStore + Send,
+            D: a::b::interface_with_live_type::HostWithStore<T>
+                + a::b::interface_with_dead_type::HostWithStore<T> + Send,
             for<'a> D::Data<
                 'a,
             >: a::b::interface_with_live_type::Host
@@ -205,8 +205,8 @@ pub mod a {
                     4 == < LiveType as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn f<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn f(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = LiveType> + Send;
             }
@@ -217,7 +217,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -226,7 +226,7 @@ pub mod a {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::f(host).await;
+                            let r = <D as HostWithStore<T>>::f(host).await;
                             Ok((r,))
                         })
                     },
@@ -238,7 +238,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -300,10 +300,10 @@ pub mod a {
                 assert!(8 == < V as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
@@ -312,7 +312,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -323,7 +323,7 @@ pub mod a {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {

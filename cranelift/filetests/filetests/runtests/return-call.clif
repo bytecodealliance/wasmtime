@@ -15,7 +15,8 @@ target s390x
 
 function %callee_i64(i64) -> i64 tail {
 block0(v0: i64):
-    v1 = iadd_imm.i64 v0, 10
+    v2 = iconst.i64 10
+    v1 = iadd v0, v2
     return v1
 }
 

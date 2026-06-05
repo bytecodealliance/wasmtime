@@ -41,7 +41,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   5c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   5c: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -132,7 +132,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  1c0: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  1c4: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  1c8: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  1cc: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  1c0: udf     #0xc11f
+;;  1c4: udf     #0xc11f
+;;  1c8: udf     #0xc11f
+;;  1cc: udf     #0xc11f

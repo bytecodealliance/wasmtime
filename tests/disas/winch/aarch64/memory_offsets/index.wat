@@ -1097,7 +1097,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  8a8: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  8a8: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -1211,10 +1211,10 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  a7c: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  a80: .byte   0x00, 0x00, 0x00, 0x00
-;;  a84: .byte   0x00, 0x00, 0x00, 0x00
-;;  a88: .byte   0x00, 0x00, 0x00, 0x00
+;;  a7c: udf     #0xc11f
+;;  a80: udf     #0
+;;  a84: udf     #0
+;;  a88: udf     #0
 ;;
 ;; wasm[0]::function[2]:
 ;;       stp     x29, x30, [sp, #-0x10]!
@@ -1328,7 +1328,7 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  c5c: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  c60: .byte   0x00, 0x00, 0x00, 0x00
-;;  c64: .byte   0x00, 0x00, 0x00, 0x00
-;;  c68: .byte   0x00, 0x00, 0x00, 0x00
+;;  c5c: udf     #0xc11f
+;;  c60: udf     #0
+;;  c64: udf     #0
+;;  c68: udf     #0

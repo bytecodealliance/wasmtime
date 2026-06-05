@@ -66,5 +66,5 @@ block2(v0: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 ; block3: ; offset 0x14
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 

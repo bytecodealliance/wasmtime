@@ -603,7 +603,7 @@ jobs:
           os: ubuntu-latest
           test: >
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,pulley,async,debug,debug-builtins,demangle,anyhow &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model-async,pulley,debug,debug-builtins,demangle,anyhow &&
             cargo check -p cranelift-control --no-default-features &&
             cargo check -p cranelift-assembler-x64 --lib &&
             cargo check -p cranelift-codegen --no-default-features --features x86,arm64,riscv64 &&
@@ -1288,7 +1288,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - crate: "wasmtime --features component-model-async-bytes"
+          - crate: "wasmtime --features component-model-bytes,component-model-async"
           - crate: "wasmtime-cli"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"

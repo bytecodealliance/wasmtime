@@ -1,8 +1,8 @@
-#[cfg(feature = "component-model-async-bytes")]
+use crate::prelude::*;
+#[cfg(feature = "component-model-bytes")]
 use bytes::{Bytes, BytesMut};
-use std::mem::{self, MaybeUninit};
-use std::slice;
-use std::vec::Vec;
+use core::mem::{self, MaybeUninit};
+use core::slice;
 
 // Inner module here to restrict possible readers of the fields of
 // `UntypedWriteBuffer`.
@@ -10,10 +10,10 @@ pub use untyped::*;
 mod untyped {
     use super::WriteBuffer;
     use crate::vm::SendSyncPtr;
-    use std::any::TypeId;
-    use std::marker;
-    use std::mem;
-    use std::ptr::NonNull;
+    use core::any::TypeId;
+    use core::marker;
+    use core::mem;
+    use core::ptr::NonNull;
 
     /// Helper structure to type-erase the `T` in `WriteBuffer<T>`.
     ///
@@ -374,7 +374,7 @@ impl<T: Send + Sync + 'static> ReadBuffer<T> for Vec<T> {
 
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 unsafe impl WriteBuffer<u8> for Bytes {
     fn remaining(&self) -> &[u8] {
         self
@@ -392,7 +392,7 @@ unsafe impl WriteBuffer<u8> for Bytes {
 
 // SAFETY: the `take` implementation below guarantees that the `fun` closure is
 // provided with fully initialized items.
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 unsafe impl WriteBuffer<u8> for BytesMut {
     fn remaining(&self) -> &[u8] {
         self
@@ -408,7 +408,7 @@ unsafe impl WriteBuffer<u8> for BytesMut {
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 impl ReadBuffer<u8> for BytesMut {
     fn extend<I: IntoIterator<Item = u8>>(&mut self, iter: I) {
         Extend::extend(self, iter)
@@ -430,7 +430,7 @@ impl ReadBuffer<u8> for BytesMut {
     }
 }
 
-#[cfg(feature = "component-model-async-bytes")]
+#[cfg(feature = "component-model-bytes")]
 fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
     // SAFETY: it's always safe to interpret a slice of items as a
     // possibly-initialized slice of items.
@@ -440,7 +440,6 @@ fn unsafe_byte_slice(slice: &[u8]) -> &[MaybeUninit<u8>] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
 
     #[test]
     fn test_vec_buffer_take() {
@@ -466,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "component-model-async-bytes")]
+    #[cfg(feature = "component-model-bytes")]
     fn test_cursor_bytes_take() {
         let mut buf = Bytes::from(&b"123"[..]);
         let mut dst = Vec::new();
@@ -483,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "component-model-async-bytes")]
+    #[cfg(feature = "component-model-bytes")]
     fn test_cursor_bytes_mut_take() {
         let mut buf = BytesMut::from(&b"123"[..]);
         let mut dst = Vec::new();

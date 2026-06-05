@@ -36,7 +36,7 @@
 ;;       stur    x1, [x28, #8]
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
-;;       orr     x0, xzr, #0xfffffffe
+;;       mov     x0, #0xfffffffe
 ;;       stur    w0, [x28, #4]
 ;;       mov     w0, #-3
 ;;       stur    w0, [x28]
@@ -51,4 +51,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   84: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   84: udf     #0xc11f

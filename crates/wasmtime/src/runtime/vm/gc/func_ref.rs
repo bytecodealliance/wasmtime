@@ -79,12 +79,14 @@ impl FuncRefTable {
 
             // Ensure that the funcref actually is a subtype of the expected
             // type. This protects against GC heap corruption being leveraged in
-            // attacks: if the attacker has a write gadget inside the GC heap, they
-            // can overwrite a funcref ID to point to a different funcref, but this
-            // assertion ensures that any calls to that wrong funcref at least
-            // remain well-typed, which reduces the attack surface and maintains
-            // memory safety.
-            assert!(types.is_subtype(actual_ty, expected_ty));
+            // attacks: if the attacker has a write gadget inside the GC heap,
+            // they can overwrite a funcref ID to point to a different funcref,
+            // but this check ensures that any calls to that wrong funcref at
+            // least remain well-typed, which reduces the attack surface and
+            // maintains memory safety.
+            if !types.is_subtype(actual_ty, expected_ty) {
+                bail_bug!("funcref table type mismatch")
+            }
         }
 
         Ok(f)

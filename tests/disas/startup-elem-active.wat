@@ -51,27 +51,27 @@
 ;;     v86 = iconst.i64 4
 ;;     v92 = icmp ult v6, v86  ; v86 = 4
 ;;     trapnz v92, user6
-;;     v12 = load.i64 notrap aligned v0+48
+;;     v13 = load.i64 notrap aligned v0+48
 ;;     v103 = iconst.i32 21
 ;;     v2 = iconst.i32 1
 ;;     v114 = icmp ule v5, v2  ; v2 = 1
 ;;     v79 = iconst.i64 0
-;;     v15 = iadd v12, v86  ; v86 = 4
-;;     v28 = select_spectre_guard v114, v79, v15  ; v79 = 0
-;;     store user6 aligned region0 v103, v28  ; v103 = 21
+;;     v17 = iadd v13, v86  ; v86 = 4
+;;     v34 = select_spectre_guard v114, v79, v17  ; v79 = 0
+;;     store user6 aligned region0 v103, v34  ; v103 = 21
 ;;     v117 = iconst.i32 23
 ;;     v123 = iconst.i32 2
 ;;     v129 = icmp ule v5, v123  ; v123 = 2
 ;;     v131 = iconst.i64 8
-;;     v39 = iadd v12, v131  ; v131 = 8
-;;     v41 = select_spectre_guard v129, v79, v39  ; v79 = 0
-;;     store user6 aligned region0 v117, v41  ; v117 = 23
+;;     v49 = iadd v13, v131  ; v131 = 8
+;;     v51 = select_spectre_guard v129, v79, v49  ; v79 = 0
+;;     store user6 aligned region0 v117, v51  ; v117 = 23
 ;;     v133 = iconst.i32 25
 ;;     v3 = iconst.i32 3
 ;;     v144 = icmp ule v5, v3  ; v3 = 3
 ;;     v146 = iconst.i64 12
-;;     v52 = iadd v12, v146  ; v146 = 12
-;;     v54 = select_spectre_guard v144, v79, v52  ; v79 = 0
-;;     store user6 aligned region0 v133, v54  ; v133 = 25
+;;     v66 = iadd v13, v146  ; v146 = 12
+;;     v68 = select_spectre_guard v144, v79, v66  ; v79 = 0
+;;     store user6 aligned region0 v133, v68  ; v133 = 25
 ;;     return
 ;; }

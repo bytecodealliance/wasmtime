@@ -171,7 +171,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::flegs::HostWithStore + Send,
+            D: foo::foo::flegs::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
             T: 'static + Send,
         {
@@ -303,10 +303,10 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn roundtrip_flag1(
@@ -387,7 +387,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -489,7 +489,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -786,6 +786,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_roundtrip_flag1(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag1,), (Flag1,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag1,),
+                                (Flag1,),
+                            >::new_unchecked(self.roundtrip_flag1)
+                        }
+                    }
                     pub async fn call_roundtrip_flag1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -794,16 +804,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag1,),
-                                (Flag1,),
-                            >::new_unchecked(self.roundtrip_flag1)
-                        };
+                        let callee = self.func_roundtrip_flag1();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag2,), (Flag2,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag2,),
+                                (Flag2,),
+                            >::new_unchecked(self.roundtrip_flag2)
+                        }
                     }
                     pub async fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
                         &self,
@@ -813,16 +828,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag2,),
-                                (Flag2,),
-                            >::new_unchecked(self.roundtrip_flag2)
-                        };
+                        let callee = self.func_roundtrip_flag2();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag4(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag4,), (Flag4,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag4,),
+                                (Flag4,),
+                            >::new_unchecked(self.roundtrip_flag4)
+                        }
                     }
                     pub async fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
                         &self,
@@ -832,16 +852,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag4,),
-                                (Flag4,),
-                            >::new_unchecked(self.roundtrip_flag4)
-                        };
+                        let callee = self.func_roundtrip_flag4();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag8(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag8,), (Flag8,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag8,),
+                                (Flag8,),
+                            >::new_unchecked(self.roundtrip_flag8)
+                        }
                     }
                     pub async fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
                         &self,
@@ -851,16 +876,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag8,),
-                                (Flag8,),
-                            >::new_unchecked(self.roundtrip_flag8)
-                        };
+                        let callee = self.func_roundtrip_flag8();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag16(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag16,), (Flag16,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag16,),
+                                (Flag16,),
+                            >::new_unchecked(self.roundtrip_flag16)
+                        }
                     }
                     pub async fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
                         &self,
@@ -870,16 +900,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag16,),
-                                (Flag16,),
-                            >::new_unchecked(self.roundtrip_flag16)
-                        };
+                        let callee = self.func_roundtrip_flag16();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag32(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag32,), (Flag32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag32,),
+                                (Flag32,),
+                            >::new_unchecked(self.roundtrip_flag32)
+                        }
                     }
                     pub async fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
                         &self,
@@ -889,16 +924,21 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag32,),
-                                (Flag32,),
-                            >::new_unchecked(self.roundtrip_flag32)
-                        };
+                        let callee = self.func_roundtrip_flag32();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_roundtrip_flag64(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Flag64,), (Flag64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Flag64,),
+                                (Flag64,),
+                            >::new_unchecked(self.roundtrip_flag64)
+                        }
                     }
                     pub async fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
                         &self,
@@ -908,12 +948,7 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Flag64,),
-                                (Flag64,),
-                            >::new_unchecked(self.roundtrip_flag64)
-                        };
+                        let callee = self.func_roundtrip_flag64();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;

@@ -7,8 +7,8 @@ use crate::p3::sockets::WasiSockets;
 use crate::sockets::WasiSocketsCtxView;
 use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, parse_host};
 
-impl HostWithStore for WasiSockets {
-    async fn resolve_addresses<U>(
+impl<U> HostWithStore<U> for WasiSockets {
+    async fn resolve_addresses(
         store: &Accessor<U, Self>,
         name: String,
     ) -> wasmtime::Result<Result<Vec<types::IpAddress>, ErrorCode>> {

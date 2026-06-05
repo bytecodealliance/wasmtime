@@ -197,7 +197,8 @@ block10:
     brif v70, block12, block11
 
 block12:
-    v71 = iadd_imm.i16 v3, 0xffff_ffff_ffff_0087  ; v3 = 0xffef
+    v220 = iconst.i16 135
+    v71 = iadd v3, v220 ; v3 = 0xffef
     v72 = uextend.i32 v71
     br_table v72, block1, [block1, block1, block1, block1, block1, block1]
 
@@ -207,7 +208,8 @@ block11:
     brif v73, block13, block1
 
 block13:
-    v74 = iadd_imm.i16 v3, 0xffff_ffff_ffff_00de  ; v3 = 0xffef
+    v221 = iconst.i16 222
+    v74 = iadd v3, v221 ; v3 = 0xffef
     v75 = uextend.i32 v74
     br_table v75, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -222,7 +224,8 @@ block14:
     brif v77, block15, block1
 
 block15:
-    v78 = iadd_imm.i16 v3, 0xffff_ffff_ffff_0901  ; v3 = 0xffef
+    v222 = iconst.i16 2305
+    v78 = iadd v3, v222 ; v3 = 0xffef
     v79 = uextend.i32 v78
     br_table v79, block1, [block1, block1, block1, block1, block1, block1, block1]
 
@@ -242,7 +245,8 @@ block18:
     brif v82, block20, block19
 
 block20:
-    v83 = iadd_imm.i16 v3, 0xffff_ffff_ffff_1001  ; v3 = 0xffef
+    v223 = iconst.i16 4097
+    v83 = iadd v3, v223 ; v3 = 0xffef
     v84 = uextend.i32 v83
     br_table v84, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -252,7 +256,8 @@ block19:
     brif v85, block21, block1
 
 block21:
-    v86 = iadd_imm.i16 v3, 0xffff_ffff_ffff_10d6  ; v3 = 0xffef
+    v224 = iconst.i16 4310
+    v86 = iadd v3, v224 ; v3 = 0xffef
     v87 = uextend.i32 v86
     br_table v87, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -267,7 +272,8 @@ block22:
     brif v89, block23, block1
 
 block23:
-    v90 = iadd_imm.i16 v3, 0xffff_ffff_ffff_2a29  ; v3 = 0xffef
+    v225 = iconst.i16 10793
+    v90 = iadd v3, v225 ; v3 = 0xffef
     v91 = uextend.i32 v90
     br_table v91, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -287,7 +293,8 @@ block27:
     brif v94, block29, block28
 
 block29:
-    v95 = iadd_imm.i16 v3, 0xffff_ffff_ffff_40bf  ; v3 = 0xffef
+    v226 = iconst.i16 16575
+    v95 = iadd v3, v226 ; v3 = 0xffef
     v96 = uextend.i32 v95
     br_table v96, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -307,7 +314,8 @@ block26:
     brif v99, block32, block31
 
 block32:
-    v100 = iadd_imm.i16 v3, 0xffff_ffff_ffff_6cff  ; v3 = 0xffef
+    v227 = iconst.i16 27903
+    v100 = iadd v3, v227 ; v3 = 0xffef
     v101 = uextend.i32 v100
     br_table v101, block1, [block1, block1, block1, block1, block1, block1, block1]
 
@@ -317,7 +325,8 @@ block31:
     brif v102, block33, block1
 
 block33:
-    v103 = iadd_imm.i16 v3, 0xffff_ffff_ffff_8c9d  ; v3 = 0xffef
+    v228 = iconst.i16 -29539
+    v103 = iadd v3, v228 ; v3 = 0xffef
     v104 = uextend.i32 v103
     br_table v104, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -347,7 +356,8 @@ block34:
     brif v109, block39, block38
 
 block39:
-    v110 = iadd_imm.i16 v3, 0xffff_ffff_ffff_aedd  ; v3 = 0xffef
+    v229 = iconst.i16 -20771
+    v110 = iadd v3, v229 ; v3 = 0xffef
     v111 = uextend.i32 v110
     br_table v111, block1, [block1, block1, block1, block1, block1, block1, block1]
 
@@ -357,7 +367,8 @@ block38:
     brif v112, block40, block1
 
 block40:
-    v113 = iadd_imm.i16 v3, 0xffff_ffff_ffff_afb3  ; v3 = 0xffef
+    v230 = iconst.i16 -20557
+    v113 = iadd v3, v230 ; v3 = 0xffef
     v114 = uextend.i32 v113
     br_table v114, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -392,7 +403,8 @@ block48:
     brif v120, block49, block1
 
 block49:
-    v121 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d0d6  ; v3 = 0xffef
+    v231 = iconst.i16 -12074
+    v121 = iadd v3, v231 ; v3 = 0xffef
     v122 = uextend.i32 v121
     br_table v122, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -407,7 +419,8 @@ block50:
     brif v124, block51, block1
 
 block51:
-    v125 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d522  ; v3 = 0xffef
+    v232 = iconst.i16 -10974
+    v125 = iadd v3, v232 ; v3 = 0xffef
     v126 = uextend.i32 v125
     br_table v126, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -427,7 +440,8 @@ block54:
     brif v129, block56, block55
 
 block56:
-    v130 = iadd_imm.i16 v3, 0xffff_ffff_ffff_d599  ; v3 = 0xffef
+    v233 = iconst.i16 -10855
+    v130 = iadd v3, v233 ; v3 = 0xffef
     v131 = uextend.i32 v130
     br_table v131, block1, [block1, block1, block1, block1, block1, block1]
 
@@ -462,7 +476,8 @@ block61:
     brif v137, block63, block62
 
 block63:
-    v138 = iadd_imm.i16 v3, -8738  ; v3 = 0xffef
+    v234 = iconst.i16 -8738
+    v138 = iadd v3, v234 ; v3 = 0xffef
     v139 = uextend.i32 v138
     br_table v139, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -472,7 +487,8 @@ block62:
     brif v140, block65, block64
 
 block65:
-    v141 = iadd_imm.i16 v3, -8241  ; v3 = 0xffef
+    v235 = iconst.i16 -8241
+    v141 = iadd v3, v235 ; v3 = 0xffef
     v142 = uextend.i32 v141
     br_table v142, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -487,7 +503,8 @@ block60:
     brif v144, block67, block66
 
 block67:
-    v145 = iadd_imm.i16 v3, -512  ; v3 = 0xffef
+    v236 = iconst.i16 -512
+    v145 = iadd v3, v236 ; v3 = 0xffef
     v146 = uextend.i32 v145
     br_table v146, block1, [block1, block1, block1]
 
@@ -497,7 +514,8 @@ block66:
     brif v147, block68, block1
 
 block68:
-    v148 = iadd_imm.i16 v3, -341  ; v3 = 0xffef
+    v237 = iconst.i16 -341
+    v148 = iadd v3, v237 ; v3 = 0xffef
     v149 = uextend.i32 v148
     br_table v149, block1, [block1, block1]
 
@@ -512,7 +530,8 @@ block70:
     brif v151, block72, block71
 
 block72:
-    v152 = iadd_imm.i16 v3, -212  ; v3 = 0xffef
+    v238 = iconst.i16 -212
+    v152 = iadd v3, v238 ; v3 = 0xffef
     v153 = uextend.i32 v152
     br_table v153, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -522,7 +541,8 @@ block71:
     brif v154, block73, block1
 
 block73:
-    v155 = iadd_imm.i16 v3, -148  ; v3 = 0xffef
+    v239 = iconst.i16 -148
+    v155 = iadd v3, v239 ; v3 = 0xffef
     v156 = uextend.i32 v155
     br_table v156, block1, [block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1, block1]
 
@@ -532,7 +552,8 @@ block69:
     brif v157, block75, block74
 
 block75:
-    v158 = iadd_imm.i16 v3, -128  ; v3 = 0xffef
+    v240 = iconst.i16 -128
+    v158 = iadd v3, v240 ; v3 = 0xffef
     v159 = uextend.i32 v158
     br_table v159, block1, [block1, block1]
 

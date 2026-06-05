@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::floats::HostWithStore + Send,
+            D: foo::foo::floats::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::floats::Host + Send,
             T: 'static + Send,
         {
@@ -191,10 +191,10 @@ pub mod foo {
         pub mod floats {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn f32_param(
@@ -241,7 +241,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -350,7 +350,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -453,6 +453,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f32,),
+                                (),
+                            >::new_unchecked(self.f32_param)
+                        }
+                    }
                     pub async fn call_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -466,17 +476,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/floats", function = "f32-param",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f32,),
-                                (),
-                            >::new_unchecked(self.f32_param)
-                        };
+                        let callee = self.func_f32_param();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f64,),
+                                (),
+                            >::new_unchecked(self.f64_param)
+                        }
                     }
                     pub async fn call_f64_param<S: wasmtime::AsContextMut>(
                         &self,
@@ -491,17 +506,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/floats", function = "f64-param",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f64,),
-                                (),
-                            >::new_unchecked(self.f64_param)
-                        };
+                        let callee = self.func_f64_param();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())
                             .await?;
                         Ok(())
+                    }
+                    pub fn func_f32_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f32,),
+                            >::new_unchecked(self.f32_result)
+                        }
                     }
                     pub async fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -515,17 +535,22 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/floats", function = "f32-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f32,),
-                            >::new_unchecked(self.f32_result)
-                        };
+                        let callee = self.func_f32_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_f64_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f64,),
+                            >::new_unchecked(self.f64_result)
+                        }
                     }
                     pub async fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
@@ -539,12 +564,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/floats", function = "f64-result",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f64,),
-                            >::new_unchecked(self.f64_result)
-                        };
+                        let callee = self.func_f64_result();
                         let (ret0,) = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())

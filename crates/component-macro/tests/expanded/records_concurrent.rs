@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::records::HostWithStore + Send,
+            D: foo::foo::records::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::records::Host + Send,
             T: 'static + Send,
         {
@@ -388,43 +388,43 @@ pub mod foo {
                     >::ALIGN32
                 );
             };
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn tuple_arg<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn tuple_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: (char, u32),
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn tuple_result<T: Send>(
+                fn tuple_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = (char, u32)> + Send;
-                fn empty_arg<T: Send>(
+                fn empty_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Empty,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn empty_result<T: Send>(
+                fn empty_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Empty> + Send;
-                fn scalar_arg<T: Send>(
+                fn scalar_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Scalars,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn scalar_result<T: Send>(
+                fn scalar_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Scalars> + Send;
-                fn flags_arg<T: Send>(
+                fn flags_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: ReallyFlags,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn flags_result<T: Send>(
+                fn flags_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ReallyFlags> + Send;
-                fn aggregate_arg<T: Send>(
+                fn aggregate_arg(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     x: Aggregates,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
-                fn aggregate_result<T: Send>(
+                fn aggregate_result(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = Aggregates> + Send;
-                fn typedef_inout<T: Send>(
+                fn typedef_inout(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     e: TupleTypedef2,
                 ) -> impl ::core::future::Future<Output = i32> + Send;
@@ -436,7 +436,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -448,7 +448,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::tuple_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::tuple_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -458,7 +458,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::tuple_result(host).await;
+                            let r = <D as HostWithStore<T>>::tuple_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -468,7 +468,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (arg0,): (Empty,)| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::empty_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::empty_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -478,7 +478,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::empty_result(host).await;
+                            let r = <D as HostWithStore<T>>::empty_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -491,7 +491,8 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::scalar_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::scalar_arg(host, arg0)
+                                .await;
                             Ok(r)
                         })
                     },
@@ -501,7 +502,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::scalar_result(host).await;
+                            let r = <D as HostWithStore<T>>::scalar_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -514,7 +515,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::flags_arg(host, arg0).await;
+                            let r = <D as HostWithStore<T>>::flags_arg(host, arg0).await;
                             Ok(r)
                         })
                     },
@@ -524,7 +525,7 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::flags_result(host).await;
+                            let r = <D as HostWithStore<T>>::flags_result(host).await;
                             Ok((r,))
                         })
                     },
@@ -537,7 +538,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::aggregate_arg(host, arg0)
+                            let r = <D as HostWithStore<T>>::aggregate_arg(host, arg0)
                                 .await;
                             Ok(r)
                         })
@@ -548,7 +549,8 @@ pub mod foo {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::aggregate_result(host).await;
+                            let r = <D as HostWithStore<T>>::aggregate_result(host)
+                                .await;
                             Ok((r,))
                         })
                     },
@@ -561,7 +563,7 @@ pub mod foo {
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::typedef_inout(host, arg0)
+                            let r = <D as HostWithStore<T>>::typedef_inout(host, arg0)
                                 .await;
                             Ok((r,))
                         })
@@ -574,7 +576,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -992,6 +994,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_tuple_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<((char, u32),), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                ((char, u32),),
+                                (),
+                            >::new_unchecked(self.tuple_arg)
+                        }
+                    }
                     pub async fn call_tuple_arg<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -1001,14 +1013,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                ((char, u32),),
-                                (),
-                            >::new_unchecked(self.tuple_arg)
-                        };
+                        let callee = self.func_tuple_arg();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_tuple_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ((char, u32),)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                ((char, u32),),
+                            >::new_unchecked(self.tuple_result)
+                        }
                     }
                     pub async fn call_tuple_result<_T, _D>(
                         &self,
@@ -1018,14 +1035,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                ((char, u32),),
-                            >::new_unchecked(self.tuple_result)
-                        };
+                        let callee = self.func_tuple_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_empty_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Empty,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Empty,),
+                                (),
+                            >::new_unchecked(self.empty_arg)
+                        }
                     }
                     pub async fn call_empty_arg<_T, _D>(
                         &self,
@@ -1036,14 +1058,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Empty,),
-                                (),
-                            >::new_unchecked(self.empty_arg)
-                        };
+                        let callee = self.func_empty_arg();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_empty_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Empty,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Empty,),
+                            >::new_unchecked(self.empty_result)
+                        }
                     }
                     pub async fn call_empty_result<_T, _D>(
                         &self,
@@ -1053,14 +1080,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Empty,),
-                            >::new_unchecked(self.empty_result)
-                        };
+                        let callee = self.func_empty_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_scalar_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Scalars,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Scalars,),
+                                (),
+                            >::new_unchecked(self.scalar_arg)
+                        }
                     }
                     pub async fn call_scalar_arg<_T, _D>(
                         &self,
@@ -1071,14 +1103,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Scalars,),
-                                (),
-                            >::new_unchecked(self.scalar_arg)
-                        };
+                        let callee = self.func_scalar_arg();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_scalar_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Scalars,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Scalars,),
+                            >::new_unchecked(self.scalar_result)
+                        }
                     }
                     pub async fn call_scalar_result<_T, _D>(
                         &self,
@@ -1088,14 +1125,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Scalars,),
-                            >::new_unchecked(self.scalar_result)
-                        };
+                        let callee = self.func_scalar_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_flags_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(ReallyFlags,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (ReallyFlags,),
+                                (),
+                            >::new_unchecked(self.flags_arg)
+                        }
                     }
                     pub async fn call_flags_arg<_T, _D>(
                         &self,
@@ -1106,14 +1148,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (ReallyFlags,),
-                                (),
-                            >::new_unchecked(self.flags_arg)
-                        };
+                        let callee = self.func_flags_arg();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_flags_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (ReallyFlags,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (ReallyFlags,),
+                            >::new_unchecked(self.flags_result)
+                        }
                     }
                     pub async fn call_flags_result<_T, _D>(
                         &self,
@@ -1123,14 +1170,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (ReallyFlags,),
-                            >::new_unchecked(self.flags_result)
-                        };
+                        let callee = self.func_flags_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_aggregate_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Aggregates,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Aggregates,),
+                                (),
+                            >::new_unchecked(self.aggregate_arg)
+                        }
                     }
                     pub async fn call_aggregate_arg<_T, _D>(
                         &self,
@@ -1141,14 +1193,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Aggregates,),
-                                (),
-                            >::new_unchecked(self.aggregate_arg)
-                        };
+                        let callee = self.func_aggregate_arg();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_aggregate_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Aggregates,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Aggregates,),
+                            >::new_unchecked(self.aggregate_result)
+                        }
                     }
                     pub async fn call_aggregate_result<_T, _D>(
                         &self,
@@ -1158,14 +1215,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Aggregates,),
-                            >::new_unchecked(self.aggregate_result)
-                        };
+                        let callee = self.func_aggregate_result();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_typedef_inout(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(TupleTypedef2,), (i32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (TupleTypedef2,),
+                                (i32,),
+                            >::new_unchecked(self.typedef_inout)
+                        }
                     }
                     pub async fn call_typedef_inout<_T, _D>(
                         &self,
@@ -1176,12 +1238,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (TupleTypedef2,),
-                                (i32,),
-                            >::new_unchecked(self.typedef_inout)
-                        };
+                        let callee = self.func_typedef_inout();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }

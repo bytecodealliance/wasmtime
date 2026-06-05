@@ -68,20 +68,20 @@
 ;;
 ;;                                 block4(v39: i32, v40: i64):
 ;; @0023                               v3 = f32const 0.0
-;;                                     v48 = iconst.i64 16
-;; @0023                               v41 = iadd v40, v48  ; v48 = 16
-;; @0023                               store user2 little region1 v3, v41  ; v3 = 0.0
+;; @0023                               v41 = iconst.i64 16
+;; @0023                               v42 = iadd v40, v41  ; v41 = 16
+;; @0023                               store user2 little region1 v3, v42  ; v3 = 0.0
 ;; @0023                               v4 = iconst.i32 0
-;;                                     v47 = iconst.i64 20
-;; @0023                               v42 = iadd v40, v47  ; v47 = 20
-;; @0023                               istore8 user2 little region1 v4, v42  ; v4 = 0
-;;                                     v46 = iconst.i64 24
-;; @0023                               v43 = iadd v40, v46  ; v46 = 24
-;; @0023                               store user2 little region1 v4, v43  ; v4 = 0
+;; @0023                               v43 = iconst.i64 20
+;; @0023                               v44 = iadd v40, v43  ; v43 = 20
+;; @0023                               istore8 user2 little region1 v4, v44  ; v4 = 0
+;; @0023                               v45 = iconst.i64 24
+;; @0023                               v46 = iadd v40, v45  ; v45 = 24
+;; @0023                               store user2 little region1 v4, v46  ; v4 = 0
 ;; @0023                               v6 = vconst.i8x16 const0
-;;                                     v45 = iconst.i64 32
-;; @0023                               v44 = iadd v40, v45  ; v45 = 32
-;; @0023                               store user2 little region1 v6, v44  ; v6 = const0
+;; @0023                               v47 = iconst.i64 32
+;; @0023                               v48 = iadd v40, v47  ; v47 = 32
+;; @0023                               store user2 little region1 v6, v48  ; v6 = const0
 ;; @0026                               jump block1(v39)
 ;;
 ;;                                 block1(v2: i32):

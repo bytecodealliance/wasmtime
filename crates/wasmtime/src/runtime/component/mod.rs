@@ -120,9 +120,10 @@ pub use self::component::{Component, ComponentExportIndex, ExportLookup};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
     Access, Accessor, AccessorTask, AsAccessor, Destination, DirectDestination, DirectSource,
-    ErrorContext, FutureAny, FutureConsumer, FutureProducer, FutureReader, GuardedFutureReader,
-    GuardedStreamReader, JoinHandle, ReadBuffer, Source, StreamAny, StreamConsumer, StreamProducer,
-    StreamReader, StreamResult, VMComponentAsyncStore, VecBuffer, WriteBuffer,
+    ErrorContext, FuncCallConcurrent, FutureAny, FutureConsumer, FutureProducer, FutureReader,
+    GuardedFutureReader, GuardedStreamReader, GuestTaskId, JoinHandle, ReadBuffer, Source,
+    StreamAny, StreamConsumer, StreamProducer, StreamReader, StreamResult, TypedFuncCallConcurrent,
+    VMComponentAsyncStore, VecBuffer, WriteBuffer,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -445,6 +446,39 @@ pub(crate) use self::store::ComponentStoreData;
 ///         // which typed resource shows up in generated bindings and can be
 ///         // useful when working with the typed methods of `ResourceTable`.
 ///         "wasi:filesystem/types.descriptor": MyDescriptorType,
+///     },
+///
+///     // Generate an additional set of "named imports" bindings for the listed
+///     // interfaces, used together with the component model's
+///     // `(implements "...")` annotation.
+///     //
+///     // For each interface listed here an extra `Host` trait is generated
+///     // under a top-level `named_imports` module (mirroring the interface's
+///     // normal module path) whose methods each take an additional first
+///     // argument: a reference to the host-chosen "id" type given as the value
+///     // (here `MyHandlerId`). Alongside the trait a reflection-based
+///     // `add_to_linker` is generated:
+///     //
+///     // ```ignore
+///     // fn add_to_linker<T, D>(
+///     //     linker: &mut Linker<T>,
+///     //     component: &Component,
+///     //     lookup: impl FnMut(&str) -> Result<MyHandlerId>,
+///     //     host_getter: fn(&mut T) -> D::Data<'_>,
+///     // ) -> Result<()>;
+///     // ```
+///     //
+///     // This inspects `component`'s imports, and for each one annotated with
+///     // `(implements "wasi:http/handler")` calls `lookup` with the import's
+///     // name to obtain an id. That id is then cloned into each linker closure
+///     // and passed as the first argument to every method call, letting a
+///     // single `Host` implementation distinguish between multiple imports
+///     // of the same interface.
+///     //
+///     // The id type must be `Clone + Send + Sync + 'static`. Interfaces that
+///     // define a resource are not supported here and cause a compile error.
+///     named_imports: {
+///         "wasi:http/handler": MyHandlerId,
 ///     },
 ///
 ///     // Additional derive attributes to include on generated types (structs or enums).

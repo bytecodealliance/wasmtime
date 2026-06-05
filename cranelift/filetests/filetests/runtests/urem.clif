@@ -86,7 +86,8 @@ block0(v0: i8,v1: i8):
 
 function %urem_imm_i64(i64) -> i64 {
 block0(v0: i64):
-    v1 = urem_imm v0, 3
+    v2 = iconst.i64 3
+    v1 = urem v0, v2
     return v1
 }
 ; run: %urem_imm_i64(0) == 0
@@ -100,7 +101,8 @@ block0(v0: i64):
 
 function %urem_imm_i32(i32) -> i32 {
 block0(v0: i32):
-    v1 = urem_imm v0, 3
+    v2 = iconst.i32 3
+    v1 = urem v0, v2
     return v1
 }
 ; run: %urem_imm_i32(0) == 0
@@ -114,7 +116,8 @@ block0(v0: i32):
 
 function %urem_imm_i16(i16) -> i16 {
 block0(v0: i16):
-    v1 = urem_imm v0, 3
+    v2 = iconst.i16 3
+    v1 = urem v0, v2
     return v1
 }
 ; run: %urem_imm_i16(0) == 0
@@ -128,7 +131,8 @@ block0(v0: i16):
 
 function %urem_imm_i8(i8) -> i8 {
 block0(v0: i8):
-    v1 = urem_imm v0, 3
+    v2 = iconst.i8 3
+    v1 = urem v0, v2
     return v1
 }
 ; run: %urem_imm_i8(0) == 0

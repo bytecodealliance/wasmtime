@@ -15,10 +15,14 @@ target s390x
 
 function %tail_callee(i8, i16, i32, i64, f32, f64) -> f64, f32, i64, i32, i16, i8 tail {
 block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
-    v6 = iadd_imm v0, 1
-    v7 = iadd_imm v1, 1
-    v8 = iadd_imm v2, 1
-    v9 = iadd_imm v3, 1
+    v12 = iconst.i8 1
+    v6 = iadd v0, v12
+    v13 = iconst.i16 1
+    v7 = iadd v1, v13
+    v14 = iconst.i32 1
+    v8 = iadd v2, v14
+    v15 = iconst.i64 1
+    v9 = iadd v3, v15
     v10 = fadd v4, v4
     v11 = fadd v5, v5
     return v11, v10, v9, v8, v7, v6

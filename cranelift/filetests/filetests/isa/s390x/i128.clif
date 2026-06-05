@@ -60,7 +60,9 @@ block0(v0: i64, v1: i64):
     v2 = sextend.i128 v0
     v3 = sextend.i128 v1
     v4 = imul v2, v3
-    v5 = sshr_imm v4, 64
+    v7 = iconst.i64 64
+    v8 = uextend.i128 v7
+    v5 = sshr v4, v8
     v6 = ireduce.i64 v5
     return v6
 }
@@ -105,7 +107,9 @@ block0(v0: i64, v1: i64):
     v2 = uextend.i128 v0
     v3 = uextend.i128 v1
     v4 = imul v2, v3
-    v5 = ushr_imm v4, 64
+    v7 = iconst.i64 64
+    v8 = uextend.i128 v7
+    v5 = ushr v4, v8
     v6 = ireduce.i64 v5
     return v6
 }

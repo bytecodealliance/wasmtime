@@ -1,9 +1,10 @@
 use crate::clocks::Datetime;
 use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
-use cap_fs_ext::{FileTypeExt as _, MetadataExt as _};
-use fs_set_times::SystemTimeSpec;
+use cap_fs_ext::{FileTypeExt as _, MetadataExt as _, SystemTimeSpec};
+use io_lifetimes::AsFilelike;
 use std::collections::hash_map;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tracing::debug;
 use wasmtime::component::{HasData, Resource, ResourceTable};
 use wasmtime::error::Context as _;
@@ -564,23 +565,31 @@ impl Descriptor {
 
     pub(crate) async fn set_times(
         &self,
-        atim: Option<SystemTimeSpec>,
-        mtim: Option<SystemTimeSpec>,
+        atim: Option<SystemTime>,
+        mtim: Option<SystemTime>,
     ) -> Result<(), ErrorCode> {
-        use fs_set_times::SetTimes as _;
+        let mut times = std::fs::FileTimes::new();
+        if let Some(atim) = atim {
+            times = times.set_accessed(atim);
+        }
+        if let Some(mtim) = mtim {
+            times = times.set_modified(mtim);
+        }
         match self {
             Self::File(f) => {
                 if !f.perms.contains(FilePerms::WRITE) {
                     return Err(ErrorCode::NotPermitted);
                 }
-                f.run_blocking(|f| f.set_times(atim, mtim)).await?;
+                f.run_blocking(move |f| f.as_filelike_view::<std::fs::File>().set_times(times))
+                    .await?;
                 Ok(())
             }
             Self::Dir(d) => {
                 if !d.perms.contains(DirPerms::MUTATE) {
                     return Err(ErrorCode::NotPermitted);
                 }
-                d.run_blocking(|d| d.set_times(atim, mtim)).await?;
+                d.run_blocking(move |d| d.as_filelike_view::<std::fs::File>().set_times(times))
+                    .await?;
                 Ok(())
             }
         }
@@ -870,32 +879,22 @@ impl Dir {
         &self,
         path_flags: PathFlags,
         path: String,
-        atim: Option<SystemTimeSpec>,
-        mtim: Option<SystemTimeSpec>,
+        atim: Option<SystemTime>,
+        mtim: Option<SystemTime>,
     ) -> Result<(), ErrorCode> {
         use cap_fs_ext::DirExt as _;
 
         if !self.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted);
         }
+        let atim = atim.map(|t| SystemTimeSpec::Absolute(cap_std::time::SystemTime::from_std(t)));
+        let mtim = mtim.map(|t| SystemTimeSpec::Absolute(cap_std::time::SystemTime::from_std(t)));
         if path_flags.contains(PathFlags::SYMLINK_FOLLOW) {
-            self.run_blocking(move |d| {
-                d.set_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
-            })
-            .await?;
+            self.run_blocking(move |d| d.set_times(&path, atim, mtim))
+                .await?;
         } else {
-            self.run_blocking(move |d| {
-                d.set_symlink_times(
-                    &path,
-                    atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                    mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-                )
-            })
-            .await?;
+            self.run_blocking(move |d| d.set_symlink_times(&path, atim, mtim))
+                .await?;
         }
         Ok(())
     }

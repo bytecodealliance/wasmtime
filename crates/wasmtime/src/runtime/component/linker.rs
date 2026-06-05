@@ -861,8 +861,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
                     let mut store = cx.as_context_mut();
                     let accessor =
                         &Accessor::new(crate::store::StoreToken::new(store.as_context_mut()));
-                    let mut future = std::pin::pin!(dtor(accessor, param));
-                    std::future::poll_fn(|cx| {
+                    let mut future = core::pin::pin!(dtor(accessor, param));
+                    core::future::poll_fn(|cx| {
                         crate::component::concurrent::tls::set(store.0, || future.as_mut().poll(cx))
                     })
                     .await

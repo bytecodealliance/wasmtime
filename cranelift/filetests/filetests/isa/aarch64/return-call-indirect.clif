@@ -6,7 +6,8 @@ target aarch64
 
 function %callee_i64(i64) -> i64 tail {
 block0(v0: i64):
-    v1 = iadd_imm.i64 v0, 10
+    v2 = iconst.i64 10
+    v1 = iadd v0, v2
     return v1
 }
 
@@ -38,8 +39,8 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_i64 0
+;   udf #0
 ;   br x1
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,8 +104,8 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_f64 0
+;   udf #0
 ;   br x1
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -146,8 +147,8 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_i8 0
+;   udf #0
 ;   br x1
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -296,8 +297,8 @@ block0:
 ;   mov x25, #0x87
 ;   ldr x2, #0xa4
 ;   b #0xac
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   udf #0
 ;   stur x0, [sp, #0x70]
 ;   stur x1, [sp, #0x78]
 ;   stur x8, [sp, #0x80]

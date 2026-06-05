@@ -5,7 +5,8 @@ target x86_64
 function %f0() {
 block0:
     v1 = get_pinned_reg.i64
-    v2 = iadd_imm v1, 1
+    v3 = iconst.i64 1
+    v2 = iadd v1, v3
     set_pinned_reg v2
     return
 }
@@ -36,7 +37,8 @@ block0:
 function %f1() windows_fastcall {
 block0:
     v1 = get_pinned_reg.i64
-    v2 = iadd_imm v1, 1
+    v3 = iconst.i64 1
+    v2 = iadd v1, v3
     set_pinned_reg v2
     return
 }

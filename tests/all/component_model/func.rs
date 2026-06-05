@@ -1,6 +1,7 @@
 #![cfg(not(miri))]
 
 use super::{ApiStyle, REALLOC_AND_FREE};
+use bytes::{Bytes, BytesMut};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering::SeqCst},
@@ -107,6 +108,8 @@ fn typecheck() -> Result<()> {
     assert!(take_two_args.typed::<(i32, &[u8]), (u32,)>(&store).is_err());
     assert!(take_two_args.typed::<(u32, &[u8]), ()>(&store).is_err());
     assert!(take_two_args.typed::<(i32, &[u8]), ()>(&store).is_ok());
+    assert!(take_two_args.typed::<(i32, Bytes), ()>(&store).is_ok());
+    assert!(take_two_args.typed::<(i32, BytesMut), ()>(&store).is_ok());
     assert!(ret_tuple.typed::<(), ()>(&store).is_err());
     assert!(ret_tuple.typed::<(), (u8,)>(&store).is_err());
     assert!(ret_tuple.typed::<(), ((u8, i8),)>(&store).is_ok());
@@ -117,6 +120,8 @@ fn typecheck() -> Result<()> {
     assert!(ret_list_u8.typed::<(), (WasmList<u16>,)>(&store).is_err());
     assert!(ret_list_u8.typed::<(), (WasmList<i8>,)>(&store).is_err());
     assert!(ret_list_u8.typed::<(), (WasmList<u8>,)>(&store).is_ok());
+    assert!(ret_list_u8.typed::<(), (Bytes,)>(&store).is_ok());
+    assert!(ret_list_u8.typed::<(), (BytesMut,)>(&store).is_ok());
 
     Ok(())
 }

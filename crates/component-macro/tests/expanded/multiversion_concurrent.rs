@@ -178,7 +178,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: my::dep0_1_0::a::HostWithStore + my::dep0_2_0::a::HostWithStore + Send,
+            D: my::dep0_1_0::a::HostWithStore<T> + my::dep0_2_0::a::HostWithStore<T>
+                + Send,
             for<'a> D::Data<'a>: my::dep0_1_0::a::Host + my::dep0_2_0::a::Host + Send,
             T: 'static + Send,
         {
@@ -200,8 +201,8 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn x<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn x(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -212,7 +213,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -221,7 +222,7 @@ pub mod my {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::x(host).await;
+                            let r = <D as HostWithStore<T>>::x(host).await;
                             Ok(r)
                         })
                     },
@@ -233,7 +234,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -247,8 +248,8 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {
-                fn x<T: Send>(
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {
+                fn x(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<Output = ()> + Send;
             }
@@ -259,7 +260,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -268,7 +269,7 @@ pub mod my {
                     move |caller: &wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let host = &caller.with_getter(host_getter);
-                            let r = <D as HostWithStore>::x(host).await;
+                            let r = <D as HostWithStore<T>>::x(host).await;
                             Ok(r)
                         })
                     },
@@ -280,7 +281,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -355,6 +356,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -363,12 +372,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }
@@ -438,6 +442,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -446,12 +458,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }

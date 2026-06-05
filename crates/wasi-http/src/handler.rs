@@ -2,6 +2,8 @@
 //! `wasi:http/handler` guest instances.
 
 #[cfg(feature = "p2")]
+use crate::p2;
+#[cfg(feature = "p2")]
 use crate::p2::bindings::http::types as p2_types;
 #[cfg(feature = "p3")]
 use crate::p3;
@@ -29,10 +31,10 @@ use std::sync::{
 use std::task::{Context, Poll};
 use std::time::Instant;
 use tokio::sync::Notify;
-use wasmtime::component::Accessor;
+use wasmtime::component::{Accessor, GuestTaskId, Resource, TypedFuncCallConcurrent};
 #[cfg(feature = "p2")]
 use wasmtime::error::Context as _;
-use wasmtime::{AsContextMut, Result, Store, format_err};
+use wasmtime::{AsContextMut, Result, Store, StoreContextMut, format_err};
 
 /// Represents either a `wasi:http/types@0.2.x` or `wasi:http/types@0.3.x` `error-code`.
 pub enum ErrorCode {
@@ -287,30 +289,6 @@ pub type Request = http::Request<UnsyncBoxBody<Bytes, ErrorCode>>;
 /// A Response returned by `ProxyHandler::handle`.
 pub type Response = http::Response<UnsyncBoxBody<Bytes, wasmtime::Error>>;
 
-/// Alternative p2 bindings generated with `exports: { default: async | store }`
-/// so we can use `TypedFunc::call_concurrent` with both p2 and p3 instances.
-#[cfg(feature = "p2")]
-pub mod p2 {
-    #[expect(missing_docs, reason = "bindgen-generated code")]
-    pub mod bindings {
-        wasmtime::component::bindgen!({
-            path: "wit",
-            world: "wasi:http/proxy",
-            imports: { default: tracing },
-            exports: { default: async | store },
-            require_store_data_send: true,
-            with: {
-                // http is in this crate
-                "wasi:http": crate::p2::bindings::http,
-                // Upstream package dependencies
-                "wasi:io": wasmtime_wasi::p2::bindings::io,
-            }
-        });
-
-        pub use wasi::*;
-    }
-}
-
 /// Represents either a `wasi:http/incoming-handler@0.2.x` or
 /// `wasi:http/handler@0.3.x` pre-instance.
 pub enum ProxyPre<T: 'static> {
@@ -442,12 +420,21 @@ pub trait WorkerState: 'static + Send + Sync {
     /// The type of the associated data for [`Store`] belonging to this worker.
     type StoreData: Send;
 
+    /// An opaque unique identifier that hosts can assigned to requests which is
+    /// threaded from [`ProxyHandler::handle`] into
+    /// [`WorkerState::on_request_start`]
+    type RequestId: Send + Sync;
+
     /// Indicate whether the worker should accept another request given the
     /// current number it is already handling concurrently and the total it has
     /// handled so far.
     fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept;
 
     /// Notification that a request has been accepted by the worker.
+    ///
+    /// This method can be used to record anything within `store`, if necessary.
+    /// The `task` corresponding to the component-model-level async task about
+    /// to be created is additionally passed here.
     ///
     /// If the future returned by this function resolves before the guest has
     /// produced a response, the request will be considered "expired" and the
@@ -477,7 +464,9 @@ pub trait WorkerState: 'static + Send + Sync {
     /// defence" will no longer be necessary.
     fn on_request_start(
         &self,
-        request: &Request,
+        store: StoreContextMut<'_, Self::StoreData>,
+        id: Self::RequestId,
+        task: GuestTaskId,
     ) -> Pin<Box<dyn Future<Output = ()> + 'static + Send + Sync>>;
 
     /// Dispose of the store belonging to the now-exited worker.
@@ -542,7 +531,7 @@ pub trait HandlerState: 'static + Sync + Send + Sized {
 
 struct ProxyHandlerInner<S: HandlerState> {
     state: S,
-    request_queue: Queue<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
+    request_queue: Queue<WorkerRequest<S>>,
     worker_count: AtomicUsize,
 }
 
@@ -577,6 +566,12 @@ impl StartTimes {
         self.0.last_key_value().map(|(&k, _)| k)
     }
 }
+
+type WorkerRequest<S> = (
+    <<S as HandlerState>::WorkerState as WorkerState>::RequestId,
+    Request,
+    oneshot::Sender<Result<Response, wasmtime::Error>>,
+);
 
 struct Worker<S>
 where
@@ -615,10 +610,7 @@ where
         }
     }
 
-    async fn run(
-        self,
-        request: Option<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
-    ) {
+    async fn run(self, request: Option<WorkerRequest<S>>) {
         match self.handler.0.state.instantiate().await {
             Ok(Instance {
                 store,
@@ -633,8 +625,9 @@ where
 
             Err(error) => {
                 let error = Arc::new(error);
-                if let Some((request, tx)) = request {
+                if let Some((request_id, request, tx)) = request {
                     _ = tx.send(Err(InstantiationError {
+                        request_id,
                         request: Mutex::new(request),
                         error,
                     }
@@ -643,7 +636,7 @@ where
                     // In this case, the worker was spawned to handle any queued
                     // requests.  Since we can't handle those requests, we send
                     // them all an instantiation error.
-                    for (request, tx) in mem::take(
+                    for (request_id, request, tx) in mem::take(
                         self.handler
                             .0
                             .request_queue
@@ -653,6 +646,7 @@ where
                             .deref_mut(),
                     ) {
                         _ = tx.send(Err(InstantiationError {
+                            request_id,
                             request: Mutex::new(request),
                             error: error.clone(),
                         }
@@ -670,7 +664,7 @@ where
         view: ViewFn<S::StoreData>,
         expiration: S::WorkerExpiration,
         state: S::WorkerState,
-        request: Option<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
+        request: Option<WorkerRequest<S>>,
     ) {
         // NB: The code the follows is rather subtle in that it is structured
         // carefully to give the `HandlerState` implementation full control over
@@ -733,8 +727,7 @@ where
             let mut futures = FuturesUnordered::new();
             let mut start_times = StartTimes::default();
 
-            let accept_request = |request: Request,
-                                  tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
+            let accept_request = |(request_id, request, tx): WorkerRequest<S>,
                                   futures: &mut FuturesUnordered<_>,
                                   start_times: &mut StartTimes,
                                   reuse_count: &mut usize| {
@@ -750,34 +743,41 @@ where
                 accept_concurrent.store(false, Relaxed);
                 *reuse_count += 1;
 
-                // Notify the `HandlerState` that we're starting to handle a
-                // request and retrieve the deadline by which it must produce a
-                // response.
-                //
-                // If it fails to produce a response by the deadline, we'll stop
-                // accepting new requests and eventually exit the worker.
-                let expiration = dropper.state.on_request_start(&request);
+                let prepared = accessor.with(|mut store| {
+                    let prepared = Prepared::new(store.as_context_mut(), proxy, request, view, tx);
+                    match prepared {
+                        Ok(prepared) => {
+                            // Notify the `HandlerState` that we're starting to
+                            // handle a request and retrieve the deadline by
+                            // which it must produce a response.
+                            //
+                            // If it fails to produce a response by the
+                            // deadline, we'll stop accepting new requests and
+                            // eventually exit the worker.
+                            let expiration = dropper.state.on_request_start(
+                                store.as_context_mut(),
+                                request_id,
+                                prepared.task(),
+                            );
+                            Ok((prepared, expiration))
+                        }
+                        Err(e) => Err(e),
+                    }
+                });
 
                 let start_time = Instant::now();
                 start_times.add(start_time);
                 *status.try_lock().unwrap() = (WorkerStatus::Requests, start_time);
 
                 futures.push(async move {
-                    Ok::<_, wasmtime::Error>((
-                        handle(accessor, proxy, request, view, tx, expiration).await?,
-                        start_time,
-                    ))
+                    let (prepared, expiration) = prepared?;
+                    let sent = prepared.run(accessor, expiration).await?;
+                    wasmtime::error::Ok((sent, start_time))
                 });
             };
 
-            if let Some((request, tx)) = request {
-                accept_request(
-                    request,
-                    tx,
-                    &mut futures,
-                    &mut start_times,
-                    &mut reuse_count,
-                );
+            if let Some(req) = request {
+                accept_request(req, &mut futures, &mut start_times, &mut reuse_count);
             }
 
             // This is the main driver loop for this worker. This is modeled as
@@ -870,16 +870,9 @@ where
                     // successful then push it into `futures` and turn this loop
                     // again to see where we're at next time around.
                     if self.available
-                        && let Poll::Ready(Some((request, tx))) =
-                            incoming_requests.as_mut().poll_next(cx)
+                        && let Poll::Ready(Some(req)) = incoming_requests.as_mut().poll_next(cx)
                     {
-                        accept_request(
-                            request,
-                            tx,
-                            &mut futures,
-                            &mut start_times,
-                            &mut reuse_count,
-                        );
+                        accept_request(req, &mut futures, &mut start_times, &mut reuse_count);
                         continue;
                     }
 
@@ -1018,7 +1011,9 @@ impl<S: HandlerState> Clone for ProxyHandler<S> {
 /// case, the caller may be able to recover and retry (e.g. after waiting for
 /// existing instances to be dropped and/or freeing memory used by caches,
 /// etc.).  Otherwise, it will probably need to return an HTTP 500 error.
-pub struct InstantiationError {
+pub struct InstantiationError<T> {
+    /// The ID of the request which was originally configured,
+    pub request_id: T,
     /// The original request passed to `ProxyHandler::handle`.
     ///
     /// This is wrapped in a `Mutex` to satisfy the `Send + Sync` bounds
@@ -1031,19 +1026,19 @@ pub struct InstantiationError {
     pub error: Arc<wasmtime::Error>,
 }
 
-impl fmt::Display for InstantiationError {
+impl<T> fmt::Display for InstantiationError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "instantiation error: {}", self.error)
     }
 }
 
-impl fmt::Debug for InstantiationError {
+impl<T> fmt::Debug for InstantiationError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "instantiation error: {:?}", self.error)
     }
 }
 
-impl error::Error for InstantiationError {}
+impl<T> error::Error for InstantiationError<T> {}
 
 /// Returned when the guest failed to produce a response before the expiration
 /// returned by `HandlerState::on_request_start` elapsed.
@@ -1114,18 +1109,36 @@ where
     /// In other failure cases (e.g. `wasi:http/types#error-code` return values
     /// and/or traps when executing synchronous WASIp2 handler functions), the
     /// original error returned by the handler will be returned.
-    pub async fn handle(&self, request: Request) -> Result<Response, wasmtime::Error> {
+    ///
+    /// # Backpressure
+    ///
+    /// Note that this API does not implement any form of backpressure to limit
+    /// the number of in-flight `Request`s being processed. This function
+    /// may spawn new tokio tasks, instantiate new modules under new stores, and
+    /// queue up pending `Request`s while waiting for previous instances. In all
+    /// of these situations invoking this function will consume some host-side
+    /// resources until the request is done.
+    ///
+    /// Embedders using this API must ensure to take this into account. If an
+    /// infinite number of requests can be fed into this function then it's
+    /// recommended to take a semaphore, for example, around this function call
+    /// to limit the number of concurrent requests that are being processed.
+    pub async fn handle(
+        &self,
+        id: <S::WorkerState as WorkerState>::RequestId,
+        request: Request,
+    ) -> Result<Response, wasmtime::Error> {
         let (tx, rx) = oneshot::channel();
-
+        let req = (id, request, tx);
         if self.0.worker_count.load(Relaxed) == 0 {
             // There are no available workers; skip the queue and pass
             // the request directly to the worker, which improves
             // performance as measured by `wasmtime-server-rps.sh` by
             // about 15%.
-            self.start_worker(Some((request, tx)));
+            self.start_worker(Some(req));
         } else {
             let mut queue = self.0.request_queue.queue.lock().unwrap();
-            queue.push_back((request, tx));
+            queue.push_back(req);
 
             // Start a new worker to handle the request if the last worker just
             // went unavailable.  See also `Worker::set_available` for what
@@ -1146,9 +1159,9 @@ where
             // instantiation error, we'll give the request back to the caller in
             // an `Err(_)`, allowing the application to decide what to do next.
             if self.0.worker_count.load(Relaxed) == 0 {
-                let (request, tx) = queue.pop_back().unwrap();
+                let req = queue.pop_back().unwrap();
                 drop(queue);
-                self.start_worker(Some((request, tx)));
+                self.start_worker(Some(req));
             } else {
                 drop(queue);
                 self.0.request_queue.notify_push.notify_one();
@@ -1163,10 +1176,7 @@ where
         &self.0.state
     }
 
-    fn start_worker(
-        &self,
-        request: Option<(Request, oneshot::Sender<Result<Response, wasmtime::Error>>)>,
-    ) {
+    fn start_worker(&self, request: Option<WorkerRequest<S>>) {
         tokio::spawn(
             Worker {
                 handler: self.clone(),
@@ -1177,133 +1187,217 @@ where
     }
 }
 
-async fn handle<T: Send>(
-    accessor: &Accessor<T>,
-    proxy: &Proxy,
-    request: Request,
-    view: ViewFn<T>,
-    tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
-    expiration: impl Future<Output = ()>,
-) -> Result<bool> {
-    let expiration = pin!(expiration);
+/// Representation of a "prepared" call for a guest, used to extract the
+/// `GuestTaskId` before actually executing any handlers.
+///
+/// Right now this is a bit gross since it has to type out a bunch of types by
+/// hand.
+pub enum Prepared<'a, T: 'static> {
+    #[doc(hidden)]
+    #[cfg(feature = "p2")]
+    P2 {
+        guest: &'a p2::bindings::Proxy,
+        call: TypedFuncCallConcurrent<
+            T,
+            (
+                Resource<p2_types::IncomingRequest>,
+                Resource<p2_types::ResponseOutparam>,
+            ),
+            (),
+        >,
+        tx: Arc<Mutex<Option<oneshot::Sender<Result<Response, wasmtime::Error>>>>>,
+    },
+    #[doc(hidden)]
+    #[cfg(feature = "p3")]
+    P3 {
+        guest: &'a p3::bindings::Service,
+        call: TypedFuncCallConcurrent<
+            T,
+            (Resource<p3_types::Request>,),
+            (Result<Resource<p3_types::Response>, p3_types::ErrorCode>,),
+        >,
+        tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
+        request_io_result: Pin<Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>>,
+        view: fn(&mut T) -> p3::WasiHttpCtxView,
+    },
+}
 
-    match (proxy, view) {
-        #[cfg(feature = "p3")]
-        (Proxy::P3(guest), ViewFn::P3(view)) => {
-            let (request, body) = request.into_parts();
-            let body = body.map_err(p3_types::ErrorCode::from);
-            let request = http::Request::from_parts(request, body);
-            let (request, request_io_result) = p3::Request::from_http(request);
+impl<'a, T: Send> Prepared<'a, T> {
+    /// Creates a new prepared request.
+    pub fn new(
+        mut store: StoreContextMut<'_, T>,
+        proxy: &'a Proxy,
+        request: Request,
+        view: ViewFn<T>,
+        tx: oneshot::Sender<Result<Response, wasmtime::Error>>,
+    ) -> Result<Prepared<'a, T>> {
+        match (proxy, view) {
+            #[cfg(feature = "p3")]
+            (Proxy::P3(guest), ViewFn::P3(view)) => {
+                let (request, body) = request.into_parts();
+                let body = body.map_err(p3_types::ErrorCode::from);
+                let request = http::Request::from_parts(request, body);
+                let (request, request_io_result) = p3::Request::from_http(request);
+                let request = view(store.data_mut()).table.push(request)?;
 
-            let request = accessor.with(|mut store| {
-                Ok::<_, wasmtime::Error>(view(store.data_mut()).table.push(request)?)
-            })?;
+                Ok(Prepared::P3 {
+                    tx,
+                    request_io_result: Box::pin(request_io_result),
+                    guest,
+                    view,
+                    call: guest
+                        .wasi_http_handler()
+                        .func_handle()
+                        .start_call_concurrent(store, (request,))?,
+                })
+            }
+            #[cfg(feature = "p2")]
+            (Proxy::P2(guest), ViewFn::P2(view)) => {
+                // Here we wrap the sender in an `Arc<Mutex<Option<_>>>`, with one
+                // clone used in the `response-outparam` and the other used to send
+                // an error if the request expires or the handler returns without
+                // producing a response.
+                let tx = Arc::new(Mutex::new(Some(tx)));
 
-            let handle = pin!(async move {
-                let response = guest
-                    .wasi_http_handler()
-                    .call_handle(accessor, request)
-                    .await?;
+                let request =
+                    view(store.data_mut()).new_incoming_request(p2_types::Scheme::Http, request)?;
 
-                let response = accessor.with(|mut store| {
-                    let response = view(store.get()).table.delete(response?)?;
-                    Ok::<_, wasmtime::Error>(response.into_http_with_getter(
-                        &mut store,
-                        request_io_result,
-                        view,
-                    )?)
+                let out = view(store.data_mut()).new_response_outparam_from_callback({
+                    let tx = tx.clone();
+                    move |value| {
+                        if let Some(tx) = tx.lock().unwrap().take() {
+                            _ = tx.send(
+                                value
+                                    .map(|v| {
+                                        v.map(move |body| {
+                                            body.map_err(wasmtime::Error::from).boxed_unsync()
+                                        })
+                                    })
+                                    .map_err(wasmtime::Error::from),
+                            );
+                        }
+                    }
                 })?;
 
-                Ok(response.map(move |body| body.map_err(wasmtime::Error::from).boxed_unsync()))
-            });
-
-            // TODO: We should also use `oneshot::Sender::poll_close` to be
-            // notified when the receiver is dropped, in which case we should
-            // expire the request since the response is no longer of interest to
-            // the original `ProxyHandler::handle` caller.
-            let (result, sent) = match futures::future::select(handle, expiration).await {
-                Either::Left((result, _)) => (result, true),
-                // TODO: We should also send a cancel request to the expired
-                // task to give it a chance to shut down gracefully, but as of
-                // this writing Wasmtime does not yet provide an API for doing
-                // that.  See issue #11833.  Instead, we let it continue running
-                // as a background task until it either returns a response
-                // (which we'll ignore) or the instance itself has expired.
-                Either::Right(((), _)) => (Err(ExpirationError.into()), false),
-            };
-
-            _ = tx.send(result);
-
-            Ok(sent)
+                Ok(Prepared::P2 {
+                    guest,
+                    tx,
+                    call: guest
+                        .wasi_http_incoming_handler()
+                        .func_handle()
+                        .start_call_concurrent(store, (request, out))?,
+                })
+            }
+            #[cfg(all(feature = "p2", feature = "p3"))]
+            _ => unreachable!(),
         }
-        #[cfg(feature = "p2")]
-        (Proxy::P2(guest), ViewFn::P2(view)) => {
-            // Here we wrap the sender in an `Arc<Mutex<Option<_>>>`, with one
-            // clone used in the `response-outparam` and the other used to send
-            // an error if the request expires or the handler returns without
-            // producing a response.
-            let tx = Arc::new(Mutex::new(Some(tx)));
+    }
 
-            let (request, out) = accessor.with({
-                let tx = tx.clone();
-                move |mut access| {
-                    let request = view(access.data_mut())
-                        .new_incoming_request(p2_types::Scheme::Http, request)?;
+    fn task(&self) -> GuestTaskId {
+        match self {
+            #[cfg(feature = "p3")]
+            Prepared::P3 { call, .. } => call.task(),
+            #[cfg(feature = "p2")]
+            Prepared::P2 { call, .. } => call.task(),
+        }
+    }
 
-                    let out = view(access.data_mut()).new_response_outparam_from_callback(
-                        move |value| {
-                            if let Some(tx) = tx.lock().unwrap().take() {
-                                _ = tx.send(
-                                    value
-                                        .map(|v| {
-                                            v.map(move |body| {
-                                                body.map_err(wasmtime::Error::from).boxed_unsync()
-                                            })
-                                        })
-                                        .map_err(wasmtime::Error::from),
-                                );
-                            }
-                        },
-                    )?;
+    /// Executes this request to completion.
+    pub async fn run(
+        self,
+        accessor: &Accessor<T>,
+        expiration: impl Future<Output = ()>,
+    ) -> Result<bool> {
+        let expiration = pin!(expiration);
 
-                    wasmtime::error::Ok((request, out))
-                }
-            })?;
+        match self {
+            #[cfg(feature = "p3")]
+            Prepared::P3 {
+                guest,
+                call,
+                tx,
+                request_io_result,
+                view,
+            } => {
+                let handle =
+                    pin!(async move {
+                        let response = guest
+                            .wasi_http_handler()
+                            .func_handle()
+                            .finish_call_concurrent(accessor, call)
+                            .await?
+                            .0?;
 
-            let handle = pin!(
-                guest
-                    .wasi_http_incoming_handler()
-                    .call_handle(accessor, request, out)
-            );
+                        let response = accessor.with(|mut store| {
+                            let response = view(store.get()).table.delete(response)?;
+                            Ok::<_, wasmtime::Error>(response.into_http_with_getter(
+                                &mut store,
+                                request_io_result,
+                                view,
+                            )?)
+                        })?;
 
-            const MESSAGE: &str = "guest never invoked `response-outparam::set` method";
+                        Ok(response
+                            .map(move |body| body.map_err(wasmtime::Error::from).boxed_unsync()))
+                    });
 
-            struct Dropper(Arc<Mutex<Option<oneshot::Sender<Result<Response, wasmtime::Error>>>>>);
+                // TODO: We should also use `oneshot::Sender::poll_close` to be
+                // notified when the receiver is dropped, in which case we should
+                // expire the request since the response is no longer of interest to
+                // the original `ProxyHandler::handle` caller.
+                let (result, sent) = match futures::future::select(handle, expiration).await {
+                    Either::Left((result, _)) => (result, true),
+                    // TODO: We should also send a cancel request to the expired
+                    // task to give it a chance to shut down gracefully, but as of
+                    // this writing Wasmtime does not yet provide an API for doing
+                    // that.  See issue #11833.  Instead, we let it continue running
+                    // as a background task until it either returns a response
+                    // (which we'll ignore) or the instance itself has expired.
+                    Either::Right(((), _)) => (Err(ExpirationError.into()), false),
+                };
 
-            impl Drop for Dropper {
-                fn drop(&mut self) {
-                    if let Some(tx) = self.0.lock().unwrap().take() {
-                        _ = tx.send(Err(format_err!("{MESSAGE}")));
+                _ = tx.send(result);
+
+                Ok(sent)
+            }
+            #[cfg(feature = "p2")]
+            Prepared::P2 { guest, call, tx } => {
+                let handle = pin!(
+                    guest
+                        .wasi_http_incoming_handler()
+                        .func_handle()
+                        .finish_call_concurrent(accessor, call)
+                );
+
+                const MESSAGE: &str = "guest never invoked `response-outparam::set` method";
+
+                struct Dropper(
+                    Arc<Mutex<Option<oneshot::Sender<Result<Response, wasmtime::Error>>>>>,
+                );
+
+                impl Drop for Dropper {
+                    fn drop(&mut self) {
+                        if let Some(tx) = self.0.lock().unwrap().take() {
+                            _ = tx.send(Err(format_err!("{MESSAGE}")));
+                        }
                     }
                 }
-            }
 
-            let tx = Dropper(tx);
+                let tx = Dropper(tx);
 
-            // See corresponding TODO comment for the p3 case above.
-            let (result, sent) = match futures::future::select(handle, expiration).await {
-                Either::Left((result, _)) => (result.context(MESSAGE), true),
                 // See corresponding TODO comment for the p3 case above.
-                Either::Right(((), _)) => (Err(ExpirationError.into()), false),
-            };
+                let (result, sent) = match futures::future::select(handle, expiration).await {
+                    Either::Left((result, _)) => (result.context(MESSAGE), true),
+                    // See corresponding TODO comment for the p3 case above.
+                    Either::Right(((), _)) => (Err(ExpirationError.into()), false),
+                };
 
-            if let Some(tx) = tx.0.lock().unwrap().take() {
-                _ = tx.send(result.and_then(|()| Err(format_err!("{MESSAGE}"))));
+                if let Some(tx) = tx.0.lock().unwrap().take() {
+                    _ = tx.send(result.and_then(|()| Err(format_err!("{MESSAGE}"))));
+                }
+
+                Ok(sent)
             }
-
-            Ok(sent)
         }
-        #[cfg(all(feature = "p2", feature = "p3"))]
-        _ => unreachable!(),
     }
 }

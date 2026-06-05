@@ -65,16 +65,16 @@
 ;;
 ;;                                 block4(v38: i32, v39: i64):
 ;; @0021                               v3 = f32const 0.0
-;;                                     v45 = iconst.i64 16
-;; @0021                               v40 = iadd v39, v45  ; v45 = 16
-;; @0021                               store user2 little region1 v3, v40  ; v3 = 0.0
+;; @0021                               v40 = iconst.i64 16
+;; @0021                               v41 = iadd v39, v40  ; v40 = 16
+;; @0021                               store user2 little region1 v3, v41  ; v3 = 0.0
 ;; @0021                               v4 = iconst.i32 0
-;;                                     v44 = iconst.i64 20
-;; @0021                               v41 = iadd v39, v44  ; v44 = 20
-;; @0021                               istore8 user2 little region1 v4, v41  ; v4 = 0
-;;                                     v43 = iconst.i64 24
-;; @0021                               v42 = iadd v39, v43  ; v43 = 24
-;; @0021                               store user2 little region1 v4, v42  ; v4 = 0
+;; @0021                               v42 = iconst.i64 20
+;; @0021                               v43 = iadd v39, v42  ; v42 = 20
+;; @0021                               istore8 user2 little region1 v4, v43  ; v4 = 0
+;; @0021                               v44 = iconst.i64 24
+;; @0021                               v45 = iadd v39, v44  ; v44 = 24
+;; @0021                               store user2 little region1 v4, v45  ; v4 = 0
 ;; @0024                               jump block1(v38)
 ;;
 ;;                                 block1(v2: i32):

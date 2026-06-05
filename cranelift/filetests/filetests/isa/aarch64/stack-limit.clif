@@ -69,12 +69,12 @@ block0(v0: i64):
 ; block1: ; offset 0x1c
 ;   ldr x0, #0x24
 ;   b #0x2c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %foo 0
+;   udf #0
 ;   blr x0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   udf #0xc11f ; trap: stk_ovf
 
 function %limit_preamble(i64 vmctx) {
     gv0 = vmctx
@@ -114,7 +114,7 @@ block0(v0: i64):
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   udf #0xc11f ; trap: stk_ovf
 
 function %limit_preamble_huge(i64 vmctx) {
     gv0 = vmctx
@@ -170,8 +170,8 @@ block0(v0: i64):
 ;   add sp, sp, x16
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   udf #0xc11f ; trap: stk_ovf
+;   udf #0xc11f ; trap: stk_ovf
 
 function %limit_preamble_huge_offset(i64 vmctx) {
     gv0 = vmctx
@@ -210,5 +210,5 @@ block0(v0: i64):
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   udf #0xc11f ; trap: stk_ovf
 

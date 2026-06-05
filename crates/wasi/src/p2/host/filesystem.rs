@@ -8,6 +8,7 @@ use crate::p2::bindings::filesystem::types::{
 use crate::p2::filesystem::{FileInputStream, FileOutputStream, ReaddirIterator};
 use crate::p2::{FsError, FsResult};
 use crate::{DirPerms, FilePerms};
+use std::time::SystemTime;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
@@ -741,16 +742,13 @@ fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, Err
         .ok_or(ErrorCode::Overflow)
 }
 
-fn systemtimespec_from(
-    t: types::NewTimestamp,
-) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
-    use fs_set_times::SystemTimeSpec;
+fn systemtimespec_from(t: types::NewTimestamp) -> Result<Option<SystemTime>, ErrorCode> {
     match t {
         types::NewTimestamp::NoChange => Ok(None),
-        types::NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
+        types::NewTimestamp::Now => Ok(Some(SystemTime::now())),
         types::NewTimestamp::Timestamp(st) => {
             let st = systemtime_from(st)?;
-            Ok(Some(SystemTimeSpec::Absolute(st)))
+            Ok(Some(st))
         }
     }
 }

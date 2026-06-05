@@ -62,9 +62,9 @@ impl Ranges {
         &self,
     ) -> impl DoubleEndedIterator<Item = (usize, Range<usize>)> + ExactSizeIterator + '_ {
         self.ranges
-            .windows(2)
+            .array_windows()
             .enumerate()
-            .map(|(index, range)| (self.map_index(index), range[0] as usize..range[1] as usize))
+            .map(|(index, [lo, hi])| (self.map_index(index), *lo as usize..*hi as usize))
     }
 
     /// Reverse this list of ranges, so that the first range is at the

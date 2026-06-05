@@ -38,11 +38,11 @@
 ;;       tst     w0, w0
 ;;       b.eq    #0x60
 ;;       b       #0x5c
-;;   5c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   5c: udf     #0xc11f
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   78: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   78: udf     #0xc11f

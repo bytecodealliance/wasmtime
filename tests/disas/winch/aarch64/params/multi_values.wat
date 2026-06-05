@@ -63,4 +63,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   d4: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   d4: udf     #0xc11f

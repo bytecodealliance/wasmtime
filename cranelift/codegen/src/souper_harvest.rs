@@ -95,31 +95,18 @@ fn harvest_candidate_lhs(
     let should_trace = |val| match func.dfg.value_def(val) {
         ir::ValueDef::Result(inst, 0) => match func.dfg.insts[inst].opcode() {
                 ir::Opcode::Iadd
-                | ir::Opcode::IaddImm
-                | ir::Opcode::IrsubImm
                 | ir::Opcode::Imul
-                | ir::Opcode::ImulImm
                 | ir::Opcode::Udiv
-                | ir::Opcode::UdivImm
                 | ir::Opcode::Sdiv
-                | ir::Opcode::SdivImm
                 | ir::Opcode::Urem
-                | ir::Opcode::UremImm
                 | ir::Opcode::Srem
-                | ir::Opcode::SremImm
                 | ir::Opcode::Band
-                | ir::Opcode::BandImm
                 | ir::Opcode::Bor
-                | ir::Opcode::BorImm
                 | ir::Opcode::Bxor
-                | ir::Opcode::BxorImm
                 | ir::Opcode::Bnot
                 | ir::Opcode::Ishl
-                | ir::Opcode::IshlImm
                 | ir::Opcode::Sshr
-                | ir::Opcode::SshrImm
                 | ir::Opcode::Ushr
-                | ir::Opcode::UshrImm
                 | ir::Opcode::Select
                 | ir::Opcode::Uextend
                 | ir::Opcode::Sextend
@@ -185,42 +172,9 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::Add { a, b }.into()
                     }
-                    (ir::Opcode::IaddImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Add { a, b }.into()
-                    }
-                    (ir::Opcode::IrsubImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let b = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let a = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Sub { a, b }.into()
-                    }
                     (ir::Opcode::Imul, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Mul { a, b }.into()
-                    }
-                    (ir::Opcode::ImulImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Mul { a, b }.into()
                     }
                     (ir::Opcode::Udiv, _) => {
@@ -228,31 +182,9 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::Udiv { a, b }.into()
                     }
-                    (ir::Opcode::UdivImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Udiv { a, b }.into()
-                    }
                     (ir::Opcode::Sdiv, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Sdiv { a, b }.into()
-                    }
-                    (ir::Opcode::SdivImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Sdiv { a, b }.into()
                     }
                     (ir::Opcode::Urem, _) => {
@@ -260,31 +192,9 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::Urem { a, b }.into()
                     }
-                    (ir::Opcode::UremImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Urem { a, b }.into()
-                    }
                     (ir::Opcode::Srem, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Srem { a, b }.into()
-                    }
-                    (ir::Opcode::SremImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Srem { a, b }.into()
                     }
                     (ir::Opcode::Band, _) => {
@@ -292,47 +202,14 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::And { a, b }.into()
                     }
-                    (ir::Opcode::BandImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::And { a, b }.into()
-                    }
                     (ir::Opcode::Bor, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
                         ast::Instruction::Or { a, b }.into()
                     }
-                    (ir::Opcode::BorImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Or { a, b }.into()
-                    }
                     (ir::Opcode::Bxor, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Xor { a, b }.into()
-                    }
-                    (ir::Opcode::BxorImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Xor { a, b }.into()
                     }
                     (ir::Opcode::Bnot, _) => {
@@ -349,47 +226,14 @@ fn harvest_candidate_lhs(
                         let b = arg(allocs, 1);
                         ast::Instruction::Shl { a, b }.into()
                     }
-                    (ir::Opcode::IshlImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Shl { a, b }.into()
-                    }
                     (ir::Opcode::Sshr, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
                         ast::Instruction::Ashr { a, b }.into()
                     }
-                    (ir::Opcode::SshrImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
-                        ast::Instruction::Ashr { a, b }.into()
-                    }
                     (ir::Opcode::Ushr, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
-                        ast::Instruction::Lshr { a, b }.into()
-                    }
-                    (ir::Opcode::UshrImm, ir::InstructionData::BinaryImm64 { imm, .. }) => {
-                        let a = arg(allocs, 0);
-                        let value: i64 = (*imm).into();
-                        let value: i128 = value.into();
-                        let b = ast::Constant {
-                            value,
-                            r#type: souper_type_of(&func.dfg, val),
-                        }
-                        .into();
                         ast::Instruction::Lshr { a, b }.into()
                     }
                     (ir::Opcode::Select, _) => {

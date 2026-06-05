@@ -93,7 +93,8 @@ block0(v90: i32, v91: i32):
     v1 = icmp ult v90, v91
     v92 = iconst.i32 -12
     v2 = icmp sge v90, v92
-    v3 = irsub_imm v91, 45
+    v93 = iconst.i32 45
+    v3 = isub v93, v91
     v4 = icmp eq v90, v91
     brif v4, block0(v91, v90), block0(v91, v90)
 }
@@ -103,7 +104,8 @@ block0(v90: i32, v91: i32):
 ; nextln:     v1 = icmp ult v90, v91
 ; nextln:     v92 = iconst.i32 -12
 ; nextln:     v2 = icmp sge v90, v92
-; nextln:     v3 = irsub_imm v91, 45
+; nextln:     v93 = iconst.i32 45
+; nextln:     v3 = isub v93, v91
 ; nextln:     v4 = icmp eq v90, v91
 ; nextln:     brif v4, block0(v91, v90), block0(v91, v90)
 ; nextln: }

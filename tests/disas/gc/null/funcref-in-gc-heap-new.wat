@@ -51,11 +51,11 @@
 ;; @0020                               v30 = load.i32 notrap aligned readonly can_move v29
 ;; @0020                               store user2 region1 v30, v25+4
 ;; @0020                               store.i32 user2 region1 v16, v9
-;; @0020                               v33 = call fn1(v0, v2)
-;; @0020                               v34 = ireduce.i32 v33
-;;                                     v35 = iconst.i64 8
-;; @0020                               v31 = iadd v25, v35  ; v35 = 8
-;; @0020                               store user2 little region1 v34, v31
+;; @0020                               v34 = call fn1(v0, v2)
+;; @0020                               v35 = ireduce.i32 v34
+;; @0020                               v31 = iconst.i64 8
+;; @0020                               v32 = iadd v25, v31  ; v31 = 8
+;; @0020                               store user2 little region1 v35, v32
 ;; @0023                               jump block1
 ;;
 ;;                                 block3 cold:

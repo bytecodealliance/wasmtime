@@ -897,7 +897,8 @@ block0(v0: i8, v1: i8):
 
 function %ushr_i64_const(i64) -> i64 {
 block0(v0: i64):
-    v1 = ushr_imm.i64 v0, 65
+    v2 = iconst.i64 65
+    v1 = ushr v0, v2
     return v1
 }
 
@@ -924,7 +925,8 @@ block0(v0: i64):
 
 function %ushr_i32_const(i32) -> i32 {
 block0(v0: i32):
-    v1 = ushr_imm.i32 v0, 33
+    v2 = iconst.i32 33
+    v1 = ushr v0, v2
     return v1
 }
 
@@ -951,7 +953,8 @@ block0(v0: i32):
 
 function %ushr_i16_const(i16) -> i16 {
 block0(v0: i16):
-    v1 = ushr_imm.i16 v0, 17
+    v2 = iconst.i16 17
+    v1 = ushr v0, v2
     return v1
 }
 
@@ -978,7 +981,8 @@ block0(v0: i16):
 
 function %ushr_i8_const(i8) -> i8 {
 block0(v0: i8):
-    v1 = ushr_imm.i8 v0, 9
+    v2 = iconst.i8 9
+    v1 = ushr v0, v2
     return v1
 }
 

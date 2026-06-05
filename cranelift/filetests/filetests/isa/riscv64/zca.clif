@@ -36,7 +36,8 @@ block0(v0: i64, v1: i64):
 
 function %c_mv_ori(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-  v2 = bor_imm.i64 v1, 0
+  v3 = iconst.i64 0
+  v2 = bor v1, v3
   return v2
 }
 
@@ -283,7 +284,8 @@ block0:
 
 function %c_addi_max(i64) -> i64 {
 block0(v0: i64):
-  v2 = iadd_imm.i64 v0, 31
+  v3 = iconst.i64 31
+  v2 = iadd v0, v3
   return v2
 }
 
@@ -299,7 +301,8 @@ block0(v0: i64):
 
 function %c_addi_min(i64) -> i64 {
 block0(v0: i64):
-  v2 = iadd_imm.i64 v0, -32
+  v3 = iconst.i64 -32
+  v2 = iadd v0, v3
   return v2
 }
 
@@ -331,7 +334,8 @@ block0(v0: i32):
 
 function %c_addiw(i32) -> i64 {
 block0(v0: i32):
-  v1 = iadd_imm.i32 v0, -32
+  v3 = iconst.i32 -32
+  v1 = iadd v0, v3
   v2 = sextend.i64 v1
   return v2
 }
@@ -385,7 +389,8 @@ block0:
 
 function %c_slli(i64) -> i64 {
 block0(v0: i64):
-  v1 = ishl_imm.i64 v0, 63
+  v2 = iconst.i64 63
+  v1 = ishl v0, v2
   return v1
 }
 
@@ -401,7 +406,8 @@ block0(v0: i64):
 
 function %c_srai(i64) -> i64 {
 block0(v0: i64):
-  v1 = sshr_imm.i64 v0, 63
+  v2 = iconst.i64 63
+  v1 = sshr v0, v2
   return v1
 }
 
@@ -417,7 +423,8 @@ block0(v0: i64):
 
 function %c_srli(i64) -> i64 {
 block0(v0: i64):
-  v1 = ushr_imm.i64 v0, 20
+  v2 = iconst.i64 20
+  v1 = ushr v0, v2
   return v1
 }
 
@@ -637,7 +644,8 @@ block0:
 
 function %c_andi_f(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, 0xf
+  v2 = iconst.i64 0xf
+  v1 = band v0, v2
   return v1
 }
 
@@ -653,7 +661,8 @@ block0(v0: i64):
 
 function %c_andi_neg_16(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, -16
+  v2 = iconst.i64 -16
+  v1 = band v0, v2
   return v1
 }
 
@@ -669,7 +678,8 @@ block0(v0: i64):
 
 function %c_andi_zero(i64) -> i64 {
 block0(v0: i64):
-  v1 = band_imm.i64 v0, 0
+  v2 = iconst.i64 0
+  v1 = band v0, v2
   return v1
 }
 

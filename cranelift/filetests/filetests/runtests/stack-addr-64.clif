@@ -13,12 +13,14 @@ function %stack_addr_iadd(i64) -> i8 {
 
 block0(v0: i64):
     v1 = stack_addr.i64 ss0
-    v2 = iadd_imm.i64 v1, 8
+    v10 = iconst.i64 8
+    v2 = iadd v1, v10
 
     stack_store.i64 v0, ss0+8
     v3 = load.i64 v2
 
-    v5 = iadd_imm.i64 v0, 20
+    v11 = iconst.i64 20
+    v5 = iadd v0, v11
     store.i64 v5, v2
     v6 = stack_load.i64 ss0+8
 

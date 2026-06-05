@@ -631,7 +631,8 @@ block1:
 
 function %tbnz_i8(i8) {
 block0(v0: i8):
-  v1 = band_imm v0, 0x10
+  v2 = iconst.i8 16
+  v1 = band v0, v2
   brif v1, block1, block2
 
 block1:
@@ -658,7 +659,8 @@ block2:
 
 function %tbz_i16(i16) {
 block0(v0: i16):
-  v1 = band_imm v0, 0x1000
+  v4 = iconst.i16 4096
+  v1 = band v0, v4
   v3 = iconst.i16 0
   v2 = icmp eq v1, v3
   brif v2, block1, block2
@@ -687,7 +689,8 @@ block2:
 
 function %tbnz_i32(i32) {
 block0(v0: i32):
-  v1 = band_imm v0, 0x10000
+  v2 = iconst.i32 65536
+  v1 = band v0, v2
   brif v1, block1, block2
 
 block1:
@@ -715,7 +718,8 @@ block2:
 
 function %tbz_i64(i64) {
 block0(v0: i64):
-  v1 = band_imm v0, 0x1_00000000
+  v4 = iconst.i64 0x1_00000000
+  v1 = band v0, v4
   v3 = iconst.i64 0
   v2 = icmp eq v1, v3
   brif v2, block1, block2
@@ -744,7 +748,8 @@ block2:
 
 function %not_tbz1(i8) {
 block0(v0: i8):
-  v1 = band_imm v0, 0x100
+  v4 = iconst.i8 0
+  v1 = band v0, v4
   v3 = iconst.i8 0
   v2 = icmp eq v1, v3
   brif v2, block1, block2
@@ -779,7 +784,8 @@ block2:
 
 function %not_tbz2(i8) {
 block0(v0: i8):
-  v1 = band_imm v0, 0x3
+  v4 = iconst.i8 3
+  v1 = band v0, v4
   v3 = iconst.i8 0
   v2 = icmp eq v1, v3
   brif v2, block1, block2

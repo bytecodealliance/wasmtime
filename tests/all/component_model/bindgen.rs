@@ -272,8 +272,8 @@ mod one_import_concurrent {
             type Data<'a> = &'a mut MyImports;
         }
 
-        impl foo::HostWithStore for MyImports {
-            async fn foo<T>(accessor: &Accessor<T, Self>) {
+        impl<T> foo::HostWithStore<T> for MyImports {
+            async fn foo(accessor: &Accessor<T, Self>) {
                 accessor.with(|mut view| view.get().hit = true);
             }
         }
@@ -1133,6 +1133,161 @@ mod implements {
         let mut store = Store::new(&engine, MyHost::default());
         let instance = Cache::instantiate(&mut store, &component, &linker)?;
         instance.call_run(&mut store)?;
+        Ok(())
+    }
+}
+
+mod named_imports {
+    use super::*;
+    use std::collections::HashMap;
+    use wasmtime::component::HasSelf;
+
+    /// Host-chosen id type threaded into every method call.
+    #[derive(Clone)]
+    pub struct MyId(u32);
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                get: func(key: u32) -> u32;
+                set: func(key: u32, value: u32);
+            }
+
+            world cache {
+                import store;
+
+                export run: func();
+            }
+        ",
+        named_imports: {
+            "demo:pkg/store": MyId,
+        },
+    });
+
+    // A component which imports the `store` interface twice, under arbitrary
+    // names `a` and `b`, each annotated as implementing `demo:pkg/store`. The
+    // exported `run` writes through each import and reads the value back, so a
+    // mix-up in id routing would cause a trap.
+    const COMPONENT: &str = r#"
+        (component
+            (import "a" (implements "demo:pkg/store") (instance $a
+                (export "get" (func (param "key" u32) (result u32)))
+                (export "set" (func (param "key" u32) (param "value" u32)))
+            ))
+            (import "b" (implements "demo:pkg/store") (instance $b
+                (export "get" (func (param "key" u32) (result u32)))
+                (export "set" (func (param "key" u32) (param "value" u32)))
+            ))
+
+            (core module $m
+                (import "a" "get" (func $a-get (param i32) (result i32)))
+                (import "a" "set" (func $a-set (param i32 i32)))
+                (import "b" "get" (func $b-get (param i32) (result i32)))
+                (import "b" "set" (func $b-set (param i32 i32)))
+
+                (func (export "run")
+                    (call $a-set (i32.const 0) (i32.const 10))
+                    (call $b-set (i32.const 0) (i32.const 20))
+
+                    (if (i32.ne (call $a-get (i32.const 0)) (i32.const 10))
+                        (then unreachable))
+                    (if (i32.ne (call $b-get (i32.const 0)) (i32.const 20))
+                        (then unreachable))
+                )
+            )
+            (core func $a-get-l (canon lower (func $a "get")))
+            (core func $a-set-l (canon lower (func $a "set")))
+            (core func $b-get-l (canon lower (func $b "get")))
+            (core func $b-set-l (canon lower (func $b "set")))
+            (core instance $i (instantiate $m
+                (with "a" (instance
+                    (export "get" (func $a-get-l))
+                    (export "set" (func $a-set-l))
+                ))
+                (with "b" (instance
+                    (export "get" (func $b-get-l))
+                    (export "set" (func $b-set-l))
+                ))
+            ))
+
+            (func (export "run") (canon lift (core func $i "run")))
+        )
+    "#;
+
+    fn implements_engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        Engine::new(&config).unwrap()
+    }
+
+    #[derive(Default)]
+    struct MyHost {
+        kv: HashMap<(u32, u32), u32>,
+        calls: Vec<(u32, &'static str)>,
+    }
+
+    impl named_imports::demo::pkg::store::Host for MyHost {
+        fn get(&mut self, id: MyId, key: u32) -> u32 {
+            self.calls.push((id.0, "get"));
+            *self.kv.get(&(id.0, key)).unwrap()
+        }
+
+        fn set(&mut self, id: MyId, key: u32, value: u32) {
+            self.calls.push((id.0, "set"));
+            self.kv.insert((id.0, key), value);
+        }
+    }
+
+    #[test]
+    fn ids_are_threaded_through() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name| match name {
+                "a" => Ok(MyId(1)),
+                "b" => Ok(MyId(2)),
+                other => wasmtime::bail!("unexpected import: {other}"),
+            },
+            |s| s,
+        )?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let cache = Cache::instantiate(&mut store, &component, &linker)?;
+
+        cache.call_run(&mut store)?;
+
+        let calls = &store.data().calls;
+        assert!(calls.contains(&(1, "set")), "calls: {calls:?}");
+        assert!(calls.contains(&(2, "set")), "calls: {calls:?}");
+        assert!(calls.contains(&(1, "get")), "calls: {calls:?}");
+        assert!(calls.contains(&(2, "get")), "calls: {calls:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn lookup_error_is_propagated() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        let result = named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name| match name {
+                "a" => Ok(MyId(1)),
+                _ => wasmtime::bail!("bad import"),
+            },
+            |s| s,
+        );
+        let err = result.expect_err("expected lookup error to propagate");
+        assert!(
+            err.to_string().contains("bad import"),
+            "unexpected error: {err:?}"
+        );
         Ok(())
     }
 }

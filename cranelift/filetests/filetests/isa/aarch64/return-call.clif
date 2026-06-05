@@ -6,7 +6,8 @@ target aarch64
 
 function %callee_i64(i64) -> i64 tail {
 block0(v0: i64):
-    v1 = iadd_imm.i64 v0, 10
+    v2 = iconst.i64 10
+    v1 = iadd v0, v2
     return v1
 }
 
@@ -36,8 +37,8 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_i64 0
+;   udf #0
 ;   br x1
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -94,8 +95,8 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_f64 0
+;   udf #0
 ;   br x1
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -135,8 +136,8 @@ block0(v0: i8):
 ; block0: ; offset 0x0
 ;   ldr x1, #8
 ;   b #0x10
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %callee_i8 0
+;   udf #0
 ;   br x1
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -322,8 +323,8 @@ block0:
 ;   stur x25, [sp, #0xf8]
 ;   ldr x1, #0xec
 ;   b #0xf4
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   udf #0
 ;   ldp x19, x20, [sp], #0x10
 ;   ldp x21, x22, [sp], #0x10
 ;   ldp x23, x24, [sp], #0x10
@@ -584,8 +585,8 @@ block2:
 ;   str x2, [sp, #0x110]
 ;   ldr x1, #0x100
 ;   b #0x108
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %different_callee2 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %different_callee2 0
+;   udf #0
 ;   ldur x2, [sp]
 ;   add sp, sp, #0x10
 ;   ldp x19, x20, [sp], #0x10
@@ -619,8 +620,8 @@ block2:
 ;   str x0, [sp, #0x118]
 ;   ldr x1, #0x188
 ;   b #0x190
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %different_callee1 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %different_callee1 0
+;   udf #0
 ;   add sp, sp, #0x10
 ;   ldp x19, x20, [sp], #0x10
 ;   ldp x21, x22, [sp], #0x10

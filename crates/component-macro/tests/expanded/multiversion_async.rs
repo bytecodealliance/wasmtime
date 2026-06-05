@@ -178,7 +178,8 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: my::dep0_1_0::a::HostWithStore + my::dep0_2_0::a::HostWithStore + Send,
+            D: my::dep0_1_0::a::HostWithStore<T> + my::dep0_2_0::a::HostWithStore<T>
+                + Send,
             for<'a> D::Data<'a>: my::dep0_1_0::a::Host + my::dep0_2_0::a::Host + Send,
             T: 'static + Send,
         {
@@ -200,10 +201,10 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn x(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
@@ -218,7 +219,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -239,7 +240,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -253,10 +254,10 @@ pub mod my {
         pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn x(&mut self) -> impl ::core::future::Future<Output = ()> + Send;
@@ -271,7 +272,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -292,7 +293,7 @@ pub mod my {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -367,6 +368,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -374,12 +383,7 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
                         Ok(())
                     }
@@ -449,6 +453,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -456,12 +468,7 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee.call_async(store.as_context_mut(), ()).await?;
                         Ok(())
                     }

@@ -21,23 +21,23 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       orr     x6, xzr, #0xfffffffc
+;;       mov     x6, #0xfffffffc
 ;;       cmp     x4, x6
 ;;       b.hi    #0x24
 ;;   14: ldr     x7, [x2, #0x38]
 ;;       str     w5, [x7, x4]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   24: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   24: udf     #0xc11f
 ;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       orr     x5, xzr, #0xfffffffc
+;;       mov     x5, #0xfffffffc
 ;;       cmp     x4, x5
 ;;       b.hi    #0x64
 ;;   54: ldr     x7, [x2, #0x38]
 ;;       ldr     w2, [x7, x4]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   64: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   64: udf     #0xc11f

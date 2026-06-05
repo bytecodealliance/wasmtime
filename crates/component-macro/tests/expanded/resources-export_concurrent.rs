@@ -201,7 +201,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::transitive_import::HostWithStore + Send,
+            D: foo::foo::transitive_import::HostWithStore<T> + Send,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host + Send,
             T: 'static + Send,
         {
@@ -235,8 +235,8 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub enum Y {}
-            pub trait HostYWithStore: wasmtime::component::HasData {
-                fn drop<T>(
+            pub trait HostYWithStore<T>: wasmtime::component::HasData {
+                fn drop(
                     accessor: &wasmtime::component::Accessor<T, Self>,
                     rep: wasmtime::component::Resource<Y>,
                 ) -> impl ::core::future::Future<Output = wasmtime::Result<()>> + Send
@@ -245,10 +245,12 @@ pub mod foo {
             }
             pub trait HostY {}
             impl<_T: HostY + ?Sized + Send> HostY for &mut _T {}
-            pub trait HostWithStore: wasmtime::component::HasData + HostYWithStore + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostYWithStore<T> + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostYWithStore + Send,
+                H: wasmtime::component::HasData + HostYWithStore<T> + Send,
             {}
             pub trait Host: HostY + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
@@ -257,7 +259,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -268,7 +270,9 @@ pub mod foo {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &caller.with_getter(host_getter);
                             wasmtime::ToWasmtimeResult::to_wasmtime_result(
-                                HostYWithStore::drop(
+                                HostYWithStore::<
+                                    T,
+                                >::drop(
                                         accessor,
                                         wasmtime::component::Resource::new_own(rep),
                                     )
@@ -284,7 +288,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -397,6 +401,19 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_a_constructor)
+                        }
+                    }
                     pub async fn call_constructor<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -405,14 +422,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_static_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (u32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (u32,),
+                            >::new_unchecked(self.funcs.static_a_static_a)
+                        }
                     }
                     pub async fn call_static_a<_T, _D>(
                         &self,
@@ -422,14 +444,22 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (u32,),
-                            >::new_unchecked(self.funcs.static_a_static_a)
-                        };
+                        let callee = self.func_static_a();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_method_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::ResourceAny,),
+                        (u32,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::ResourceAny,),
+                                (u32,),
+                            >::new_unchecked(self.funcs.method_a_method_a)
+                        }
                     }
                     pub async fn call_method_a<_T, _D>(
                         &self,
@@ -440,12 +470,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::ResourceAny,),
-                                (u32,),
-                            >::new_unchecked(self.funcs.method_a_method_a)
-                        };
+                        let callee = self.func_method_a();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }
@@ -555,6 +580,19 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Y>,),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Y>,),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_a_constructor)
+                        }
+                    }
                     pub async fn call_constructor<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -564,14 +602,22 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Y>,),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_static_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::Resource<Y>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::Resource<Y>,),
+                            >::new_unchecked(self.funcs.static_a_static_a)
+                        }
                     }
                     pub async fn call_static_a<_T, _D>(
                         &self,
@@ -581,14 +627,28 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::Resource<Y>,),
-                            >::new_unchecked(self.funcs.static_a_static_a)
-                        };
+                        let callee = self.func_static_a();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_method_a(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            wasmtime::component::ResourceAny,
+                            wasmtime::component::Resource<Y>,
+                        ),
+                        (wasmtime::component::Resource<Y>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    wasmtime::component::ResourceAny,
+                                    wasmtime::component::Resource<Y>,
+                                ),
+                                (wasmtime::component::Resource<Y>,),
+                            >::new_unchecked(self.funcs.method_a_method_a)
+                        }
                     }
                     pub async fn call_method_a<_T, _D>(
                         &self,
@@ -600,15 +660,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    wasmtime::component::ResourceAny,
-                                    wasmtime::component::Resource<Y>,
-                                ),
-                                (wasmtime::component::Resource<Y>,),
-                            >::new_unchecked(self.funcs.method_a_method_a)
-                        };
+                        let callee = self.func_method_a();
                         let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;
@@ -692,6 +744,19 @@ pub mod exports {
                     }
                 }
                 impl GuestA<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_a_constructor)
+                        }
+                    }
                     pub async fn call_constructor<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -700,12 +765,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_a_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
                     }
@@ -788,6 +848,19 @@ pub mod exports {
                     }
                 }
                 impl GuestB<'_> {
+                    pub fn func_constructor(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::ResourceAny,),
+                        (wasmtime::component::ResourceAny,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::ResourceAny,),
+                                (wasmtime::component::ResourceAny,),
+                            >::new_unchecked(self.funcs.constructor_b_constructor)
+                        }
+                    }
                     pub async fn call_constructor<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -797,12 +870,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::ResourceAny,),
-                                (wasmtime::component::ResourceAny,),
-                            >::new_unchecked(self.funcs.constructor_b_constructor)
-                        };
+                        let callee = self.func_constructor();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }

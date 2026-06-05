@@ -14,6 +14,7 @@ use core::task::{Context, Poll, ready};
 use core::{iter, mem};
 use std::io;
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::{JoinHandle, spawn_blocking};
 use wasmtime::StoreContextMut;
@@ -111,15 +112,11 @@ fn systemtime_from(t: system_clock::Instant) -> Result<std::time::SystemTime, Er
     }
 }
 
-fn systemtimespec_from(t: NewTimestamp) -> Result<Option<fs_set_times::SystemTimeSpec>, ErrorCode> {
-    use fs_set_times::SystemTimeSpec;
+fn systemtimespec_from(t: NewTimestamp) -> Result<Option<SystemTime>, ErrorCode> {
     match t {
         NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => {
-            let st = systemtime_from(st)?;
-            Ok(Some(SystemTimeSpec::Absolute(st)))
-        }
+        NewTimestamp::Now => Ok(Some(SystemTime::now())),
+        NewTimestamp::Timestamp(st) => Ok(Some(systemtime_from(st)?)),
     }
 }
 
@@ -519,8 +516,8 @@ impl types::Host for WasiFilesystemCtxView<'_> {
     }
 }
 
-impl types::HostDescriptorWithStore for WasiFilesystem {
-    fn read_via_stream<U>(
+impl<U> types::HostDescriptorWithStore<U> for WasiFilesystem {
+    fn read_via_stream(
         mut store: Access<U, Self>,
         fd: Resource<Descriptor>,
         offset: Filesize,
@@ -551,7 +548,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         ))
     }
 
-    fn write_via_stream<U>(
+    fn write_via_stream(
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
@@ -579,7 +576,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         FutureReader::new(&mut store, result_rx)
     }
 
-    fn append_via_stream<U>(
+    fn append_via_stream(
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
         mut data: StreamReader<u8>,
@@ -603,7 +600,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         FutureReader::new(&mut store, result_rx)
     }
 
-    async fn advise<U>(
+    async fn advise(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         offset: Filesize,
@@ -615,7 +612,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn sync_data<U>(
+    async fn sync_data(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
     ) -> FilesystemResult<()> {
@@ -624,7 +621,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn get_flags<U>(
+    async fn get_flags(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
     ) -> FilesystemResult<DescriptorFlags> {
@@ -633,7 +630,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(flags.into())
     }
 
-    async fn get_type<U>(
+    async fn get_type(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
     ) -> FilesystemResult<DescriptorType> {
@@ -642,7 +639,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(ty.into())
     }
 
-    async fn set_size<U>(
+    async fn set_size(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         size: Filesize,
@@ -652,7 +649,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn set_times<U>(
+    async fn set_times(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         data_access_timestamp: NewTimestamp,
@@ -665,7 +662,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    fn read_directory<U>(
+    fn read_directory(
         mut store: Access<'_, U, Self>,
         fd: Resource<Descriptor>,
     ) -> wasmtime::Result<(
@@ -709,13 +706,13 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok((stream, FutureReader::new(&mut store, result_rx)?))
     }
 
-    async fn sync<U>(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {
+    async fn sync(store: &Accessor<U, Self>, fd: Resource<Descriptor>) -> FilesystemResult<()> {
         let fd = store.get_descriptor(&fd)?;
         fd.sync().await?;
         Ok(())
     }
 
-    async fn create_directory_at<U>(
+    async fn create_directory_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path: String,
@@ -725,7 +722,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn stat<U>(
+    async fn stat(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
     ) -> FilesystemResult<DescriptorStat> {
@@ -734,7 +731,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(stat.into())
     }
 
-    async fn stat_at<U>(
+    async fn stat_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path_flags: PathFlags,
@@ -745,7 +742,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(stat.into())
     }
 
-    async fn set_times_at<U>(
+    async fn set_times_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path_flags: PathFlags,
@@ -761,7 +758,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn link_at<U>(
+    async fn link_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         old_path_flags: PathFlags,
@@ -776,7 +773,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn open_at<U>(
+    async fn open_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path_flags: PathFlags,
@@ -802,7 +799,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(fd)
     }
 
-    async fn readlink_at<U>(
+    async fn readlink_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path: String,
@@ -812,7 +809,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(path)
     }
 
-    async fn remove_directory_at<U>(
+    async fn remove_directory_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path: String,
@@ -822,7 +819,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn rename_at<U>(
+    async fn rename_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         old_path: String,
@@ -834,7 +831,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn symlink_at<U>(
+    async fn symlink_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         old_path: String,
@@ -845,7 +842,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn unlink_file_at<U>(
+    async fn unlink_file_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path: String,
@@ -855,7 +852,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(())
     }
 
-    async fn is_same_object<U>(
+    async fn is_same_object(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         other: Resource<Descriptor>,
@@ -869,7 +866,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         fd.is_same_object(&other).await
     }
 
-    async fn metadata_hash<U>(
+    async fn metadata_hash(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
     ) -> FilesystemResult<MetadataHashValue> {
@@ -878,7 +875,7 @@ impl types::HostDescriptorWithStore for WasiFilesystem {
         Ok(meta.into())
     }
 
-    async fn metadata_hash_at<U>(
+    async fn metadata_hash_at(
         store: &Accessor<U, Self>,
         fd: Resource<Descriptor>,
         path_flags: PathFlags,

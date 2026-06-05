@@ -1090,7 +1090,8 @@ block2:
     return
 
 block3:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
+    v2 = iconst.i64 0
+    v3 = iadd.i64 v1, v2  ; v1 = 0x1234_5678, v2 = 0
     return
 }
             "#
@@ -1178,7 +1179,8 @@ block1:
     return
 
 block2:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
+    v2 = iconst.i64 0
+    v3 = iadd.i64 v1, v2  ; v1 = 0x1234_5678, v2 = 0
     return
 }
             "#
@@ -1246,7 +1248,8 @@ block0(v0: i32):
     brif v0, block1, block2
 
 block1:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
+    v2 = iconst.i64 0
+    v3 = iadd.i64 v1, v2  ; v1 = 0x1234_5678, v2 = 0
     return
 
 block2:
@@ -1336,7 +1339,8 @@ block1:
     return_call fn0()
 
 block2:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
+    v2 = iconst.i64 0
+    v3 = iadd.i64 v1, v2  ; v1 = 0x1234_5678, v2 = 0
     return
 }
             "#
@@ -1403,7 +1407,8 @@ block0(v0: i32):
     brif v0, block1, block2
 
 block1:
-    v2 = iadd_imm.i64 v1, 0  ; v1 = 0x1234_5678
+    v2 = iconst.i64 0
+    v3 = iadd.i64 v1, v2  ; v1 = 0x1234_5678, v2 = 0
     return
 
 block2:
@@ -1517,23 +1522,24 @@ block1:
     v2 = iconst.i64 2
     stack_store v2, ss1  ; v2 = 2
     call fn0(), stack_map=[i64 @ ss0+0, i64 @ ss1+0]
-    v9 = stack_load.i64 ss0
-    v10 = stack_load.i64 ss1
-    jump block3(v9, v10)
+    v10 = stack_load.i64 ss0
+    v11 = stack_load.i64 ss1
+    jump block3(v10, v11)
 
 block2:
     v3 = iconst.i64 3
     stack_store v3, ss0  ; v3 = 3
     v4 = iconst.i64 4
     call fn0(), stack_map=[i64 @ ss0+0, i64 @ ss0+0]
-    v11 = stack_load.i64 ss0
     v12 = stack_load.i64 ss0
-    jump block3(v11, v12)
+    v13 = stack_load.i64 ss0
+    jump block3(v12, v13)
 
 block3(v5: i64, v6: i64):
     call fn0(), stack_map=[i64 @ ss0+0]
-    v8 = stack_load.i64 ss0
-    v7 = iadd_imm v8, 0
+    v7 = iconst.i64 0
+    v9 = stack_load.i64 ss0
+    v8 = iadd v9, v7  ; v7 = 0
     return
 }
             "#
@@ -2438,23 +2444,24 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32):
 
 block1(v4: i32):
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
-    v8 = stack_load.i32 ss0
-    call fn1(v8), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
+    v9 = stack_load.i32 ss0
+    call fn1(v9), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
     jump block2
 
 block2:
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
-    v7 = stack_load.i32 ss1
-    call fn1(v7), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
+    v8 = stack_load.i32 ss1
+    call fn1(v8), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
-    v5 = iadd_imm.i32 v4, -1
-    brif.i32 v4, block1(v5), block3
+    v5 = iconst.i32 -1
+    v6 = iadd.i32 v4, v5  ; v5 = -1
+    brif.i32 v4, block1(v6), block3
 
 block3:
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
-    v6 = stack_load.i32 ss2
-    call fn1(v6), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
+    v7 = stack_load.i32 ss2
+    call fn1(v7), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
     call fn0(), stack_map=[i32 @ ss0+0, i32 @ ss1+0, i32 @ ss2+0]
     jump block2
 }

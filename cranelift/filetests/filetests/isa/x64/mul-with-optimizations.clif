@@ -5,7 +5,8 @@ target x86_64
 
 function %imul_i16_const_unsigned_but_big(i32) -> i16 {
 block0(v0: i32):
-    v3 = imul_imm v0, 0x81111
+    v5 = iconst.i32 528657
+    v3 = imul v0, v5
     v4 = ireduce.i16 v3
     return v4
 }

@@ -199,6 +199,25 @@ pub unsafe extern "C" fn reset_adapter_state() {
     }
 }
 
+/// Toggle whether `clock_time_get` calls `monotonic_clock::now` or uses a
+/// cached value.
+///
+/// When `paused` is true, subsequent calls to `clock_time_get` will return a
+/// cached value instead of calling `monotonic_clock::now`.  This is useful in
+/// cases where the module's `cabi_realloc` function might call `clock_time_get`
+/// with `CLOCKID_MONOTONIC`.  Since `cabi_realloc` is forbidden to call
+/// imports, we can avoid trapping by using the cached value.
+///
+/// This should be set back to false as soon as it is safe to call imports from
+/// `clock_time_get` again.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn adapter_monotonic_clock_set_paused(paused: bool) {
+    State::with(|state| {
+        state.monotonic_clock_paused.set(paused);
+        Ok(())
+    });
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
@@ -685,8 +704,32 @@ pub unsafe extern "C" fn clock_time_get(
 ) -> Errno {
     match id {
         CLOCKID_MONOTONIC => {
-            *time = monotonic_clock::now();
-            ERRNO_SUCCESS
+            // See `adapter_monotonic_clock_set_paused` for details on why we
+            // sometimes use a cached value instead of calling
+            // `monotonic_clock::now` here.
+            if matches!(
+                unsafe { get_allocation_state() },
+                AllocationState::StackAllocated | AllocationState::StateAllocated
+            ) {
+                State::with(|state| {
+                    if state.monotonic_clock_paused.get() {
+                        *time = state.monotonic_clock_cached.get();
+                    } else {
+                        let now = monotonic_clock::now();
+                        *time = now;
+                        state.monotonic_clock_cached.set(now);
+                    }
+
+                    Ok(())
+                })
+            } else {
+                // If the `State` has not yet been allocated, return a zero
+                // value.  This ensures that the clock won't go backwards once
+                // the `State` is allocated and we start calling
+                // `monotonic_clock::now`.
+                *time = 0;
+                ERRNO_SUCCESS
+            }
         }
         CLOCKID_REALTIME => {
             let res = wall_clock::now();
@@ -2704,6 +2747,16 @@ struct State {
     #[cfg(not(feature = "proxy"))]
     dotdot: [UnsafeCell<u8>; 2],
 
+    /// Cached copy of the most recent value returned by `monotonic_clock::now`
+    monotonic_clock_cached: Cell<Timestamp>,
+
+    /// If true, skip calling `monotonic_clock::now` in `clock_time_get` and
+    /// instead return the value in `monotonic_clock_cached`.
+    ///
+    /// See `wasi_snapshot_preview1 adapter_monotonic_clock_set_paused` for
+    /// details.
+    monotonic_clock_paused: Cell<bool>,
+
     /// Another canary constant located at the end of the structure to catch
     /// memory corruption coming from the bottom.
     magic2: u32,
@@ -2765,7 +2818,7 @@ const fn temporary_data_size() -> usize {
     }
 
     // Remove miscellaneous metadata also stored in state.
-    let misc = if cfg!(feature = "proxy") { 8 } else { 10 };
+    let misc = if cfg!(feature = "proxy") { 12 } else { 14 };
     start -= misc * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
@@ -2882,6 +2935,8 @@ impl State {
                 },
                 #[cfg(not(feature = "proxy"))]
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
+                monotonic_clock_cached: Cell::new(0),
+                monotonic_clock_paused: Cell::new(false),
             });
         }
     }

@@ -15,7 +15,8 @@ function %f0(i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v10 = iconst.i32 1
+        v8 = iadd v7, v10
         v9 = f32const 0x0.0        
         return v8, v9, v2
 }
@@ -136,7 +137,8 @@ function %f2(i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v11 = iconst.i32 1
+        v8 = iadd v7, v11
         v9 = f32const 0x0.0        
         return v8, v9, v2
 }
@@ -211,8 +213,8 @@ function %f2(i32) -> i32, f32, f64 {
 ;   stur q1, [sp]
 ;   ldr x11, #0x40
 ;   b #0x48
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   mov x2, x0
 ;   blr x11
 ; block2: ; offset 0x50
@@ -261,7 +263,8 @@ function %f4(i64, i32) -> i32, f32, f64 {
 
     block2(v6: i64):
         v7 = ireduce.i32 v6
-        v8 = iadd_imm.i32 v7, 1
+        v10 = iconst.i32 1
+        v8 = iadd v7, v10
         v9 = f32const 0x0.0        
         return v8, v9, v2
 
@@ -351,8 +354,8 @@ function %f4(i64, i32) -> i32, f32, f64 {
 ;   stur q1, [sp, #0x10]
 ;   ldr x12, #0x44
 ;   b #0x4c
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   mov x2, x1
 ;   stur x1, [sp]
 ;   blr x12
@@ -484,8 +487,8 @@ function %f5() -> i64 {
 ; block2: ; offset 0x38
 ;   ldr x4, #0x40
 ;   b #0x48
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   udf #0 ; reloc_external Abs8 %g 0
+;   udf #0
 ;   blr x4
 ; block3: ; offset 0x4c
 ;   ldur x0, [sp]

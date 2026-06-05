@@ -11,9 +11,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "debug")]
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::thread;
-use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{
     Engine, Error, Func, Module, Result, Store, StoreLimits, Val, ValType, bail,
     error::Context as _, format_err,
@@ -28,8 +26,6 @@ use wasmtime_wasi_http::WasiHttpCtx;
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
-#[cfg(feature = "wasi-threads")]
-use wasmtime_wasi_threads::WasiThreadsCtx;
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -293,7 +289,8 @@ impl RunCommand {
                         move |store| {
                             Box::pin(async move {
                                 let engine_clone = store.engine().clone();
-                                let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                                let cancel =
+                                    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                                 let cancel_clone = cancel.clone();
                                 let epoch_thread = thread::spawn(move || {
                                     while !cancel_clone.load(std::sync::atomic::Ordering::Relaxed) {
@@ -381,7 +378,7 @@ impl RunCommand {
         let host = Host::default();
 
         let mut store = Store::new(&engine, host);
-        self.populate_with_wasi(&mut linker, &mut store, &main)?;
+        self.populate_with_wasi(&mut linker, &mut store)?;
 
         store.data_mut().limits = self.run.store_limits();
         store.limiter(|t| &mut t.limits);
@@ -488,9 +485,7 @@ impl RunCommand {
                 // Exit the process if Wasmtime understands the error;
                 // otherwise, fall back on Rust's default error printing/return
                 // code.
-                if store.data().legacy_p1_ctx.is_some() {
-                    return Err(wasi_common::maybe_exit_on_error(e));
-                } else if store.data().wasip1_ctx.is_some() {
+                if store.data().wasip1_ctx.is_some() {
                     if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
                         std::process::exit(exit.0);
                     }
@@ -599,19 +594,19 @@ impl RunCommand {
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
         store.data_mut().guest_profiler = match main_target {
-            RunTarget::Core(_m) => Some(Arc::new(GuestProfiler::new(
+            RunTarget::Core(_m) => Some(GuestProfiler::new(
                 store.engine(),
                 module_name,
                 interval,
                 profiled_modules,
-            )?)),
-            RunTarget::Component(component) => Some(Arc::new(GuestProfiler::new_component(
+            )?),
+            RunTarget::Component(component) => Some(GuestProfiler::new_component(
                 store.engine(),
                 module_name,
                 interval,
                 component.clone(),
                 profiled_modules,
-            )?)),
+            )?),
         };
 
         fn sample(
@@ -619,10 +614,7 @@ impl RunCommand {
             f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
         ) {
             let mut profiler = store.data_mut().guest_profiler.take().unwrap();
-            f(
-                Arc::get_mut(&mut profiler).expect("profiling doesn't support threads yet"),
-                store.as_context(),
-            );
+            f(&mut profiler, store.as_context());
             store.data_mut().guest_profiler = Some(profiler);
         }
 
@@ -664,8 +656,7 @@ impl RunCommand {
 
         let path = path.to_string();
         Ok(Box::new(move |store| {
-            let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
-                .expect("profiling doesn't support threads yet");
+            let profiler = store.data_mut().guest_profiler.take().unwrap();
             if let Err(e) = std::fs::File::create(&path)
                 .map_err(wasmtime::Error::new)
                 .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
@@ -1104,12 +1095,7 @@ impl RunCommand {
     }
 
     /// Populates the given `Linker` with WASI APIs.
-    fn populate_with_wasi(
-        &self,
-        linker: &mut CliLinker,
-        store: &mut Store<Host>,
-        module: &RunTarget,
-    ) -> Result<()> {
+    fn populate_with_wasi(&self, linker: &mut CliLinker, store: &mut Store<Host>) -> Result<()> {
         self.run.validate_p3_option()?;
         let cli = self.run.validate_cli_enabled()?;
 
@@ -1117,26 +1103,13 @@ impl RunCommand {
             match linker {
                 CliLinker::Core(linker) => {
                     match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
-                        // If preview2 is explicitly disabled, or if threads
-                        // are enabled, then use the historical preview1
-                        // implementation.
                         (Some(false), _) | (None, Some(true)) => {
                             let flag = if self.run.common.wasi.preview2 == Some(false) {
                                 "-Spreview2=n"
                             } else {
                                 "-Sthreads"
                             };
-                            eprintln!(
-                                "\
-WARNING: the `{flag}` flag will be a hard error in Wasmtime 47.0.0 on 2026-07-20. \
-For more information see https://github.com/bytecodealliance/rfcs/pull/47 and \
-please reach out on Zulip with questions.
-                            "
-                            );
-                            wasi_common::tokio::add_to_linker(linker, |host| {
-                                host.legacy_p1_ctx.as_mut().unwrap()
-                            })?;
-                            self.set_legacy_p1_ctx(store)?;
+                            bail!("the `{flag}` flag is no longer supported")
                         }
                         // If preview2 was explicitly requested, always use it.
                         // Otherwise use it so long as threads are disabled.
@@ -1172,28 +1145,20 @@ please reach out on Zulip with questions.
                 match linker {
                     CliLinker::Core(linker) => {
                         wasmtime_wasi_nn::witx::add_to_linker(linker, |host| {
-                            Arc::get_mut(host.wasi_nn_witx.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support")
+                            host.wasi_nn_witx.as_mut().unwrap()
                         })?;
-                        store.data_mut().wasi_nn_witx = Some(Arc::new(
-                            wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry),
-                        ));
+                        store.data_mut().wasi_nn_witx =
+                            Some(wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry));
                     }
                     #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
                             let ctx = h.wasip1_ctx.as_mut().expect("wasi is not configured");
-                            let ctx = Arc::get_mut(ctx)
-                                .expect("wasmtime_wasi is not compatible with threads")
-                                .get_mut()
-                                .unwrap();
-                            let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support");
+                            let nn_ctx = h.wasi_nn_wit.as_mut().unwrap();
                             WasiNnView::new(ctx.ctx().table, nn_ctx)
                         })?;
-                        store.data_mut().wasi_nn_wit = Some(Arc::new(
-                            wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
-                        ));
+                        store.data_mut().wasi_nn_wit =
+                            Some(wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry));
                     }
                 }
             }
@@ -1223,9 +1188,9 @@ please reach out on Zulip with questions.
                         );
 
                         wasmtime_wasi_config::add_to_linker(linker, |h| {
-                            WasiConfig::new(Arc::get_mut(h.wasi_config.as_mut().unwrap()).unwrap())
+                            WasiConfig::new(h.wasi_config.as_mut().unwrap())
                         })?;
-                        store.data_mut().wasi_config = Some(Arc::new(vars));
+                        store.data_mut().wasi_config = Some(vars);
                     }
                 }
             }
@@ -1258,45 +1223,16 @@ please reach out on Zulip with questions.
 
                         wasmtime_wasi_keyvalue::add_to_linker(linker, |h| {
                             let ctx = h.wasip1_ctx.as_mut().expect("wasip2 is not configured");
-                            let ctx = Arc::get_mut(ctx).unwrap().get_mut().unwrap();
-                            WasiKeyValue::new(
-                                Arc::get_mut(h.wasi_keyvalue.as_mut().unwrap()).unwrap(),
-                                ctx.ctx().table,
-                            )
+                            WasiKeyValue::new(h.wasi_keyvalue.as_mut().unwrap(), ctx.ctx().table)
                         })?;
-                        store.data_mut().wasi_keyvalue = Some(Arc::new(ctx));
+                        store.data_mut().wasi_keyvalue = Some(ctx);
                     }
                 }
             }
         }
 
         if self.run.common.wasi.threads == Some(true) {
-            #[cfg(not(feature = "wasi-threads"))]
-            {
-                // Silence the unused warning for `module` as it is only used in the
-                // conditionally-compiled wasi-threads.
-                let _ = &module;
-
-                bail!(
-                    "Cannot enable wasi-threads when the binary is not compiled with this feature."
-                );
-            }
-            #[cfg(feature = "wasi-threads")]
-            {
-                let linker = match linker {
-                    CliLinker::Core(linker) => linker,
-                    _ => bail!("wasi-threads does not support components yet"),
-                };
-                let module = module.unwrap_core();
-                wasmtime_wasi_threads::add_to_linker(linker, store, &module, |host| {
-                    host.wasi_threads.as_ref().unwrap()
-                })?;
-                store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
-                    module.clone(),
-                    Arc::new(linker.clone()),
-                    true,
-                )?));
-            }
+            bail!("support for wasi-threads has been removed from Wasmtime");
         }
 
         if self.run.common.wasi.http == Some(true) {
@@ -1319,7 +1255,7 @@ please reach out on Zulip with questions.
                     }
                 }
                 let http = self.run.wasi_http_ctx()?;
-                store.data_mut().wasi_http = Some(Arc::new(http));
+                store.data_mut().wasi_http = Some(http);
             }
         }
 
@@ -1345,7 +1281,7 @@ please reach out on Zulip with questions.
                         }
 
                         let ctx = wasmtime_wasi_tls::WasiTlsCtxBuilder::new().build();
-                        store.data_mut().wasi_tls = Some(Arc::new(ctx));
+                        store.data_mut().wasi_tls = Some(ctx);
                     }
                 }
             }
@@ -1354,70 +1290,7 @@ please reach out on Zulip with questions.
         Ok(())
     }
 
-    fn set_legacy_p1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = WasiCtxBuilder::new();
-        builder.args(&self.compute_argv()?)?;
-
-        if self.run.common.wasi.inherit_stdin.unwrap_or(true) {
-            builder.inherit_stdin();
-        }
-        if self.run.common.wasi.inherit_stdout.unwrap_or(true) {
-            builder.inherit_stdout();
-        }
-        if self.run.common.wasi.inherit_stderr.unwrap_or(true) {
-            builder.inherit_stderr();
-        }
-
-        if self.run.common.wasi.inherit_env == Some(true) {
-            for (k, v) in std::env::vars() {
-                builder.env(&k, &v)?;
-            }
-        }
-        for (key, value) in self.run.vars.iter() {
-            let value = match value {
-                Some(value) => value.clone(),
-                None => match std::env::var_os(key) {
-                    Some(val) => val
-                        .into_string()
-                        .map_err(|_| format_err!("environment variable `{key}` not valid utf-8"))?,
-                    None => {
-                        // leave the env var un-set in the guest
-                        continue;
-                    }
-                },
-            };
-            builder.env(key, &value)?;
-        }
-
-        let mut num_fd: usize = 3;
-
-        if self.run.common.wasi.listenfd == Some(true) {
-            num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
-        }
-
-        for listener in self.run.compute_preopen_sockets()? {
-            let listener = TcpListener::from_std(listener);
-            builder.preopened_socket(num_fd as _, listener)?;
-            num_fd += 1;
-        }
-
-        for (host, guest) in self.run.dirs.iter() {
-            let dir = Dir::open_ambient_dir(host, ambient_authority())
-                .with_context(|| format!("failed to open directory '{host}'"))?;
-            builder.preopened_dir(dir, guest)?;
-        }
-
-        store.data_mut().legacy_p1_ctx = Some(builder.build());
-        Ok(())
-    }
-
-    /// Note the naming here is subtle, but this is effectively setting up a
-    /// `wasmtime_wasi::WasiCtx` structure.
-    ///
-    /// This is stored in `Host` as `WasiP1Ctx` which internally contains the
-    /// `WasiCtx` and `ResourceTable` used for WASI implementations. Exactly
-    /// which "p" for WASIpN is more a reference to
-    /// `wasmtime-wasi`-vs-`wasi-common` here more than anything else.
+    /// Configure `wasmtime_wasi::WasiCtx` and store it in `Host`.
     fn set_wasi_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.args(&self.compute_argv()?);
@@ -1442,7 +1315,7 @@ please reach out on Zulip with questions.
         if let Some(fuel) = self.run.common.wasi.hostcall_fuel {
             store.set_hostcall_fuel(fuel);
         }
-        store.data_mut().wasip1_ctx = Some(Arc::new(Mutex::new(ctx)));
+        store.data_mut().wasip1_ctx = Some(ctx);
         Ok(())
     }
 
@@ -1466,68 +1339,40 @@ please reach out on Zulip with questions.
 ///
 /// This structures has a number of contexts used for various WASI proposals.
 /// Note that all of them are optional meaning that they're `None` by default
-/// and enabled with various CLI flags (some CLI flags are on-by-default). Note
-/// additionally that this structure is `Clone` to implement the `wasi-threads`
-/// proposal. Many WASI proposals are not compatible with `wasi-threads` so to
-/// model this `Arc` and `Arc<Mutex<T>>` is used for many configurations. If a
-/// WASI proposal is inherently threadsafe it's protected with just an `Arc` to
-/// share its configuration across many threads.
-///
-/// If mutation is required then `Mutex` is used. Note though that the mutex is
-/// not actually locked as access always goes through `Arc::get_mut` which
-/// effectively asserts that there's only one thread. In short much of this is
-/// not compatible with `wasi-threads`.
-#[derive(Default, Clone)]
+/// and enabled with various CLI flags (some CLI flags are on-by-default).
+#[derive(Default)]
 pub struct Host {
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
-    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
-
-    // Legacy wasip1 context using `wasi_common`, not set unless opted-in-to
-    // with the CLI.
-    legacy_p1_ctx: Option<wasi_common::WasiCtx>,
+    guest_profiler: Option<wasmtime::GuestProfiler>,
 
     // Context for both WASIp1 and WASIp2 (and beyond) for the `wasmtime_wasi`
     // crate. This has both `wasmtime_wasi::WasiCtx` as well as a
     // `ResourceTable` internally to be used.
-    //
-    // The Mutex is only needed to satisfy the Sync constraint but we never
-    // actually perform any locking on it as we use Mutex::get_mut for every
-    // access.
-    wasip1_ctx: Option<Arc<Mutex<wasmtime_wasi::p1::WasiP1Ctx>>>,
+    wasip1_ctx: Option<wasmtime_wasi::p1::WasiP1Ctx>,
 
     #[cfg(feature = "wasi-nn")]
-    wasi_nn_wit: Option<Arc<wasmtime_wasi_nn::wit::WasiNnCtx>>,
+    wasi_nn_wit: Option<wasmtime_wasi_nn::wit::WasiNnCtx>,
     #[cfg(feature = "wasi-nn")]
-    wasi_nn_witx: Option<Arc<wasmtime_wasi_nn::witx::WasiNnCtx>>,
+    wasi_nn_witx: Option<wasmtime_wasi_nn::witx::WasiNnCtx>,
 
-    #[cfg(feature = "wasi-threads")]
-    wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
     #[cfg(feature = "wasi-http")]
-    wasi_http: Option<Arc<WasiHttpCtx>>,
+    wasi_http: Option<WasiHttpCtx>,
     #[cfg(feature = "wasi-http")]
     wasi_http_hooks: crate::common::HttpHooks,
 
     #[cfg(feature = "wasi-config")]
-    wasi_config: Option<Arc<WasiConfigVariables>>,
+    wasi_config: Option<WasiConfigVariables>,
     #[cfg(feature = "wasi-keyvalue")]
-    wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
+    wasi_keyvalue: Option<WasiKeyValueCtx>,
     #[cfg(feature = "wasi-tls")]
-    wasi_tls: Option<Arc<wasmtime_wasi_tls::WasiTlsCtx>>,
+    wasi_tls: Option<wasmtime_wasi_tls::WasiTlsCtx>,
 }
 
 impl Host {
     pub(crate) fn wasip1_ctx(&mut self) -> &mut wasmtime_wasi::p1::WasiP1Ctx {
-        unwrap_singlethread_context(&mut self.wasip1_ctx)
+        self.wasip1_ctx.as_mut().unwrap()
     }
-}
-
-fn unwrap_singlethread_context<T>(ctx: &mut Option<Arc<Mutex<T>>>) -> &mut T {
-    let ctx = ctx.as_mut().expect("context not configured");
-    Arc::get_mut(ctx)
-        .expect("context is not compatible with threads")
-        .get_mut()
-        .unwrap()
 }
 
 impl WasiView for Host {
@@ -1540,9 +1385,8 @@ impl WasiView for Host {
 impl wasmtime_wasi_http::p2::WasiHttpView for Host {
     fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
         let ctx = self.wasi_http.as_mut().unwrap();
-        let ctx = Arc::get_mut(ctx).expect("wasmtime_wasi_http is not compatible with threads");
         wasmtime_wasi_http::p2::WasiHttpCtxView {
-            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            table: WasiView::ctx(self.wasip1_ctx.as_mut().unwrap()).table,
             ctx,
             hooks: &mut self.wasi_http_hooks,
         }
@@ -1553,9 +1397,8 @@ impl wasmtime_wasi_http::p2::WasiHttpView for Host {
 impl wasmtime_wasi_http::p3::WasiHttpView for Host {
     fn http(&mut self) -> wasmtime_wasi_http::p3::WasiHttpCtxView<'_> {
         let ctx = self.wasi_http.as_mut().unwrap();
-        let ctx = Arc::get_mut(ctx).expect("wasmtime_wasi_http is not compatible with threads");
         wasmtime_wasi_http::p3::WasiHttpCtxView {
-            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
+            table: WasiView::ctx(self.wasip1_ctx.as_mut().unwrap()).table,
             ctx,
             hooks: &mut self.wasi_http_hooks,
         }
@@ -1566,39 +1409,10 @@ impl wasmtime_wasi_http::p3::WasiHttpView for Host {
 impl wasmtime_wasi_tls::WasiTlsView for Host {
     fn tls(&mut self) -> wasmtime_wasi_tls::WasiTlsCtxView<'_> {
         wasmtime_wasi_tls::WasiTlsCtxView {
-            table: WasiView::ctx(unwrap_singlethread_context(&mut self.wasip1_ctx)).table,
-            ctx: Arc::get_mut(self.wasi_tls.as_mut().unwrap()).unwrap(),
+            table: WasiView::ctx(self.wasip1_ctx.as_mut().unwrap()).table,
+            ctx: self.wasi_tls.as_mut().unwrap(),
         }
     }
-}
-
-fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
-    let _ = &mut num_fd;
-    let _ = &mut *builder;
-
-    #[cfg(all(unix, feature = "run"))]
-    {
-        use listenfd::ListenFd;
-
-        for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
-            if let Ok(val) = std::env::var(env) {
-                builder.env(env, &val)?;
-            }
-        }
-
-        let mut listenfd = ListenFd::from_env();
-
-        for i in 0..listenfd.len() {
-            if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
-                let _ = stdlistener.set_nonblocking(true)?;
-                let listener = TcpListener::from_std(stdlistener);
-                builder.preopened_socket((3 + i) as _, listener)?;
-                num_fd = 3 + i;
-            }
-        }
-    }
-
-    Ok(num_fd)
 }
 
 #[cfg(feature = "coredump")]

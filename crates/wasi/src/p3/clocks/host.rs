@@ -22,8 +22,8 @@ impl system_clock::Host for WasiClocksCtxView<'_> {
     }
 }
 
-impl monotonic_clock::HostWithStore for WasiClocks {
-    async fn wait_until<U>(
+impl<U> monotonic_clock::HostWithStore<U> for WasiClocks {
+    async fn wait_until(
         store: &Accessor<U, Self>,
         when: monotonic_clock::Mark,
     ) -> wasmtime::Result<()> {
@@ -34,7 +34,7 @@ impl monotonic_clock::HostWithStore for WasiClocks {
         Ok(())
     }
 
-    async fn wait_for<U>(
+    async fn wait_for(
         _store: &Accessor<U, Self>,
         duration: types::Duration,
     ) -> wasmtime::Result<()> {

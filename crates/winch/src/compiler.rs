@@ -5,7 +5,6 @@ use std::mem;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::CompiledFunction;
-#[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTranslation;
 use wasmtime_environ::error::Result;
 use wasmtime_environ::{
@@ -203,7 +202,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.is_branch_protection_enabled()
     }
 
-    #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self.trampolines.component_compiler()
     }
@@ -309,7 +307,6 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
         self.0.is_branch_protection_enabled()
     }
 
-    #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self
     }
@@ -330,7 +327,6 @@ impl wasmtime_environ::Compiler for NoInlineCompiler {
     }
 }
 
-#[cfg(feature = "component-model")]
 impl wasmtime_environ::component::ComponentCompiler for NoInlineCompiler {
     fn compile_component_trampoline(
         &self,

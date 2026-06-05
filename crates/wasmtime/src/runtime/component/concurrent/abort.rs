@@ -1,7 +1,8 @@
-use std::mem::{self, ManuallyDrop};
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use crate::try_mutex::TryMutex;
+use alloc::sync::Arc;
+use core::mem::{self, ManuallyDrop};
+use core::pin::Pin;
+use core::task::{Context, Poll, Waker};
 
 /// Handle to a task which may be used to join on the result of executing it.
 ///
@@ -13,7 +14,12 @@ use std::task::{Context, Poll, Waker};
 /// connected to. A manual invocation of [`JoinHandle::abort`] is required to
 /// affect the task.
 pub struct JoinHandle {
-    state: Arc<Mutex<JoinState>>,
+    // Note that at this time the usage of this type within Wasmtime's async
+    // implementation is not expected to ever expose the ability to expose
+    // a situation where this lock can be contended. Everything's bound to the
+    // store and this is largely just used to satisfy compiler bounds. Hence,
+    // lock operations in this module all unwrap.
+    state: Arc<TryMutex<JoinState>>,
 }
 
 enum JoinState {
@@ -51,7 +57,7 @@ impl JoinHandle {
     /// await the result and destruction of the task that this is associated
     /// with.
     pub fn abort(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.try_lock().expect("should not be contended");
 
         match &mut *state {
             // If this task is still running, then fall through to below to
@@ -85,7 +91,7 @@ impl JoinHandle {
         F: Future,
     {
         let handle = JoinHandle {
-            state: Arc::new(Mutex::new(JoinState::Running {
+            state: Arc::new(TryMutex::new(JoinState::Running {
                 waiting_for_abort_signal: None,
                 waiting_for_abort_to_complete: None,
             })),
@@ -102,7 +108,10 @@ impl Future for JoinHandle {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .try_lock()
+            .expect("this lock should not be contended");
         match &mut *state {
             // If this task is running or still only has requested an abort,
             // wait further for the task to get dropped.
@@ -125,7 +134,7 @@ impl Future for JoinHandle {
 
 struct JoinHandleFuture<F> {
     future: ManuallyDrop<F>,
-    state: Arc<Mutex<JoinState>>,
+    state: Arc<TryMutex<JoinState>>,
 }
 
 impl<F> Future for JoinHandleFuture<F>
@@ -146,7 +155,7 @@ where
         // First, before polling the future, check to see if we've been
         // aborted. If not register our task as awaiting such an abort.
         {
-            let mut state = state.lock().unwrap();
+            let mut state = state.try_lock().expect("this lock should not be contended");
             match &mut *state {
                 JoinState::Running {
                     waiting_for_abort_signal,
@@ -178,7 +187,10 @@ impl<F> Drop for JoinHandleFuture<F> {
 
         // After the future dropped see if there was a task awaiting its
         // destruction. Simultaneously flag this state as complete.
-        let prev = mem::replace(&mut *self.state.lock().unwrap(), JoinState::Complete);
+        let prev = mem::replace(
+            &mut *self.state.try_lock().expect("should not be contended"),
+            JoinState::Complete,
+        );
         let task = match prev {
             JoinState::Running {
                 waiting_for_abort_to_complete,

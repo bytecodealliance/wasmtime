@@ -12,7 +12,7 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trap_iadd_ifcout(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -31,7 +31,7 @@ block0(v0: i64, v1: i64):
 ;   adds x3, x0, x1
 ;   b.hs #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -48,7 +48,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   cbz x0, #8
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz(i64) {
 block0(v0: i64):
@@ -65,7 +65,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   cbnz x0, #8
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_i128(i128) {
 block0(v0: i128):
@@ -84,7 +84,7 @@ block0(v0: i128):
 ;   orr x3, x0, x1
 ;   cbz x3, #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz_i128(i128) {
 block0(v0: i128):
@@ -103,7 +103,7 @@ block0(v0: i128):
 ;   orr x3, x0, x1
 ;   cbnz x3, #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_icmp(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -123,7 +123,7 @@ block0(v0: i64, v1: i64):
 ;   cmp x0, x1
 ;   b.ne #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz_icmp(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -143,7 +143,7 @@ block0(v0: i64, v1: i64):
 ;   cmp x0, x1
 ;   b.eq #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_fcmp(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -163,7 +163,7 @@ block0(v0: f64, v1: f64):
 ;   fcmp d0, d1
 ;   b.ne #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz_fcmp(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -183,7 +183,7 @@ block0(v0: f64, v1: f64):
 ;   fcmp d0, d1
 ;   b.eq #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_uextend_icmp(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -204,7 +204,7 @@ block0(v0: i64, v1: i64):
 ;   cmp x0, x1
 ;   b.ne #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz_uextend_icmp(i64, i64) {
 block0(v0: i64, v1: i64):
@@ -225,7 +225,7 @@ block0(v0: i64, v1: i64):
 ;   cmp x0, x1
 ;   b.eq #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_uextend_fcmp(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -246,7 +246,7 @@ block0(v0: f64, v1: f64):
 ;   fcmp d0, d1
 ;   b.ne #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapnz_uextend_fcmp(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -267,7 +267,7 @@ block0(v0: f64, v1: f64):
 ;   fcmp d0, d1
 ;   b.eq #0xc
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_fcmp_one(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -293,7 +293,7 @@ block0(v0: f64, v1: f64):
 ;   and w8, w4, w6
 ;   cbnz w8, #0x18
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 
 function %trapz_fcmp_ueq(f64, f64) {
 block0(v0: f64, v1: f64):
@@ -319,5 +319,5 @@ block0(v0: f64, v1: f64):
 ;   and w8, w4, w6
 ;   cbnz w8, #0x18
 ;   ret
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1
+;   udf #0xc11f ; trap: user1
 

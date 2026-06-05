@@ -50,12 +50,14 @@
 //! store.  This is equivalent to `StoreContextMut::spawn` but more convenient to use
 //! in host functions.
 
+use self::error_contexts::GlobalErrorContextRefCount;
 use crate::bail_bug;
-use crate::component::func::{self, Func, call_post_return};
+use crate::component::func::{Func, call_post_return};
 use crate::component::{
     HasData, HasSelf, Instance, Resource, ResourceTable, ResourceTableError, RuntimeInstance,
 };
 use crate::fiber::{self, StoreFiber, StoreFiberYield};
+use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::store::{Store, StoreId, StoreInner, StoreOpaque, StoreToken};
 use crate::vm::component::{CallContext, ComponentInstance, InstanceState};
@@ -63,25 +65,22 @@ use crate::vm::{AlwaysMut, SendSyncPtr, VMFuncRef, VMMemoryDefinition, VMStore};
 use crate::{
     AsContext, AsContextMut, FuncType, Result, StoreContext, StoreContextMut, ValRaw, ValType, bail,
 };
-use error_contexts::GlobalErrorContextRefCount;
+use alloc::borrow::ToOwned;
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use core::any::Any;
+use core::cell::UnsafeCell;
+use core::fmt;
+use core::future;
+use core::future::Future;
+use core::marker::PhantomData;
+use core::mem::{self, ManuallyDrop, MaybeUninit};
+use core::ops::DerefMut;
+use core::pin::{Pin, pin};
+use core::ptr::{self, NonNull};
+use core::task::{Context, Poll, Waker};
 use futures::channel::oneshot;
-use futures::future::{self, FutureExt};
 use futures::stream::{FuturesUnordered, StreamExt};
 use futures_and_streams::{FlatAbi, ReturnCode, TransmitHandle, TransmitIndex};
-use std::any::Any;
-use std::borrow::ToOwned;
-use std::boxed::Box;
-use std::cell::UnsafeCell;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
-use std::fmt;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::mem::{self, ManuallyDrop, MaybeUninit};
-use std::ops::DerefMut;
-use std::pin::{Pin, pin};
-use std::ptr::{self, NonNull};
-use std::task::{Context, Poll, Waker};
-use std::vec::Vec;
 use table::{TableDebug, TableId};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, CanonicalOptions, CanonicalOptionsDataModel, MAX_FLAT_PARAMS,
@@ -94,6 +93,7 @@ use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{NUM_COMPONENT_CONTEXT_SLOTS, Trap};
 
 pub use abort::JoinHandle;
+pub use func::{FuncCallConcurrent, TypedFuncCallConcurrent};
 pub use future_stream_any::{FutureAny, StreamAny};
 pub use futures_and_streams::{
     Destination, DirectDestination, DirectSource, ErrorContext, FutureConsumer, FutureProducer,
@@ -104,6 +104,7 @@ pub(crate) use futures_and_streams::{ResourcePair, lower_error_context_to_index}
 
 mod abort;
 mod error_contexts;
+mod func;
 mod future_stream_any;
 mod futures_and_streams;
 pub(crate) mod table;
@@ -293,7 +294,7 @@ where
 /// time so the store is effectively being passed between futures.
 ///
 /// Rust's `Future` trait, however, has no means of passing a `Store`
-/// temporarily between futures. The [`Context`](std::task::Context) type does
+/// temporarily between futures. The [`Context`](core::task::Context) type does
 /// not have the ability to attach arbitrary information to it at this time.
 /// This type, [`Accessor`], is used to bridge this expressivity gap.
 ///
@@ -576,7 +577,7 @@ where
 
 /// Represents a task which may be provided to `Accessor::spawn`,
 /// `Accessor::forward`, or `StorecContextMut::spawn`.
-// TODO: Replace this with `std::ops::AsyncFnOnce` when that becomes a viable
+// TODO: Replace this with `core::ops::AsyncFnOnce` when that becomes a viable
 // option.
 //
 // As of this writing, it's not possible to specify e.g. `Send` and `Sync`
@@ -1527,6 +1528,30 @@ impl<T> StoreContextMut<'_, T> {
             closure(&mut accessor).await
         }
     }
+
+    /// Returns an iterator over the current async call stack defined by the
+    /// component model.
+    ///
+    /// This can be used, for example to correlate a host import call with which
+    /// root export task originally called it.
+    ///
+    /// Tasks are yielded "youngest first" where the first item in the iterator
+    /// is the current task, and the last item in the iterator is the original
+    /// call.
+    pub fn async_call_stack(&mut self) -> impl Iterator<Item = GuestTaskId> {
+        let state = self.0.concurrent_state_mut();
+        let mut cur = Some(state.current_thread);
+        core::iter::from_fn(move || {
+            while let Some(t) = cur {
+                cur = state.parent(t);
+                if let Some(thread) = t.guest() {
+                    return Some(GuestTaskId(thread.task));
+                }
+            }
+
+            None
+        })
+    }
 }
 
 impl StoreOpaque {
@@ -1684,32 +1709,23 @@ impl StoreOpaque {
             return Ok(true);
         }
         let state = self.concurrent_state_mut();
-        let mut cur = state.current_thread;
-        loop {
-            match cur {
-                CurrentThread::None => break Ok(true),
-                CurrentThread::Guest(thread) => {
-                    let task = state.get_mut(thread.task)?;
-
-                    // Note that we only compare top-level instance IDs here.
-                    // The idea is that the host is not allowed to recursively
-                    // enter a top-level instance even if the specific leaf
-                    // instance is not on the stack. This the behavior defined
-                    // in the spec, and it allows us to elide runtime checks in
-                    // guest-to-guest adapters.
-                    if task.instance.instance == instance.instance {
-                        break Ok(false);
-                    }
-                    cur = match task.caller {
-                        Caller::Host { caller, .. } => caller,
-                        Caller::Guest { thread } => thread.into(),
-                    };
-                }
-                CurrentThread::Host(id) => {
-                    cur = state.get_mut(id)?.caller.into();
+        let mut cur = Some(state.current_thread);
+        while let Some(t) = cur {
+            if let Some(thread) = t.guest() {
+                let task = state.get_mut(thread.task)?;
+                // Note that we only compare top-level instance IDs here.
+                // The idea is that the host is not allowed to recursively
+                // enter a top-level instance even if the specific leaf
+                // instance is not on the stack. This the behavior defined
+                // in the spec, and it allows us to elide runtime checks in
+                // guest-to-guest adapters.
+                if task.instance.instance == instance.instance {
+                    return Ok(false);
                 }
             }
+            cur = state.parent(t);
         }
+        Ok(true)
     }
 
     /// Helper function to retrieve the `InstanceState` for the
@@ -3712,7 +3728,7 @@ impl Instance {
             }
         };
         let memory = self.options_memory_mut(store, params.options);
-        let ptr = func::validate_inbounds_dynamic(
+        let ptr = crate::component::func::validate_inbounds_dynamic(
             &CanonicalAbiInfo::POINTER_PAIR,
             memory,
             &ValRaw::u32(params.payload),
@@ -4079,7 +4095,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
         // SAFETY: The `wasmtime_cranelift`-generated code that calls
         // this method will have ensured that `storage` is a valid
         // pointer containing at least `storage_len` items.
-        let params = unsafe { std::slice::from_raw_parts(storage, storage_len) }.to_vec();
+        let params = unsafe { core::slice::from_raw_parts(storage, storage_len) }.to_vec();
 
         unsafe {
             instance.prepare_call(
@@ -4132,7 +4148,7 @@ impl<T: 'static> VMComponentAsyncStore for StoreInner<T> {
                     // SAFETY: The `wasmtime_cranelift`-generated code that calls
                     // this method will have ensured that `storage` is a valid
                     // pointer containing at least `storage_len` items.
-                    Some(std::slice::from_raw_parts_mut(storage, storage_len)),
+                    Some(core::slice::from_raw_parts_mut(storage, storage_len)),
                 )
                 .map(drop)
         }
@@ -5351,6 +5367,21 @@ impl ConcurrentState {
     pub(crate) fn table(&mut self) -> &mut ResourceTable {
         self.table.get_mut()
     }
+
+    /// Returns the parent thread, if any, of `cur`.
+    fn parent(&mut self, cur: CurrentThread) -> Option<CurrentThread> {
+        match cur {
+            CurrentThread::Guest(thread) => {
+                let task = self.get_mut(thread.task).ok()?;
+                Some(match task.caller {
+                    Caller::Host { caller, .. } => caller,
+                    Caller::Guest { thread } => thread.into(),
+                })
+            }
+            CurrentThread::Host(id) => Some(self.get_mut(id).ok()?.caller.into()),
+            CurrentThread::None => None,
+        }
+    }
 }
 
 /// Provide a type hint to compiler about the shape of a parameter lower
@@ -5372,37 +5403,23 @@ fn for_any_lift<
     fun
 }
 
-/// Wrap the specified future in a `poll_fn` which asserts that the future is
-/// only polled from the event loop of the specified `Store`.
-///
-/// See `StoreContextMut::run_concurrent` for details.
-fn checked<F: Future + Send + 'static>(
-    id: StoreId,
-    fut: F,
-) -> impl Future<Output = F::Output> + Send + 'static {
-    async move {
-        let mut fut = pin!(fut);
-        future::poll_fn(move |cx| {
-            let message = "\
-                `Future`s which depend on asynchronous component tasks, streams, or \
-                futures to complete may only be polled from the event loop of the \
-                store to which they belong.  Please use \
-                `StoreContextMut::{run_concurrent,spawn}` to poll or await them.\
-            ";
-            tls::try_get(|store| {
-                let matched = match store {
-                    tls::TryGet::Some(store) => store.id() == id,
-                    tls::TryGet::Taken | tls::TryGet::None => false,
-                };
+fn check_ambient_store(id: StoreId) {
+    let message = "\
+        `Future`s which depend on asynchronous component tasks, streams, or \
+        futures to complete may only be polled from the event loop of the \
+        store to which they belong.  Please use \
+        `StoreContextMut::{run_concurrent,spawn}` to poll or await them.\
+    ";
+    tls::try_get(|store| {
+        let matched = match store {
+            tls::TryGet::Some(store) => store.id() == id,
+            tls::TryGet::Taken | tls::TryGet::None => false,
+        };
 
-                if !matched {
-                    panic!("{message}")
-                }
-            });
-            fut.as_mut().poll(cx)
-        })
-        .await
-    }
+        if !matched {
+            panic!("{message}")
+        }
+    });
 }
 
 /// Assert that `StoreContextMut::run_concurrent` has not been called from
@@ -5434,6 +5451,17 @@ enum WaitableCheck {
     Wait,
     Poll,
 }
+
+/// An identifier representing a guest task within a component.
+///
+/// This can be acquired by calling [`Func::start_call_concurrent`] or
+/// [`TypedFunc::start_call_concurrent`] and then using the
+/// [`FuncCallConcurrent::task`] accessor, for example. This can then be
+/// reflected on with [`StoreContextMut::async_call_stack`].
+///
+/// [`TypedFunc::start_call_concurrent`]: crate::component::TypedFunc::start_call_concurrent
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct GuestTaskId(TableId<GuestTask>);
 
 /// Represents a guest task called from the host, prepared using `prepare_call`.
 pub(crate) struct PreparedCall<R> {
@@ -5578,36 +5606,63 @@ pub(crate) fn prepare_call<T, R>(
     })
 }
 
-/// Queue a call previously prepared using `prepare_call` to be run as part of
-/// the associated `ComponentInstance`'s event loop.
-///
-/// The returned future will resolve to the result once it is available, but
-/// must only be polled via the instance's event loop. See
-/// `StoreContextMut::run_concurrent` for details.
-pub(crate) fn queue_call<T: 'static, R: Send + 'static>(
-    mut store: StoreContextMut<T>,
-    prepared: PreparedCall<R>,
-) -> Result<impl Future<Output = Result<R>> + Send + 'static + use<T, R>> {
-    let PreparedCall {
-        handle,
-        thread,
-        param_count,
-        rx,
-        ..
-    } = prepared;
+pub(crate) struct QueuedCall<R> {
+    store: StoreId,
+    task: TableId<GuestTask>,
+    rx: oneshot::Receiver<LiftedResult>,
+    _marker: PhantomData<fn() -> R>,
+}
 
-    queue_call0(store.as_context_mut(), handle, thread, param_count)?;
+impl<R> QueuedCall<R> {
+    /// Queue a call previously prepared using `prepare_call` to be run as part of
+    /// the associated `ComponentInstance`'s event loop.
+    ///
+    /// The returned future will resolve to the result once it is available, but
+    /// must only be polled via the instance's event loop. See
+    /// `StoreContextMut::run_concurrent` for details.
+    pub(crate) fn new<T: 'static>(
+        mut store: StoreContextMut<T>,
+        prepared: PreparedCall<R>,
+    ) -> Result<QueuedCall<R>> {
+        let PreparedCall {
+            handle,
+            thread,
+            param_count,
+            rx,
+            ..
+        } = prepared;
 
-    Ok(checked(
-        store.0.id(),
-        rx.map(move |result| match result {
+        queue_call0(store.as_context_mut(), handle, thread, param_count)?;
+
+        Ok(QueuedCall {
+            store: store.0.id(),
+            task: thread.task,
+            rx,
+            _marker: PhantomData,
+        })
+    }
+
+    fn task(&self) -> GuestTaskId {
+        GuestTaskId(self.task)
+    }
+}
+
+impl<R> Future for QueuedCall<R>
+where
+    R: 'static,
+{
+    type Output = Result<R>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        check_ambient_store(self.store);
+        Pin::new(&mut self.rx).poll(cx).map(|result| match result {
             Ok(r) => match r.downcast() {
                 Ok(r) => Ok(*r),
                 Err(_) => bail_bug!("wrong type of value produced"),
             },
-            Err(e) => Err(e.into()),
-        }),
-    ))
+            Err(oneshot::Canceled) => bail_bug!("channel erroneously dropped"),
+        })
+    }
 }
 
 /// Queue a call previously prepared using `prepare_call` to be run as part of

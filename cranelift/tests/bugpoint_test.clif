@@ -430,7 +430,8 @@ block2:
     trap user1
 
 block3:
-    v125 = iadd_imm.i64 v124, 8
+    v1075 = iconst.i64 8
+    v125 = iadd v124, v1075
     v126 = load.i64 v125
     v127 = iconst.i64 0
     v128 = icmp ugt v126, v127
@@ -446,7 +447,8 @@ block4:
     trap user1
 
 block5:
-    v137 = iadd_imm.i64 v136, 16
+    v1076 = iconst.i64 16
+    v137 = iadd v136, v1076
     v138 = load.i64 v137+42
     v139 = iconst.i64 0
     v140 = icmp ugt v138, v139
@@ -463,7 +465,8 @@ block6:
 
 block7:
     v149 = load.i64 v148
-    v150 = iadd_imm.i64 v148, 16
+    v1077 = iconst.i64 16
+    v150 = iadd v148, v1077
     v151 = load.i64 v150
     call fn6(v7, v149, v151)
     jump block8
@@ -487,7 +490,8 @@ block10:
 
 block11:
     v161 = load.i64 v160
-    v162 = iadd_imm.i64 v160, 8
+    v1078 = iconst.i64 8
+    v162 = iadd v160, v1078
     v163 = load.i64 v162
     call fn10(v9, v161, v163)
     jump block12
@@ -532,7 +536,8 @@ block17:
 
 block18:
     v186 = load.i64 v185
-    v187 = iadd_imm.i64 v185, 16
+    v1079 = iconst.i64 16
+    v187 = iadd v185, v1079
     v188 = load.i64 v187
     v189 = iadd v186, v188
     v190 = iconst.i8 0
@@ -540,7 +545,8 @@ block18:
     v192 = stack_addr.i64 ss108
     v193 = load.i64 aligned v192
     v194 = load.i64 aligned v192+8
-    v195 = iadd_imm.i64 v12, 8
+    v1080 = iconst.i64 8
+    v195 = iadd v12, v1080
     v196 = load.i8 v195
     v197 = uextend.i32 v196
     brif v197, block164, block19
@@ -560,7 +566,8 @@ block19:
     v205 = stack_addr.i64 ss109
     v206 = load.i64 aligned v205
     v207 = load.i64 aligned v205+8
-    v208 = iadd_imm.i64 v13, 8
+    v1081 = iconst.i64 8
+    v208 = iadd v13, v1081
     v209 = load.i8 v208
     v210 = uextend.i32 v209
     brif v210, block163, block20
@@ -585,7 +592,8 @@ block21:
 
 block22:
     v223 = load.i64 v222
-    v224 = iadd_imm.i64 v222, 16
+    v1082 = iconst.i64 16
+    v224 = iadd v222, v1082
     v225 = load.i64 v224
     v226 = iadd v223, v225
     v227 = iconst.i8 0
@@ -593,7 +601,8 @@ block22:
     v229 = stack_addr.i64 ss110
     v230 = load.i64 aligned v229
     v231 = load.i64 aligned v229+8
-    v232 = iadd_imm.i64 v16, 8
+    v1083 = iconst.i64 8
+    v232 = iadd v16, v1083
     v233 = load.i8 v232
     v234 = uextend.i32 v233
     brif v234, block162, block23
@@ -604,15 +613,18 @@ block162:
 
 block23:
     v236 = load.i64 v16
-    v238 = iadd_imm.i64 v237, 24
+    v1084 = iconst.i64 24
+    v238 = iadd v237, v1084
     v239 = load.i16 v238
-    v240 = iadd_imm.i64 v15, 8
+    v1085 = iconst.i64 8
+    v240 = iadd v15, v1085
     call fn22(v14, v15)
     jump block24
 
 block24:
     v242 = load.i64 v241
-    v243 = iadd_imm.i64 v241, 8
+    v1086 = iconst.i64 8
+    v243 = iadd v241, v1086
     v244 = load.i64 v243
     v245 = isub v242, v244
     v246 = iconst.i8 0
@@ -620,7 +632,8 @@ block24:
     v248 = stack_addr.i64 ss111
     v249 = load.i64 aligned v248
     v250 = load.i64 aligned v248+8
-    v251 = iadd_imm.i64 v19, 8
+    v1087 = iconst.i64 8
+    v251 = iadd v19, v1087
     v252 = load.i8 v251
     v253 = uextend.i32 v252
     brif v253, block161, block25
@@ -631,26 +644,33 @@ block161:
 
 block25:
     v255 = load.i64 v19
-    v257 = iadd_imm.i64 v256, 24
+    v1088 = iconst.i64 24
+    v257 = iadd v256, v1088
     v258 = load.i16 v257
-    v259 = iadd_imm.i64 v18, 8
-    v260 = iadd_imm.i64 v14, 8
+    v1089 = iconst.i64 8
+    v259 = iadd v18, v1089
+    v1090 = iconst.i64 8
+    v260 = iadd v14, v1090
     v261 = load.i16 v260
     call fn24(v17, v18, v261)
     jump block26
 
 block26:
     v263 = load.i64 v262
-    v264 = iadd_imm.i64 v262, 24
+    v1091 = iconst.i64 24
+    v264 = iadd v262, v1091
     v265 = load.i16 v264
-    v266 = iadd_imm.i64 v21, 8
-    v267 = iadd_imm.i64 v14, 8
+    v1092 = iconst.i64 8
+    v266 = iadd v21, v1092
+    v1093 = iconst.i64 8
+    v267 = iadd v14, v1093
     v268 = load.i16 v267
     call fn25(v20, v21, v268)
     jump block27
 
 block27:
-    v269 = iadd_imm.i64 v14, 8
+    v1094 = iconst.i64 8
+    v269 = iadd v14, v1094
     v270 = load.i16 v269
     v271 = iconst.i16 -60
     v272 = isub v271, v270
@@ -658,7 +678,8 @@ block27:
     v274 = stack_addr.i64 ss112
     v275 = stack_addr.i64 ss112
     v276 = load.i32 aligned v275
-    v277 = iadd_imm.i64 v24, 2
+    v1095 = iconst.i64 2
+    v277 = iadd v24, v1095
     v278 = load.i8 v277
     v279 = uextend.i32 v278
     brif v279, block160, block28
@@ -675,7 +696,8 @@ block28:
     v285 = stack_addr.i64 ss113
     v286 = stack_addr.i64 ss113
     v287 = load.i32 aligned v286
-    v288 = iadd_imm.i64 v25, 2
+    v1096 = iconst.i64 2
+    v288 = iadd v25, v1096
     v289 = load.i8 v288
     v290 = uextend.i32 v289
     brif v290, block159, block29
@@ -687,7 +709,8 @@ block159:
 block29:
     v292 = load.i16 v25
         v317 -> v292
-    v293 = iadd_imm.i64 v14, 8
+    v1097 = iconst.i64 8
+    v293 = iadd v14, v1097
     v294 = load.i16 v293
     v295 = iconst.i16 -32
     v296 = isub v295, v294
@@ -695,7 +718,8 @@ block29:
     v298 = stack_addr.i64 ss114
     v299 = stack_addr.i64 ss114
     v300 = load.i32 aligned v299
-    v301 = iadd_imm.i64 v26, 2
+    v1098 = iconst.i64 2
+    v301 = iadd v26, v1098
     v302 = load.i8 v301
     v303 = uextend.i32 v302
     brif v303, block158, block30
@@ -712,7 +736,8 @@ block30:
     v309 = stack_addr.i64 ss115
     v310 = stack_addr.i64 ss115
     v311 = load.i32 aligned v310
-    v312 = iadd_imm.i64 v27, 2
+    v1099 = iconst.i64 2
+    v312 = iadd v27, v1099
     v313 = load.i8 v312
     v314 = uextend.i32 v313
     brif v314, block157, block31
@@ -729,7 +754,8 @@ block31:
 block32:
     v318 = load.i16 v23
         v1007 -> v318
-    v319 = iadd_imm.i64 v23, 8
+    v1100 = iconst.i64 8
+    v319 = iadd v23, v1100
     v320 = load.i64 aligned v319
     v321 = load.i64 aligned v319+8
     call fn31(v28, v14, v22)
@@ -749,12 +775,16 @@ block35:
     brif v323, block36, block42
 
 block36:
-    v324 = iadd_imm.i64 v28, 8
-    v325 = iadd_imm.i64 v29, 8
-    v326 = iadd_imm.i64 v31, 8
+    v1101 = iconst.i64 8
+    v324 = iadd v28, v1101
+    v1102 = iconst.i64 8
+    v325 = iadd v29, v1102
+    v1103 = iconst.i64 8
+    v326 = iadd v31, v1103
     v327 = load.i64 v31
         v340 -> v327
-    v328 = iadd_imm.i64 v31, 8
+    v1104 = iconst.i64 8
+    v328 = iadd v31, v1104
     v329 = load.i64 v328
         v341 -> v329
     v330 = load.i16 v327
@@ -769,9 +799,11 @@ block36:
 block37:
     v338 = global_value.i64 gv22
     v339 = iconst.i64 3
-    v342 = iadd_imm.i64 v36, 8
+    v1105 = iconst.i64 8
+    v342 = iadd v36, v1105
     v343 = load.i64 v36
-    v344 = iadd_imm.i64 v36, 8
+    v1106 = iconst.i64 8
+    v344 = iadd v36, v1106
     v345 = load.i64 v344
         v347 -> v345
     v346 = func_addr.i64 fn34
@@ -788,12 +820,14 @@ block39:
 
 block40:
     v349 = iconst.i64 0
-    v350 = imul_imm v349, 16
+    v1152 = iconst.i64 16
+    v350 = imul v349, v1152
     v351 = iadd.i64 v35, v350
     v352 = load.i64 aligned v39
     v353 = load.i64 aligned v39+8
     v354 = iconst.i64 1
-    v355 = imul_imm v354, 16
+    v1153 = iconst.i64 16
+    v355 = imul v354, v1153
     v356 = iadd.i64 v35, v355
     v357 = load.i64 aligned v40
     v358 = load.i64 aligned v40+8
@@ -813,12 +847,16 @@ block42:
     brif v363, block43, block49(v1007)
 
 block43:
-    v364 = iadd_imm.i64 v28, 8
-    v365 = iadd_imm.i64 v30, 8
-    v366 = iadd_imm.i64 v41, 8
+    v1107 = iconst.i64 8
+    v364 = iadd v28, v1107
+    v1108 = iconst.i64 8
+    v365 = iadd v30, v1108
+    v1109 = iconst.i64 8
+    v366 = iadd v41, v1109
     v367 = load.i64 v41
         v380 -> v367
-    v368 = iadd_imm.i64 v41, 8
+    v1110 = iconst.i64 8
+    v368 = iadd v41, v1110
     v369 = load.i64 v368
         v381 -> v369
     v370 = load.i16 v367
@@ -833,9 +871,11 @@ block43:
 block44:
     v378 = global_value.i64 gv25
     v379 = iconst.i64 3
-    v382 = iadd_imm.i64 v46, 8
+    v1111 = iconst.i64 8
+    v382 = iadd v46, v1111
     v383 = load.i64 v46
-    v384 = iadd_imm.i64 v46, 8
+    v1112 = iconst.i64 8
+    v384 = iadd v46, v1112
     v385 = load.i64 v384
         v387 -> v385
     v386 = func_addr.i64 fn41
@@ -852,12 +892,14 @@ block46:
 
 block47:
     v389 = iconst.i64 0
-    v390 = imul_imm v389, 16
+    v1154 = iconst.i64 16
+    v390 = imul v389, v1154
     v391 = iadd.i64 v45, v390
     v392 = load.i64 aligned v49
     v393 = load.i64 aligned v49+8
     v394 = iconst.i64 1
-    v395 = imul_imm v394, 16
+    v1155 = iconst.i64 16
+    v395 = imul v394, v1155
     v396 = iadd.i64 v45, v395
     v397 = load.i64 aligned v50
     v398 = load.i64 aligned v50+8
@@ -881,7 +923,8 @@ block49(v1006: i16):
     v407 = stack_addr.i64 ss116
     v408 = load.i64 aligned v407
     v409 = load.i64 aligned v407+8
-    v410 = iadd_imm.i64 v51, 8
+    v1113 = iconst.i64 8
+    v410 = iadd v51, v1113
     v411 = load.i8 v410
     v412 = uextend.i32 v411
     brif v412, block156, block50
@@ -904,7 +947,8 @@ block50:
     v420 = stack_addr.i64 ss117
     v421 = load.i64 aligned v420
     v422 = load.i64 aligned v420+8
-    v423 = iadd_imm.i64 v52, 8
+    v1114 = iconst.i64 8
+    v423 = iadd v52, v1114
     v424 = load.i8 v423
     v425 = uextend.i32 v424
     brif v425, block155, block51
@@ -916,7 +960,8 @@ block155:
 block51:
     v427 = load.i64 v52
         v509 -> v427
-    v428 = iadd_imm.i64 v28, 8
+    v1115 = iconst.i64 8
+    v428 = iadd v28, v1115
     v429 = load.i16 v428
         v435 -> v429
     v430 = iconst.i16 0x8000
@@ -940,7 +985,8 @@ block52:
     v443 = stack_addr.i64 ss118
     v444 = load.i64 aligned v443
     v445 = load.i64 aligned v443+8
-    v446 = iadd_imm.i64 v53, 8
+    v1116 = iconst.i64 8
+    v446 = iadd v53, v1116
     v447 = load.i8 v446
     v448 = uextend.i32 v447
     brif v448, block153, block53
@@ -961,7 +1007,8 @@ block53:
     v458 = stack_addr.i64 ss119
     v459 = load.i64 aligned v458
     v460 = load.i64 aligned v458+8
-    v461 = iadd_imm.i64 v54, 8
+    v1117 = iconst.i64 8
+    v461 = iadd v54, v1117
     v462 = load.i8 v461
     v463 = uextend.i32 v462
     brif v463, block152, block54
@@ -979,7 +1026,8 @@ block54:
     v470 = stack_addr.i64 ss120
     v471 = load.i64 aligned v470
     v472 = load.i64 aligned v470+8
-    v473 = iadd_imm.i64 v55, 8
+    v1118 = iconst.i64 8
+    v473 = iadd v55, v1118
     v474 = load.i8 v473
     v475 = uextend.i32 v474
     brif v475, block151, block55
@@ -997,7 +1045,8 @@ block55:
 block56:
     v481 = load.i8 v56
         v548 -> v481
-    v482 = iadd_imm.i64 v56, 4
+    v1119 = iconst.i64 4
+    v482 = iadd v56, v1119
     v483 = load.i32 v482
         v550 -> v483
     v484 = iconst.i64 0
@@ -1007,7 +1056,8 @@ block56:
     v489 = stack_addr.i64 ss121
     v490 = stack_addr.i64 ss121
     v491 = load.i32 aligned v490
-    v492 = iadd_imm.i64 v57, 2
+    v1120 = iconst.i64 2
+    v492 = iadd v57, v1120
     v493 = load.i8 v492
     v494 = uextend.i32 v493
     brif v494, block150, block57
@@ -1024,7 +1074,8 @@ block57:
     v500 = stack_addr.i64 ss122
     v501 = stack_addr.i64 ss122
     v502 = load.i32 aligned v501
-    v503 = iadd_imm.i64 v58, 2
+    v1121 = iconst.i64 2
+    v503 = iadd v58, v1121
     v504 = load.i8 v503
     v505 = uextend.i32 v504
     brif v505, block149, block58
@@ -1041,7 +1092,8 @@ block58:
     v513 = stack_addr.i64 ss123
     v514 = load.i64 aligned v513
     v515 = load.i64 aligned v513+8
-    v516 = iadd_imm.i64 v59, 8
+    v1122 = iconst.i64 8
+    v516 = iadd v59, v1122
     v517 = load.i8 v516
     v518 = uextend.i32 v517
     brif v518, block148, block59
@@ -1060,7 +1112,8 @@ block59:
     v526 = stack_addr.i64 ss124
     v527 = load.i64 aligned v526
     v528 = load.i64 aligned v526+8
-    v529 = iadd_imm.i64 v60, 8
+    v1123 = iconst.i64 8
+    v529 = iadd v60, v1123
     v530 = load.i8 v529
     v531 = uextend.i32 v530
     brif v531, block147, block60
@@ -1078,7 +1131,8 @@ block60:
     v538 = stack_addr.i64 ss125
     v539 = load.i64 aligned v538
     v540 = load.i64 aligned v538+8
-    v541 = iadd_imm.i64 v61, 8
+    v1124 = iconst.i64 8
+    v541 = iadd v61, v1124
     v542 = load.i8 v541
     v543 = uextend.i32 v542
     brif v543, block146, block61
@@ -1189,7 +1243,8 @@ block68(v584: i32):
     v589 = stack_addr.i64 ss126
     v590 = stack_addr.i64 ss126
     v591 = load.i16 aligned v590
-    v592 = iadd_imm.i64 v64, 1
+    v1125 = iconst.i64 1
+    v592 = iadd v64, v1125
     v593 = load.i8 v592
     v594 = uextend.i32 v593
     brif v594, block143, block69
@@ -1212,7 +1267,8 @@ block142:
 block70:
     v603 = load.i64 v3
     v604 = load.i64 v3+8
-    v606 = imul_imm.i64 v605, 1
+    v1156 = iconst.i64 1
+    v606 = imul v605, v1156
     v607 = iadd v603, v606
     v608 = load.i8 aligned v64
     v610 = iconst.i64 1
@@ -1222,7 +1278,8 @@ block70:
     v614 = stack_addr.i64 ss127
     v615 = load.i64 aligned v614
     v616 = load.i64 aligned v614+8
-    v617 = iadd_imm.i64 v65, 8
+    v1126 = iconst.i64 8
+    v617 = iadd v65, v1126
     v618 = load.i8 v617
     v619 = uextend.i32 v618
     brif v619, block141, block71
@@ -1244,7 +1301,8 @@ block71:
     v628 = stack_addr.i64 ss128
     v629 = load.i64 aligned v628
     v630 = load.i64 aligned v628+8
-    v631 = iadd_imm.i64 v66, 8
+    v1127 = iconst.i64 8
+    v631 = iadd v66, v1127
     v632 = load.i8 v631
     v633 = uextend.i32 v632
     brif v633, block140, block72
@@ -1261,7 +1319,8 @@ block72:
     v640 = stack_addr.i64 ss129
     v641 = load.i64 aligned v640
     v642 = load.i64 aligned v640+8
-    v643 = iadd_imm.i64 v67, 8
+    v1128 = iconst.i64 8
+    v643 = iadd v67, v1128
     v644 = load.i8 v643
     v645 = uextend.i32 v644
     brif v645, block139, block73
@@ -1287,7 +1346,8 @@ block74:
     v658 = stack_addr.i64 ss130
     v659 = load.i64 aligned v658
     v660 = load.i64 aligned v658+8
-    v661 = iadd_imm.i64 v68, 8
+    v1129 = iconst.i64 8
+    v661 = iadd v68, v1129
     v662 = load.i8 v661
     v663 = uextend.i32 v662
     brif v663, block138, block75
@@ -1317,7 +1377,8 @@ block76:
     v682 = stack_addr.i64 ss131
     v683 = load.i64 aligned v682
     v684 = load.i64 aligned v682+8
-    v685 = iadd_imm.i64 v74, 8
+    v1130 = iconst.i64 8
+    v685 = iadd v74, v1130
     v686 = load.i8 v685
     v687 = uextend.i32 v686
     brif v687, block137, block77
@@ -1351,10 +1412,12 @@ block81:
 
 block82:
     v703 = global_value.i64 gv50
-    v704 = iadd_imm.i64 v75, 8
+    v1131 = iconst.i64 8
+    v704 = iadd v75, v1131
     v705 = load.i64 v75
         v718 -> v705
-    v706 = iadd_imm.i64 v75, 8
+    v1132 = iconst.i64 8
+    v706 = iadd v75, v1132
     v707 = load.i64 v706
         v719 -> v707
     v708 = load.i32 v705
@@ -1369,9 +1432,11 @@ block82:
 block83:
     v716 = global_value.i64 gv51
     v717 = iconst.i64 3
-    v720 = iadd_imm.i64 v80, 8
+    v1133 = iconst.i64 8
+    v720 = iadd v80, v1133
     v721 = load.i64 v80
-    v722 = iadd_imm.i64 v80, 8
+    v1134 = iconst.i64 8
+    v722 = iadd v80, v1134
     v723 = load.i64 v722
         v725 -> v723
     v724 = func_addr.i64 fn73
@@ -1388,12 +1453,14 @@ block85:
 
 block86:
     v727 = iconst.i64 0
-    v728 = imul_imm v727, 16
+    v1157 = iconst.i64 16
+    v728 = imul v727, v1157
     v729 = iadd.i64 v79, v728
     v730 = load.i64 aligned v83
     v731 = load.i64 aligned v83+8
     v732 = iconst.i64 1
-    v733 = imul_imm v732, 16
+    v1158 = iconst.i64 16
+    v733 = imul v732, v1158
     v734 = iadd.i64 v79, v733
     v735 = load.i64 aligned v84
     v736 = load.i64 aligned v84+8
@@ -1414,10 +1481,12 @@ block88:
 
 block89:
     v742 = global_value.i64 gv54
-    v743 = iadd_imm.i64 v85, 8
+    v1135 = iconst.i64 8
+    v743 = iadd v85, v1135
     v744 = load.i64 v85
         v757 -> v744
-    v745 = iadd_imm.i64 v85, 8
+    v1136 = iconst.i64 8
+    v745 = iadd v85, v1136
     v746 = load.i64 v745
         v758 -> v746
     v747 = load.i16 v744
@@ -1432,9 +1501,11 @@ block89:
 block90:
     v755 = global_value.i64 gv55
     v756 = iconst.i64 3
-    v759 = iadd_imm.i64 v90, 8
+    v1137 = iconst.i64 8
+    v759 = iadd v90, v1137
     v760 = load.i64 v90
-    v761 = iadd_imm.i64 v90, 8
+    v1138 = iconst.i64 8
+    v761 = iadd v90, v1138
     v762 = load.i64 v761
         v764 -> v762
     v763 = func_addr.i64 fn80
@@ -1451,12 +1522,14 @@ block92:
 
 block93:
     v766 = iconst.i64 0
-    v767 = imul_imm v766, 16
+    v1159 = iconst.i64 16
+    v767 = imul v766, v1159
     v768 = iadd.i64 v89, v767
     v769 = load.i64 aligned v93
     v770 = load.i64 aligned v93+8
     v771 = iconst.i64 1
-    v772 = imul_imm v771, 16
+    v1160 = iconst.i64 16
+    v772 = imul v771, v1160
     v773 = iadd.i64 v89, v772
     v774 = load.i64 aligned v94
     v775 = load.i64 aligned v94+8
@@ -1482,7 +1555,8 @@ block96:
     v786 = stack_addr.i64 ss132
     v787 = stack_addr.i64 ss132
     v788 = load.i32 aligned v787
-    v789 = iadd_imm.i64 v95, 2
+    v1139 = iconst.i64 2
+    v789 = iadd v95, v1139
     v790 = load.i8 v789
     v791 = uextend.i32 v790
     brif v791, block136, block97
@@ -1535,7 +1609,8 @@ block99(v804: i64, v1035: i64, v1037: i64, v1039: i64, v1044: i64, v1052: i16, v
     v809 = stack_addr.i64 ss133
     v810 = load.i64 aligned v809
     v811 = load.i64 aligned v809+8
-    v812 = iadd_imm.i64 v96, 8
+    v1140 = iconst.i64 8
+    v812 = iadd v96, v1140
     v813 = load.i8 v812
     v814 = uextend.i32 v813
     brif v814, block134, block100
@@ -1556,7 +1631,8 @@ block100:
     v822 = stack_addr.i64 ss134
     v823 = load.i64 aligned v822
     v824 = load.i64 aligned v822+8
-    v825 = iadd_imm.i64 v97, 8
+    v1141 = iconst.i64 8
+    v825 = iadd v97, v1141
     v826 = load.i8 v825
     v827 = uextend.i32 v826
     brif v827, block133, block101
@@ -1579,7 +1655,8 @@ block101:
     v835 = stack_addr.i64 ss135
     v836 = load.i64 aligned v835
     v837 = load.i64 aligned v835+8
-    v838 = iadd_imm.i64 v98, 8
+    v1142 = iconst.i64 8
+    v838 = iadd v98, v1142
     v839 = load.i8 v838
     v840 = uextend.i32 v839
     brif v840, block132, block102
@@ -1600,7 +1677,8 @@ block102:
     v848 = stack_addr.i64 ss136
     v849 = load.i64 aligned v848
     v850 = load.i64 aligned v848+8
-    v851 = iadd_imm.i64 v99, 8
+    v1143 = iconst.i64 8
+    v851 = iadd v99, v1143
     v852 = load.i8 v851
     v853 = uextend.i32 v852
     brif v853, block131, block103
@@ -1619,7 +1697,8 @@ block103:
     v862 = stack_addr.i64 ss137
     v863 = load.i64 aligned v862
     v864 = load.i64 aligned v862+8
-    v865 = iadd_imm.i64 v100, 8
+    v1144 = iconst.i64 8
+    v865 = iadd v100, v1144
     v866 = load.i8 v865
     v867 = uextend.i32 v866
     brif v867, block130, block104
@@ -1637,7 +1716,8 @@ block104:
     v874 = stack_addr.i64 ss138
     v875 = load.i64 aligned v874
     v876 = load.i64 aligned v874+8
-    v877 = iadd_imm.i64 v101, 8
+    v1145 = iconst.i64 8
+    v877 = iadd v101, v1145
     v878 = load.i8 v877
     v879 = uextend.i32 v878
     brif v879, block129, block105
@@ -1683,7 +1763,8 @@ block109(v896: i64):
     v901 = stack_addr.i64 ss139
     v902 = stack_addr.i64 ss139
     v903 = load.i16 aligned v902
-    v904 = iadd_imm.i64 v102, 1
+    v1146 = iconst.i64 1
+    v904 = iadd v102, v1146
     v905 = load.i8 v904
     v906 = uextend.i32 v905
     brif v906, block128, block110
@@ -1706,7 +1787,8 @@ block127:
 block111:
     v915 = load.i64 v3
     v916 = load.i64 v3+8
-    v918 = imul_imm.i64 v917, 1
+    v1161 = iconst.i64 1
+    v918 = imul v917, v1161
     v919 = iadd v915, v918
     v920 = load.i8 aligned v102
     v922 = iconst.i64 1
@@ -1716,7 +1798,8 @@ block111:
     v926 = stack_addr.i64 ss140
     v927 = load.i64 aligned v926
     v928 = load.i64 aligned v926+8
-    v929 = iadd_imm.i64 v103, 8
+    v1147 = iconst.i64 8
+    v929 = iadd v103, v1147
     v930 = load.i8 v929
     v931 = uextend.i32 v930
     brif v931, block126, block112
@@ -1741,7 +1824,8 @@ block113:
     v944 = stack_addr.i64 ss141
     v945 = load.i64 aligned v944
     v946 = load.i64 aligned v944+8
-    v947 = iadd_imm.i64 v104, 8
+    v1148 = iconst.i64 8
+    v947 = iadd v104, v1148
     v948 = load.i8 v947
     v949 = uextend.i32 v948
     brif v949, block125, block114
@@ -1771,7 +1855,8 @@ block115:
     v968 = stack_addr.i64 ss142
     v969 = load.i64 aligned v968
     v970 = load.i64 aligned v968+8
-    v971 = iadd_imm.i64 v110, 8
+    v1149 = iconst.i64 8
+    v971 = iadd v110, v1149
     v972 = load.i8 v971
     v973 = uextend.i32 v972
     brif v973, block123, block116
@@ -1788,7 +1873,8 @@ block116:
     v980 = stack_addr.i64 ss143
     v981 = load.i64 aligned v980
     v982 = load.i64 aligned v980+8
-    v983 = iadd_imm.i64 v111, 8
+    v1150 = iconst.i64 8
+    v983 = iadd v111, v1150
     v984 = load.i8 v983
     v985 = uextend.i32 v984
     brif v985, block122, block117
@@ -1813,7 +1899,8 @@ block119:
     v997 = stack_addr.i64 ss144
     v998 = stack_addr.i64 ss144
     v999 = load.i32 aligned v998
-    v1000 = iadd_imm.i64 v112, 2
+    v1151 = iconst.i64 2
+    v1000 = iadd v112, v1151
     v1001 = load.i8 v1000
     v1002 = uextend.i32 v1001
     brif v1002, block121, block120

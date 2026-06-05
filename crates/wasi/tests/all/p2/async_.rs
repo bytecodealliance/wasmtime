@@ -435,3 +435,8 @@ async fn file_truncation_readonly(component_path: &str) {
     let contents = std::fs::read(&file).expect("read truncation test file");
     assert_eq!(EXPECTED_CONTENTS, contents);
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn p2_clocks_zero_wait() {
+    run(P2_CLOCKS_ZERO_WAIT_COMPONENT, |_| {}).await.unwrap()
+}

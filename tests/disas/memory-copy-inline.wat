@@ -24,18 +24,18 @@
 ;; @0024                               v6 = load.i64 notrap aligned v0+64
 ;; @0024                               v7 = uextend.i64 v2
 ;;                                     v35 = iconst.i64 16
-;; @0024                               v10 = iadd v7, v35  ; v35 = 16
-;; @0024                               v11 = icmp ugt v10, v6
-;; @0024                               trapnz v11, heap_oob
-;; @0024                               v18 = uextend.i64 v3
-;; @0024                               v21 = iadd v18, v35  ; v35 = 16
-;; @0024                               v22 = icmp ugt v21, v6
-;; @0024                               trapnz v22, heap_oob
-;; @0024                               v12 = load.i64 notrap aligned readonly can_move v0+56
-;; @0024                               v26 = iadd v12, v18
-;; @0024                               v28 = load.i8x16 notrap aligned little v26
-;; @0024                               v15 = iadd v12, v7
-;; @0024                               store notrap aligned little v28, v15
+;; @0024                               v11 = iadd v7, v35  ; v35 = 16
+;; @0024                               v12 = icmp ugt v11, v6
+;; @0024                               trapnz v12, heap_oob
+;; @0024                               v20 = uextend.i64 v3
+;; @0024                               v24 = iadd v20, v35  ; v35 = 16
+;; @0024                               v25 = icmp ugt v24, v6
+;; @0024                               trapnz v25, heap_oob
+;; @0024                               v13 = load.i64 notrap aligned readonly can_move v0+56
+;; @0024                               v30 = iadd v13, v20
+;; @0024                               v32 = load.i8x16 notrap aligned little v30
+;; @0024                               v17 = iadd v13, v7
+;; @0024                               store notrap aligned little v32, v17
 ;; @0028                               jump block1
 ;;
 ;;                                 block1:

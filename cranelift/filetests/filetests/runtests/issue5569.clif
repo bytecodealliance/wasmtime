@@ -16,7 +16,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v55 = iconst.i32 0
     v56 = iconst.i32 1
     v57 = icmp eq v2, v55  ; v55 = 0
-    v58 = ishl_imm v56, 31  ; v56 = 1
+    v802 = iconst.i32 31
+    v58 = ishl v56, v802 ; v56 = 1
     v59 = isub v55, v56  ; v55 = 0, v56 = 1
     v60 = icmp eq v2, v58
     v61 = icmp eq v2, v59
@@ -27,7 +28,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v65 = iconst.i32 0
     v66 = iconst.i32 1
     v67 = icmp eq v13, v65  ; v65 = 0
-    v68 = ishl_imm v66, 31  ; v66 = 1
+    v803 = iconst.i32 31
+    v68 = ishl v66, v803 ; v66 = 1
     v69 = isub v65, v66  ; v65 = 0, v66 = 1
     v70 = icmp eq v13, v68
     v71 = icmp eq v13, v69
@@ -38,7 +40,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v75 = iconst.i32 0
     v76 = iconst.i32 1
     v77 = icmp eq v14, v75  ; v75 = 0
-    v78 = ishl_imm v76, 31  ; v76 = 1
+    v804 = iconst.i32 31
+    v78 = ishl v76, v804 ; v76 = 1
     v79 = isub v75, v76  ; v75 = 0, v76 = 1
     v80 = icmp eq v14, v78
     v81 = icmp eq v14, v79
@@ -49,7 +52,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v85 = iconst.i64 0
     v86 = iconst.i64 1
     v87 = icmp eq v3, v85  ; v85 = 0
-    v88 = ishl_imm v86, 63  ; v86 = 1
+    v805 = iconst.i64 63
+    v88 = ishl v86, v805 ; v86 = 1
     v89 = isub v85, v86  ; v85 = 0, v86 = 1
     v90 = icmp eq v3, v88
     v91 = icmp eq v3, v89
@@ -60,7 +64,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v95 = iconst.i32 0
     v96 = iconst.i32 1
     v97 = icmp eq v15, v95  ; v95 = 0
-    v98 = ishl_imm v96, 31  ; v96 = 1
+    v806 = iconst.i32 31
+    v98 = ishl v96, v806 ; v96 = 1
     v99 = isub v95, v96  ; v95 = 0, v96 = 1
     v100 = icmp eq v15, v98
     v101 = icmp eq v15, v99
@@ -73,7 +78,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v105 = iconst.i32 0
     v106 = iconst.i32 1
     v107 = icmp eq v17, v105  ; v105 = 0
-    v108 = ishl_imm v106, 31  ; v106 = 1
+    v807 = iconst.i32 31
+    v108 = ishl v106, v807 ; v106 = 1
     v109 = isub v105, v106  ; v105 = 0, v106 = 1
     v110 = icmp eq v17, v108
     v111 = icmp eq v17, v109
@@ -84,7 +90,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v115 = iconst.i32 0
     v116 = iconst.i32 1
     v117 = icmp eq v19, v115  ; v115 = 0
-    v118 = ishl_imm v116, 31  ; v116 = 1
+    v808 = iconst.i32 31
+    v118 = ishl v116, v808 ; v116 = 1
     v119 = isub v115, v116  ; v115 = 0, v116 = 1
     v120 = icmp eq v19, v118
     v121 = icmp eq v19, v119
@@ -95,7 +102,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v125 = iconst.i32 0
     v126 = iconst.i32 1
     v127 = icmp eq v20, v125  ; v125 = 0
-    v128 = ishl_imm v126, 31  ; v126 = 1
+    v809 = iconst.i32 31
+    v128 = ishl v126, v809 ; v126 = 1
     v129 = isub v125, v126  ; v125 = 0, v126 = 1
     v130 = icmp eq v20, v128
     v131 = icmp eq v20, v129
@@ -107,7 +115,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v135 = iconst.i32 0
     v136 = iconst.i32 1
     v137 = icmp eq v21, v135  ; v135 = 0
-    v138 = ishl_imm v136, 31  ; v136 = 1
+    v810 = iconst.i32 31
+    v138 = ishl v136, v810 ; v136 = 1
     v139 = isub v135, v136  ; v135 = 0, v136 = 1
     v140 = icmp eq v21, v138
     v141 = icmp eq v21, v139
@@ -118,7 +127,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v145 = iconst.i32 0
     v146 = iconst.i32 1
     v147 = icmp eq v22, v145  ; v145 = 0
-    v148 = ishl_imm v146, 31  ; v146 = 1
+    v811 = iconst.i32 31
+    v148 = ishl v146, v811 ; v146 = 1
     v149 = isub v145, v146  ; v145 = 0, v146 = 1
     v150 = icmp eq v22, v148
     v151 = icmp eq v22, v149
@@ -129,7 +139,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v155 = iconst.i32 0
     v156 = iconst.i32 1
     v157 = icmp eq v23, v155  ; v155 = 0
-    v158 = ishl_imm v156, 31  ; v156 = 1
+    v812 = iconst.i32 31
+    v158 = ishl v156, v812 ; v156 = 1
     v159 = isub v155, v156  ; v155 = 0, v156 = 1
     v160 = icmp eq v23, v158
     v161 = icmp eq v23, v159
@@ -140,7 +151,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v165 = iconst.i32 0
     v166 = iconst.i32 1
     v167 = icmp eq v24, v165  ; v165 = 0
-    v168 = ishl_imm v166, 31  ; v166 = 1
+    v813 = iconst.i32 31
+    v168 = ishl v166, v813 ; v166 = 1
     v169 = isub v165, v166  ; v165 = 0, v166 = 1
     v170 = icmp eq v24, v168
     v171 = icmp eq v24, v169
@@ -151,7 +163,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v175 = iconst.i32 0
     v176 = iconst.i32 1
     v177 = icmp eq v25, v175  ; v175 = 0
-    v178 = ishl_imm v176, 31  ; v176 = 1
+    v814 = iconst.i32 31
+    v178 = ishl v176, v814 ; v176 = 1
     v179 = isub v175, v176  ; v175 = 0, v176 = 1
     v180 = icmp eq v25, v178
     v181 = icmp eq v25, v179
@@ -162,7 +175,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v185 = iconst.i32 0
     v186 = iconst.i32 1
     v187 = icmp eq v26, v185  ; v185 = 0
-    v188 = ishl_imm v186, 31  ; v186 = 1
+    v815 = iconst.i32 31
+    v188 = ishl v186, v815 ; v186 = 1
     v189 = isub v185, v186  ; v185 = 0, v186 = 1
     v190 = icmp eq v26, v188
     v191 = icmp eq v26, v189
@@ -173,7 +187,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v195 = iconst.i32 0
     v196 = iconst.i32 1
     v197 = icmp eq v27, v195  ; v195 = 0
-    v198 = ishl_imm v196, 31  ; v196 = 1
+    v816 = iconst.i32 31
+    v198 = ishl v196, v816 ; v196 = 1
     v199 = isub v195, v196  ; v195 = 0, v196 = 1
     v200 = icmp eq v27, v198
     v201 = icmp eq v27, v199
@@ -184,7 +199,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v205 = iconst.i32 0
     v206 = iconst.i32 1
     v207 = icmp eq v28, v205  ; v205 = 0
-    v208 = ishl_imm v206, 31  ; v206 = 1
+    v817 = iconst.i32 31
+    v208 = ishl v206, v817 ; v206 = 1
     v209 = isub v205, v206  ; v205 = 0, v206 = 1
     v210 = icmp eq v28, v208
     v211 = icmp eq v28, v209
@@ -199,7 +215,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v215 = iconst.i32 0
     v216 = iconst.i32 1
     v217 = icmp eq v29, v215  ; v215 = 0
-    v218 = ishl_imm v216, 31  ; v216 = 1
+    v818 = iconst.i32 31
+    v218 = ishl v216, v818 ; v216 = 1
     v219 = isub v215, v216  ; v215 = 0, v216 = 1
     v220 = icmp eq v29, v218
     v221 = icmp eq v29, v219
@@ -210,7 +227,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v225 = iconst.i32 0
     v226 = iconst.i32 1
     v227 = icmp eq v31, v225  ; v225 = 0
-    v228 = ishl_imm v226, 31  ; v226 = 1
+    v819 = iconst.i32 31
+    v228 = ishl v226, v819 ; v226 = 1
     v229 = isub v225, v226  ; v225 = 0, v226 = 1
     v230 = icmp eq v31, v228
     v231 = icmp eq v31, v229
@@ -221,7 +239,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v235 = iconst.i32 0
     v236 = iconst.i32 1
     v237 = icmp eq v32, v235  ; v235 = 0
-    v238 = ishl_imm v236, 31  ; v236 = 1
+    v820 = iconst.i32 31
+    v238 = ishl v236, v820 ; v236 = 1
     v239 = isub v235, v236  ; v235 = 0, v236 = 1
     v240 = icmp eq v32, v238
     v241 = icmp eq v32, v239
@@ -232,7 +251,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v245 = iconst.i32 0
     v246 = iconst.i32 1
     v247 = icmp eq v33, v245  ; v245 = 0
-    v248 = ishl_imm v246, 31  ; v246 = 1
+    v821 = iconst.i32 31
+    v248 = ishl v246, v821 ; v246 = 1
     v249 = isub v245, v246  ; v245 = 0, v246 = 1
     v250 = icmp eq v33, v248
     v251 = icmp eq v33, v249
@@ -245,7 +265,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v255 = iconst.i32 0
     v256 = iconst.i32 1
     v257 = icmp eq v34, v255  ; v255 = 0
-    v258 = ishl_imm v256, 31  ; v256 = 1
+    v822 = iconst.i32 31
+    v258 = ishl v256, v822 ; v256 = 1
     v259 = isub v255, v256  ; v255 = 0, v256 = 1
     v260 = icmp eq v34, v258
     v261 = icmp eq v34, v259
@@ -256,7 +277,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v265 = iconst.i32 0
     v266 = iconst.i32 1
     v267 = icmp eq v36, v265  ; v265 = 0
-    v268 = ishl_imm v266, 31  ; v266 = 1
+    v823 = iconst.i32 31
+    v268 = ishl v266, v823 ; v266 = 1
     v269 = isub v265, v266  ; v265 = 0, v266 = 1
     v270 = icmp eq v36, v268
     v271 = icmp eq v36, v269
@@ -267,7 +289,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v275 = iconst.i32 0
     v276 = iconst.i32 1
     v277 = icmp eq v37, v275  ; v275 = 0
-    v278 = ishl_imm v276, 31  ; v276 = 1
+    v824 = iconst.i32 31
+    v278 = ishl v276, v824 ; v276 = 1
     v279 = isub v275, v276  ; v275 = 0, v276 = 1
     v280 = icmp eq v37, v278
     v281 = icmp eq v37, v279
@@ -279,7 +302,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v285 = iconst.i32 0
     v286 = iconst.i32 1
     v287 = icmp eq v38, v285  ; v285 = 0
-    v288 = ishl_imm v286, 31  ; v286 = 1
+    v825 = iconst.i32 31
+    v288 = ishl v286, v825 ; v286 = 1
     v289 = isub v285, v286  ; v285 = 0, v286 = 1
     v290 = icmp eq v38, v288
     v291 = icmp eq v38, v289
@@ -290,7 +314,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v295 = iconst.i32 0
     v296 = iconst.i32 1
     v297 = icmp eq v39, v295  ; v295 = 0
-    v298 = ishl_imm v296, 31  ; v296 = 1
+    v826 = iconst.i32 31
+    v298 = ishl v296, v826 ; v296 = 1
     v299 = isub v295, v296  ; v295 = 0, v296 = 1
     v300 = icmp eq v39, v298
     v301 = icmp eq v39, v299
@@ -302,7 +327,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v305 = iconst.i32 0
     v306 = iconst.i32 1
     v307 = icmp eq v40, v305  ; v305 = 0
-    v308 = ishl_imm v306, 31  ; v306 = 1
+    v827 = iconst.i32 31
+    v308 = ishl v306, v827 ; v306 = 1
     v309 = isub v305, v306  ; v305 = 0, v306 = 1
     v310 = icmp eq v40, v308
     v311 = icmp eq v40, v309
@@ -313,7 +339,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v315 = iconst.i32 0
     v316 = iconst.i32 1
     v317 = icmp eq v42, v315  ; v315 = 0
-    v318 = ishl_imm v316, 31  ; v316 = 1
+    v828 = iconst.i32 31
+    v318 = ishl v316, v828 ; v316 = 1
     v319 = isub v315, v316  ; v315 = 0, v316 = 1
     v320 = icmp eq v42, v318
     v321 = icmp eq v42, v319
@@ -324,7 +351,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v325 = iconst.i32 0
     v326 = iconst.i32 1
     v327 = icmp eq v43, v325  ; v325 = 0
-    v328 = ishl_imm v326, 31  ; v326 = 1
+    v829 = iconst.i32 31
+    v328 = ishl v326, v829 ; v326 = 1
     v329 = isub v325, v326  ; v325 = 0, v326 = 1
     v330 = icmp eq v43, v328
     v331 = icmp eq v43, v329
@@ -335,7 +363,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v335 = iconst.i32 0
     v336 = iconst.i32 1
     v337 = icmp eq v44, v335  ; v335 = 0
-    v338 = ishl_imm v336, 31  ; v336 = 1
+    v830 = iconst.i32 31
+    v338 = ishl v336, v830 ; v336 = 1
     v339 = isub v335, v336  ; v335 = 0, v336 = 1
     v340 = icmp eq v44, v338
     v341 = icmp eq v44, v339
@@ -346,7 +375,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v345 = iconst.i32 0
     v346 = iconst.i32 1
     v347 = icmp eq v45, v345  ; v345 = 0
-    v348 = ishl_imm v346, 31  ; v346 = 1
+    v831 = iconst.i32 31
+    v348 = ishl v346, v831 ; v346 = 1
     v349 = isub v345, v346  ; v345 = 0, v346 = 1
     v350 = icmp eq v45, v348
     v351 = icmp eq v45, v349
@@ -357,7 +387,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v355 = iconst.i32 0
     v356 = iconst.i32 1
     v357 = icmp eq v46, v355  ; v355 = 0
-    v358 = ishl_imm v356, 31  ; v356 = 1
+    v832 = iconst.i32 31
+    v358 = ishl v356, v832 ; v356 = 1
     v359 = isub v355, v356  ; v355 = 0, v356 = 1
     v360 = icmp eq v46, v358
     v361 = icmp eq v46, v359
@@ -369,7 +400,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v365 = iconst.i32 0
     v366 = iconst.i32 1
     v367 = icmp eq v47, v365  ; v365 = 0
-    v368 = ishl_imm v366, 31  ; v366 = 1
+    v833 = iconst.i32 31
+    v368 = ishl v366, v833 ; v366 = 1
     v369 = isub v365, v366  ; v365 = 0, v366 = 1
     v370 = icmp eq v47, v368
     v371 = icmp eq v47, v369
@@ -380,7 +412,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v375 = iconst.i32 0
     v376 = iconst.i32 1
     v377 = icmp eq v49, v375  ; v375 = 0
-    v378 = ishl_imm v376, 31  ; v376 = 1
+    v834 = iconst.i32 31
+    v378 = ishl v376, v834 ; v376 = 1
     v379 = isub v375, v376  ; v375 = 0, v376 = 1
     v380 = icmp eq v49, v378
     v381 = icmp eq v49, v379

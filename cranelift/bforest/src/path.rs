@@ -82,7 +82,7 @@ impl<F: Forest> Path<F> {
                         }
                     };
                 }
-                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+                NodeData::Free { .. } => panic!("Free {node} reached from {root}"),
             }
         }
         unreachable!();
@@ -98,7 +98,7 @@ impl<F: Forest> Path<F> {
             match pool[node] {
                 NodeData::Inner { tree, .. } => node = tree[0],
                 NodeData::Leaf { keys, vals, .. } => return (keys.borrow()[0], vals.borrow()[0]),
-                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+                NodeData::Free { .. } => panic!("Free {node} reached from {root}"),
             }
         }
         unreachable!();
@@ -216,7 +216,7 @@ impl<F: Forest> Path<F> {
                     self.size = l + 1;
                     break;
                 }
-                NodeData::Free { .. } => panic!("Free {} reached from {}", node, root),
+                NodeData::Free { .. } => panic!("Free {node} reached from {root}"),
             }
         }
         node

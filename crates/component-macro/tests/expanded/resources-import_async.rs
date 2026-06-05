@@ -1,8 +1,8 @@
 pub enum WorldResource {}
-pub trait HostWorldResourceWithStore: wasmtime::component::HasData + Send {}
-impl<_T: ?Sized> HostWorldResourceWithStore for _T
+pub trait HostWorldResourceWithStore<T>: wasmtime::component::HasData + Send {}
+impl<H: ?Sized, T> HostWorldResourceWithStore<T> for H
 where
-    _T: wasmtime::component::HasData + Send,
+    H: wasmtime::component::HasData + Send,
 {}
 pub trait HostWorldResource: Send {
     fn new(
@@ -150,10 +150,12 @@ pub struct TheWorld {
     interface1: exports::foo::foo::uses_resource_transitively::Guest,
     some_world_func2: wasmtime::component::Func,
 }
-pub trait TheWorldImportsWithStore: wasmtime::component::HasData + HostWorldResourceWithStore + Send {}
-impl<_T: ?Sized> TheWorldImportsWithStore for _T
+pub trait TheWorldImportsWithStore<
+    T,
+>: wasmtime::component::HasData + HostWorldResourceWithStore<T> + Send {}
+impl<H: ?Sized, T> TheWorldImportsWithStore<T> for H
 where
-    _T: wasmtime::component::HasData + HostWorldResourceWithStore + Send,
+    H: wasmtime::component::HasData + HostWorldResourceWithStore<T> + Send,
 {}
 pub trait TheWorldImports: HostWorldResource + Send {
     fn some_world_func(
@@ -281,7 +283,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: TheWorldImportsWithStore,
+            D: TheWorldImportsWithStore<T>,
             for<'a> D::Data<'a>: TheWorldImports,
             T: 'static + Send,
         {
@@ -356,13 +358,13 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::resources::HostWithStore
-                + foo::foo::long_use_chain1::HostWithStore
-                + foo::foo::long_use_chain2::HostWithStore
-                + foo::foo::long_use_chain3::HostWithStore
-                + foo::foo::long_use_chain4::HostWithStore
-                + foo::foo::transitive_interface_with_resource::HostWithStore
-                + TheWorldImportsWithStore + Send,
+            D: foo::foo::resources::HostWithStore<T>
+                + foo::foo::long_use_chain1::HostWithStore<T>
+                + foo::foo::long_use_chain2::HostWithStore<T>
+                + foo::foo::long_use_chain3::HostWithStore<T>
+                + foo::foo::long_use_chain4::HostWithStore<T>
+                + foo::foo::transitive_interface_with_resource::HostWithStore<T>
+                + TheWorldImportsWithStore<T> + Send,
             for<'a> D::Data<
                 'a,
             >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
@@ -384,6 +386,19 @@ const _: () = {
             >(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_some_world_func2(
+            &self,
+        ) -> wasmtime::component::TypedFunc<
+            (),
+            (wasmtime::component::Resource<WorldResource>,),
+        > {
+            unsafe {
+                wasmtime::component::TypedFunc::<
+                    (),
+                    (wasmtime::component::Resource<WorldResource>,),
+                >::new_unchecked(self.some_world_func2)
+            }
+        }
         pub async fn call_some_world_func2<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -391,12 +406,7 @@ const _: () = {
         where
             <S as wasmtime::AsContext>::Data: Send,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<
-                    (),
-                    (wasmtime::component::Resource<WorldResource>,),
-                >::new_unchecked(self.some_world_func2)
-            };
+            let callee = self.func_some_world_func2();
             let (ret0,) = callee.call_async(store.as_context_mut(), ()).await?;
             Ok(ret0)
         }
@@ -414,10 +424,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub enum Bar {}
-            pub trait HostBarWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostBarWithStore for _T
+            pub trait HostBarWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostBarWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait HostBar: Send {
                 fn new(
@@ -519,10 +529,10 @@ pub mod foo {
                 );
             };
             pub enum Fallible {}
-            pub trait HostFallibleWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostFallibleWithStore for _T
+            pub trait HostFallibleWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostFallibleWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait HostFallible: Send {
                 fn new(
@@ -556,11 +566,15 @@ pub mod foo {
                     HostFallible::drop(*self, rep).await
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostBarWithStore + HostFallibleWithStore + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostBarWithStore<
+                    T,
+                > + HostFallibleWithStore<T> + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostBarWithStore
-                    + HostFallibleWithStore + Send,
+                H: wasmtime::component::HasData + HostBarWithStore<T>
+                    + HostFallibleWithStore<T> + Send,
             {}
             pub trait Host: HostBar + HostFallible + Send {
                 fn bar_own_arg(
@@ -781,7 +795,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1106,7 +1120,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1119,10 +1133,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub enum A {}
-            pub trait HostAWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostAWithStore for _T
+            pub trait HostAWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostAWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostA {
                 fn drop(
@@ -1138,10 +1152,12 @@ pub mod foo {
                     HostA::drop(*self, rep).await
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostAWithStore + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostAWithStore<T> + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostAWithStore + Send,
+                H: wasmtime::component::HasData + HostAWithStore<T> + Send,
             {}
             pub trait Host: HostA + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
@@ -1150,7 +1166,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1176,7 +1192,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1189,10 +1205,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
@@ -1201,7 +1217,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1212,7 +1228,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1225,10 +1241,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {}
             impl<_T: Host + ?Sized> Host for &mut _T {}
@@ -1237,7 +1253,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1248,7 +1264,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -1261,10 +1277,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
-            pub trait HostWithStore: wasmtime::component::HasData + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + Send,
+                H: wasmtime::component::HasData + Send,
             {}
             pub trait Host: Send {
                 fn foo(
@@ -1287,7 +1303,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1308,7 +1324,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1321,10 +1337,10 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
             pub enum Foo {}
-            pub trait HostFooWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostFooWithStore for _T
+            pub trait HostFooWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostFooWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait HostFoo {
                 fn drop(
@@ -1340,10 +1356,12 @@ pub mod foo {
                     HostFoo::drop(*self, rep).await
                 }
             }
-            pub trait HostWithStore: wasmtime::component::HasData + HostFooWithStore + Send {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<
+                T,
+            >: wasmtime::component::HasData + HostFooWithStore<T> + Send {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData + HostFooWithStore + Send,
+                H: wasmtime::component::HasData + HostFooWithStore<T> + Send,
             {}
             pub trait Host: HostFoo + Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
@@ -1352,7 +1370,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1378,7 +1396,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
@@ -1458,6 +1476,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_handle(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Foo>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Foo>,),
+                                (),
+                            >::new_unchecked(self.handle)
+                        }
+                    }
                     pub async fn call_handle<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -1466,12 +1497,7 @@ pub mod exports {
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Foo>,),
-                                (),
-                            >::new_unchecked(self.handle)
-                        };
+                        let callee = self.func_handle();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .await?;

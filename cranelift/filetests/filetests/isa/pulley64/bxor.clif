@@ -3,7 +3,8 @@ target pulley64
 
 function %i8_imm(i8) -> i8 {
 block0(v0: i8):
-  v2 = bxor_imm v0, 7
+  v3 = iconst.i8 7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -18,7 +19,8 @@ block0(v0: i8):
 
 function %i8_imm2(i8) -> i8 {
 block0(v0: i8):
-  v2 = bxor_imm v0, -7
+  v3 = iconst.i8 -7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -33,7 +35,8 @@ block0(v0: i8):
 
 function %i16_imm(i16) -> i16 {
 block0(v0: i16):
-  v2 = bxor_imm v0, 7
+  v3 = iconst.i16 7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -48,7 +51,8 @@ block0(v0: i16):
 
 function %i16_imm2(i16) -> i16 {
 block0(v0: i16):
-  v2 = bxor_imm v0, -7
+  v3 = iconst.i16 -7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -63,7 +67,8 @@ block0(v0: i16):
 
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
-  v2 = bxor_imm v0, 7
+  v3 = iconst.i32 7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -78,7 +83,8 @@ block0(v0: i32):
 
 function %i32_imm2(i32) -> i32 {
 block0(v0: i32):
-  v2 = bxor_imm v0, -7
+  v3 = iconst.i32 -7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -93,7 +99,8 @@ block0(v0: i32):
 
 function %i32_imm_big(i32) -> i32 {
 block0(v0: i32):
-  v2 = bxor_imm v0, 77777
+  v3 = iconst.i32 77777
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -108,7 +115,8 @@ block0(v0: i32):
 
 function %i32_imm_big2(i32) -> i32 {
 block0(v0: i32):
-  v2 = bxor_imm v0, -77777
+  v3 = iconst.i32 -77777
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -123,7 +131,8 @@ block0(v0: i32):
 
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
-  v2 = bxor_imm v0, 7
+  v3 = iconst.i64 7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -138,7 +147,8 @@ block0(v0: i64):
 
 function %i64_imm2(i64) -> i64 {
 block0(v0: i64):
-  v2 = bxor_imm v0, -7
+  v3 = iconst.i64 -7
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -153,7 +163,8 @@ block0(v0: i64):
 
 function %i64_imm_big(i64) -> i64 {
 block0(v0: i64):
-  v2 = bxor_imm v0, 77777
+  v3 = iconst.i64 77777
+  v2 = bxor v0, v3
   return v2
 }
 
@@ -168,7 +179,8 @@ block0(v0: i64):
 
 function %i64_imm_big2(i64) -> i64 {
 block0(v0: i64):
-  v2 = bxor_imm v0, -77777
+  v3 = iconst.i64 -77777
+  v2 = bxor v0, v3
   return v2
 }
 

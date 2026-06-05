@@ -173,7 +173,7 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::floats::HostWithStore,
+            D: foo::foo::floats::HostWithStore<T>,
             for<'a> D::Data<'a>: foo::foo::floats::Host,
             T: 'static,
         {
@@ -191,10 +191,10 @@ pub mod foo {
         pub mod floats {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::Box;
-            pub trait HostWithStore: wasmtime::component::HasData {}
-            impl<_T: ?Sized> HostWithStore for _T
+            pub trait HostWithStore<T>: wasmtime::component::HasData {}
+            impl<H: ?Sized, T> HostWithStore<T> for H
             where
-                _T: wasmtime::component::HasData,
+                H: wasmtime::component::HasData,
             {}
             pub trait Host {
                 fn f32_param(&mut self, x: f32) -> ();
@@ -221,7 +221,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -264,7 +264,7 @@ pub mod foo {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: HostWithStore,
+                D: HostWithStore<T>,
                 for<'a> D::Data<'a>: Host,
                 T: 'static,
             {
@@ -367,57 +367,77 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_f32_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f32,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f32,),
+                                (),
+                            >::new_unchecked(self.f32_param)
+                        }
+                    }
                     pub fn call_f32_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f32,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f32,),
-                                (),
-                            >::new_unchecked(self.f32_param)
-                        };
+                        let callee = self.func_f32_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_f64_param(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(f64,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (f64,),
+                                (),
+                            >::new_unchecked(self.f64_param)
+                        }
                     }
                     pub fn call_f64_param<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: f64,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (f64,),
-                                (),
-                            >::new_unchecked(self.f64_param)
-                        };
+                        let callee = self.func_f64_param();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_f32_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f32,),
+                            >::new_unchecked(self.f32_result)
+                        }
                     }
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f32> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f32,),
-                            >::new_unchecked(self.f32_result)
-                        };
+                        let callee = self.func_f32_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_f64_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (f64,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (f64,),
+                            >::new_unchecked(self.f64_result)
+                        }
                     }
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<f64> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (f64,),
-                            >::new_unchecked(self.f64_result)
-                        };
+                        let callee = self.func_f64_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
                     }

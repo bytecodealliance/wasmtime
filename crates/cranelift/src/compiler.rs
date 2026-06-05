@@ -45,11 +45,9 @@ use wasmtime_environ::{
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
-#[cfg(feature = "component-model")]
 pub(crate) mod component;
 
 struct IncrementalCacheContext {
-    #[cfg(feature = "incremental-cache")]
     cache_store: Arc<dyn CacheStore>,
     num_hits: usize,
     num_cached: usize,
@@ -87,7 +85,6 @@ pub struct Compiler {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
-    #[cfg(feature = "wmemcheck")]
     pub(crate) wmemcheck: bool,
 }
 
@@ -138,7 +135,6 @@ impl Compiler {
             linkopts,
             cache_store,
             clif_dir,
-            #[cfg(feature = "wmemcheck")]
             wmemcheck,
         }
     }
@@ -628,7 +624,6 @@ impl wasmtime_environ::Compiler for Compiler {
                 let ty = types[ty].unwrap_func();
                 self.compile_wasm_to_array_trampoline(ty, key, symbol)
             }
-            #[cfg(feature = "component-model")]
             FuncKey::ResourceDropTrampoline => {
                 let ty = types.find_resource_drop_signature().unwrap();
                 let ty = types[ty].unwrap_func();
@@ -645,7 +640,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
             FuncKey::PulleyHostCall(_) => unreachable!(),
 
-            #[cfg(feature = "component-model")]
             FuncKey::ComponentTrampoline(..) | FuncKey::UnsafeIntrinsic(..) => {
                 unreachable!()
             }
@@ -856,7 +850,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.is_branch_protection_enabled()
     }
 
-    #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self
     }
@@ -969,7 +962,6 @@ impl InliningCompiler for Compiler {
                 .map(|name| FuncKey::from_raw_parts(name.namespace, name.index))
                 .filter(|key| match key {
                     FuncKey::DefinedWasmFunction(..) => true,
-                    #[cfg(feature = "component-model")]
                     FuncKey::UnsafeIntrinsic(..) => true,
                     _ => false,
                 }),
@@ -1029,7 +1021,6 @@ impl InliningCompiler for Compiler {
                 let callee = FuncKey::from_raw_parts(callee.namespace, callee.index);
                 match callee {
                     FuncKey::DefinedWasmFunction(..) => {}
-                    #[cfg(feature = "component-model")]
                     FuncKey::UnsafeIntrinsic(..) => {}
                     _ => return InlineCommand::KeepCall,
                 }
@@ -1094,56 +1085,39 @@ impl InliningCompiler for Compiler {
     }
 }
 
-#[cfg(feature = "incremental-cache")]
-mod incremental_cache {
-    use super::*;
+struct CraneliftCacheStore(Arc<dyn CacheStore>);
 
-    struct CraneliftCacheStore(Arc<dyn CacheStore>);
-
-    impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
-        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
-            self.0.get(key)
-        }
-        fn insert(&mut self, key: &[u8], val: Vec<u8>) {
-            self.0.insert(key, val);
-        }
+impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
+    fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
+        self.0.get(key)
     }
-
-    pub(super) fn compile_maybe_cached<'a>(
-        context: &'a mut Context,
-        isa: &dyn TargetIsa,
-        cache_ctx: Option<&mut IncrementalCacheContext>,
-    ) -> Result<CompiledCode, CompileError> {
-        let cache_ctx = match cache_ctx {
-            Some(ctx) => ctx,
-            None => return compile_uncached(context, isa),
-        };
-
-        let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
-        let (_compiled_code, from_cache) = context
-            .compile_with_cache(isa, &mut cache_store, &mut Default::default())
-            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
-
-        if from_cache {
-            cache_ctx.num_hits += 1;
-        } else {
-            cache_ctx.num_cached += 1;
-        }
-
-        Ok(context.take_compiled_code().unwrap())
+    fn insert(&mut self, key: &[u8], val: Vec<u8>) {
+        self.0.insert(key, val);
     }
 }
 
-#[cfg(feature = "incremental-cache")]
-use incremental_cache::*;
-
-#[cfg(not(feature = "incremental-cache"))]
 fn compile_maybe_cached<'a>(
     context: &'a mut Context,
     isa: &dyn TargetIsa,
-    _cache_ctx: Option<&mut IncrementalCacheContext>,
+    cache_ctx: Option<&mut IncrementalCacheContext>,
 ) -> Result<CompiledCode, CompileError> {
-    compile_uncached(context, isa)
+    let cache_ctx = match cache_ctx {
+        Some(ctx) => ctx,
+        None => return compile_uncached(context, isa),
+    };
+
+    let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
+    let (_compiled_code, from_cache) = context
+        .compile_with_cache(isa, &mut cache_store, &mut Default::default())
+        .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+
+    if from_cache {
+        cache_ctx.num_hits += 1;
+    } else {
+        cache_ctx.num_cached += 1;
+    }
+
+    Ok(context.take_compiled_code().unwrap())
 }
 
 fn compile_uncached<'a>(
@@ -1285,7 +1259,6 @@ impl Compiler {
                     ctx
                 })
                 .unwrap_or_else(|| CompilerContext {
-                    #[cfg(feature = "incremental-cache")]
                     incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
                         IncrementalCacheContext {
                             cache_store: cache_store.clone(),

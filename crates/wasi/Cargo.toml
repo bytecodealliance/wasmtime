@@ -31,7 +31,6 @@ cap-fs-ext = { workspace = true }
 cap-net-ext = { workspace = true }
 cap-time-ext = { workspace = true }
 io-lifetimes = { workspace = true }
-fs-set-times = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -72,7 +71,7 @@ p1 = ["dep:wiggle", "p2"]
 p2 = ["wasmtime/component-model", "wasmtime/async"]
 p3 = [
     "wasmtime/component-model-async",
-    "wasmtime/component-model-async-bytes",
+    "wasmtime/component-model-bytes",
 ]
 
 [[test]]

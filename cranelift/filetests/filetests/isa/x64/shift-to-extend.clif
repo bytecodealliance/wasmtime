@@ -5,8 +5,10 @@ target x86_64
 
 function %i32_shl_sshr_8_to_ireduce(i32) -> i32 {
 block0(v0: i32):
-    v1 = ishl_imm v0, 24
-    v2 = sshr_imm v1, 24
+    v3 = iconst.i32 24
+    v1 = ishl v0, v3
+    v4 = iconst.i32 24
+    v2 = sshr v1, v4
     return v2
 }
 
@@ -31,8 +33,10 @@ block0(v0: i32):
 
 function %i32_shl_sshr_16_to_ireduce(i32) -> i32 {
 block0(v0: i32):
-    v1 = ishl_imm v0, 16
-    v2 = sshr_imm v1, 16
+    v3 = iconst.i32 16
+    v1 = ishl v0, v3
+    v4 = iconst.i32 16
+    v2 = sshr v1, v4
     return v2
 }
 
@@ -57,8 +61,10 @@ block0(v0: i32):
 
 function %i64_shl_sshr_8_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 56
-    v2 = sshr_imm v1, 56
+    v3 = iconst.i64 56
+    v1 = ishl v0, v3
+    v4 = iconst.i64 56
+    v2 = sshr v1, v4
     return v2
 }
 
@@ -83,8 +89,10 @@ block0(v0: i64):
 
 function %i64_shl_sshr_16_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 48
-    v2 = sshr_imm v1, 48
+    v3 = iconst.i64 48
+    v1 = ishl v0, v3
+    v4 = iconst.i64 48
+    v2 = sshr v1, v4
     return v2
 }
 
@@ -109,8 +117,10 @@ block0(v0: i64):
 
 function %i64_shl_sshr_32_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 32
-    v2 = sshr_imm v1, 32
+    v3 = iconst.i64 32
+    v1 = ishl v0, v3
+    v4 = iconst.i64 32
+    v2 = sshr v1, v4
     return v2
 }
 
@@ -135,8 +145,10 @@ block0(v0: i64):
 
 function %i32_shl_ushr_8_to_ireduce(i32) -> i32 {
 block0(v0: i32):
-    v1 = ishl_imm v0, 24
-    v2 = ushr_imm v1, 24
+    v3 = iconst.i32 24
+    v1 = ishl v0, v3
+    v4 = iconst.i32 24
+    v2 = ushr v1, v4
     return v2
 }
 
@@ -161,8 +173,10 @@ block0(v0: i32):
 
 function %i32_shl_ushr_16_to_ireduce(i32) -> i32 {
 block0(v0: i32):
-    v1 = ishl_imm v0, 16
-    v2 = ushr_imm v1, 16
+    v3 = iconst.i32 16
+    v1 = ishl v0, v3
+    v4 = iconst.i32 16
+    v2 = ushr v1, v4
     return v2
 }
 
@@ -187,8 +201,10 @@ block0(v0: i32):
 
 function %i64_shl_ushr_8_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 56
-    v2 = ushr_imm v1, 56
+    v3 = iconst.i64 56
+    v1 = ishl v0, v3
+    v4 = iconst.i64 56
+    v2 = ushr v1, v4
     return v2
 }
 
@@ -213,8 +229,10 @@ block0(v0: i64):
 
 function %i64_shl_ushr_16_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 48
-    v2 = ushr_imm v1, 48
+    v3 = iconst.i64 48
+    v1 = ishl v0, v3
+    v4 = iconst.i64 48
+    v2 = ushr v1, v4
     return v2
 }
 
@@ -239,8 +257,10 @@ block0(v0: i64):
 
 function %i64_shl_ushr_32_to_ireduce(i64) -> i64 {
 block0(v0: i64):
-    v1 = ishl_imm v0, 32
-    v2 = ushr_imm v1, 32
+    v3 = iconst.i64 32
+    v1 = ishl v0, v3
+    v4 = iconst.i64 32
+    v2 = ushr v1, v4
     return v2
 }
 
