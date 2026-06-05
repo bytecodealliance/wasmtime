@@ -14,7 +14,7 @@ use wasmtime::{Config, Result, WasmBacktraceDetails, bail, error::Context as _};
 pub mod opt;
 
 #[cfg(feature = "logging")]
-fn init_file_per_thread_logger(prefix: &str) {
+fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
     file_per_thread_logger::allow_uninitialized();
 
@@ -32,9 +32,8 @@ fn init_file_per_thread_logger(prefix: &str) {
             if let Some(stack_size) = thread.stack_size() {
                 b = b.stack_size(stack_size);
             }
-            let prefix = prefix.to_string();
             b.spawn(move || {
-                file_per_thread_logger::initialize(&prefix);
+                file_per_thread_logger::initialize(prefix);
                 thread.run()
             })?;
             Ok(())
@@ -300,8 +299,6 @@ wasmtime_option_group! {
         pub logging: Option<bool>,
         /// Configure whether logs are emitted to files
         pub log_to_files: Option<bool>,
-        /// Log file prefix
-        pub log_prefix: Option<String>,
         /// Enable coredump generation to this file after a WebAssembly trap.
         pub coredump: Option<String>,
         /// Load the given debugger component and attach it to the
@@ -780,12 +777,7 @@ impl CommonOptions {
         }
         #[cfg(feature = "logging")]
         if self.debug.log_to_files == Some(true) {
-            let default_prefix = "wasmtime.dbg.";
-            let prefix = self
-                .debug
-                .log_prefix
-                .as_ref()
-                .map_or(default_prefix, |p| p.as_str());
+            let prefix = "wasmtime.dbg.";
             init_file_per_thread_logger(prefix);
         } else {
             use std::io::IsTerminal;

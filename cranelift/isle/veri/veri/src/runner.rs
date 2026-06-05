@@ -654,6 +654,12 @@ impl Runner {
         let output = Self::open_log_file(self.log_dir.clone(), "report.json")?;
         serde_json::to_writer_pretty(output, &report)?;
 
+        // Verification failures are an overall error so that callers (the
+        // `veri` binary and tests) observe them via the returned `Result`.
+        if !verification_failures.is_empty() {
+            bail!("verification failures: {}", verification_failures.len());
+        }
+
         Ok(())
     }
 

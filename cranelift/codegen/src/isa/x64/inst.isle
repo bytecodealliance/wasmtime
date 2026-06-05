@@ -4,7 +4,6 @@
 
 ;; Don't build `MInst` variants directly, in general. Instead, use the
 ;; instruction-emitting helpers defined further down.
-;;;; Verification terms ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (model MInst (type (bv 1)))
 (type MInst nodebug
       (enum
@@ -349,9 +348,7 @@
            ((ExtMode.BQ) (zero_ext 64 (conv_to 8  loaded_value)))
            ((ExtMode.WL) (zero_ext 64 (conv_to 16 loaded_value)))
            ((ExtMode.WQ) (zero_ext 64 (conv_to 16 loaded_value)))
-           ((ExtMode.LQ) (zero_ext 64 (conv_to 32 loaded_value)))))))
-  )
-)
+           ((ExtMode.LQ) (zero_ext 64 (conv_to 32 loaded_value)))))))))
 
 (spec (MInst.MovRM size src dst)
       ;; marks store active
@@ -396,9 +393,7 @@
             ;; store back to memory
             (= (:active isa_store) true)
             (= (:addr isa_store) src1)
-            (= (:size_bits isa_store) (:size_bits isa_load))
-      )
-)
+            (= (:size_bits isa_store) (:size_bits isa_load))))
 
 (spec (MInst.AluRmiR size op src1 src2 dst)
       (provide
@@ -458,9 +453,7 @@
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (spec (operand_size_of_type_32_64 ty)
       (provide
-            (= result (if (= (:bits ty) 64) (OperandSize.Size64) (OperandSize.Size32)))
-      )
-)
+            (= result (if (= (:bits ty) 64) (OperandSize.Size64) (OperandSize.Size32)))))
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
 

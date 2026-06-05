@@ -1,4 +1,5 @@
 //! AArch64 ISA definitions: registers.
+#![allow(missing_docs)] // re-exported for cranelift-isle/veri; not part of the public API contract
 
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;
@@ -47,7 +48,6 @@ pub(crate) const fn vreg_preg(num: u8) -> PReg {
 }
 
 /// Get a writable reference to a V-register.
-#[cfg(test)] // Used only in test code.
 pub fn writable_vreg(num: u8) -> Writable<Reg> {
     Writable::from_reg(vreg(num))
 }
@@ -175,7 +175,6 @@ fn show_reg(reg: Reg) -> String {
     }
 }
 
-/// Pretty print reg
 pub fn pretty_print_reg(reg: Reg) -> String {
     show_reg(reg)
 }
@@ -188,7 +187,6 @@ fn show_reg_sized(reg: Reg, size: OperandSize) -> String {
     }
 }
 
-/// Pretty print register with size
 pub fn pretty_print_reg_sized(reg: Reg, size: OperandSize) -> String {
     show_reg_sized(reg, size)
 }
@@ -266,22 +264,18 @@ pub fn show_vreg_element(reg: Reg, idx: u8, size: ScalarSize) -> String {
     format!("{s}{suffix}[{idx}]")
 }
 
-/// Pretty print ireg
 pub fn pretty_print_ireg(reg: Reg, size: OperandSize) -> String {
     show_ireg_sized(reg, size)
 }
 
-/// Pretty print vreg scalar
 pub fn pretty_print_vreg_scalar(reg: Reg, size: ScalarSize) -> String {
     show_vreg_scalar(reg, size)
 }
 
-/// Pretty print vreg vector
 pub fn pretty_print_vreg_vector(reg: Reg, size: VectorSize) -> String {
     show_vreg_vector(reg, size)
 }
 
-/// Pretty print vreg element
 pub fn pretty_print_vreg_element(reg: Reg, idx: usize, size: ScalarSize) -> String {
     show_vreg_element(reg, idx as u8, size)
 }

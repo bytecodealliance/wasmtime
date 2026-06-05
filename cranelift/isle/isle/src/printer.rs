@@ -16,6 +16,11 @@ pub fn print<W: Write>(defs: &[Def], width: usize, out: &mut W) -> std::io::Resu
     Ok(())
 }
 
+/// Dump a single ISLE node to standard output.
+pub fn dump<N: ToSExpr>(node: &N) -> std::io::Result<()> {
+    print_node(node, 120, &mut std::io::stdout())
+}
+
 /// Print a single ISLE node.
 pub fn print_node<N: ToSExpr, W: Write>(
     node: &N,

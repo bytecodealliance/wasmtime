@@ -29,7 +29,6 @@ args.append('--exclude=wasmtime-wasi-nn')
 args.append('--exclude=wasmtime-wasi-tls')
 args.append('--exclude=wasmtime-fuzzing')
 args.append('--exclude=wasm-spec-interpreter')
-args.append('--exclude=veri_engine')
 args.append('--exclude=calculator')
 args.extend(sys.argv[1:])
 
