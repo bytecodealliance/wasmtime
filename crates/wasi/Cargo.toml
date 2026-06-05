@@ -52,7 +52,6 @@ env_logger = { workspace = true }
 rustix = { workspace = true, features = ["event", "fs", "net"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]

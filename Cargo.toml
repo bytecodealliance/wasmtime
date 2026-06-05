@@ -352,7 +352,6 @@ cap-net-ext = "4.0.2"
 cap-time-ext = "4.0.2"
 cap-tempfile = "4.0.2"
 io-lifetimes = { version = "3.0.1", default-features = false }
-io-extras = "0.19.0"
 rustix = "1.1.4"
 # wit-bindgen:
 wit-bindgen = { version = "0.57.0", default-features = false }

@@ -5228,7 +5228,6 @@ dependencies = [
  "cfg-if",
  "env_logger 0.11.5",
  "futures",
- "io-extras",
  "io-lifetimes 3.0.1",
  "rand 0.10.1",
  "rustix 1.1.4",
