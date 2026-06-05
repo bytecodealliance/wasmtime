@@ -6847,7 +6847,7 @@ end = "2025-12-05"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-net-ext]]
 criteria = "safe-to-deploy"
@@ -6855,11 +6855,17 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
 end = "2024-07-14"
 
+[[trusted.cap-net-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-04-07"
+end = "2027-06-05"
+
 [[trusted.cap-primitives]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-08-07"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-rand]]
 criteria = "safe-to-deploy"
@@ -6871,7 +6877,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-06-25"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-tempfile]]
 criteria = "safe-to-deploy"
@@ -6883,7 +6889,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-21"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cc]]
 criteria = "safe-to-deploy"
@@ -7081,7 +7087,7 @@ end = "2026-11-17"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-06-12"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.is-terminal]]
 criteria = "safe-to-deploy"
@@ -7393,7 +7399,7 @@ end = "2025-07-30"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-03-06"
-end = "2025-12-06"
+end = "2027-06-05"
 
 [[trusted.termcolor]]
 criteria = "safe-to-deploy"
