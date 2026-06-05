@@ -148,10 +148,7 @@ impl Expr {
     }
 
     pub fn pure(&self) -> bool {
-        match self {
-            Expr::BVConvTo(..) => false,
-            _ => true,
-        }
+        !matches!(self, Expr::BVConvTo(..))
     }
 
     pub fn sources(&self) -> Vec<ExprId> {
@@ -2182,7 +2179,7 @@ impl<'a> ConditionsBuilder<'a> {
         }
 
         // Evaluate macro body.
-        self.spec_expr(&body, &macro_vars)
+        self.spec_expr(body, &macro_vars)
     }
 
     fn replicate(&mut self, x: ExprId, n: usize) -> Result<ExprId> {

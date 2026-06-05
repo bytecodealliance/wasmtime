@@ -113,7 +113,7 @@ fn main() -> Result<()> {
         runner.skip_tag("TODO");
     }
 
-    runner.set_default_solver_backend(opts.solver_backend.into());
+    runner.set_default_solver_backend(opts.solver_backend);
     if !opts.ignore_solver_tags {
         runner.add_solver_tag_rules();
     }

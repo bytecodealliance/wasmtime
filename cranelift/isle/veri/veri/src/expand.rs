@@ -134,10 +134,10 @@ impl Expansion {
                 continue;
             }
             let binding_id = i.try_into().unwrap();
-            if let Some(eq) = self.equals.find(binding_id) {
-                if eq != binding_id {
-                    eqs.push((binding_id, eq));
-                }
+            if let Some(eq) = self.equals.find(binding_id)
+                && eq != binding_id
+            {
+                eqs.push((binding_id, eq));
             }
         }
         eqs
@@ -707,14 +707,14 @@ impl Application {
         // Equals.
         for i in 0..rule_set.bindings.len() {
             let binding_id = i.try_into().unwrap();
-            if let Some(equal_binding_id) = rule.equals.find(binding_id) {
-                if equal_binding_id != binding_id {
-                    let expansion_binding_id = self.add_binding(rule_set, binding_id);
-                    let expansion_equal_binding_id = self.add_binding(rule_set, equal_binding_id);
-                    self.expansion
-                        .equals
-                        .merge(expansion_binding_id, expansion_equal_binding_id);
-                }
+            if let Some(equal_binding_id) = rule.equals.find(binding_id)
+                && equal_binding_id != binding_id
+            {
+                let expansion_binding_id = self.add_binding(rule_set, binding_id);
+                let expansion_equal_binding_id = self.add_binding(rule_set, equal_binding_id);
+                self.expansion
+                    .equals
+                    .merge(expansion_binding_id, expansion_equal_binding_id);
             }
         }
 

@@ -120,14 +120,12 @@ fn spec_ext(ext_op: SpecOp, w: usize, x: SpecExpr) -> SpecExpr {
         ref args,
         pos: _,
     } = x
+        && *op == ext_op
+        && let [SpecExpr::ConstInt { val, .. }, n] = args.as_slice()
     {
-        if *op == ext_op {
-            if let [SpecExpr::ConstInt { val, .. }, n] = args.as_slice() {
-                let nw: usize = (*val).try_into().unwrap();
-                if w >= nw {
-                    return spec_zero_ext(w, n.clone());
-                }
-            }
+        let nw: usize = (*val).try_into().unwrap();
+        if w >= nw {
+            return spec_zero_ext(w, n.clone());
         }
     }
 
@@ -208,6 +206,12 @@ pub struct Conditions {
     pub requires: Vec<SpecExpr>,
     pub provides: Vec<SpecExpr>,
     pub modifies: HashSet<String>,
+}
+
+impl Default for Conditions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Conditions {

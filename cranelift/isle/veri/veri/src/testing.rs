@@ -27,7 +27,7 @@ where
         for b in elements {
             for c in elements {
                 assert!(
-                    !(a < b && b < c && !(a < c)),
+                    !(a < b && b < c) || a < c,
                     "transitivity property failed: a={a:?} b={b:?} c={c:?}"
                 );
             }
@@ -37,7 +37,11 @@ where
     // Duality
     for a in elements {
         for b in elements {
-            assert_eq!(a < b, b > a, "duality property failed: a={a:?} b={b:?}");
+            assert_eq!(
+                a.partial_cmp(b) == Some(Ordering::Less),
+                b.partial_cmp(a) == Some(Ordering::Greater),
+                "duality property failed: a={a:?} b={b:?}"
+            );
         }
     }
 }

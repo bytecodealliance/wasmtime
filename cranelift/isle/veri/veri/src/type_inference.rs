@@ -899,6 +899,12 @@ pub struct Solver {
     assignment: Assignment,
 }
 
+impl Default for Solver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Solver {
     pub fn new() -> Self {
         Self {

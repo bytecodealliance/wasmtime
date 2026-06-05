@@ -83,7 +83,7 @@ fn generated_attribute(term: &str) -> Attr {
     }
 }
 
-fn write_spec(path: &Path, defs: &Vec<Def>, width: usize) -> Result<()> {
+fn write_spec(path: &Path, defs: &[Def], width: usize) -> Result<()> {
     let mut output = std::fs::File::create(path)?;
 
     // Code generation warning.

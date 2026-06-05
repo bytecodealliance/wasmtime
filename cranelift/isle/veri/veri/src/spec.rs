@@ -921,7 +921,7 @@ impl SpecEnv {
         }
 
         // External extractor
-        if let Some(sig) = term.extractor_sig(&tyenv) {
+        if let Some(sig) = term.extractor_sig(tyenv) {
             return sig.ret_kind == ReturnKind::Option;
         }
 

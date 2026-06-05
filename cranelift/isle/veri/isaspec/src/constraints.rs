@@ -103,6 +103,12 @@ pub struct Scope {
     writes: HashSet<Target>,
 }
 
+impl Default for Scope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Scope {
     pub fn new() -> Self {
         Self {

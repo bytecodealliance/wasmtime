@@ -1307,7 +1307,7 @@ where
     // Verify template against the assembler.
     verify_opcode_template(&template, |assignment: &HashMap<String, u32>| {
         let bits = assignment.get("uimm12").unwrap();
-        let uimm12 = UImm12Scaled::maybe_from_i64((*bits).try_into().unwrap(), I8).unwrap();
+        let uimm12 = UImm12Scaled::maybe_from_i64((*bits).into(), I8).unwrap();
         Ok(inst(AMode::UnsignedOffset { rn, uimm12 }))
     })?;
 

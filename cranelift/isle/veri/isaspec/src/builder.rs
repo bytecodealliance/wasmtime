@@ -25,6 +25,10 @@ pub struct SpecConfig {
     pub cases: Cases,
 }
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "verification code"
+)]
 pub enum Cases {
     Instruction(InstConfig),
     Cases(Vec<Case>),

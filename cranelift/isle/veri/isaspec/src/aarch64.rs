@@ -87,7 +87,7 @@ pub fn assemble(inst: &Inst) -> Vec<u8> {
     let mut buffer = MachBuffer::new();
     inst.emit(&mut buffer, &emit_info, &mut Default::default());
     let buffer = buffer.finish(&Default::default(), &mut Default::default());
-    return buffer.data().to_vec();
+    buffer.data().to_vec()
 }
 
 /// Assemble the instruction and partition into opcodes.

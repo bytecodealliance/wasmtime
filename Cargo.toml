@@ -465,6 +465,13 @@ sha2 = { version = "0.10.2", default-features = false }
 gdbstub = "0.7.10"
 gdbstub_arch = "0.3.3"
 reqwest = "0.11"
+pest = "2.7.8"
+pest_derive = "2.7.8"
+enquote = "1.1.0"
+proc-macro-error = "1.0"
+num-bigint = "0.4"
+num-traits = "0.2"
+easy-smt = "0.2.4"
 
 # =============================================================================
 #

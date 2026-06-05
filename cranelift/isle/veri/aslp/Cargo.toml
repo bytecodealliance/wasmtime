@@ -5,9 +5,9 @@ edition = "2021"
 publish = false
 
 [dependencies]
-pest = "2.7.8"
-pest_derive = "2.7.8"
-enquote = "1.1.0"
+pest = { workspace = true }
+pest_derive = { workspace = true }
+enquote = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }
 tracing = { workspace = true }

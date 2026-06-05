@@ -129,10 +129,10 @@ pub fn print_rule_set(prog: &Program, term_id: &TermId, rule_set: &RuleSet) {
             println!("\t\t\tequals = [");
             for i in 0..rule_set.bindings.len() {
                 let binding_id = i.try_into().unwrap();
-                if let Some(eq) = rule.equals.find(binding_id) {
-                    if eq != binding_id {
-                        println!("\t\t\t\t{} == {}", binding_id.index(), eq.index());
-                    }
+                if let Some(eq) = rule.equals.find(binding_id)
+                    && eq != binding_id
+                {
+                    println!("\t\t\t\t{} == {}", binding_id.index(), eq.index());
                 }
             }
             println!("\t\t\t]");

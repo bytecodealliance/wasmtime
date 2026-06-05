@@ -969,7 +969,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-isle",
  "cranelift-isle-veri-aslp",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "reqwest",
  "tracing",
  "tracing-subscriber",
@@ -2278,15 +2278,6 @@ dependencies = [
  "clap",
  "cranelift-isle",
  "env_logger 0.11.10",
-]
-
-[[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
 ]
 
 [[package]]

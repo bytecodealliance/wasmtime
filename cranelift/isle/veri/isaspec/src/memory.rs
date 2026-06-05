@@ -7,6 +7,12 @@ pub struct ReadEffect {
     pub value: Target,
 }
 
+impl Default for ReadEffect {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReadEffect {
     pub fn new() -> Self {
         Self {
@@ -31,6 +37,12 @@ pub struct SetEffect {
     pub addr: Target,
     pub size_bits: Target,
     pub value: Target,
+}
+
+impl Default for SetEffect {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SetEffect {

@@ -635,7 +635,7 @@ impl Runner {
         }
 
         // Prepare report
-        expansion_reports.sort_by(|a, b| a.id.cmp(&b.id));
+        expansion_reports.sort_by_key(|a| a.id);
         let terms = TermMetadata::from_prog(&self.prog);
         let report = Report {
             build_profile: BUILD_PROFILE.to_string(),
@@ -708,7 +708,7 @@ impl Runner {
             ExpansionPredicate::ContainsRule(identifier) => {
                 let rule = self
                     .prog
-                    .get_rule_by_identifier(&identifier)
+                    .get_rule_by_identifier(identifier)
                     .ok_or(format_err!("unknown rule '{identifier}'"))?;
                 expansion.rules.contains(&rule.id)
             }
@@ -877,6 +877,10 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "verification code"
+    )]
     fn verify_expansion_type_instantiation(
         &self,
         conditions: &Conditions,

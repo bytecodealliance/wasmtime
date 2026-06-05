@@ -8,7 +8,7 @@ edition.workspace = true
 proc-macro = true
 
 [dependencies]
-quote = "1.0"
+quote = { workspace = true }
 syn = { workspace = true, features = ["full"]}
-proc-macro2 = "1.0"
-proc-macro-error = "1.0"
+proc-macro2 = { workspace = true }
+proc-macro-error = { workspace = true }

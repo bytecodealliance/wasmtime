@@ -410,9 +410,9 @@ impl<'a> Solver<'a> {
             Expr::BV2Nat(x) => Ok(self
                 .smt
                 .list(vec![self.smt.atom("bv2nat"), self.expr_atom(x)])),
-            Expr::ToFP(w, x) => self.to_fp_from_expr(w, x, true),
-            Expr::ToFPUnsigned(w, x) => self.to_fp_from_expr(w, x, false),
-            Expr::ToFPFromFP(w, x) => self.to_fp_from_fp(w, x),
+            Expr::ToFP(w, x) => self.fp_from_expr(w, x, true),
+            Expr::ToFPUnsigned(w, x) => self.fp_from_expr(w, x, false),
+            Expr::ToFPFromFP(w, x) => self.fp_from_fp(w, x),
             Expr::FPToUBV(w, x) => self.fp_to_bv(w, x, false),
             Expr::FPToSBV(w, x) => self.fp_to_bv(w, x, true),
             Expr::WidthOf(x) => self.width_of(x),
@@ -817,7 +817,7 @@ impl<'a> Solver<'a> {
         ]))
     }
 
-    fn to_fp_from_expr(&mut self, w: ExprId, xid: ExprId, signed: bool) -> Result<SExpr> {
+    fn fp_from_expr(&mut self, w: ExprId, xid: ExprId, signed: bool) -> Result<SExpr> {
         // Destination width expression should have known integer value.
         let width: usize = self
             .assignment
@@ -872,7 +872,7 @@ impl<'a> Solver<'a> {
         Ok(fp)
     }
 
-    fn to_fp_from_fp(&mut self, w: ExprId, xid: ExprId) -> Result<SExpr> {
+    fn fp_from_fp(&mut self, w: ExprId, xid: ExprId) -> Result<SExpr> {
         // Destination width expression should have known integer value.
         let new_width: usize = self
             .assignment
@@ -1020,7 +1020,7 @@ impl<'a> Solver<'a> {
         // SMT bitvector rotate_left requires that the rotate amount be
         // statically specified. Instead, to use a dynamic amount, desugar
         // to shifts and bit arithmetic.
-        let width_as_bv = self.smt.binary(width.try_into().unwrap(), width);
+        let width_as_bv = self.smt.binary(width, width);
         let wrapped_amount = self.smt.bvurem(amount, width_as_bv);
         let wrapped_delta = self.smt.bvsub(width_as_bv, wrapped_amount);
         match op {

@@ -498,10 +498,10 @@ impl<'a> ExplorerWriter<'a> {
                 writeln!(output, "<td>{id}</td>", id = id.index())?;
 
                 // Equals
-                if let Some(eq) = expansion.equals.find(id) {
-                    if id != eq {
-                        write!(output, "<td>&equals; {}</td>", eq.index())?;
-                    }
+                if let Some(eq) = expansion.equals.find(id)
+                    && id != eq
+                {
+                    write!(output, "<td>&equals; {}</td>", eq.index())?;
                 }
 
                 // Type
