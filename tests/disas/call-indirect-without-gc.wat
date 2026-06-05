@@ -1,4 +1,6 @@
 ;;! target = "x86_64"
+;;! flags = "-W function-references=n,gc=n"
+;;! test = "optimize"
 
 (module
   (table (export "t") 0 100 funcref)
@@ -22,14 +24,14 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0035                               v5 = load.i64 notrap aligned v0+56
+;; @0035                               v9 = load.i64 notrap aligned v0+48
 ;; @0035                               v6 = ireduce.i32 v5
 ;; @0035                               v7 = icmp uge v3, v6
+;; @0035                               v13 = iconst.i64 0
 ;; @0035                               v8 = uextend.i64 v3
-;; @0035                               v9 = load.i64 notrap aligned v0+48
 ;; @0035                               v10 = iconst.i64 3
 ;; @0035                               v11 = ishl v8, v10  ; v10 = 3
 ;; @0035                               v12 = iadd v9, v11
-;; @0035                               v13 = iconst.i64 0
 ;; @0035                               v14 = select_spectre_guard v7, v13, v12  ; v13 = 0
 ;; @0035                               v15 = load.i64 user6 aligned region0 v14
 ;; @0035                               v16 = iconst.i64 -2
@@ -38,14 +40,13 @@
 ;;
 ;;                                 block2 cold:
 ;; @0035                               v19 = iconst.i32 0
-;; @0035                               v21 = uextend.i64 v3
-;; @0035                               v22 = call fn0(v0, v19, v21)  ; v19 = 0
+;; @0035                               v22 = call fn0(v0, v19, v8)  ; v19 = 0
 ;; @0035                               jump block3(v22)
 ;;
 ;;                                 block3(v18: i64):
+;; @0035                               v26 = load.i32 user7 aligned readonly v18+16
 ;; @0035                               v24 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0035                               v25 = load.i32 notrap aligned readonly can_move v24+4
-;; @0035                               v26 = load.i32 user7 aligned readonly v18+16
 ;; @0035                               v27 = icmp eq v26, v25
 ;; @0035                               trapz v27, user8
 ;; @0035                               v28 = load.i64 notrap aligned readonly v18+8
