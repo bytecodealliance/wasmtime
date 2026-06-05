@@ -1,0 +1,115 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; brif (bmask x) -> brif x
+function %brif_bmask(i32) -> i32 {
+block0(v0: i32):
+    v1 = bmask.i32 v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_bmask(i32) -> i32 fast {
+; block0(v0: i32):
+;     brif v0, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+;; brif (ineg x) -> brif x
+function %brif_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg.i32 v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_ineg(i32) -> i32 fast {
+; block0(v0: i32):
+;     brif v0, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+;; brif (sextend x) -> brif x
+function %brif_sextend(i8) -> i32 {
+block0(v0: i8):
+    v1 = sextend.i32 v0
+    brif v1, block1, block2
+
+block1:
+    v2 = iconst.i32 100
+    return v2
+
+block2:
+    v3 = iconst.i32 200
+    return v3
+}
+
+; function %brif_sextend(i8) -> i32 fast {
+; block0(v0: i8):
+;     brif v0, block1, block2
+;
+; block1:
+;     v2 = iconst.i32 100
+;     return v2  ; v2 = 100
+;
+; block2:
+;     v3 = iconst.i32 200
+;     return v3  ; v3 = 200
+; }
+
+;; trapz (uextend x) -> trapz x
+function %trapz_uextend(i8) -> i8 {
+block0(v0: i8):
+    v1 = uextend.i32 v0
+    trapz v1, user8
+    return v0
+}
+
+; function %trapz_uextend(i8) -> i8 fast {
+; block0(v0: i8):
+;     trapz v0, user8
+;     return v0
+; }
+
+;; trapnz (bmask x) -> trapnz x
+function %trapnz_bmask(i32) -> i32 {
+block0(v0: i32):
+    v1 = bmask.i32 v0
+    trapnz v1, user8
+    return v0
+}
+
+; function %trapnz_bmask(i32) -> i32 fast {
+; block0(v0: i32):
+;     trapnz v0, user8
+;     return v0
+; }

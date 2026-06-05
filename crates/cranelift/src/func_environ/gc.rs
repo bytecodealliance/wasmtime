@@ -1247,7 +1247,12 @@ pub fn translate_ref_test(
                     .ins()
                     .load(ir::types::I32, gc_memflags.with_readonly(), ty_addr, 0);
 
-            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+            func_env.is_subtype(
+                builder,
+                actual_shared_ty,
+                expected_shared_ty,
+                expected_interned_ty,
+            )
         }
 
         // Same as for concrete arrays and structs except that a `VMFuncRef`
@@ -1265,7 +1270,12 @@ pub fn translate_ref_test(
                 val,
             );
 
-            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+            func_env.is_subtype(
+                builder,
+                actual_shared_ty,
+                expected_shared_ty,
+                expected_interned_ty,
+            )
         }
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
@@ -1648,22 +1658,35 @@ impl FuncEnvironment<'_> {
         }
     }
 
-    // Emit code to check whether `a <: b` for two `VMSharedTypeIndex`es.
+    /// Emit code to check whether `a <: b` for two `VMSharedTypeIndex`es.
     pub(crate) fn is_subtype(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         a: ir::Value,
         b: ir::Value,
+        b_ty: ModuleInternedTypeIndex,
     ) -> ir::Value {
         log::trace!("is_subtype({a:?}, {b:?})");
-
-        let diff_tys_block = builder.create_block();
-        let continue_block = builder.create_block();
 
         // Current block: fast path for when `a == b`.
         log::trace!("is_subtype: fast path check for exact same types");
         let same_ty = builder.ins().icmp(IntCC::Equal, a, b);
         let same_ty = builder.ins().uextend(ir::types::I32, same_ty);
+
+        // When `b` is final the equality check above is already a complete
+        // subtype check, so there is nothing more to do: a final type cannot be
+        // the supertype of any other type, so `a <: b` holds if and only if `a
+        // == b`; in that case we can avoid emitting the slow-path `is_subtype`
+        // libcall and its control flow entirely (the slow path would only ever
+        // return `false` here anyway).
+        let b_is_final = self.types[b_ty].is_final;
+        if b_is_final {
+            return same_ty;
+        }
+
+        let diff_tys_block = builder.create_block();
+        let continue_block = builder.create_block();
+
         builder.ins().brif(
             same_ty,
             continue_block,

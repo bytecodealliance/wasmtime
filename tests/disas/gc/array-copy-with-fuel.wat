@@ -89,7 +89,7 @@
 ;; @002b                               trapnz v81, user2
 ;; @002b                               v83 = iconst.i64 6
 ;; @002b                               v84 = iadd v82, v83  ; v83 = 6
-;; @002b                               brif v31, block4, block7(v84)
+;; @002b                               brif.i32 v6, block4, block7(v84)
 ;;
 ;;                                 block4:
 ;;                                     v148 = load.i32 notrap v201

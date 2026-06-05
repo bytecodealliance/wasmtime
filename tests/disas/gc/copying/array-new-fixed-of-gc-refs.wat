@@ -83,9 +83,7 @@
 ;; @0025                               v53 = iadd v280, v51
 ;; @0025                               v55 = iadd v53, v48  ; v48 = 16
 ;; @0025                               v56 = load.i32 user2 readonly region1 v55
-;; @0025                               v50 = iconst.i32 0
-;;                                     v181 = icmp ne v56, v50  ; v50 = 0
-;; @0025                               trapz v181, user17
+;; @0025                               trapz v56, user17
 ;; @0025                               v59 = uextend.i64 v56
 ;;                                     v155 = iconst.i64 2
 ;;                                     v184 = ishl v59, v155  ; v155 = 2
