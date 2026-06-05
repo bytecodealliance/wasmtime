@@ -1,3 +1,15 @@
+## 45.0.1
+
+Released 2026-06-05.
+
+### Fixed
+
+* Fixed regression with WASIp2 zero-delay clocks/timers: allow repeat calls to
+  `.ready()` to make progress.
+  [#13511](https://github.com/bytecodealliance/wasmtime/pull/13511)
+
+--------------------------------------------------------------------------------
+
 ## 45.0.0
 
 Released 2026-05-21.

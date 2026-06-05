@@ -73,7 +73,7 @@ fn subscribe_to_duration(
     duration: tokio::time::Duration,
 ) -> wasmtime::Result<Resource<DynPollable>> {
     let sleep = if duration.is_zero() {
-        table.push(Deadline::Past)?
+        table.push(Deadline::Past { yielded: false })?
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
         // NB: this resource created here is not actually exposed to wasm, it's
         // only an internal implementation detail used to match the signature
@@ -115,7 +115,7 @@ impl monotonic_clock::Host for WasiClocksCtxView<'_> {
 }
 
 enum Deadline {
-    Past,
+    Past { yielded: bool },
     Instant(tokio::time::Instant),
     Never,
 }
@@ -124,7 +124,8 @@ enum Deadline {
 impl Pollable for Deadline {
     async fn ready(&mut self) {
         match self {
-            Deadline::Past => {
+            Deadline::Past { yielded: true } => {}
+            Deadline::Past { yielded } => {
                 // It is important we yield to Tokio here; otherwise we risk
                 // starving `mio` such that it is unable to signal readiness for
                 // other pollables (e.g. TCP sockets) when the guest is polling
@@ -142,6 +143,7 @@ impl Pollable for Deadline {
                 // are hypothetically other ways to generate a pollable that's
                 // always immediately ready, which this hack doesn't cover, but
                 // we consider this sufficient for now.
+                *yielded = true;
                 tokio::task::yield_now().await
             }
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
