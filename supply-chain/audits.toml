@@ -6311,6 +6311,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.23.0 -> 0.25.2"
 
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.26.1 -> 1.0.7"
+notes = "Minor changes, new certs, etc. Nothing major"
+
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
