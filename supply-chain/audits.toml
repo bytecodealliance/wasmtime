@@ -4641,6 +4641,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "1.4.1"
 
+[[audits.similar]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.7.0 -> 3.1.1"
+notes = "Lots of crate changes, new algorithms, etc, but nothing awry. No `unsafe` changes"
+
 [[audits.sized-chunks]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"

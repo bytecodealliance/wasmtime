@@ -52,7 +52,7 @@ libm = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-similar = "2.1.0"
+similar = { workspace = true }
 env_logger = { workspace = true }
 proptest = { workspace = true }
 
