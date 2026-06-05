@@ -69,9 +69,9 @@
 ;; @0031                               v22 = load.i32 notrap aligned readonly can_move v21
 ;; @0031                               v24 = icmp eq v23, v22
 ;; @0031                               trapz v24, user8
-;; @0031                               v25 = load.i64 notrap aligned readonly v15+8
-;; @0031                               v26 = load.i64 notrap aligned readonly v15+24
-;; @0031                               call_indirect sig0, v25(v26, v0)
+;; @0031                               v26 = load.i64 notrap aligned readonly v15+8
+;; @0031                               v27 = load.i64 notrap aligned readonly v15+24
+;; @0031                               call_indirect sig0, v26(v27, v0)
 ;; @0034                               jump block1
 ;;
 ;;                                 block1:
