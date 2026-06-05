@@ -1,6 +1,5 @@
 use cap_std::time::{Duration, Instant, SystemClock, SystemTime};
 use cap_std::{AmbientAuthority, ambient_authority};
-use cap_time_ext::{MonotonicClockExt as _, SystemClockExt as _};
 use std::error::Error;
 use std::fmt;
 use wasmtime::component::{HasData, ResourceTable};
@@ -103,7 +102,22 @@ impl WallClock {
 
 impl HostWallClock for WallClock {
     fn resolution(&self) -> Duration {
-        self.clock.resolution()
+        #[cfg(unix)]
+        {
+            let res = rustix::time::clock_getres(rustix::time::ClockId::Realtime);
+            Duration::new(
+                res.tv_sec.try_into().unwrap(),
+                res.tv_nsec.try_into().unwrap(),
+            )
+        }
+        #[cfg(windows)]
+        {
+            // According to [this blog post], the system timer resolution
+            // is 55ms or 10ms. Use the more conservative of the two.
+            //
+            // [this blog post]: https://devblogs.microsoft.com/oldnewthing/20170921-00/?p=97057
+            Duration::new(0, 55_000_000)
+        }
     }
 
     fn now(&self) -> Duration {
@@ -140,7 +154,26 @@ impl MonotonicClock {
 
 impl HostMonotonicClock for MonotonicClock {
     fn resolution(&self) -> u64 {
-        self.clock.resolution().as_nanos().try_into().unwrap()
+        #[cfg(unix)]
+        {
+            let res = rustix::time::clock_getres(rustix::time::ClockId::Monotonic);
+            u64::try_from(res.tv_sec).unwrap() * 1_000_000_000 + u64::try_from(res.tv_nsec).unwrap()
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Performance::QueryPerformanceFrequency;
+
+            unsafe {
+                let mut frequency = 0;
+                if QueryPerformanceFrequency(&mut frequency) == 0 {
+                    panic!(
+                        "QueryPerformanceFrequency failed: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
+                1_000_000_000 / u64::try_from(frequency).unwrap()
+            }
+        }
     }
 
     fn now(&self) -> u64 {
