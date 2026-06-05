@@ -98,11 +98,26 @@ pub fn get_isle_compilations(
     #[cfg(feature = "pulley")]
     let pulley_gen = gen_dir.join("pulley_gen.isle");
     // Verification
-    let prelude_spec_isle = codegen_crate_dir.join("src").join("spec").join("prelude_spec.isle");
-    let inst_specs_isle = codegen_crate_dir.join("src").join("spec").join("inst_specs.isle");
-    let inst_tags_isle = codegen_crate_dir.join("src").join("spec").join("inst_tags.isle");
-    let fpconst_isle = codegen_crate_dir.join("src").join("spec").join("fpconst.isle");
-    let state_isle = codegen_crate_dir.join("src").join("spec").join("state.isle");
+    let prelude_spec_isle = codegen_crate_dir
+        .join("src")
+        .join("spec")
+        .join("prelude_spec.isle");
+    let inst_specs_isle = codegen_crate_dir
+        .join("src")
+        .join("spec")
+        .join("inst_specs.isle");
+    let inst_tags_isle = codegen_crate_dir
+        .join("src")
+        .join("spec")
+        .join("inst_tags.isle");
+    let fpconst_isle = codegen_crate_dir
+        .join("src")
+        .join("spec")
+        .join("fpconst.isle");
+    let state_isle = codegen_crate_dir
+        .join("src")
+        .join("spec")
+        .join("state.isle");
 
     // Directory for mid-end optimizations.
     let src_opts = codegen_crate_dir.join("src").join("opts");
