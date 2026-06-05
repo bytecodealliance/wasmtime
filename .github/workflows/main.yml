@@ -523,6 +523,7 @@ jobs:
           --exclude wasmtime-wasi-tls \
           --exclude wasmtime-fuzzing \
           --exclude wasm-spec-interpreter \
+          --exclude cranelift-isle-veri \
           --exclude calculator \
           --exclude wasi-preview1-component-adapter
 
