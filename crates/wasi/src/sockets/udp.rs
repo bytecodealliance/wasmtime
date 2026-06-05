@@ -5,7 +5,6 @@ use crate::sockets::util::{
     set_unicast_hop_limit, udp_bind, udp_connect, udp_disconnect, udp_socket,
 };
 use crate::sockets::{SocketAddrCheck, SocketAddressFamily, WasiSocketsCtx};
-use cap_net_ext::AddressFamily;
 use io_lifetimes::AsSocketlike as _;
 use io_lifetimes::raw::{FromRawSocketlike as _, IntoRawSocketlike as _};
 use rustix::io::Errno;
@@ -57,23 +56,14 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     /// Create a new socket in the given family.
-    pub(crate) fn new(cx: &WasiSocketsCtx, family: AddressFamily) -> Result<Self, ErrorCode> {
+    pub(crate) fn new(cx: &WasiSocketsCtx, family: SocketAddressFamily) -> Result<Self, ErrorCode> {
         cx.allowed_network_uses.check_allowed_udp()?;
-
-        // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
-        // - On Windows: call WSAStartup if not done before.
-        // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
-        //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
 
         let fd = udp_socket(family)?;
 
-        let socket_address_family = match family {
-            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
-            AddressFamily::Ipv6 => {
-                rustix::net::sockopt::set_ipv6_v6only(&fd, true)?;
-                SocketAddressFamily::Ipv6
-            }
-        };
+        if family == SocketAddressFamily::Ipv6 {
+            rustix::net::sockopt::set_ipv6_v6only(&fd, true)?;
+        }
 
         let socket = with_ambient_tokio_runtime(|| {
             tokio::net::UdpSocket::try_from(unsafe {
@@ -84,7 +74,7 @@ impl UdpSocket {
         Ok(Self {
             socket: Arc::new(socket),
             udp_state: UdpState::Default,
-            family: socket_address_family,
+            family,
             socket_addr_check: None,
         })
     }

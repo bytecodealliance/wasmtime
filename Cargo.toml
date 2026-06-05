@@ -348,8 +348,6 @@ wasip1 = { version = "1.0.0", default-features = false }
 target-lexicon = "0.13.5"
 cap-std = "4.0.2"
 cap-fs-ext = "4.0.2"
-cap-net-ext = "4.0.2"
-cap-tempfile = "4.0.2"
 io-lifetimes = { version = "3.0.1", default-features = false }
 rustix = "1.1.4"
 # wit-bindgen:

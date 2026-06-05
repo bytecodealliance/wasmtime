@@ -1,7 +1,6 @@
 use crate::p2::SocketError;
 use crate::p2::bindings::sockets::network::{
-    self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
-    Ipv6SocketAddress,
+    self, ErrorCode, IpAddress, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
 };
 use crate::sockets::WasiSocketsCtxView;
 use crate::sockets::util::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
@@ -215,23 +214,5 @@ impl std::net::ToSocketAddrs for Ipv6SocketAddress {
 
     fn to_socket_addrs(&self) -> io::Result<Self::Iter> {
         std::net::SocketAddrV6::from(*self).to_socket_addrs()
-    }
-}
-
-impl From<IpAddressFamily> for cap_net_ext::AddressFamily {
-    fn from(family: IpAddressFamily) -> Self {
-        match family {
-            IpAddressFamily::Ipv4 => cap_net_ext::AddressFamily::Ipv4,
-            IpAddressFamily::Ipv6 => cap_net_ext::AddressFamily::Ipv6,
-        }
-    }
-}
-
-impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
-    fn from(family: cap_net_ext::AddressFamily) -> Self {
-        match family {
-            cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
-            cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
-        }
     }
 }
