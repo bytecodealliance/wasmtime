@@ -20,7 +20,7 @@ all-features = true
 [dependencies]
 anyhow = { workspace = true }
 postcard = { workspace = true }
-cpp_demangle = { version = "0.4.3", default-features = false, features = ['alloc'], optional = true }
+cpp_demangle = { version = "0.5.1", default-features = false, features = ['alloc'], optional = true }
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
 cranelift-bitset = { workspace = true, features = ['enable-serde'] }
 cranelift-bforest = { workspace = true }
