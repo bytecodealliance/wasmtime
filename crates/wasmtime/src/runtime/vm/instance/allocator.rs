@@ -324,32 +324,35 @@ impl dyn InstanceAllocator + '_ {
                 .expect("module should have already been validated before allocation");
         }
 
-        self.increment_core_instance_count()?;
-
         let num_defined_memories = module.num_defined_memories();
         let num_defined_tables = module.num_defined_tables();
 
+        let memories = TryPrimaryMap::with_capacity(num_defined_memories)?;
+        let tables = TryPrimaryMap::with_capacity(num_defined_tables)?;
+
+        // Note that incrementing the instance count here must be done just
+        // before creation of `DeallocateOnDrop`. This is required to ensure
+        // that upon successful increment it'll get paired with a decrement
+        // below should anything fail.
+        self.increment_core_instance_count()?;
         let mut guard = DeallocateOnDrop {
             run_deallocate: true,
-            memories: TryPrimaryMap::with_capacity(num_defined_memories)?,
-            tables: TryPrimaryMap::with_capacity(num_defined_tables)?,
+            memories,
+            tables,
             allocator: self,
+            // NB: do not add more initialization here if it can fail, move that
+            // above the increment above instead.
         };
 
         self.allocate_memories(&mut request, &mut guard.memories)
             .await?;
         self.allocate_tables(&mut request, &mut guard.tables)
             .await?;
+
         // SAFETY: memories/tables were just allocated from the store within
         // `request` and this function's own contract requires that the
         // imports are valid.
-        let handle = unsafe {
-            Instance::new(
-                request,
-                mem::take(&mut guard.memories),
-                mem::take(&mut guard.tables),
-            )?
-        };
+        let handle = unsafe { Instance::new(request, &mut guard.memories, &mut guard.tables)? };
         guard.run_deallocate = false;
         return Ok(handle);
 
@@ -363,6 +366,8 @@ impl dyn InstanceAllocator + '_ {
         impl Drop for DeallocateOnDrop<'_> {
             fn drop(&mut self) {
                 if !self.run_deallocate {
+                    debug_assert!(self.memories.is_empty());
+                    debug_assert!(self.tables.is_empty());
                     return;
                 }
                 // SAFETY: these were previously allocated by this allocator

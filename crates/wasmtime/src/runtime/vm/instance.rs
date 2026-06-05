@@ -151,10 +151,14 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Create an instance at the given memory address.
+    /// Creates a new owned instance handle from `req`.
     ///
-    /// It is assumed the memory was properly aligned and the
-    /// allocation was `alloc_size` in bytes.
+    /// The runtime memory/table data structures must have been previously
+    /// allocated and are present within `memories` and `tables`. These values
+    /// are `mem::take`n upon allocation success of an instance, and if the
+    /// instance allocation fails then these are otherwise left in place. This
+    /// enable the pooling allocator to run custom deallocation code for them,
+    /// for example.
     ///
     /// # Safety
     ///
@@ -163,8 +167,8 @@ impl Instance {
     /// and `tables` must have been allocated for `req.store`.
     unsafe fn new(
         req: InstanceAllocationRequest,
-        memories: TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
-        tables: TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+        memories: &mut TryPrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+        tables: &mut TryPrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
     ) -> Result<InstanceHandle, OutOfMemory> {
         let module = req.runtime_info.env_module();
         let memory_tys = &module.memories;
@@ -191,17 +195,27 @@ impl Instance {
             passive_elements.push(PassiveElementSegment::new(*ty, len)?)?;
         }
 
+        // Allocate the instance and its `VMContext` with empty memory and table
+        // maps. This is the final fallible allocation in this function; only
+        // after it succeeds do we transfer ownership of the pool-allocated
+        // `memories`/`tables` into the instance (below), so that a failure here
+        // leaves them in the caller's deallocation guard to be freed.
         let mut ret = OwnedInstance::new(Instance {
             id: req.id,
             runtime_info: req.runtime_info.clone(),
-            memories,
-            tables,
+            memories: TryPrimaryMap::default(),
+            tables: TryPrimaryMap::default(),
             passive_elements,
             #[cfg(feature = "wmemcheck")]
             wmemcheck_state,
             store: None,
             vmctx: OwnedVMContext::new(),
         })?;
+
+        // Can't fail any more, so transfer ownership of `memories` and `tables`
+        // to this instance.
+        *ret.get_mut().memories_mut() = mem::take(memories);
+        *ret.get_mut().tables_mut() = mem::take(tables);
 
         // SAFETY: this vmctx was allocated with the same layout above, so it
         // should be safe to initialize with the same values here.
