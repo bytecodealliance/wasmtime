@@ -565,41 +565,6 @@ impl DefaultMutate for CatchKind {
     type DefaultMutate = EnumMutator;
 }
 
-impl Generate<TagSig> for TagSigMutator {
-    fn generate(&mut self, ctx: &mut Context) -> MutResult<TagSig> {
-        let count = ctx.rng().gen_index(MAX_TAG_PARAMS).unwrap_or(0) + 1;
-        let params = (0..count)
-            .map(|_| EnumMutator.generate(ctx))
-            .collect::<MutResult<Vec<_>>>()?;
-        Ok(TagSig { params })
-    }
-}
-
-impl Generate<Scenario> for ScenarioMutator {
-    fn generate(&mut self, ctx: &mut Context) -> MutResult<Scenario> {
-        let mut m = mutatis::mutators::u32();
-        Ok(Scenario {
-            throw_tag: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
-            throw_depth: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
-            catch_depth: mutatis::Generate::<u32>::generate(&mut m, ctx)?,
-            catch_kind: EnumMutator.generate(ctx)?,
-            decoy_catches: vec![],
-            decoy_catches_after: vec![],
-        })
-    }
-}
-
-impl Generate<ExceptionOps> for ExceptionOpsMutator {
-    fn generate(&mut self, _ctx: &mut Context) -> MutResult<ExceptionOps> {
-        let mut ops = ExceptionOps::default();
-        let mut session = mutatis::Session::new();
-        for _ in 0..32 {
-            session.mutate(&mut ops)?;
-        }
-        Ok(ops)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
