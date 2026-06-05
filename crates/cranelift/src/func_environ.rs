@@ -2281,7 +2281,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // full subtype check. Otherwise, we do a simple equality check.
         let matches = if features.gc() {
             self.env
-                .is_subtype(self.builder, callee_sig_id, caller_sig_id)
+                .is_subtype(self.builder, callee_sig_id, caller_sig_id, interned_ty)
         } else {
             self.builder
                 .ins()

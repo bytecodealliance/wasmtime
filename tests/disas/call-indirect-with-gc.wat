@@ -19,9 +19,7 @@
 ;;     gv5 = load.i64 notrap aligned gv3+56
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
-;;     sig2 = (i64 vmctx, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:7 sig1
-;;     fn1 = colocated u805306368:27 sig2
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
@@ -50,20 +48,12 @@
 ;; @0035                               v24 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0035                               v25 = load.i32 notrap aligned readonly can_move v24+4
 ;; @0035                               v27 = icmp eq v26, v25
-;; @0035                               v28 = uextend.i32 v27
-;; @0035                               brif v27, block5(v28), block4
-;;
-;;                                 block4:
-;; @0035                               v30 = call fn1(v0, v26, v25)
-;; @0035                               jump block5(v30)
-;;
-;;                                 block5(v31: i32):
-;; @0035                               trapz v31, user8
-;; @0035                               v32 = load.i64 notrap aligned readonly v18+8
-;; @0035                               v33 = load.i64 notrap aligned readonly v18+24
-;; @0035                               v34 = call_indirect sig0, v32(v33, v0, v2)
+;; @0035                               trapz v27, user8
+;; @0035                               v29 = load.i64 notrap aligned readonly v18+8
+;; @0035                               v30 = load.i64 notrap aligned readonly v18+24
+;; @0035                               v31 = call_indirect sig0, v29(v30, v0, v2)
 ;; @0038                               jump block1
 ;;
 ;;                                 block1:
-;; @0038                               return v34
+;; @0038                               return v31
 ;; }

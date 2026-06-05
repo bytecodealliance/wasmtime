@@ -9,7 +9,6 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     ss0 = explicit_slot 4, align = 4
 ;;     region0 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
@@ -18,13 +17,9 @@
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
-;;     sig0 = (i64 vmctx, i32, i32) -> i32 tail
-;;     fn0 = colocated u805306368:27 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v36 = stack_addr.i64 ss0
-;;                                     store notrap v2, v36
 ;; @001e                               v4 = iconst.i32 0
 ;; @001e                               v5 = icmp eq v2, v4  ; v4 = 0
 ;; @001e                               brif v5, block4(v4), block2  ; v4 = 0
@@ -32,12 +27,12 @@
 ;;                                 block2:
 ;; @001e                               v8 = iconst.i32 1
 ;; @001e                               v9 = band.i32 v2, v8  ; v8 = 1
-;;                                     v37 = iconst.i32 0
-;; @001e                               brif v9, block4(v37), block3  ; v37 = 0
+;;                                     v25 = iconst.i32 0
+;; @001e                               brif v9, block4(v25), block3  ; v25 = 0
 ;;
 ;;                                 block3:
-;; @001e                               v31 = load.i64 notrap aligned readonly can_move v0+8
-;; @001e                               v15 = load.i64 notrap aligned readonly can_move v31+32
+;; @001e                               v23 = load.i64 notrap aligned readonly can_move v0+8
+;; @001e                               v15 = load.i64 notrap aligned readonly can_move v23+32
 ;; @001e                               v14 = uextend.i64 v2
 ;; @001e                               v16 = iadd v15, v14
 ;; @001e                               v17 = iconst.i64 4
@@ -47,20 +42,12 @@
 ;; @001e                               v13 = load.i32 notrap aligned readonly can_move v12
 ;; @001e                               v20 = icmp eq v19, v13
 ;; @001e                               v21 = uextend.i32 v20
-;; @001e                               brif v20, block6(v21), block5
+;; @001e                               jump block4(v21)
 ;;
-;;                                 block5:
-;; @001e                               v23 = call fn0(v0, v19, v13), stack_map=[i32 @ ss0+0]
-;; @001e                               jump block6(v23)
-;;
-;;                                 block6(v24: i32):
-;; @001e                               jump block4(v24)
-;;
-;;                                 block4(v25: i32):
-;; @001e                               trapz v25, user19
-;;                                     v26 = load.i32 notrap v36
+;;                                 block4(v22: i32):
+;; @001e                               trapz v22, user19
 ;; @0021                               jump block1
 ;;
 ;;                                 block1:
-;; @0021                               return v26
+;; @0021                               return v2
 ;; }
