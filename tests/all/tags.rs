@@ -6,14 +6,14 @@ use wasmtime::*;
 fn wasm_export_tags() -> Result<()> {
     let source = r#"
             (module
-                (tag (export "t1") (param i32) (result i32))
-                (tag (export "t2") (param i32) (result i32))
-                (tag (export "t3") (param i64) (result i32))
+                (tag (export "t1") (param i32))
+                (tag (export "t2") (param i32))
+                (tag (export "t3") (param i64))
             )
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_exceptions(true).wasm_stack_switching(true);
+    config.wasm_exceptions(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(&engine, source)?;
@@ -50,19 +50,19 @@ fn wasm_export_tags() -> Result<()> {
 fn wasm_import_tags() -> Result<()> {
     let m1_src = r#"
             (module
-                (tag (export "t1") (param i32) (result i32))
+                (tag (export "t1") (param i32))
             )
         "#;
     let m2_src = r#"
             (module
-                (tag (export "t1_2") (import "" "") (param i32) (result i32))
-                (tag (export "t1_22") (import "" "") (param i32) (result i32))
-                (tag (export "t2") (param i32) (result i32))
+                (tag (export "t1_2") (import "" "") (param i32))
+                (tag (export "t1_22") (import "" "") (param i32))
+                (tag (export "t2") (param i32))
             )
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_exceptions(true).wasm_stack_switching(true);
+    config.wasm_exceptions(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let m1 = Module::new(&engine, m1_src)?;
@@ -97,7 +97,10 @@ fn stack_switching_disallows_inlining() -> Result<()> {
 fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
     let mut config = Config::new();
     config.strategy(Strategy::Winch);
-    let engine = Engine::new(&config)?;
+    // Ignore targets that don't have support for Winch just yet
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
     let mut store = Store::new(&engine, ());
     let fty = FuncType::new(&engine, [], []);
     let tty1 = TagType::new(fty.clone());
