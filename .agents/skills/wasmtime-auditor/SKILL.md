@@ -33,7 +33,7 @@ in Wasmtime are not bugs. Bugs can be anything Wasmtime considers a security
 vulnerability. Bugs can also be a `debug_assert!`, for example, and it's
 recommend to analyze and run binaries with debug asserts enabled.
 
-Bugs identifies in previous audits are not interesting and should be ignored for
+Bugs identified in previous audits are not interesting and should be ignored for
 the purposes of finding new bugs.
 
 ## Making a bug report

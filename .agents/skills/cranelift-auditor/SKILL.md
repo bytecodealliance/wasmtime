@@ -33,7 +33,7 @@ Bugs in Cranelift can include:
 * Backend-specific ABI bugs.
 * Other logic/miscellaneous bugs.
 
-Bugs identifies in previous audits are not interesting and should be ignored for
+Bugs identified in previous audits are not interesting and should be ignored for
 the purposes of finding new bugs.
 
 ## Making a bug report
@@ -41,7 +41,7 @@ the purposes of finding new bugs.
 Bug reports should be clear and concise. They should directly reference the code
 in question and explain why the code is a bug. Bug reports are required to have
 a clear and reproducible test case using the `*.clif` test format which is
-executed with the `clif-util` too. This test format allows, for example,
+executed with the `clif-util` tool. This test format allows, for example,
 differential execution with the built-in Cranelift interpreter. This should be
 used to demonstrate all bugs.
 
