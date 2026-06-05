@@ -6,7 +6,8 @@ function %c_fldsp() -> f64 {
   ss0 = explicit_slot 16
 
 block0:
-  v0 = stack_load.f64 ss0+8
+  v1 = stack_addr.i64 ss0+8
+  v0 = load.f64 notrap v1
   return v0
 }
 
@@ -43,7 +44,8 @@ function %c_fsdsp(f64) {
   ss0 = explicit_slot 128
 
 block0(v0: f64):
-  stack_store.f64 v0, ss0+64
+  v1 = stack_addr.i64 ss0+64
+  store.f64 notrap v0, v1
   return
 }
 

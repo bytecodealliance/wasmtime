@@ -8,9 +8,11 @@ function %f0(i64) -> i64 tail {
     ss0 = explicit_slot 16
     fn0 = %whatever(i64)
 block0(v0: i64):
-    stack_store v0, ss0+8
+    v3 = stack_addr.i64 ss0+8
+    store notrap v0, v3
     call fn0(v0), stack_map=[i64 @ ss0+8]
-    v1 = stack_load.i64 ss0+8
+    v2 = stack_addr.i64 ss0+8
+    v1 = load.i64 notrap v2
     return v1
 }
 
@@ -64,9 +66,11 @@ function %f3(i64) -> i64 tail {
     ss0 = explicit_slot 16
     fn0 = %f2(i64) -> i64 tail
 block0(v0: i64):
-    stack_store v0, ss0+8
+    v5 = stack_addr.i64 ss0+8
+    store notrap v0, v5
     v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
-    v2 = stack_load.i64 ss0+8
+    v4 = stack_addr.i64 ss0+8
+    v2 = load.i64 notrap v4
     v3 = iadd v1, v2
     return v3
 }
@@ -102,9 +106,11 @@ function %f4(i64) -> i64 tail {
     ss0 = explicit_slot 8
     fn0 = %whatever(i64)
 block0(v0: i64):
-    stack_store v0, ss0
+    v3 = stack_addr.i64 ss0
+    store notrap v0, v3
     call fn0(v0), stack_map=[i64 @ ss0+0]
-    v1 = stack_load.i64 ss0
+    v2 = stack_addr.i64 ss0
+    v1 = load.i64 notrap v2
     return v1
 }
 
@@ -114,9 +120,11 @@ function %f5(i64) -> i64 tail {
     ss0 = explicit_slot 16
     fn0 = %f4(i64) -> i64 tail
 block0(v0: i64):
-    stack_store v0, ss0+8
+    v5 = stack_addr.i64 ss0+8
+    store notrap v0, v5
     v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
-    v2 = stack_load.i64 ss0+8
+    v4 = stack_addr.i64 ss0+8
+    v2 = load.i64 notrap v4
     v3 = iadd v1, v2
     return v3
 }
@@ -166,9 +174,11 @@ function %f7(i64) -> i64 tail {
     ss0 = explicit_slot 16
     fn0 = %f6(i64) -> i64 tail
 block0(v0: i64):
-    stack_store v0, ss0+8
+    v5 = stack_addr.i64 ss0+8
+    store notrap v0, v5
     v1 = call fn0(v0), stack_map=[i64 @ ss0+8]
-    v2 = stack_load.i64 ss0+8
+    v4 = stack_addr.i64 ss0+8
+    v2 = load.i64 notrap v4
     v3 = iadd v1, v2
     return v3
 }
@@ -213,9 +223,11 @@ function %f9(i64, i64) -> i64 tail {
     ss0 = explicit_slot 16
     fn0 = %f8(i64, i64) -> i64 tail
 block0(v0: i64, v1: i64):
-    stack_store v0, ss0+8
+    v6 = stack_addr.i64 ss0+8
+    store notrap v0, v6
     v2 = call fn0(v0, v1), stack_map=[i64 @ ss0+8]
-    v3 = stack_load.i64 ss0+8
+    v5 = stack_addr.i64 ss0+8
+    v3 = load.i64 notrap v5
     v4 = iadd v2, v3
     return v4
 }

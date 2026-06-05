@@ -11,8 +11,10 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v10 = iconst.i32 0
     v11 = iconst.i64 0
     v12 = uextend.i128 v11  ; v11 = 0
-    stack_store v12, ss0
-    stack_store v11, ss0+16  ; v11 = 0
+    v835 = stack_addr.i64 ss0
+    store notrap v12, v835
+    v836 = stack_addr.i64 ss0+16
+    store notrap v11, v836  ; v11 = 0
     v55 = iconst.i32 0
     v56 = iconst.i32 1
     v57 = icmp eq v2, v55  ; v55 = 0
@@ -111,7 +113,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v133 = bor v127, v132
     v134 = select v133, v126, v20  ; v126 = 1
     v21 = sdiv v20, v134
-    stack_store v16, ss0+4
+    v837 = stack_addr.i64 ss0+4
+    store notrap v16, v837
     v135 = iconst.i32 0
     v136 = iconst.i32 1
     v137 = icmp eq v21, v135  ; v135 = 0
@@ -298,7 +301,8 @@ block0(v0: i16, v1: f64, v2: i32, v3: i64, v4: i16, v5: i128, v6: f32):
     v283 = bor v277, v282
     v284 = select v283, v276, v37  ; v276 = 1
     v38 = sdiv v37, v284
-    stack_store v16, ss0+4
+    v838 = stack_addr.i64 ss0+4
+    store notrap v16, v838
     v285 = iconst.i32 0
     v286 = iconst.i32 1
     v287 = icmp eq v38, v285  ; v285 = 0

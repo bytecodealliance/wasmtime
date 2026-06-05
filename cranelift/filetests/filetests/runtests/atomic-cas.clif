@@ -13,12 +13,14 @@ function %atomic_cas_i64(i64, i64, i64) -> i64 {
     ss0 = explicit_slot 8
 
 block0(v0: i64, v1: i64, v2: i64):
-    stack_store.i64 v0, ss0
+    v6 = stack_addr.i64 ss0
+    store.i64 notrap v0, v6
 
     v3 = stack_addr.i64 ss0
     v4 = atomic_cas.i64 v3, v1, v2
 
-    v5 = stack_load.i64 ss0
+    v7 = stack_addr.i64 ss0
+    v5 = load.i64 notrap v7
     return v5
 }
 ; run: %atomic_cas_i64(0, 0, 2) == 2
@@ -30,12 +32,14 @@ function %atomic_cas_i32(i32, i32, i32) -> i32 {
     ss0 = explicit_slot 4
 
 block0(v0: i32, v1: i32, v2: i32):
-    stack_store.i32 v0, ss0
+    v6 = stack_addr.i64 ss0
+    store.i32 notrap v0, v6
 
     v3 = stack_addr.i64 ss0
     v4 = atomic_cas.i32 v3, v1, v2
 
-    v5 = stack_load.i32 ss0
+    v7 = stack_addr.i64 ss0
+    v5 = load.i32 notrap v7
     return v5
 }
 ; run: %atomic_cas_i32(0, 0, 2) == 2

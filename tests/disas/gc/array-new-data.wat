@@ -152,8 +152,8 @@
 ;; @0025                               jump block4(v45, v48)
 ;;
 ;;                                 block4(v57: i32, v58: i64):
-;;                                     v124 = stack_addr.i64 ss0
-;;                                     store notrap v57, v124
+;;                                     v116 = stack_addr.i64 ss0
+;;                                     store notrap v57, v116
 ;; @0025                               v59 = iconst.i64 16
 ;; @0025                               v60 = iadd v58, v59  ; v59 = 16
 ;; @0025                               store.i32 user2 region1 v3, v60
@@ -181,9 +181,9 @@
 ;; @0025                               trapnz v106, user2
 ;; @0025                               v96 = iadd v94, v8
 ;; @0025                               call fn1(v0, v79, v96, v9), stack_map=[i32 @ ss0+0]
-;;                                     v108 = load.i32 notrap v124
+;;                                     v109 = load.i32 notrap v116
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               return v108
+;; @0029                               return v109
 ;; }

@@ -33,7 +33,8 @@ function %vm_state() -> i64 {
 block0:
     ;; Store a 1 in the vmctx struct
     v1 = iconst.i64 1
-    stack_store.i64 v1, ss1
+    v4 = stack_addr.i64 ss1
+    store.i64 notrap v1, v4
 
     ;; Call %load_at_0_and_add with vmctx
     v2 = stack_addr.i64 ss1

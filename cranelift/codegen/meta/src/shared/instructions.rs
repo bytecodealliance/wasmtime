@@ -1189,52 +1189,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "stack_load",
-            r#"
-        Load a value from a stack slot at the constant offset.
-
-        This is a polymorphic instruction that can load any value type which
-        has a memory representation.
-
-        The offset is an immediate constant, not an SSA value. The memory
-        access cannot go out of bounds, i.e.
-        `sizeof(a) + Offset <= sizeof(SS)`.
-        "#,
-            &formats.stack_load,
-        )
-        .operands_in(vec![
-            Operand::new("SS", &entities.stack_slot),
-            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
-        ])
-        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
-        .can_load(),
-    );
-
-    ig.push(
-        Inst::new(
-            "stack_store",
-            r#"
-        Store a value to a stack slot at a constant offset.
-
-        This is a polymorphic instruction that can store any value type with a
-        memory representation.
-
-        The offset is an immediate constant, not an SSA value. The memory
-        access cannot go out of bounds, i.e.
-        `sizeof(a) + Offset <= sizeof(SS)`.
-        "#,
-            &formats.stack_store,
-        )
-        .operands_in(vec![
-            Operand::new("x", Mem).with_doc("Value to be stored"),
-            Operand::new("SS", &entities.stack_slot),
-            Operand::new("Offset", &imm.offset32).with_doc("In-bounds offset into stack slot"),
-        ])
-        .can_store(),
-    );
-
-    ig.push(
-        Inst::new(
             "stack_addr",
             r#"
         Get the address of a stack slot.
@@ -1243,7 +1197,7 @@ pub(crate) fn define(
         refer to a byte inside the stack slot:
         `0 <= Offset < sizeof(SS)`.
         "#,
-            &formats.stack_load,
+            &formats.stack_addr,
         )
         .operands_in(vec![
             Operand::new("SS", &entities.stack_slot),
@@ -1254,47 +1208,13 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "dynamic_stack_load",
-            r#"
-        Load a value from a dynamic stack slot.
-
-        This is a polymorphic instruction that can load any value type which
-        has a memory representation.
-        "#,
-            &formats.dynamic_stack_load,
-        )
-        .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
-        .operands_out(vec![Operand::new("a", Mem).with_doc("Value loaded")])
-        .can_load(),
-    );
-
-    ig.push(
-        Inst::new(
-            "dynamic_stack_store",
-            r#"
-        Store a value to a dynamic stack slot.
-
-        This is a polymorphic instruction that can store any dynamic value type with a
-        memory representation.
-        "#,
-            &formats.dynamic_stack_store,
-        )
-        .operands_in(vec![
-            Operand::new("x", Mem).with_doc("Value to be stored"),
-            Operand::new("DSS", &entities.dynamic_stack_slot),
-        ])
-        .can_store(),
-    );
-
-    ig.push(
-        Inst::new(
             "dynamic_stack_addr",
             r#"
         Get the address of a dynamic stack slot.
 
         Compute the absolute address of the first byte of a dynamic stack slot.
         "#,
-            &formats.dynamic_stack_load,
+            &formats.dynamic_stack_addr,
         )
         .operands_in(vec![Operand::new("DSS", &entities.dynamic_stack_slot)])
         .operands_out(vec![Operand::new("addr", iAddr)]),

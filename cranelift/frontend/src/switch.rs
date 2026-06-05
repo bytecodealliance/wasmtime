@@ -336,6 +336,15 @@ mod tests {
     use super::*;
     use crate::frontend::FunctionBuilderContext;
     use alloc::string::ToString;
+    use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
+
+    fn systemv_frontend_config() -> TargetFrontendConfig {
+        TargetFrontendConfig {
+            default_call_conv: CallConv::SystemV,
+            pointer_width: target_lexicon::PointerWidth::U64,
+            page_size_align_log2: 12,
+        }
+    }
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{
@@ -569,7 +578,7 @@ block4:
                 builder.ins().return_(&[]);
             }
 
-            builder.finalize(); // Will panic if some blocks are not sealed
+            builder.finalize(systemv_frontend_config()); // Will panic if some blocks are not sealed
         }
     }
 

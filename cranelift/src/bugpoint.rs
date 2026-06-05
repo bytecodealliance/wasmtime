@@ -539,8 +539,7 @@ impl Mutator for RemoveUnusedEntities {
                     for inst in func.layout.block_insts(block) {
                         match func.dfg.insts[inst] {
                             // Add new cases when there are new instruction formats taking a `StackSlot`.
-                            InstructionData::StackLoad { stack_slot, .. }
-                            | InstructionData::StackStore { stack_slot, .. } => {
+                            InstructionData::StackAddr { stack_slot, .. } => {
                                 stack_slot_usage_map
                                     .entry(stack_slot)
                                     .or_insert_with(Vec::new)
@@ -560,8 +559,7 @@ impl Mutator for RemoveUnusedEntities {
                         for &inst in stack_slot_usage {
                             match &mut func.dfg.insts[inst] {
                                 // Keep in sync with the above match.
-                                InstructionData::StackLoad { stack_slot, .. }
-                                | InstructionData::StackStore { stack_slot, .. } => {
+                                InstructionData::StackAddr { stack_slot, .. } => {
                                     *stack_slot = new_stack_slot;
                                 }
                                 _ => unreachable!(),

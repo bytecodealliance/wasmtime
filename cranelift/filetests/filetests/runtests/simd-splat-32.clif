@@ -1,17 +1,8 @@
 ; test interpret TODO: Not yet implemented
 test run
-target aarch64
-target s390x
-target x86_64
-target x86_64 ssse3
-target x86_64 sse41
-target x86_64 sse41 has_avx
-target x86_64 sse41 has_avx has_avx2
 set enable_multi_ret_implicit_sret
-target riscv64 has_v
-target riscv64 has_v has_c has_zcb
-target pulley64
-target pulley64be
+target pulley32
+target pulley32be
 
 function %splat_i8x16(i8) -> i8x16 {
 block0(v0: i8):
@@ -137,9 +128,9 @@ function %load_splat_i8x16(i8) -> i8x16 {
     ss0 = explicit_slot 8
 
 block0(v0: i8):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.i8 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.i8 notrap v4
     v2 = splat.i8x16 v1
     return v2
@@ -152,9 +143,9 @@ function %load_splat_i16x8(i16) -> i16x8 {
     ss0 = explicit_slot 8
 
 block0(v0: i16):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.i16 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.i16 notrap v4
     v2 = splat.i16x8 v1
     return v2
@@ -167,9 +158,9 @@ function %load_splat_i32x4(i32) -> i32x4 {
     ss0 = explicit_slot 8
 
 block0(v0: i32):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.i32 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.i32 notrap v4
     v2 = splat.i32x4 v1
     return v2
@@ -182,9 +173,9 @@ function %load_splat_i64x2(i64) -> i64x2 {
     ss0 = explicit_slot 8
 
 block0(v0: i64):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.i64 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.i64 notrap v4
     v2 = splat.i64x2 v1
     return v2
@@ -197,9 +188,9 @@ function %load_splat_f32x4(f32) -> f32x4 {
     ss0 = explicit_slot 8
 
 block0(v0: f32):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.f32 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.f32 notrap v4
     v2 = splat.f32x4 v1
     return v2
@@ -212,9 +203,9 @@ function %load_splat_f64x2(f64) -> f64x2 {
     ss0 = explicit_slot 8
 
 block0(v0: f64):
-    v3 = stack_addr.i64 ss0
+    v3 = stack_addr.i32 ss0
     store.f64 notrap v0, v3
-    v4 = stack_addr.i64 ss0
+    v4 = stack_addr.i32 ss0
     v1 = load.f64 notrap v4
     v2 = splat.f64x2 v1
     return v2

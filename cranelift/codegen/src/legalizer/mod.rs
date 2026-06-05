@@ -14,7 +14,7 @@
 //! from the encoding recipes, and solved later by the register allocator.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, InstBuilder, InstructionData, MemFlagsData, Value};
+use crate::ir::{self, InstBuilder, InstructionData};
 use crate::isa::TargetIsa;
 use crate::trace;
 use cranelift_entity::EntitySet;
@@ -98,30 +98,6 @@ pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
             global_value,
         } => expand_global_value(inst, func, isa, global_value),
 
-        InstructionData::StackLoad {
-            opcode: ir::Opcode::StackLoad,
-            stack_slot,
-            offset,
-        } => expand_stack_load(isa, func, inst, stack_slot, offset),
-
-        InstructionData::StackStore {
-            opcode: ir::Opcode::StackStore,
-            arg,
-            stack_slot,
-            offset,
-        } => expand_stack_store(isa, func, inst, arg, stack_slot, offset),
-
-        InstructionData::DynamicStackLoad {
-            opcode: ir::Opcode::DynamicStackLoad,
-            dynamic_stack_slot,
-        } => expand_dynamic_stack_load(isa, func, inst, dynamic_stack_slot),
-
-        InstructionData::DynamicStackStore {
-            opcode: ir::Opcode::DynamicStackStore,
-            arg,
-            dynamic_stack_slot,
-        } => expand_dynamic_stack_store(isa, func, inst, arg, dynamic_stack_slot),
-
         InstructionData::Binary { opcode, args } => expand_binary(func, inst, opcode, args),
 
         _ => WalkCommand::Continue,
@@ -158,105 +134,6 @@ fn expand_binary(
         }
         _ => {}
     }
-
-    WalkCommand::Continue
-}
-
-fn expand_dynamic_stack_store(
-    isa: &dyn TargetIsa,
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    arg: Value,
-    dynamic_stack_slot: ir::DynamicStackSlot,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func);
-    pos.goto_inst(inst);
-    pos.use_srcloc(inst);
-
-    let vector_ty = pos.func.dfg.value_type(arg);
-    assert!(vector_ty.is_dynamic_vector());
-
-    let addr_ty = isa.pointer_type();
-    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-    let mut mflags = MemFlagsData::new();
-    // Stack slots are required to be accessible and aligned.
-    mflags.set_notrap();
-    mflags.set_aligned();
-
-    pos.func.replace(inst).store(mflags, arg, addr, 0);
-
-    WalkCommand::Continue
-}
-
-fn expand_dynamic_stack_load(
-    isa: &dyn TargetIsa,
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    dynamic_stack_slot: ir::DynamicStackSlot,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-    assert!(ty.is_dynamic_vector());
-
-    let addr_ty = isa.pointer_type();
-    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-    // Stack slots are required to be accessible and aligned.
-    let mflags = MemFlagsData::trusted();
-
-    pos.func.replace(inst).load(ty, mflags, addr, 0);
-
-    WalkCommand::Continue
-}
-
-fn expand_stack_store(
-    isa: &dyn TargetIsa,
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    arg: ir::Value,
-    stack_slot: ir::StackSlot,
-    offset: ir::immediates::Offset32,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let addr_ty = isa.pointer_type();
-    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-    // Stack slots are required to be accessible.
-    // We can't currently ensure that they are aligned.
-    let mut mflags = MemFlagsData::new();
-    mflags.set_notrap();
-
-    pos.func.replace(inst).store(mflags, arg, addr, 0);
-
-    WalkCommand::Continue
-}
-
-fn expand_stack_load(
-    isa: &dyn TargetIsa,
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    stack_slot: ir::StackSlot,
-    offset: ir::immediates::Offset32,
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-    let addr_ty = isa.pointer_type();
-
-    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-    // Stack slots are required to be accessible.
-    // We can't currently ensure that they are aligned.
-    let mut mflags = MemFlagsData::new();
-    mflags.set_notrap();
-
-    pos.func.replace(inst).load(ty, mflags, addr, 0);
 
     WalkCommand::Continue
 }

@@ -83,8 +83,8 @@
 ;; @001f                               jump block4(v31, v34)
 ;;
 ;;                                 block4(v43: i32, v44: i64):
-;;                                     v105 = stack_addr.i64 ss0
-;;                                     store notrap v43, v105
+;;                                     v97 = stack_addr.i64 ss0
+;;                                     store notrap v43, v97
 ;; @001f                               v45 = iconst.i64 16
 ;; @001f                               v46 = iadd v44, v45  ; v45 = 16
 ;; @001f                               store.i32 user2 region1 v2, v46
@@ -121,9 +121,9 @@
 ;; @001f                               brif v88, block6, block5(v157)
 ;;
 ;;                                 block6:
-;;                                     v89 = load.i32 notrap v105
+;;                                     v90 = load.i32 notrap v97
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               return v89
+;; @0022                               return v90
 ;; }

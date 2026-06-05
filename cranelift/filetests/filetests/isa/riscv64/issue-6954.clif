@@ -14,36 +14,66 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
     v13 = iconst.i32 0
     v14 = iconst.i64 0
     v15 = uextend.i128 v14
-    stack_store v15, ss0
-    stack_store v15, ss0+16
-    stack_store v15, ss0+32
-    stack_store v15, ss0+48
-    stack_store v15, ss0+64
-    stack_store v15, ss0+80
-    stack_store v15, ss0+96
-    stack_store v14, ss0+112
-    stack_store v13, ss0+120
-    stack_store v12, ss0+124
-    stack_store v15, ss1
-    stack_store v15, ss1+16
-    stack_store v15, ss1+32
-    stack_store v15, ss1+48
-    stack_store v15, ss1+64
-    stack_store v15, ss1+80
-    stack_store v15, ss1+96
-    stack_store v14, ss1+112
-    stack_store v13, ss1+120
-    stack_store v12, ss1+124
-    stack_store v15, ss2
-    stack_store v15, ss2+16
-    stack_store v15, ss2+32
-    stack_store v15, ss2+48
-    stack_store v15, ss2+64
-    stack_store v15, ss2+80
-    stack_store v15, ss2+96
-    stack_store v14, ss2+112
-    stack_store v13, ss2+120
-    stack_store v12, ss2+124
+    v88 = stack_addr.i64 ss0
+    store notrap v15, v88
+    v89 = stack_addr.i64 ss0+16
+    store notrap v15, v89
+    v90 = stack_addr.i64 ss0+32
+    store notrap v15, v90
+    v91 = stack_addr.i64 ss0+48
+    store notrap v15, v91
+    v92 = stack_addr.i64 ss0+64
+    store notrap v15, v92
+    v93 = stack_addr.i64 ss0+80
+    store notrap v15, v93
+    v94 = stack_addr.i64 ss0+96
+    store notrap v15, v94
+    v95 = stack_addr.i64 ss0+112
+    store notrap v14, v95
+    v96 = stack_addr.i64 ss0+120
+    store notrap v13, v96
+    v97 = stack_addr.i64 ss0+124
+    store notrap v12, v97
+    v98 = stack_addr.i64 ss1
+    store notrap v15, v98
+    v99 = stack_addr.i64 ss1+16
+    store notrap v15, v99
+    v100 = stack_addr.i64 ss1+32
+    store notrap v15, v100
+    v101 = stack_addr.i64 ss1+48
+    store notrap v15, v101
+    v102 = stack_addr.i64 ss1+64
+    store notrap v15, v102
+    v103 = stack_addr.i64 ss1+80
+    store notrap v15, v103
+    v104 = stack_addr.i64 ss1+96
+    store notrap v15, v104
+    v105 = stack_addr.i64 ss1+112
+    store notrap v14, v105
+    v106 = stack_addr.i64 ss1+120
+    store notrap v13, v106
+    v107 = stack_addr.i64 ss1+124
+    store notrap v12, v107
+    v108 = stack_addr.i64 ss2
+    store notrap v15, v108
+    v109 = stack_addr.i64 ss2+16
+    store notrap v15, v109
+    v110 = stack_addr.i64 ss2+32
+    store notrap v15, v110
+    v111 = stack_addr.i64 ss2+48
+    store notrap v15, v111
+    v112 = stack_addr.i64 ss2+64
+    store notrap v15, v112
+    v113 = stack_addr.i64 ss2+80
+    store notrap v15, v113
+    v114 = stack_addr.i64 ss2+96
+    store notrap v15, v114
+    v115 = stack_addr.i64 ss2+112
+    store notrap v14, v115
+    v116 = stack_addr.i64 ss2+120
+    store notrap v13, v116
+    v117 = stack_addr.i64 ss2+124
+    store notrap v12, v117
     v16 = select v3, v8, v8
     v17 = select v3, v16, v16
     v18 = select v3, v17, v17
@@ -90,7 +120,8 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
     v48 = select v30, v47, v47
     v49 = select v30, v48, v48
     v50 = select v30, v49, v49
-    stack_store v37, ss0+33
+    v118 = stack_addr.i64 ss0+33
+    store notrap v37, v118
     v51 = select v30, v50, v50
     v52 = select v30, v51, v51
     v53 = select v30, v52, v52

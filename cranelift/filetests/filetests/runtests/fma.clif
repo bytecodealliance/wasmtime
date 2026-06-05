@@ -145,8 +145,10 @@ function %fma_load_f32(f32, f32, f32) -> f32 {
     ss0 = explicit_slot 4
 
 block0(v0: f32, v1: f32, v2: f32):
-    stack_store.f32 v2, ss0
-    v3 = stack_load.f32 ss0
+    v5 = stack_addr.i64 ss0
+    store.f32 notrap v2, v5
+    v6 = stack_addr.i64 ss0
+    v3 = load.f32 notrap v6
     v4 = fma v0, v1, v3
     return v4
 }

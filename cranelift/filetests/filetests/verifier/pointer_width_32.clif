@@ -29,10 +29,12 @@ function %error_atomic_cas(i128, i128, i128) -> i128, i128 {
     ss0 = explicit_slot 16
 
 block0(v0: i128, v1: i128, v2: i128):
-    stack_store.i128 v0, ss0
+    v6 = stack_addr.i32 ss0
+    store.i128 notrap v0, v6
     v3 = stack_addr.i64 ss0
     v4 = atomic_cas.i128 v3, v1, v2; error: invalid pointer width (got 64, expected 32) encountered v3
-    v5 = stack_load.i128 ss0
+    v7 = stack_addr.i32 ss0
+    v5 = load.i128 notrap v7
     return v5, v4
 }
 

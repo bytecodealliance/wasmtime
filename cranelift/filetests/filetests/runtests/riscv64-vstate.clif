@@ -17,12 +17,18 @@ function u1:1(i64) -> i64 fast {
 block0(v2: i64):
     v1 = iconst.i64 -5608073308517523622
     v3 = vconst.f32x4 const0
-    stack_store v1, ss0
-    stack_store v1, ss0+8
-    stack_store v1, ss0+16
-    stack_store v1, ss0+24
-    stack_store v3, ss1
-    stack_store v3, ss1+16
+    v4 = stack_addr.i64 ss0
+    store notrap v1, v4
+    v5 = stack_addr.i64 ss0+8
+    store notrap v1, v5
+    v6 = stack_addr.i64 ss0+16
+    store notrap v1, v6
+    v7 = stack_addr.i64 ss0+24
+    store notrap v1, v7
+    v8 = stack_addr.i64 ss1
+    store notrap v3, v8
+    v9 = stack_addr.i64 ss1+16
+    store notrap v3, v9
     return v2
 }
 

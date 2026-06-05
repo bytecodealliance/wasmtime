@@ -92,7 +92,7 @@ impl FuncTranslator {
         parse_local_decls(&mut reader, &mut builder, num_params, environ, validator)?;
         parse_function_body(validator, reader, &mut builder, environ)?;
 
-        builder.finalize();
+        builder.finalize(environ.target_config());
         log::trace!("translated Wasm to CLIF:\n{}", func.display());
         Ok(())
     }
@@ -113,7 +113,7 @@ impl FuncTranslator {
         environ.translate_module_startup(&mut builder)?;
         environ.after_translate_function(&mut builder)?;
         builder.ins().return_(&[]);
-        builder.finalize();
+        builder.finalize(environ.target_config());
         Ok(())
     }
 }
