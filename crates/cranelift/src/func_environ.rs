@@ -29,7 +29,7 @@ use smallvec::{SmallVec, smallvec};
 use std::iter::Peekable;
 use std::mem;
 use wasmparser::{
-    BranchHint, FuncValidator, Operator, SectionLimitedIntoIter, WasmFeatures, WasmModuleResources,
+    BranchHint, FuncValidator, Operator, SectionLimitedIntoIter, WasmModuleResources,
 };
 use wasmtime_core::math::f64_cvt_to_int_bounds;
 use wasmtime_environ::{
@@ -2082,7 +2082,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
     /// Do a Wasm-level indirect call through the given funcref table.
     pub fn indirect_call(
         mut self,
-        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -2090,7 +2089,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         call_args: &[ir::Value],
     ) -> WasmResult<Option<CallRets>> {
         let (code_ptr, callee_vmctx) = match self.check_and_load_code_and_callee_vmctx(
-            features,
             table_index,
             ty_index,
             callee,
@@ -2106,7 +2104,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     fn check_and_load_code_and_callee_vmctx(
         &mut self,
-        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         callee: ir::Value,
@@ -2118,8 +2115,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 .table_get_funcref(self.builder, table_index, callee, cold_blocks);
 
         // If necessary, check the signature.
-        let check =
-            self.check_indirect_call_type_signature(features, table_index, ty_index, funcref_ptr);
+        let check = self.check_indirect_call_type_signature(table_index, ty_index, funcref_ptr);
 
         let trap_code = match check {
             // `funcref_ptr` is checked at runtime that its type matches,
@@ -2153,14 +2149,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
     fn check_indirect_call_type_signature(
         &mut self,
-        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         funcref_ptr: ir::Value,
     ) -> CheckIndirectCallTypeSignature {
         let table = &self.env.module.tables[table_index];
-        let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
-        let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
@@ -2183,42 +2176,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     return CheckIndirectCallTypeSignature::StaticMatch {
                         may_be_null: table.ref_type.nullable,
                     };
-                }
-
-                if features.gc() {
-                    // If we are in the Wasm GC world, then we need to perform
-                    // an actual subtype check at runtime. Fall through to below
-                    // to do that.
-                } else {
-                    // Otherwise if the types don't match then either (a) this
-                    // is a null pointer or (b) it's a pointer with the wrong
-                    // type. Figure out which and trap here.
-                    //
-                    // If it's possible to have a null here then try to load the
-                    // type information. If that fails due to the function being
-                    // a null pointer, then this was a call to null. Otherwise
-                    // if it succeeds then we know it won't match, so trap
-                    // anyway.
-                    if table.ref_type.nullable {
-                        if self.env.clif_memory_traps_enabled() {
-                            self.builder.ins().load(
-                                sig_id_type,
-                                ir::MemFlagsData::trusted()
-                                    .with_readonly()
-                                    .with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
-                                funcref_ptr,
-                                i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
-                            );
-                        } else {
-                            self.env.trapz(
-                                self.builder,
-                                funcref_ptr,
-                                crate::TRAP_INDIRECT_CALL_TO_NULL,
-                            );
-                        }
-                    }
-                    self.env.trap(self.builder, crate::TRAP_BAD_SIGNATURE);
-                    return CheckIndirectCallTypeSignature::StaticTrap;
                 }
             }
 
@@ -2279,14 +2236,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
         // Check that they match: in the case of Wasm GC, this means doing a
         // full subtype check. Otherwise, we do a simple equality check.
-        let matches = if features.gc() {
-            self.env
-                .is_subtype(self.builder, callee_sig_id, caller_sig_id, interned_ty)
-        } else {
-            self.builder
-                .ins()
-                .icmp(IntCC::Equal, callee_sig_id, caller_sig_id)
-        };
+        let matches = self
+            .env
+            .is_subtype(self.builder, callee_sig_id, caller_sig_id, interned_ty);
         self.env
             .trapz(self.builder, matches, crate::TRAP_BAD_SIGNATURE);
         CheckIndirectCallTypeSignature::Runtime
@@ -3338,7 +3290,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &'a mut FunctionBuilder,
         srcloc: ir::SourceLoc,
-        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -3346,7 +3297,6 @@ impl FuncEnvironment<'_> {
         call_args: &[ir::Value],
     ) -> WasmResult<Option<CallRets>> {
         Call::new(builder, self, srcloc).indirect_call(
-            features,
             table_index,
             ty_index,
             sig_ref,
@@ -3393,7 +3343,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         srcloc: ir::SourceLoc,
-        features: &WasmFeatures,
         table_index: TableIndex,
         ty_index: TypeIndex,
         sig_ref: ir::SigRef,
@@ -3401,7 +3350,6 @@ impl FuncEnvironment<'_> {
         call_args: &[ir::Value],
     ) -> WasmResult<()> {
         Call::new_tail(builder, self, srcloc).indirect_call(
-            features,
             table_index,
             ty_index,
             sig_ref,

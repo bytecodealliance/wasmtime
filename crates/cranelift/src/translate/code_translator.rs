@@ -744,7 +744,6 @@ pub fn translate_operator(
             let inst_results = environ.translate_call_indirect(
                 builder,
                 environ.next_srcloc,
-                validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
                 sigref,
@@ -810,7 +809,6 @@ pub fn translate_operator(
             environ.translate_return_call_indirect(
                 builder,
                 srcloc,
-                validator.features(),
                 TableIndex::from_u32(*table_index),
                 type_index,
                 sigref,

@@ -33,9 +33,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
-;; @0043                               v63 = load.i64 notrap aligned readonly can_move v0+48
-;; @0043                               v5 = load.i64 notrap aligned v63+8
-;; @0043                               v9 = load.i64 notrap aligned v63
+;; @0043                               v64 = load.i64 notrap aligned readonly can_move v0+48
+;; @0043                               v5 = load.i64 notrap aligned v64+8
+;; @0043                               v9 = load.i64 notrap aligned v64
 ;; @0043                               v15 = iconst.i64 1
 ;; @0043                               v16 = bor v3, v15  ; v15 = 1
 ;; @0043                               v6 = ireduce.i32 v5
@@ -69,11 +69,11 @@
 ;; @004d                               v49 = load.i32 notrap aligned readonly can_move v48
 ;; @004d                               v51 = icmp eq v50, v49
 ;; @004d                               trapz v51, user8
-;; @004d                               v52 = load.i64 notrap aligned readonly v42+8
-;; @004d                               v53 = load.i64 notrap aligned readonly v42+24
-;; @004d                               v54 = call_indirect sig0, v52(v53, v0)
+;; @004d                               v53 = load.i64 notrap aligned readonly v42+8
+;; @004d                               v54 = load.i64 notrap aligned readonly v42+24
+;; @004d                               v55 = call_indirect sig0, v53(v54, v0)
 ;; @0050                               jump block1
 ;;
 ;;                                 block1:
-;; @0050                               return v54
+;; @0050                               return v55
 ;; }
