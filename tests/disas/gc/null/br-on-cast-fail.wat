@@ -36,8 +36,7 @@
 ;;                                     store notrap v2, v42
 ;; @002e                               v4 = iconst.i32 0
 ;; @002e                               v5 = icmp eq v2, v4  ; v4 = 0
-;; @002e                               v6 = uextend.i32 v5
-;; @002e                               brif v6, block5(v4), block3  ; v4 = 0
+;; @002e                               brif v5, block5(v4), block3  ; v4 = 0
 ;;
 ;;                                 block3:
 ;; @002e                               v8 = iconst.i32 1
@@ -57,7 +56,7 @@
 ;; @002e                               v13 = load.i32 notrap aligned readonly can_move v12
 ;; @002e                               v20 = icmp eq v19, v13
 ;; @002e                               v21 = uextend.i32 v20
-;; @002e                               brif v21, block7(v21), block6
+;; @002e                               brif v20, block7(v21), block6
 ;;
 ;;                                 block6:
 ;; @002e                               v23 = call fn0(v0, v19, v13), stack_map=[i32 @ ss0+0]

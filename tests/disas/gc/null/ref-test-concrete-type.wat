@@ -24,8 +24,7 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001d                               v4 = iconst.i32 0
 ;; @001d                               v5 = icmp eq v2, v4  ; v4 = 0
-;; @001d                               v6 = uextend.i32 v5
-;; @001d                               brif v6, block4(v4), block2  ; v4 = 0
+;; @001d                               brif v5, block4(v4), block2  ; v4 = 0
 ;;
 ;;                                 block2:
 ;; @001d                               v8 = iconst.i32 1
@@ -45,7 +44,7 @@
 ;; @001d                               v13 = load.i32 notrap aligned readonly can_move v12
 ;; @001d                               v20 = icmp eq v19, v13
 ;; @001d                               v21 = uextend.i32 v20
-;; @001d                               brif v21, block6(v21), block5
+;; @001d                               brif v20, block6(v21), block5
 ;;
 ;;                                 block5:
 ;; @001d                               v23 = call fn0(v0, v19, v13)
