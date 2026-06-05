@@ -2384,22 +2384,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                             let now = wall_clock::Host::now(&mut temp.ctx.clocks())
                                 .context("failed to call `wall_clock::now`")
                                 .map_err(types::Error::trap)?;
-
-                            // Convert `timeout` to `Datetime` format.
-                            let seconds = timeout / 1_000_000_000;
-                            let nanoseconds = timeout % 1_000_000_000;
-
-                            let timeout = if now.seconds < seconds
-                                || now.seconds == seconds
-                                    && u64::from(now.nanoseconds) < nanoseconds
-                            {
-                                // `now` is less than `timeout`, which is expressible as u64,
-                                // subtract the nanosecond counts directly
-                                now.seconds * 1_000_000_000 + u64::from(now.nanoseconds) - timeout
-                            } else {
-                                0
-                            };
-                            (timeout, false)
+                            let now = now.seconds * 1_000_000_000 + u64::from(now.nanoseconds);
+                            (timeout.saturating_sub(now), false)
                         }
                         _ => return Err(types::Errno::Inval.into()),
                     };
