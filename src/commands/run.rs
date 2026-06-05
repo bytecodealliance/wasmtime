@@ -948,7 +948,7 @@ impl RunCommand {
         // provide an instance of the same name, in which case we want the
         // below to search through it.
         match component.get_export(None, item_name) {
-            Some((CItem::ComponentFunc(func), index)) => return Ok((index.clone(), func.clone())),
+            Some((CItem::ComponentFunc(func), index)) => return Ok((index, func.clone())),
             _ => {}
         }
         if item_name.interface.is_some() || item_name.package.is_some() {
