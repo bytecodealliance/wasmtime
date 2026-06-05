@@ -832,13 +832,6 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
-[[publisher.cap-time-ext]]
-version = "4.0.2"
-when = "2026-02-15"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.cc]]
 version = "1.0.89"
 when = "2024-03-04"
@@ -1213,13 +1206,6 @@ user-name = "David Tolnay"
 [[publisher.jobserver]]
 version = "0.1.25"
 when = "2022-09-23"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.js-sys]]
-version = "0.3.74"
-when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1672,41 +1658,6 @@ user-name = "Alex Crichton"
 [[publisher.wasip3]]
 version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 when = "2026-01-15"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-bindgen]]
-version = "0.2.97"
-when = "2024-11-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-bindgen-backend]]
-version = "0.2.97"
-when = "2024-11-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-bindgen-macro]]
-version = "0.2.97"
-when = "2024-11-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-bindgen-macro-support]]
-version = "0.2.97"
-when = "2024-11-30"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-bindgen-shared]]
-version = "0.2.97"
-when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
