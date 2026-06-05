@@ -3,5 +3,4 @@
 ; Whether a trap has occurred.
 (state exec_trap
     (type Bool)
-    (default (not exec_trap))
-)
+    (default (not exec_trap)))

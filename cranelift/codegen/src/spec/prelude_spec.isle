@@ -55,13 +55,10 @@
 (macro (fp_equal_sign_inc_nan x y)
     (=
         (bvand (bv_top_bit_set! (widthof x)) x)
-        (bvand (bv_top_bit_set! (widthof y)) y)
-    )
-)
+        (bvand (bv_top_bit_set! (widthof y)) y)))
 
 ; Whether two floating-point values have the opposite signs.
 (macro (fp_opposite_sign x y) (not (fp_equal_sign! x y)))
-
 
 ; Build a floating-point zero with the given sign and width.
 (macro (fp_signed_zero negative w) (if negative (fp.-zero w) (fp.+zero w)))
