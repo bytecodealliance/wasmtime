@@ -805,6 +805,55 @@ fn component_enabled_by_default() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn component_invoke_multiple_run_exports() -> Result<()> {
+    let path = "tests/all/cli_tests/component-multiple-runs.wat";
+    let wasm = build_wasm(path)?;
+
+    // demonstrate run --invoke can give a useful error message when
+    // there are multiple interfaces that export the function name specified
+    let output = get_wasmtime_command()?
+        .arg("run")
+        .arg("-Wcomponent-model")
+        .arg("-Ccache=n")
+        .arg("--invoke")
+        .arg("run()")
+        .arg(wasm.path())
+        .output()?;
+    assert!(
+        !output.status.success(),
+        "should fail because run() is ambigious for this component"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Multiple instances contained funcs named `run`, retry with a more specific name: `wasi:cli/run.run@0.2.0`, `some:other/one.run`"));
+
+    // test program cli run gives `ok`:
+    let output = get_wasmtime_command()?
+        .arg("run")
+        .arg("-Wcomponent-model")
+        .arg("-Ccache=n")
+        .arg("--invoke")
+        .arg("wasi:cli/run.run@0.2.0()")
+        .arg(wasm.path())
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "ok\n");
+
+    // test program other run gives `err`:
+    let output = get_wasmtime_command()?
+        .arg("run")
+        .arg("-Wcomponent-model")
+        .arg("-Ccache=n")
+        .arg("--invoke")
+        .arg("some:other/one.run()")
+        .arg(wasm.path())
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "err\n");
+
+    Ok(())
+}
+
 // If the text format is invalid then the filename should be mentioned in the
 // error message.
 #[test]

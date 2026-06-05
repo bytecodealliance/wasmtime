@@ -1002,7 +1002,16 @@ impl RunCommand {
             _ => {
                 let candidates = search
                     .into_iter()
-                    .map(|(_index, _func, instname)| format!("`{instname}.{needle}`"))
+                    .map(|(_index, _func, instname)| {
+                        // Manipulate as an ItemName to get package version
+                        // correct in the output
+                        let mut itemname: wasmtime::component::wit_parser::ItemName =
+                            instname.parse().unwrap();
+                        // Push the function name onto the itemname:
+                        itemname.interface = Some(itemname.name.clone());
+                        itemname.name = needle.to_string();
+                        format!("`{itemname}`")
+                    })
                     .collect::<Vec<_>>();
                 bail!(
                     "Multiple instances contained funcs named `{needle}`, retry with a more specific name: {}",
