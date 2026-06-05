@@ -3686,36 +3686,53 @@ impl FuncEnvironment<'_> {
             .ins()
             .iconst(pointer_type, UNINTERRUPTABLE_CHUNK_SIZE);
 
+        // For `memcpy` when chunking this up we might need to do a backwards
+        // copy or a forwards copy. Determine that here and jump to the
+        // backwards copy if needed.
+        let backwards_block = if let BulkOp::MemoryCopy { dst, src, .. } = op {
+            let forwards = builder.ins().icmp(IntCC::UnsignedGreaterThan, src, dst);
+            let forwards_block = builder.create_block();
+            let backwards_block = builder.create_block();
+            builder
+                .ins()
+                .brif(forwards, forwards_block, &[], backwards_block, &[]);
+            builder.switch_to_block(forwards_block);
+            builder.seal_block(forwards_block);
+            Some((backwards_block, op.clone()))
+        } else {
+            None
+        };
+
         // Helper closure to test if the length in `op` is larger than `chunk`,
         // and if so do a single chunk. Else this goes to the final block with
         // the final operation.
-        let has_chunk_branch = |builder: &mut FunctionBuilder<'_>, op: &_| {
-            let len = match *op {
-                BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
+        let has_chunk_branch =
+            |builder: &mut FunctionBuilder<'_>, op: &_, chunk_block, last_chunk_block| {
+                let len = match *op {
+                    BulkOp::MemoryCopy { len, .. } | BulkOp::MemoryFill { len, .. } => len,
+                };
+                let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
+                match *op {
+                    BulkOp::MemoryCopy { dst, src, len, .. } => {
+                        builder.ins().brif(
+                            has_chunk,
+                            chunk_block,
+                            &[dst.into(), src.into(), len.into()],
+                            last_chunk_block,
+                            &[dst.into(), src.into(), len.into()],
+                        );
+                    }
+                    BulkOp::MemoryFill { dst, len, .. } => {
+                        builder.ins().brif(
+                            has_chunk,
+                            chunk_block,
+                            &[dst.into(), len.into()],
+                            last_chunk_block,
+                            &[dst.into(), len.into()],
+                        );
+                    }
+                }
             };
-            let has_chunk = builder.ins().icmp(IntCC::UnsignedGreaterThan, len, chunk);
-            match *op {
-                BulkOp::MemoryCopy { dst, src, len, .. } => {
-                    builder.ins().brif(
-                        has_chunk,
-                        chunk_block,
-                        &[dst.into(), src.into(), len.into()],
-                        last_chunk_block,
-                        &[dst.into(), src.into(), len.into()],
-                    );
-                }
-                BulkOp::MemoryFill { dst, len, .. } => {
-                    builder.ins().brif(
-                        has_chunk,
-                        chunk_block,
-                        &[dst.into(), len.into()],
-                        last_chunk_block,
-                        &[dst.into(), len.into()],
-                    );
-                }
-            }
-        };
-        has_chunk_branch(builder, &op);
 
         let append_block_params = |builder: &mut FunctionBuilder<'_>, block, op: &mut _| match op {
             BulkOp::MemoryCopy { dst, src, len, .. } => {
@@ -3729,10 +3746,14 @@ impl FuncEnvironment<'_> {
             }
         };
 
-        // In the block with per-chunk copies, each operation performs `chunk`
-        // length of bytes and then decrements the current length by `chunk`.
-        // Afterwards a condition tests if we do another chunk or break out for
-        // the final chunk.
+        // Forwards copy: dispatch to the per-chunk loop or the final iteration
+        // if there's no chunks.
+        has_chunk_branch(builder, &op, chunk_block, last_chunk_block);
+
+        // Forwards copy: In the block with per-chunk copies, each operation
+        // performs `chunk` length of bytes and then decrements the current
+        // length by `chunk`. Afterwards a condition tests if we do another
+        // chunk or break out for the final chunk.
         builder.switch_to_block(chunk_block);
         append_block_params(builder, chunk_block, &mut op);
         let op_len = match &mut op {
@@ -3752,17 +3773,83 @@ impl FuncEnvironment<'_> {
                 *len = builder.ins().isub(remaining_len, chunk);
             }
         };
-        has_chunk_branch(builder, &op);
+        has_chunk_branch(builder, &op, chunk_block, last_chunk_block);
+        builder.seal_block(chunk_block);
+
+        // Backwards copy: similar to the above but with adjustments on where
+        // increments/decrements happen. Notably:
+        //
+        // * Initial src/end are the final byte address
+        // * Each chunk starts out by decrementing src/end as opposed to above
+        //   where the increment happens at the end.
+        // * The final block performs the final decrement before jumping to the
+        //   shared `last_chunk_block` between the forwards/backwards paths.
+        if let Some((backwards_block, mut op)) = backwards_block {
+            // Setup `dst=dst+len` and `src=src+len`, then see if we have a
+            // chunk.
+            builder.switch_to_block(backwards_block);
+            builder.seal_block(backwards_block);
+            let backwards_chunk_block = builder.create_block();
+            let backwards_last_chunk_block = builder.create_block();
+            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
+                unreachable!()
+            };
+            *dst = builder.ins().iadd(*dst, *len);
+            *src = builder.ins().iadd(*src, *len);
+            has_chunk_branch(
+                builder,
+                &op,
+                backwards_chunk_block,
+                backwards_last_chunk_block,
+            );
+
+            // Execute the per-chunk backwards copy, adjusting pointers before
+            // the copy itself.
+            builder.switch_to_block(backwards_chunk_block);
+            append_block_params(builder, backwards_chunk_block, &mut op);
+            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
+                unreachable!()
+            };
+            let remaining_len = *len;
+            *len = chunk;
+            *dst = builder.ins().isub(*dst, chunk);
+            *src = builder.ins().isub(*src, chunk);
+            raw_call(self, builder, &op);
+            let BulkOp::MemoryCopy { len, .. } = &mut op else {
+                unreachable!()
+            };
+            *len = builder.ins().isub(remaining_len, chunk);
+            has_chunk_branch(
+                builder,
+                &op,
+                backwards_chunk_block,
+                backwards_last_chunk_block,
+            );
+            builder.seal_block(backwards_chunk_block);
+
+            // Final backwards chunk: adjust the dst/src to be their true base
+            // pointers and then delegate to `last_chunk_block` for the actual
+            // memcpy.
+            builder.switch_to_block(backwards_last_chunk_block);
+            builder.seal_block(backwards_last_chunk_block);
+            append_block_params(builder, backwards_last_chunk_block, &mut op);
+            let BulkOp::MemoryCopy { dst, src, len, .. } = &mut op else {
+                unreachable!()
+            };
+            *dst = builder.ins().isub(*dst, *len);
+            *src = builder.ins().isub(*src, *len);
+            builder.ins().jump(
+                last_chunk_block,
+                &[(*dst).into(), (*src).into(), (*len).into()],
+            );
+        }
 
         // In the final block we know that the length of the operation is less
-        // than `chunk`. This could still be sizable, though, so a final
-        // fuel/epoch check is inserted.
+        // than `chunk`.
         builder.switch_to_block(last_chunk_block);
+        builder.seal_block(last_chunk_block);
         append_block_params(builder, last_chunk_block, &mut op);
         raw_call(self, builder, &op);
-
-        builder.seal_block(chunk_block);
-        builder.seal_block(last_chunk_block);
     }
 
     /// Emits a generic "fill" of `entity` from `dst` for `len` elements,
@@ -6134,6 +6221,7 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
 }
 
 /// Operations to [`FuncEnvironment::raw_bulk_memory_operation`].
+#[derive(Clone)]
 enum BulkOp {
     /// A `memory.copy` operation, copying memory from `src` to `dst`.
     ///
