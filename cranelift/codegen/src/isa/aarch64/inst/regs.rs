@@ -1,5 +1,5 @@
 //! AArch64 ISA definitions: registers.
-#![allow(missing_docs)] // re-exported for cranelift-isle/veri; not part of the public API contract
+#![allow(missing_docs, reason = "Used for cranelift-isle-veri")]
 
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;
