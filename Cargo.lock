@@ -359,18 +359,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cap-net-ext"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35e3ea603c5602ad8839d4cfcccbfb72bf494286a3dc4564b3b8f52d8f803a89"
-dependencies = [
- "cap-primitives",
- "cap-std",
- "rustix 1.1.4",
- "smallvec 1.15.1",
-]
-
-[[package]]
 name = "cap-primitives"
 version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5111,7 +5099,6 @@ dependencies = [
  "bitflags 2.11.1",
  "bytes",
  "cap-fs-ext",
- "cap-net-ext",
  "cap-std",
  "cfg-if",
  "env_logger 0.11.5",
