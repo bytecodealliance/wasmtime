@@ -2915,7 +2915,7 @@
         dst))
 
 ;; Helper to to downgrade mov_to_fpu from F16 to F32 when FP16 is not enabled.
-(decl rec size_for_mov_to_fpu (ScalarSize) ScalarSize)
+(decl size_for_mov_to_fpu (ScalarSize) ScalarSize)
 (rule (size_for_mov_to_fpu size) size)
 
 (attr rule mov_to_fpu_16 (tag narrowfloat))
