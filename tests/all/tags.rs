@@ -97,7 +97,10 @@ fn stack_switching_disallows_inlining() -> Result<()> {
 fn issue_13474_create_tag_without_gc_runtime_configured() -> Result<()> {
     let mut config = Config::new();
     config.strategy(Strategy::Winch);
-    let engine = Engine::new(&config)?;
+    // Ignore targets that don't have support for Winch just yet
+    let Ok(engine) = Engine::new(&config) else {
+        return Ok(());
+    };
     let mut store = Store::new(&engine, ());
     let fty = FuncType::new(&engine, [], []);
     let tty1 = TagType::new(fty.clone());
