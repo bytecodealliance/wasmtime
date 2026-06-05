@@ -827,13 +827,6 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
-[[publisher.fd-lock]]
-version = "4.0.4"
-when = "2025-03-10"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.filecheck]]
 version = "0.5.0"
 when = "2020-03-17"
@@ -1270,13 +1263,6 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
-[[publisher.system-interface]]
-version = "0.27.3"
-when = "2024-12-04"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.tar]]
 version = "0.4.45"
 when = "2026-03-19"
@@ -1437,11 +1423,6 @@ when = "2024-10-08"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
-
-[[publisher.wasi-common]]
-version = "44.0.1"
-when = "2026-04-30"
-trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasip1]]
 version = "1.0.0"
@@ -1691,11 +1672,6 @@ when = "2026-04-30"
 trusted-publisher = "github:bytecodealliance/wasmtime"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "44.0.1"
-when = "2026-04-30"
-trusted-publisher = "github:bytecodealliance/wasmtime"
-
-[[publisher.wasmtime-wasi-threads]]
 version = "44.0.1"
 when = "2026-04-30"
 trusted-publisher = "github:bytecodealliance/wasmtime"
