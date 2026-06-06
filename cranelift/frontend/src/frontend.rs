@@ -1156,7 +1156,7 @@ impl<'a> FunctionBuilder<'a> {
         let pointer_type = config.pointer_type();
         let size = self.ins().iconst(pointer_type, size as i64);
         let cmp = self.call_memcmp(config, left, right, size);
-        self.ins().icmp_imm(zero_cc, cmp, 0)
+        self.ins().icmp_imm_s(zero_cc, cmp, 0)
     }
 }
 

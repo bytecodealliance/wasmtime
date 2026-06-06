@@ -53,7 +53,7 @@ fn insert_int_divz_sequence(pos: &mut FuncCursor, inst: Inst) {
         // Srem and Sdiv can also trap on INT_MIN / -1. So we need to check for the second one
 
         // 1 << (ty bits - 1) to get INT_MIN
-        let int_min = pos.ins().ishl_imm(one, ty.lane_bits() as i64 - 1);
+        let int_min = pos.ins().ishl_imm_u(one, ty.lane_bits() as i64 - 1);
 
         // Get a -1 const
         // TODO: A iconst -1 would be clearer, but #2906 makes this impossible for i128

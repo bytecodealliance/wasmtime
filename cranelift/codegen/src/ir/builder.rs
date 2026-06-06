@@ -46,20 +46,11 @@ pub trait InstBuilderBase<'f>: Sized {
     ///
     /// The constant's type is `controlling_type`, or, for vector controlling
     /// types, its lane type. Because `iconst` only supports `i8` through `i64`,
-    /// an `i128` constant is built as an `iconst.i64` that is then sign- or
-    /// zero-extended.
-    ///
-    /// Whether the immediate is sign- or zero-extended matches the historical
-    /// semantics of the `*_imm` instruction for `base_opcode`:
-    ///
-    /// * Sign-extended: `iadd`, `imul`, `sdiv`, `srem`, and `icmp`
-    /// * Zero-extended: Everything else
-    fn build_imm_const(
-        &mut self,
-        controlling_type: Type,
-        imm: Imm64,
-        base_opcode: Opcode,
-    ) -> Value {
+    /// an `i128` constant is built as an `iconst.i64` that is then extended:
+    /// sign-extended when `signed` is true, zero-extended otherwise. For narrower
+    /// types the `signed` flag has no effect, as the masked immediate is the same
+    /// either way.
+    fn build_imm_const(&mut self, controlling_type: Type, imm: Imm64, signed: bool) -> Value {
         if controlling_type == types::I128 {
             let mut data = InstructionData::UnaryImm {
                 opcode: Opcode::Iconst,
@@ -69,12 +60,7 @@ pub trait InstBuilderBase<'f>: Sized {
             let lo = self.build_aux_inst(data, types::I64);
             let lo = self.data_flow_graph().first_result(lo);
 
-            // The immediates of these instructions were historically sign-extended
-            // by their `*_imm` variants; all the others were zero-extended.
-            let opcode = if matches!(
-                base_opcode,
-                Opcode::Iadd | Opcode::Imul | Opcode::Sdiv | Opcode::Srem | Opcode::Icmp
-            ) {
+            let opcode = if signed {
                 Opcode::Sextend
             } else {
                 Opcode::Uextend
@@ -343,7 +329,7 @@ mod tests {
         let mut pos = FuncCursor::new(&mut func);
         pos.insert_block(block0);
 
-        let v0 = pos.ins().iadd_imm(arg0, 17);
+        let v0 = pos.ins().iadd_imm_s(arg0, 17);
         assert_eq!(pos.func.dfg.value_type(v0), I32);
         let iadd = pos.prev_inst().unwrap();
         assert_eq!(pos.func.dfg.value_def(v0), ValueDef::Result(iadd, 0));
@@ -376,7 +362,7 @@ mod tests {
         let inst = func.layout.last_inst(block0).unwrap();
         assert_eq!(func.dfg.insts[inst].opcode(), Opcode::Icmp);
 
-        let result = func.replace(inst).icmp_imm(IntCC::Equal, arg0, 42);
+        let result = func.replace(inst).icmp_imm_s(IntCC::Equal, arg0, 42);
 
         // The replaced instruction is still an `icmp`, now comparing against a
         // freshly materialized constant.
@@ -389,6 +375,39 @@ mod tests {
         let iconst_result = func.dfg.first_result(iconst);
         assert_eq!(func.dfg.value_type(iconst_result), I32);
         assert_eq!(func.dfg.inst_args(inst), &[arg0, iconst_result]);
+    }
+
+    #[test]
+    fn imm_s_and_imm_u_extend_i128() {
+        // For an `i128` controlling type the immediate is materialized as an
+        // `iconst.i64` and then extended. `_imm_s` sign-extends, `_imm_u`
+        // zero-extends, and the deprecated `_imm` keeps the historical behavior
+        // (signed, for `iadd`).
+        let mut func = Function::new();
+        let block0 = func.dfg.make_block();
+        let arg = func.dfg.append_block_param(block0, I128);
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+
+        // Opcode of the instruction that extends `iadd`'s materialized immediate.
+        fn ext_opcode(pos: &FuncCursor, iadd: crate::ir::Inst) -> Opcode {
+            let imm = pos.func.dfg.inst_args(iadd)[1];
+            let ext = pos.func.dfg.value_def(imm).unwrap_inst();
+            pos.func.dfg.insts[ext].opcode()
+        }
+
+        pos.ins().iadd_imm_s(arg, -1);
+        let iadd = pos.prev_inst().unwrap();
+        assert_eq!(ext_opcode(&pos, iadd), Opcode::Sextend);
+
+        pos.ins().iadd_imm_u(arg, -1);
+        let iadd = pos.prev_inst().unwrap();
+        assert_eq!(ext_opcode(&pos, iadd), Opcode::Uextend);
+
+        #[allow(deprecated, reason = "exercising the deprecated `_imm` shim")]
+        pos.ins().iadd_imm(arg, -1);
+        let iadd = pos.prev_inst().unwrap();
+        assert_eq!(ext_opcode(&pos, iadd), Opcode::Sextend);
     }
 
     #[test]

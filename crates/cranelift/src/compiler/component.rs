@@ -1228,7 +1228,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Conditionally emit destructor-execution code based on whether we
         // statically know that a destructor exists or not.
         if has_destructor {
-            let rep = self.builder.ins().ushr_imm(should_run_destructor, 1);
+            let rep = self.builder.ins().ushr_imm_u(should_run_destructor, 1);
             let rep = self.builder.ins().ireduce(ir::types::I32, rep);
             let index = self.types[resource].unwrap_concrete_ty();
             // NB: despite the vmcontext storing nullable funcrefs for function
@@ -1514,7 +1514,7 @@ impl<'a> TrampolineCompiler<'a> {
         let may_leave_bit = self
             .builder
             .ins()
-            .band_imm(flags, i64::from(FLAG_MAY_LEAVE));
+            .band_imm_u(flags, i64::from(FLAG_MAY_LEAVE));
         let (mut traps, builder) = self.traps();
         traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
     }

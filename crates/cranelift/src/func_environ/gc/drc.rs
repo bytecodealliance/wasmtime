@@ -107,7 +107,7 @@ impl DrcCompiler {
     ) -> ir::Value {
         debug_assert!(delta == -1 || delta == 1);
         let old_ref_count = self.load_ref_count(func_env, builder, gc_ref);
-        let new_ref_count = builder.ins().iadd_imm(old_ref_count, delta);
+        let new_ref_count = builder.ins().iadd_imm_s(old_ref_count, delta);
         self.store_ref_count(func_env, builder, gc_ref, new_ref_count);
         new_ref_count
     }
@@ -153,7 +153,7 @@ impl DrcCompiler {
         // meaning that there are always fewer objects in the GC heap than
         // `u32::MAX`.
         let current_len = self.load_current_over_approximated_stack_roots_len(func_env, builder);
-        let new_current_len = builder.ins().iadd_imm(current_len, 1);
+        let new_current_len = builder.ins().iadd_imm_s(current_len, 1);
         self.store_current_over_approximated_stack_roots_len(func_env, builder, new_current_len);
     }
 
@@ -174,7 +174,7 @@ impl DrcCompiler {
         if offset == 0 {
             ptr
         } else {
-            builder.ins().iadd_imm(ptr, offset)
+            builder.ins().iadd_imm_s(ptr, offset)
         }
     }
 
@@ -390,7 +390,7 @@ impl GcCompiler for DrcCompiler {
         let extended_array_ref =
             uextend_i32_to_pointer_type(builder, func_env.pointer_type(), array_ref);
         let object_addr = builder.ins().iadd(base, extended_array_ref);
-        let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
+        let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
         let flags = func_env.gc_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
         Ok(array_ref)
@@ -496,7 +496,7 @@ impl GcCompiler for DrcCompiler {
         // Finally, initialize the tag fields.
         let instance_id_addr = builder
             .ins()
-            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
+            .iadd_imm_s(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
         self.init_field(
             func_env,
             builder,
@@ -506,7 +506,7 @@ impl GcCompiler for DrcCompiler {
         )?;
         let tag_addr = builder
             .ins()
-            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
+            .iadd_imm_s(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
         self.init_field(
             func_env,
             builder,
@@ -830,8 +830,8 @@ impl GcCompiler for DrcCompiler {
             "DRC write barrier: decrement old ref's ref count and check for zero ref count"
         );
         let ref_count = self.load_ref_count(func_env, builder, old_val);
-        let new_ref_count = builder.ins().iadd_imm(ref_count, -1);
-        let old_val_needs_drop = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
+        let new_ref_count = builder.ins().iadd_imm_s(ref_count, -1);
+        let old_val_needs_drop = builder.ins().icmp_imm_s(IntCC::Equal, new_ref_count, 0);
         builder.ins().brif(
             old_val_needs_drop,
             drop_old_val_block,

@@ -1346,14 +1346,19 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     });
 }
 
-/// Emit an additional `{name}_imm` convenience method for `inst`, requested via
-/// `.inst_builder_imm_method(true)`.
+/// Emit the `{name}_imm_s`, `{name}_imm_u`, and (deprecated) `{name}_imm`
+/// convenience methods for `inst`, requested via `.inst_builder_imm_method(true)`.
 ///
-/// The generated method has the same shape as `inst`'s normal builder method,
+/// Each generated method has the same shape as `inst`'s normal builder method,
 /// except that its trailing value operand is taken as an `Into<Imm64>`
-/// immediate. That immediate is materialized as an `iconst` (sign- or
-/// zero-extended to the controlling type as needed, see
-/// `InstBuilder::build_imm_const`) and then `inst` is built with it.
+/// immediate. That immediate is materialized as an `iconst` (extended to the
+/// controlling type as needed, see `InstBuilder::build_imm_const`) and then
+/// `inst` is built with it. The `_imm_s` variant sign-extends the immediate
+/// while `_imm_u` zero-extends it; this only matters for `i128`.
+///
+/// The bare `_imm` method is kept around for backwards-compatibility, with the
+/// sign-/zero-extension behavior the now-removed `*_imm` instructions used to
+/// have. It is deprecated in favor of the explicit `_imm_s`/`_imm_u` variants.
 fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
     // Only the simple, fixed-operand, single-result integer instructions that
     // used to have a `binary_imm64`/`int_compare_imm` counterpart are
@@ -1376,6 +1381,36 @@ fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
         inst.value_opnums.len()
     );
 
+    // Whether the now-removed `*_imm` instruction historically sign-extended its
+    // immediate. This is what the deprecated bare `_imm` method preserves.
+    let historically_signed = matches!(
+        inst.name.as_str(),
+        "iadd" | "imul" | "sdiv" | "srem" | "icmp"
+    );
+
+    gen_one_imm_inst_builder(inst, fmt, "_imm_s", true, None);
+    fmt.empty_line();
+    gen_one_imm_inst_builder(inst, fmt, "_imm_u", false, None);
+    fmt.empty_line();
+    let name = inst.snake_name();
+    let deprecation = format!(
+        "use `{name}_imm_s` (sign-extends the immediate) or `{name}_imm_u` \
+         (zero-extends the immediate) instead",
+    );
+    gen_one_imm_inst_builder(inst, fmt, "_imm", historically_signed, Some(&deprecation));
+}
+
+/// Emit a single immediate convenience method for `inst` with the given method
+/// name `suffix` (e.g. `"_imm_s"`). `signed` selects sign- vs zero-extension of
+/// the materialized immediate, and `deprecation`, if set, marks the method
+/// `#[deprecated]` with the given note.
+fn gen_one_imm_inst_builder(
+    inst: &Instruction,
+    fmt: &mut Formatter,
+    suffix: &str,
+    signed: bool,
+    deprecation: Option<&str>,
+) {
     // The immediate replaces the trailing value operand; the first value
     // operand provides the controlling type for the synthesized `iconst`.
     let imm_opnum = *inst.value_opnums.last().unwrap();
@@ -1399,15 +1434,20 @@ fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
     }
 
     let proto = format!(
-        "{}_imm<T: Into<ir::immediates::Imm64>>({}) -> Value",
+        "{}{suffix}<T: Into<ir::immediates::Imm64>>({}) -> Value",
         inst.snake_name(),
         args.join(", "),
     );
 
+    let extends = if signed {
+        "sign-extended"
+    } else {
+        "zero-extended"
+    };
     fmt.doc_comment(format!(
         "Convenience method that is like [`{name}`][Self::{name}], but takes its \
          trailing operand as an immediate integer constant which is materialized \
-         with an `iconst`.",
+         with an `iconst` and {extends} to the controlling type.",
         name = inst.snake_name(),
     ));
     fmt.line("///");
@@ -1417,6 +1457,9 @@ fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
         fmt.doc_comment(doc_line);
     }
 
+    if let Some(note) = deprecation {
+        fmtln!(fmt, "#[deprecated(note = \"{note}\")]");
+    }
     fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
     fmt.add_block(&format!("fn {proto}"), |fmt| {
         fmtln!(fmt, "let {imm_name} = {imm_name}.into();");
@@ -1426,8 +1469,7 @@ fn gen_imm_inst_builder(inst: &Instruction, fmt: &mut Formatter) {
         );
         fmtln!(
             fmt,
-            "let {imm_name} = self.build_imm_const(imm_ty, {imm_name}, Opcode::{});",
-            inst.camel_name
+            "let {imm_name} = self.build_imm_const(imm_ty, {imm_name}, {signed});",
         );
         let call_args = inst
             .operands_in
