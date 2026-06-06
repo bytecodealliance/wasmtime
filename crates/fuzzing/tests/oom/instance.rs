@@ -1,8 +1,8 @@
 #![cfg(arc_try_new)]
 
 use wasmtime::{
-    Config, Engine, Func, Global, GlobalType, Instance, Linker, Module, Mutability, Result, Store,
-    Val, ValType,
+    Config, Engine, Func, Global, GlobalType, Instance, InstanceAllocationStrategy, Linker, Module,
+    Mutability, PoolingAllocationConfig, Result, Store, Val, ValType,
 };
 use wasmtime_fuzzing::oom::OomTest;
 
@@ -322,6 +322,32 @@ fn instance_global_init_with_imported_global() -> Result<()> {
         let instance = linker.instantiate(&mut store, &module)?;
         let g2 = instance.get_global(&mut store, "g2").unwrap();
         assert_eq!(g2.get(&mut store).unwrap_i32(), 1000);
+        Ok(())
+    })
+}
+
+#[test]
+fn pooling_allocator_memory_slot_leak_on_oom() -> Result<()> {
+    let mut pool = PoolingAllocationConfig::default();
+    pool.total_memories(1);
+    pool.total_tables(10);
+    pool.total_core_instances(10);
+
+    let mut config = Config::new();
+    config.concurrency_support(false);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(&engine, r#"(module (memory (export "m") 1))"#)?;
+    let linker = Linker::<()>::new(&engine);
+    let instance_pre = linker.instantiate_pre(&module)?;
+
+    // With only one memory slot in the pooling allocator shared amongst all
+    // runs here we should be guaranteed that an OOM failure anywhere always
+    // returns the memory, if any, back to the pooling allocator.
+    OomTest::new().allow_alloc_after_oom(true).test(|| {
+        let mut store = Store::try_new(&engine, ())?;
+        let _instance = instance_pre.instantiate(&mut store)?;
         Ok(())
     })
 }
