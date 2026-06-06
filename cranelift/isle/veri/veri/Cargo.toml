@@ -16,7 +16,7 @@ num-bigint = { workspace = true }
 num-traits = { workspace = true }
 easy-smt = { workspace = true }
 rayon = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 cranelift-isle-veri-test-macros = { path = "../test-macros" }

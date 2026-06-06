@@ -40,14 +40,16 @@ If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 
 ## Running
 
-To run the verifier, from the `cranelift/isle/veri/veri` directory run:
+To run the verifier, run:
 
 ```
-./script/veri.sh
+cargo run -p cranelift-isle-veri --bin veri -- --default-excludes
 ```
 
 This will run verification on the default AArch64 backend. To run on the X64
-backend, add the `-a x64` option.
+backend, add the `-a x64` option. `--default-excludes` will skip ISLE terms
+that are either currently not well-supported or slow to verify, such as vector operations
+and expensive division operations.
 
 By default the verifier attempts every expansion it can reach. It seeds an
 expansion at every term that has rules, a constructor, and an explicit

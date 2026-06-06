@@ -17,6 +17,27 @@ use std::{
     iter::zip,
 };
 
+thread_local!(pub static DBG_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) });
+pub struct DbgGuard;
+impl Drop for DbgGuard {
+    fn drop(&mut self) {
+        DBG_DEPTH.with(|d| d.set(d.get() - 1));
+    }
+}
+macro_rules! dbg_depth {
+    ($name:expr) => {
+        let _g = DbgGuard;
+        let __d = DBG_DEPTH.with(|d| {
+            let n = d.get() + 1;
+            d.set(n);
+            n
+        });
+        if __d % 200 == 0 {
+            eprintln!("DBG combined depth={} at {}", __d, $name);
+        }
+    };
+}
+
 declare_id!(
     /// The id of an expression within verification Conditions.
     #[must_use]
@@ -1078,6 +1099,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn add_binding(&mut self, id: BindingId, binding: &Binding) -> Result<()> {
+        dbg_depth!("add_binding");
         // Exit if already added.
         if self.binding_value.contains_key(&id) {
             return Ok(());
@@ -1277,6 +1299,7 @@ impl<'a> ConditionsBuilder<'a> {
         invocation: Invocation,
         domain: Domain,
     ) -> Result<()> {
+        dbg_depth!("call");
         // Lookup spec.
         let term_name = self.prog.term_name(term);
         let term_spec = self
@@ -1695,6 +1718,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn spec_expr(&mut self, expr: &spec::Expr, vars: &Variables) -> Result<Symbolic> {
+        dbg_depth!("spec_expr");
         self.position_stack.push(expr.pos);
         let result = self.spec_expr_kind(&expr.x, vars);
         self.position_stack.pop();
@@ -1912,6 +1936,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn construct(&mut self, constructor: &Constructor, vars: &Variables) -> Result<Symbolic> {
+        dbg_depth!("construct");
         match constructor {
             Constructor::Enum {
                 name,
@@ -2209,6 +2234,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn values_equal(&mut self, a: Symbolic, b: Symbolic) -> Result<ExprId> {
+        dbg_depth!("values_equal");
         if std::mem::discriminant(&a) != std::mem::discriminant(&b) {
             return Err(self.error("equality on different symbolic types"));
         }
@@ -2305,6 +2331,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn alloc_binding(&mut self, binding_type: &BindingType, name: String) -> Result<Symbolic> {
+        dbg_depth!("alloc_binding");
         match binding_type {
             BindingType::Base(type_id) => self.alloc_model(*type_id, name),
             BindingType::Option(inner_type) => {
@@ -2331,6 +2358,7 @@ impl<'a> ConditionsBuilder<'a> {
     }
 
     fn alloc_value(&mut self, ty: &Compound, name: String) -> Result<Symbolic> {
+        dbg_depth!("alloc_value");
         match ty {
             Compound::Primitive(ty) => Ok(Symbolic::Scalar(self.alloc_variable(ty.clone(), name))),
             Compound::Struct(fields) => Ok(Symbolic::Struct(

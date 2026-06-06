@@ -1,5 +1,5 @@
 //! AArch64 ISA definitions: registers.
-#![allow(missing_docs, reason = "Used for cranelift-isle-veri")]
+#![expect(missing_docs, reason = "fields mostly self-describing")]
 
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;

@@ -137,6 +137,27 @@ impl std::fmt::Display for ExpansionPredicate {
     }
 }
 
+impl ExpansionPredicate {
+    /// Describe, in natural English, the expansions this predicate matches.
+    fn describe(&self) -> String {
+        match self {
+            ExpansionPredicate::FirstRuleNamed => {
+                "whose first rule has a name".to_string()
+            }
+            ExpansionPredicate::Specified => "marked as specified".to_string(),
+            ExpansionPredicate::Tagged(tag) => format!("tagged `{tag}`"),
+            ExpansionPredicate::Root(term) => format!("rooted at the term `{term}`"),
+            ExpansionPredicate::ContainsRule(rule) => {
+                format!("that use the rule `{rule}`")
+            }
+            ExpansionPredicate::Not(p) => format!("not {}", p.describe()),
+            ExpansionPredicate::And(p, q) => {
+                format!("{} and {}", p.describe(), q.describe())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Filter {
     include: bool,
@@ -154,6 +175,17 @@ impl Filter {
 
     fn exclude(predicate: ExpansionPredicate) -> Self {
         Self::new(false, predicate)
+    }
+
+    /// Describe this filter as a natural-English sentence, e.g.
+    /// "Excluding ISLE terms tagged `vector`."
+    pub fn describe(&self) -> String {
+        let verb = if self.include {
+            "Including"
+        } else {
+            "Excluding"
+        };
+        format!("{verb} ISLE terms {}.", self.predicate.describe())
     }
 }
 

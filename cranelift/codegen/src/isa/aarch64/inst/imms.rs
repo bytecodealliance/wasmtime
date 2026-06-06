@@ -1,5 +1,7 @@
 //! AArch64 ISA definitions: immediate constants.
 
+#![expect(missing_docs, reason = "fields mostly self-describing")]
+
 use crate::ir::types::*;
 use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
 use crate::machinst::PrettyPrint;

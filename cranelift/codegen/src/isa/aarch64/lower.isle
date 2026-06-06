@@ -10,8 +10,7 @@
                   (= result arg)
                   ; If we expect a CLIF trap, it should happen in execution
                   ; also.
-                  exec_trap
-            )
+                  exec_trap)
 
             ; Should trap on both sides, or neither.
             (= clif_trap exec_trap)
@@ -35,12 +34,7 @@
                         (= (:addr clif_store) (:addr isa_store))
                         (=
                               (conv_to (:size_bits clif_store) (:value clif_store))
-                              (conv_to (:size_bits clif_store) (:value isa_store))
-                        )
-                  )
-            )
-      )
-)
+                              (conv_to (:size_bits clif_store) (:value isa_store)))))))
 (decl partial lower (Inst) InstOutput)
 
 ;; Variant of the main lowering constructor term, which receives an
@@ -3233,5 +3227,5 @@
 (attr rule lower_sshr128 (tag i128))
 (attr rule lower_clz128 (tag i128))
 
-(attr load_ext_name (tag todo))
-(attr get_exception_handler_address (tag todo))
+(attr load_ext_name (tag TODO))
+(attr get_exception_handler_address (tag TODO))
