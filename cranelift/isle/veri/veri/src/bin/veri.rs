@@ -189,7 +189,9 @@ fn main() -> Result<()> {
             default_exclude_tags.join(", ")
         );
     } else {
-        println!("Not applying any default tag exclusions (pass --default-excludes to skip the tags that are not yet well supported).");
+        println!(
+            "Not applying any default tag exclusions (pass --default-excludes to skip the tags that are not yet well supported)."
+        );
     }
     if opts.skip_todo {
         println!("Excluding ISLE terms tagged TODO.");

@@ -141,9 +141,7 @@ impl ExpansionPredicate {
     /// Describe, in natural English, the expansions this predicate matches.
     fn describe(&self) -> String {
         match self {
-            ExpansionPredicate::FirstRuleNamed => {
-                "whose first rule has a name".to_string()
-            }
+            ExpansionPredicate::FirstRuleNamed => "whose first rule has a name".to_string(),
             ExpansionPredicate::Specified => "marked as specified".to_string(),
             ExpansionPredicate::Tagged(tag) => format!("tagged `{tag}`"),
             ExpansionPredicate::Root(term) => format!("rooted at the term `{term}`"),
@@ -909,10 +907,7 @@ impl Runner {
         Ok(self.default_solver_backend)
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "verification code"
-    )]
+    #[allow(clippy::too_many_arguments, reason = "verification code")]
     fn verify_expansion_type_instantiation(
         &self,
         conditions: &Conditions,
