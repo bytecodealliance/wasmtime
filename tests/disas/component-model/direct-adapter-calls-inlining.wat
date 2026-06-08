@@ -87,8 +87,7 @@
 ;;                                     v15 = band v13, v14  ; v14 = 1
 ;;                                     v11 = iconst.i32 0
 ;;                                     v17 = icmp eq v15, v11  ; v11 = 0
-;;                                     v18 = uextend.i32 v17
-;;                                     brif v18, block4, block5
+;;                                     brif v17, block4, block5
 ;;
 ;;                                 block4:
 ;;                                     v21 = load.i64 notrap aligned readonly can_move v5+88

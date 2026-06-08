@@ -25,8 +25,10 @@ function %probe_loop(i64) -> i64 {
     ss0 = explicit_slot 1048576
 
 block0(v0: i64):
-    stack_store.i64 v0, ss0
-    v1 = stack_load.i64 ss0
+    v2 = stack_addr.i64 ss0
+    store.i64 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i64 notrap v3
     return v1
 }
 ; run: %probe_loop(1) == 1
@@ -37,8 +39,10 @@ function %probe_unroll(i64) -> i64 {
     ss0 = explicit_slot 9000
 
 block0(v0: i64):
-    stack_store.i64 v0, ss0
-    v1 = stack_load.i64 ss0
+    v2 = stack_addr.i64 ss0
+    store.i64 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i64 notrap v3
     return v1
 }
 ; run: %probe_unroll(1) == 1

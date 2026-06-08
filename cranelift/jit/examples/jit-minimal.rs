@@ -48,7 +48,7 @@ fn main() {
         let add = bcx.ins().iadd(cst, param);
         bcx.ins().return_(&[add]);
         bcx.seal_all_blocks();
-        bcx.finalize();
+        bcx.finalize(module.target_config());
     }
     module.define_function(func_a, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
@@ -71,7 +71,7 @@ fn main() {
         };
         bcx.ins().return_(&[value]);
         bcx.seal_all_blocks();
-        bcx.finalize();
+        bcx.finalize(module.target_config());
     }
     module.define_function(func_b, &mut ctx).unwrap();
     module.clear_context(&mut ctx);

@@ -1,0 +1,55 @@
+test compile precise-output
+set enable_compact_unwind_abi=true
+target aarch64
+
+function %compact_unwind_adds_integer_pairs(i64, i64, i64) -> i64 apple_aarch64 {
+    fn0 = colocated %callee() apple_aarch64
+
+block0(v0: i64, v1: i64, v2: i64):
+    call fn0()
+    v5 = iadd v0, v1
+    v6 = iadd v5, v2
+    return v6
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x20, x19, [sp, #-16]!
+;   stp x22, x21, [sp, #-16]!
+; block0:
+;   mov x19, x2
+;   mov x20, x1
+;   mov x21, x0
+;   bl 0
+;   mov x0, x21
+;   mov x1, x20
+;   add x6, x0, x1
+;   mov x2, x19
+;   add x0, x6, x2
+;   ldp x22, x21, [sp], #16
+;   ldp x20, x19, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x20, x19, [sp, #-0x10]!
+;   stp x22, x21, [sp, #-0x10]!
+; block1: ; offset 0x10
+;   mov x19, x2
+;   mov x20, x1
+;   mov x21, x0
+;   bl #0x1c ; reloc_external Call %callee 0
+;   mov x0, x21
+;   mov x1, x20
+;   add x6, x0, x1
+;   mov x2, x19
+;   add x0, x6, x2
+;   ldp x22, x21, [sp], #0x10
+;   ldp x20, x19, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

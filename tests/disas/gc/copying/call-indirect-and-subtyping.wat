@@ -55,7 +55,7 @@
 ;; @005c                               v22 = load.i32 notrap aligned readonly can_move v21
 ;; @005c                               v24 = icmp eq v23, v22
 ;; @005c                               v25 = uextend.i32 v24
-;; @005c                               brif v25, block5(v25), block4
+;; @005c                               brif v24, block5(v25), block4
 ;;
 ;;                                 block4:
 ;; @005c                               v27 = call fn1(v0, v23, v22)

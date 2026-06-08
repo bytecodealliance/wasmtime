@@ -42,8 +42,10 @@ block0(v0: f64):
 function %store_i32x2(i32x2) -> i64 {
     ss0 = explicit_slot 8
 block0(v0: i32x2):
-    stack_store.i32x2 v0, ss0
-    v1 = stack_load.i64 ss0
+    v2 = stack_addr.i64 ss0
+    store.i32x2 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i64 notrap v3
     return v1
 }
 ; run: %store_i32x2([0xBEEF 0xC0FFEE]) == 0x00c0ffee_0000beef
@@ -52,8 +54,10 @@ block0(v0: i32x2):
 function %load_i32x2(i64) -> i32x2 {
     ss0 = explicit_slot 8
 block0(v0: i64):
-    stack_store.i64 v0, ss0
-    v1 = stack_load.i32x2 ss0
+    v2 = stack_addr.i64 ss0
+    store.i64 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i32x2 notrap v3
     return v1
 }
 ; run: %bitcast_i64_to_i32x2(0x00c0ffee_0000beef) == [0xBEEF 0xC0FFEE]
@@ -96,8 +100,10 @@ block0(v0: f32):
 function %store_i16x2(i16x2) -> i32 {
     ss0 = explicit_slot 4
 block0(v0: i16x2):
-    stack_store.i16x2 v0, ss0
-    v1 = stack_load.i32 ss0
+    v2 = stack_addr.i64 ss0
+    store.i16x2 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i32 notrap v3
     return v1
 }
 ; run: %store_i16x2([0xBEEF 0xC0FE]) == 0xc0fe_beef
@@ -106,8 +112,10 @@ block0(v0: i16x2):
 function %load_i16x2(i32) -> i16x2 {
     ss0 = explicit_slot 4
 block0(v0: i32):
-    stack_store.i32 v0, ss0
-    v1 = stack_load.i16x2 ss0
+    v2 = stack_addr.i64 ss0
+    store.i32 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i16x2 notrap v3
     return v1
 }
 ; run: %bitcast_i32_to_i16x2(0xc0fe_beef) == [0xBEEF 0xC0FE]
@@ -150,8 +158,10 @@ block0(v0: f16):
 function %store_i8x2(i8x2) -> i16 {
     ss0 = explicit_slot 2
 block0(v0: i8x2):
-    stack_store.i8x2 v0, ss0
-    v1 = stack_load.i16 ss0
+    v2 = stack_addr.i64 ss0
+    store.i8x2 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i16 notrap v3
     return v1
 }
 ; run: %store_i8x2([0xFE 0xC0]) == 0xc0fe
@@ -160,8 +170,10 @@ block0(v0: i8x2):
 function %load_i8x2(i16) -> i8x2 {
     ss0 = explicit_slot 2
 block0(v0: i16):
-    stack_store.i16 v0, ss0
-    v1 = stack_load.i8x2 ss0
+    v2 = stack_addr.i64 ss0
+    store.i16 notrap v0, v2
+    v3 = stack_addr.i64 ss0
+    v1 = load.i8x2 notrap v3
     return v1
 }
 ; run: %bitcast_i16_to_i8x2(0xc0fe) == [0xFE 0xC0]

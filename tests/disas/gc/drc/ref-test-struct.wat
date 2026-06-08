@@ -21,8 +21,7 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001b                               v4 = iconst.i32 0
 ;; @001b                               v5 = icmp eq v2, v4  ; v4 = 0
-;; @001b                               v6 = uextend.i32 v5
-;; @001b                               brif v6, block4(v4), block2  ; v4 = 0
+;; @001b                               brif v5, block4(v4), block2  ; v4 = 0
 ;;
 ;;                                 block2:
 ;; @001b                               v8 = iconst.i32 1

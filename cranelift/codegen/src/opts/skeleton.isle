@@ -32,6 +32,18 @@
       (if-let dest (resolve_jump_table_entry jt idx))
       (jump dest))
 
+;; `brif`, `trapz`, and `trapnz` only test their condition for being zero
+;; vs. non-zero, so any truthiness-preserving operation can be stripped off.
+(rule (simplify_skeleton (brif c _ _))
+      (if-let x (truthy c))
+      (replace_branch_cond x))
+(rule (simplify_skeleton (trapz c _))
+      (if-let x (truthy c))
+      (replace_branch_cond x))
+(rule (simplify_skeleton (trapnz c _))
+      (if-let x (truthy c))
+      (replace_branch_cond x))
+
 ;; TODO: We can't simplify into unconditional traps yet. See the comment in
 ;; `simplify_skeleton_inst` for more details.
 ;;

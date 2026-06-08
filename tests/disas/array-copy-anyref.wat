@@ -62,7 +62,7 @@
 ;; @002b                               v64 = uadd_overflow_trap v50, v124, user2
 ;; @002b                               v65 = icmp ugt v64, v58
 ;; @002b                               trapnz v65, user2
-;; @002b                               brif v15, block2, block5
+;; @002b                               brif v6, block2, block5
 ;;
 ;;                                 block2:
 ;; @002b                               v66 = icmp.i64 ult v28, v50

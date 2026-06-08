@@ -275,7 +275,7 @@ impl Compiler {
                 vmstore_ctx_ptr,
                 i32::from(ptr_size.vmstore_context_execution_version()),
             );
-            let new_version = builder.ins().iadd_imm(old_version, 1);
+            let new_version = builder.ins().iadd_imm_s(old_version, 1);
             builder.ins().store(
                 MemFlagsData::trusted(),
                 new_version,
@@ -292,7 +292,7 @@ impl Compiler {
         let results =
             self.load_values_from_array(wasm_func_ty.results(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -389,7 +389,7 @@ impl Compiler {
         } else {
             builder.ins().return_(&[]);
         }
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -1359,7 +1359,7 @@ impl Compiler {
         if !self.emit_debug_checks {
             return;
         }
-        let enough_capacity = builder.ins().icmp_imm(
+        let enough_capacity = builder.ins().icmp_imm_s(
             ir::condcodes::IntCC::UnsignedGreaterThanOrEqual,
             capacity,
             ir::immediates::Imm64::new(length.try_into().unwrap()),
@@ -1382,7 +1382,7 @@ impl Compiler {
             vmctx,
             0,
         );
-        let is_expected_vmctx = builder.ins().icmp_imm(
+        let is_expected_vmctx = builder.ins().icmp_imm_s(
             ir::condcodes::IntCC::Equal,
             magic,
             i64::from(expected_vmctx_magic),
@@ -1516,7 +1516,7 @@ impl Compiler {
         let false_return = builder.ins().iconst(ir::types::I8, 0);
         builder.ins().return_(&[false_return]);
 
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),

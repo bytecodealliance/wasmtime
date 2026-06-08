@@ -31,7 +31,7 @@ impl Handler for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            wit_bindgen::spawn(async move {
+            wit_bindgen::spawn_local(async move {
                 let mut body_rx = body;
                 let mut chunk = Vec::with_capacity(1024);
                 loop {

@@ -111,8 +111,7 @@
 ;; @007b                               v8 = band v6, v7  ; v7 = 1
 ;; @0075                               v4 = iconst.i32 0
 ;; @007c                               v10 = icmp eq v8, v4  ; v4 = 0
-;; @007c                               v11 = uextend.i32 v10
-;; @007d                               brif v11, block2, block3
+;; @007d                               brif v10, block2, block3
 ;;
 ;;                                 block2:
 ;; @0081                               v15 = load.i64 notrap aligned readonly can_move v0+88

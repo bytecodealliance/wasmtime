@@ -31,8 +31,8 @@
 ;; @0034                               v4 = iconst.i64 48
 ;; @0034                               v5 = iadd v0, v4  ; v4 = 48
 ;; @0034                               v6 = load.i32 notrap aligned v5
-;;                                     v92 = stack_addr.i64 ss0
-;;                                     store notrap v6, v92
+;;                                     v82 = stack_addr.i64 ss0
+;;                                     store notrap v6, v82
 ;; @0034                               v7 = iconst.i32 1
 ;; @0034                               v8 = band v6, v7  ; v7 = 1
 ;; @0034                               v9 = iconst.i32 0
@@ -42,8 +42,8 @@
 ;; @0034                               brif v12, block4, block2
 ;;
 ;;                                 block2:
-;; @0034                               v87 = load.i64 notrap aligned readonly can_move v0+8
-;; @0034                               v14 = load.i64 notrap aligned readonly can_move v87+32
+;; @0034                               v91 = load.i64 notrap aligned readonly can_move v0+8
+;; @0034                               v14 = load.i64 notrap aligned readonly can_move v91+32
 ;; @0034                               v13 = uextend.i64 v6
 ;; @0034                               v15 = iadd v14, v13
 ;; @0034                               v16 = load.i32 user2 region0 v15
@@ -86,11 +86,11 @@
 ;; @0034                               jump block4
 ;;
 ;;                                 block4:
-;;                                     v64 = load.i32 notrap v92
+;;                                     v65 = load.i32 notrap v82
 ;; @0036                               jump block1
 ;;
 ;;                                 block1:
-;; @0036                               return v64
+;; @0036                               return v65
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {

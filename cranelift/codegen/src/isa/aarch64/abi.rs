@@ -1,6 +1,9 @@
 //! Implementation of a standard AArch64 ABI.
 
+use core::cmp::Reverse;
+
 use crate::CodegenResult;
+use crate::FxHashSet;
 use crate::ir;
 use crate::ir::MemFlagsData;
 use crate::ir::types;
@@ -76,6 +79,46 @@ fn compute_clobber_size(
     };
 
     int_save_bytes + vec_save_bytes
+}
+
+/// The compact unwinding encoding can only represent pushes and pops of adjacent register pairs,
+/// so unused callee-saved registers may also need to be pushed.
+fn add_macho_compact_unwind_paired_regs(regs: &mut Vec<Writable<RealReg>>) {
+    let int_regs: FxHashSet<_> = regs
+        .iter()
+        .filter_map(|r| {
+            if r.to_reg().class() == RegClass::Int {
+                Some(r.to_reg().hw_enc())
+            } else {
+                None
+            }
+        })
+        .collect();
+    for (a, b) in [(19, 20), (21, 22), (23, 24), (25, 26), (27, 28)] {
+        if int_regs.contains(&a) && !int_regs.contains(&b) {
+            regs.push(Writable::from_reg(xreg(b).to_real_reg().unwrap()))
+        } else if int_regs.contains(&b) && !int_regs.contains(&a) {
+            regs.push(Writable::from_reg(xreg(a).to_real_reg().unwrap()))
+        }
+    }
+
+    let fp_regs: FxHashSet<_> = regs
+        .iter()
+        .filter_map(|r| {
+            if r.to_reg().class() == RegClass::Float {
+                Some(r.to_reg().hw_enc())
+            } else {
+                None
+            }
+        })
+        .collect();
+    for (a, b) in [(8, 9), (10, 11), (12, 13), (14, 15)] {
+        if fp_regs.contains(&a) && !fp_regs.contains(&b) {
+            regs.push(Writable::from_reg(vreg(b).to_real_reg().unwrap()))
+        } else if fp_regs.contains(&b) && !fp_regs.contains(&a) {
+            regs.push(Writable::from_reg(vreg(a).to_real_reg().unwrap()))
+        }
+    }
 }
 
 /// AArch64-specific ABI behavior. This struct just serves as an implementation
@@ -1155,6 +1198,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Wasmtime).
             (isa::CallConv::PreserveAll, true) => ALL_CLOBBERS,
             (isa::CallConv::SystemV, _) => DEFAULT_AAPCS_CLOBBERS,
+            // On Mach-O, the compact unwind info properly describes how are callee-save
+            // registers restored during unwinding.
+            (isa::CallConv::AppleAarch64, true) => DEFAULT_AAPCS_CLOBBERS,
             (isa::CallConv::PreserveAll, _) => NO_CLOBBERS,
             (_, false) => DEFAULT_AAPCS_CLOBBERS,
             (_, true) => panic!("unimplemented clobbers for exn abi of {call_conv:?}"),
@@ -1192,9 +1238,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
             })
             .collect();
 
-        // Sort registers for deterministic code output. We can do an unstable
-        // sort because the registers will be unique (there are no dups).
-        regs.sort_unstable();
+        if call_conv == isa::CallConv::AppleAarch64 && flags.enable_compact_unwind_abi() {
+            add_macho_compact_unwind_paired_regs(&mut regs);
+            // For Mach-O compact unwind, these pushes/pops must be emitted in
+            // the fixed expected order. The encoding specifies only which
+            // callee-saved register pairs are preserved; the order is mandatory.
+            regs.sort_unstable_by_key(|r| {
+                let reg = r.to_reg();
+                (reg.class(), Reverse(reg.hw_enc()))
+            });
+        } else {
+            // Sort registers for deterministic code output. We can do an unstable
+            // sort because the registers will be unique (there are no dups).
+            regs.sort_unstable();
+        }
 
         // Compute clobber size.
         let clobber_size = compute_clobber_size(call_conv, &regs);
@@ -1239,9 +1296,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
         const PAYLOAD_REGS: &'static [Reg] = &[regs::xreg(0), regs::xreg(1)];
         match call_conv {
-            isa::CallConv::SystemV | isa::CallConv::Tail | isa::CallConv::PreserveAll => {
-                PAYLOAD_REGS
-            }
+            isa::CallConv::SystemV
+            | isa::CallConv::Tail
+            | isa::CallConv::PreserveAll
+            | isa::CallConv::AppleAarch64 => PAYLOAD_REGS,
             _ => &[],
         }
     }

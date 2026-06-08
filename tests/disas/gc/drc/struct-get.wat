@@ -127,8 +127,8 @@
 ;; @004e                               v7 = iconst.i64 32
 ;; @004e                               v8 = iadd v6, v7  ; v7 = 32
 ;; @004e                               v9 = load.i32 user2 little region0 v8
-;;                                     v95 = stack_addr.i64 ss0
-;;                                     store notrap v9, v95
+;;                                     v85 = stack_addr.i64 ss0
+;;                                     store notrap v9, v85
 ;; @004e                               v10 = iconst.i32 1
 ;; @004e                               v11 = band v9, v10  ; v10 = 1
 ;; @004e                               v12 = iconst.i32 0
@@ -180,9 +180,9 @@
 ;; @004e                               jump block4
 ;;
 ;;                                 block4:
-;;                                     v67 = load.i32 notrap v95
+;;                                     v68 = load.i32 notrap v85
 ;; @0052                               jump block1
 ;;
 ;;                                 block1:
-;; @0052                               return v67
+;; @0052                               return v68
 ;; }

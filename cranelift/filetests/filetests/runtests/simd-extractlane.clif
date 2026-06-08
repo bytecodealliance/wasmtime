@@ -9,8 +9,6 @@ target x86_64 sse42 has_avx
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
-target pulley32
-target pulley32be
 target pulley64
 target pulley64be
 
@@ -49,11 +47,15 @@ function %unaligned_extractlane() -> f64 {
 
 block0:
     v0 = iconst.i64 0
-    stack_store.i64 v0, ss0+0
-    stack_store.i64 v0, ss0+8
-    stack_store.i64 v0, ss0+16
+    v3 = stack_addr.i64 ss0+0
+    store.i64 notrap v0, v3
+    v4 = stack_addr.i64 ss0+8
+    store.i64 notrap v0, v4
+    v5 = stack_addr.i64 ss0+16
+    store.i64 notrap v0, v5
 
-    v1 = stack_load.f64x2 ss0+1
+    v6 = stack_addr.i64 ss0+1
+    v1 = load.f64x2 notrap v6
     v2 = extractlane v1, 1
     return v2
 }

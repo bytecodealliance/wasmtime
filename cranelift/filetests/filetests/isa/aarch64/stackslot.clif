@@ -6,16 +6,26 @@ function %f1(i32, i64, f32, f64, i8x16) -> i32, i64, f32, f64, i8x16 {
   ss0 = explicit_slot 40
 
 block0(v0: i32, v1: i64, v2: f32, v3: f64, v4: i8x16):
-  stack_store v0, ss0+0
-  stack_store v1, ss0+4
-  stack_store v2, ss0+12
-  stack_store v3, ss0+16
-  stack_store v4, ss0+24
-  v5 = stack_load.i32 ss0+0
-  v6 = stack_load.i64 ss0+4
-  v7 = stack_load.f32 ss0+12
-  v8 = stack_load.f64 ss0+16
-  v9 = stack_load.i8x16 ss0+24
+  v15 = stack_addr.i64 ss0+0
+  store notrap v0, v15
+  v16 = stack_addr.i64 ss0+4
+  store notrap v1, v16
+  v17 = stack_addr.i64 ss0+12
+  store notrap v2, v17
+  v18 = stack_addr.i64 ss0+16
+  store notrap v3, v18
+  v19 = stack_addr.i64 ss0+24
+  store notrap v4, v19
+  v10 = stack_addr.i64 ss0+0
+  v5 = load.i32 notrap v10
+  v11 = stack_addr.i64 ss0+4
+  v6 = load.i64 notrap v11
+  v12 = stack_addr.i64 ss0+12
+  v7 = load.f32 notrap v12
+  v13 = stack_addr.i64 ss0+16
+  v8 = load.f64 notrap v13
+  v14 = stack_addr.i64 ss0+24
+  v9 = load.i8x16 notrap v14
   return v5, v6, v7, v8, v9
 }
 

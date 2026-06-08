@@ -56,10 +56,10 @@
 ;; @004c                               v8 = load.i64 notrap aligned readonly can_move v0+88
 ;; @004c                               v7 = load.i64 notrap aligned readonly can_move v0+104
 ;; @004c                               call_indirect sig0, v8(v7, v0), stack_map=[i32 @ ss0+0]
-;;                                     v12 = load.i32 notrap v14
+;;                                     v13 = load.i32 notrap v14
 ;; @004e                               v11 = load.i64 notrap aligned readonly can_move v0+56
 ;; @004e                               v10 = load.i64 notrap aligned readonly can_move v0+72
-;; @004e                               call_indirect sig1, v11(v10, v0, v12)
+;; @004e                               call_indirect sig1, v11(v10, v0, v13)
 ;; @0050                               jump block1
 ;;
 ;;                                 block1:

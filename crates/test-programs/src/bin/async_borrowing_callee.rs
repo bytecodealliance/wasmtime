@@ -18,7 +18,7 @@ struct Component;
 impl Borrowing for Component {
     async fn foo(x: &X, misbehave: bool) {
         let handle = x.handle();
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             if misbehave {
                 unsafe { X::from_handle(handle) }.foo();
             }

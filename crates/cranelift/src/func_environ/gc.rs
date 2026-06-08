@@ -913,7 +913,7 @@ fn emit_array_size_info(
     let array_len = builder.ins().uextend(ir::types::I64, array_len);
     let all_elems_size = builder.ins().imul(one_elem_size, array_len);
 
-    let high_bits = builder.ins().ushr_imm(all_elems_size, 32);
+    let high_bits = builder.ins().ushr_imm_u(all_elems_size, 32);
     builder.ins().trapnz(high_bits, TRAP_GC_HEAP_CORRUPT);
 
     let all_elems_size = builder.ins().ireduce(ir::types::I32, all_elems_size);
@@ -1247,7 +1247,12 @@ pub fn translate_ref_test(
                     .ins()
                     .load(ir::types::I32, gc_memflags.with_readonly(), ty_addr, 0);
 
-            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+            func_env.is_subtype(
+                builder,
+                actual_shared_ty,
+                expected_shared_ty,
+                expected_interned_ty,
+            )
         }
 
         // Same as for concrete arrays and structs except that a `VMFuncRef`
@@ -1265,7 +1270,12 @@ pub fn translate_ref_test(
                 val,
             );
 
-            func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
+            func_env.is_subtype(
+                builder,
+                actual_shared_ty,
+                expected_shared_ty,
+                expected_interned_ty,
+            )
         }
         WasmHeapType::ConcreteCont(_) => {
             // TODO(#10248) GC integration for stack switching
@@ -1328,8 +1338,8 @@ fn emit_array_size(
     let len = builder.ins().uextend(ir::types::I64, len);
     let elems_size_64 = builder
         .ins()
-        .imul_imm(len, i64::from(array_layout.elem_size));
-    let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
+        .imul_imm_s(len, i64::from(array_layout.elem_size));
+    let high_bits = builder.ins().ushr_imm_u(elems_size_64, 32);
     func_env.trapnz(builder, high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
     let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
 
@@ -1372,7 +1382,9 @@ fn initialize_struct_fields(
     for ((ty, val), offset) in field_types.into_iter().zip(field_values).zip(field_offsets) {
         let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
         assert!(offset + size_of_access <= struct_size);
-        let field_addr = builder.ins().iadd_imm(raw_ptr_to_struct, i64::from(offset));
+        let field_addr = builder
+            .ins()
+            .iadd_imm_s(raw_ptr_to_struct, i64::from(offset));
         gc_compiler(func_env)?.init_field(func_env, builder, ty.element_type, field_addr, *val)?;
     }
 
@@ -1632,38 +1644,55 @@ impl FuncEnvironment<'_> {
             (false, false) => builder.ins().iconst(ir::types::I32, 0),
 
             // This GC reference is always non-null, but might be an i31.
-            (false, true) => builder.ins().band_imm(gc_ref, i64::from(I31_DISCRIMINANT)),
+            (false, true) => builder
+                .ins()
+                .band_imm_u(gc_ref, i64::from(I31_DISCRIMINANT)),
 
             // This GC reference might be null, but can never be an i31.
-            (true, false) => builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0),
+            (true, false) => builder.ins().icmp_imm_s(IntCC::Equal, gc_ref, 0),
 
             // Fully general case: this GC reference could be either null or an
             // i31.
             (true, true) => {
-                let is_i31 = builder.ins().band_imm(gc_ref, i64::from(I31_DISCRIMINANT));
-                let is_null = builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0);
+                let is_i31 = builder
+                    .ins()
+                    .band_imm_u(gc_ref, i64::from(I31_DISCRIMINANT));
+                let is_null = builder.ins().icmp_imm_s(IntCC::Equal, gc_ref, 0);
                 let is_null = builder.ins().uextend(ir::types::I32, is_null);
                 builder.ins().bor(is_i31, is_null)
             }
         }
     }
 
-    // Emit code to check whether `a <: b` for two `VMSharedTypeIndex`es.
+    /// Emit code to check whether `a <: b` for two `VMSharedTypeIndex`es.
     pub(crate) fn is_subtype(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         a: ir::Value,
         b: ir::Value,
+        b_ty: ModuleInternedTypeIndex,
     ) -> ir::Value {
         log::trace!("is_subtype({a:?}, {b:?})");
-
-        let diff_tys_block = builder.create_block();
-        let continue_block = builder.create_block();
 
         // Current block: fast path for when `a == b`.
         log::trace!("is_subtype: fast path check for exact same types");
         let same_ty = builder.ins().icmp(IntCC::Equal, a, b);
         let same_ty = builder.ins().uextend(ir::types::I32, same_ty);
+
+        // When `b` is final the equality check above is already a complete
+        // subtype check, so there is nothing more to do: a final type cannot be
+        // the supertype of any other type, so `a <: b` holds if and only if `a
+        // == b`; in that case we can avoid emitting the slow-path `is_subtype`
+        // libcall and its control flow entirely (the slow path would only ever
+        // return `false` here anyway).
+        let b_is_final = self.types[b_ty].is_final;
+        if b_is_final {
+            return same_ty;
+        }
+
+        let diff_tys_block = builder.create_block();
+        let continue_block = builder.create_block();
+
         builder.ins().brif(
             same_ty,
             continue_block,

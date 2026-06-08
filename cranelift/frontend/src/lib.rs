@@ -63,8 +63,9 @@
 //! ```rust
 //! use cranelift_codegen::ir::types::*;
 //! use cranelift_codegen::ir::{AbiParam, UserFuncName, Function, InstBuilder, Signature};
-//! use cranelift_codegen::isa::CallConv;
+//! use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 //! use cranelift_codegen::settings;
+//! use target_lexicon::PointerWidth;
 //! use cranelift_codegen::verifier::verify_function;
 //! use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 //!
@@ -140,7 +141,11 @@
 //!     builder.ins().jump(block1, &[]);
 //!     builder.seal_block(block1);
 //!
-//!     builder.finalize();
+//!     builder.finalize(TargetFrontendConfig {
+//!         default_call_conv: CallConv::SystemV,
+//!         pointer_width: PointerWidth::U64,
+//!         page_size_align_log2: 12,
+//!     });
 //! }
 //!
 //! let flags = settings::Flags::new(settings::builder());

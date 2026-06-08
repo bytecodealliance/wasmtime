@@ -20,7 +20,7 @@ impl Guest for Component {
         let (mut stream_tx, stream_rx) = wit_stream::new();
         let (future_tx, future_rx) = wit_future::new(|| 0);
 
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             assert!(stream_tx.write_all(vec![2, 4, 6, 8, 9]).await.is_empty());
             future_tx.write(10).await.unwrap();
         });

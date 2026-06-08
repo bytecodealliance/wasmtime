@@ -225,7 +225,8 @@ impl Switch {
             val
         } else {
             if let Ok(first_index) = u64::try_from(first_index) {
-                bx.ins().iadd_imm(val, (first_index as i64).wrapping_neg())
+                bx.ins()
+                    .iadd_imm_s(val, (first_index as i64).wrapping_neg())
             } else {
                 let (lsb, msb) = (first_index as u64, (first_index >> 64) as u64);
                 let lsb = bx.ins().iconst(types::I64, lsb as i64);
@@ -241,7 +242,7 @@ impl Switch {
                 let new_block = bx.create_block();
                 let bigger_than_u32 =
                     bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
+                        .icmp_imm_s(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
                 bx.ins()
                     .brif(bigger_than_u32, otherwise, &[], new_block, &[]);
                 bx.seal_block(new_block);
@@ -281,9 +282,9 @@ impl Switch {
 fn icmp_imm_u128(bx: &mut FunctionBuilder, cond: IntCC, x: Value, y: u128) -> Value {
     if bx.func.dfg.value_type(x) != types::I128 {
         assert!(u64::try_from(y).is_ok());
-        bx.ins().icmp_imm(cond, x, y as i64)
+        bx.ins().icmp_imm_s(cond, x, y as i64)
     } else if let Ok(index) = i64::try_from(y) {
-        bx.ins().icmp_imm(cond, x, index)
+        bx.ins().icmp_imm_s(cond, x, index)
     } else {
         let (lsb, msb) = (y as u64, (y >> 64) as u64);
         let lsb = bx.ins().iconst(types::I64, lsb as i64);
@@ -335,6 +336,15 @@ mod tests {
     use super::*;
     use crate::frontend::FunctionBuilderContext;
     use alloc::string::ToString;
+    use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
+
+    fn systemv_frontend_config() -> TargetFrontendConfig {
+        TargetFrontendConfig {
+            default_call_conv: CallConv::SystemV,
+            pointer_width: target_lexicon::PointerWidth::U64,
+            page_size_align_log2: 12,
+        }
+    }
 
     macro_rules! setup {
         ($default:expr, [$($index:expr,)*]) => {{
@@ -568,7 +578,7 @@ block4:
                 builder.ins().return_(&[]);
             }
 
-            builder.finalize(); // Will panic if some blocks are not sealed
+            builder.finalize(systemv_frontend_config()); // Will panic if some blocks are not sealed
         }
     }
 

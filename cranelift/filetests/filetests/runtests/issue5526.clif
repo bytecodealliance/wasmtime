@@ -21,74 +21,142 @@ block0(v0: i128, v1: i8, v2: i8, v3: i8, v4: i16, v5: i32, v6: i8, v7: i8, v8: i
     v14 = iconst.i32 0
     v15 = iconst.i64 0
     v16 = uextend.i128 v15  ; v15 = 0
-    stack_store v16, ss0
-    stack_store v16, ss0+16
-    stack_store v16, ss0+32
-    stack_store v16, ss0+48
-    stack_store v16, ss0+64
-    stack_store v15, ss0+80  ; v15 = 0
-    stack_store v13, ss0+88  ; v13 = 0
-    stack_store v16, ss1
-    stack_store v16, ss1+16
-    stack_store v16, ss1+32
-    stack_store v16, ss1+48
-    stack_store v16, ss1+64
-    stack_store v15, ss1+80  ; v15 = 0
-    stack_store v13, ss1+88  ; v13 = 0
-    stack_store v16, ss2
-    stack_store v16, ss2+16
-    stack_store v16, ss2+32
-    stack_store v16, ss2+48
-    stack_store v16, ss2+64
-    stack_store v15, ss2+80  ; v15 = 0
-    stack_store v13, ss2+88  ; v13 = 0
-    stack_store v16, ss3
-    stack_store v16, ss3+16
-    stack_store v16, ss3+32
-    stack_store v16, ss3+48
-    stack_store v16, ss3+64
-    stack_store v15, ss3+80  ; v15 = 0
-    stack_store v13, ss3+88  ; v13 = 0
-    stack_store v16, ss4
-    stack_store v16, ss4+16
-    stack_store v16, ss4+32
-    stack_store v16, ss4+48
-    stack_store v16, ss4+64
-    stack_store v16, ss4+80
-    stack_store v16, ss4+96
-    stack_store v15, ss4+112  ; v15 = 0
-    stack_store v14, ss4+120  ; v14 = 0
-    stack_store v13, ss4+124  ; v13 = 0
-    stack_store v16, ss5
-    stack_store v16, ss5+16
-    stack_store v16, ss5+32
-    stack_store v16, ss5+48
-    stack_store v16, ss5+64
-    stack_store v16, ss5+80
-    stack_store v16, ss5+96
-    stack_store v15, ss5+112  ; v15 = 0
-    stack_store v14, ss5+120  ; v14 = 0
-    stack_store v13, ss5+124  ; v13 = 0
-    stack_store v16, ss6
-    stack_store v16, ss6+16
-    stack_store v16, ss6+32
-    stack_store v16, ss6+48
-    stack_store v16, ss6+64
-    stack_store v16, ss6+80
-    stack_store v16, ss6+96
-    stack_store v15, ss6+112  ; v15 = 0
-    stack_store v14, ss6+120  ; v14 = 0
-    stack_store v13, ss6+124  ; v13 = 0
-    stack_store v16, ss7
-    stack_store v16, ss7+16
-    stack_store v16, ss7+32
-    stack_store v16, ss7+48
-    stack_store v16, ss7+64
-    stack_store v16, ss7+80
-    stack_store v16, ss7+96
-    stack_store v15, ss7+112  ; v15 = 0
-    stack_store v14, ss7+120  ; v14 = 0
-    stack_store v13, ss7+124  ; v13 = 0
+    v19 = stack_addr.i64 ss0
+    store notrap v16, v19
+    v20 = stack_addr.i64 ss0+16
+    store notrap v16, v20
+    v21 = stack_addr.i64 ss0+32
+    store notrap v16, v21
+    v22 = stack_addr.i64 ss0+48
+    store notrap v16, v22
+    v23 = stack_addr.i64 ss0+64
+    store notrap v16, v23
+    v24 = stack_addr.i64 ss0+80
+    store notrap v15, v24  ; v15 = 0
+    v25 = stack_addr.i64 ss0+88
+    store notrap v13, v25  ; v13 = 0
+    v26 = stack_addr.i64 ss1
+    store notrap v16, v26
+    v27 = stack_addr.i64 ss1+16
+    store notrap v16, v27
+    v28 = stack_addr.i64 ss1+32
+    store notrap v16, v28
+    v29 = stack_addr.i64 ss1+48
+    store notrap v16, v29
+    v30 = stack_addr.i64 ss1+64
+    store notrap v16, v30
+    v31 = stack_addr.i64 ss1+80
+    store notrap v15, v31  ; v15 = 0
+    v32 = stack_addr.i64 ss1+88
+    store notrap v13, v32  ; v13 = 0
+    v33 = stack_addr.i64 ss2
+    store notrap v16, v33
+    v34 = stack_addr.i64 ss2+16
+    store notrap v16, v34
+    v35 = stack_addr.i64 ss2+32
+    store notrap v16, v35
+    v36 = stack_addr.i64 ss2+48
+    store notrap v16, v36
+    v37 = stack_addr.i64 ss2+64
+    store notrap v16, v37
+    v38 = stack_addr.i64 ss2+80
+    store notrap v15, v38  ; v15 = 0
+    v39 = stack_addr.i64 ss2+88
+    store notrap v13, v39  ; v13 = 0
+    v40 = stack_addr.i64 ss3
+    store notrap v16, v40
+    v41 = stack_addr.i64 ss3+16
+    store notrap v16, v41
+    v42 = stack_addr.i64 ss3+32
+    store notrap v16, v42
+    v43 = stack_addr.i64 ss3+48
+    store notrap v16, v43
+    v44 = stack_addr.i64 ss3+64
+    store notrap v16, v44
+    v45 = stack_addr.i64 ss3+80
+    store notrap v15, v45  ; v15 = 0
+    v46 = stack_addr.i64 ss3+88
+    store notrap v13, v46  ; v13 = 0
+    v47 = stack_addr.i64 ss4
+    store notrap v16, v47
+    v48 = stack_addr.i64 ss4+16
+    store notrap v16, v48
+    v49 = stack_addr.i64 ss4+32
+    store notrap v16, v49
+    v50 = stack_addr.i64 ss4+48
+    store notrap v16, v50
+    v51 = stack_addr.i64 ss4+64
+    store notrap v16, v51
+    v52 = stack_addr.i64 ss4+80
+    store notrap v16, v52
+    v53 = stack_addr.i64 ss4+96
+    store notrap v16, v53
+    v54 = stack_addr.i64 ss4+112
+    store notrap v15, v54  ; v15 = 0
+    v55 = stack_addr.i64 ss4+120
+    store notrap v14, v55  ; v14 = 0
+    v56 = stack_addr.i64 ss4+124
+    store notrap v13, v56  ; v13 = 0
+    v57 = stack_addr.i64 ss5
+    store notrap v16, v57
+    v58 = stack_addr.i64 ss5+16
+    store notrap v16, v58
+    v59 = stack_addr.i64 ss5+32
+    store notrap v16, v59
+    v60 = stack_addr.i64 ss5+48
+    store notrap v16, v60
+    v61 = stack_addr.i64 ss5+64
+    store notrap v16, v61
+    v62 = stack_addr.i64 ss5+80
+    store notrap v16, v62
+    v63 = stack_addr.i64 ss5+96
+    store notrap v16, v63
+    v64 = stack_addr.i64 ss5+112
+    store notrap v15, v64  ; v15 = 0
+    v65 = stack_addr.i64 ss5+120
+    store notrap v14, v65  ; v14 = 0
+    v66 = stack_addr.i64 ss5+124
+    store notrap v13, v66  ; v13 = 0
+    v67 = stack_addr.i64 ss6
+    store notrap v16, v67
+    v68 = stack_addr.i64 ss6+16
+    store notrap v16, v68
+    v69 = stack_addr.i64 ss6+32
+    store notrap v16, v69
+    v70 = stack_addr.i64 ss6+48
+    store notrap v16, v70
+    v71 = stack_addr.i64 ss6+64
+    store notrap v16, v71
+    v72 = stack_addr.i64 ss6+80
+    store notrap v16, v72
+    v73 = stack_addr.i64 ss6+96
+    store notrap v16, v73
+    v74 = stack_addr.i64 ss6+112
+    store notrap v15, v74  ; v15 = 0
+    v75 = stack_addr.i64 ss6+120
+    store notrap v14, v75  ; v14 = 0
+    v76 = stack_addr.i64 ss6+124
+    store notrap v13, v76  ; v13 = 0
+    v77 = stack_addr.i64 ss7
+    store notrap v16, v77
+    v78 = stack_addr.i64 ss7+16
+    store notrap v16, v78
+    v79 = stack_addr.i64 ss7+32
+    store notrap v16, v79
+    v80 = stack_addr.i64 ss7+48
+    store notrap v16, v80
+    v81 = stack_addr.i64 ss7+64
+    store notrap v16, v81
+    v82 = stack_addr.i64 ss7+80
+    store notrap v16, v82
+    v83 = stack_addr.i64 ss7+96
+    store notrap v16, v83
+    v84 = stack_addr.i64 ss7+112
+    store notrap v15, v84  ; v15 = 0
+    v85 = stack_addr.i64 ss7+120
+    store notrap v14, v85  ; v14 = 0
+    v86 = stack_addr.i64 ss7+124
+    store notrap v13, v86  ; v13 = 0
 
 
     v17 = select_spectre_guard v8, v0, v0

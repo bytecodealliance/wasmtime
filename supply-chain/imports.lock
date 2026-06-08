@@ -811,13 +811,6 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
-[[publisher.cap-net-ext]]
-version = "4.0.2"
-when = "2026-02-15"
-user-id = 6825
-user-login = "sunfishcode"
-user-name = "Dan Gohman"
-
 [[publisher.cap-primitives]]
 version = "4.0.2"
 when = "2026-02-15"
@@ -2118,8 +2111,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen]]
-version = "0.57.0"
-when = "2026-04-17"
+version = "0.58.0"
+when = "2026-06-08"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
@@ -2128,8 +2121,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-core]]
-version = "0.57.0"
-when = "2026-04-17"
+version = "0.58.0"
+when = "2026-06-08"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rt]]
@@ -2144,8 +2137,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.57.0"
-when = "2026-04-17"
+version = "0.58.0"
+when = "2026-06-08"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
@@ -2154,8 +2147,8 @@ when = "2026-01-12"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.57.0"
-when = "2026-04-17"
+version = "0.58.0"
+when = "2026-06-08"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
