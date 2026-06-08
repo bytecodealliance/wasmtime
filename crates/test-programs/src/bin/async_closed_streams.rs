@@ -39,7 +39,7 @@ impl Guest for Component {
         expected: u8,
         _rx_ignored: FutureReader<u8>,
     ) {
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             assert_eq!(rx.await, expected);
         });
     }

@@ -11,7 +11,7 @@ impl service::exports::wasi::http::handler::Guest for T {
         let (response, _future_result) = Response::new(Fields::new(), None, body_result_rx);
         drop(body_result_tx);
 
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             for _ in 0..10 {
                 wit_bindgen::yield_async().await;
             }
