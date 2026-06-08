@@ -1,9 +1,9 @@
 //! Implementation of a standard AArch64 ABI.
 
 use core::cmp::Reverse;
-use std::collections::HashSet;
 
 use crate::CodegenResult;
+use crate::FxHashSet;
 use crate::ir;
 use crate::ir::MemFlagsData;
 use crate::ir::types;
@@ -84,7 +84,7 @@ fn compute_clobber_size(
 /// The compact unwinding encoding can only represent pushes and pops of adjacent register pairs,
 /// so unused callee-saved registers may also need to be pushed.
 fn add_macho_compact_unwind_paired_regs(regs: &mut Vec<Writable<RealReg>>) {
-    let int_regs: HashSet<_> = regs
+    let int_regs: FxHashSet<_> = regs
         .iter()
         .filter_map(|r| {
             if r.to_reg().class() == RegClass::Int {
@@ -102,7 +102,7 @@ fn add_macho_compact_unwind_paired_regs(regs: &mut Vec<Writable<RealReg>>) {
         }
     }
 
-    let fp_regs: HashSet<_> = regs
+    let fp_regs: FxHashSet<_> = regs
         .iter()
         .filter_map(|r| {
             if r.to_reg().class() == RegClass::Float {
