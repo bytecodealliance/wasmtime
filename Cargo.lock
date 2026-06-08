@@ -646,9 +646,9 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 
 [[package]]
 name = "cpp_demangle"
-version = "0.4.3"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8227005286ec39567949b33df9896bcadfa6051bccca2488129f108ca23119"
+checksum = "0667304c32ea56cb4cd6d2d7c0cfe9a2f8041229db8c033af7f8d69492429def"
 dependencies = [
  "cfg-if",
 ]
@@ -2427,9 +2427,9 @@ dependencies = [
 
 [[package]]
 name = "mutatis"
-version = "0.4.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "645a17bdae66c8ee0fdba0004ab864cbd711bec41aae4c466ce0d35e266c946e"
+checksum = "cda9aa1c47053dd102896e1f3e69d0cec502e3467af8c3ab3b58702cc62197ef"
 dependencies = [
  "log",
  "mutatis-derive",
@@ -2438,9 +2438,9 @@ dependencies = [
 
 [[package]]
 name = "mutatis-derive"
-version = "0.4.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e2c58c651085c4319cd3554f44541dcf1be8daa0481c9089de50926750623e7"
+checksum = "1a3c893cbc8cc5b87607ed340786512781aff5d8d7ede9f43a82464f5c7c2390"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3449,9 +3449,12 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "similar"
-version = "2.7.0"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+dependencies = [
+ "bstr",
+]
 
 [[package]]
 name = "slab"
@@ -5267,9 +5270,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "0.26.1"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3de34ae270483955a94f4b21bdaaeb83d508bb84a01435f393818edb0012009"
+checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
 dependencies = [
  "rustls-pki-types",
 ]
