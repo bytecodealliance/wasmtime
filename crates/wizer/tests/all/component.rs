@@ -165,14 +165,16 @@ async fn wizen(wasm: &[u8]) -> Result<Vec<u8>> {
         wasmprinter::print_bytes(&wasm).unwrap()
     );
     let mut store = store()?;
-    let wasm = Wizer::new()
+    let (wasm, rets) = Wizer::new()
         .run_component(&mut store, &wasm, instantiate)
         .await?;
     log::debug!(
         "=== Wizened Wasm ==========================================================\n\
       {}\n\
-      ===========================================================================",
-        wasmprinter::print_bytes(&wasm).unwrap()
+      ===========================================================================\n
+        {}\n",
+        wasmprinter::print_bytes(&wasm).unwrap(),
+        wasm_wave::wasm::DisplayFuncResults(&rets),
     );
     if log::log_enabled!(log::Level::Debug) {
         std::fs::write("test.wasm", &wasm).unwrap();
@@ -692,7 +694,7 @@ async fn rust_regex() -> Result<()> {
     // Wizer directly here because, currently, this test is broken if
     // `keep_init_func(true)` is not set.
     let mut store = store()?;
-    let wizened_component = Wizer::new()
+    let (wizened_component, _) = Wizer::new()
         .keep_init_func(true)
         .run_component(&mut store, component, instantiate)
         .await
@@ -737,26 +739,29 @@ async fn component_interfaces() -> Result<()> {
 
     let mut store = store()?;
 
-    let wizened_component = Wizer::new()
+    let (wizened_component, rets) = Wizer::new()
         .init_func("local:local/init.add-string@0.1.0(\"hello, world\")")
         .keep_init_func(true)
         .run_component(&mut store, component, instantiate)
         .await
         .context("Wizer::run_component")?;
+    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\")]");
 
-    let wizened_component = Wizer::new()
+    let (wizened_component, rets) = Wizer::new()
         .init_func("local:local/init.add-int@0.1.0(42)")
         .keep_init_func(true)
         .run_component(&mut store, &wizened_component, instantiate)
         .await
         .context("Wizer::run_component")?;
+    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\"), int(42)]");
 
-    let wizened_component = Wizer::new()
+    let (wizened_component, _) = Wizer::new()
         .init_func("local:local/init.add-string@0.1.0(\"wizer is better with wave\")")
         .keep_init_func(true)
         .run_component(&mut store, &wizened_component, instantiate)
         .await
         .context("Wizer::run_component")?;
+    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\"), int(42), str(\"wizer is better with wave\")]");
 
     let out = run_wasm(&wizened_component).await.context("run_wasm")?;
     assert_eq!(

@@ -9,8 +9,9 @@ wit_bindgen::generate!({
 package local:local@0.1.0;
 
 interface init {
-    add-string: func(arg: string);
-    add-int: func(arg: s32);
+    use run.{elem};
+    add-string: func(arg: string) -> list<elem>;
+    add-int: func(arg: s32) -> list<elem>;
 }
 
 interface run {
@@ -34,11 +35,15 @@ use std::sync::Mutex;
 static INITS: Mutex<Vec<Elem>> = Mutex::new(Vec::new());
 
 impl exports::local::local::init::Guest for C {
-    fn add_string(s: String) {
-        INITS.lock().unwrap().push(Elem::Str(s))
+    fn add_string(s: String) -> Vec<Elem> {
+        let mut inits = INITS.lock().unwrap();
+        inits.push(Elem::Str(s));
+        inits.clone()
     }
-    fn add_int(i: i32) {
-        INITS.lock().unwrap().push(Elem::Int(i))
+    fn add_int(i: i32) -> Vec<Elem> {
+        let mut inits = INITS.lock().unwrap();
+        inits.push(Elem::Int(i));
+        inits.clone()
     }
 }
 

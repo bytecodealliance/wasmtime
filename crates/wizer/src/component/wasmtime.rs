@@ -15,7 +15,7 @@ impl Wizer {
         store: &mut Store<T>,
         wasm: &[u8],
         instantiate: impl AsyncFnOnce(&mut Store<T>, &Component) -> Result<Instance>,
-    ) -> wasmtime::Result<Vec<u8>> {
+    ) -> wasmtime::Result<(Vec<u8>, Vec<Val>)> {
         let (cx, instrumented_wasm) = self.instrument_component(wasm)?;
 
         #[cfg(feature = "wasmprinter")]
@@ -27,13 +27,14 @@ impl Wizer {
         let engine = store.engine();
         let component = Component::new(engine, &instrumented_wasm)
             .context("failed to compile the Wasm component")?;
-        let (index, args, rets) = self.validate_component_init_func(&component)?;
+        let (index, args, mut rets) = self.validate_component_init_func(&component)?;
 
         let instance = instantiate(store, &component).await?;
-        self.initialize_component(store, &instance, index, args, rets)
+        self.initialize_component(store, &instance, index, args, &mut rets)
             .await?;
-        self.snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
-            .await
+        let snap = self.snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
+            .await?;
+        Ok((snap, rets))
     }
 
     fn validate_component_init_func(
@@ -97,16 +98,15 @@ impl Wizer {
         instance: &Instance,
         index: ComponentExportIndex,
         args: Vec<Val>,
-        mut rets: Vec<Val>,
+        rets: &mut Vec<Val>,
     ) -> wasmtime::Result<()> {
         let init_func = instance
             .get_func(&mut *store, index)
             .expect("checked by `validate_init_func`");
         init_func
-            .call_async(&mut *store, &args, &mut rets)
+            .call_async(&mut *store, &args, rets)
             .await
             .with_context(|| format!("the initialization function trapped"))?;
-        // TODO: do we want some way to report the values of `rets` back up?
         Ok(())
     }
 }

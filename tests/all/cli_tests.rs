@@ -3403,7 +3403,7 @@ fn wizer_components() -> Result<()> {
 #[test]
 fn wizer_components_wave() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    run_wasmtime(&[
+    let output = run_wasmtime(&[
         "wizer",
         "-Scli",
         "-Ccache=n",
@@ -3415,6 +3415,8 @@ fn wizer_components_wave() -> Result<()> {
         dir.path().join("stage1.wasm").to_str().unwrap(),
     ])?;
 
+    assert_eq!(output, "[str(\"hello, world\")]\n");
+
     let output = run_wasmtime(&[
         "run",
         "--invoke",
@@ -3425,7 +3427,7 @@ fn wizer_components_wave() -> Result<()> {
 
     assert_eq!(output, "[str(\"hello, world\")]\n");
 
-    run_wasmtime(&[
+    let output = run_wasmtime(&[
         "wizer",
         "-Scli",
         "-Ccache=n",
@@ -3436,8 +3438,9 @@ fn wizer_components_wave() -> Result<()> {
         "-o",
         dir.path().join("stage2.wasm").to_str().unwrap(),
     ])?;
+    assert_eq!(output, "[str(\"hello, world\"), int(12345)]\n");
 
-    run_wasmtime(&[
+    let output = run_wasmtime(&[
         "wizer",
         "-Scli",
         "-Ccache=n",
@@ -3448,6 +3451,10 @@ fn wizer_components_wave() -> Result<()> {
         "-o",
         dir.path().join("stage3.wasm").to_str().unwrap(),
     ])?;
+    assert_eq!(
+        output,
+        "[str(\"hello, world\"), int(12345), str(\"wave is pretty cool\")]\n"
+    );
 
     let output = run_wasmtime(&[
         "run",
