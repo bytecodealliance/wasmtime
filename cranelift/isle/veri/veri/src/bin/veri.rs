@@ -53,7 +53,7 @@ struct Opts {
     timeout: u64,
 
     /// Number of threads to use.
-    #[arg(long, default_value = "1")]
+    #[arg(long, default_value = "0")]
     num_threads: usize,
 
     /// Log directory.
@@ -95,8 +95,17 @@ fn main() -> Result<()> {
     let opts = Opts::parse();
 
     // Setup thread pool.
+    //
+    // Recursively evaluating complex spec encodings (e.g., `clz`) can overflow
+    // the default Rayon worker thread stack size, so default to a larger stack.
+    const DEFAULT_STACK_SIZE: usize = 256 * 1024 * 1024;
+    let stack_size = std::env::var("ISLE_VERI_STACK_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_STACK_SIZE);
     rayon::ThreadPoolBuilder::new()
         .num_threads(opts.num_threads)
+        .stack_size(stack_size)
         .build_global()?;
     log::info!("num theads: {}", rayon::current_num_threads());
 
@@ -134,6 +143,7 @@ fn main() -> Result<()> {
         "amode_const",
         "i128",
         "slow",
+        "wasm_category_stack",
     ];
     if opts.default_excludes {
         for tag in default_exclude_tags {
@@ -170,10 +180,11 @@ fn main() -> Result<()> {
     // Summarize what is being excluded and where output is going before
     // starting verification.
     println!("=== veri configuration ===");
-    println!("working directory:  {}", work_dir.display());
-    println!("log directory:      {}", log_dir.display());
+    println!("Number of threads:  {}", rayon::current_num_threads());
+    println!("Working directory:  {}", work_dir.display());
+    println!("Log directory:      {}", log_dir.display());
     println!(
-        "results to log dir: {}",
+        "Results to log dir: {}",
         if opts.results_to_log_dir {
             format!("yes (results.out under {})", log_dir.display())
         } else {

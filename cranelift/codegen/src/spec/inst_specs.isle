@@ -233,6 +233,10 @@
     (modifies clif_trap)
     (provide clif_trap))
 
+(spec (trapz val trap_code)
+    (modifies clif_trap)
+    (provide (= clif_trap (bv_is_zero! val))))
+
 (spec (iconst ty arg)
     (provide (= arg (zero_ext 64 result))
              (= (:bits ty) (widthof result))))

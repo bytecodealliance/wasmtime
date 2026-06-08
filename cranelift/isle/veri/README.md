@@ -51,12 +51,14 @@ backend, add the `-a x64` option. `--default-excludes` will skip ISLE terms
 that are either currently not well-supported or slow to verify, such as vector operations
 and expensive division operations.
 
+The verification bin will default to running on a number of threads
+based on the number of logical CPUs on your current machine, pass `--num-threads=n` to
+override this. On a 12 core M2 Macbook, the command above takes about 6 minutes.
+
 By default the verifier attempts every expansion it can reach. It seeds an
 expansion at every term that has rules, a constructor, and an explicit
-specification, and verifies all rule chains reachable from those roots. Terms
-without a spec are not verified standalone; they are only checked when chained
-(inlined) into a specified root. Expansions tagged `TODO` are skipped by default
-(pass `--no-skip-todo` to include them).
+specification, and verifies all rule chains reachable from those roots.
+Expansions tagged `TODO` are skipped by default (pass `--no-skip-todo` to include them).
 
 ### Filtering expansions
 
@@ -94,7 +96,7 @@ than filtering after the fact.
 
 ## ISA Specifications
 
-Where possible we derive ISA specifications in VeriISLE format from
+Where possible, we derive ISA specifications in VeriISLE format from
 authoritative specifications distributed by vendors. Currently this is only
 in place for the AArch64 backend, with specifications derived from ARM's Machine
 Readable Specification in Architecture Specification Language (ASL). We rely on
