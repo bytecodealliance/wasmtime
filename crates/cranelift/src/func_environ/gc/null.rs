@@ -223,7 +223,9 @@ impl GcCompiler for NullCompiler {
         // Note: we don't need to bounds-check the GC ref access here, because
         // the result of the inline allocation is trusted and we aren't reading
         // any pointers or offsets out from the (untrusted) GC heap.
-        let len_addr = builder.ins().iadd_imm(ptr_to_object, i64::from(len_offset));
+        let len_addr = builder
+            .ins()
+            .iadd_imm_s(ptr_to_object, i64::from(len_offset));
         let flags = func_env.gc_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
@@ -327,7 +329,7 @@ impl GcCompiler for NullCompiler {
         // Initialize the tag fields.
         let instance_id_addr = builder
             .ins()
-            .iadd_imm(raw_exn_pointer, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
+            .iadd_imm_s(raw_exn_pointer, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
         write_field_at_addr(
             func_env,
             builder,
@@ -337,7 +339,7 @@ impl GcCompiler for NullCompiler {
         )?;
         let tag_addr = builder
             .ins()
-            .iadd_imm(raw_exn_pointer, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
+            .iadd_imm_s(raw_exn_pointer, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
         write_field_at_addr(
             func_env,
             builder,

@@ -25,7 +25,7 @@ pub(crate) fn deconstruct<'a>(
     let ptr_bits = ptr_ty.bits();
 
     let contref = pos.ins().ireduce(ptr_ty, contobj);
-    let shifted = pos.ins().ushr_imm(contobj, i64::from(ptr_bits));
+    let shifted = pos.ins().ushr_imm_u(contobj, i64::from(ptr_bits));
     let revision_counter = pos.ins().ireduce(ptr_ty, shifted);
 
     (revision_counter, contref)
@@ -48,7 +48,7 @@ pub(crate) fn construct<'a>(
 
     let contref_addr = pos.ins().uextend(fat_ptr_ty, contref_addr);
     let revision_counter = pos.ins().uextend(fat_ptr_ty, revision_counter);
-    let shifted_counter = pos.ins().ishl_imm(revision_counter, i64::from(ptr_bits));
+    let shifted_counter = pos.ins().ishl_imm_u(revision_counter, i64::from(ptr_bits));
     let contobj = pos.ins().bor(shifted_counter, contref_addr);
 
     contobj

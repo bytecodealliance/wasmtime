@@ -345,7 +345,7 @@ fn insert_atomic_rmw(
     let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
 
     // AtomicRMW does not directly support offsets, so add the offset to the address separately.
-    let address = builder.ins().iadd_imm(address, i64::from(offset));
+    let address = builder.ins().iadd_imm_s(address, i64::from(offset));
 
     // Load and store target variables
     let source_var = fgen.get_variable_of_type(ctrl_type)?;
@@ -373,7 +373,7 @@ fn insert_atomic_cas(
     let (address, flags, offset) = fgen.generate_address_and_memflags(builder, type_size, true)?;
 
     // AtomicCas does not directly support offsets, so add the offset to the address separately.
-    let address = builder.ins().iadd_imm(address, i64::from(offset));
+    let address = builder.ins().iadd_imm_s(address, i64::from(offset));
 
     // Source and Target variables
     let expected_var = fgen.get_variable_of_type(ctrl_type)?;

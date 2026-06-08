@@ -99,9 +99,9 @@ impl TableData {
             index
         } else if element_size.is_power_of_two() {
             pos.ins()
-                .ishl_imm(index, i64::from(element_size.trailing_zeros()))
+                .ishl_imm_u(index, i64::from(element_size.trailing_zeros()))
         } else {
-            pos.ins().imul_imm(index, element_size as i64)
+            pos.ins().imul_imm_s(index, element_size as i64)
         };
 
         let element_addr = pos.ins().iadd(base, offset);

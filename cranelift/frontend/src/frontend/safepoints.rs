@@ -1065,7 +1065,7 @@ block0:
         // a value as keeping it live, regardless if the use has side effects or
         // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
         // here.
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.seal_all_blocks();
@@ -1157,7 +1157,7 @@ block3:
         // a value as keeping it live, regardless if the use has side effects or
         // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
         // here.
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.seal_all_blocks();
@@ -1226,7 +1226,7 @@ block2:
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.switch_to_block(block2);
@@ -1318,7 +1318,7 @@ block2:
         // a value as keeping it live, regardless if the use has side effects or
         // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
         // here.
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.seal_all_blocks();
@@ -1386,7 +1386,7 @@ block2:
         builder.ins().brif(v0, block1, &[], block2, &[]);
 
         builder.switch_to_block(block1);
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.switch_to_block(block2);
@@ -1498,7 +1498,7 @@ block2:
         // a value as keeping it live, regardless if the use has side effects or
         // is otherwise itself live, so an `iadd_imm` suffices to keep `v1` live
         // here.
-        builder.ins().iadd_imm(v1, 0);
+        builder.ins().iadd_imm_s(v1, 0);
         builder.ins().return_(&[]);
 
         builder.seal_all_blocks();
@@ -2412,7 +2412,7 @@ block4:
         builder.ins().call(foo_func_ref, &[]);
         builder.ins().call(bar_func_ref, &[v1]);
         builder.ins().call(foo_func_ref, &[]);
-        let v5 = builder.ins().iadd_imm(v4, -1);
+        let v5 = builder.ins().iadd_imm_s(v4, -1);
         builder.ins().brif(v4, block1, &[v5.into()], block3, &[]);
 
         builder.switch_to_block(block3);

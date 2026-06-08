@@ -248,7 +248,7 @@ impl GcCompiler for CopyingCompiler {
             size,
             reserved_bits,
         )?;
-        let len_addr = builder.ins().iadd_imm(object_addr, i64::from(len_offset));
+        let len_addr = builder.ins().iadd_imm_s(object_addr, i64::from(len_offset));
         let flags = func_env.gc_memflags(&mut builder.func);
         builder.ins().store(flags, len, len_addr, 0);
 
@@ -332,7 +332,7 @@ impl GcCompiler for CopyingCompiler {
         // Initialize tag fields.
         let instance_id_addr = builder
             .ins()
-            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
+            .iadd_imm_s(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_INSTANCE_OFFSET));
         self.init_field(
             func_env,
             builder,
@@ -342,7 +342,7 @@ impl GcCompiler for CopyingCompiler {
         )?;
         let tag_addr = builder
             .ins()
-            .iadd_imm(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
+            .iadd_imm_s(raw_ptr_to_exn, i64::from(EXCEPTION_TAG_DEFINED_OFFSET));
         self.init_field(
             func_env,
             builder,
