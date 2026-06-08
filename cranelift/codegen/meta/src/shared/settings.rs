@@ -356,6 +356,24 @@ pub(crate) fn define() -> SettingGroup {
         0,
     );
 
+    settings.add_bool(
+        "enable_compact_unwind_abi",
+        "Enable Mach-O compact unwind compatible code emission.",
+        r#"
+            This constrains function prologues and epilogues to the ABI shape
+            that Mach-O compact unwind can encode. Unwind instructions describe
+            which pairs of callee-save registers are saved and restored, but the
+            canonical stack frame layout is still expected: nonvolatile registers
+            must be placed near the top of the frame, immediately below the
+            return address.
+
+            The unwind encoding only supports register pairs emitted with `stp`;
+            it cannot encode individual registers. This may result in slightly
+            larger stack frames.
+        "#,
+        false,
+    );
+
     // When adding new settings please check if they can also be added
     // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()
