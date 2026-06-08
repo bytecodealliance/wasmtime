@@ -19,7 +19,7 @@ impl Guest for Component {
     async fn run(count: u32) -> StreamReader<()> {
         let (mut tx, rx) = wit_stream::new();
 
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             let mut sent = 0;
             let mut chunk_size = 1;
             while sent < count {

@@ -21,7 +21,7 @@ struct Component;
 impl Guest for Component {
     async fn run(times: u64) {
         // Spawn a task to run post-return and otherwise return immediately.
-        async_support::spawn(async move {
+        async_support::spawn_local(async move {
             // Create a couple of subtasks which will also return immediately
             // and yield post-return.  These will not have completed once we
             // exit and thus will be reparented to the caller.

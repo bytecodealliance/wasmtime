@@ -76,7 +76,7 @@ impl exports::wasi::http::handler::Guest for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            wit_bindgen::spawn(async move {
+            wit_bindgen::spawn_local(async move {
                 {
                     let mut decoder = DeflateDecoder::new(Vec::new());
                     let mut status = StreamResult::Complete(0);
@@ -140,7 +140,7 @@ impl exports::wasi::http::handler::Guest for Component {
             let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
             let (mut pipe_tx, pipe_rx) = wit_stream::new();
 
-            wit_bindgen::spawn(async move {
+            wit_bindgen::spawn_local(async move {
                 {
                     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::fast());
                     let mut status = StreamResult::Complete(0);

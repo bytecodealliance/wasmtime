@@ -7,11 +7,11 @@ export!(Component);
 impl exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         let (mut tx, rx) = wit_stream::new();
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             wasi::cli::stdout::write_via_stream(rx).await.unwrap();
         });
         tx.write_all(b"hello, world\n".to_vec()).await;
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             // Yield a few times to allow the host to accept and process
             // the `run` result.
             for _ in 0..10 {

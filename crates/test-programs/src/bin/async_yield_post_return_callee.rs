@@ -18,7 +18,7 @@ struct Component;
 impl Guest for Component {
     async fn run(times: u64) {
         // Spawn a task to run post-return and otherwise return immediately.
-        async_support::spawn(async move {
+        async_support::spawn_local(async move {
             // Yield for as long as requested:
             yield_::yield_times(times).await;
         });
