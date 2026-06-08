@@ -8,8 +8,7 @@ pub fn demangle_function_name(writer: &mut impl core::fmt::Write, name: &str) ->
     if let Ok(demangled) = rustc_demangle::try_demangle(name) {
         return write!(writer, "{demangled}");
     } else if let Ok(symbol) = cpp_demangle::Symbol::new(name) {
-        let options = cpp_demangle::DemangleOptions::default();
-        if let Ok(demangled) = symbol.demangle(&options) {
+        if let Ok(demangled) = symbol.demangle() {
             return write!(writer, "{demangled}");
         }
     }
