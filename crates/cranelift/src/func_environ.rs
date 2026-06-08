@@ -478,6 +478,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Get or create the `ir::Global` for the `*mut VMStoreContext` in our
     /// `VMContext`.
+    #[cfg_attr(
+        not(feature = "gc"),
+        expect(
+            dead_code,
+            reason = "only used to derive the GC heap base/bound globals"
+        )
+    )]
     fn get_vmstore_context_ptr_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
         if let Some(ptr) = self.vm_store_context {
             return ptr;
@@ -502,8 +509,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Get the `*mut VMStoreContext` value for our `VMContext`.
     fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
-        let global = self.get_vmstore_context_ptr_global(&mut builder.func);
-        builder.ins().global_value(self.pointer_type(), global)
+        let pointer_type = self.pointer_type();
+        let offset = i32::from(self.offsets.ptr.vmctx_store_context());
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        builder.ins().load(
+            pointer_type,
+            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            vmctx,
+            offset,
+        )
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -800,9 +814,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
-        let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
-        let base = builder.ins().global_value(pointer_type, vmctx);
+        let base = self.vmctx_val(&mut builder.cursor());
         let offset = i32::from(self.offsets.ptr.vmctx_epoch_ptr());
         let epoch_ptr = builder
             .ins()
@@ -1479,9 +1492,9 @@ impl TranslateTrap for FuncEnvironment<'_> {
     }
 
     fn vmctx_val(&mut self, pos: &mut FuncCursor<'_>) -> ir::Value {
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(&mut pos.func);
-        pos.ins().global_value(pointer_type, vmctx)
+        pos.func
+            .special_param(ir::ArgumentPurpose::VMContext)
+            .expect("Missing vmctx parameter")
     }
 
     fn builtin_funcref(

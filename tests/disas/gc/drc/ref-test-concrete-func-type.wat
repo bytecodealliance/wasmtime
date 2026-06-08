@@ -13,7 +13,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
@@ -26,15 +25,15 @@
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0020                               v11 = load.i32 user2 readonly region0 v2+16
-;; @0020                               v9 = load.i64 notrap aligned readonly can_move v0+40
-;; @0020                               v10 = load.i32 notrap aligned readonly can_move v9
-;; @0020                               v12 = icmp eq v11, v10
-;; @0020                               v13 = uextend.i32 v12
-;; @0020                               jump block4(v13)
+;; @0020                               v10 = load.i32 user2 readonly region0 v2+16
+;; @0020                               v8 = load.i64 notrap aligned readonly can_move v0+40
+;; @0020                               v9 = load.i32 notrap aligned readonly can_move v8
+;; @0020                               v11 = icmp eq v10, v9
+;; @0020                               v12 = uextend.i32 v11
+;; @0020                               jump block4(v12)
 ;;
-;;                                 block4(v14: i32):
-;; @0023                               jump block1(v14)
+;;                                 block4(v13: i32):
+;; @0023                               jump block1(v13)
 ;;
 ;;                                 block1(v3: i32):
 ;; @0023                               return v3

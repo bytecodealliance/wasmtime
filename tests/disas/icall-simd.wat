@@ -37,22 +37,22 @@
 ;;
 ;;                                 block2 cold:
 ;; @0033                               v18 = iconst.i32 0
-;; @0033                               v20 = uextend.i64 v2
-;; @0033                               v21 = call fn0(v0, v18, v20)  ; v18 = 0
-;; @0033                               jump block3(v21)
+;; @0033                               v19 = uextend.i64 v2
+;; @0033                               v20 = call fn0(v0, v18, v19)  ; v18 = 0
+;; @0033                               jump block3(v20)
 ;;
 ;;                                 block3(v17: i64):
-;; @0033                               v23 = load.i64 notrap aligned readonly can_move v0+40
-;; @0033                               v24 = load.i32 notrap aligned readonly can_move v23
-;; @0033                               v25 = load.i32 user7 aligned readonly v17+16
-;; @0033                               v26 = icmp eq v25, v24
-;; @0033                               v27 = uextend.i32 v26
-;; @0033                               trapz v27, user8
-;; @0033                               v28 = load.i64 notrap aligned readonly v17+8
-;; @0033                               v29 = load.i64 notrap aligned readonly v17+24
-;; @0033                               v30 = call_indirect sig0, v28(v29, v0, v3)
+;; @0033                               v21 = load.i64 notrap aligned readonly can_move v0+40
+;; @0033                               v22 = load.i32 notrap aligned readonly can_move v21
+;; @0033                               v23 = load.i32 user7 aligned readonly v17+16
+;; @0033                               v24 = icmp eq v23, v22
+;; @0033                               v25 = uextend.i32 v24
+;; @0033                               trapz v25, user8
+;; @0033                               v26 = load.i64 notrap aligned readonly v17+8
+;; @0033                               v27 = load.i64 notrap aligned readonly v17+24
+;; @0033                               v28 = call_indirect sig0, v26(v27, v0, v3)
 ;; @0036                               jump block1
 ;;
 ;;                                 block1:
-;; @0036                               return v30
+;; @0036                               return v28
 ;; }

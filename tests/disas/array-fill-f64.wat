@@ -89,8 +89,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @0045                               trapz v2, user16
-;; @0045                               v44 = load.i64 notrap aligned readonly can_move v0+8
-;; @0045                               v7 = load.i64 notrap aligned readonly can_move v44+32
+;; @0045                               v43 = load.i64 notrap aligned readonly can_move v0+8
+;; @0045                               v7 = load.i64 notrap aligned readonly can_move v43+32
 ;; @0045                               v6 = uextend.i64 v2
 ;; @0045                               v8 = iadd v7, v6
 ;; @0045                               v9 = iconst.i64 16
@@ -102,19 +102,19 @@
 ;; @0045                               v12 = uextend.i64 v11
 ;; @0045                               v18 = icmp ugt v17, v12
 ;; @0045                               trapnz v18, user17
-;; @0045                               v32 = load.i64 notrap aligned v44+40
+;; @0045                               v32 = load.i64 notrap aligned v43+40
 ;; @0045                               v22 = iconst.i64 24
 ;; @0045                               v23 = iadd v8, v22  ; v22 = 24
-;;                                     v48 = iconst.i64 3
-;;                                     v49 = ishl v13, v48  ; v48 = 3
-;; @0045                               v27 = iadd v23, v49
-;;                                     v51 = ishl v14, v48  ; v48 = 3
-;; @0045                               v34 = uadd_overflow_trap v27, v51, user2
+;;                                     v47 = iconst.i64 3
+;;                                     v48 = ishl v13, v47  ; v47 = 3
+;; @0045                               v27 = iadd v23, v48
+;;                                     v50 = ishl v14, v47  ; v47 = 3
+;; @0045                               v34 = uadd_overflow_trap v27, v50, user2
 ;; @0045                               v33 = iadd v7, v32
 ;; @0045                               v35 = icmp ugt v34, v33
 ;; @0045                               trapnz v35, user2
 ;; @0045                               v36 = iconst.i32 0
-;; @0045                               call fn0(v0, v27, v36, v51)  ; v36 = 0
+;; @0045                               call fn0(v0, v27, v36, v50)  ; v36 = 0
 ;; @0048                               jump block1
 ;;
 ;;                                 block1:
