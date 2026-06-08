@@ -1386,7 +1386,7 @@
 (rule (lower (has_type $I128 (band _ x y))) (i128_alu_bitop (ALUOp.And) $I64 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
-;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; by Cranelift's `band_not` builder method, which emits the simpler
 ;; forms early on.
 (rule band_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (band _ x (bnot _ y))))
       (alu_rs_imm_logic (ALUOp.AndNot) ty x y))
@@ -1423,7 +1423,7 @@
 (rule (lower (has_type $I128 (bor _ x y))) (i128_alu_bitop (ALUOp.Orr) $I64 x y))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
-;; by Cranelift's `bor_not` instruction that is legalized into the simpler
+;; by Cranelift's `bor_not` builder method, which emits the simpler
 ;; forms early on.
 (rule bor_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor _ x (bnot _ y))))
       (alu_rs_imm_logic (ALUOp.OrrNot) ty x y))
@@ -1490,7 +1490,7 @@
 (rule (lower (has_type $I128 (bxor _ x y))) (i128_alu_bitop (ALUOp.Eor) $I64 x y))
 
 ;; Specialized lowerings for `(bxor x (bnot y))` which is additionally produced
-;; by Cranelift's `bxor_not` instruction that is legalized into the simpler
+;; by Cranelift's `bxor_not` builder method, which emits the simpler
 ;; forms early on.
 
 (rule bxor_not_right 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor _ x (bnot _ y))))

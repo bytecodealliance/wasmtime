@@ -1173,12 +1173,12 @@ mod tests {
         assert_eq!(x, y);
         assert_eq!(x.format(), InstructionFormat::Binary);
 
-        assert_eq!(format!("{:?}", Opcode::BandNot), "BandNot");
-        assert_eq!(Opcode::BandNot.to_string(), "band_not");
+        assert_eq!(format!("{:?}", Opcode::StackAddr), "StackAddr");
+        assert_eq!(Opcode::StackAddr.to_string(), "stack_addr");
 
         // Check the matcher.
         assert_eq!("iadd".parse::<Opcode>(), Ok(Opcode::Iadd));
-        assert_eq!("band_not".parse::<Opcode>(), Ok(Opcode::BandNot));
+        assert_eq!("stack_addr".parse::<Opcode>(), Ok(Opcode::StackAddr));
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));

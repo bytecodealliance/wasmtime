@@ -371,7 +371,7 @@
       (and_i128 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
-;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; by Cranelift's `band_not` builder method, which emits the simpler
 ;; forms early on.
 
 (decl sse_and_not (Type Xmm XmmMem128) Xmm)

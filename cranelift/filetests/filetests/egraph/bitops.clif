@@ -206,7 +206,8 @@ block0(v0: i32x4):
 
 function %issue_13229_band_not_f64(f64) {
 block0(v0: f64):
-    v1 = band_not v0, v0
+    v2 = bnot v0
+    v1 = band v0, v2
     return
 }
 

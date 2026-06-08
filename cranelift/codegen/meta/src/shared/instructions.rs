@@ -2204,48 +2204,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "band_not",
-            r#"
-        Bitwise and not.
-
-        Computes `x & ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bor_not",
-            r#"
-        Bitwise or not.
-
-        Computes `x | ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "bxor_not",
-            r#"
-        Bitwise xor not.
-
-        Computes `x ^ ~y`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", bits), Operand::new("y", bits)])
-        .operands_out(vec![Operand::new("a", bits)]),
-    );
-
-    ig.push(
-        Inst::new(
             "rotl",
             r#"
         Rotate left.
