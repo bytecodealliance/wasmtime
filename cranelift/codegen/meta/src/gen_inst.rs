@@ -1565,6 +1565,34 @@ fn gen_stack_access_builders(fmt: &mut Formatter) {
     );
 }
 
+/// Emit the `band_not`, `bor_not`, and `bxor_not` `InstBuilder`
+/// backwards-compat/convenience methods.
+///
+/// These fused bitwise-plus-not instructions were removed; each one is
+/// equivalent to a `bnot` of the second operand followed by the corresponding
+/// `band`/`bor`/`bxor`.
+fn gen_bitwise_not_builders(fmt: &mut Formatter) {
+    for (method, op, doc) in [
+        ("band_not", "band", "Bitwise and not: computes `x & ~y`."),
+        ("bor_not", "bor", "Bitwise or not: computes `x | ~y`."),
+        ("bxor_not", "bxor", "Bitwise xor not: computes `x ^ ~y`."),
+    ] {
+        fmt.doc_comment(format!(
+            "{doc}\n\nThis emits a `bnot` of `y` followed by a `{op}`."
+        ));
+        fmt.add_block(
+            &format!("fn {method}(mut self, x: ir::Value, y: ir::Value) -> Value"),
+            |fmt| {
+                fmt.line("let ctrl_typevar = self.data_flow_graph().value_type(y);");
+                fmt.line("let neg = self.build_aux_inst(InstructionData::Unary { opcode: Opcode::Bnot, arg: y }, ctrl_typevar);");
+                fmt.line("let neg = self.data_flow_graph().first_result(neg);");
+                fmtln!(fmt, "self.{op}(x, neg)");
+            },
+        );
+        fmt.empty_line();
+    }
+}
+
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
@@ -1602,6 +1630,7 @@ fn gen_builder(
         }
         gen_stack_access_builders(fmt);
         fmt.empty_line();
+        gen_bitwise_not_builders(fmt);
         for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);
             if i + 1 != formats.len() {

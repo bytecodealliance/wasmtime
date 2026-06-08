@@ -742,7 +742,7 @@
   (lower_float_binary (AluOPRRR.And) x y $F32))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
-;; by Cranelift's `band_not` instruction that is legalized into the simpler
+;; by Cranelift's `band_not` builder method, which emits the simpler
 ;; forms early on.
 
 (rule 5 (lower (has_type (fits_in_64 (ty_int ty)) (band _ x (bnot _ y))))
@@ -877,7 +877,7 @@
   (lower_float_binary (AluOPRRR.Or) x y $F32))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
-;; by Cranelift's `bor_not` instruction that is legalized into the simpler
+;; by Cranelift's `bor_not` builder method, which emits the simpler
 ;; forms early on.
 
 (rule 5 (lower (has_type (fits_in_64 (ty_int ty)) (bor _ x (bnot _ y))))

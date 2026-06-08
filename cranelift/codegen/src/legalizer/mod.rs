@@ -98,42 +98,8 @@ pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
             global_value,
         } => expand_global_value(inst, func, isa, global_value),
 
-        InstructionData::Binary { opcode, args } => expand_binary(func, inst, opcode, args),
-
         _ => WalkCommand::Continue,
     });
 
     trace!("Post-legalization function:\n{}", func.display());
-}
-
-fn expand_binary(
-    func: &mut ir::Function,
-    inst: ir::Inst,
-    opcode: ir::Opcode,
-    args: [ir::Value; 2],
-) -> WalkCommand {
-    let mut pos = FuncCursor::new(func);
-    pos.goto_inst(inst);
-
-    // Legalize the fused bitwise-plus-not instructions into simpler
-    // instructions to assist with optimizations. Lowering will pattern match
-    // this sequence regardless when architectures support the instruction
-    // natively.
-    match opcode {
-        ir::Opcode::BandNot => {
-            let neg = pos.ins().bnot(args[1]);
-            pos.func.replace(inst).band(args[0], neg);
-        }
-        ir::Opcode::BorNot => {
-            let neg = pos.ins().bnot(args[1]);
-            pos.func.replace(inst).bor(args[0], neg);
-        }
-        ir::Opcode::BxorNot => {
-            let neg = pos.ins().bnot(args[1]);
-            pos.func.replace(inst).bxor(args[0], neg);
-        }
-        _ => {}
-    }
-
-    WalkCommand::Continue
 }
