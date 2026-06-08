@@ -1238,7 +1238,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             })
             .collect();
 
-        if call_conv == isa::CallConv::AppleAarch64 {
+        if call_conv == isa::CallConv::AppleAarch64 && flags.enable_compact_unwind_abi() {
             add_macho_compact_unwind_paired_regs(&mut regs);
             // For Mach-O compact unwind, these pushes/pops must be emitted in
             // the fixed expected order. The encoding specifies only which
