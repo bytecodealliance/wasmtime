@@ -30,7 +30,8 @@ impl Wizer {
         let (index, args, rets) = self.validate_component_init_func(&component)?;
 
         let instance = instantiate(store, &component).await?;
-        self.initialize_component(store, &instance, index, args, rets).await?;
+        self.initialize_component(store, &instance, index, args, rets)
+            .await?;
         self.snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
             .await
     }
