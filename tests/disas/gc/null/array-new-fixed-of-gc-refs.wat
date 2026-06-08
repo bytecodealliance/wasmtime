@@ -27,99 +27,99 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
-;;                                     v127 = stack_addr.i64 ss2
-;;                                     store notrap v2, v127
-;;                                     v128 = stack_addr.i64 ss1
-;;                                     store notrap v3, v128
-;;                                     v129 = stack_addr.i64 ss0
-;;                                     store notrap v4, v129
-;; @0025                               v19 = load.i64 notrap aligned readonly region0 v0+32
-;; @0025                               v20 = load.i32 user2 region1 v19
-;;                                     v163 = iconst.i32 7
-;; @0025                               v23 = uadd_overflow_trap v20, v163, user18  ; v163 = 7
-;;                                     v169 = iconst.i32 -8
-;; @0025                               v25 = band v23, v169  ; v169 = -8
-;;                                     v156 = iconst.i32 24
-;; @0025                               v26 = uadd_overflow_trap v25, v156, user18  ; v156 = 24
-;; @0025                               v144 = load.i64 notrap aligned readonly can_move v0+8
-;; @0025                               v28 = load.i64 notrap aligned v144+40
-;; @0025                               v27 = uextend.i64 v26
-;; @0025                               v29 = icmp ule v27, v28
-;; @0025                               brif v29, block2, block3
+;;                                     v124 = stack_addr.i64 ss2
+;;                                     store notrap v2, v124
+;;                                     v125 = stack_addr.i64 ss1
+;;                                     store notrap v3, v125
+;;                                     v126 = stack_addr.i64 ss0
+;;                                     store notrap v4, v126
+;; @0025                               v18 = load.i64 notrap aligned readonly region0 v0+32
+;; @0025                               v19 = load.i32 user2 region1 v18
+;;                                     v160 = iconst.i32 7
+;; @0025                               v22 = uadd_overflow_trap v19, v160, user18  ; v160 = 7
+;;                                     v166 = iconst.i32 -8
+;; @0025                               v24 = band v22, v166  ; v166 = -8
+;;                                     v153 = iconst.i32 24
+;; @0025                               v25 = uadd_overflow_trap v24, v153, user18  ; v153 = 24
+;; @0025                               v141 = load.i64 notrap aligned readonly can_move v0+8
+;; @0025                               v27 = load.i64 notrap aligned v141+40
+;; @0025                               v26 = uextend.i64 v25
+;; @0025                               v28 = icmp ule v26, v27
+;; @0025                               brif v28, block2, block3
 ;;
 ;;                                 block2:
-;;                                     v170 = iconst.i32 -1476394984
-;; @0025                               v33 = load.i64 notrap aligned readonly can_move v144+32
-;;                                     v268 = band.i32 v23, v169  ; v169 = -8
-;;                                     v269 = uextend.i64 v268
-;; @0025                               v35 = iadd v33, v269
-;; @0025                               store user2 region1 v170, v35  ; v170 = -1476394984
-;; @0025                               v39 = load.i64 notrap aligned readonly can_move v0+40
-;; @0025                               v40 = load.i32 notrap aligned readonly can_move v39
-;; @0025                               store user2 region1 v40, v35+4
-;; @0025                               store.i32 user2 region1 v26, v19
+;;                                     v167 = iconst.i32 -1476394984
+;; @0025                               v31 = load.i64 notrap aligned readonly can_move v141+32
+;;                                     v265 = band.i32 v22, v166  ; v166 = -8
+;;                                     v266 = uextend.i64 v265
+;; @0025                               v33 = iadd v31, v266
+;; @0025                               store user2 region1 v167, v33  ; v167 = -1476394984
+;; @0025                               v36 = load.i64 notrap aligned readonly can_move v0+40
+;; @0025                               v37 = load.i32 notrap aligned readonly can_move v36
+;; @0025                               store user2 region1 v37, v33+4
+;; @0025                               store.i32 user2 region1 v25, v18
 ;; @0025                               v6 = iconst.i32 3
-;; @0025                               v41 = iconst.i64 8
-;; @0025                               v42 = iadd v35, v41  ; v41 = 8
-;; @0025                               store user2 region1 v6, v42  ; v6 = 3
-;; @0025                               trapz v268, user16
-;;                                     v270 = iconst.i32 24
-;; @0025                               v62 = uadd_overflow_trap v268, v270, user2  ; v270 = 24
-;;                                     v126 = load.i32 notrap v127
-;; @0025                               v63 = uextend.i64 v62
-;; @0025                               v65 = iadd v33, v63
-;;                                     v147 = iconst.i64 12
-;; @0025                               v68 = isub v65, v147  ; v147 = 12
-;; @0025                               store user2 little region1 v126, v68
-;; @0025                               v75 = load.i32 user2 readonly region1 v42
-;; @0025                               v69 = iconst.i32 1
-;;                                     v208 = icmp ugt v75, v69  ; v69 = 1
-;; @0025                               trapz v208, user17
-;; @0025                               v78 = uextend.i64 v75
-;;                                     v148 = iconst.i64 2
-;;                                     v210 = ishl v78, v148  ; v148 = 2
+;; @0025                               v38 = iconst.i64 8
+;; @0025                               v39 = iadd v33, v38  ; v38 = 8
+;; @0025                               store user2 region1 v6, v39  ; v6 = 3
+;; @0025                               trapz v265, user16
+;;                                     v267 = iconst.i32 24
+;; @0025                               v59 = uadd_overflow_trap v265, v267, user2  ; v267 = 24
+;;                                     v123 = load.i32 notrap v124
+;; @0025                               v60 = uextend.i64 v59
+;; @0025                               v62 = iadd v31, v60
+;;                                     v144 = iconst.i64 12
+;; @0025                               v65 = isub v62, v144  ; v144 = 12
+;; @0025                               store user2 little region1 v123, v65
+;; @0025                               v72 = load.i32 user2 readonly region1 v39
+;; @0025                               v66 = iconst.i32 1
+;;                                     v205 = icmp ugt v72, v66  ; v66 = 1
+;; @0025                               trapz v205, user17
+;; @0025                               v75 = uextend.i64 v72
+;;                                     v145 = iconst.i64 2
+;;                                     v207 = ishl v75, v145  ; v145 = 2
 ;; @0025                               v11 = iconst.i64 32
-;; @0025                               v81 = ushr v210, v11  ; v11 = 32
-;; @0025                               trapnz v81, user2
-;;                                     v187 = iconst.i32 2
-;;                                     v217 = ishl v75, v187  ; v187 = 2
+;; @0025                               v78 = ushr v207, v11  ; v11 = 32
+;; @0025                               trapnz v78, user2
+;;                                     v184 = iconst.i32 2
+;;                                     v214 = ishl v72, v184  ; v184 = 2
 ;; @0025                               v7 = iconst.i32 12
-;; @0025                               v84 = uadd_overflow_trap v217, v7, user2  ; v7 = 12
-;; @0025                               v88 = uadd_overflow_trap v268, v84, user2
-;;                                     v124 = load.i32 notrap v128
-;; @0025                               v89 = uextend.i64 v88
-;; @0025                               v91 = iadd v33, v89
-;;                                     v230 = iconst.i32 16
-;; @0025                               v92 = isub v84, v230  ; v230 = 16
-;; @0025                               v93 = uextend.i64 v92
-;; @0025                               v94 = isub v91, v93
-;; @0025                               store user2 little region1 v124, v94
-;; @0025                               v101 = load.i32 user2 readonly region1 v42
-;;                                     v236 = icmp ugt v101, v187  ; v187 = 2
-;; @0025                               trapz v236, user17
-;; @0025                               v104 = uextend.i64 v101
-;;                                     v238 = ishl v104, v148  ; v148 = 2
-;; @0025                               v107 = ushr v238, v11  ; v11 = 32
-;; @0025                               trapnz v107, user2
-;;                                     v245 = ishl v101, v187  ; v187 = 2
-;; @0025                               v110 = uadd_overflow_trap v245, v7, user2  ; v7 = 12
-;; @0025                               v114 = uadd_overflow_trap v268, v110, user2
-;;                                     v122 = load.i32 notrap v129
-;; @0025                               v115 = uextend.i64 v114
-;; @0025                               v117 = iadd v33, v115
-;;                                     v262 = iconst.i32 20
-;; @0025                               v118 = isub v110, v262  ; v262 = 20
-;; @0025                               v119 = uextend.i64 v118
-;; @0025                               v120 = isub v117, v119
-;; @0025                               store user2 little region1 v122, v120
+;; @0025                               v81 = uadd_overflow_trap v214, v7, user2  ; v7 = 12
+;; @0025                               v85 = uadd_overflow_trap v265, v81, user2
+;;                                     v121 = load.i32 notrap v125
+;; @0025                               v86 = uextend.i64 v85
+;; @0025                               v88 = iadd v31, v86
+;;                                     v227 = iconst.i32 16
+;; @0025                               v89 = isub v81, v227  ; v227 = 16
+;; @0025                               v90 = uextend.i64 v89
+;; @0025                               v91 = isub v88, v90
+;; @0025                               store user2 little region1 v121, v91
+;; @0025                               v98 = load.i32 user2 readonly region1 v39
+;;                                     v233 = icmp ugt v98, v184  ; v184 = 2
+;; @0025                               trapz v233, user17
+;; @0025                               v101 = uextend.i64 v98
+;;                                     v235 = ishl v101, v145  ; v145 = 2
+;; @0025                               v104 = ushr v235, v11  ; v11 = 32
+;; @0025                               trapnz v104, user2
+;;                                     v242 = ishl v98, v184  ; v184 = 2
+;; @0025                               v107 = uadd_overflow_trap v242, v7, user2  ; v7 = 12
+;; @0025                               v111 = uadd_overflow_trap v265, v107, user2
+;;                                     v119 = load.i32 notrap v126
+;; @0025                               v112 = uextend.i64 v111
+;; @0025                               v114 = iadd v31, v112
+;;                                     v259 = iconst.i32 20
+;; @0025                               v115 = isub v107, v259  ; v259 = 20
+;; @0025                               v116 = uextend.i64 v115
+;; @0025                               v117 = isub v114, v116
+;; @0025                               store user2 little region1 v119, v117
 ;; @0029                               jump block1
 ;;
 ;;                                 block3 cold:
-;; @0025                               v31 = isub.i64 v27, v28
-;; @0025                               v32 = call fn0(v0, v31), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]
+;; @0025                               v29 = isub.i64 v26, v27
+;; @0025                               v30 = call fn0(v0, v29), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]
 ;; @0025                               jump block2
 ;;
 ;;                                 block1:
-;;                                     v271 = band.i32 v23, v169  ; v169 = -8
-;; @0029                               return v271
+;;                                     v268 = band.i32 v22, v166  ; v166 = -8
+;; @0029                               return v268
 ;; }

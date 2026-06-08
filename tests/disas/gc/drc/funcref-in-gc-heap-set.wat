@@ -24,15 +24,15 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
 ;; @0022                               trapz v2, user16
-;; @0022                               v10 = call fn0(v0, v3)
-;; @0022                               v11 = ireduce.i32 v10
-;; @0022                               v12 = load.i64 notrap aligned readonly can_move v0+8
-;; @0022                               v5 = load.i64 notrap aligned readonly can_move v12+32
+;; @0022                               v9 = call fn0(v0, v3)
+;; @0022                               v10 = ireduce.i32 v9
+;; @0022                               v11 = load.i64 notrap aligned readonly can_move v0+8
+;; @0022                               v5 = load.i64 notrap aligned readonly can_move v11+32
 ;; @0022                               v4 = uextend.i64 v2
 ;; @0022                               v6 = iadd v5, v4
 ;; @0022                               v7 = iconst.i64 24
 ;; @0022                               v8 = iadd v6, v7  ; v7 = 24
-;; @0022                               store user2 little region0 v11, v8
+;; @0022                               store user2 little region0 v10, v8
 ;; @0026                               jump block1
 ;;
 ;;                                 block1:
