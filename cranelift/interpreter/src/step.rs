@@ -9,7 +9,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
-    InstructionData, MemFlagsData, Opcode, TrapCode, Type, Value as ValueRef, types,
+    InstructionData, Opcode, TrapCode, Type, Value as ValueRef, types,
 };
 use log::trace;
 use smallvec::{SmallVec, smallvec};
@@ -151,8 +151,7 @@ where
             InstructionData::UnaryIeee32 { imm, .. } => DataValue::from(imm),
             InstructionData::Load { offset, .. }
             | InstructionData::Store { offset, .. }
-            | InstructionData::StackLoad { offset, .. }
-            | InstructionData::StackStore { offset, .. } => DataValue::from(offset),
+            | InstructionData::StackAddr { offset, .. } => DataValue::from(offset),
             // 64-bit.
             InstructionData::UnaryImm { imm, .. } => DataValue::from(imm.bits()),
             InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
@@ -532,28 +531,6 @@ where
                     .and_then(|addr| state.checked_store(addr, reduced, mem_flags)),
             )
         }
-        Opcode::StackLoad => {
-            let load_ty = inst_context.controlling_type().unwrap();
-            let slot = inst.stack_slot().unwrap();
-            let offset = sum_unsigned(imm(), args())? as u64;
-            let mem_flags = MemFlagsData::new();
-            assign_or_memtrap({
-                state
-                    .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_load(addr, load_ty, mem_flags))
-            })
-        }
-        Opcode::StackStore => {
-            let arg = arg(0);
-            let slot = inst.stack_slot().unwrap();
-            let offset = sum_unsigned(imm(), args_range(1..)?)? as u64;
-            let mem_flags = MemFlagsData::new();
-            continue_or_memtrap({
-                state
-                    .stack_address(AddressSize::_64, slot, offset)
-                    .and_then(|addr| state.checked_store(addr, arg, mem_flags))
-            })
-        }
         Opcode::StackAddr => {
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
@@ -567,8 +544,6 @@ where
             })
         }
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
-        Opcode::DynamicStackLoad => unimplemented!("DynamicStackLoad"),
-        Opcode::DynamicStackStore => unimplemented!("DynamicStackStore"),
         Opcode::GlobalValue | Opcode::SymbolValue | Opcode::TlsValue => {
             if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
                 assign_or_memtrap(state.resolve_global_value(global_value))

@@ -1455,7 +1455,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // This is a native-endian store (the only mode for
             // `stack_store`) because it is read by host code directly
             // as a pointer.
-            builder.ins().stack_store(vmctx, slot, 0);
+            builder
+                .ins()
+                .stack_store(self.pointer_type(), vmctx, slot, 0);
         }
     }
 

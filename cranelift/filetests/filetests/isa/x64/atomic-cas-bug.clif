@@ -63,20 +63,31 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
                                     v72 -> v2
                                     v78 -> v2
                                     v84 -> v2
-                                    stack_store v3, ss1
-                                    stack_store v4, ss2
+                                    v120 = stack_addr.i64 ss1
+                                    store notrap v3, v120
+                                    v121 = stack_addr.i64 ss2
+                                    store notrap v4, v121
                                     jump block1
 
                                 block1:
-@0002                               v5 = stack_load.i8 ss1
-@0002                               stack_store v5, ss4
-@0003                               v6 = stack_load.i8 ss2
-@0003                               stack_store v6, ss5
-@0001                               v7 = stack_load.i8 ss4
-@0001                               stack_store v7, ss3
-@0001                               v8 = stack_load.i8 ss5
-@0001                               stack_store v8, ss3+1
-@0001                               v9 = stack_load.i8 ss3
+@0002                               v122 = stack_addr.i64 ss1
+@0002                               v5 = load.i8 notrap v122
+@0002                               v123 = stack_addr.i64 ss4
+@0002                               store notrap v5, v123
+@0003                               v124 = stack_addr.i64 ss2
+@0003                               v6 = load.i8 notrap v124
+@0003                               v125 = stack_addr.i64 ss5
+@0003                               store notrap v6, v125
+@0001                               v126 = stack_addr.i64 ss4
+@0001                               v7 = load.i8 notrap v126
+@0001                               v127 = stack_addr.i64 ss3
+@0001                               store notrap v7, v127
+@0001                               v128 = stack_addr.i64 ss5
+@0001                               v8 = load.i8 notrap v128
+@0001                               v129 = stack_addr.i64 ss3+1
+@0001                               store notrap v8, v129
+@0001                               v130 = stack_addr.i64 ss3
+@0001                               v9 = load.i8 notrap v130
 @0001                               v10 = uextend.i32 v9
 @0005                               jump block37
 
@@ -84,12 +95,14 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0005                               br_table v10, block36, [block2, block4, block5, block6, block7]
 
                                 block2:
-@0001                               v11 = stack_load.i8 ss3+1
+@0001                               v131 = stack_addr.i64 ss3+1
+@0001                               v11 = load.i8 notrap v131
 @0001                               v12 = uextend.i64 v11
 @0005                               brif v12, block3, block15
 
                                 block3:
-@0001                               v13 = stack_load.i8 ss3+1
+@0001                               v132 = stack_addr.i64 ss3+1
+@0001                               v13 = load.i8 notrap v132
 @0001                               v14 = uextend.i64 v13
 @0005                               v114 = iconst.i64 3
 @0005                               v15 = icmp eq v14, v114
@@ -101,12 +114,14 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0005                               brif v16, block29, block8
 
                                 block4:
-@0001                               v17 = stack_load.i8 ss3+1
+@0001                               v133 = stack_addr.i64 ss3+1
+@0001                               v17 = load.i8 notrap v133
 @0001                               v18 = uextend.i64 v17
 @0005                               brif v18, block3, block11
 
                                 block5:
-@0001                               v19 = stack_load.i8 ss3+1
+@0001                               v134 = stack_addr.i64 ss3+1
+@0001                               v19 = load.i8 notrap v134
 @0001                               v20 = uextend.i64 v19
 @0005                               v116 = iconst.i64 2
 @0005                               v21 = icmp eq v20, v116
@@ -116,7 +131,8 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0005                               brif.i64 v20, block3, block19
 
                                 block6:
-@0001                               v22 = stack_load.i8 ss3+1
+@0001                               v135 = stack_addr.i64 ss3+1
+@0001                               v22 = load.i8 notrap v135
 @0001                               v23 = uextend.i64 v22
 @0005                               v117 = iconst.i64 2
 @0005                               v24 = icmp eq v23, v117
@@ -126,7 +142,8 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0005                               brif.i64 v23, block3, block21
 
                                 block7:
-@0001                               v25 = stack_load.i8 ss3+1
+@0001                               v136 = stack_addr.i64 ss3+1
+@0001                               v25 = load.i8 notrap v136
 @0001                               v26 = uextend.i64 v25
 @0005                               v118 = iconst.i64 4
 @0005                               v27 = icmp eq v26, v118
@@ -263,19 +280,27 @@ function u0:31(i64, i32, i32, i8, i8) -> i32, i32 system_v {
 @0045                               brif v105, block33, block34
 
                                 block33:
-@0048                               stack_store.i32 v106, ss0+4
+@0048                               v137 = stack_addr.i64 ss0+4
+@0048                               store.i32 notrap v106, v137
 @0048                               v107 = iconst.i32 0
-@0048                               stack_store v107, ss0
-@004a                               v108 = stack_load.i32 ss0
-@004a                               v109 = stack_load.i32 ss0+4
+@0048                               v138 = stack_addr.i64 ss0
+@0048                               store notrap v107, v138
+@004a                               v139 = stack_addr.i64 ss0
+@004a                               v108 = load.i32 notrap v139
+@004a                               v140 = stack_addr.i64 ss0+4
+@004a                               v109 = load.i32 notrap v140
 @004a                               return v108, v109
 
                                 block34:
-@004c                               stack_store.i32 v110, ss0+4
+@004c                               v141 = stack_addr.i64 ss0+4
+@004c                               store.i32 notrap v110, v141
 @004c                               v111 = iconst.i32 1
-@004c                               stack_store v111, ss0
-@004a                               v112 = stack_load.i32 ss0
-@004a                               v113 = stack_load.i32 ss0+4
+@004c                               v142 = stack_addr.i64 ss0
+@004c                               store notrap v111, v142
+@004a                               v143 = stack_addr.i64 ss0
+@004a                               v112 = load.i32 notrap v143
+@004a                               v144 = stack_addr.i64 ss0+4
+@004a                               v113 = load.i32 notrap v144
 @004a                               return v112, v113
 
                                 block36:

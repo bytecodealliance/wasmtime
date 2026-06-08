@@ -35,6 +35,7 @@ block37:
 block38:
   v98 = load.i8 notrap v97
   v99 = fcvt_from_uint.f64 v98
-  stack_store v99, ss0
+  v240 = stack_addr.i64 ss0
+  store notrap v99, v240
   trap user1
 }

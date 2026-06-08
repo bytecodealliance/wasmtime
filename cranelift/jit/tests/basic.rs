@@ -132,7 +132,11 @@ fn switch_error() {
         bcx.ins().return_(&[r]);
 
         bcx.seal_all_blocks();
-        bcx.finalize();
+        bcx.finalize(cranelift_codegen::isa::TargetFrontendConfig {
+            default_call_conv: CallConv::SystemV,
+            pointer_width: target_lexicon::PointerWidth::U64,
+            page_size_align_log2: 12,
+        });
     }
 
     let flags = settings::Flags::new(settings::builder());

@@ -1650,7 +1650,7 @@ impl ComponentCompiler for Compiler {
         );
 
         c.translate(&component.trampolines[trampoline_index]);
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {
@@ -1773,7 +1773,7 @@ impl ComponentCompiler for Compiler {
             | UnsafeIntrinsic::ContextSetI32_1 => c.translate_context_intrinsic(intrinsic)?,
         }
 
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {

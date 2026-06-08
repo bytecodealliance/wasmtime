@@ -7,7 +7,8 @@ function %f0(i32) {
     dss0 = explicit_dynamic_slot dt0
 block0(v0: i32):
     v1 = splat.dt0 v0
-    dynamic_stack_store.dt0 v1, dss0
+    v2 = dynamic_stack_addr.i64 dss0
+    store.dt0 notrap aligned v1, v2
     return
 }
 
@@ -21,7 +22,8 @@ function %f1() {
 block0:
     v0 = iconst.i64 99
     v1 = splat.dt0 v0
-    dynamic_stack_store.dt0 v1, dss0
+    v3 = dynamic_stack_addr.i64 dss0
+    store.dt0 notrap aligned v1, v3
     v2 = iconst.i32 1
     call fn0(v2)
     return

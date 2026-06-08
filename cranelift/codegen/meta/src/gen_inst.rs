@@ -1481,6 +1481,90 @@ fn gen_one_imm_inst_builder(
     });
 }
 
+/// Emit the `stack_load`, `stack_store`, `dynamic_stack_load`, and
+/// `dynamic_stack_store` `InstBuilder` backwards-compat/convenience methods.
+///
+/// These are equivalent to a `[dynamic_]stack_addr` followed by a normal
+/// `load`/`store`.
+fn gen_stack_access_builders(fmt: &mut Formatter) {
+    // `stack_load` => `stack_addr` + `load`.
+    fmt.doc_comment(
+        "Load a value from a stack slot at the constant offset.\n\n\
+         This emits a `stack_addr` followed by a `load`.",
+    );
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(
+        "fn stack_load<T1: Into<ir::immediates::Offset32>>(mut self, pointer_type: crate::ir::Type, Mem: crate::ir::Type, SS: ir::StackSlot, Offset: T1) -> Value",
+        |fmt| {
+            fmt.line("let Offset = Offset.into();");
+            fmt.line("let addr = self.build_aux_inst(InstructionData::StackAddr { opcode: Opcode::StackAddr, stack_slot: SS, offset: Offset }, pointer_type);");
+            fmt.line("let addr = self.data_flow_graph().first_result(addr);");
+            fmt.line("// Stack slots are required to be accessible, but we can't");
+            fmt.line("// currently ensure that they are aligned.");
+            fmt.line("let mut flags = ir::MemFlagsData::new();");
+            fmt.line("flags.set_notrap();");
+            fmt.line("self.load(Mem, flags, addr, 0)");
+        },
+    );
+    fmt.empty_line();
+
+    // `stack_store` => `stack_addr` + `store`.
+    fmt.doc_comment(
+        "Store a value to a stack slot at a constant offset.\n\n\
+         This emits a `stack_addr` followed by a `store`.",
+    );
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(
+        "fn stack_store<T1: Into<ir::immediates::Offset32>>(mut self, pointer_type: crate::ir::Type, x: ir::Value, SS: ir::StackSlot, Offset: T1) -> Inst",
+        |fmt| {
+            fmt.line("let Offset = Offset.into();");
+            fmt.line("let addr = self.build_aux_inst(InstructionData::StackAddr { opcode: Opcode::StackAddr, stack_slot: SS, offset: Offset }, pointer_type);");
+            fmt.line("let addr = self.data_flow_graph().first_result(addr);");
+            fmt.line("// Stack slots are required to be accessible, but we can't");
+            fmt.line("// currently ensure that they are aligned.");
+            fmt.line("let mut flags = ir::MemFlagsData::new();");
+            fmt.line("flags.set_notrap();");
+            fmt.line("self.store(flags, x, addr, 0)");
+        },
+    );
+    fmt.empty_line();
+
+    // `dynamic_stack_load` => `dynamic_stack_addr` + `load`.
+    fmt.doc_comment(
+        "Load a value from a dynamic stack slot.\n\n\
+         This emits a `dynamic_stack_addr` followed by a `load`.",
+    );
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(
+        "fn dynamic_stack_load(mut self, pointer_type: crate::ir::Type, Mem: crate::ir::Type, DSS: ir::DynamicStackSlot) -> Value",
+        |fmt| {
+            fmt.line("let addr = self.build_aux_inst(InstructionData::DynamicStackAddr { opcode: Opcode::DynamicStackAddr, dynamic_stack_slot: DSS }, pointer_type);");
+            fmt.line("let addr = self.data_flow_graph().first_result(addr);");
+            fmt.line("// Dynamic stack slots are required to be accessible and aligned.");
+            fmt.line("let flags = ir::MemFlagsData::trusted();");
+            fmt.line("self.load(Mem, flags, addr, 0)");
+        },
+    );
+    fmt.empty_line();
+
+    // `dynamic_stack_store` => `dynamic_stack_addr` + `store`.
+    fmt.doc_comment(
+        "Store a value to a dynamic stack slot.\n\n\
+         This emits a `dynamic_stack_addr` followed by a `store`.",
+    );
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
+    fmt.add_block(
+        "fn dynamic_stack_store(mut self, pointer_type: crate::ir::Type, x: ir::Value, DSS: ir::DynamicStackSlot) -> Inst",
+        |fmt| {
+            fmt.line("let addr = self.build_aux_inst(InstructionData::DynamicStackAddr { opcode: Opcode::DynamicStackAddr, dynamic_stack_slot: DSS }, pointer_type);");
+            fmt.line("let addr = self.data_flow_graph().first_result(addr);");
+            fmt.line("// Dynamic stack slots are required to be accessible and aligned.");
+            fmt.line("let flags = ir::MemFlagsData::trusted();");
+            fmt.line("self.store(flags, x, addr, 0)");
+        },
+    );
+}
+
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
@@ -1516,6 +1600,8 @@ fn gen_builder(
                 fmt.empty_line();
             }
         }
+        gen_stack_access_builders(fmt);
+        fmt.empty_line();
         for (i, format) in formats.iter().enumerate() {
             gen_format_constructor(format, fmt);
             if i + 1 != formats.len() {

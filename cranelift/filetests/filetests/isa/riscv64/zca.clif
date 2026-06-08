@@ -697,7 +697,8 @@ function %c_lwsp() -> i32 {
   ss0 = explicit_slot 16
 
 block0:
-  v0 = stack_load.i32 ss0+12
+  v1 = stack_addr.i64 ss0+12
+  v0 = load.i32 notrap v1
   return v0
 }
 
@@ -734,7 +735,8 @@ function %c_ldsp() -> i64 {
   ss0 = explicit_slot 128
 
 block0:
-  v0 = stack_load.i64 ss0+64
+  v1 = stack_addr.i64 ss0+64
+  v0 = load.i64 notrap v1
   return v0
 }
 
@@ -771,7 +773,8 @@ function %c_swsp(i32) {
   ss0 = explicit_slot 16
 
 block0(v0: i32):
-  stack_store.i32 v0, ss0+12
+  v1 = stack_addr.i64 ss0+12
+  store.i32 notrap v0, v1
   return
 }
 
@@ -808,7 +811,8 @@ function %c_sdsp(i64) {
   ss0 = explicit_slot 128
 
 block0(v0: i64):
-  stack_store.i64 v0, ss0+64
+  v1 = stack_addr.i64 ss0+64
+  store.i64 notrap v0, v1
   return
 }
 

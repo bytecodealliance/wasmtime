@@ -123,59 +123,6 @@ fn insert_call(
     insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
 }
 
-fn insert_stack_load(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _opcode: Opcode,
-    _args: &[Type],
-    rets: &[Type],
-) -> Result<()> {
-    let typevar = rets[0];
-    let type_size = typevar.bytes();
-    let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
-
-    // `stack_load` doesn't support setting MemFlagsData, and it does not set any
-    // alias analysis bits, so we can only emit it for `Other` slots.
-    if category != AACategory::Other {
-        return Err(arbitrary::Error::IncorrectFormat.into());
-    }
-
-    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
-
-    let val = builder.ins().stack_load(typevar, slot, offset);
-    let var = fgen.get_variable_of_type(typevar)?;
-    builder.def_var(var, val);
-
-    Ok(())
-}
-
-fn insert_stack_store(
-    fgen: &mut FunctionGenerator,
-    builder: &mut FunctionBuilder,
-    _opcode: Opcode,
-    args: &[Type],
-    _rets: &[Type],
-) -> Result<()> {
-    let typevar = args[0];
-    let type_size = typevar.bytes();
-
-    let (slot, slot_size, _align, category) = fgen.stack_slot_with_size(type_size)?;
-
-    // `stack_store` doesn't support setting MemFlagsData, and it does not set any
-    // alias analysis bits, so we can only emit it for `Other` slots.
-    if category != AACategory::Other {
-        return Err(arbitrary::Error::IncorrectFormat.into());
-    }
-
-    let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
-
-    let arg0 = fgen.get_variable_of_type(typevar)?;
-    let arg0 = builder.use_var(arg0);
-
-    builder.ins().stack_store(arg0, slot, offset);
-    Ok(())
-}
-
 fn insert_cmp(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
@@ -603,17 +550,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // Nothing wrong with this select. But we have an isle rule that can optimize it
                 // into a `min`/`max` instructions, which we don't have implemented yet.
                 (Opcode::Select, &[_, I128, I128]),
-                // These stack accesses can cause segfaults if they are merged into an SSE instruction.
-                // See: #5922
-                (
-                    Opcode::StackStore,
-                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
-                ),
-                (
-                    Opcode::StackLoad,
-                    &[],
-                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
-                ),
                 // TODO
                 (
                     Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
@@ -912,8 +848,6 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 (Opcode::Uload32x2),
                 (Opcode::Sload32x2),
                 (Opcode::StackAddr),
-                (Opcode::DynamicStackLoad),
-                (Opcode::DynamicStackStore),
                 (Opcode::DynamicStackAddr),
                 (Opcode::GlobalValue),
                 (Opcode::SymbolValue),
@@ -1069,8 +1003,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::Call => insert_call,
         InstructionFormat::CallIndirect => insert_call,
         InstructionFormat::CondTrap => todo!(),
-        InstructionFormat::DynamicStackLoad => todo!(),
-        InstructionFormat::DynamicStackStore => todo!(),
+        InstructionFormat::DynamicStackAddr => todo!(),
         InstructionFormat::FloatCompare => insert_cmp,
         InstructionFormat::FuncAddr => todo!(),
         InstructionFormat::IntAddTrap => todo!(),
@@ -1079,8 +1012,7 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::LoadNoOffset => insert_load_store,
         InstructionFormat::NullAry => insert_opcode,
         InstructionFormat::Shuffle => insert_shuffle,
-        InstructionFormat::StackLoad => insert_stack_load,
-        InstructionFormat::StackStore => insert_stack_store,
+        InstructionFormat::StackAddr => todo!(),
         InstructionFormat::Store => insert_load_store,
         InstructionFormat::StoreNoOffset => insert_load_store,
         InstructionFormat::Ternary => insert_opcode,
@@ -1986,7 +1918,7 @@ where
         }
 
         builder.seal_all_blocks();
-        builder.finalize();
+        builder.finalize(self.isa.frontend_config());
 
         Ok(func)
     }

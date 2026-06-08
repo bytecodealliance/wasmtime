@@ -27,8 +27,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
-;;                                     v45 = stack_addr.i64 ss0
-;;                                     store notrap v4, v45
+;;                                     v41 = stack_addr.i64 ss0
+;;                                     store notrap v4, v41
 ;; @002a                               v11 = load.i64 notrap aligned readonly region0 v0+32
 ;; @002a                               v12 = load.i32 user2 region1 v11
 ;;                                     v52 = iconst.i32 7
@@ -37,15 +37,15 @@
 ;; @002a                               v17 = band v15, v58  ; v58 = -8
 ;; @002a                               v6 = iconst.i32 24
 ;; @002a                               v18 = uadd_overflow_trap v17, v6, user18  ; v6 = 24
-;; @002a                               v43 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v20 = load.i64 notrap aligned v43+40
+;; @002a                               v44 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v20 = load.i64 notrap aligned v44+40
 ;; @002a                               v19 = uextend.i64 v18
 ;; @002a                               v21 = icmp ule v19, v20
 ;; @002a                               brif v21, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v59 = iconst.i32 -1342177256
-;; @002a                               v25 = load.i64 notrap aligned readonly can_move v43+32
+;; @002a                               v25 = load.i64 notrap aligned readonly can_move v44+32
 ;;                                     v65 = band.i32 v15, v58  ; v58 = -8
 ;;                                     v66 = uextend.i64 v65
 ;; @002a                               v27 = iadd v25, v66
@@ -60,10 +60,10 @@
 ;; @002a                               v35 = iconst.i64 12
 ;; @002a                               v36 = iadd v27, v35  ; v35 = 12
 ;; @002a                               istore8.i32 user2 little region1 v3, v36
-;;                                     v39 = load.i32 notrap v45
+;;                                     v40 = load.i32 notrap v41
 ;; @002a                               v37 = iconst.i64 16
 ;; @002a                               v38 = iadd v27, v37  ; v37 = 16
-;; @002a                               store user2 little region1 v39, v38
+;; @002a                               store user2 little region1 v40, v38
 ;; @002d                               jump block1
 ;;
 ;;                                 block3 cold:

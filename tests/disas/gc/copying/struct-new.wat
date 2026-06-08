@@ -25,8 +25,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
-;;                                     v52 = stack_addr.i64 ss0
-;;                                     store notrap v4, v52
+;;                                     v48 = stack_addr.i64 ss0
+;;                                     store notrap v4, v48
 ;; @002a                               v8 = load.i64 notrap aligned readonly can_move v0+32
 ;; @002a                               v9 = load.i32 notrap aligned v8
 ;; @002a                               v10 = load.i32 notrap aligned v8+4
@@ -60,8 +60,8 @@
 ;; @002a                               v6 = iconst.i32 32
 ;; @002a                               v25 = iconst.i32 16
 ;; @002a                               v26 = call fn0(v0, v21, v24, v6, v25), stack_map=[i32 @ ss0+0]  ; v21 = -1342177246, v6 = 32, v25 = 16
-;; @002a                               v48 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v27 = load.i64 notrap aligned readonly can_move v48+32
+;; @002a                               v49 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v27 = load.i64 notrap aligned readonly can_move v49+32
 ;; @002a                               v28 = uextend.i64 v26
 ;; @002a                               v29 = iadd v27, v28
 ;; @002a                               jump block4(v26, v29)
@@ -73,10 +73,10 @@
 ;; @002a                               v42 = iconst.i64 20
 ;; @002a                               v43 = iadd v39, v42  ; v42 = 20
 ;; @002a                               istore8.i32 user2 little region1 v3, v43
-;;                                     v46 = load.i32 notrap v52
+;;                                     v47 = load.i32 notrap v48
 ;; @002a                               v44 = iconst.i64 24
 ;; @002a                               v45 = iadd v39, v44  ; v44 = 24
-;; @002a                               store user2 little region1 v46, v45
+;; @002a                               store user2 little region1 v47, v45
 ;; @002d                               jump block1(v38)
 ;;
 ;;                                 block1(v5: i32):

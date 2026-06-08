@@ -24,10 +24,8 @@ pub(crate) struct Formats {
     pub(crate) multiary: Rc<InstructionFormat>,
     pub(crate) nullary: Rc<InstructionFormat>,
     pub(crate) shuffle: Rc<InstructionFormat>,
-    pub(crate) stack_load: Rc<InstructionFormat>,
-    pub(crate) stack_store: Rc<InstructionFormat>,
-    pub(crate) dynamic_stack_load: Rc<InstructionFormat>,
-    pub(crate) dynamic_stack_store: Rc<InstructionFormat>,
+    pub(crate) stack_addr: Rc<InstructionFormat>,
+    pub(crate) dynamic_stack_addr: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
     pub(crate) store_no_offset: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
@@ -181,23 +179,12 @@ impl Formats {
                 .value()
                 .build(),
 
-            stack_load: Builder::new("StackLoad")
+            stack_addr: Builder::new("StackAddr")
                 .imm(&entities.stack_slot)
                 .imm(&imm.offset32)
                 .build(),
 
-            stack_store: Builder::new("StackStore")
-                .value()
-                .imm(&entities.stack_slot)
-                .imm(&imm.offset32)
-                .build(),
-
-            dynamic_stack_load: Builder::new("DynamicStackLoad")
-                .imm(&entities.dynamic_stack_slot)
-                .build(),
-
-            dynamic_stack_store: Builder::new("DynamicStackStore")
-                .value()
+            dynamic_stack_addr: Builder::new("DynamicStackAddr")
                 .imm(&entities.dynamic_stack_slot)
                 .build(),
 
