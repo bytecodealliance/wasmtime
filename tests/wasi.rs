@@ -423,7 +423,7 @@ impl Drop for KillOnDrop {
 /// Sends `HttpRequest` to `addr`, asserting the response matches the expected
 /// response specified within `req`.
 async fn send_request(addr: SocketAddr, req: HttpRequest) -> Result<()> {
-    let tcp = TcpStream::connect(addr)?;
+    let tcp = TcpStream::connect(addr).with_context(|| format!("failed to connect to {addr:?}"))?;
     tcp.set_nonblocking(true)?;
     let tcp = tokio::net::TcpStream::from_std(tcp)?;
     let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
