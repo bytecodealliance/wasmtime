@@ -745,7 +745,10 @@ async fn component_interfaces() -> Result<()> {
         .run_component(&mut store, component, instantiate)
         .await
         .context("Wizer::run_component")?;
-    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\")]");
+    assert_eq!(
+        wasm_wave::wasm::DisplayFuncResults(&rets).to_string(),
+        "[str(\"hello world\")]"
+    );
 
     let (wizened_component, rets) = Wizer::new()
         .init_func("local:local/init.add-int@0.1.0(42)")
@@ -753,7 +756,10 @@ async fn component_interfaces() -> Result<()> {
         .run_component(&mut store, &wizened_component, instantiate)
         .await
         .context("Wizer::run_component")?;
-    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\"), int(42)]");
+    assert_eq!(
+        wasm_wave::wasm::DisplayFuncResults(&rets).to_string(),
+        "[str(\"hello world\"), int(42)]"
+    );
 
     let (wizened_component, _) = Wizer::new()
         .init_func("local:local/init.add-string@0.1.0(\"wizer is better with wave\")")
@@ -761,7 +767,10 @@ async fn component_interfaces() -> Result<()> {
         .run_component(&mut store, &wizened_component, instantiate)
         .await
         .context("Wizer::run_component")?;
-    assert_eq!(wasm_wave::wasm::DisplayFuncResults(&rets).to_string(), "[str(\"hello world\"), int(42), str(\"wizer is better with wave\")]");
+    assert_eq!(
+        wasm_wave::wasm::DisplayFuncResults(&rets).to_string(),
+        "[str(\"hello world\"), int(42), str(\"wizer is better with wave\")]"
+    );
 
     let out = run_wasm(&wizened_component).await.context("run_wasm")?;
     assert_eq!(

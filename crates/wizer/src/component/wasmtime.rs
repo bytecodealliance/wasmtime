@@ -32,7 +32,8 @@ impl Wizer {
         let instance = instantiate(store, &component).await?;
         self.initialize_component(store, &instance, index, args, &mut rets)
             .await?;
-        let snap = self.snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
+        let snap = self
+            .snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
             .await?;
         Ok((snap, rets))
     }
