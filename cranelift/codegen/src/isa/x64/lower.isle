@@ -3581,18 +3581,13 @@
 ;;;; Rules for `dead_load_with_context` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (dead_load_with_context load_ptr context))
-      (let (
-            ;; Put vmctx into rdi. TODO: Do we have to shove context in a different reg first? The type system seems happy to allow it without.
-            ;; Actually, I suspect we don't even need to do this move; because we use reg_fixed_use() to constrain the `context` arg of DeadLoadWithContext to RDI, I hypothesize regalloc will insert any MOV needed to make that so. It is, after all, in the business of inserting MOVs for spills.
-            ;; (_ SideEffectNoResult (mov_to_preg (preg_rdi) context))
-
-            ;; Load from load_ptr to perhaps trigger a trap.
-            ;; TODO: May be able to change x64_load to higher-level "load", from codegen/meta/src/shared/instructions.rs.
-            (_ Gpr (x64_load $I64 (to_amode (mem_flags_aligned_read_only)
+      (let ((load_ptr Gpr (put_in_gpr load_ptr))
+            (context Gpr (put_in_gpr context))
+            (dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit_side_effect (SideEffectNoResult.Inst
+                  (MInst.DeadLoadWithContext dst
                                              load_ptr
-                                             (zero_offset))
-                                  (ExtKind.None)))
-            (_ Unit (emit_side_effect (x64_dead_load_with_context load_ptr context))))
+                                             context)))))
        (output_none)))
 
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;

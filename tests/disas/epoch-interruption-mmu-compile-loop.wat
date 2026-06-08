@@ -14,6 +14,6 @@
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r8
 ;;       movq    0x10(%r8), %r8
-;;       movq    (%r8), %r9
+;;       movq    (%r8), %r10
 ;;       movq    (%r8), %r10
 ;;       jmp     0xf

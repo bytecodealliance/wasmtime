@@ -1,7 +1,6 @@
 //! This module defines x86_64-specific machine instruction types.
 
 pub use emit_state::EmitState;
-use regalloc2::PRegSet;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{ExternalName, LibCall, TrapCode, Type, types};
@@ -673,10 +672,15 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::DeadLoadWithContext { load_ptr, context } => {
+            Inst::DeadLoadWithContext {
+                dst,
+                load_ptr,
+                context,
+            } => {
+                let dst = pretty_print_reg(*dst.to_reg(), 8);
                 let load_ptr = pretty_print_reg(**load_ptr, 8);
                 let context = pretty_print_reg(**context, 8);
-                format!("dead_load_with_context {load_ptr}, {context}")
+                format!("dead_load_with_context {dst}, {load_ptr}, {context}")
             }
 
             Inst::JmpKnown { dst } => {
@@ -1053,7 +1057,11 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_clobbers(clobbers);
         }
 
-        Inst::DeadLoadWithContext { load_ptr, context } => {
+        Inst::DeadLoadWithContext {
+            dst,
+            load_ptr,
+            context,
+        } => {
             // load_ptr is an input param.
             collector.reg_use(load_ptr);
             // Demand context (vmctx) go into RDI.
@@ -1063,7 +1071,10 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // address (which we're overwriting with that of the epoch-ending
             // stub). Picking r10 because it's caller-saved but otherwise
             // arbitrarily.
-            collector.reg_clobbers(PRegSet::empty().with(regs::gpr_preg(asm::gpr::enc::R10)));
+            //
+            // Also def it so we can use it as the destination of the dead load
+            // rather than consuming another arbitrary reg.
+            collector.reg_fixed_def(dst, regs::r10());
         }
 
         Inst::ReturnCallKnown { info } => {

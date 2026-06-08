@@ -645,10 +645,19 @@ pub(crate) fn emit(
             sink.bind_label(resume, state.ctrl_plane_mut());
         }
 
-        Inst::DeadLoadWithContext { .. } => {
-            // The ISLE has already emitted the dead load. Put the address of
-            // this instruction aside so we can later distinguish whether a
-            // segfault is its fault.
+        Inst::DeadLoadWithContext { dst, load_ptr, .. } => {
+            let start = sink.cur_offset();
+
+            // Since we're clobbering r10 anyway to store the original return
+            // address, we also use it as a destination for the dead load rather
+            // than sucking up another reg:
+            let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));
+            asm::inst::movq_rm::new(*dst, load_ptr_addr).emit(sink, info, state);
+
+            let end = sink.cur_offset();
+
+            // Put the address of this instruction aside so we can later
+            // distinguish whether a segfault is its fault.
             sink.add_epoch_check();
         }
 

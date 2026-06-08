@@ -194,7 +194,8 @@
                     (offset i64)
                     (distance RelocDistance))
 
-       (DeadLoadWithContext (load_ptr Gpr)
+       (DeadLoadWithContext (dst WritableGpr)
+                            (load_ptr Gpr)
                             (context Gpr))
 
        ;; =========================================
@@ -1344,12 +1345,6 @@
 (decl return_call_unknown (BoxReturnCallIndInfo) SideEffectNoResult)
 (rule (return_call_unknown info)
       (SideEffectNoResult.Inst (MInst.ReturnCallUnknown info)))
-
-;; Helper for creating `DeadLoadWithContext` instructions.
-(decl x64_dead_load_with_context (Gpr Gpr) SideEffectNoResult)
-(rule (x64_dead_load_with_context load_ptr context)
-      (SideEffectNoResult.Inst (MInst.DeadLoadWithContext load_ptr
-                                                          context)))
 
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
