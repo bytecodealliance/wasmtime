@@ -1004,7 +1004,7 @@ impl Config {
     /// Note that the function references proposal depends on the reference
     /// types proposal.
     ///
-    /// This feature is `false` by default.
+    /// This feature is `true` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     #[cfg(feature = "gc")]
@@ -1033,10 +1033,8 @@ impl Config {
     /// Note that the function references proposal depends on the typed function
     /// references proposal.
     ///
-    /// This feature is `false` by default.
-    ///
-    /// **Warning: Wasmtime's implementation of the GC proposal is still in
-    /// progress and generally not ready for primetime.**
+    /// This feature is `true` by default, unless Wasmtime was not built with
+    /// the `gc` cargo feature.
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
     #[cfg(feature = "gc")]
@@ -2437,6 +2435,7 @@ impl Config {
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
         features |= WasmFeatures::MEMORY64;
+        features |= WasmFeatures::FUNCTION_REFERENCES;
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
@@ -2445,6 +2444,7 @@ impl Config {
         // Set some features to their conditionally-enabled defaults depending
         // on crate compile-time features.
         features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
+        features.set(WasmFeatures::GC, cfg!(feature = "gc"));
         features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
         features.set(
             WasmFeatures::COMPONENT_MODEL,
