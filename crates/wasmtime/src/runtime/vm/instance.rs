@@ -1034,6 +1034,27 @@ impl Instance {
         &self.memories[index].1
     }
 
+    /// Mutable access to the `index`th defined memory's `(allocation, memory)`
+    /// entry. Used by the store to hot-swap a memory's backing storage between
+    /// two instances; after swapping the entry, call
+    /// [`Instance::refresh_defined_memory`] to update the `VMContext`.
+    pub(crate) fn defined_memory_entry_mut(
+        self: Pin<&mut Self>,
+        index: DefinedMemoryIndex,
+    ) -> &mut (MemoryAllocationIndex, Memory) {
+        &mut self.memories_mut()[index]
+    }
+
+    /// Recompute the `index`th defined memory's `VMMemoryDefinition` (base +
+    /// length) from its current allocation and write it into the `VMContext`, so
+    /// compiled code observes the memory's current backing. This is the same
+    /// fix-up [`Instance::memory_grow`] performs after a grow; it must be called
+    /// after the entry is swapped via [`Instance::defined_memory_entry_mut`].
+    pub(crate) fn refresh_defined_memory(mut self: Pin<&mut Self>, index: DefinedMemoryIndex) {
+        let vmmemory = self.as_mut().get_defined_memory_mut(index).vmmemory();
+        self.set_memory(index, vmmemory);
+    }
+
     pub fn get_defined_memory_vmimport(&self, index: DefinedMemoryIndex) -> VMMemoryImport {
         crate::runtime::vm::VMMemoryImport {
             from: self.memory_ptr(index).into(),

@@ -385,6 +385,18 @@ impl Memory {
         }
     }
 
+    /// Returns the number of bytes this memory's current allocation can address
+    /// without relocating its base pointer (i.e. its reservation). Two memories
+    /// can only be hot-swapped (see the embedder `Memory::swap`) if their
+    /// capacities match.
+    pub fn byte_capacity(&self) -> usize {
+        match self {
+            Memory::Local(mem) => mem.byte_capacity(),
+            // Shared memories are never hot-swapped; report the logical size.
+            Memory::Shared(mem) => mem.byte_size(),
+        }
+    }
+
     /// Returns whether or not this memory needs initialization. It
     /// may not if it already has initial content thanks to a CoW
     /// mechanism.
@@ -731,6 +743,10 @@ impl LocalMemory {
 
     pub fn byte_size(&self) -> usize {
         self.alloc.byte_size()
+    }
+
+    pub fn byte_capacity(&self) -> usize {
+        self.alloc.byte_capacity()
     }
 
     pub fn needs_init(&self) -> bool {

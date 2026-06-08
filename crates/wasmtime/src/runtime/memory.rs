@@ -680,6 +680,72 @@ impl Memory {
         }
     }
 
+    /// Hot-swaps the backing storage of this memory with `other`'s, in O(1) and
+    /// without copying either memory's contents.
+    ///
+    /// After this returns, reads and writes through `self` observe what `other`
+    /// previously held and vice versa, and both memories' `VMContext`s are
+    /// updated so that running wasm sees the swap immediately. The two memories
+    /// exchange their entire backing allocations; their lengths and capacities
+    /// come along with them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the two memories have different [types](Memory::ty) or
+    /// different byte capacities, or if they are defined in the same instance
+    /// (swapping operates across instances). Swapping a memory with itself is a
+    /// no-op and returns `Ok`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either memory does not belong to `store`.
+    pub fn swap(&self, mut store: impl AsContextMut, other: &Memory) -> Result<()> {
+        let store = store.as_context_mut().0;
+        assert!(
+            self.comes_from_same_store(store),
+            "memory used with the wrong store"
+        );
+        assert!(
+            other.comes_from_same_store(store),
+            "memory used with the wrong store"
+        );
+
+        let a = self.instance.instance();
+        let b = other.instance.instance();
+        if a == b {
+            // Same instance: only the no-op self-swap is supported; swapping two
+            // memories within one instance isn't (it has no use case and would
+            // need a different disjoint-borrow path).
+            if self.index == other.index {
+                return Ok(());
+            }
+            bail!("cannot swap two memories defined in the same instance");
+        }
+
+        // Types (page size, limits, shared bit, index type) must match so the
+        // swapped-in memory is interchangeable.
+        if self.wasmtime_ty(store) != other.wasmtime_ty(store) {
+            bail!("cannot swap memories with different types");
+        }
+
+        // Capacities (reservations) must match so the swapped-in base satisfies
+        // the bounds checks baked into compiled code. Equal types under one
+        // engine already imply this, but check explicitly to keep the invariant
+        // local to the swap.
+        let a_cap = store[self.instance]
+            .get_defined_memory(self.index)
+            .byte_capacity();
+        let b_cap = store[other.instance]
+            .get_defined_memory(other.index)
+            .byte_capacity();
+        if a_cap != b_cap {
+            bail!("cannot swap memories with different byte capacities");
+        }
+
+        store.swap_defined_memories((a, self.index), (b, other.index));
+        Ok(())
+    }
+
     /// Creates a new memory from its raw component parts.
     ///
     /// # Safety
@@ -1153,6 +1219,80 @@ mod tests {
         let instance2 = Instance::new(&mut store, &module, &[])?;
         let m3 = instance2.get_memory(&mut store, "m").unwrap();
         assert!(m1.hash_key(&store.as_context().0) != m3.hash_key(&store.as_context().0));
+
+        Ok(())
+    }
+
+    // Two host memories of the same type exchange their contents in place.
+    #[test]
+    fn swap_exchanges_contents() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let ty = MemoryType::new(1, None);
+        let a = Memory::new(&mut store, ty.clone())?;
+        let b = Memory::new(&mut store, ty)?;
+
+        a.data_mut(&mut store)[0] = 0xAA;
+        b.data_mut(&mut store)[0] = 0xBB;
+
+        a.swap(&mut store, &b)?;
+        assert_eq!(a.data(&store)[0], 0xBB);
+        assert_eq!(b.data(&store)[0], 0xAA);
+
+        a.swap(&mut store, &b)?;
+        assert_eq!(a.data(&store)[0], 0xAA);
+        assert_eq!(b.data(&store)[0], 0xBB);
+
+        Ok(())
+    }
+
+    // After swap, compiled wasm observes the new backing.
+    // i.e. the swap rewrites the in-`VMContext` `VMMemoryDefinition`.
+    #[test]
+    fn swap_is_visible_to_running_wasm() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (memory (export "m") 1 1)
+                    (func (export "load8") (param i32) (result i32)
+                        local.get 0
+                        i32.load8_u))
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let m = instance.get_memory(&mut store, "m").unwrap();
+        let load8 = instance.get_typed_func::<i32, i32>(&mut store, "load8")?;
+
+        // A detached buffer of the matching type holding different contents.
+        let buf_ty = m.ty(&store);
+        let buf = Memory::new(&mut store, buf_ty)?;
+        m.data_mut(&mut store)[0] = 11;
+        buf.data_mut(&mut store)[0] = 99;
+
+        assert_eq!(load8.call(&mut store, 0)?, 11);
+
+        m.swap(&mut store, &buf)?;
+
+        // Compiled code now reads the swapped-in backing.
+        assert_eq!(load8.call(&mut store, 0)?, 99);
+        assert_eq!(m.data(&store)[0], 99);
+        assert_eq!(buf.data(&store)[0], 11);
+
+        Ok(())
+    }
+
+    // Swapping a memory with itself is a no-op; mismatched types are rejected.
+    #[test]
+    fn swap_self_noop_and_type_mismatch() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let a = Memory::new(&mut store, MemoryType::new(1, None))?;
+        a.data_mut(&mut store)[0] = 7;
+        a.swap(&mut store, &a)?;
+        assert_eq!(a.data(&store)[0], 7);
+
+        let big = Memory::new(&mut store, MemoryType::new(2, None))?;
+        assert!(a.swap(&mut store, &big).is_err());
 
         Ok(())
     }

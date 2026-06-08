@@ -110,7 +110,9 @@ use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(any(feature = "async", feature = "gc"))]
 use core::task::Poll;
-use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, TripleExt};
+use wasmtime_environ::{
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, TripleExt,
+};
 
 mod context;
 pub use self::context::*;
@@ -1658,6 +1660,43 @@ impl StoreOpaque {
     #[inline]
     pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
         self.instances[id].handle.get_mut()
+    }
+
+    /// Hot-swap the backing storage of two defined memories living in two
+    /// different instances within this store without copying contents.
+    /// The `(allocation, Memory)` entries are swapped wholesale (so the
+    /// instance allocator's bookkeeping travels with each memory, keeping both
+    /// the on-demand and pooling allocators correct), and each instance's
+    /// `VMContext` is refreshed so compiled code observes the swap.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `a.0 == b.0` (the two memories must be in different instances);
+    /// callers (`Memory::swap`) reject that case with an error beforehand. The
+    /// caller must also have validated that the two memories have matching types
+    /// and byte capacities.
+    pub(crate) fn swap_defined_memories(
+        &mut self,
+        a: (InstanceId, DefinedMemoryIndex),
+        b: (InstanceId, DefinedMemoryIndex),
+    ) {
+        assert_ne!(
+            a.0, b.0,
+            "swap_defined_memories requires different instances"
+        );
+        // SAFETY: `a.0 != b.0` so the two instance handles are disjoint, and we
+        // only touch each instance's own defined memory (never traversing
+        // laterally between instances), satisfying the contract of
+        // `optional_gc_store_and_instances_mut`.
+        unsafe {
+            let (_gc, [mut ia, mut ib]) = self.optional_gc_store_and_instances_mut([a.0, b.0]);
+            core::mem::swap(
+                ia.as_mut().defined_memory_entry_mut(a.1),
+                ib.as_mut().defined_memory_entry_mut(b.1),
+            );
+            ia.as_mut().refresh_defined_memory(a.1);
+            ib.as_mut().refresh_defined_memory(b.1);
+        }
     }
 
     /// Accessor from `InstanceId` to both `Pin<&mut vm::Instance>`
