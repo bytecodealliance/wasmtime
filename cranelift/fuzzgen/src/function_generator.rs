@@ -580,12 +580,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/4870
                 (Opcode::Bnot, &[F32 | F64]),
                 (
-                    Opcode::Band
-                        | Opcode::Bor
-                        | Opcode::Bxor
-                        | Opcode::BandNot
-                        | Opcode::BorNot
-                        | Opcode::BxorNot,
+                    Opcode::Band | Opcode::Bor | Opcode::Bxor,
                     &([F32, F32] | [F64, F64])
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5198
@@ -645,12 +640,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 ),
                 (Opcode::Bnot, &[F32 | F64]),
                 (
-                    Opcode::Band
-                        | Opcode::Bor
-                        | Opcode::Bxor
-                        | Opcode::BandNot
-                        | Opcode::BorNot
-                        | Opcode::BxorNot,
+                    Opcode::Band | Opcode::Bor | Opcode::Bxor,
                     &([F32, F32] | [F64, F64])
                 ),
                 (
