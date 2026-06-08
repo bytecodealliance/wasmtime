@@ -104,8 +104,7 @@ fn main() -> Result<()> {
 
     let mut trials = Vec::new();
     if !cfg!(miri) {
-        find_tests("tests/wasi_testsuite/wasi-common".as_ref(), &mut trials).unwrap();
-        find_tests("tests/wasi_testsuite/wasi-threads".as_ref(), &mut trials).unwrap();
+        find_tests("tests/wasi-testsuite".as_ref(), &mut trials).unwrap();
     }
 
     libtest_mimic::run(&Arguments::from_args(), trials).exit()
@@ -131,20 +130,6 @@ fn find_tests(path: &Path, trials: &mut Vec<Trial>) -> Result<()> {
                 move || run_test(&path, false).map_err(|e| format!("{e:?}").into())
             },
         ));
-
-        // Also test the component version using the wasip1 adapter. Note that
-        // this is skipped for `wasi-threads` since that's not supported in
-        // components and it's also skipped for assemblyscript because that
-        // doesn't support the wasip1 adapter.
-        if !path.iter().any(|p| p == "wasm32-wasip3")
-            && !path.iter().any(|p| p == "wasi-threads")
-            && !path.iter().any(|p| p == "assemblyscript")
-        {
-            trials.push(Trial::test(
-                format!("wasip1 adapter - {}", path.display()),
-                move || run_test(&path, true).map_err(|e| format!("{e:?}").into()),
-            ));
-        }
     }
     Ok(())
 }
