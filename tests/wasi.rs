@@ -202,11 +202,16 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
             Operation::Run { args, dirs, env } => {
                 assert!(child.0.is_none());
                 let mut cmd = wasmtime_test_util::command(wasmtime);
-                cmd.arg(match spec_world.as_deref() {
-                    Some("wasi:http/service") => "serve",
+                match spec_world.as_deref() {
+                    Some("wasi:http/service") => {
+                        cmd.arg("serve");
+                        cmd.arg("--addr=127.0.0.1:0");
+                    }
                     Some(world) => panic!("unknown world {world}"),
-                    None => "run",
-                });
+                    None => {
+                        cmd.arg("run");
+                    }
+                }
                 for dir in dirs {
                     cmd.arg("--dir");
                     let src = parent_dir.join(&dir);
