@@ -3296,7 +3296,7 @@ fn big_table_in_pooling_allocator() -> Result<()> {
     Ok(())
 }
 
-fn wizen(args: &[&str], wat: &str) -> Result<Output> {
+fn wizen(args: &[&str], wasm: impl AsRef<[u8]>) -> Result<Output> {
     let mut cmd = get_wasmtime_command()?;
     cmd.arg("wizer").args(args).arg("-");
     cmd.stdin(Stdio::piped())
@@ -3304,7 +3304,7 @@ fn wizen(args: &[&str], wat: &str) -> Result<Output> {
         .stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
     let mut stdin = child.stdin.take().unwrap();
-    stdin.write_all(wat.as_bytes())?;
+    stdin.write_all(wasm.as_ref())?;
     drop(stdin);
 
     let output = child.wait_with_output()?;
@@ -3397,6 +3397,77 @@ fn wizer_components() -> Result<()> {
     let result = wizen(&["-Scli"], component_with_wasi)?;
     assert!(result.status.success());
 
+    Ok(())
+}
+
+#[test]
+fn wizer_components_wave() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let output = run_wasmtime(&[
+        "wizer",
+        "-Scli",
+        "-Ccache=n",
+        "--keep-init-func=true",
+        "--init-func",
+        "local:local/init.add-string@0.1.0(\"hello, world\")",
+        test_programs_artifacts::WIZER_COMPONENT_INTERFACES_COMPONENT,
+        "-o",
+        dir.path().join("stage1.wasm").to_str().unwrap(),
+    ])?;
+
+    assert_eq!(output, "[str(\"hello, world\")]\n");
+
+    let output = run_wasmtime(&[
+        "run",
+        "--invoke",
+        "local:local/run.get-inits@0.1.0()",
+        "-Ccache=n",
+        dir.path().join("stage1.wasm").to_str().unwrap(),
+    ])?;
+
+    assert_eq!(output, "[str(\"hello, world\")]\n");
+
+    let output = run_wasmtime(&[
+        "wizer",
+        "-Scli",
+        "-Ccache=n",
+        "--keep-init-func=true",
+        "--init-func",
+        "local:local/init.add-int@0.1.0(12345)",
+        dir.path().join("stage1.wasm").to_str().unwrap(),
+        "-o",
+        dir.path().join("stage2.wasm").to_str().unwrap(),
+    ])?;
+    assert_eq!(output, "[str(\"hello, world\"), int(12345)]\n");
+
+    let output = run_wasmtime(&[
+        "wizer",
+        "-Scli",
+        "-Ccache=n",
+        "--keep-init-func=true",
+        "--init-func",
+        "local:local/init.add-string@0.1.0(\"wave is pretty cool\")",
+        dir.path().join("stage2.wasm").to_str().unwrap(),
+        "-o",
+        dir.path().join("stage3.wasm").to_str().unwrap(),
+    ])?;
+    assert_eq!(
+        output,
+        "[str(\"hello, world\"), int(12345), str(\"wave is pretty cool\")]\n"
+    );
+
+    let output = run_wasmtime(&[
+        "run",
+        "--invoke",
+        "local:local/run.get-inits@0.1.0()",
+        "-Ccache=n",
+        dir.path().join("stage3.wasm").to_str().unwrap(),
+    ])?;
+
+    assert_eq!(
+        output,
+        "[str(\"hello, world\"), int(12345), str(\"wave is pretty cool\")]\n"
+    );
     Ok(())
 }
 

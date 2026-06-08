@@ -1,7 +1,7 @@
 use crate::Wizer;
 use crate::component::ComponentInstanceState;
 use wasmtime::component::{
-    Component, ComponentExportIndex, Instance, Lift, WasmList, types::ComponentItem,
+    Component, ComponentExportIndex, Instance, Lift, Val, WasmList, types::ComponentItem,
 };
 use wasmtime::{Result, Store, error::Context as _, format_err};
 
@@ -15,7 +15,7 @@ impl Wizer {
         store: &mut Store<T>,
         wasm: &[u8],
         instantiate: impl AsyncFnOnce(&mut Store<T>, &Component) -> Result<Instance>,
-    ) -> wasmtime::Result<Vec<u8>> {
+    ) -> wasmtime::Result<(Vec<u8>, Vec<Val>)> {
         let (cx, instrumented_wasm) = self.instrument_component(wasm)?;
 
         #[cfg(feature = "wasmprinter")]
@@ -27,21 +27,45 @@ impl Wizer {
         let engine = store.engine();
         let component = Component::new(engine, &instrumented_wasm)
             .context("failed to compile the Wasm component")?;
-        let index = self.validate_component_init_func(&component)?;
+        let (index, args, mut rets) = self.validate_component_init_func(&component)?;
 
         let instance = instantiate(store, &component).await?;
-        self.initialize_component(store, &instance, index).await?;
-        self.snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
-            .await
+        self.initialize_component(store, &instance, index, args, &mut rets)
+            .await?;
+        let snap = self
+            .snapshot_component(cx, &mut WasmtimeWizerComponent { store, instance })
+            .await?;
+        Ok((snap, rets))
     }
 
     fn validate_component_init_func(
         &self,
         component: &Component,
-    ) -> wasmtime::Result<ComponentExportIndex> {
+    ) -> wasmtime::Result<(ComponentExportIndex, Vec<Val>, Vec<Val>)> {
         let init_func = self.get_init_func();
+
+        use wasmtime::component::wasm_wave::{untyped::UntypedFuncCall, wasm::WasmFunc};
+        use wasmtime::component::wit_parser::ItemName;
+        let (func_name, func_call) = if init_func.contains('(') {
+            let call = UntypedFuncCall::parse(init_func)
+                .with_context(|| format!("parsing `{init_func}` as wave function call"))?;
+            let item_name = call
+                .item_name()
+                .map_err(wasmtime::Error::from_anyhow)
+                .with_context(|| format!("parsing `{init_func}` as wave function call"))?;
+            (item_name, Some(call))
+        } else {
+            (
+                init_func
+                    .parse::<ItemName>()
+                    .map_err(wasmtime::Error::from_anyhow)
+                    .with_context(|| format!("parsing `{init_func}` as wit item name"))?,
+                None,
+            )
+        };
+
         let (ty, index) = component
-            .get_export(None, init_func)
+            .get_export(None, func_name)
             .ok_or_else(|| format_err!("the component does export the function `{init_func}`"))?;
 
         let ty = match ty {
@@ -49,12 +73,24 @@ impl Wizer {
             _ => wasmtime::bail!("the component's `{init_func}` export is not a function",),
         };
 
-        if ty.params().len() != 0 || ty.results().len() != 0 {
-            wasmtime::bail!(
-                "the component's `{init_func}` function export does not have type `[] -> []`",
-            );
+        if let Some(func_call) = func_call {
+            let param_types = WasmFunc::params(&ty).collect::<Vec<_>>();
+            let param_vals = func_call.to_wasm_params(&param_types).with_context(|| {
+                format!("parsing `{init_func}` params as types {param_types:?}")
+            })?;
+            Ok((
+                index,
+                param_vals,
+                vec![Val::Bool(false); ty.results().len()],
+            ))
+        } else {
+            if ty.params().len() != 0 || ty.results().len() != 0 {
+                wasmtime::bail!(
+                    "the component's `{init_func}` function export does not have type `[] -> []`",
+                );
+            }
+            Ok((index, vec![], vec![]))
         }
-        Ok(index)
     }
 
     async fn initialize_component<T: Send>(
@@ -62,15 +98,16 @@ impl Wizer {
         store: &mut Store<T>,
         instance: &Instance,
         index: ComponentExportIndex,
+        args: Vec<Val>,
+        rets: &mut Vec<Val>,
     ) -> wasmtime::Result<()> {
         let init_func = instance
-            .get_typed_func::<(), ()>(&mut *store, index)
+            .get_func(&mut *store, index)
             .expect("checked by `validate_init_func`");
         init_func
-            .call_async(&mut *store, ())
+            .call_async(&mut *store, &args, rets)
             .await
             .with_context(|| format!("the initialization function trapped"))?;
-
         Ok(())
     }
 }
