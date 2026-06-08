@@ -513,6 +513,7 @@ enable_probestack = false
 enable_heap_access_spectre_mitigation = true
 enable_table_access_spectre_mitigation = true
 enable_incremental_compilation_cache_checks = false
+enable_compact_unwind_abi = false
 "#;
         if actual != expected {
             panic!(

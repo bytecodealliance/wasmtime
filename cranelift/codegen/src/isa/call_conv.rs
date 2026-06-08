@@ -95,7 +95,11 @@ impl CallConv {
     /// Does this calling convention support exceptions?
     pub fn supports_exceptions(&self) -> bool {
         match self {
-            CallConv::Tail | CallConv::SystemV | CallConv::Winch | CallConv::PreserveAll => true,
+            CallConv::Tail
+            | CallConv::SystemV
+            | CallConv::Winch
+            | CallConv::PreserveAll
+            | CallConv::AppleAarch64 => true,
             _ => false,
         }
     }
@@ -113,11 +117,13 @@ impl CallConv {
     /// destinations as this return value.
     pub fn exception_payload_types(&self, pointer_ty: Type) -> &[Type] {
         match self {
-            CallConv::Tail | CallConv::SystemV | CallConv::PreserveAll => match pointer_ty {
-                types::I32 => &[types::I32, types::I32],
-                types::I64 => &[types::I64, types::I64],
-                _ => unreachable!(),
-            },
+            CallConv::Tail | CallConv::SystemV | CallConv::PreserveAll | CallConv::AppleAarch64 => {
+                match pointer_ty {
+                    types::I32 => &[types::I32, types::I32],
+                    types::I64 => &[types::I64, types::I64],
+                    _ => unreachable!(),
+                }
+            }
             _ => &[],
         }
     }
