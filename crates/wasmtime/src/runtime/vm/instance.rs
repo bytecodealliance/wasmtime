@@ -1029,6 +1029,12 @@ impl Instance {
         &mut self.memories_mut()[index].1
     }
 
+    /// Returns whether the given locally-defined memory was allocated by the
+    /// on-demand allocator (as opposed to the pooling allocator).
+    pub(crate) fn defined_memory_is_on_demand(&self, index: DefinedMemoryIndex) -> bool {
+        self.memories[index].0.is_on_demand()
+    }
+
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&self, index: DefinedMemoryIndex) -> &Memory {
         &self.memories[index].1

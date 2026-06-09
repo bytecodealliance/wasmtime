@@ -74,6 +74,12 @@ impl MemoryAllocationIndex {
     pub fn index(&self) -> usize {
         self.0 as usize
     }
+
+    /// Whether this is the sentinel value used by the on-demand allocator
+    /// (meaning this memory was not allocated from a pool).
+    pub(super) fn is_on_demand(&self) -> bool {
+        self.0 == u32::MAX
+    }
 }
 
 /// The index of a table allocation within an `InstanceAllocator`.
