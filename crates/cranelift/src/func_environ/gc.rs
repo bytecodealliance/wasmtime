@@ -1483,6 +1483,10 @@ impl FuncEnvironment<'_> {
         let mut flags = ir::MemFlagsData::trusted();
         let memory_tunables =
             wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
+
+        // If the memory cannot move (i.e. its base pointer cannot change across
+        // calls) then the base pointer is readonly and this load instruction
+        // can move (i.e. can be LICM'd out of a loop body).
         if !self
             .tunables
             .gc_heap_memory_type()
