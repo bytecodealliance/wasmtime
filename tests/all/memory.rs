@@ -6,6 +6,8 @@ use std::time::Duration;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
+use crate::ErrorExt;
+
 fn module(engine: &Engine) -> Result<Module> {
     let mut wat = format!("(module\n");
     wat.push_str("(import \"\" \"\" (memory 0))\n");
@@ -873,6 +875,371 @@ fn atomic_wait_massive_timeout() -> Result<()> {
     done.store(true, SeqCst);
 
     t.join().unwrap();
+
+    Ok(())
+}
+
+#[test]
+fn swap_rejects_cross_allocator() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(2).max_memory_size(1 << 16);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.memory_guard_size(0);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 1 1))"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let pooled = instance.get_memory(&mut store, "m").unwrap();
+    let host = Memory::new(&mut store, MemoryType::new(1, Some(1)))?;
+    let err = pooled.swap(&mut store, &host).unwrap_err();
+    err.assert_contains("different allocators");
+
+    Ok(())
+}
+
+#[test]
+fn swap_pooling_allocator() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(2).max_memory_size(1 << 16);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.memory_guard_size(0);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 1 1))"#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let inst_a = Instance::new(&mut store, &module, &[])?;
+    let inst_b = Instance::new(&mut store, &module, &[])?;
+
+    let mem_a = inst_a.get_memory(&mut store, "m").unwrap();
+    let mem_b = inst_b.get_memory(&mut store, "m").unwrap();
+
+    // Write distinct data to each memory
+    mem_a.data_mut(&mut store)[0] = 0xAA;
+    mem_b.data_mut(&mut store)[0] = 0xBB;
+    assert_eq!(mem_a.data(&store)[0], 0xAA);
+    assert_eq!(mem_b.data(&store)[0], 0xBB);
+
+    // Swap: data should travel with the memory
+    mem_a.swap(&mut store, &mem_b)?;
+    assert_eq!(
+        mem_a.data(&store)[0],
+        0xBB,
+        "mem_a should now hold inst_b's data"
+    );
+    assert_eq!(
+        mem_b.data(&store)[0],
+        0xAA,
+        "mem_b should now hold inst_a's data"
+    );
+
+    // Swap back
+    mem_a.swap(&mut store, &mem_b)?;
+    assert_eq!(mem_a.data(&store)[0], 0xAA);
+    assert_eq!(mem_b.data(&store)[0], 0xBB);
+
+    Ok(())
+}
+
+// Self-swap on pooling allocator is a no-op.
+#[test]
+fn swap_pooling_allocator_self_swap() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(1).max_memory_size(1 << 16);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.memory_guard_size(0);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 1 1))"#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let inst = Instance::new(&mut store, &module, &[])?;
+    let mem = inst.get_memory(&mut store, "m").unwrap();
+
+    mem.data_mut(&mut store)[0] = 0xAA;
+    mem.swap(&mut store, &mem)?;
+    assert_eq!(mem.data(&store)[0], 0xAA);
+
+    Ok(())
+}
+
+#[test]
+fn swap_pooling_allocator_type_mismatch() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(2).max_memory_size(2 << 16);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.memory_guard_size(0);
+    config.memory_reservation(2 << 16);
+    let engine = Engine::new(&config)?;
+
+    let module_1page = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 1 1))"#,
+    )?;
+    let module_2page = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 2 2))"#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let inst_a = Instance::new(&mut store, &module_1page, &[])?;
+    let inst_b = Instance::new(&mut store, &module_2page, &[])?;
+
+    let mem_a = inst_a.get_memory(&mut store, "m").unwrap();
+    let mem_b = inst_b.get_memory(&mut store, "m").unwrap();
+
+    let err = mem_a.swap(&mut store, &mem_b).unwrap_err();
+    err.assert_contains("different types");
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_mmap() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    // allocate a page to trigger mmap path
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem1 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    let mem2 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+
+    mem1.data_mut(&mut store)[0] = 0x11;
+    mem2.data_mut(&mut store)[0] = 0x22;
+
+    mem1.swap(&mut store, &mem2)?;
+    assert_eq!(mem1.data(&store)[0], 0x22);
+    assert_eq!(mem2.data(&store)[0], 0x11);
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_mmap_self_swap() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    mem.data_mut(&mut store)[0] = 0x11;
+
+    mem.swap(&mut store, &mem)?;
+    assert_eq!(mem.data(&store)[0], 0x11);
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_mmap_type_mismatch() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem1 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    let mem2 = Memory::new(&mut store, MemoryType::new(2, Some(2)))?;
+
+    let err = mem1.swap(&mut store, &mem2).unwrap_err();
+    err.assert_contains("different types");
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_mmap_capacity_mismatch() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(1 << 16);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem_a = Memory::new(&mut store, MemoryType::new(1, None))?;
+    let mem_b = Memory::new(&mut store, MemoryType::new(1, None))?;
+    mem_a.swap(&mut store, &mem_b)?;
+    mem_a.grow(&mut store, 1)?; // bump capacity
+    let err = mem_a.swap(&mut store, &mem_b).unwrap_err();
+    err.assert_contains("different byte capacities");
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_malloc() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(0);
+    config.memory_guard_size(0);
+    config.signals_based_traps(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem1 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    let mem2 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+
+    mem1.data_mut(&mut store)[0] = 0x11;
+    mem2.data_mut(&mut store)[0] = 0x22;
+
+    mem1.swap(&mut store, &mem2)?;
+    assert_eq!(mem1.data(&store)[0], 0x22);
+    assert_eq!(mem2.data(&store)[0], 0x11);
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_malloc_self_swap() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(0);
+    config.memory_guard_size(0);
+    config.signals_based_traps(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    mem.data_mut(&mut store)[0] = 0x11;
+
+    mem.swap(&mut store, &mem)?;
+    assert_eq!(mem.data(&store)[0], 0x11);
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_malloc_type_mismatch() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(0);
+    config.memory_guard_size(0);
+    config.signals_based_traps(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem1 = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    let mem2 = Memory::new(&mut store, MemoryType::new(2, Some(2)))?;
+
+    let err = mem1.swap(&mut store, &mem2).unwrap_err();
+    err.assert_contains("different types");
+
+    Ok(())
+}
+
+#[test]
+fn swap_ondemand_malloc_capacity_mismatch() -> Result<()> {
+    // Must set `memory_reservation_for_growth(0)` so Vec capacity is tight
+    // and actually changes on grow (default is 2GiB headroom on 64-bit).
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::OnDemand);
+    config.memory_reservation(0);
+    config.memory_guard_size(0);
+    config.memory_reservation_for_growth(0);
+    config.signals_based_traps(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem_a = Memory::new(&mut store, MemoryType::new(1, None))?;
+    let mem_b = Memory::new(&mut store, MemoryType::new(1, None))?;
+    mem_a.swap(&mut store, &mem_b)?;
+    mem_a.grow(&mut store, 1)?;
+    let err = mem_a.swap(&mut store, &mem_b).unwrap_err();
+    err.assert_contains("different byte capacities");
+
+    Ok(())
+}
+
+#[test]
+fn swap_multi_memory_pooling() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(4)
+        .max_memories_per_module(2)
+        .max_memory_size(1 << 16)
+        .total_tables(4)
+        .table_elements(10);
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.memory_guard_size(0);
+    config.memory_reservation(1 << 16);
+    config.wasm_multi_memory(true);
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "m0") 1 1)
+                (memory (export "m1") 1 1)
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let inst_a = Instance::new(&mut store, &module, &[])?;
+    let inst_b = Instance::new(&mut store, &module, &[])?;
+
+    let a_m0 = inst_a.get_memory(&mut store, "m0").unwrap();
+    let a_m1 = inst_a.get_memory(&mut store, "m1").unwrap();
+    let b_m0 = inst_b.get_memory(&mut store, "m0").unwrap();
+    let b_m1 = inst_b.get_memory(&mut store, "m1").unwrap();
+
+    a_m0.data_mut(&mut store)[0] = b'A';
+    a_m1.data_mut(&mut store)[0] = b'B';
+    b_m0.data_mut(&mut store)[0] = b'C';
+    b_m1.data_mut(&mut store)[0] = b'D';
+
+    a_m0.swap(&mut store, &b_m0)?;
+    assert_eq!(a_m0.data(&store)[0], b'C'); // got inst_b's m0
+    assert_eq!(b_m0.data(&store)[0], b'A'); // got inst_a's m0
+
+    a_m1.swap(&mut store, &b_m1)?;
+    assert_eq!(a_m1.data(&store)[0], b'D'); // got inst_b's m1
+    assert_eq!(b_m1.data(&store)[0], b'B'); // got inst_a's m1
+
+    // Now inst_a has (C, D) and inst_b has (A, B)
+    // Cross-swap: swap a_m0 with b_m1
+    a_m0.swap(&mut store, &b_m1)?;
+    assert_eq!(a_m0.data(&store)[0], b'B'); // got inst_b's original m1
+    assert_eq!(b_m1.data(&store)[0], b'C'); // got inst_b's original m0
 
     Ok(())
 }
