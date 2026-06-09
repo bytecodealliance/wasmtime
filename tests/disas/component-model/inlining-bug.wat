@@ -35,16 +35,19 @@
 )
 
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 72 "VMContext+0x48"
+;;     region2 = 104 "VMContext+0x68"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = vmctx
-;;     gv5 = load.i64 notrap aligned readonly gv4+8
+;;     gv5 = load.i64 notrap aligned readonly region0 gv4+8
 ;;     gv6 = load.i64 notrap aligned gv5+24
 ;;     gv7 = vmctx
 ;;     gv8 = vmctx
-;;     gv9 = load.i64 notrap aligned readonly gv8+8
+;;     gv9 = load.i64 notrap aligned readonly region0 gv8+8
 ;;     gv10 = load.i64 notrap aligned gv9+24
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
@@ -61,8 +64,8 @@
 ;;                                     jump block4
 ;;
 ;;                                 block4:
-;; @00d4                               v4 = load.i64 notrap aligned readonly can_move v0+72
-;;                                     v10 = load.i64 notrap aligned readonly can_move v4+104
+;; @00d4                               v4 = load.i64 notrap aligned readonly can_move region1 v0+72
+;;                                     v10 = load.i64 notrap aligned readonly can_move region2 v4+104
 ;;                                     call fn2(v10, v10)
 ;;                                     jump block5
 ;;

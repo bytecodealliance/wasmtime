@@ -8,9 +8,11 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 40 "VMContext+0x28"
+;;     region2 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -24,8 +26,8 @@
 ;; @0020                               jump block3
 ;;
 ;;                                 block3:
-;; @0020                               v10 = load.i32 user2 readonly region0 v2+16
-;; @0020                               v8 = load.i64 notrap aligned readonly can_move v0+40
+;; @0020                               v10 = load.i32 user2 readonly region2 v2+16
+;; @0020                               v8 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;; @0020                               v9 = load.i32 notrap aligned readonly can_move v8
 ;; @0020                               v11 = icmp eq v10, v9
 ;; @0020                               v12 = uextend.i32 v11

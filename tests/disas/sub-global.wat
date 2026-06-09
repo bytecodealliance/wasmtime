@@ -13,18 +13,19 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) tail {
-;;     region0 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0020                               v3 = load.i32 notrap aligned region0 v0+48
+;; @0020                               v3 = load.i32 notrap aligned region1 v0+48
 ;; @0022                               v4 = iconst.i32 16
 ;; @0024                               v5 = isub v3, v4  ; v4 = 16
-;; @0025                               store notrap aligned region0 v5, v0+48
+;; @0025                               store notrap aligned region1 v5, v0+48
 ;; @0027                               jump block1
 ;;
 ;;                                 block1:

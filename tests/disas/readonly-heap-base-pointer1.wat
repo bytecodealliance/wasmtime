@@ -8,9 +8,10 @@
     (i32.load (local.get 0)))
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -25,7 +26,7 @@
 ;; @0020                               v7 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0020                               v8 = iadd v7, v4
 ;; @0020                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
-;; @0020                               v11 = load.i32 little region0 v10
+;; @0020                               v11 = load.i32 little region1 v10
 ;; @0023                               jump block1
 ;;
 ;;                                 block1:

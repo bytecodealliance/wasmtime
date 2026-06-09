@@ -1,4 +1,5 @@
 use crate::TRAP_INTERNAL_ASSERT;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::FuncTranslator;
@@ -227,11 +228,13 @@ impl Compiler {
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
         let ptr = isa.pointer_bytes();
+        let store_ctx_offset = ptr.vmcontext_store_context();
+        let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlagsData::trusted(),
+            MemFlagsData::trusted().with_alias_region(Some(region)),
             caller_vmctx,
-            i32::from(ptr.vmcontext_store_context()),
+            i32::from(store_ctx_offset),
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, vm_store_context);
 
@@ -263,11 +266,15 @@ impl Compiler {
         // Increment the "execution version" on the VMStoreContext if
         // guest debugging is enabled.
         if self.tunables.debug_guest {
+            let store_ctx_offset = ptr_size.vmctx_store_context();
+            let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
             let vmstore_ctx_ptr = builder.ins().load(
                 pointer_type,
-                MemFlagsData::trusted().with_readonly(),
+                MemFlagsData::trusted()
+                    .with_readonly()
+                    .with_alias_region(Some(region)),
                 caller_vmctx,
-                i32::from(ptr_size.vmctx_store_context()),
+                i32::from(store_ctx_offset),
             );
             let old_version = builder.ins().load(
                 ir::types::I64,
@@ -335,11 +342,13 @@ impl Compiler {
         // additionally perform the "routine of the exit trampoline" of saving
         // fp/pc/etc.
         self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        let store_ctx_offset = ptr_size.vmcontext_store_context();
+        let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlagsData::trusted(),
+            MemFlagsData::trusted().with_alias_region(Some(region)),
             vmctx,
-            ptr_size.vmcontext_store_context(),
+            store_ctx_offset,
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, vm_store_context);
 
@@ -533,11 +542,19 @@ impl wasmtime_environ::Compiler for Compiler {
             let vmctx = context
                 .func
                 .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_region = vmctx_alias_region(
+                &mut context.func,
+                func_env.offsets.ptr.vmctx_store_context().into(),
+            );
             let interrupts_flags = context
                 .func
                 .dfg
                 .mem_flags
-                .insert(MemFlagsData::trusted().with_readonly())
+                .insert(
+                    MemFlagsData::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(interrupts_region)),
+                )
                 .unwrap();
             let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
@@ -1327,11 +1344,13 @@ impl Compiler {
         // base pointer of the array and then load the entry of the array that
         // corresponds to this builtin.
         let mem_flags = ir::MemFlagsData::trusted().with_readonly();
+        let builtins_offset = ptr_size.vmcontext_builtin_functions();
+        let region = vmctx_alias_region(builder.func, builtins_offset.into());
         let array_addr = builder.ins().load(
             pointer_type,
-            mem_flags,
+            mem_flags.with_alias_region(Some(region)),
             vmctx,
-            i32::from(ptr_size.vmcontext_builtin_functions()),
+            i32::from(builtins_offset),
         );
         let body_offset = i32::try_from(builtin.index() * pointer_type.bytes()).unwrap();
         let func_addr = builder
@@ -1762,6 +1781,21 @@ fn clif_to_env_breakpoints(
     Ok(())
 }
 
+/// Insert (deduplicated) an alias region for the `VMContext` field at `offset`.
+///
+/// This is the trampoline-side equivalent of
+/// `FuncEnvironment::vmctx_alias_region`, for the trampoline compilers that do
+/// not have a `FuncEnvironment` on hand.
+fn vmctx_alias_region(func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
+    func.dfg.alias_regions.insert(
+        AliasRegionKey::Vm {
+            ty: VmType::VMContext,
+            offset,
+        }
+        .into(),
+    )
+}
+
 fn save_last_wasm_entry_context(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
@@ -1771,9 +1805,10 @@ fn save_last_wasm_entry_context(
     block: ir::Block,
 ) {
     // First we need to get the `VMStoreContext`.
+    let region = vmctx_alias_region(builder.func, vm_store_context_offset);
     let vm_store_context = builder.ins().load(
         pointer_type,
-        MemFlagsData::trusted(),
+        MemFlagsData::trusted().with_alias_region(Some(region)),
         vmctx,
         i32::try_from(vm_store_context_offset).unwrap(),
     );

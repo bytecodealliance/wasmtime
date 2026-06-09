@@ -23,9 +23,11 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
-;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region2 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
@@ -46,12 +48,12 @@
 ;; @002b                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
 ;; @002b                               v14 = iconst.i64 -2
 ;; @002b                               v17 = iconst.i32 0
-;; @002b                               v20 = load.i64 notrap aligned readonly can_move v0+40
+;; @002b                               v20 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @002b                               v21 = load.i32 notrap aligned readonly can_move v20
 ;; @0027                               jump block2
 ;;
 ;;                                 block2:
-;; @002b                               v13 = load.i64 user6 aligned region0 v12
+;; @002b                               v13 = load.i64 user6 aligned region1 v12
 ;;                                     v30 = iconst.i64 -2
 ;;                                     v31 = band v13, v30  ; v30 = -2
 ;; @002b                               brif v13, block5(v31), block4
@@ -72,9 +74,11 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) tail {
-;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region2 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
@@ -90,13 +94,13 @@
 ;; @0038                               v13 = iconst.i64 -2
 ;; @0038                               v16 = iconst.i32 0
 ;;                                     v34 = iconst.i64 1
-;; @0038                               v19 = load.i64 notrap aligned readonly can_move v0+40
+;; @0038                               v19 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @0038                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0034                               jump block2
 ;;
 ;;                                 block2:
 ;;                                     v36 = iadd.i64 v6, v35  ; v35 = 8
-;; @0038                               v12 = load.i64 user6 aligned region0 v36
+;; @0038                               v12 = load.i64 user6 aligned region1 v36
 ;;                                     v37 = iconst.i64 -2
 ;;                                     v38 = band v12, v37  ; v37 = -2
 ;; @0038                               brif v12, block5(v38), block4

@@ -22,25 +22,26 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @0031                               trapz v2, user16
-;; @0031                               v46 = load.i64 notrap aligned readonly can_move v0+8
+;; @0031                               v46 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0031                               v7 = load.i64 notrap aligned readonly can_move v46+32
 ;; @0031                               v6 = uextend.i64 v2
 ;; @0031                               v8 = iadd v7, v6
 ;; @0031                               v9 = iconst.i64 16
 ;; @0031                               v10 = iadd v8, v9  ; v9 = 16
-;; @0031                               v11 = load.i32 user2 readonly region0 v10
+;; @0031                               v11 = load.i32 user2 readonly region1 v10
 ;; @0031                               v13 = uextend.i64 v3
 ;; @0031                               v14 = uextend.i64 v5
 ;; @0031                               v17 = iadd v13, v14
@@ -65,7 +66,7 @@
 ;; @0031                               brif v41, block3, block2(v28)
 ;;
 ;;                                 block2(v42: i64):
-;; @0031                               store.i32 user2 little region0 v4, v42
+;; @0031                               store.i32 user2 little region1 v4, v42
 ;;                                     v55 = iconst.i64 4
 ;;                                     v56 = iadd v42, v55  ; v55 = 4
 ;; @0031                               v45 = icmp eq v56, v39
@@ -79,12 +80,13 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32, i32, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
@@ -93,13 +95,13 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @003f                               trapz v2, user16
-;; @003f                               v40 = load.i64 notrap aligned readonly can_move v0+8
+;; @003f                               v40 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @003f                               v7 = load.i64 notrap aligned readonly can_move v40+32
 ;; @003f                               v6 = uextend.i64 v2
 ;; @003f                               v8 = iadd v7, v6
 ;; @003f                               v9 = iconst.i64 16
 ;; @003f                               v10 = iadd v8, v9  ; v9 = 16
-;; @003f                               v11 = load.i32 user2 readonly region0 v10
+;; @003f                               v11 = load.i32 user2 readonly region1 v10
 ;; @003f                               v13 = uextend.i64 v3
 ;; @003f                               v14 = uextend.i64 v4
 ;; @003f                               v17 = iadd v13, v14
@@ -126,12 +128,13 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32, i32, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i64, i32, i64) tail
@@ -140,13 +143,13 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @004d                               trapz v2, user16
-;; @004d                               v40 = load.i64 notrap aligned readonly can_move v0+8
+;; @004d                               v40 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @004d                               v7 = load.i64 notrap aligned readonly can_move v40+32
 ;; @004d                               v6 = uextend.i64 v2
 ;; @004d                               v8 = iadd v7, v6
 ;; @004d                               v9 = iconst.i64 16
 ;; @004d                               v10 = iadd v8, v9  ; v9 = 16
-;; @004d                               v11 = load.i32 user2 readonly region0 v10
+;; @004d                               v11 = load.i32 user2 readonly region1 v10
 ;; @004d                               v13 = uextend.i64 v3
 ;; @004d                               v14 = uextend.i64 v4
 ;; @004d                               v17 = iadd v13, v14
@@ -173,25 +176,26 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32, i32, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @005d                               trapz v2, user16
-;; @005d                               v46 = load.i64 notrap aligned readonly can_move v0+8
+;; @005d                               v46 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @005d                               v7 = load.i64 notrap aligned readonly can_move v46+32
 ;; @005d                               v6 = uextend.i64 v2
 ;; @005d                               v8 = iadd v7, v6
 ;; @005d                               v9 = iconst.i64 16
 ;; @005d                               v10 = iadd v8, v9  ; v9 = 16
-;; @005d                               v11 = load.i32 user2 readonly region0 v10
+;; @005d                               v11 = load.i32 user2 readonly region1 v10
 ;; @005d                               v13 = uextend.i64 v3
 ;; @005d                               v14 = uextend.i64 v4
 ;; @005d                               v17 = iadd v13, v14
@@ -218,7 +222,7 @@
 ;;
 ;;                                 block2(v42: i64):
 ;;                                     v55 = iconst.i32 0xdead
-;; @005d                               store user2 little region0 v55, v42  ; v55 = 0xdead
+;; @005d                               store user2 little region1 v55, v42  ; v55 = 0xdead
 ;;                                     v56 = iconst.i64 4
 ;;                                     v57 = iadd v42, v56  ; v56 = 4
 ;; @005d                               v45 = icmp eq v57, v39
