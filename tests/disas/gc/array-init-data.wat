@@ -28,8 +28,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @002a                               trapz v2, user16
-;; @002a                               v53 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v7 = load.i64 notrap aligned readonly can_move v53+32
+;; @002a                               v52 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v7 = load.i64 notrap aligned readonly can_move v52+32
 ;; @002a                               v6 = uextend.i64 v2
 ;; @002a                               v8 = iadd v7, v6
 ;; @002a                               v9 = iconst.i64 16
@@ -48,14 +48,14 @@
 ;; @002a                               v36 = icmp ugt v35, v30
 ;; @002a                               trapnz v36, heap_oob
 ;; @002a                               v37 = load.i64 notrap aligned v0+48
-;; @002a                               v47 = load.i64 notrap aligned v53+40
+;; @002a                               v48 = load.i64 notrap aligned v52+40
 ;; @002a                               v23 = iconst.i64 20
 ;; @002a                               v24 = iadd v8, v23  ; v23 = 20
 ;; @002a                               v28 = iadd v24, v13
-;; @002a                               v49 = uadd_overflow_trap v28, v14, user2
-;; @002a                               v48 = iadd v7, v47
-;; @002a                               v50 = icmp ugt v49, v48
-;; @002a                               trapnz v50, user2
+;; @002a                               v50 = uadd_overflow_trap v28, v14, user2
+;; @002a                               v49 = iadd v7, v48
+;; @002a                               v51 = icmp ugt v50, v49
+;; @002a                               trapnz v51, user2
 ;; @002a                               v39 = iadd v37, v31
 ;; @002a                               call fn0(v0, v28, v39, v14)
 ;; @002e                               jump block1

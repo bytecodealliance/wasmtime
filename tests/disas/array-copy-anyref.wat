@@ -22,8 +22,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;; @002b                               trapz v2, user16
-;; @002b                               v111 = load.i64 notrap aligned readonly can_move v0+8
-;; @002b                               v8 = load.i64 notrap aligned readonly can_move v111+32
+;; @002b                               v109 = load.i64 notrap aligned readonly can_move v0+8
+;; @002b                               v8 = load.i64 notrap aligned readonly can_move v109+32
 ;; @002b                               v7 = uextend.i64 v2
 ;; @002b                               v9 = iadd v8, v7
 ;; @002b                               v10 = iconst.i64 16
@@ -45,55 +45,55 @@
 ;; @002b                               v36 = uextend.i64 v35
 ;; @002b                               v42 = icmp ugt v41, v36
 ;; @002b                               trapnz v42, user17
-;; @002b                               v60 = load.i64 notrap aligned v111+40
+;; @002b                               v61 = load.i64 notrap aligned v109+40
 ;; @002b                               v24 = iconst.i64 20
 ;; @002b                               v25 = iadd v9, v24  ; v24 = 20
-;;                                     v115 = iconst.i64 2
-;;                                     v116 = ishl v14, v115  ; v115 = 2
-;; @002b                               v29 = iadd v25, v116
-;;                                     v120 = ishl v15, v115  ; v115 = 2
-;; @002b                               v62 = uadd_overflow_trap v29, v120, user2
-;; @002b                               v61 = iadd v8, v60
-;; @002b                               v63 = icmp ugt v62, v61
-;; @002b                               trapnz v63, user2
+;;                                     v113 = iconst.i64 2
+;;                                     v114 = ishl v14, v113  ; v113 = 2
+;; @002b                               v29 = iadd v25, v114
+;;                                     v118 = ishl v15, v113  ; v113 = 2
+;; @002b                               v63 = uadd_overflow_trap v29, v118, user2
+;; @002b                               v62 = iadd v8, v61
+;; @002b                               v64 = icmp ugt v63, v62
+;; @002b                               trapnz v64, user2
 ;; @002b                               v48 = iadd v32, v24  ; v24 = 20
-;;                                     v118 = ishl v37, v115  ; v115 = 2
-;; @002b                               v52 = iadd v48, v118
-;; @002b                               v68 = uadd_overflow_trap v52, v120, user2
-;; @002b                               v69 = icmp ugt v68, v61
-;; @002b                               trapnz v69, user2
+;;                                     v116 = ishl v37, v113  ; v113 = 2
+;; @002b                               v52 = iadd v48, v116
+;; @002b                               v70 = uadd_overflow_trap v52, v118, user2
+;; @002b                               v71 = icmp ugt v70, v62
+;; @002b                               trapnz v71, user2
 ;; @002b                               brif v6, block2, block5
 ;;
 ;;                                 block2:
-;; @002b                               v70 = icmp.i64 ult v29, v52
-;; @002b                               v75 = iadd.i64 v29, v120
-;; @002b                               v76 = iadd.i64 v52, v120
-;; @002b                               v78 = iadd.i32 v5, v6
+;; @002b                               v72 = icmp.i64 ult v29, v52
+;; @002b                               v77 = iadd.i64 v29, v118
+;; @002b                               v78 = iadd.i64 v52, v118
+;; @002b                               v80 = iadd.i32 v5, v6
 ;; @002b                               v27 = iconst.i64 4
-;; @002b                               v101 = iconst.i32 1
-;; @002b                               brif v70, block3(v29, v52, v5), block4(v75, v76, v78)
+;; @002b                               v103 = iconst.i32 1
+;; @002b                               brif v72, block3(v29, v52, v5), block4(v77, v78, v80)
 ;;
-;;                                 block3(v79: i64, v80: i64, v81: i32):
-;; @002b                               v84 = load.i32 user2 little region0 v80
-;; @002b                               store user2 little region0 v84, v79
-;;                                     v127 = iconst.i64 4
-;;                                     v128 = iadd v80, v127  ; v127 = 4
-;; @002b                               v91 = icmp eq v128, v76
-;;                                     v129 = iadd v79, v127  ; v127 = 4
-;;                                     v130 = iconst.i32 1
-;;                                     v131 = iadd v81, v130  ; v130 = 1
-;; @002b                               brif v91, block5, block3(v129, v128, v131)
+;;                                 block3(v81: i64, v82: i64, v83: i32):
+;; @002b                               v86 = load.i32 user2 little region0 v82
+;; @002b                               store user2 little region0 v86, v81
+;;                                     v125 = iconst.i64 4
+;;                                     v126 = iadd v82, v125  ; v125 = 4
+;; @002b                               v93 = icmp eq v126, v78
+;;                                     v127 = iadd v81, v125  ; v125 = 4
+;;                                     v128 = iconst.i32 1
+;;                                     v129 = iadd v83, v128  ; v128 = 1
+;; @002b                               brif v93, block5, block3(v127, v126, v129)
 ;;
-;;                                 block4(v92: i64, v93: i64, v94: i32):
-;;                                     v122 = iconst.i64 4
-;;                                     v123 = isub v93, v122  ; v122 = 4
-;; @002b                               v103 = load.i32 user2 little region0 v123
-;;                                     v124 = isub v92, v122  ; v122 = 4
-;; @002b                               store user2 little region0 v103, v124
-;; @002b                               v104 = icmp eq v123, v52
-;;                                     v125 = iconst.i32 1
-;;                                     v126 = isub v94, v125  ; v125 = 1
-;; @002b                               brif v104, block5, block4(v124, v123, v126)
+;;                                 block4(v94: i64, v95: i64, v96: i32):
+;;                                     v120 = iconst.i64 4
+;;                                     v121 = isub v95, v120  ; v120 = 4
+;; @002b                               v105 = load.i32 user2 little region0 v121
+;;                                     v122 = isub v94, v120  ; v120 = 4
+;; @002b                               store user2 little region0 v105, v122
+;; @002b                               v106 = icmp eq v121, v52
+;;                                     v123 = iconst.i32 1
+;;                                     v124 = isub v96, v123  ; v123 = 1
+;; @002b                               brif v106, block5, block4(v122, v121, v124)
 ;;
 ;;                                 block5:
 ;; @002f                               jump block1

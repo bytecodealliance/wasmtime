@@ -1524,8 +1524,15 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
-        let global = self.get_gc_heap_bound_global(&mut builder.func);
-        Ok(builder.ins().global_value(self.pointer_type(), global))
+        let pointer_type = self.pointer_type();
+        let offset = i32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length());
+        let store_context_ptr = self.get_vmstore_context_ptr(builder);
+        Ok(builder.ins().load(
+            pointer_type,
+            ir::MemFlagsData::trusted(),
+            store_context_ptr,
+            offset,
+        ))
     }
 
     /// Get or create the `Heap` for our GC heap.

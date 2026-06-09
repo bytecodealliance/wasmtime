@@ -28,16 +28,16 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @002a                               trapz v2, user16
-;; @002a                               v79 = load.i64 notrap aligned readonly can_move v0+8
-;; @002a                               v8 = load.i64 notrap aligned readonly can_move v79+32
+;; @002a                               v77 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v8 = load.i64 notrap aligned readonly can_move v77+32
 ;; @002a                               v7 = uextend.i64 v2
 ;; @002a                               v9 = iadd v8, v7
 ;; @002a                               v10 = iconst.i64 16
 ;; @002a                               v11 = iadd v9, v10  ; v10 = 16
 ;; @002a                               v12 = load.i32 user2 readonly region0 v11
 ;; @002a                               v14 = uextend.i64 v3
-;;                                     v81 = iconst.i64 7
-;; @002a                               v18 = iadd v14, v81  ; v81 = 7
+;;                                     v79 = iconst.i64 7
+;; @002a                               v18 = iadd v14, v79  ; v79 = 7
 ;; @002a                               v13 = uextend.i64 v12
 ;; @002a                               v19 = icmp ugt v18, v13
 ;; @002a                               trapnz v19, user17
@@ -47,33 +47,33 @@
 ;; @002a                               v34 = iadd v32, v10  ; v10 = 16
 ;; @002a                               v35 = load.i32 user2 readonly region0 v34
 ;; @002a                               v37 = uextend.i64 v5
-;; @002a                               v41 = iadd v37, v81  ; v81 = 7
+;; @002a                               v41 = iadd v37, v79  ; v79 = 7
 ;; @002a                               v36 = uextend.i64 v35
 ;; @002a                               v42 = icmp ugt v41, v36
 ;; @002a                               trapnz v42, user17
-;; @002a                               v60 = load.i64 notrap aligned v79+40
+;; @002a                               v61 = load.i64 notrap aligned v77+40
 ;; @002a                               v24 = iconst.i64 20
 ;; @002a                               v25 = iadd v9, v24  ; v24 = 20
-;;                                     v89 = iconst.i64 2
-;;                                     v90 = ishl v14, v89  ; v89 = 2
-;; @002a                               v29 = iadd v25, v90
-;;                                     v94 = iconst.i64 28
-;; @002a                               v62 = uadd_overflow_trap v29, v94, user2  ; v94 = 28
-;; @002a                               v61 = iadd v8, v60
-;; @002a                               v63 = icmp ugt v62, v61
-;; @002a                               trapnz v63, user2
+;;                                     v87 = iconst.i64 2
+;;                                     v88 = ishl v14, v87  ; v87 = 2
+;; @002a                               v29 = iadd v25, v88
+;;                                     v92 = iconst.i64 28
+;; @002a                               v63 = uadd_overflow_trap v29, v92, user2  ; v92 = 28
+;; @002a                               v62 = iadd v8, v61
+;; @002a                               v64 = icmp ugt v63, v62
+;; @002a                               trapnz v64, user2
 ;; @002a                               v48 = iadd v32, v24  ; v24 = 20
-;;                                     v92 = ishl v37, v89  ; v89 = 2
-;; @002a                               v52 = iadd v48, v92
-;; @002a                               v68 = uadd_overflow_trap v52, v94, user2  ; v94 = 28
-;; @002a                               v69 = icmp ugt v68, v61
-;; @002a                               trapnz v69, user2
-;; @002a                               v70 = load.i8x16 notrap aligned little v52
-;; @002a                               v71 = load.i64 notrap aligned little v52+16
-;; @002a                               v72 = load.i32 notrap aligned little v52+24
-;; @002a                               store notrap aligned little v70, v29
-;; @002a                               store notrap aligned little v71, v29+16
-;; @002a                               store notrap aligned little v72, v29+24
+;;                                     v90 = ishl v37, v87  ; v87 = 2
+;; @002a                               v52 = iadd v48, v90
+;; @002a                               v70 = uadd_overflow_trap v52, v92, user2  ; v92 = 28
+;; @002a                               v71 = icmp ugt v70, v62
+;; @002a                               trapnz v71, user2
+;; @002a                               v72 = load.i8x16 notrap aligned little v52
+;; @002a                               v73 = load.i64 notrap aligned little v52+16
+;; @002a                               v74 = load.i32 notrap aligned little v52+24
+;; @002a                               store notrap aligned little v72, v29
+;; @002a                               store notrap aligned little v73, v29+16
+;; @002a                               store notrap aligned little v74, v29+24
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
