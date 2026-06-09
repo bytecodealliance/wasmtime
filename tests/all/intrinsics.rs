@@ -697,15 +697,27 @@ fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> 
         Inlining::No
     });
 
-    // Safety: this setting is safe to toggle.
-    unsafe {
-        config.cranelift_flag_set(
-            "enable_heap_access_spectre_mitigation",
-            if spectre { "true" } else { "false" },
-        );
+    if spectre {
+        // Spectre heap mitigations require signals-based traps.
+        config.signals_based_traps(true);
+        unsafe {
+            config.cranelift_flag_set("enable_heap_access_spectre_mitigation", "true");
+        }
+    } else {
+        unsafe {
+            config.cranelift_flag_set("enable_heap_access_spectre_mitigation", "false");
+        }
     }
 
-    let engine = Engine::new(&config)?;
+    let Ok(engine) = Engine::new(&config) else {
+        // Some platforms don't support all the knobs we are tuning here. Warn
+        // and ignore.
+        eprintln!(
+            "Warning: could not create engine with `spectre = {spectre}` and \
+             `inlining = {inlining}` on this platform; ignoring."
+        );
+        return Ok(());
+    };
 
     // A few distinct values, used for the initial buffer contents (`KNOWN*`)
     // and the values written by the store intrinsic (`STORED*`).
