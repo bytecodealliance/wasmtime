@@ -709,15 +709,7 @@ fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> 
         }
     }
 
-    let Ok(engine) = Engine::new(&config) else {
-        // Some platforms don't support all the knobs we are tuning here. Warn
-        // and ignore.
-        eprintln!(
-            "Warning: could not create engine with `spectre = {spectre}` and \
-             `inlining = {inlining}` on this platform; ignoring."
-        );
-        return Ok(());
-    };
+    let engine = Engine::new(&config)?;
 
     // A few distinct values, used for the initial buffer contents (`KNOWN*`)
     // and the values written by the store intrinsic (`STORED*`).
@@ -946,6 +938,9 @@ fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> 
 
 #[test]
 #[cfg_attr(miri, ignore)]
+// These tests require signals-based traps, and we can't always enable that on
+// 32-bit architectures.
+#[cfg(target_pointer_width = "64")]
 fn checked_native_loads_and_stores_with_spectre_mitigations() -> Result<()> {
     checked_native_loads_and_stores(true, false)?;
     checked_native_loads_and_stores(true, true)?;
