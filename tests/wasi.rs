@@ -23,10 +23,6 @@ const KNOWN_FAILURES: &[&str] = &[
     "remove_directory_trailing_slashes",
     // FIXME(#12475)
     "sockets-udp-send",
-    // FIXME(#13396)
-    #[cfg(target_os = "linux")]
-    "sockets-tcp-connect",
-    // FIXME(#13396)
     #[cfg(target_vendor = "apple")]
     "filesystem-advise",
     // FIXME(WebAssembly/wasi-testsuite#128)
