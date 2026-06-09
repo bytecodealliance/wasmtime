@@ -89,14 +89,8 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
         "file descriptor range check",
     );
 
-    wasi::fd_renumber(fd_file3, 127).expect("renumbering FD to 127");
-    match wasi::fd_renumber(127, u32::MAX) {
-        Err(wasi::ERRNO_NOMEM) => {
-            // The preview1 adapter cannot handle more than 128 descriptors
-            eprintln!("fd_renumber({fd_file3}, {}) returned NOMEM", u32::MAX)
-        }
-        res => res.expect("renumbering FD to `u32::MAX`"),
-    }
+    wasi::fd_renumber(fd_file3, 127).unwrap_err();
+    wasi::fd_renumber(127, u32::MAX).unwrap_err();
 
     let fd_file4 = wasi::path_open(
         dir_fd,
@@ -112,6 +106,28 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
         fd_file4 > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
+}
+
+unsafe fn test_renumber_loop(dir_fd: wasi::Fd) {
+    let mut cur = wasi::path_open(
+        dir_fd,
+        0,
+        "file1",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+
+    for _ in 0..2000 {
+        let next = wasi::path_open(dir_fd, 0, "file1", 0, wasi::RIGHTS_FD_READ, 0, 0)
+            .expect("opening a file");
+        wasi::fd_renumber(cur, next).unwrap();
+        cur = next;
+    }
+
+    wasi::fd_close(cur).unwrap();
 }
 
 fn main() {
@@ -135,4 +151,5 @@ fn main() {
 
     // Run the tests.
     unsafe { test_renumber(dir_fd) }
+    unsafe { test_renumber_loop(dir_fd) }
 }
