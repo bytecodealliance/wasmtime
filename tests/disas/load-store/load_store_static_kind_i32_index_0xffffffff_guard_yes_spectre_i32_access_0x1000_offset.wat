@@ -19,9 +19,10 @@
     i32.load offset=0x1000))
 
 ;; function u0:0(i64 vmctx, i64, i32, i32) tail {
-;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -34,7 +35,7 @@
 ;; @0040                               v6 = iadd v5, v4
 ;; @0040                               v7 = iconst.i64 4096
 ;; @0040                               v8 = iadd v6, v7  ; v7 = 4096
-;; @0040                               store little region0 v3, v8
+;; @0040                               store little region1 v3, v8
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
@@ -42,9 +43,10 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -57,7 +59,7 @@
 ;; @0049                               v6 = iadd v5, v4
 ;; @0049                               v7 = iconst.i64 4096
 ;; @0049                               v8 = iadd v6, v7  ; v7 = 4096
-;; @0049                               v9 = load.i32 little region0 v8
+;; @0049                               v9 = load.i32 little region1 v8
 ;; @004d                               jump block1
 ;;
 ;;                                 block1:

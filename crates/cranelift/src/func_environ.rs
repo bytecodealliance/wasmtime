@@ -1,7 +1,7 @@
 mod gc;
 pub(crate) mod stack_switching;
 
-use crate::alias_region_key::AliasRegionKey;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::compiler::Compiler;
 use crate::translate::{
     FuncTranslationStacks, GlobalVariable, Heap, HeapData, MemoryKind, StructFieldsVec, TableData,
@@ -438,7 +438,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         offset: u32,
     ) -> ir::AliasRegion {
-        self.alias_region(func, AliasRegionKey::VMContext { offset })
+        self.alias_region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMContext,
+                offset,
+            },
+        )
     }
 
     fn get_memory_atomic_wait(&mut self, func: &mut Function, ty: ir::Type) -> ir::FuncRef {
@@ -461,10 +467,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (vmctx, offset)
         } else {
             let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
+            let region = self.vmctx_alias_region(func, from_offset);
             let global_flags = func
                 .dfg
                 .mem_flags
-                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                .insert(
+                    MemFlagsData::trusted()
+                        .with_readonly()
+                        .with_can_move()
+                        .with_alias_region(Some(region)),
+                )
                 .unwrap();
             let global = func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
@@ -492,10 +504,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let offset = self.offsets.ptr.vmctx_store_context();
         let base = self.vmctx(func);
+        let region = self.vmctx_alias_region(func, offset.into());
         let ptr_flags = func
             .dfg
             .mem_flags
-            .insert(ir::MemFlagsData::trusted().with_readonly().with_can_move())
+            .insert(
+                ir::MemFlagsData::trusted()
+                    .with_readonly()
+                    .with_can_move()
+                    .with_alias_region(Some(region)),
+            )
             .unwrap();
         let ptr = func.create_global_value(ir::GlobalValueData::Load {
             base,
@@ -510,13 +528,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Get the `*mut VMStoreContext` value for our `VMContext`.
     fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let pointer_type = self.pointer_type();
-        let offset = i32::from(self.offsets.ptr.vmctx_store_context());
+        let offset = self.offsets.ptr.vmctx_store_context();
         let vmctx = self.vmctx_val(&mut builder.cursor());
+        let region = self.vmctx_alias_region(builder.func, offset.into());
         builder.ins().load(
             pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
             vmctx,
-            offset,
+            i32::from(offset),
         )
     }
 
@@ -816,10 +838,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let pointer_type = self.pointer_type();
         let base = self.vmctx_val(&mut builder.cursor());
-        let offset = i32::from(self.offsets.ptr.vmctx_epoch_ptr());
-        let epoch_ptr = builder
-            .ins()
-            .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
+        let offset = self.offsets.ptr.vmctx_epoch_ptr();
+        let region = self.vmctx_alias_region(builder.func, offset.into());
+        let epoch_ptr = builder.ins().load(
+            pointer_type,
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+            base,
+            i32::from(offset),
+        );
         epoch_ptr
     }
 
@@ -1129,6 +1155,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         flags: ir::MemFlagsData,
     ) -> ir::GlobalValue {
         let vmctx = self.vmctx(func);
+        let region = self.vmctx_alias_region(func, offset);
+        let flags = flags.with_alias_region(Some(region));
         self.global_load(func, vmctx, offset, flags)
     }
 
@@ -1219,11 +1247,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let mem_flags = ir::MemFlagsData::trusted().with_readonly().with_can_move();
 
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
+        let type_ids_offset = self.offsets.ptr.vmctx_type_ids_array();
+        let region = self.vmctx_alias_region(pos.func, type_ids_offset.into());
         let shared_indices = pos.ins().load(
             pointer_type,
-            mem_flags,
+            mem_flags.with_alias_region(Some(region)),
             vmctx,
-            i32::from(self.offsets.ptr.vmctx_type_ids_array()),
+            i32::from(type_ids_offset),
         );
 
         // Calculate the offset in that array for this type's entry.
@@ -1793,10 +1823,16 @@ impl FuncEnvironment<'_> {
                 (vmctx, base_offset, current_elements_offset)
             } else {
                 let from_offset = self.offsets.vmctx_vmtable_from(index);
+                let region = self.vmctx_alias_region(func, from_offset);
                 let table_flags = func
                     .dfg
                     .mem_flags
-                    .insert(MemFlagsData::trusted().with_readonly().with_can_move())
+                    .insert(
+                        MemFlagsData::trusted()
+                            .with_readonly()
+                            .with_can_move()
+                            .with_alias_region(Some(region)),
+                    )
                     .unwrap();
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
@@ -1899,15 +1935,21 @@ impl FuncEnvironment<'_> {
             let vmctx_tag_index_offset = self.offsets.vmctx_vmtag_import_index(tag_index);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let pointer_type = self.pointer_type();
+            let vmctx_region = self.vmctx_alias_region(builder.func, vmctx_tag_vmctx_offset);
             let from_vmctx = builder.ins().load(
                 pointer_type,
-                MemFlagsData::trusted().with_readonly(),
+                MemFlagsData::trusted()
+                    .with_readonly()
+                    .with_alias_region(Some(vmctx_region)),
                 vmctx,
                 i32::try_from(vmctx_tag_vmctx_offset).unwrap(),
             );
+            let index_region = self.vmctx_alias_region(builder.func, vmctx_tag_index_offset);
             let index = builder.ins().load(
                 I32,
-                MemFlagsData::trusted().with_readonly(),
+                MemFlagsData::trusted()
+                    .with_readonly()
+                    .with_alias_region(Some(index_region)),
                 vmctx,
                 i32::try_from(vmctx_tag_index_offset).unwrap(),
             );
@@ -2009,20 +2051,24 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let mem_flags = ir::MemFlagsData::trusted().with_readonly().with_can_move();
 
         // Load the callee address.
-        let body_offset = i32::try_from(
-            self.env
-                .offsets
-                .vmctx_vmfunction_import_wasm_call(callee_index),
-        )
-        .unwrap();
+        let wasm_call_offset = self
+            .env
+            .offsets
+            .vmctx_vmfunction_import_wasm_call(callee_index);
+        let body_offset = i32::try_from(wasm_call_offset).unwrap();
 
         // First append the callee vmctx address.
-        let vmctx_offset =
-            i32::try_from(self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let callee_vmctx = self
-            .builder
-            .ins()
-            .load(pointer_type, mem_flags, base, vmctx_offset);
+        let vmctx_import_offset = self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index);
+        let vmctx_offset = i32::try_from(vmctx_import_offset).unwrap();
+        let vmctx_region = self
+            .env
+            .vmctx_alias_region(self.builder.func, vmctx_import_offset);
+        let callee_vmctx = self.builder.ins().load(
+            pointer_type,
+            mem_flags.with_alias_region(Some(vmctx_region)),
+            base,
+            vmctx_offset,
+        );
         real_call_args.push(callee_vmctx);
         real_call_args.push(caller_vmctx);
 
@@ -2071,10 +2117,15 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // and with different functions. Either way, we have to do the
             // indirect call.
             None => {
-                let func_addr = self
-                    .builder
-                    .ins()
-                    .load(pointer_type, mem_flags, base, body_offset);
+                let wasm_call_region = self
+                    .env
+                    .vmctx_alias_region(self.builder.func, wasm_call_offset);
+                let func_addr = self.builder.ins().load(
+                    pointer_type,
+                    mem_flags.with_alias_region(Some(wasm_call_region)),
+                    base,
+                    body_offset,
+                );
                 Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
             }
         }
@@ -3406,19 +3457,21 @@ impl FuncEnvironment<'_> {
             None => {
                 let vmimport = self.offsets.vmctx_vmmemory_import(index);
 
+                let vmctx_offset = vmimport + u32::from(self.offsets.vmmemory_import_vmctx());
+                let vmctx_region = self.vmctx_alias_region(pos.func, vmctx_offset);
                 let vmctx = pos.ins().load(
                     self.isa.pointer_type(),
-                    ir::MemFlagsData::trusted(),
+                    ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                     cur_vmctx,
-                    i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_vmctx()))
-                        .unwrap(),
+                    i32::try_from(vmctx_offset).unwrap(),
                 );
+                let index_offset = vmimport + u32::from(self.offsets.vmmemory_import_index());
+                let index_region = self.vmctx_alias_region(pos.func, index_offset);
                 let index = pos.ins().load(
                     ir::types::I32,
-                    ir::MemFlagsData::trusted(),
+                    ir::MemFlagsData::trusted().with_alias_region(Some(index_region)),
                     cur_vmctx,
-                    i32::try_from(vmimport + u32::from(self.offsets.vmmemory_import_index()))
-                        .unwrap(),
+                    i32::try_from(index_offset).unwrap(),
                 );
                 (vmctx, index)
             }
@@ -3442,19 +3495,21 @@ impl FuncEnvironment<'_> {
             None => {
                 let vmimport = self.offsets.vmctx_vmtable_import(index);
 
+                let vmctx_offset = vmimport + u32::from(self.offsets.vmtable_import_vmctx());
+                let vmctx_region = self.vmctx_alias_region(pos.func, vmctx_offset);
                 let vmctx = pos.ins().load(
                     self.isa.pointer_type(),
-                    ir::MemFlagsData::trusted(),
+                    ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
                     cur_vmctx,
-                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_vmctx()))
-                        .unwrap(),
+                    i32::try_from(vmctx_offset).unwrap(),
                 );
+                let index_offset = vmimport + u32::from(self.offsets.vmtable_import_index());
+                let index_region = self.vmctx_alias_region(pos.func, index_offset);
                 let index = pos.ins().load(
                     ir::types::I32,
-                    ir::MemFlagsData::trusted(),
+                    ir::MemFlagsData::trusted().with_alias_region(Some(index_region)),
                     cur_vmctx,
-                    i32::try_from(vmimport + u32::from(self.offsets.vmtable_import_index()))
-                        .unwrap(),
+                    i32::try_from(index_offset).unwrap(),
                 );
                 (vmctx, index)
             }
@@ -3504,11 +3559,14 @@ impl FuncEnvironment<'_> {
         match self.module.defined_memory_index(index) {
             Some(def_index) => {
                 if is_shared {
-                    let offset =
-                        i32::try_from(self.offsets.vmctx_vmmemory_pointer(def_index)).unwrap();
-                    let vmmemory_ptr =
-                        pos.ins()
-                            .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
+                    let ptr_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
+                    let region = self.vmctx_alias_region(pos.func, ptr_offset);
+                    let vmmemory_ptr = pos.ins().load(
+                        pointer_type,
+                        ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+                        base,
+                        i32::try_from(ptr_offset).unwrap(),
+                    );
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());
                     let vmmemory_definition_ptr = pos
@@ -3537,10 +3595,14 @@ impl FuncEnvironment<'_> {
                 }
             }
             None => {
-                let offset = i32::try_from(self.offsets.vmctx_vmmemory_import_from(index)).unwrap();
-                let vmmemory_ptr =
-                    pos.ins()
-                        .load(pointer_type, ir::MemFlagsData::trusted(), base, offset);
+                let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
+                let region = self.vmctx_alias_region(pos.func, from_offset);
+                let vmmemory_ptr = pos.ins().load(
+                    pointer_type,
+                    ir::MemFlagsData::trusted().with_alias_region(Some(region)),
+                    base,
+                    i32::try_from(from_offset).unwrap(),
+                );
                 if is_shared {
                     let vmmemory_definition_offset =
                         i64::from(self.offsets.ptr.vmmemory_definition_current_length());

@@ -9,8 +9,10 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) tail {
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 24 "VMContext+0x18"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -22,9 +24,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
-;; @001e                               v5 = load.i64 notrap aligned v0+24
+;; @001e                               v5 = load.i64 notrap aligned region1 v0+24
 ;; @001e                               v6 = load.i64 notrap aligned v5
-;; @001e                               v7 = load.i64 notrap aligned readonly can_move v0+8
+;; @001e                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @001e                               v8 = load.i64 notrap aligned v7+8
 ;; @001e                               v9 = icmp uge v6, v8
 ;; @001e                               brif v9, block3, block2(v8)

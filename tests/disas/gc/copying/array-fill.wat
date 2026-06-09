@@ -9,25 +9,26 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i64, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i64, v5: i32):
 ;; @0027                               trapz v2, user16
-;; @0027                               v46 = load.i64 notrap aligned readonly can_move v0+8
+;; @0027                               v46 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0027                               v7 = load.i64 notrap aligned readonly can_move v46+32
 ;; @0027                               v6 = uextend.i64 v2
 ;; @0027                               v8 = iadd v7, v6
 ;; @0027                               v9 = iconst.i64 16
 ;; @0027                               v10 = iadd v8, v9  ; v9 = 16
-;; @0027                               v11 = load.i32 user2 readonly region0 v10
+;; @0027                               v11 = load.i32 user2 readonly region1 v10
 ;; @0027                               v13 = uextend.i64 v3
 ;; @0027                               v14 = uextend.i64 v5
 ;; @0027                               v17 = iadd v13, v14
@@ -52,7 +53,7 @@
 ;; @0027                               brif v41, block3, block2(v28)
 ;;
 ;;                                 block2(v42: i64):
-;; @0027                               store.i64 user2 little region0 v4, v42
+;; @0027                               store.i64 user2 little region1 v4, v42
 ;;                                     v55 = iconst.i64 8
 ;;                                     v56 = iadd v42, v55  ; v55 = 8
 ;; @0027                               v45 = icmp eq v56, v39

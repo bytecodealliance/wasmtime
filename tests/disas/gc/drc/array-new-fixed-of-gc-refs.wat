@@ -13,12 +13,14 @@
 ;;     ss0 = explicit_slot 4, align = 4
 ;;     ss1 = explicit_slot 4, align = 4
 ;;     ss2 = explicit_slot 4, align = 4
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 40 "VMContext+0x28"
+;;     region2 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
@@ -33,19 +35,19 @@
 ;;                                     v193 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v193
 ;; @0025                               v15 = iconst.i32 -1476395008
-;; @0025                               v16 = load.i64 notrap aligned readonly can_move v0+40
+;; @0025                               v16 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;; @0025                               v17 = load.i32 notrap aligned readonly can_move v16
 ;;                                     v229 = iconst.i32 40
 ;; @0025                               v18 = iconst.i32 8
 ;; @0025                               v19 = call fn0(v0, v15, v17, v229, v18), stack_map=[i32 @ ss2+0, i32 @ ss1+0, i32 @ ss0+0]  ; v15 = -1476395008, v229 = 40, v18 = 8
 ;; @0025                               v6 = iconst.i32 3
-;; @0025                               v20 = load.i64 notrap aligned readonly can_move v0+8
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0025                               v21 = load.i64 notrap aligned readonly can_move v20+32
 ;; @0025                               v22 = uextend.i64 v19
 ;; @0025                               v23 = iadd v21, v22
 ;; @0025                               v24 = iconst.i64 24
 ;; @0025                               v25 = iadd v23, v24  ; v24 = 24
-;; @0025                               store user2 region0 v6, v25  ; v6 = 3
+;; @0025                               store user2 region2 v6, v25  ; v6 = 3
 ;; @0025                               trapz v19, user16
 ;; @0025                               v45 = uadd_overflow_trap v19, v229, user2  ; v229 = 40
 ;;                                     v190 = load.i32 notrap v191
@@ -63,10 +65,10 @@
 ;; @0025                               v60 = iadd.i64 v21, v58
 ;; @0025                               v61 = iconst.i64 8
 ;; @0025                               v62 = iadd v60, v61  ; v61 = 8
-;; @0025                               v63 = load.i64 user2 region0 v62
+;; @0025                               v63 = load.i64 user2 region2 v62
 ;; @0025                               v64 = iconst.i64 1
 ;; @0025                               v65 = iadd v63, v64  ; v64 = 1
-;; @0025                               store user2 region0 v65, v62
+;; @0025                               store user2 region2 v65, v62
 ;; @0025                               jump block3
 ;;
 ;;                                 block3:
@@ -75,9 +77,9 @@
 ;; @0025                               v48 = iadd.i64 v21, v46
 ;;                                     v219 = iconst.i64 12
 ;; @0025                               v51 = isub v48, v219  ; v219 = 12
-;; @0025                               store user2 little region0 v182, v51
+;; @0025                               store user2 little region2 v182, v51
 ;;                                     v322 = iadd.i64 v23, v24  ; v24 = 24
-;; @0025                               v77 = load.i32 user2 readonly region0 v322
+;; @0025                               v77 = load.i32 user2 readonly region2 v322
 ;;                                     v323 = iconst.i32 1
 ;;                                     v324 = icmp ugt v77, v323  ; v323 = 1
 ;; @0025                               trapz v324, user17
@@ -106,10 +108,10 @@
 ;; @0025                               v105 = iadd.i64 v21, v103
 ;;                                     v328 = iconst.i64 8
 ;; @0025                               v107 = iadd v105, v328  ; v328 = 8
-;; @0025                               v108 = load.i64 user2 region0 v107
+;; @0025                               v108 = load.i64 user2 region2 v107
 ;;                                     v329 = iconst.i64 1
 ;; @0025                               v110 = iadd v108, v329  ; v329 = 1
-;; @0025                               store user2 region0 v110, v107
+;; @0025                               store user2 region2 v110, v107
 ;; @0025                               jump block5
 ;;
 ;;                                 block5:
@@ -120,9 +122,9 @@
 ;; @0025                               v94 = isub.i32 v86, v284  ; v284 = 32
 ;; @0025                               v95 = uextend.i64 v94
 ;; @0025                               v96 = isub v93, v95
-;; @0025                               store user2 little region0 v172, v96
+;; @0025                               store user2 little region2 v172, v96
 ;;                                     v330 = iadd.i64 v23, v24  ; v24 = 24
-;; @0025                               v122 = load.i32 user2 readonly region0 v330
+;; @0025                               v122 = load.i32 user2 readonly region2 v330
 ;;                                     v331 = iconst.i32 2
 ;;                                     v332 = icmp ugt v122, v331  ; v331 = 2
 ;; @0025                               trapz v332, user17
@@ -151,10 +153,10 @@
 ;; @0025                               v150 = iadd.i64 v21, v148
 ;;                                     v343 = iconst.i64 8
 ;; @0025                               v152 = iadd v150, v343  ; v343 = 8
-;; @0025                               v153 = load.i64 user2 region0 v152
+;; @0025                               v153 = load.i64 user2 region2 v152
 ;;                                     v344 = iconst.i64 1
 ;; @0025                               v155 = iadd v153, v344  ; v344 = 1
-;; @0025                               store user2 region0 v155, v152
+;; @0025                               store user2 region2 v155, v152
 ;; @0025                               jump block7
 ;;
 ;;                                 block7:
@@ -165,7 +167,7 @@
 ;; @0025                               v139 = isub.i32 v131, v316  ; v316 = 36
 ;; @0025                               v140 = uextend.i64 v139
 ;; @0025                               v141 = isub v138, v140
-;; @0025                               store user2 little region0 v162, v141
+;; @0025                               store user2 little region2 v162, v141
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:

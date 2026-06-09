@@ -73,8 +73,9 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -94,8 +95,9 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -115,8 +117,9 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -139,8 +142,9 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -163,9 +167,10 @@
 ;; }
 ;;
 ;; function u0:4(i64 vmctx, i64, i32) tail {
-;;     region0 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     stack_limit = gv2
@@ -175,12 +180,12 @@
 ;;
 ;;                                 block2:
 ;; @009b                               v3 = iconst.i32 1
-;; @009d                               store notrap aligned region0 v3, v0+48  ; v3 = 1
+;; @009d                               store notrap aligned region1 v3, v0+48  ; v3 = 1
 ;; @009f                               jump block3
 ;;
 ;;                                 block4 cold:
 ;; @00a0                               v5 = iconst.i32 2
-;; @00a2                               store notrap aligned region0 v5, v0+48  ; v5 = 2
+;; @00a2                               store notrap aligned region1 v5, v0+48  ; v5 = 2
 ;; @00a4                               jump block3
 ;;
 ;;                                 block3:

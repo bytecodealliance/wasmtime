@@ -7,6 +7,7 @@
   (start $f)
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
+;;     region0 = 8 "VMContext+0x8"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -14,7 +15,7 @@
 ;;     jump block1
 ;;
 ;; block1:
-;;     v4 = load.i64 notrap aligned v0+8
+;;     v4 = load.i64 notrap aligned region0 v0+8
 ;;     v5 = get_frame_pointer.i64 
 ;;     store notrap aligned v5, v4+72
 ;;     v6 = get_stack_pointer.i64 
