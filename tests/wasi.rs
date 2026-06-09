@@ -21,7 +21,7 @@ use wit_component::ComponentEncoder;
 const KNOWN_FAILURES: &[&str] = &[
     // FIXME(#11524)
     "remove_directory_trailing_slashes",
-    // FIXME(#12475)
+    // FIXME(#12568)
     "sockets-udp-send",
     #[cfg(target_vendor = "apple")]
     "filesystem-advise",
