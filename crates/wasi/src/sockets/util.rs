@@ -396,6 +396,10 @@ pub fn udp_socket(family: SocketAddressFamily) -> std::io::Result<rustix::fd::Ow
     rustix::io::ioctl_fioclex(&socket)?;
     #[cfg(any(windows, target_vendor = "apple"))]
     rustix::io::ioctl_fionbio(&socket, true)?;
+
+    if family == SocketAddressFamily::Ipv6 {
+        rustix::net::sockopt::set_ipv6_v6only(&socket, true)?;
+    }
     Ok(socket)
 }
 
