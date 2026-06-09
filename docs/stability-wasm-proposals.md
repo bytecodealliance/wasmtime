@@ -34,6 +34,7 @@ The emoji legend is:
 | [`memory64`]             | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`function-references`]  | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`gc`]                   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -49,7 +50,6 @@ The emoji legend is:
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 

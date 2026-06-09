@@ -42,6 +42,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`memory64`]                               |
 | WebAssembly Proposal | [`function-references`]                    |
 | WebAssembly Proposal | [`gc`]                                     |
+| WebAssembly Proposal | [`exception-handling`]                     |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -71,6 +72,7 @@ For explanations of what each tier means see below.
 [`wasi-sockets`]: https://github.com/WebAssembly/wasi-sockets
 [`wasi-http`]: https://github.com/WebAssembly/wasi-http
 [`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
+[`exception-handling`]: https://github.com/WebAssembly/exception-handling
 
 [^support]: Compiler support is further broken down [below](#compiler-support)
   into finer-grained target/wasm proposal combinations. Compilers are not
@@ -86,7 +88,6 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
-| WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
 | WebAssembly Proposal | [`threads`]                | fuzzing, API quality        |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
@@ -98,7 +99,6 @@ For explanations of what each tier means see below.
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
-[`exception-handling`]: https://github.com/WebAssembly/exception-handling
 [`stack-switching`]: https://github.com/WebAssembly/stack-switching
 
 #### Tier 3
