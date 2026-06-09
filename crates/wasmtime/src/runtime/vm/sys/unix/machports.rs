@@ -32,12 +32,14 @@
 //! the SpiderMonkey implementation and it should pass all the tests!
 
 #![allow(
-    // FFI bindings here for C/etc don't follow Rust's naming conventions.
     non_snake_case,
-    // Platform-specific code has a lot of false positives with these lints so
-    // like Unix disable the lints for this module.
+    reason = "FFI bindings here for C/etc don't follow Rust's naming conventions"
+)]
+#![allow(
     clippy::cast_sign_loss,
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
+    reason = "Platform-specific code has a lot of false positives with these \
+              lints so like Unix disable the lints for this module"
 )]
 
 use crate::runtime::module::lookup_code;
@@ -172,7 +174,6 @@ unsafe extern "C" fn sigbus_handler(
 // additionally match what mach expects (apparently, I wish I had a better
 // reference for this).
 #[repr(C, packed(4))]
-#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 struct __Request__exception_raise_t {
     Head: mach_msg_header_t,
@@ -194,7 +195,6 @@ struct __Request__exception_raise_t {
 
 // This is largely just copied from SpiderMonkey.
 #[repr(C)]
-#[allow(dead_code)]
 #[derive(Debug)]
 struct ExceptionRequest {
     body: __Request__exception_raise_t,
