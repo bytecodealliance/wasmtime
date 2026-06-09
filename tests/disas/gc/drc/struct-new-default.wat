@@ -32,24 +32,24 @@
 ;; @0021                               v10 = iconst.i32 8
 ;; @0021                               v11 = call fn0(v0, v7, v9, v6, v10)  ; v7 = -1342177280, v6 = 40, v10 = 8
 ;; @0021                               v3 = f32const 0.0
-;; @0021                               v44 = load.i64 notrap aligned readonly can_move v0+8
-;; @0021                               v12 = load.i64 notrap aligned readonly can_move v44+32
-;; @0021                               v13 = uextend.i64 v11
-;; @0021                               v14 = iadd v12, v13
-;; @0021                               v15 = iconst.i64 24
-;; @0021                               v16 = iadd v14, v15  ; v15 = 24
-;; @0021                               store user2 little region0 v3, v16  ; v3 = 0.0
+;; @0021                               v12 = load.i64 notrap aligned readonly can_move v0+8
+;; @0021                               v13 = load.i64 notrap aligned readonly can_move v12+32
+;; @0021                               v14 = uextend.i64 v11
+;; @0021                               v15 = iadd v13, v14
+;; @0021                               v16 = iconst.i64 24
+;; @0021                               v17 = iadd v15, v16  ; v16 = 24
+;; @0021                               store user2 little region0 v3, v17  ; v3 = 0.0
 ;; @0021                               v4 = iconst.i32 0
-;; @0021                               v17 = iconst.i64 28
-;; @0021                               v18 = iadd v14, v17  ; v17 = 28
-;; @0021                               istore8 user2 little region0 v4, v18  ; v4 = 0
+;; @0021                               v18 = iconst.i64 28
+;; @0021                               v19 = iadd v15, v18  ; v18 = 28
+;; @0021                               istore8 user2 little region0 v4, v19  ; v4 = 0
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     v63 = iconst.i32 0
-;; @0021                               v19 = iconst.i64 32
-;; @0021                               v20 = iadd.i64 v14, v19  ; v19 = 32
-;; @0021                               store user2 little region0 v63, v20  ; v63 = 0
+;;                                     v62 = iconst.i32 0
+;; @0021                               v20 = iconst.i64 32
+;; @0021                               v21 = iadd.i64 v15, v20  ; v20 = 32
+;; @0021                               store user2 little region0 v62, v21  ; v62 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

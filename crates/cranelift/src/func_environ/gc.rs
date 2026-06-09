@@ -1477,8 +1477,29 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
-        let global = self.get_gc_heap_base_global(&mut builder.func);
-        Ok(builder.ins().global_value(self.pointer_type(), global))
+        let pointer_type = self.pointer_type();
+        let offset = i32::from(self.offsets.ptr.vmstore_context_gc_heap_base());
+
+        let mut flags = ir::MemFlagsData::trusted();
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
+
+        // If the memory cannot move (i.e. its base pointer cannot change across
+        // calls) then the base pointer is readonly and this load instruction
+        // can move (i.e. can be LICM'd out of a loop body).
+        if !self
+            .tunables
+            .gc_heap_memory_type()
+            .memory_may_move(&memory_tunables)
+        {
+            flags.set_readonly();
+            flags.set_can_move();
+        }
+
+        let store_context_ptr = self.get_vmstore_context_ptr(builder);
+        Ok(builder
+            .ins()
+            .load(pointer_type, flags, store_context_ptr, offset))
     }
 
     fn get_gc_heap_bound_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
@@ -1507,8 +1528,15 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
-        let global = self.get_gc_heap_bound_global(&mut builder.func);
-        Ok(builder.ins().global_value(self.pointer_type(), global))
+        let pointer_type = self.pointer_type();
+        let offset = i32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length());
+        let store_context_ptr = self.get_vmstore_context_ptr(builder);
+        Ok(builder.ins().load(
+            pointer_type,
+            ir::MemFlagsData::trusted(),
+            store_context_ptr,
+            offset,
+        ))
     }
 
     /// Get or create the `Heap` for our GC heap.
