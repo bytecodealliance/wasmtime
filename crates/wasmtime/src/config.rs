@@ -1336,6 +1336,8 @@ impl Config {
 
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
+    /// This is `true` by default.
+    ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
     #[cfg(feature = "gc")]
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
@@ -2443,6 +2445,9 @@ impl Config {
         // Set some features to their conditionally-enabled defaults depending
         // on crate compile-time features.
         features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
+        // Exception handling requires the `gc` build-time feature for runtime
+        // support.
+        features.set(WasmFeatures::EXCEPTIONS, cfg!(feature = "gc"));
         features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
         features.set(
             WasmFeatures::COMPONENT_MODEL,
