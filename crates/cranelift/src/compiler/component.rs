@@ -2091,12 +2091,22 @@ impl TrampolineCompiler<'_> {
 
         let [_callee_vmctx, _caller_vmctx, base_address, offset, length] = *self.abi_load_params()
         else {
-            unreachable!()
+            unreachable!(
+                "should've been caught by validation: wrong number of params for checked load \
+                 intrinsic"
+            )
         };
 
         // Bounds-check the access and compute its native address, trapping if
         // it is out of bounds.
-        let addr = self.checked_native_addr(base_address, offset, length, clif_ty.bytes())?;
+        let addr = UnsafeIntrinsicCompiler::checked_native_addr(
+            &mut self.builder.cursor(),
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
 
         // Do the load!
         let mut value = self
@@ -2144,7 +2154,14 @@ impl TrampolineCompiler<'_> {
 
         // Bounds-check the access and compute its native address, trapping if
         // it is out of bounds.
-        let addr = self.checked_native_addr(base_address, offset, length, clif_ty.bytes())?;
+        let addr = UnsafeIntrinsicCompiler::checked_native_addr(
+            &mut self.builder.cursor(),
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
 
         // Truncate the value to the access type, if necessary.
         let wasm_ty = crate::value_type(self.isa, wasm_ty);
@@ -2160,80 +2177,6 @@ impl TrampolineCompiler<'_> {
 
         self.abi_store_results(&[]);
         Ok(())
-    }
-
-    /// Emit the bounds check and native-address computation shared by the
-    /// checked native load and store intrinsics.
-    ///
-    /// Given the `base_address`, `offset`, and `length` `i64` arguments and the
-    /// `size` (in bytes) of the access, this traps with a heap-out-of-bounds
-    /// trap if `offset + size > length` or if that addition overflows.
-    /// Otherwise it returns the pointer-typed native address `base_address +
-    /// offset` to access.
-    ///
-    /// When the target enables Spectre mitigations for heap accesses, the
-    /// returned address is additionally guarded with a `select_spectre_guard`
-    /// instruction so that speculative execution cannot use an out-of-bounds
-    /// address even if the preceding bounds-check branch is mispredicted.
-    fn checked_native_addr(
-        &mut self,
-        base_address: ir::Value,
-        offset: ir::Value,
-        length: ir::Value,
-        size: u32,
-    ) -> Result<ir::Value> {
-        debug_assert_eq!(
-            self.builder.func.dfg.value_type(base_address),
-            ir::types::I64
-        );
-        debug_assert_eq!(self.builder.func.dfg.value_type(offset), ir::types::I64);
-        debug_assert_eq!(self.builder.func.dfg.value_type(length), ir::types::I64);
-
-        // Compute `offset + size`, trapping if it either overflows or is
-        // greater than `length`.
-        let size = self.builder.ins().iconst(ir::types::I64, i64::from(size));
-        let (end, overflow) = self.builder.ins().uadd_overflow(offset, size);
-        let too_big = self
-            .builder
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, end, length);
-        let oob = self.builder.ins().bor(overflow, too_big);
-
-        // Compute the native address `base_address + offset`, truncating to the
-        // target's pointer width on 32-bit architectures.
-        let addr = self.builder.ins().iadd(base_address, offset);
-        let addr = match self.isa.pointer_bits() {
-            32 => self.builder.ins().ireduce(ir::types::I32, addr),
-            64 => addr,
-            p => bail!("unsupported architecture: no support for {p}-bit pointers"),
-        };
-
-        let addr =
-            // When Spectre mitigations are enabled, replace the address with
-            // NULL on the out-of-bounds path. The subsequent access only
-            // happens on the in-bounds path (we will have trapped otherwise),
-            // but this guards against the bounds-check branch being
-            // mispredicted and the access being performed speculatively against
-            // an out-of-bounds address.
-            if self.isa.flags().enable_heap_access_spectre_mitigation() {
-                let pointer_type = self.isa.pointer_type();
-                let null = self.builder.ins().iconst(pointer_type, 0);
-                let addr = self.builder.ins().select_spectre_guard(oob, null, addr);
-                self.builder
-                    .ins()
-                    .trapz(addr, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-                addr
-            }
-            // Otherwise, when Specter mitigations are disabled, just conditionally
-            // trap on the out-of-bounds condition directly.
-            else {
-                self.builder
-                    .ins()
-                    .trapnz(oob, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-                addr
-            };
-
-        Ok(addr)
     }
 
     fn translate_context_intrinsic(&mut self, intrinsic: UnsafeIntrinsic) -> Result<()> {
@@ -2494,7 +2437,14 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
 
         // Bounds-check the access and compute its native address, trapping if
         // it is out of bounds.
-        let addr = self.checked_native_addr(base_address, offset, length, clif_ty.bytes())?;
+        let addr = Self::checked_native_addr(
+            &mut self.cursor,
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
 
         // Do the load!
         let mut value = self
@@ -2545,7 +2495,14 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
 
         // Bounds-check the access and compute its native address, trapping if
         // it is out of bounds.
-        let addr = self.checked_native_addr(base_address, offset, length, clif_ty.bytes())?;
+        let addr = Self::checked_native_addr(
+            &mut self.cursor,
+            self.isa,
+            base_address,
+            offset,
+            length,
+            clif_ty.bytes(),
+        )?;
 
         // Truncate the value to the access type, if necessary.
         let wasm_ty = crate::value_type(self.isa, wasm_ty);
@@ -2565,56 +2522,68 @@ impl<'a> UnsafeIntrinsicCompiler<'a> {
     /// Emit the bounds check and native-address computation shared by the
     /// checked native load and store intrinsics.
     ///
-    /// See [`TrampolineCompiler::checked_native_addr`] for details; this is the
-    /// equivalent for the inlined translation path.
+    /// Given the `base_address`, `offset`, and `length` `i64` arguments and the
+    /// `size` (in bytes) of the access, this traps with a heap-out-of-bounds
+    /// trap if `offset + size > length` or if that addition overflows.
+    /// Otherwise it returns the pointer-typed native address `base_address +
+    /// offset` to access.
+    ///
+    /// When the target enables Spectre mitigations for heap accesses, the
+    /// returned address is additionally guarded with a `select_spectre_guard`
+    /// instruction so that speculative execution cannot use an out-of-bounds
+    /// address even if the preceding bounds-check branch is mispredicted.
     fn checked_native_addr(
-        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        isa: &(dyn TargetIsa + 'static),
         base_address: ir::Value,
         offset: ir::Value,
         length: ir::Value,
         size: u32,
     ) -> Result<ir::Value> {
-        debug_assert_eq!(
-            self.cursor.func.dfg.value_type(base_address),
-            ir::types::I64
-        );
-        debug_assert_eq!(self.cursor.func.dfg.value_type(offset), ir::types::I64);
-        debug_assert_eq!(self.cursor.func.dfg.value_type(length), ir::types::I64);
+        debug_assert_eq!(cursor.func.dfg.value_type(base_address), ir::types::I64);
+        debug_assert_eq!(cursor.func.dfg.value_type(offset), ir::types::I64);
+        debug_assert_eq!(cursor.func.dfg.value_type(length), ir::types::I64);
 
         // Compute `offset + size`, trapping if it either overflows or is
         // greater than `length`.
-        let size = self.cursor.ins().iconst(ir::types::I64, i64::from(size));
-        let (end, overflow) = self.cursor.ins().uadd_overflow(offset, size);
-        let too_big = self
-            .cursor
-            .ins()
-            .icmp(IntCC::UnsignedGreaterThan, end, length);
-        let oob = self.cursor.ins().bor(overflow, too_big);
-        self.cursor
-            .ins()
-            .trapnz(oob, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        let size = cursor.ins().iconst(ir::types::I64, i64::from(size));
+        let (end, overflow) = cursor.ins().uadd_overflow(offset, size);
+        let too_big = cursor.ins().icmp(IntCC::UnsignedGreaterThan, end, length);
+        let oob = cursor.ins().bor(overflow, too_big);
 
         // Compute the native address `base_address + offset`, truncating to the
         // target's pointer width on 32-bit architectures.
-        let addr = self.cursor.ins().iadd(base_address, offset);
-        let addr = match self.isa.pointer_bits() {
-            32 => self.cursor.ins().ireduce(ir::types::I32, addr),
+        let addr = cursor.ins().iadd(base_address, offset);
+        let addr = match isa.pointer_bits() {
+            32 => cursor.ins().ireduce(ir::types::I32, addr),
             64 => addr,
             p => bail!("unsupported architecture: no support for {p}-bit pointers"),
         };
 
-        // When Spectre mitigations are enabled, replace the address with NULL
-        // on the out-of-bounds path. The subsequent access only happens on the
-        // in-bounds path (we trapped above otherwise), but this guards against
-        // the bounds-check branch being mispredicted and the access being
-        // performed speculatively against an out-of-bounds address.
-        let addr = if self.isa.flags().enable_heap_access_spectre_mitigation() {
-            let pointer_type = self.isa.pointer_type();
-            let null = self.cursor.ins().iconst(pointer_type, 0);
-            self.cursor.ins().select_spectre_guard(oob, null, addr)
-        } else {
-            addr
-        };
+        let addr =
+            // When Spectre mitigations are enabled, replace the address with
+            // NULL on the out-of-bounds path. The subsequent access only
+            // happens on the in-bounds path (we will have trapped otherwise),
+            // but this guards against the bounds-check branch being
+            // mispredicted and the access being performed speculatively against
+            // an out-of-bounds address.
+            if isa.flags().enable_heap_access_spectre_mitigation() {
+                let pointer_type = isa.pointer_type();
+                let null = cursor.ins().iconst(pointer_type, 0);
+                let addr = cursor.ins().select_spectre_guard(oob, null, addr);
+                cursor
+                    .ins()
+                    .trapz(addr, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+                addr
+            }
+            // Otherwise, when Spectre mitigations are disabled, just conditionally
+            // trap on the out-of-bounds condition directly.
+            else {
+                cursor
+                    .ins()
+                    .trapnz(oob, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+                addr
+            };
 
         Ok(addr)
     }
