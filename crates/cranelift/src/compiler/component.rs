@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::alias_region_key::AliasRegionKey;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
@@ -1726,13 +1726,15 @@ impl ComponentCompiler for Compiler {
 
                 // Load the `*mut VMStoreContext` out of our vmctx.
                 let vmctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMContext {
+                    AliasRegionKey::Vm {
+                        ty: VmType::VMContext,
                         offset: c.offsets.vm_store_context(),
                     }
                     .into(),
                 );
                 let store_ctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMStoreContext {
+                    AliasRegionKey::Vm {
+                        ty: VmType::VMStoreContext,
                         offset: u32::from(c.offsets.ptr.vmstore_context_store_data()),
                     }
                     .into(),

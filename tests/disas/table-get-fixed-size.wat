@@ -16,9 +16,10 @@
     table.get 0))
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     region0 = 1073741824 "PublicTable"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
@@ -35,7 +36,7 @@
 ;; @0054                               v10 = iadd v7, v9
 ;; @0054                               v11 = iconst.i64 0
 ;; @0054                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @0054                               v13 = load.i32 user6 aligned region0 v12
+;; @0054                               v13 = load.i32 user6 aligned region1 v12
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
@@ -43,9 +44,10 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 1073741824 "PublicTable"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 1073741824 "PublicTable"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
@@ -61,7 +63,7 @@
 ;; @005b                               v10 = iadd v7, v9
 ;; @005b                               v11 = iconst.i64 0
 ;; @005b                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @005b                               v13 = load.i32 user6 aligned region0 v12
+;; @005b                               v13 = load.i32 user6 aligned region1 v12
 ;; @005d                               jump block1
 ;;
 ;;                                 block1:

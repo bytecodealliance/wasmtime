@@ -11,13 +11,15 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     ss0 = explicit_slot 4, align = 4
-;;     region0 = 32 "VMContext+0x20"
-;;     region1 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 40 "VMContext+0x28"
+;;     region2 = 32 "VMContext+0x20"
+;;     region3 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
@@ -56,13 +58,13 @@
 ;;                                     v117 = iconst.i32 -16
 ;;                                     v118 = band v114, v117  ; v117 = -16
 ;;                                     v120 = iadd.i32 v13, v118
-;; @001f                               store notrap aligned region0 v120, v12
+;; @001f                               store notrap aligned region2 v120, v12
 ;;                                     v141 = iconst.i32 -1476395002
-;;                                     v142 = load.i64 notrap aligned readonly can_move v0+8
+;;                                     v142 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v143 = load.i64 notrap aligned readonly can_move v142+32
 ;; @001f                               v37 = iadd v143, v20
 ;; @001f                               store notrap aligned v141, v37  ; v141 = -1476395002
-;;                                     v144 = load.i64 notrap aligned readonly can_move v0+40
+;;                                     v144 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;;                                     v145 = load.i32 notrap aligned readonly can_move v144
 ;; @001f                               store notrap aligned v145, v37+4
 ;;                                     v146 = band.i64 v18, v17  ; v17 = -16
@@ -71,11 +73,11 @@
 ;;
 ;;                                 block3 cold:
 ;; @001f                               v24 = iconst.i32 -1476395002
-;; @001f                               v25 = load.i64 notrap aligned readonly can_move v0+40
+;; @001f                               v25 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;; @001f                               v26 = load.i32 notrap aligned readonly can_move v25
 ;; @001f                               v27 = iconst.i32 16
 ;; @001f                               v28 = call fn0(v0, v24, v26, v11, v27)  ; v24 = -1476395002, v27 = 16
-;; @001f                               v29 = load.i64 notrap aligned readonly can_move v0+8
+;; @001f                               v29 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @001f                               v30 = load.i64 notrap aligned readonly can_move v29+32
 ;; @001f                               v31 = uextend.i64 v28
 ;; @001f                               v32 = iadd v30, v31
@@ -86,14 +88,14 @@
 ;;                                     store notrap v41, v89
 ;; @001f                               v43 = iconst.i64 16
 ;; @001f                               v44 = iadd v42, v43  ; v43 = 16
-;; @001f                               store.i32 user2 region1 v2, v44
+;; @001f                               store.i32 user2 region3 v2, v44
 ;; @001f                               trapz v41, user16
-;;                                     v147 = load.i64 notrap aligned readonly can_move v0+8
+;;                                     v147 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v148 = load.i64 notrap aligned readonly can_move v147+32
 ;; @001f                               v47 = uextend.i64 v41
 ;; @001f                               v49 = iadd v148, v47
 ;; @001f                               v51 = iadd v49, v43  ; v43 = 16
-;; @001f                               v52 = load.i32 user2 readonly region1 v51
+;; @001f                               v52 = load.i32 user2 readonly region3 v51
 ;; @001f                               v53 = uextend.i64 v52
 ;; @001f                               v59 = icmp.i64 ugt v5, v53
 ;; @001f                               trapnz v59, user17

@@ -919,12 +919,15 @@ pub(crate) fn tag_address<'a>(
         let offset = i32::try_from(env.offsets.vmctx_vmtag_definition(def_index)).unwrap();
         builder.ins().iadd_imm_s(vmctx, i64::from(offset))
     } else {
-        let offset = i32::try_from(env.offsets.vmctx_vmtag_import_from(tag_index)).unwrap();
+        let from_offset = env.offsets.vmctx_vmtag_import_from(tag_index);
+        let region = env.vmctx_alias_region(builder.func, from_offset);
         builder.ins().load(
             pointer_type,
-            ir::MemFlagsData::trusted().with_readonly(),
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_alias_region(Some(region)),
             vmctx,
-            ir::immediates::Offset32::new(offset),
+            ir::immediates::Offset32::new(i32::try_from(from_offset).unwrap()),
         )
     }
 }
@@ -941,9 +944,10 @@ pub fn vmctx_load_stack_chain<'a>(
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
+    let region = env.vmctx_alias_region(builder.func, vm_store_context_offset.into());
     let vm_store_context = builder.ins().load(
         env.pointer_type(),
-        MemFlagsData::trusted(),
+        MemFlagsData::trusted().with_alias_region(Some(region)),
         vmctx,
         vm_store_context_offset,
     );
@@ -969,9 +973,10 @@ pub fn vmctx_store_stack_chain<'a>(
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
+    let region = env.vmctx_alias_region(builder.func, vm_store_context_offset.into());
     let vm_store_context = builder.ins().load(
         env.pointer_type(),
-        MemFlagsData::trusted(),
+        MemFlagsData::trusted().with_alias_region(Some(region)),
         vmctx,
         vm_store_context_offset,
     );
@@ -997,13 +1002,18 @@ pub fn vmctx_load_vm_runtime_limits_ptr<'a>(
     vmctx: ir::Value,
 ) -> ir::Value {
     let pointer_type = env.pointer_type();
-    let offset = i32::from(env.offsets.ptr.vmctx_store_context());
+    let store_ctx_offset = env.offsets.ptr.vmctx_store_context();
+    let region = env.vmctx_alias_region(builder.func, store_ctx_offset.into());
 
     // The *pointer* to the VMRuntimeLimits does not change within the
     // same function, allowing us to set the `read_only` flag.
-    let flags = ir::MemFlagsData::trusted().with_readonly();
+    let flags = ir::MemFlagsData::trusted()
+        .with_readonly()
+        .with_alias_region(Some(region));
 
-    builder.ins().load(pointer_type, flags, vmctx, offset)
+    builder
+        .ins()
+        .load(pointer_type, flags, vmctx, i32::from(store_ctx_offset))
 }
 
 /// This function generates code that searches for a handler for `tag_address`,

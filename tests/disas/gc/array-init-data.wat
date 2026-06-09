@@ -14,12 +14,13 @@
     array.init_data $a $passive)
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32, i32) tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i64, i64, i64) tail
@@ -28,13 +29,13 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @002a                               trapz v2, user16
-;; @002a                               v52 = load.i64 notrap aligned readonly can_move v0+8
+;; @002a                               v52 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @002a                               v7 = load.i64 notrap aligned readonly can_move v52+32
 ;; @002a                               v6 = uextend.i64 v2
 ;; @002a                               v8 = iadd v7, v6
 ;; @002a                               v9 = iconst.i64 16
 ;; @002a                               v10 = iadd v8, v9  ; v9 = 16
-;; @002a                               v11 = load.i32 user2 readonly region0 v10
+;; @002a                               v11 = load.i32 user2 readonly region1 v10
 ;; @002a                               v13 = uextend.i64 v3
 ;; @002a                               v14 = uextend.i64 v5
 ;; @002a                               v17 = iadd v13, v14

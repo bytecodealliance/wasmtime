@@ -15,12 +15,14 @@
     (ref.cast (ref $s) (local.get 0)))
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 40 "VMContext+0x28"
+;;     region2 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
@@ -37,14 +39,14 @@
 ;; @0024                               brif v9, block4(v24), block3  ; v24 = 0
 ;;
 ;;                                 block3:
-;; @0024                               v22 = load.i64 notrap aligned readonly can_move v0+8
+;; @0024                               v22 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0024                               v14 = load.i64 notrap aligned readonly can_move v22+32
 ;; @0024                               v13 = uextend.i64 v2
 ;; @0024                               v15 = iadd v14, v13
 ;; @0024                               v16 = iconst.i64 4
 ;; @0024                               v17 = iadd v15, v16  ; v16 = 4
-;; @0024                               v18 = load.i32 user2 readonly region0 v17
-;; @0024                               v11 = load.i64 notrap aligned readonly can_move v0+40
+;; @0024                               v18 = load.i32 user2 readonly region2 v17
+;; @0024                               v11 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;; @0024                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @0024                               v19 = icmp eq v18, v12
 ;; @0024                               v20 = uextend.i32 v19
@@ -58,12 +60,14 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 40 "VMContext+0x28"
+;;     region2 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
@@ -80,14 +84,14 @@
 ;; @002c                               brif v9, block4(v24), block3  ; v24 = 0
 ;;
 ;;                                 block3:
-;; @002c                               v22 = load.i64 notrap aligned readonly can_move v0+8
+;; @002c                               v22 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @002c                               v14 = load.i64 notrap aligned readonly can_move v22+32
 ;; @002c                               v13 = uextend.i64 v2
 ;; @002c                               v15 = iadd v14, v13
 ;; @002c                               v16 = iconst.i64 4
 ;; @002c                               v17 = iadd v15, v16  ; v16 = 4
-;; @002c                               v18 = load.i32 user2 readonly region0 v17
-;; @002c                               v11 = load.i64 notrap aligned readonly can_move v0+40
+;; @002c                               v18 = load.i32 user2 readonly region2 v17
+;; @002c                               v11 = load.i64 notrap aligned readonly can_move region1 v0+40
 ;; @002c                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @002c                               v19 = icmp eq v18, v12
 ;; @002c                               v20 = uextend.i32 v19

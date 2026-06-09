@@ -34,9 +34,12 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) tail {
-;;     region0 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 96 "VMContext+0x60"
+;;     region2 = 80 "VMContext+0x50"
+;;     region3 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -46,8 +49,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0028                               v3 = iconst.i32 0
-;; @0030                               v7 = load.i64 notrap aligned readonly can_move v0+80
-;; @0030                               v6 = load.i64 notrap aligned readonly can_move v0+96
+;; @0030                               v7 = load.i64 notrap aligned readonly can_move region2 v0+80
+;; @0030                               v6 = load.i64 notrap aligned readonly can_move region1 v0+96
 ;; @0039                               v13 = iconst.i64 0x0001_0000
 ;; @0039                               v17 = iconst.i64 0
 ;; @0039                               v15 = load.i64 notrap aligned readonly can_move v0+56
@@ -64,7 +67,7 @@
 ;; @0039                               v16 = iadd.i64 v15, v12
 ;;                                     v25 = iconst.i64 0
 ;;                                     v26 = select_spectre_guard v24, v25, v16  ; v25 = 0
-;; @0039                               store little region0 v22, v26  ; v22 = 0
+;; @0039                               store little region3 v22, v26  ; v22 = 0
 ;;                                     v27 = iconst.i32 1
 ;;                                     v28 = iadd v9, v27  ; v27 = 1
 ;; @0043                               jump block2(v28)

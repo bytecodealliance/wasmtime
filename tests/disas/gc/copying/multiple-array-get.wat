@@ -10,25 +10,26 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) -> i64, i64 tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @0024                               trapz v2, user16
-;; @0024                               v65 = load.i64 notrap aligned readonly can_move v0+8
+;; @0024                               v65 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @0024                               v8 = load.i64 notrap aligned readonly can_move v65+32
 ;; @0024                               v7 = uextend.i64 v2
 ;; @0024                               v9 = iadd v8, v7
 ;; @0024                               v10 = iconst.i64 16
 ;; @0024                               v11 = iadd v9, v10  ; v10 = 16
-;; @0024                               v12 = load.i32 user2 readonly region0 v11
+;; @0024                               v12 = load.i32 user2 readonly region1 v11
 ;; @0024                               v13 = icmp ult v3, v12
 ;; @0024                               trapz v13, user17
 ;; @0024                               v15 = uextend.i64 v12
@@ -49,7 +50,7 @@
 ;; @0024                               v29 = isub v21, v24
 ;; @0024                               v30 = uextend.i64 v29
 ;; @0024                               v31 = isub v28, v30
-;; @0024                               v32 = load.i64 user2 little region0 v31
+;; @0024                               v32 = load.i64 user2 little region1 v31
 ;; @002b                               v39 = icmp ult v4, v12
 ;; @002b                               trapz v39, user17
 ;;                                     v86 = ishl v4, v77  ; v77 = 3
@@ -57,7 +58,7 @@
 ;; @002b                               v55 = isub v21, v50
 ;; @002b                               v56 = uextend.i64 v55
 ;; @002b                               v57 = isub v28, v56
-;; @002b                               v58 = load.i64 user2 little region0 v57
+;; @002b                               v58 = load.i64 user2 little region1 v57
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:

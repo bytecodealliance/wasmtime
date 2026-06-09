@@ -38,19 +38,22 @@
 )
 
 ;; function u2:0(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 72 "VMContext+0x48"
+;;     region2 = 104 "VMContext+0x68"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = vmctx
-;;     gv5 = load.i64 notrap aligned readonly gv4+8
+;;     gv5 = load.i64 notrap aligned readonly region0 gv4+8
 ;;     gv6 = load.i64 notrap aligned gv5+24
 ;;     gv7 = vmctx
 ;;     gv8 = vmctx
-;;     gv9 = load.i64 notrap aligned readonly gv8+8
+;;     gv9 = load.i64 notrap aligned readonly region0 gv8+8
 ;;     gv10 = load.i64 notrap aligned gv9+24
 ;;     gv11 = vmctx
-;;     gv12 = load.i64 notrap aligned readonly gv11+8
+;;     gv12 = load.i64 notrap aligned readonly region0 gv11+8
 ;;     gv13 = load.i64 notrap aligned gv12+24
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
