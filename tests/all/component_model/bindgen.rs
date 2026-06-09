@@ -1291,3 +1291,394 @@ mod named_imports {
         Ok(())
     }
 }
+
+/// A component shared by the sync and async resource named-import tests below.
+///
+/// It imports `demo:pkg/store` (which defines a `counter` resource plus a free
+/// `label` function) twice, under arbitrary names `a` and `b`, each annotated
+/// as implementing that interface. The exported `run` exercises, through *both*
+/// imports: the constructor, an instance method (`value`/`bump`), a static
+/// method (`combine`), the free function (`label`), and the destructor.
+const RESOURCE_COMPONENT: &str = r#"
+    (component
+        (import "a" (implements "demo:pkg/store") (instance $a
+            (export "counter" (type $counter_a (sub resource)))
+            (export "[constructor]counter" (func (param "init" u32) (result (own $counter_a))))
+            (export "[method]counter.value" (func (param "self" (borrow $counter_a)) (result u32)))
+            (export "[method]counter.bump" (func (param "self" (borrow $counter_a)) (param "by" u32)))
+            (export "[static]counter.combine" (func (param "a" u32) (param "b" u32) (result u32)))
+            (export "label" (func (result u32)))
+        ))
+        (import "b" (implements "demo:pkg/store") (instance $b
+            (export "counter" (type $counter_b (sub resource)))
+            (export "[constructor]counter" (func (param "init" u32) (result (own $counter_b))))
+            (export "[method]counter.value" (func (param "self" (borrow $counter_b)) (result u32)))
+            (export "[method]counter.bump" (func (param "self" (borrow $counter_b)) (param "by" u32)))
+            (export "[static]counter.combine" (func (param "a" u32) (param "b" u32) (result u32)))
+            (export "label" (func (result u32)))
+        ))
+
+        (alias export $a "counter" (type $ca))
+        (alias export $b "counter" (type $cb))
+
+        (core func $a-ctor (canon lower (func $a "[constructor]counter")))
+        (core func $a-value (canon lower (func $a "[method]counter.value")))
+        (core func $a-bump (canon lower (func $a "[method]counter.bump")))
+        (core func $a-combine (canon lower (func $a "[static]counter.combine")))
+        (core func $a-label (canon lower (func $a "label")))
+        (core func $a-drop (canon resource.drop $ca))
+        (core func $b-ctor (canon lower (func $b "[constructor]counter")))
+        (core func $b-value (canon lower (func $b "[method]counter.value")))
+        (core func $b-bump (canon lower (func $b "[method]counter.bump")))
+        (core func $b-combine (canon lower (func $b "[static]counter.combine")))
+        (core func $b-label (canon lower (func $b "label")))
+        (core func $b-drop (canon resource.drop $cb))
+
+        (core module $m
+            (import "" "a-ctor" (func $a-ctor (param i32) (result i32)))
+            (import "" "a-value" (func $a-value (param i32) (result i32)))
+            (import "" "a-bump" (func $a-bump (param i32 i32)))
+            (import "" "a-combine" (func $a-combine (param i32 i32) (result i32)))
+            (import "" "a-label" (func $a-label (result i32)))
+            (import "" "a-drop" (func $a-drop (param i32)))
+            (import "" "b-ctor" (func $b-ctor (param i32) (result i32)))
+            (import "" "b-value" (func $b-value (param i32) (result i32)))
+            (import "" "b-bump" (func $b-bump (param i32 i32)))
+            (import "" "b-combine" (func $b-combine (param i32 i32) (result i32)))
+            (import "" "b-label" (func $b-label (result i32)))
+            (import "" "b-drop" (func $b-drop (param i32)))
+
+            (func (export "run")
+                (local $ha i32)
+                (local $hb i32)
+
+                (local.set $ha (call $a-ctor (i32.const 10)))
+                (call $a-bump (local.get $ha) (i32.const 5))
+                (if (i32.ne (call $a-value (local.get $ha)) (i32.const 15))
+                    (then unreachable))
+
+                (local.set $hb (call $b-ctor (i32.const 100)))
+                (if (i32.ne (call $b-value (local.get $hb)) (i32.const 100))
+                    (then unreachable))
+
+                ;; static method through each import
+                (if (i32.ne (call $a-combine (i32.const 3) (i32.const 4)) (i32.const 7))
+                    (then unreachable))
+                (if (i32.ne (call $b-combine (i32.const 5) (i32.const 6)) (i32.const 11))
+                    (then unreachable))
+
+                ;; free function in the same interface, id-dependent result
+                (if (i32.ne (call $a-label) (i32.const 1000))
+                    (then unreachable))
+                (if (i32.ne (call $b-label) (i32.const 2000))
+                    (then unreachable))
+
+                (call $a-drop (local.get $ha))
+                (call $b-drop (local.get $hb))
+            )
+        )
+        (core instance $i (instantiate $m
+            (with "" (instance
+                (export "a-ctor" (func $a-ctor))
+                (export "a-value" (func $a-value))
+                (export "a-bump" (func $a-bump))
+                (export "a-combine" (func $a-combine))
+                (export "a-label" (func $a-label))
+                (export "a-drop" (func $a-drop))
+                (export "b-ctor" (func $b-ctor))
+                (export "b-value" (func $b-value))
+                (export "b-bump" (func $b-bump))
+                (export "b-combine" (func $b-combine))
+                (export "b-label" (func $b-label))
+                (export "b-drop" (func $b-drop))
+            ))
+        ))
+
+        (func (export "run") (canon lift (core func $i "run")))
+    )
+"#;
+
+mod named_imports_resources {
+    use super::*;
+    use std::collections::HashMap;
+    use wasmtime::component::{HasSelf, Resource};
+
+    /// Host-chosen id threaded into every resource method.
+    #[derive(Clone)]
+    pub struct MyId(u32);
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                resource counter {
+                    constructor(init: u32);
+                    value: func() -> u32;
+                    bump: func(by: u32);
+                    combine: static func(a: u32, b: u32) -> u32;
+                }
+
+                label: func() -> u32;
+            }
+
+            world runner {
+                import store;
+
+                export run: func();
+            }
+        ",
+        named_imports: {
+            "demo:pkg/store": MyId,
+        },
+    });
+
+    use demo::pkg::store::Counter;
+
+    fn implements_engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        Engine::new(&config).unwrap()
+    }
+
+    #[derive(Default)]
+    struct MyHost {
+        /// Resource state keyed by `(id, rep)`.
+        counters: HashMap<(u32, u32), u32>,
+        /// Global rep allocator producing distinct reps across imports.
+        next_rep: u32,
+        /// Records `(id, op)` of every static/free-function call.
+        calls: Vec<(u32, &'static str)>,
+        /// Records `(id, rep)` of every destructor call.
+        drops: Vec<(u32, u32)>,
+    }
+
+    impl named_imports::demo::pkg::store::HostCounter for MyHost {
+        fn new(&mut self, id: MyId, init: u32) -> Resource<Counter> {
+            self.next_rep += 1;
+            let rep = self.next_rep;
+            self.counters.insert((id.0, rep), init);
+            Resource::new_own(rep)
+        }
+
+        fn value(&mut self, id: MyId, self_: Resource<Counter>) -> u32 {
+            self.counters[&(id.0, self_.rep())]
+        }
+
+        fn bump(&mut self, id: MyId, self_: Resource<Counter>, by: u32) {
+            *self.counters.get_mut(&(id.0, self_.rep())).unwrap() += by;
+        }
+
+        fn combine(&mut self, id: MyId, a: u32, b: u32) -> u32 {
+            self.calls.push((id.0, "combine"));
+            a + b
+        }
+
+        fn drop(&mut self, id: MyId, rep: Resource<Counter>) -> Result<()> {
+            self.drops.push((id.0, rep.rep()));
+            self.counters.remove(&(id.0, rep.rep()));
+            Ok(())
+        }
+    }
+
+    impl named_imports::demo::pkg::store::Host for MyHost {
+        fn label(&mut self, id: MyId) -> u32 {
+            self.calls.push((id.0, "label"));
+            id.0 * 1000
+        }
+    }
+
+    #[test]
+    fn resource_ids_are_threaded_through() -> Result<()> {
+        let engine = implements_engine();
+        let component = Component::new(&engine, super::RESOURCE_COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name| match name {
+                "a" => Ok(MyId(1)),
+                "b" => Ok(MyId(2)),
+                other => wasmtime::bail!("unexpected import: {other}"),
+            },
+            |s| s,
+        )?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let runner = Runner::instantiate(&mut store, &component, &linker)?;
+
+        runner.call_run(&mut store)?;
+
+        let data = store.data();
+        // Destructors ran with the right id and distinct reps (a -> 1, b -> 2),
+        // so a swapped drop id would fail these assertions.
+        assert!(data.drops.contains(&(1, 1)), "drops: {:?}", data.drops);
+        assert!(data.drops.contains(&(2, 2)), "drops: {:?}", data.drops);
+        // The static method and the free function were each routed to the right
+        // id through both imports.
+        assert!(
+            data.calls.contains(&(1, "combine")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(2, "combine")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(1, "label")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(2, "label")),
+            "calls: {:?}",
+            data.calls
+        );
+        // Every counter was removed on drop.
+        assert!(data.counters.is_empty(), "counters: {:?}", data.counters);
+        Ok(())
+    }
+}
+
+// The same resource exercise as above, but with the host bindings generated in
+// async mode (`imports`/`exports` async). This drives the `resource_async`
+// destructor closure and the async resource methods through the runtime, where
+// `call_async` runs each host future. The WIT functions remain synchronous, so
+// the component itself (`super::RESOURCE_COMPONENT`) is unchanged.
+mod named_imports_resources_async {
+    use super::*;
+    use std::collections::HashMap;
+    use wasmtime::component::{HasSelf, Resource};
+
+    #[derive(Clone)]
+    pub struct MyId(u32);
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface store {
+                resource counter {
+                    constructor(init: u32);
+                    value: func() -> u32;
+                    bump: func(by: u32);
+                    combine: static func(a: u32, b: u32) -> u32;
+                }
+
+                label: func() -> u32;
+            }
+
+            world runner {
+                import store;
+
+                export run: func();
+            }
+        ",
+        named_imports: {
+            "demo:pkg/store": MyId,
+        },
+        imports: { default: async },
+        exports: { default: async },
+    });
+
+    use demo::pkg::store::Counter;
+
+    fn implements_async_engine() -> Engine {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_implements(true);
+        Engine::new(&config).unwrap()
+    }
+
+    #[derive(Default)]
+    struct MyHost {
+        counters: HashMap<(u32, u32), u32>,
+        next_rep: u32,
+        calls: Vec<(u32, &'static str)>,
+        drops: Vec<(u32, u32)>,
+    }
+
+    impl named_imports::demo::pkg::store::HostCounter for MyHost {
+        async fn new(&mut self, id: MyId, init: u32) -> Resource<Counter> {
+            self.next_rep += 1;
+            let rep = self.next_rep;
+            self.counters.insert((id.0, rep), init);
+            Resource::new_own(rep)
+        }
+
+        async fn value(&mut self, id: MyId, self_: Resource<Counter>) -> u32 {
+            self.counters[&(id.0, self_.rep())]
+        }
+
+        async fn bump(&mut self, id: MyId, self_: Resource<Counter>, by: u32) {
+            *self.counters.get_mut(&(id.0, self_.rep())).unwrap() += by;
+        }
+
+        async fn combine(&mut self, id: MyId, a: u32, b: u32) -> u32 {
+            self.calls.push((id.0, "combine"));
+            a + b
+        }
+
+        async fn drop(&mut self, id: MyId, rep: Resource<Counter>) -> Result<()> {
+            self.drops.push((id.0, rep.rep()));
+            self.counters.remove(&(id.0, rep.rep()));
+            Ok(())
+        }
+    }
+
+    impl named_imports::demo::pkg::store::Host for MyHost {
+        async fn label(&mut self, id: MyId) -> u32 {
+            self.calls.push((id.0, "label"));
+            id.0 * 1000
+        }
+    }
+
+    #[tokio::test]
+    async fn resource_ids_are_threaded_through_async() -> Result<()> {
+        let engine = implements_async_engine();
+        let component = Component::new(&engine, super::RESOURCE_COMPONENT)?;
+        let mut linker = Linker::new(&engine);
+        named_imports::demo::pkg::store::add_to_linker::<_, HasSelf<MyHost>>(
+            &mut linker,
+            &component,
+            |name| match name {
+                "a" => Ok(MyId(1)),
+                "b" => Ok(MyId(2)),
+                other => wasmtime::bail!("unexpected import: {other}"),
+            },
+            |s| s,
+        )?;
+        let mut store = Store::new(&engine, MyHost::default());
+        let runner = Runner::instantiate_async(&mut store, &component, &linker).await?;
+
+        runner.call_run(&mut store).await?;
+
+        let data = store.data();
+        assert!(data.drops.contains(&(1, 1)), "drops: {:?}", data.drops);
+        assert!(data.drops.contains(&(2, 2)), "drops: {:?}", data.drops);
+        assert!(
+            data.calls.contains(&(1, "combine")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(2, "combine")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(1, "label")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(
+            data.calls.contains(&(2, "label")),
+            "calls: {:?}",
+            data.calls
+        );
+        assert!(data.counters.is_empty(), "counters: {:?}", data.counters);
+        Ok(())
+    }
+}
