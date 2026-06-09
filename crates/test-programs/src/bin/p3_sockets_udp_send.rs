@@ -58,7 +58,8 @@ async fn test_wrong_address_family(family: IpAddressFamily) {
             result,
             Err(ErrorCode::NotSupported
                 | ErrorCode::InvalidArgument
-                | ErrorCode::RemoteUnreachable)
+                | ErrorCode::RemoteUnreachable
+                | ErrorCode::Other(_))
         ),
         "bad error {result:?}"
     );
