@@ -115,8 +115,6 @@ To run ISA specification generation, you will first need to install ASLp:
 1.  [Install `opam`](https://opam.ocaml.org/doc/Install.html), the OCaml Package
     Manager. The "Binary distribution" method is recommended. Ensure it is
     initialized with `opam init`; the install script assumes a working opam.
-    Building ASLp also needs a C toolchain and GMP (`libgmp-dev` on Debian,
-    `gmp-devel` on Fedora); recent opam may offer to install these for you.
 2.  Install ASLp with `./setup/install-aslp.sh`. This creates a dedicated
     OCaml 5.x opam switch named `aslp` and installs the upstream
     [ASLp](https://github.com/UQ-PAC/aslp) and
