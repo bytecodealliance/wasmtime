@@ -627,6 +627,97 @@ fn store_data_address() -> Result<()> {
     Ok(())
 }
 
+/// Exercise intrinsics that are:
+///
+/// - lowered to core functions,
+/// - re-exported directly from a core instance *without* being wrapped in any
+///   core function,
+/// - lifted back into component functions,
+/// - and then called directly by the host.
+///
+/// This is a tricky case for intrinsics like `store-data-address` that read out
+/// of a vmctx: in this path the intrinsic trampoline is reached without any
+/// intervening core-Wasm caller, so we must not assume that the trampoline's
+/// caller vmctx is a core-Wasm `VMContext`.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn directly_reexported_and_lifted_intrinsics() -> Result<()> {
+    let engine = Engine::default();
+
+    let wat = r#"
+        (component
+            (import "unsafe-intrinsics"
+                (instance $intrinsics
+                    (export "store-data-address" (func (result u64)))
+                    (export "u64-native-load" (func (param "pointer" u64) (result u64)))
+                )
+            )
+
+            ;; Lower the intrinsics to core functions.
+            (core func $store-data-address' (canon lower (func $intrinsics "store-data-address")))
+            (core func $u64-native-load' (canon lower (func $intrinsics "u64-native-load")))
+
+            ;; A core module that imports the intrinsics and re-exports them
+            ;; directly, without wrapping them in any core function of its own.
+            (core module $m
+                (import "" "store-data-address" (func $store-data-address (result i64)))
+                (import "" "u64-native-load" (func $load (param i64) (result i64)))
+                (export "store-data-address" (func $store-data-address))
+                (export "u64-native-load" (func $load))
+            )
+
+            (core instance $i
+                (instantiate $m
+                    (with "" (instance (export "store-data-address" (func $store-data-address'))
+                                       (export "u64-native-load" (func $u64-native-load'))))
+                )
+            )
+
+            ;; Lift the re-exported core functions directly back into component
+            ;; functions and export them.
+            (func (export "store-data-address") (result u64)
+                (canon lift (core func $i "store-data-address")))
+            (func (export "u64-native-load") (param "pointer" u64) (result u64)
+                (canon lift (core func $i "u64-native-load")))
+        )
+    "#;
+
+    let mut code_builder = CodeBuilder::new(&engine);
+    code_builder.wasm_binary_or_text(wat.as_bytes(), None)?;
+    unsafe {
+        code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+    }
+    let component = code_builder.compile_component()?;
+
+    let known = 0x1122_3344_5566_7788_u64;
+    let linker = component::Linker::new(&engine);
+    let mut store = Store::new(&engine, known);
+    let instance = linker.instantiate(&mut store, &component)?;
+
+    let store_data_address =
+        instance.get_typed_func::<(), (u64,)>(&mut store, "store-data-address")?;
+    let load = instance.get_typed_func::<(u64,), (u64,)>(&mut store, "u64-native-load")?;
+
+    // `store-data-address` must return the address of the store's `T` data,
+    // which is the same address that `Store::data` exposes.
+    let (address,) = store_data_address.call(&mut store, ())?;
+    let expected = core::ptr::from_ref(store.data()) as u64;
+    assert_eq!(
+        address, expected,
+        "store-data-address returned the wrong pointer"
+    );
+
+    // And loading through that address (also via a directly-lifted intrinsic)
+    // must observe the known store data.
+    let (value,) = load.call(&mut store, (address,))?;
+    assert_eq!(
+        value, known,
+        "u64-native-load through store-data-address read the wrong data"
+    );
+
+    Ok(())
+}
+
 /// A 16-byte buffer aligned to 8 bytes so that aligned native accesses of any
 /// of our intrinsic widths (`u8`/`u16`/`u32`/`u64`) are well-defined.
 #[repr(align(8))]
