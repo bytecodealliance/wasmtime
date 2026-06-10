@@ -322,39 +322,6 @@ impl<'a> ExceptionTable<'a> {
         )
     }
 
-    /// Look up the frame offset and handler destination if any, for a
-    /// given return address (as an offset into the code section) and
-    /// exception tag.
-    ///
-    /// Note: we use raw `u32` types for code offsets and tags here to
-    /// avoid dependencies on `cranelift-codegen` when this crate is
-    /// built without compiler backend support (runtime-only config).
-    pub fn lookup_pc_tag(&self, pc: u32, tag: u32) -> Option<(u32, u32)> {
-        // First, look up the callsite in the sorted callsites list.
-        let callsite_idx = self
-            .callsites
-            .binary_search_by_key(&pc, |callsite| callsite.get(LittleEndian))
-            .ok()?;
-        let frame_offset =
-            option_from_u32(self.frame_offsets[callsite_idx].get(LittleEndian)).unwrap_or(0);
-
-        let (tags, _, handlers) = self.tags_contexts_handlers_for_callsite(callsite_idx);
-
-        // Is there any handler with an exact tag match?
-        if let Ok(handler_idx) = tags.binary_search_by_key(&tag, |tag| tag.get(LittleEndian)) {
-            return Some((frame_offset, handlers[handler_idx].get(LittleEndian)));
-        }
-
-        // If not, is there a fallback handler? Note that we serialize
-        // it with the tag `u32::MAX`, so it is always last in sorted
-        // order.
-        if tags.last().map(|v| v.get(LittleEndian)) == Some(u32::MAX) {
-            return Some((frame_offset, handlers.last().unwrap().get(LittleEndian)));
-        }
-
-        None
-    }
-
     fn tags_contexts_handlers_for_callsite(
         &self,
         idx: usize,
