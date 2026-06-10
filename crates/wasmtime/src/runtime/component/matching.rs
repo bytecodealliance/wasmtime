@@ -205,7 +205,7 @@ impl<'a> InstanceType<'a> {
         match self.types[index] {
             TypeResourceTable::Concrete { ty, .. } => self
                 .resources
-                .map(|t| t[ty])
+                .and_then(|t| t.get(ty).copied())
                 .unwrap_or_else(|| ResourceType::uninstantiated(&self.types, ty)),
             TypeResourceTable::Abstract(ty) => ResourceType::abstract_(&self.types, ty),
         }
