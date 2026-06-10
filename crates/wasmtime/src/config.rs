@@ -2302,7 +2302,7 @@ impl Config {
     /// first-level filter on incoming wasm modules/configuration to fail-fast
     /// instead of panicking later on.
     ///
-    /// Note that if a feature is not listed here it does not mean that the
+    /// Note that if a feature is not returned here it does not mean that the
     /// backend fully supports the proposal. Instead that means that the backend
     /// doesn't ever panic on the proposal, but errors during compilation may
     /// still be returned. This means that features listed here are definitely
@@ -2315,30 +2315,10 @@ impl Config {
         // this is a sort of "maximal set" that we invert to create a set
         // of features we _definitely can't support_ because wasmtime
         // has never heard of them.
-        let features_known_to_wasmtime = WasmFeatures::empty()
-            | WasmFeatures::MUTABLE_GLOBAL
-            | WasmFeatures::SATURATING_FLOAT_TO_INT
-            | WasmFeatures::SIGN_EXTENSION
-            | WasmFeatures::REFERENCE_TYPES
-            | WasmFeatures::CALL_INDIRECT_OVERLONG
-            | WasmFeatures::MULTI_VALUE
-            | WasmFeatures::BULK_MEMORY
-            | WasmFeatures::BULK_MEMORY_OPT
-            | WasmFeatures::SIMD
-            | WasmFeatures::RELAXED_SIMD
-            | WasmFeatures::THREADS
+        let features_known_to_wasmtime = WasmFeatures::WASM3
             | WasmFeatures::SHARED_EVERYTHING_THREADS
-            | WasmFeatures::TAIL_CALL
-            | WasmFeatures::FLOATS
-            | WasmFeatures::MULTI_MEMORY
-            | WasmFeatures::EXCEPTIONS
-            | WasmFeatures::MEMORY64
-            | WasmFeatures::EXTENDED_CONST
             | WasmFeatures::COMPONENT_MODEL
-            | WasmFeatures::FUNCTION_REFERENCES
-            | WasmFeatures::GC
             | WasmFeatures::CUSTOM_PAGE_SIZES
-            | WasmFeatures::GC_TYPES
             | WasmFeatures::STACK_SWITCHING
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::CM_ASYNC
@@ -2414,39 +2394,61 @@ impl Config {
 
     /// Calculates the set of features that are enabled for this `Config`.
     ///
-    /// This method internally will start with the an empty set of features to
+    /// This is a bit of a subtle function which takes into account inputs such
+    /// as the default set of features Wasmtime has enabled, the currently
+    /// enabled compiler, the currently enabled target, compile-time crate
+    /// features, and explicitly configured wasm proposals. This function does
+    /// not return a fixed set of all proposals in all cases as it's a bit more
+    /// nuanced than that.
+    ///
+    /// This method internally will start with an empty set of features to
     /// avoid being tied to wasmparser's defaults. Next Wasmtime's set of
     /// default features are added to this set, some of which are conditional
     /// depending on crate features. Finally explicitly requested features via
     /// `wasm_*` methods on `Config` are applied. Everything is then validated
     /// later in `Config::validate`.
+    ///
+    /// Note that the validation later on in `Config::validate` is a crucial
+    /// step here. The returned features here might include features unsupported
+    /// at compile time or unsupported by the selected compiler. In that case
+    /// `Config::validate` will present a first-class error message indicating
+    /// what's going on, and users should in theory be able to understand "ok
+    /// yeah that's why I can't enable that feature here".
     fn features(&self) -> WasmFeatures {
-        // Wasmtime by default supports all of the wasm 2.0 version of the
-        // specification.
-        let mut features = WasmFeatures::WASM2;
+        // Start with an empty set of wasm features. This notably decouples
+        // features in Wasmtime from features in wasmparser as the two are
+        // generally on different timelines.
+        let mut features = WasmFeatures::empty();
 
-        // On-by-default features that wasmtime has. Note that these are all
+        // Next add in all on-by-default features that Wasmtime has which are
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
-        // and
-        // https://docs.wasmtime.dev/stability-wasm-proposals.html
-        features |= WasmFeatures::MULTI_MEMORY;
-        features |= WasmFeatures::RELAXED_SIMD;
-        features |= WasmFeatures::TAIL_CALL;
-        features |= WasmFeatures::EXTENDED_CONST;
-        features |= WasmFeatures::MEMORY64;
-        features |= WasmFeatures::FUNCTION_REFERENCES;
-        features |= WasmFeatures::GC;
+        // and https://docs.wasmtime.dev/stability-wasm-proposals.html.
+        //
+        // Note that the first entry here, `WASM3`, is a fixed feature set that
+        // won't change over time in wasmparser which represents the union of
+        // all on-by-default features in Wasmtime. Also note that this is
+        // further refined in the conditional section below based on crate
+        // features.
+        features |= WasmFeatures::WASM3;
+
+        // features |= WasmFeatures::YOUR_WASM_FEATURE;
+        // ...
+
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
         // there too.
 
-        // Set some features to their conditionally-enabled defaults depending
-        // on crate compile-time features.
+        // Next configure some features further based on compile-time features
+        // of the wasmtime crate itself. For example if "gc" is disabled then
+        // `GC_TYPES` are disabled (a wasmparser pseudo-feature) as well as
+        // exceptions, but reference-types is still available (e.g. new
+        // encodings/types/etc).
+        //
+        // These features are all "on by default" in effect but dependent on
+        // compile-time support being available.
         features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
-        // Exception handling requires the `gc` build-time feature for runtime
-        // support.
         features.set(WasmFeatures::EXCEPTIONS, cfg!(feature = "gc"));
         features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
         features.set(
@@ -2454,13 +2456,15 @@ impl Config {
             cfg!(feature = "component-model"),
         );
 
-        // From the default set of proposals remove any that the current
-        // compiler backend may panic on if the module contains them.
+        // Next disable any features which the current compiler/target do not
+        // support. This handles cases where Winch, for example, doesn't
+        // implement a feature yet but Cranelift does. Or maybe Cranelift only
+        // supports one particular platform and not others. Things like that.
         features = features & !self.compiler_panicking_wasm_features();
 
-        // After wasmtime's defaults are configured then factor in user requests
-        // and disable/enable features. Note that the enable/disable sets should
-        // be disjoint.
+        // And, finally, process all explicitly enabled/disabled features on
+        // behalf of the embedder's frobbing `Config::wasm_*`. These have the
+        // highest priority since they were explicitly requested.
         debug_assert!((self.enabled_features & self.disabled_features).is_empty());
         features &= !self.disabled_features;
         features |= self.enabled_features;
