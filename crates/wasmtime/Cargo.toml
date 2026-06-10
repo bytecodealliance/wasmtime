@@ -385,6 +385,9 @@ custom-native-signals = []
 # Same as `custom-virtual-memory` above, but for custom sync primitive APIs.
 custom-sync-primitives = []
 
+# Same as `custom-virtual-memory` above, but for custom fiber APIs.
+custom-fiber = ["wasmtime-fiber?/custom"]
+
 # Off-by-default support to profile the Pulley interpreter. This has a
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.

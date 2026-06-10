@@ -33,6 +33,10 @@ cfg_if::cfg_if! {
         mod riscv32imac;
         pub(crate) use supported::*;
         pub(crate) use riscv32imac::*;
+    } else if #[cfg(feature = "custom")] {
+        mod custom;
+        pub(crate) use supported::*;
+        pub(crate) use custom::*;
     } else {
         // No support for this platform. Don't fail compilation though and
         // instead defer the error to happen at runtime when a fiber is created.
