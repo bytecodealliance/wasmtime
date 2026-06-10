@@ -2414,7 +2414,7 @@ impl Config {
 
     /// Calculates the set of features that are enabled for this `Config`.
     ///
-    /// This method internally will start with the an empty set of features to
+    /// This method internally will start with an empty set of features to
     /// avoid being tied to wasmparser's defaults. Next Wasmtime's set of
     /// default features are added to this set, some of which are conditional
     /// depending on crate features. Finally explicitly requested features via
@@ -2423,20 +2423,20 @@ impl Config {
     fn features(&self) -> WasmFeatures {
         // Wasmtime by default supports all of the wasm 2.0 version of the
         // specification.
-        let mut features = WasmFeatures::WASM2;
+        let mut features = WasmFeatures::empty();
 
         // On-by-default features that wasmtime has. Note that these are all
         // subject to the criteria at
         // https://docs.wasmtime.dev/contributing-implementing-wasm-proposals.html
-        // and
-        // https://docs.wasmtime.dev/stability-wasm-proposals.html
-        features |= WasmFeatures::MULTI_MEMORY;
-        features |= WasmFeatures::RELAXED_SIMD;
-        features |= WasmFeatures::TAIL_CALL;
-        features |= WasmFeatures::EXTENDED_CONST;
-        features |= WasmFeatures::MEMORY64;
-        features |= WasmFeatures::FUNCTION_REFERENCES;
-        features |= WasmFeatures::GC;
+        // and https://docs.wasmtime.dev/stability-wasm-proposals.html.
+        //
+        // Note that the first entry here, `WASM3`, is a fixed feature set that
+        // won't change over time in wasmparser which represents the union of
+        // all on-by-default features in Wasmtime. Also note that this is
+        // further refined in the conditional section below based on crate
+        // features.
+        features |= WasmFeatures::WASM3;
+        // features |= WasmFeatures::YOUR_WASM_FEATURE;
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
