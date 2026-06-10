@@ -498,11 +498,15 @@
                 (match
                     (:op shiftop)
                     ((Lsl)
-                        (with
-                            (t1)
-                            (and
-                                (= t1 (zero_ext 6 (extract 4 0 (extract 4 0 (:amt shiftop)))))
-                                (= rd (zero_ext 64 (extract 31 0 (bvlshr (concat (extract 31 0 rn) (extract 31 0 rm)) (zero_ext 64 t1)))))
+                        (=
+                            rd
+                            (zero_ext
+                                64
+                                (extract
+                                    31
+                                    0
+                                    (bvlshr (concat (extract 31 0 rn) (extract 31 0 rm)) (zero_ext 64 (extract 4 0 (extract 4 0 (:amt shiftop)))))
+                                )
                             )
                         )
                     )

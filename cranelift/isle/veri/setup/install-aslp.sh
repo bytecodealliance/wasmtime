@@ -3,7 +3,11 @@
 set -euxo pipefail
 
 # Pinned upstream sources.
-aslp="https://github.com/UQ-PAC/aslp.git#0.3.2"
+#
+# TEMPORARY: asli is pinned to a fork branch carrying the symbolic-EXTR lift fix
+# (UQ-PAC/aslp PR #152). Revert to the upstream release containing the fix once
+# it merges (e.g. "https://github.com/UQ-PAC/aslp.git#<version>").
+aslp="https://github.com/mmcloughlin/aslp.git#extr-fix"
 aslp_rpc="https://github.com/UQ-PAC/aslp-rpc.git#v0.1.4"
 
 switch="${ASLP_SWITCH:-aslp}"

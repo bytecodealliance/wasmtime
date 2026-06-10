@@ -110,6 +110,7 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )
 
 (attr MInst.Store16 (tag isaspec_generated))
@@ -222,6 +223,7 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )
 
 (attr MInst.Store32 (tag isaspec_generated))
@@ -334,6 +336,7 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )
 
 (attr MInst.Store64 (tag isaspec_generated))
@@ -446,6 +449,7 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )
 
 (attr MInst.FpuStore32 (tag isaspec_generated))
@@ -558,6 +562,7 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )
 
 (attr MInst.FpuStore64 (tag isaspec_generated))
@@ -670,4 +675,5 @@
             ((UnsignedOffset rn uimm12) true)
         )
     )
+    (modifies isa_store)
 )

@@ -74,26 +74,7 @@
                     ((SDiv)
                         (with
                             (t1 t2 t4)
-                            (and
-                                (= t1 (= rm #x0000000000000000))
-                                (if
-                                    t1
-                                    (= t2 #x0000000000000000)
-                                    (=
-                                        t4
-                                        (extract
-                                            63
-                                            0
-                                            (if
-                                                (and (= rn #x8000000000000000) (= rm #xffffffffffffffff))
-                                                #x00000000000000008000000000000000
-                                                (sign_ext 128 (bvsdiv rn rm))
-                                            )
-                                        )
-                                    )
-                                )
-                                (= rd (if t1 t2 t4))
-                            )
+                            (and (= t1 (= rm #x0000000000000000)) (if t1 (= t2 #x0000000000000000) (= t4 (bvsdiv rn rm))) (= rd (if t1 t2 t4)))
                         )
                     )
                     ((UDiv)
@@ -199,25 +180,7 @@
                             (t1 t2 t4)
                             (and
                                 (= t1 (= (extract 31 0 rm) #x00000000))
-                                (if
-                                    t1
-                                    (= t2 #x0000000000000000)
-                                    (=
-                                        t4
-                                        (zero_ext
-                                            64
-                                            (extract
-                                                31
-                                                0
-                                                (if
-                                                    (and (= (extract 31 0 rn) #x80000000) (= (extract 31 0 rm) #xffffffff))
-                                                    #x0000000080000000
-                                                    (sign_ext 64 (bvsdiv (extract 31 0 rn) (extract 31 0 rm)))
-                                                )
-                                            )
-                                        )
-                                    )
-                                )
+                                (if t1 (= t2 #x0000000000000000) (= t4 (zero_ext 64 (bvsdiv (extract 31 0 rn) (extract 31 0 rm)))))
                                 (= rd (if t1 t2 t4))
                             )
                         )
