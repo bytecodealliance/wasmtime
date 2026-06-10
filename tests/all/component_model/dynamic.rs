@@ -1239,6 +1239,82 @@ fn introspection() -> Result<()> {
 }
 
 #[test]
+fn substituted_component_type_with_exported_resource() -> Result<()> {
+    // Regression test: `Linker::substituted_component_type` builds a
+    // `types::Component` whose resource substitution map only covers *imported*
+    // resources, but is nonetheless `Some(..)`. Introspecting an exported
+    // function that references an *exported* (non-imported) resource used to
+    // panic with an index-out-of-bounds when resolving the resource type,
+    // because the resolver hard-indexed that partial map instead of falling
+    // back to treating the resource as uninstantiated (which is what
+    // `Component::component_type()` does via `resources: None`).
+    let engine = super::engine();
+
+    let component = Component::new(
+        &engine,
+        r#"
+            (component
+                (type $t' (resource (rep i32)))
+                (export $t "t" (type $t'))
+
+                (core func $ctor (canon resource.new $t))
+                (func (export "[constructor]t") (param "x" u32) (result (own $t))
+                    (canon lift (core func $ctor)))
+
+                (core module $m
+                    (func (export "f") (param i32))
+                )
+                (core instance $i (instantiate $m))
+                (func (export "[method]t.use") (param "self" (borrow $t))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    let linker = Linker::<()>::new(&engine);
+
+    // This must not panic, even though `t` is an exported resource that is
+    // absent from the linker's imported-resource substitution map.
+    let component_ty = linker.substituted_component_type(&component)?;
+
+    let mut exports = component_ty.exports(linker.engine());
+
+    // The exported resource itself.
+    let (name, _t_ty) = exports.next().unwrap();
+    assert_eq!(name, "t");
+
+    // `[constructor]t` returns `own<t>`.
+    let (name, ctor_ty) = exports.next().unwrap();
+    assert_eq!(name, "[constructor]t");
+    let ComponentItem::ComponentFunc(ctor_ty) = ctor_ty.ty else {
+        panic!("`[constructor]t` export item of wrong type")
+    };
+    assert_eq!(ctor_ty.params().len(), 1);
+    let mut ctor_results = ctor_ty.results();
+    assert_eq!(ctor_results.len(), 1);
+    let types::Type::Own(_) = ctor_results.next().unwrap() else {
+        panic!("`[constructor]t` should return an `own` handle")
+    };
+
+    // `[method]t.use` takes `borrow<t>`.
+    let (name, method_ty) = exports.next().unwrap();
+    assert_eq!(name, "[method]t.use");
+    let ComponentItem::ComponentFunc(method_ty) = method_ty.ty else {
+        panic!("`[method]t.use` export item of wrong type")
+    };
+    let mut method_params = method_ty.params();
+    assert_eq!(method_params.len(), 1);
+    let (name, param) = method_params.next().unwrap();
+    assert_eq!(name, "self");
+    let types::Type::Borrow(_) = param else {
+        panic!("`[method]t.use` should take a `borrow` handle")
+    };
+    assert_eq!(method_ty.results().len(), 0);
+
+    Ok(())
+}
+
+#[test]
 fn flags_beyond_end() -> Result<()> {
     let engine = super::engine();
 
