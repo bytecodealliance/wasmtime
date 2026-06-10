@@ -652,14 +652,15 @@ extern "C-unwind" fn __cranelift_throw(
         )
         .expect("module larger than 4GiB");
 
-        table
-            .lookup_pc_tag(relative_pc, tag)
-            .map(|(frame_offset, handler)| {
+        let (frame_offset, mut handlers) = table.lookup_pc(relative_pc);
+        handlers
+            .find(|handler| handler.tag == Some(tag) || handler.tag.is_none())
+            .map(|handler| {
                 let handler_sp = frame
                     .fp()
-                    .wrapping_sub(usize::try_from(frame_offset).unwrap());
+                    .wrapping_sub(usize::try_from(frame_offset.unwrap_or(0)).unwrap());
                 let handler_pc = base
-                    .checked_add(usize::try_from(handler).unwrap())
+                    .checked_add(usize::try_from(handler.handler_offset).unwrap())
                     .expect("Handler address computation overflowed");
                 (handler_pc, handler_sp)
             })
