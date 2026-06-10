@@ -430,6 +430,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_simple_list1(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::__internal::Vec<u32>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::__internal::Vec<u32>,),
+                                (),
+                            >::new_unchecked(self.simple_list1)
+                        }
+                    }
                     pub async fn call_simple_list1<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -439,14 +452,22 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::__internal::Vec<u32>,),
-                                (),
-                            >::new_unchecked(self.simple_list1)
-                        };
+                        let callee = self.func_simple_list1();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_simple_list2(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (),
+                        (wasmtime::component::__internal::Vec<u32>,),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (wasmtime::component::__internal::Vec<u32>,),
+                            >::new_unchecked(self.simple_list2)
+                        }
                     }
                     pub async fn call_simple_list2<_T, _D>(
                         &self,
@@ -456,14 +477,38 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (wasmtime::component::__internal::Vec<u32>,),
-                            >::new_unchecked(self.simple_list2)
-                        };
+                        let callee = self.func_simple_list2();
                         let (ret0,) = callee.call_concurrent(accessor, ()).await?;
                         Ok(ret0)
+                    }
+                    pub fn func_simple_list3(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            wasmtime::component::__internal::Vec<u32>,
+                            wasmtime::component::__internal::Vec<u32>,
+                        ),
+                        (
+                            (
+                                wasmtime::component::__internal::Vec<u32>,
+                                wasmtime::component::__internal::Vec<u32>,
+                            ),
+                        ),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    wasmtime::component::__internal::Vec<u32>,
+                                    wasmtime::component::__internal::Vec<u32>,
+                                ),
+                                (
+                                    (
+                                        wasmtime::component::__internal::Vec<u32>,
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    ),
+                                ),
+                            >::new_unchecked(self.simple_list3)
+                        }
                     }
                     pub async fn call_simple_list3<_T, _D>(
                         &self,
@@ -480,24 +525,40 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    wasmtime::component::__internal::Vec<u32>,
-                                    wasmtime::component::__internal::Vec<u32>,
-                                ),
-                                (
-                                    (
-                                        wasmtime::component::__internal::Vec<u32>,
-                                        wasmtime::component::__internal::Vec<u32>,
-                                    ),
-                                ),
-                            >::new_unchecked(self.simple_list3)
-                        };
+                        let callee = self.func_simple_list3();
                         let (ret0,) = callee
                             .call_concurrent(accessor, (arg0, arg1))
                             .await?;
                         Ok(ret0)
+                    }
+                    pub fn func_simple_list4(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::Vec<u32>,
+                            >,
+                        ),
+                        (
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::Vec<u32>,
+                            >,
+                        ),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    >,
+                                ),
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    >,
+                                ),
+                            >::new_unchecked(self.simple_list4)
+                        }
                     }
                     pub async fn call_simple_list4<_T, _D>(
                         &self,
@@ -514,20 +575,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    wasmtime::component::__internal::Vec<
-                                        wasmtime::component::__internal::Vec<u32>,
-                                    >,
-                                ),
-                                (
-                                    wasmtime::component::__internal::Vec<
-                                        wasmtime::component::__internal::Vec<u32>,
-                                    >,
-                                ),
-                            >::new_unchecked(self.simple_list4)
-                        };
+                        let callee = self.func_simple_list4();
                         let (ret0,) = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(ret0)
                     }

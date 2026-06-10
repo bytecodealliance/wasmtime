@@ -143,20 +143,28 @@ function %stack() {
     ss2 = explicit_slot 4
 
 block0:
-    v1 = stack_load.i32 ss10
-    v2 = stack_load.i32 ss10+4
-    stack_store v1, ss10+2
-    stack_store v2, ss2
+    v3 = stack_addr.i64 ss10
+    v1 = load.i32 notrap v3
+    v4 = stack_addr.i64 ss10+4
+    v2 = load.i32 notrap v4
+    v5 = stack_addr.i64 ss10+2
+    store notrap v1, v5
+    v6 = stack_addr.i64 ss2
+    store notrap v2, v6
 }
 ; sameln: function %stack() fast {
 ; check:     ss2 = explicit_slot 4
 ; check:     ss10 = explicit_slot 8
 
 ; check: block0:
-; nextln: v1 = stack_load.i32 ss10
-; nextln: v2 = stack_load.i32 ss10+4
-; nextln: stack_store v1, ss10+2
-; nextln: stack_store v2, ss2
+; nextln: v3 = stack_addr.i64 ss10
+; nextln: v1 = load.i32 notrap v3
+; nextln: v4 = stack_addr.i64 ss10+4
+; nextln: v2 = load.i32 notrap v4
+; nextln: v5 = stack_addr.i64 ss10+2
+; nextln: store notrap v1, v5
+; nextln: v6 = stack_addr.i64 ss2
+; nextln: store notrap v2, v6
 
 ; Memory access instructions.
 function %memory(i32) {

@@ -548,9 +548,8 @@ impl InstructionData {
     pub fn load_store_offset(&self) -> Option<i32> {
         match self {
             &InstructionData::Load { offset, .. }
-            | &InstructionData::StackLoad { offset, .. }
-            | &InstructionData::Store { offset, .. }
-            | &InstructionData::StackStore { offset, .. } => Some(offset.into()),
+            | &InstructionData::StackAddr { offset, .. }
+            | &InstructionData::Store { offset, .. } => Some(offset.into()),
             _ => None,
         }
     }
@@ -577,8 +576,7 @@ impl InstructionData {
     /// If this instruction references a stack slot, return it
     pub fn stack_slot(&self) -> Option<StackSlot> {
         match self {
-            &InstructionData::StackStore { stack_slot, .. }
-            | &InstructionData::StackLoad { stack_slot, .. } => Some(stack_slot),
+            &InstructionData::StackAddr { stack_slot, .. } => Some(stack_slot),
             _ => None,
         }
     }
@@ -1175,12 +1173,12 @@ mod tests {
         assert_eq!(x, y);
         assert_eq!(x.format(), InstructionFormat::Binary);
 
-        assert_eq!(format!("{:?}", Opcode::BandNot), "BandNot");
-        assert_eq!(Opcode::BandNot.to_string(), "band_not");
+        assert_eq!(format!("{:?}", Opcode::StackAddr), "StackAddr");
+        assert_eq!(Opcode::StackAddr.to_string(), "stack_addr");
 
         // Check the matcher.
         assert_eq!("iadd".parse::<Opcode>(), Ok(Opcode::Iadd));
-        assert_eq!("band_not".parse::<Opcode>(), Ok(Opcode::BandNot));
+        assert_eq!("stack_addr".parse::<Opcode>(), Ok(Opcode::StackAddr));
         assert_eq!("iadd\0".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("".parse::<Opcode>(), Err("Unknown opcode"));
         assert_eq!("\0".parse::<Opcode>(), Err("Unknown opcode"));
@@ -1485,13 +1483,13 @@ mod tests {
 
         // Mapping `StackSlot`s.
         assert_eq!(
-            map(InstructionData::StackLoad {
-                opcode: Opcode::StackLoad,
+            map(InstructionData::StackAddr {
+                opcode: Opcode::StackAddr,
                 stack_slot: StackSlot::from_u32(0),
                 offset: 0.into()
             }),
-            InstructionData::StackLoad {
-                opcode: Opcode::StackLoad,
+            InstructionData::StackAddr {
+                opcode: Opcode::StackAddr,
                 stack_slot: StackSlot::from_u32(1),
                 offset: 0.into()
             },
@@ -1499,12 +1497,12 @@ mod tests {
 
         // Mapping `DynamicStackSlot`s.
         assert_eq!(
-            map(InstructionData::DynamicStackLoad {
-                opcode: Opcode::DynamicStackLoad,
+            map(InstructionData::DynamicStackAddr {
+                opcode: Opcode::DynamicStackAddr,
                 dynamic_stack_slot: DynamicStackSlot::from_u32(0),
             }),
-            InstructionData::DynamicStackLoad {
-                opcode: Opcode::DynamicStackLoad,
+            InstructionData::DynamicStackAddr {
+                opcode: Opcode::DynamicStackAddr,
                 dynamic_stack_slot: DynamicStackSlot::from_u32(1),
             },
         );

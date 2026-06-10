@@ -190,6 +190,7 @@ where
             "enable_heap_access_spectre_mitigation",
             "enable_table_access_spectre_mitigation",
             "enable_incremental_compilation_cache_checks",
+            "enable_compact_unwind_abi",
             "regalloc_checker",
             "enable_llvm_abi_extensions",
         ];

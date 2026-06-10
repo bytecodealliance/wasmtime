@@ -1,7 +1,7 @@
 use futures::join;
 use test_programs::p3::wasi::http::types::{ErrorCode, Headers, Request, Response};
 use test_programs::p3::{wit_future, wit_stream};
-use wit_bindgen::spawn;
+use wit_bindgen::spawn_local;
 
 struct T;
 
@@ -36,7 +36,7 @@ impl test_programs::p3::service::exports::wasi::http::handler::Guest for T {
         let (mut contents_tx, contents_rx) = wit_stream::new();
         let (trailers_tx, trailers_rx) = wit_future::new(|| todo!());
         let (resp, transmit) = Response::new(hdrs, Some(contents_rx), trailers_rx);
-        spawn(async {
+        spawn_local(async {
             join!(
                 async {
                     let remaining = contents_tx.write_all(b"hello, world!".to_vec()).await;

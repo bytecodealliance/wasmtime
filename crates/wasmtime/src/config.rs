@@ -1004,7 +1004,7 @@ impl Config {
     /// Note that the function references proposal depends on the reference
     /// types proposal.
     ///
-    /// This feature is `false` by default.
+    /// This feature is `true` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
     #[cfg(feature = "gc")]
@@ -1033,13 +1033,9 @@ impl Config {
     /// Note that the function references proposal depends on the typed function
     /// references proposal.
     ///
-    /// This feature is `false` by default.
-    ///
-    /// **Warning: Wasmtime's implementation of the GC proposal is still in
-    /// progress and generally not ready for primetime.**
+    /// This feature is `true` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
-    #[cfg(feature = "gc")]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
         self.wasm_features(WasmFeatures::GC, enable);
         self
@@ -1339,6 +1335,8 @@ impl Config {
     }
 
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
+    ///
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
     #[cfg(feature = "gc")]
@@ -2437,6 +2435,8 @@ impl Config {
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
         features |= WasmFeatures::MEMORY64;
+        features |= WasmFeatures::FUNCTION_REFERENCES;
+        features |= WasmFeatures::GC;
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
@@ -2445,6 +2445,9 @@ impl Config {
         // Set some features to their conditionally-enabled defaults depending
         // on crate compile-time features.
         features.set(WasmFeatures::GC_TYPES, cfg!(feature = "gc"));
+        // Exception handling requires the `gc` build-time feature for runtime
+        // support.
+        features.set(WasmFeatures::EXCEPTIONS, cfg!(feature = "gc"));
         features.set(WasmFeatures::THREADS, cfg!(feature = "threads"));
         features.set(
             WasmFeatures::COMPONENT_MODEL,

@@ -12,10 +12,10 @@
   (func $i32x4.trunc_sat_f64x2_u_zero (param v128) (result v128) (i32x4.trunc_sat_f64x2_u_zero (local.get 0)))
 )
 ;; function u0:0(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:28 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -23,31 +23,31 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0023                               v4 = bitcast.f32x4 little v2
-;; @0023                               v6 = vconst.f32x4 const0
-;; @0023                               v7 = extractlane v4, 0
-;; @0023                               v8 = call fn0(v0, v7)
-;; @0023                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @0023                               v10 = extractlane v4, 1
-;; @0023                               v11 = call fn0(v0, v10)
-;; @0023                               v12 = insertlane v9, v11, 1
-;; @0023                               v13 = extractlane v4, 2
-;; @0023                               v14 = call fn0(v0, v13)
-;; @0023                               v15 = insertlane v12, v14, 2
-;; @0023                               v16 = extractlane v4, 3
-;; @0023                               v17 = call fn0(v0, v16)
-;; @0023                               v18 = insertlane v15, v17, 3
-;; @0025                               v19 = bitcast.i8x16 little v18
+;; @0023                               v5 = vconst.f32x4 const0
+;; @0023                               v6 = extractlane v4, 0
+;; @0023                               v7 = call fn0(v0, v6)
+;; @0023                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @0023                               v9 = extractlane v4, 1
+;; @0023                               v10 = call fn0(v0, v9)
+;; @0023                               v11 = insertlane v8, v10, 1
+;; @0023                               v12 = extractlane v4, 2
+;; @0023                               v13 = call fn0(v0, v12)
+;; @0023                               v14 = insertlane v11, v13, 2
+;; @0023                               v15 = extractlane v4, 3
+;; @0023                               v16 = call fn0(v0, v15)
+;; @0023                               v17 = insertlane v14, v16, 3
+;; @0025                               v18 = bitcast.i8x16 little v17
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @0025                               return v19
+;; @0025                               return v18
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:30 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -55,31 +55,31 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @002a                               v4 = bitcast.f32x4 little v2
-;; @002a                               v6 = vconst.f32x4 const0
-;; @002a                               v7 = extractlane v4, 0
-;; @002a                               v8 = call fn0(v0, v7)
-;; @002a                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @002a                               v10 = extractlane v4, 1
-;; @002a                               v11 = call fn0(v0, v10)
-;; @002a                               v12 = insertlane v9, v11, 1
-;; @002a                               v13 = extractlane v4, 2
-;; @002a                               v14 = call fn0(v0, v13)
-;; @002a                               v15 = insertlane v12, v14, 2
-;; @002a                               v16 = extractlane v4, 3
-;; @002a                               v17 = call fn0(v0, v16)
-;; @002a                               v18 = insertlane v15, v17, 3
-;; @002c                               v19 = bitcast.i8x16 little v18
+;; @002a                               v5 = vconst.f32x4 const0
+;; @002a                               v6 = extractlane v4, 0
+;; @002a                               v7 = call fn0(v0, v6)
+;; @002a                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @002a                               v9 = extractlane v4, 1
+;; @002a                               v10 = call fn0(v0, v9)
+;; @002a                               v11 = insertlane v8, v10, 1
+;; @002a                               v12 = extractlane v4, 2
+;; @002a                               v13 = call fn0(v0, v12)
+;; @002a                               v14 = insertlane v11, v13, 2
+;; @002a                               v15 = extractlane v4, 3
+;; @002a                               v16 = call fn0(v0, v15)
+;; @002a                               v17 = insertlane v14, v16, 3
+;; @002c                               v18 = bitcast.i8x16 little v17
 ;; @002c                               jump block1
 ;;
 ;;                                 block1:
-;; @002c                               return v19
+;; @002c                               return v18
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:32 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -87,31 +87,31 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0031                               v4 = bitcast.f32x4 little v2
-;; @0031                               v6 = vconst.f32x4 const0
-;; @0031                               v7 = extractlane v4, 0
-;; @0031                               v8 = call fn0(v0, v7)
-;; @0031                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @0031                               v10 = extractlane v4, 1
-;; @0031                               v11 = call fn0(v0, v10)
-;; @0031                               v12 = insertlane v9, v11, 1
-;; @0031                               v13 = extractlane v4, 2
-;; @0031                               v14 = call fn0(v0, v13)
-;; @0031                               v15 = insertlane v12, v14, 2
-;; @0031                               v16 = extractlane v4, 3
-;; @0031                               v17 = call fn0(v0, v16)
-;; @0031                               v18 = insertlane v15, v17, 3
-;; @0033                               v19 = bitcast.i8x16 little v18
+;; @0031                               v5 = vconst.f32x4 const0
+;; @0031                               v6 = extractlane v4, 0
+;; @0031                               v7 = call fn0(v0, v6)
+;; @0031                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @0031                               v9 = extractlane v4, 1
+;; @0031                               v10 = call fn0(v0, v9)
+;; @0031                               v11 = insertlane v8, v10, 1
+;; @0031                               v12 = extractlane v4, 2
+;; @0031                               v13 = call fn0(v0, v12)
+;; @0031                               v14 = insertlane v11, v13, 2
+;; @0031                               v15 = extractlane v4, 3
+;; @0031                               v16 = call fn0(v0, v15)
+;; @0031                               v17 = insertlane v14, v16, 3
+;; @0033                               v18 = bitcast.i8x16 little v17
 ;; @0033                               jump block1
 ;;
 ;;                                 block1:
-;; @0033                               return v19
+;; @0033                               return v18
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f32) -> f32 tail
 ;;     fn0 = colocated u805306368:34 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -119,31 +119,31 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0038                               v4 = bitcast.f32x4 little v2
-;; @0038                               v6 = vconst.f32x4 const0
-;; @0038                               v7 = extractlane v4, 0
-;; @0038                               v8 = call fn0(v0, v7)
-;; @0038                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @0038                               v10 = extractlane v4, 1
-;; @0038                               v11 = call fn0(v0, v10)
-;; @0038                               v12 = insertlane v9, v11, 1
-;; @0038                               v13 = extractlane v4, 2
-;; @0038                               v14 = call fn0(v0, v13)
-;; @0038                               v15 = insertlane v12, v14, 2
-;; @0038                               v16 = extractlane v4, 3
-;; @0038                               v17 = call fn0(v0, v16)
-;; @0038                               v18 = insertlane v15, v17, 3
-;; @003a                               v19 = bitcast.i8x16 little v18
+;; @0038                               v5 = vconst.f32x4 const0
+;; @0038                               v6 = extractlane v4, 0
+;; @0038                               v7 = call fn0(v0, v6)
+;; @0038                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @0038                               v9 = extractlane v4, 1
+;; @0038                               v10 = call fn0(v0, v9)
+;; @0038                               v11 = insertlane v8, v10, 1
+;; @0038                               v12 = extractlane v4, 2
+;; @0038                               v13 = call fn0(v0, v12)
+;; @0038                               v14 = insertlane v11, v13, 2
+;; @0038                               v15 = extractlane v4, 3
+;; @0038                               v16 = call fn0(v0, v15)
+;; @0038                               v17 = insertlane v14, v16, 3
+;; @003a                               v18 = bitcast.i8x16 little v17
 ;; @003a                               jump block1
 ;;
 ;;                                 block1:
-;; @003a                               return v19
+;; @003a                               return v18
 ;; }
 ;;
 ;; function u0:4(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:29 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -151,25 +151,25 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @003f                               v4 = bitcast.f64x2 little v2
-;; @003f                               v6 = vconst.f64x2 const0
-;; @003f                               v7 = extractlane v4, 0
-;; @003f                               v8 = call fn0(v0, v7)
-;; @003f                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @003f                               v10 = extractlane v4, 1
-;; @003f                               v11 = call fn0(v0, v10)
-;; @003f                               v12 = insertlane v9, v11, 1
-;; @0041                               v13 = bitcast.i8x16 little v12
+;; @003f                               v5 = vconst.f64x2 const0
+;; @003f                               v6 = extractlane v4, 0
+;; @003f                               v7 = call fn0(v0, v6)
+;; @003f                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @003f                               v9 = extractlane v4, 1
+;; @003f                               v10 = call fn0(v0, v9)
+;; @003f                               v11 = insertlane v8, v10, 1
+;; @0041                               v12 = bitcast.i8x16 little v11
 ;; @0041                               jump block1
 ;;
 ;;                                 block1:
-;; @0041                               return v13
+;; @0041                               return v12
 ;; }
 ;;
 ;; function u0:5(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:31 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -177,25 +177,25 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0046                               v4 = bitcast.f64x2 little v2
-;; @0046                               v6 = vconst.f64x2 const0
-;; @0046                               v7 = extractlane v4, 0
-;; @0046                               v8 = call fn0(v0, v7)
-;; @0046                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @0046                               v10 = extractlane v4, 1
-;; @0046                               v11 = call fn0(v0, v10)
-;; @0046                               v12 = insertlane v9, v11, 1
-;; @0048                               v13 = bitcast.i8x16 little v12
+;; @0046                               v5 = vconst.f64x2 const0
+;; @0046                               v6 = extractlane v4, 0
+;; @0046                               v7 = call fn0(v0, v6)
+;; @0046                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @0046                               v9 = extractlane v4, 1
+;; @0046                               v10 = call fn0(v0, v9)
+;; @0046                               v11 = insertlane v8, v10, 1
+;; @0048                               v12 = bitcast.i8x16 little v11
 ;; @0048                               jump block1
 ;;
 ;;                                 block1:
-;; @0048                               return v13
+;; @0048                               return v12
 ;; }
 ;;
 ;; function u0:6(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:33 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -203,25 +203,25 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @004d                               v4 = bitcast.f64x2 little v2
-;; @004d                               v6 = vconst.f64x2 const0
-;; @004d                               v7 = extractlane v4, 0
-;; @004d                               v8 = call fn0(v0, v7)
-;; @004d                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @004d                               v10 = extractlane v4, 1
-;; @004d                               v11 = call fn0(v0, v10)
-;; @004d                               v12 = insertlane v9, v11, 1
-;; @004f                               v13 = bitcast.i8x16 little v12
+;; @004d                               v5 = vconst.f64x2 const0
+;; @004d                               v6 = extractlane v4, 0
+;; @004d                               v7 = call fn0(v0, v6)
+;; @004d                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @004d                               v9 = extractlane v4, 1
+;; @004d                               v10 = call fn0(v0, v9)
+;; @004d                               v11 = insertlane v8, v10, 1
+;; @004f                               v12 = bitcast.i8x16 little v11
 ;; @004f                               jump block1
 ;;
 ;;                                 block1:
-;; @004f                               return v13
+;; @004f                               return v12
 ;; }
 ;;
 ;; function u0:7(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, f64) -> f64 tail
 ;;     fn0 = colocated u805306368:35 sig0
 ;;     const0 = 0x00000000000000000000000000000000
@@ -229,23 +229,24 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i8x16):
 ;; @0054                               v4 = bitcast.f64x2 little v2
-;; @0054                               v6 = vconst.f64x2 const0
-;; @0054                               v7 = extractlane v4, 0
-;; @0054                               v8 = call fn0(v0, v7)
-;; @0054                               v9 = insertlane v6, v8, 0  ; v6 = const0
-;; @0054                               v10 = extractlane v4, 1
-;; @0054                               v11 = call fn0(v0, v10)
-;; @0054                               v12 = insertlane v9, v11, 1
-;; @0057                               v13 = bitcast.i8x16 little v12
+;; @0054                               v5 = vconst.f64x2 const0
+;; @0054                               v6 = extractlane v4, 0
+;; @0054                               v7 = call fn0(v0, v6)
+;; @0054                               v8 = insertlane v5, v7, 0  ; v5 = const0
+;; @0054                               v9 = extractlane v4, 1
+;; @0054                               v10 = call fn0(v0, v9)
+;; @0054                               v11 = insertlane v8, v10, 1
+;; @0057                               v12 = bitcast.i8x16 little v11
 ;; @0057                               jump block1
 ;;
 ;;                                 block1:
-;; @0057                               return v13
+;; @0057                               return v12
 ;; }
 ;;
 ;; function u0:8(i64 vmctx, i64, i8x16) -> i8x16 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     const0 = 0x00000000000000000000000000000000
 ;;     stack_limit = gv2

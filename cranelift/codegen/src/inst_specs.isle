@@ -138,10 +138,6 @@
     (require (or (= (widthof x) 8) (= (widthof x) 16) (= (widthof x) 32) (= (widthof x) 64))))
 (instantiate bnot bv_unary_8_to_64)
 
-(spec (band_not x y)
-    (provide (= result (bvand x (bvnot y)))))
-(instantiate band_not bv_binary_8_to_64)
-
 (spec (rotl x y)
     (provide (= result (rotl x y))))
 (instantiate rotl bv_binary_8_to_64)

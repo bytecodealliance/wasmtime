@@ -394,6 +394,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -406,12 +414,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "my:dep/a@0.1.0", function = "x",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())
@@ -484,6 +487,14 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_x(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.x)
+                        }
+                    }
                     pub async fn call_x<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -496,12 +507,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "my:dep/a@0.2.0", function = "x",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.x)
-                        };
+                        let callee = self.func_x();
                         let () = callee
                             .call_async(store.as_context_mut(), ())
                             .instrument(span.clone())

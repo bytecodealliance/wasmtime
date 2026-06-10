@@ -8,12 +8,13 @@
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
-;;     region0 = 2147483648 "GcHeap"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
 ;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
 ;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     stack_limit = gv2
@@ -21,8 +22,7 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001b                               v4 = iconst.i32 0
 ;; @001b                               v5 = icmp eq v2, v4  ; v4 = 0
-;; @001b                               v6 = uextend.i32 v5
-;; @001b                               brif v6, block4(v4), block2  ; v4 = 0
+;; @001b                               brif v5, block4(v4), block2  ; v4 = 0
 ;;
 ;;                                 block2:
 ;; @001b                               v8 = iconst.i32 1
@@ -31,11 +31,11 @@
 ;; @001b                               brif v9, block4(v24), block3  ; v24 = 0
 ;;
 ;;                                 block3:
-;; @001b                               v22 = load.i64 notrap aligned readonly can_move v0+8
+;; @001b                               v22 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;; @001b                               v12 = load.i64 notrap aligned readonly can_move v22+32
 ;; @001b                               v11 = uextend.i64 v2
 ;; @001b                               v13 = iadd v12, v11
-;; @001b                               v16 = load.i32 user2 readonly region0 v13
+;; @001b                               v16 = load.i32 user2 readonly region1 v13
 ;; @001b                               v17 = iconst.i32 -1476395008
 ;; @001b                               v18 = band v16, v17  ; v17 = -1476395008
 ;; @001b                               v19 = icmp eq v18, v17  ; v17 = -1476395008

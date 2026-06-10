@@ -219,6 +219,11 @@ const _: () = {
             foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_f(&self) -> wasmtime::component::TypedFunc<(), ((T, U, R),)> {
+            unsafe {
+                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
+            }
+        }
         pub async fn call_f<_T, _D>(
             &self,
             accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -227,9 +232,7 @@ const _: () = {
             _T: Send,
             _D: wasmtime::component::HasData,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
-            };
+            let callee = self.func_f();
             let (ret0,) = callee.call_concurrent(accessor, ()).await?;
             Ok(ret0)
         }

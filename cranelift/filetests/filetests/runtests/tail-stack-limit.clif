@@ -28,7 +28,8 @@ function %b(i8, i8, i8, i8, i8, i8, i8, i128) -> i128 tail {
 block0(v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128):
     ;; Store a 0 in the vmctx struct.
     v9 = iconst.i64 0
-    stack_store.i64 v9, ss0
+    v11 = stack_addr.i64 ss0
+    store.i64 notrap v9, v11
 
     ;; Call %a with our vmctx.
     v10 = stack_addr.i64 ss0

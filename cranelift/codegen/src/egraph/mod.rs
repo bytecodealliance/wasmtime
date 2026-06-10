@@ -663,10 +663,12 @@ where
                 }
                 // `ReplaceBranchCond` is unconditionally accepted — the
                 // opcode and successors don't change, so we can't use the
-                // cost-based ranking the other variants do. The first such
+                // cost-based ranking the other variants do (replacing the
+                // condition with a cheaper sub-expression keeps the same
+                // opcode/arity, hence the same skeleton cost). The first such
                 // candidate wins; ISLE rule ordering picks the form.
                 SkeletonInstSimplification::ReplaceBranchCond { cond } => {
-                    log::trace!(" -> simplify_skeleton: replace `brif` cond with {cond}");
+                    log::trace!(" -> simplify_skeleton: replace condition operand with {cond}");
                     return Some(SkeletonInstSimplification::ReplaceBranchCond { cond });
                 }
             };
@@ -995,12 +997,15 @@ impl<'a> EgraphPass<'a> {
             SkeletonInstSimplification::Replace { inst } => (inst, None),
             SkeletonInstSimplification::ReplaceWithVal { inst, val } => (inst, Some(val)),
             SkeletonInstSimplification::ReplaceBranchCond { cond } => {
-                // Swap the condition operand of the existing `brif` in
-                // place. Successors stay; CFG is preserved.
-                debug_assert_eq!(
+                // Swap the condition operand (argument 0) of the existing
+                // conditional skeleton instruction in place. The opcode and any
+                // successors stay the same, so the CFG is preserved. This
+                // applies to `brif` as well as the conditional traps `trapz` and
+                // `trapnz`, which all take the tested value as argument 0.
+                debug_assert!(matches!(
                     cursor.func.dfg.insts[old_inst].opcode(),
-                    crate::ir::Opcode::Brif,
-                );
+                    crate::ir::Opcode::Brif | crate::ir::Opcode::Trapz | crate::ir::Opcode::Trapnz,
+                ));
                 cursor.func.dfg.inst_args_mut(old_inst)[0] = cond;
                 return;
             }

@@ -589,6 +589,53 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_many_args(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                            u64,
+                        ),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                    u64,
+                                ),
+                                (),
+                            >::new_unchecked(self.many_args)
+                        }
+                    }
                     pub async fn call_many_args<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -613,29 +660,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                    u64,
-                                ),
-                                (),
-                            >::new_unchecked(self.many_args)
-                        };
+                        let callee = self.func_many_args();
                         let () = callee
                             .call_concurrent(
                                 accessor,
@@ -661,6 +686,16 @@ pub mod exports {
                             .await?;
                         Ok(())
                     }
+                    pub fn func_big_argument(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(BigStruct,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (BigStruct,),
+                                (),
+                            >::new_unchecked(self.big_argument)
+                        }
+                    }
                     pub async fn call_big_argument<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -670,12 +705,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (BigStruct,),
-                                (),
-                            >::new_unchecked(self.big_argument)
-                        };
+                        let callee = self.func_big_argument();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }

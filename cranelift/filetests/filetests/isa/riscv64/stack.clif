@@ -97,7 +97,8 @@ function %stack_load_small() -> i64 {
 ss0 = explicit_slot 8
 
 block0:
-  v0 = stack_load.i64 ss0
+  v1 = stack_addr.i64 ss0
+  v0 = load.i64 notrap v1
   return v0
 }
 
@@ -135,7 +136,8 @@ ss0 = explicit_slot 100000
 ss1 = explicit_slot 8
 
 block0:
-  v0 = stack_load.i64 ss0
+  v1 = stack_addr.i64 ss0
+  v0 = load.i64 notrap v1
   return v0
 }
 
@@ -187,7 +189,8 @@ function %stack_store_small(i64) {
 ss0 = explicit_slot 8
 
 block0(v0: i64):
-  stack_store.i64 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i64 notrap v0, v1
   return
 }
 
@@ -225,7 +228,8 @@ ss0 = explicit_slot 100000
 ss1 = explicit_slot 8
 
 block0(v0: i64):
-  stack_store.i64 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i64 notrap v0, v1
   return
 }
 
@@ -839,7 +843,8 @@ function %i128_stack_store(i128) {
 ss0 = explicit_slot 16
 
 block0(v0: i128):
-  stack_store.i128 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i128 notrap v0, v1
   return
 }
 
@@ -879,7 +884,8 @@ ss0 = explicit_slot 16
 ss1 = explicit_slot 16
 
 block0(v0: i128):
-  stack_store.i128 v0, ss1+16
+  v1 = stack_addr.i64 ss1+16
+  store.i128 notrap v0, v1
   return
 }
 
@@ -919,7 +925,8 @@ ss0 = explicit_slot 100000
 ss1 = explicit_slot 8
 
 block0(v0: i128):
-  stack_store.i128 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i128 notrap v0, v1
   return
 }
 
@@ -973,7 +980,8 @@ function %i128_stack_load() -> i128 {
 ss0 = explicit_slot 16
 
 block0:
-  v0 = stack_load.i128 ss0
+  v1 = stack_addr.i64 ss0
+  v0 = load.i128 notrap v1
   return v0
 }
 
@@ -1013,7 +1021,8 @@ ss0 = explicit_slot 16
 ss1 = explicit_slot 16
 
 block0:
-  v0 = stack_load.i128 ss1+16
+  v1 = stack_addr.i64 ss1+16
+  v0 = load.i128 notrap v1
   return v0
 }
 
@@ -1053,7 +1062,8 @@ ss0 = explicit_slot 100000
 ss1 = explicit_slot 8
 
 block0:
-  v0 = stack_load.i128 ss0
+  v1 = stack_addr.i64 ss0
+  v0 = load.i128 notrap v1
   return v0
 }
 

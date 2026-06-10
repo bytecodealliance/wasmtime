@@ -9,6 +9,7 @@
   (data (i32.const 1) "hi")
 )
 ;; function u2415919104:1(i64 vmctx, i64, i64, i64) -> i8 system_v {
+;;     region0 = 8 "VMContext+0x8"
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     fn0 = colocated u2415919104:0 sig0
 ;;
@@ -16,7 +17,7 @@
 ;;     jump block1
 ;;
 ;; block1:
-;;     v4 = load.i64 notrap aligned v0+8
+;;     v4 = load.i64 notrap aligned region0 v0+8
 ;;     v5 = get_frame_pointer.i64 
 ;;     store notrap aligned v5, v4+72
 ;;     v6 = get_stack_pointer.i64 
@@ -42,19 +43,19 @@
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v3 = load.i64 notrap aligned v0+112
-;;     v4 = iconst.i64 0
-;;     v5 = icmp eq v3, v4  ; v4 = 0
-;;     brif v5, block2, block1
+;;     v2 = load.i64 notrap aligned v0+112
+;;     v3 = iconst.i64 0
+;;     v4 = icmp eq v2, v3  ; v3 = 0
+;;     brif v4, block2, block1
 ;;
 ;; block1:
-;;     v8 = load.i32 notrap aligned v0+120
-;;     v11 = load.i64 notrap aligned v0+64
-;;     v13 = uextend.i64 v8
-;;     v17 = icmp ugt v13, v11
-;;     trapnz v17, heap_oob
-;;     v18 = load.i64 notrap aligned readonly can_move v0+56
-;;     call fn0(v0, v18, v3, v13)
+;;     v6 = load.i32 notrap aligned v0+120
+;;     v9 = load.i64 notrap aligned v0+64
+;;     v11 = uextend.i64 v6
+;;     v15 = icmp ugt v11, v9
+;;     trapnz v15, heap_oob
+;;     v16 = load.i64 notrap aligned readonly can_move v0+56
+;;     call fn0(v0, v16, v2, v11)
 ;;     jump block2
 ;;
 ;; block2:

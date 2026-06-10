@@ -207,7 +207,8 @@ function %issue_10929_no_crash_on_icmp_vectors() -> i32x4 {
 
 block0():
   v1 = vconst.i32x4 const0
-  v2 = bxor_not v1, v1
+  v4 = bnot v1
+  v2 = bxor v1, v4
   v3 = icmp.i32x4 ne v1, v2
   return v3
 }

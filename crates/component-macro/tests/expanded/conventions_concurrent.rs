@@ -633,6 +633,16 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_kebab_case(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.kebab_case)
+                        }
+                    }
                     pub async fn call_kebab_case<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -641,14 +651,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.kebab_case)
-                        };
+                        let callee = self.func_kebab_case();
                         let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
+                    }
+                    pub fn func_foo(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(LudicrousSpeed,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (LudicrousSpeed,),
+                                (),
+                            >::new_unchecked(self.foo)
+                        }
                     }
                     pub async fn call_foo<_T, _D>(
                         &self,
@@ -659,14 +674,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (LudicrousSpeed,),
-                                (),
-                            >::new_unchecked(self.foo)
-                        };
+                        let callee = self.func_foo();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
+                    }
+                    pub fn func_function_with_dashes(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (),
+                            >::new_unchecked(self.function_with_dashes)
+                        }
                     }
                     pub async fn call_function_with_dashes<_T, _D>(
                         &self,
@@ -676,14 +696,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_function_with_dashes();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_function_with_no_weird_characters(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.function_with_dashes)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.function_with_no_weird_characters)
+                        }
                     }
                     pub async fn call_function_with_no_weird_characters<_T, _D>(
                         &self,
@@ -693,14 +718,17 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_function_with_no_weird_characters();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_apple(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.function_with_no_weird_characters)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.apple)
+                        }
                     }
                     pub async fn call_apple<_T, _D>(
                         &self,
@@ -710,14 +738,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_apple();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_apple_pear(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.apple)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.apple_pear)
+                        }
                     }
                     pub async fn call_apple_pear<_T, _D>(
                         &self,
@@ -727,14 +760,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_apple_pear();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_apple_pear_grape(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.apple_pear)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.apple_pear_grape)
+                        }
                     }
                     pub async fn call_apple_pear_grape<_T, _D>(
                         &self,
@@ -744,14 +782,17 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_apple_pear_grape();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_a0(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.apple_pear_grape)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.a0)
+                        }
                     }
                     pub async fn call_a0<_T, _D>(
                         &self,
@@ -761,14 +802,17 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_a0();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_is_xml(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.a0)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.is_xml)
+                        }
                     }
                     /// Comment out identifiers that collide when mapped to snake_case, for now; see
                     ///  https://github.com/WebAssembly/component-model/issues/118
@@ -783,14 +827,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_is_xml();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_explicit(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.is_xml)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.explicit)
+                        }
                     }
                     pub async fn call_explicit<_T, _D>(
                         &self,
@@ -800,14 +849,19 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_explicit();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_explicit_kebab(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.explicit)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.explicit_kebab)
+                        }
                     }
                     pub async fn call_explicit_kebab<_T, _D>(
                         &self,
@@ -817,14 +871,17 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
+                        let callee = self.func_explicit_kebab();
+                        let () = callee.call_concurrent(accessor, ()).await?;
+                        Ok(())
+                    }
+                    pub fn func_bool(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                        unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
-                            >::new_unchecked(self.explicit_kebab)
-                        };
-                        let () = callee.call_concurrent(accessor, ()).await?;
-                        Ok(())
+                            >::new_unchecked(self.bool)
+                        }
                     }
                     /// Identifiers with the same name as keywords are quoted.
                     pub async fn call_bool<_T, _D>(
@@ -835,12 +892,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (),
-                            >::new_unchecked(self.bool)
-                        };
+                        let callee = self.func_bool();
                         let () = callee.call_concurrent(accessor, ()).await?;
                         Ok(())
                     }

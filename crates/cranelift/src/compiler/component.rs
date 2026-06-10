@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::alias_region_key::AliasRegionKey;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
 use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
@@ -1230,7 +1230,7 @@ impl<'a> TrampolineCompiler<'a> {
         // Conditionally emit destructor-execution code based on whether we
         // statically know that a destructor exists or not.
         if has_destructor {
-            let rep = self.builder.ins().ushr_imm(should_run_destructor, 1);
+            let rep = self.builder.ins().ushr_imm_u(should_run_destructor, 1);
             let rep = self.builder.ins().ireduce(ir::types::I32, rep);
             let index = self.types[resource].unwrap_concrete_ty();
             // NB: despite the vmcontext storing nullable funcrefs for function
@@ -1516,7 +1516,7 @@ impl<'a> TrampolineCompiler<'a> {
         let may_leave_bit = self
             .builder
             .ins()
-            .band_imm(flags, i64::from(FLAG_MAY_LEAVE));
+            .band_imm_u(flags, i64::from(FLAG_MAY_LEAVE));
         let (mut traps, builder) = self.traps();
         traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
     }
@@ -1652,7 +1652,7 @@ impl ComponentCompiler for Compiler {
         );
 
         c.translate(&component.trampolines[trampoline_index]);
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {
@@ -1728,13 +1728,15 @@ impl ComponentCompiler for Compiler {
 
                 // Load the `*mut VMStoreContext` out of our vmctx.
                 let vmctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMContext {
+                    AliasRegionKey::Vm {
+                        ty: VmType::VMContext,
                         offset: c.offsets.vm_store_context(),
                     }
                     .into(),
                 );
                 let store_ctx_region = c.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::VMStoreContext {
+                    AliasRegionKey::Vm {
+                        ty: VmType::VMStoreContext,
                         offset: u32::from(c.offsets.ptr.vmstore_context_store_data()),
                     }
                     .into(),
@@ -1775,7 +1777,7 @@ impl ComponentCompiler for Compiler {
             | UnsafeIntrinsic::ContextSetI32_1 => c.translate_context_intrinsic(intrinsic)?,
         }
 
-        c.builder.finalize();
+        c.builder.finalize(c.isa.frontend_config());
         compiler.cx.abi = Some(abi);
 
         Ok(CompiledFunctionBody {

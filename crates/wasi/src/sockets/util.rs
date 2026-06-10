@@ -1,15 +1,12 @@
+use crate::sockets::SocketAddressFamily;
 use core::fmt;
 use core::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use core::str::FromStr as _;
 use core::time::Duration;
-
-use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
 use rustix::fd::AsFd;
 use rustix::io::Errno;
 use rustix::net::{bind, connect, connect_unspec, sockopt};
 use tracing::debug;
-
-use crate::sockets::SocketAddressFamily;
 
 #[derive(Debug)]
 pub enum ErrorCode {
@@ -368,13 +365,41 @@ pub fn tcp_bind(
         })
 }
 
-pub fn udp_socket(family: AddressFamily) -> std::io::Result<cap_std::net::UdpSocket> {
-    // Delegate socket creation to cap_net_ext. They handle a couple of things for us:
-    // - On Windows: call WSAStartup if not done before.
-    // - Set the NONBLOCK and CLOEXEC flags. Either immediately during socket creation,
-    //   or afterwards using ioctl or fcntl. Exact method depends on the platform.
+/// Creates a non-blocking/cloexec UDP socket.
+pub fn udp_socket(family: SocketAddressFamily) -> std::io::Result<rustix::fd::OwnedFd> {
+    // Let the standard library be responsible for handling `WSAStartup`.
+    #[cfg(windows)]
+    static INIT: std::sync::Once = std::sync::Once::new();
+    #[cfg(windows)]
+    INIT.call_once(|| {
+        let _ = std::net::TcpStream::connect(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::UNSPECIFIED,
+            0,
+        ));
+    });
 
-    let socket = cap_std::net::UdpSocket::new(family, Blocking::No)?;
+    #[cfg(not(any(windows, target_vendor = "apple")))]
+    let flags = rustix::net::SocketFlags::CLOEXEC | rustix::net::SocketFlags::NONBLOCK;
+    #[cfg(any(windows, target_vendor = "apple"))]
+    let flags = rustix::net::SocketFlags::empty();
+
+    let socket = rustix::net::socket_with(
+        match family {
+            SocketAddressFamily::Ipv4 => rustix::net::AddressFamily::INET,
+            SocketAddressFamily::Ipv6 => rustix::net::AddressFamily::INET6,
+        },
+        rustix::net::SocketType::DGRAM,
+        flags,
+        None,
+    )?;
+    #[cfg(target_vendor = "apple")]
+    rustix::io::ioctl_fioclex(&socket)?;
+    #[cfg(any(windows, target_vendor = "apple"))]
+    rustix::io::ioctl_fionbio(&socket, true)?;
+
+    if family == SocketAddressFamily::Ipv6 {
+        rustix::net::sockopt::set_ipv6_v6only(&socket, true)?;
+    }
     Ok(socket)
 }
 

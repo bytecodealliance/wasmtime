@@ -40,7 +40,7 @@ impl Guest for Component {
     ) -> StreamReader<short_reads::Thing> {
         let (mut tx, rx) = wit_stream::new();
 
-        async_support::spawn(async move {
+        async_support::spawn_local(async move {
             // Read the things one at a time, forcing the host to re-take
             // ownership of any unwritten items between writes.
             let mut things = Vec::new();

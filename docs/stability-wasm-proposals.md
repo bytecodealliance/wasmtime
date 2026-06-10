@@ -32,6 +32,9 @@ The emoji legend is:
 | [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`extended-const`]       | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`memory64`]             | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`function-references`]  | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`gc`]                   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -47,21 +50,11 @@ The emoji legend is:
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API  |
 |--------------------------|---------|-------|----------|--------|-----|--------|
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`exception-handling`]   | ✅      | ✅    | ✅       | ✅     | ✅  | ✅     |
-| [`function-references`]  | ✅      | ✅    | ✅       | 🚧     | ✅  | ❌     |
-| [`gc`] [^5]              | ✅      | ✅    | 🚧[^6]   | ✅     | ✅  | ✅     |
 | [`threads`]              | ✅      | ✅    | 🚧[^8]   | ❌[^4] | ✅  | ✅     |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅     |
 
 [^4]: Fuzzing with threads is an open implementation question that is expected
     to get fleshed out as the [`shared-everything-threads`] proposal advances.
-[^5]: There is also a [tracking
-    issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
-    GC proposal.
-[^6]: The implementation of Wasm GC is feature complete from a specification
-    perspective, however a number of quality-of-implementation tasks
-    [remain](https://github.com/bytecodealliance/wasmtime/issues/13216) that
-    we'd like to resolve before promoting Wasm GC to tier 1.
 [^8]: There are [known
     issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
     shared memories and the implementation/API in Wasmtime, for example they

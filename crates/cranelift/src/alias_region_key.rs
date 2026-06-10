@@ -5,6 +5,18 @@ use wasmtime_environ::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, StaticModuleIndex,
 };
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum VmType {
+    VMContext,
+    VMStoreContext,
+
+    #[allow(
+        dead_code,
+        reason = "used when tagging `VMMemoryDefinition` fields in upcoming commits"
+    )]
+    VMMemoryDefinition,
+}
+
 /// A key that uniquely identifies an alias region across an entire compilation.
 ///
 /// This is used to assign stable `user_id`s to `AliasRegionData` entries so
@@ -14,20 +26,12 @@ use wasmtime_environ::{
 /// `[ kind: 4 bits | data: 28 bits ]`
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum AliasRegionKey {
-    /// A `VMContext` field access.
-    VMContext {
-        /// The offset of the `VMContext` field being accessed (or the base
-        /// of the array for `VMContext` array fields).
-        offset: u32,
-    },
-
-    /// A `VMStoreContext` field access.
-    #[cfg_attr(
-        not(feature = "component-model"),
-        expect(dead_code, reason = "easier not to cfg off")
-    )]
-    VMStoreContext {
-        /// The offset of the `VMStoreContext` field being accessed.
+    /// An access of a field within a VM data structure of type `ty`.
+    Vm {
+        /// The type of VM data structure being accessed.
+        ty: VmType,
+        /// The offset of the accessed field *within* the `ty` structure (or
+        /// the base offset of the array, for array fields).
         offset: u32,
     },
 
@@ -68,10 +72,6 @@ pub(crate) enum AliasRegionKey {
     },
 
     /// A GC heap access.
-    #[allow(
-        dead_code,
-        reason = "easier not to cfg off; exact feature set is wonky in workspace"
-    )]
     GcHeap,
 }
 
@@ -102,18 +102,20 @@ impl AliasRegionKey {
     const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b0110);
     const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b0111);
     const GC_HEAP_KIND: u32 = Self::new_kind(0b1000);
+    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b1001);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
     pub(crate) fn into_raw(self) -> u32 {
         match self {
-            AliasRegionKey::VMContext { offset } => {
+            AliasRegionKey::Vm { ty, offset } => {
                 debug_assert_eq!(offset & Self::KIND_MASK, 0);
-                Self::VM_CONTEXT_KIND | (offset & Self::OFFSET_MASK)
-            }
-            AliasRegionKey::VMStoreContext { offset } => {
-                debug_assert_eq!(offset & Self::KIND_MASK, 0);
-                Self::VM_STORE_CONTEXT_KIND | (offset & Self::OFFSET_MASK)
+                let kind = match ty {
+                    VmType::VMContext => Self::VM_CONTEXT_KIND,
+                    VmType::VMStoreContext => Self::VM_STORE_CONTEXT_KIND,
+                    VmType::VMMemoryDefinition => Self::VM_MEMORY_DEFINITION_KIND,
+                };
+                kind | (offset & Self::OFFSET_MASK)
             }
             AliasRegionKey::PublicMemory => Self::IMPORTED_MEMORY_KIND,
             AliasRegionKey::DefinedMemory { module, index } => {
@@ -154,8 +156,7 @@ impl AliasRegionKey {
 impl fmt::Debug for AliasRegionKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AliasRegionKey::VMContext { offset } => write!(f, "VMContext+{offset:#x}"),
-            AliasRegionKey::VMStoreContext { offset } => write!(f, "VMStoreContext+{offset:#x}"),
+            AliasRegionKey::Vm { ty, offset } => write!(f, "{ty:?}+{offset:#x}"),
             AliasRegionKey::PublicMemory => write!(f, "PublicMemory"),
             AliasRegionKey::DefinedMemory { module, index } => {
                 write!(f, "DefinedMemory({module:?}, {index:?})")

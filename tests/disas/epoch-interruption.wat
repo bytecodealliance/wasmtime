@@ -5,44 +5,44 @@
 (module (func (loop (br 0))))
 
 ;; function u0:0(i64 vmctx, i64) tail {
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 24 "VMContext+0x18"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
 ;;     sig0 = (i64 vmctx) -> i64 tail
 ;;     fn0 = colocated u805306368:13 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0016                               v3 = load.i64 notrap aligned v0+24
-;; @0016                               v4 = load.i64 notrap aligned v3
-;; @0016                               v5 = load.i64 notrap aligned readonly can_move v0+8
-;; @0016                               v6 = load.i64 notrap aligned v5+8
-;; @0016                               v7 = icmp uge v4, v6
-;; @0016                               brif v7, block3, block2(v6)
+;; @0016                               v2 = load.i64 notrap aligned region1 v0+24
+;; @0016                               v3 = load.i64 notrap aligned v2
+;; @0016                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0016                               v5 = load.i64 notrap aligned v4+8
+;; @0016                               v6 = icmp uge v3, v5
+;; @0016                               brif v6, block3, block2(v5)
 ;;
 ;;                                 block3 cold:
-;; @0016                               v9 = call fn0(v0)
-;; @0016                               jump block2(v9)
+;; @0016                               v7 = call fn0(v0)
+;; @0016                               jump block2(v7)
 ;;
-;;                                 block2(v21: i64):
-;; @0017                               jump block4(v21)
+;;                                 block2(v18: i64):
+;; @0017                               jump block4(v18)
 ;;
-;;                                 block4(v12: i64):
-;; @0017                               v11 = load.i64 notrap aligned v3
-;; @0017                               v13 = icmp uge v11, v12
-;; @0017                               brif v13, block7, block6(v12)
+;;                                 block4(v10: i64):
+;; @0017                               v9 = load.i64 notrap aligned v2
+;; @0017                               v11 = icmp uge v9, v10
+;; @0017                               brif v11, block7, block6(v10)
 ;;
 ;;                                 block7 cold:
-;; @0017                               v15 = load.i64 notrap aligned v5+8
-;; @0017                               v16 = icmp.i64 uge v11, v15
-;; @0017                               brif v16, block8, block6(v15)
+;; @0017                               v13 = load.i64 notrap aligned v4+8
+;; @0017                               v14 = icmp.i64 uge v9, v13
+;; @0017                               brif v14, block8, block6(v13)
 ;;
 ;;                                 block8 cold:
-;; @0017                               v18 = call fn0(v0)
-;; @0017                               jump block6(v18)
+;; @0017                               v15 = call fn0(v0)
+;; @0017                               jump block6(v15)
 ;;
-;;                                 block6(v22: i64):
-;; @0019                               jump block4(v22)
+;;                                 block6(v19: i64):
+;; @0019                               jump block4(v19)
 ;; }

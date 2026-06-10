@@ -362,6 +362,19 @@ const _: () = {
             >(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_some_world_func2(
+            &self,
+        ) -> wasmtime::component::TypedFunc<
+            (),
+            (wasmtime::component::Resource<WorldResource>,),
+        > {
+            unsafe {
+                wasmtime::component::TypedFunc::<
+                    (),
+                    (wasmtime::component::Resource<WorldResource>,),
+                >::new_unchecked(self.some_world_func2)
+            }
+        }
         pub async fn call_some_world_func2<_T, _D>(
             &self,
             accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -370,12 +383,7 @@ const _: () = {
             _T: Send,
             _D: wasmtime::component::HasData,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<
-                    (),
-                    (wasmtime::component::Resource<WorldResource>,),
-                >::new_unchecked(self.some_world_func2)
-            };
+            let callee = self.func_some_world_func2();
             let (ret0,) = callee.call_concurrent(accessor, ()).await?;
             Ok(ret0)
         }
@@ -1273,6 +1281,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_handle(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Foo>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Foo>,),
+                                (),
+                            >::new_unchecked(self.handle)
+                        }
+                    }
                     pub async fn call_handle<_T, _D>(
                         &self,
                         accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -1282,12 +1303,7 @@ pub mod exports {
                         _T: Send,
                         _D: wasmtime::component::HasData,
                     {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Foo>,),
-                                (),
-                            >::new_unchecked(self.handle)
-                        };
+                        let callee = self.func_handle();
                         let () = callee.call_concurrent(accessor, (arg0,)).await?;
                         Ok(())
                     }

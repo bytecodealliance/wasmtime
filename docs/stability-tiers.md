@@ -40,6 +40,9 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`tail-call`]                              |
 | WebAssembly Proposal | [`extended-const`]                         |
 | WebAssembly Proposal | [`memory64`]                               |
+| WebAssembly Proposal | [`function-references`]                    |
+| WebAssembly Proposal | [`gc`]                                     |
+| WebAssembly Proposal | [`exception-handling`]                     |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -58,6 +61,9 @@ For explanations of what each tier means see below.
 [`bulk-memory`]: https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md
 [`extended-const`]: https://github.com/WebAssembly/extended-const
 [`reference-types`]: https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md
+[`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
+[`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
+[`gc`]: https://github.com/WebAssembly/gc
 [`simd`]: https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md
 [`wasi-clocks`]: https://github.com/WebAssembly/wasi-clocks
 [`wasi-filesystem`]: https://github.com/WebAssembly/wasi-filesystem
@@ -66,6 +72,7 @@ For explanations of what each tier means see below.
 [`wasi-sockets`]: https://github.com/WebAssembly/wasi-sockets
 [`wasi-http`]: https://github.com/WebAssembly/wasi-http
 [`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
+[`exception-handling`]: https://github.com/WebAssembly/exception-handling
 
 [^support]: Compiler support is further broken down [below](#compiler-support)
   into finer-grained target/wasm proposal combinations. Compilers are not
@@ -81,23 +88,17 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
 | WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
-| WebAssembly Proposal | [`exception-handling`]     | fuzzing, dependence on GC   |
-| WebAssembly Proposal | [`function-references`]    | production quality          |
-| WebAssembly Proposal | [`gc`]                     | production quality          |
 | WebAssembly Proposal | [`threads`]                | fuzzing, API quality        |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 | Embedding API        | C++                        | Full-time maintainer        |
 
-[`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
 [`threads`]: https://github.com/WebAssembly/threads
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
 [`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
-[`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
 [`wide-arithmetic`]: https://github.com/WebAssembly/wide-arithmetic/blob/main/proposals/wide-arithmetic/Overview.md
-[`exception-handling`]: https://github.com/WebAssembly/exception-handling
 [`stack-switching`]: https://github.com/WebAssembly/stack-switching
 
 #### Tier 3
@@ -133,7 +134,6 @@ For explanations of what each tier means see below.
 [`wasi-config`]: https://github.com/WebAssembly/wasi-config
 [`wasi-keyvalue`]: https://github.com/WebAssembly/wasi-keyvalue
 [`wasi-tls`]: https://github.com/WebAssembly/wasi-tls
-[`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a
 general-purpose code generator such as integer value types other than `i32` and

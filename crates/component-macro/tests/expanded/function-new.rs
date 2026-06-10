@@ -180,13 +180,14 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
         }
+        pub fn func_new(&self) -> wasmtime::component::TypedFunc<(), ()> {
+            unsafe { wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new) }
+        }
         pub fn call_new<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
         ) -> wasmtime::Result<()> {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new)
-            };
+            let callee = self.func_new();
             let () = callee.call(store.as_context_mut(), ())?;
             Ok(())
         }

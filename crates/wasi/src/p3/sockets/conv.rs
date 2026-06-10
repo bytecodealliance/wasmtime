@@ -104,24 +104,6 @@ impl ToSocketAddrs for types::Ipv6SocketAddress {
     }
 }
 
-impl From<types::IpAddressFamily> for cap_net_ext::AddressFamily {
-    fn from(family: types::IpAddressFamily) -> Self {
-        match family {
-            types::IpAddressFamily::Ipv4 => Self::Ipv4,
-            types::IpAddressFamily::Ipv6 => Self::Ipv6,
-        }
-    }
-}
-
-impl From<cap_net_ext::AddressFamily> for types::IpAddressFamily {
-    fn from(family: cap_net_ext::AddressFamily) -> Self {
-        match family {
-            cap_net_ext::AddressFamily::Ipv4 => Self::Ipv4,
-            cap_net_ext::AddressFamily::Ipv6 => Self::Ipv6,
-        }
-    }
-}
-
 impl From<SocketAddressFamily> for types::IpAddressFamily {
     fn from(family: SocketAddressFamily) -> Self {
         match family {

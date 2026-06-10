@@ -235,14 +235,14 @@ impl FunctionStencil {
         self.dfg.jump_tables.push(data)
     }
 
-    /// Creates a sized stack slot in the function, to be used by `stack_load`, `stack_store`
-    /// and `stack_addr` instructions.
+    /// Creates a sized stack slot in the function, to be used by the `stack_addr`
+    /// instruction.
     pub fn create_sized_stack_slot(&mut self, data: StackSlotData) -> StackSlot {
         self.sized_stack_slots.push(data)
     }
 
-    /// Creates a dynamic stack slot in the function, to be used by `dynamic_stack_load`,
-    /// `dynamic_stack_store` and `dynamic_stack_addr` instructions.
+    /// Creates a dynamic stack slot in the function, to be used by the
+    /// `dynamic_stack_addr` instruction.
     pub fn create_dynamic_stack_slot(&mut self, data: DynamicStackSlotData) -> DynamicStackSlot {
         self.dynamic_stack_slots.push(data)
     }

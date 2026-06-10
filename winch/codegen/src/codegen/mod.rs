@@ -2391,13 +2391,7 @@ where
         Ok(())
     }
 
-    #[cfg(not(feature = "threads"))]
-    pub fn emit_atomic_wait(&mut self, _arg: &MemArg, _kind: AtomicWaitKind) -> Result<()> {
-        Err(CodeGenError::unimplemented_wasm_instruction().into())
-    }
-
     /// Emit the sequence of instruction for a `memory.atomic.wait*`.
-    #[cfg(feature = "threads")]
     pub fn emit_atomic_wait(&mut self, arg: &MemArg, kind: AtomicWaitKind) -> Result<()> {
         // The `memory_atomic_wait*` builtins expect the following arguments:
         // - `memory`, as u32
@@ -2448,12 +2442,6 @@ where
         Ok(())
     }
 
-    #[cfg(not(feature = "threads"))]
-    pub fn emit_atomic_notify(&mut self, _arg: &MemArg) -> Result<()> {
-        Err(CodeGenError::unimplemented_wasm_instruction().into())
-    }
-
-    #[cfg(feature = "threads")]
     pub fn emit_atomic_notify(&mut self, arg: &MemArg) -> Result<()> {
         // The memory `memory_atomic_notify` builtin expects the following arguments:
         // - `memory`, as u32

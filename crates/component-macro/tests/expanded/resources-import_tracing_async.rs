@@ -441,6 +441,19 @@ const _: () = {
             >(linker, host_getter)?;
             Ok(())
         }
+        pub fn func_some_world_func2(
+            &self,
+        ) -> wasmtime::component::TypedFunc<
+            (),
+            (wasmtime::component::Resource<WorldResource>,),
+        > {
+            unsafe {
+                wasmtime::component::TypedFunc::<
+                    (),
+                    (wasmtime::component::Resource<WorldResource>,),
+                >::new_unchecked(self.some_world_func2)
+            }
+        }
         pub async fn call_some_world_func2<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
@@ -453,12 +466,7 @@ const _: () = {
                 tracing::Level::TRACE, "wit-bindgen export", module = "default", function
                 = "some-world-func2",
             );
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<
-                    (),
-                    (wasmtime::component::Resource<WorldResource>,),
-                >::new_unchecked(self.some_world_func2)
-            };
+            let callee = self.func_some_world_func2();
             let (ret0,) = callee
                 .call_async(store.as_context_mut(), ())
                 .instrument(span.clone())
@@ -1885,6 +1893,19 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_handle(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<
+                        (wasmtime::component::Resource<Foo>,),
+                        (),
+                    > {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (wasmtime::component::Resource<Foo>,),
+                                (),
+                            >::new_unchecked(self.handle)
+                        }
+                    }
                     pub async fn call_handle<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
@@ -1898,12 +1919,7 @@ pub mod exports {
                             tracing::Level::TRACE, "wit-bindgen export", module =
                             "foo:foo/uses-resource-transitively", function = "handle",
                         );
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (wasmtime::component::Resource<Foo>,),
-                                (),
-                            >::new_unchecked(self.handle)
-                        };
+                        let callee = self.func_handle();
                         let () = callee
                             .call_async(store.as_context_mut(), (arg0,))
                             .instrument(span.clone())

@@ -79,8 +79,9 @@
 )
 
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -89,8 +90,9 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -102,8 +104,9 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -134,8 +137,9 @@
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;

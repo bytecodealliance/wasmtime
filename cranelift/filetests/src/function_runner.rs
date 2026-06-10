@@ -611,7 +611,7 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
     }
 
     builder.ins().return_(&[]);
-    builder.finalize();
+    builder.finalize(isa.frontend_config());
 
     func
 }

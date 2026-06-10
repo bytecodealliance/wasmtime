@@ -4,7 +4,8 @@ target x86_64 has_bmi1
 
 function %f1(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-    v2 = band_not v0, v1
+    v3 = bnot v1
+    v2 = band v0, v3
     return v2
 }
 

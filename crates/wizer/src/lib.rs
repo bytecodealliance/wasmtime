@@ -56,6 +56,10 @@ const DEFAULT_KEEP_INIT_FUNC: bool = false;
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
+    ///
+    /// When used with components, this can be either the item name of a
+    /// function (e.g. `wasi:cli/run.run`) or a complete wave-encoded function
+    /// call (e.g. `your:package/iface.func("hello world")`)
     #[cfg_attr(
         feature = "clap",
         arg(short = 'f', long, default_value = "wizer-initialize")

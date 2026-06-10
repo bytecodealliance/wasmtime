@@ -94,12 +94,15 @@
         ;; or types of results as the old instruction.
         (ReplaceWithVal (inst Inst) (val Value))
 
-        ;; Narrow rewrite: replace the condition operand of a `brif`
-        ;; (argument 0) with the given value. The opcode and successor
-        ;; blocks stay the same, so the CFG is preserved. Use this to
-        ;; rewrite branch conditions whose producer simplifies in
-        ;; boolean-test context (e.g. `(brif (ctz x))` → branch on the
-        ;; LSB of x).
+        ;; Narrow rewrite: replace the condition operand of a conditional
+        ;; skeleton instruction (i.e. `brif`, `trapz`, or `trapnz`) with the
+        ;; given value.
+        ;;
+        ;; The opcode and any successor blocks stay the same, so the CFG is
+        ;; preserved.
+        ;;
+        ;; Use this to rewrite conditions which simplify within a boolean-test
+        ;; context (e.g. `(brif (ctz x))` can be simplified to `(brif x)`).
         (ReplaceBranchCond (cond Value))))
 
 (decl pure inst_to_skeleton_inst_simplification (Inst) SkeletonInstSimplification)

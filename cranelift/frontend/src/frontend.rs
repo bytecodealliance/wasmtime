@@ -681,7 +681,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// This resets the state of the [`FunctionBuilderContext`] in preparation to
     /// be used for another function.
-    pub fn finalize(mut self) {
+    pub fn finalize(mut self, frontend_config: TargetFrontendConfig) {
         // Check that all the `Block`s are filled and sealed.
         #[cfg(debug_assertions)]
         {
@@ -715,9 +715,11 @@ impl<'a> FunctionBuilder<'a> {
         // to run our pass to spill those values to the stack at safepoints and
         // generate stack maps.
         if !self.func_ctx.ssa.stack_map_values().is_empty() {
-            self.func_ctx
-                .safepoints
-                .run(&mut self.func, self.func_ctx.ssa.stack_map_values());
+            self.func_ctx.safepoints.run(
+                &mut self.func,
+                self.func_ctx.ssa.stack_map_values(),
+                frontend_config.pointer_type(),
+            );
         }
 
         // Clear the state (but preserve the allocated buffers) in preparation
@@ -1156,7 +1158,7 @@ impl<'a> FunctionBuilder<'a> {
         let pointer_type = config.pointer_type();
         let size = self.ins().iconst(pointer_type, size as i64);
         let cmp = self.call_memcmp(config, left, right, size);
-        self.ins().icmp_imm(zero_cc, cmp, 0)
+        self.ins().icmp_imm_s(zero_cc, cmp, 0)
     }
 }
 
@@ -1295,7 +1297,7 @@ mod tests {
                 builder.seal_all_blocks();
             }
 
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         let flags = settings::Flags::new(settings::builder());
@@ -1361,7 +1363,7 @@ mod tests {
             builder.ins().return_(&[size]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1416,7 +1418,7 @@ block0:
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1468,7 +1470,7 @@ block0:
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1512,7 +1514,7 @@ block0:
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1551,7 +1553,7 @@ block0:
             builder.ins().return_(&[dest]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1612,7 +1614,7 @@ block0:
             builder.ins().return_(&[cmp]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1821,7 +1823,7 @@ block0:
             builder.ins().return_(&[ret]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1854,7 +1856,7 @@ block0:
             builder.ins().return_(&[a, b, c]);
 
             builder.seal_all_blocks();
-            builder.finalize();
+            builder.finalize(systemv_frontend_config());
         }
 
         check(
@@ -1927,7 +1929,7 @@ block0:
         builder.ins().return_(&[]);
 
         builder.seal_all_blocks();
-        builder.finalize();
+        builder.finalize(systemv_frontend_config());
 
         let flags = cranelift_codegen::settings::Flags::new(cranelift_codegen::settings::builder());
         let ctx = cranelift_codegen::Context::for_function(func);
@@ -2002,7 +2004,7 @@ block0:
         builder.ins().return_(&[ret_val]);
 
         builder.seal_all_blocks();
-        builder.finalize();
+        builder.finalize(systemv_frontend_config());
 
         let flags = cranelift_codegen::settings::Flags::new(cranelift_codegen::settings::builder());
         let ctx = cranelift_codegen::Context::for_function(func);

@@ -1,4 +1,5 @@
 use crate::TRAP_INTERNAL_ASSERT;
+use crate::alias_region_key::{AliasRegionKey, VmType};
 #[cfg(feature = "std")]
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
@@ -52,11 +53,9 @@ use wasmtime_environ::{
 };
 use wasmtime_unwinder::ExceptionTableBuilder;
 
-#[cfg(feature = "component-model")]
 pub(crate) mod component;
 
 struct IncrementalCacheContext {
-    #[cfg(feature = "incremental-cache")]
     cache_store: Arc<dyn CacheStore>,
     num_hits: usize,
     num_cached: usize,
@@ -95,7 +94,6 @@ pub struct Compiler {
     cache_store: Option<Arc<dyn CacheStore>>,
     #[cfg(feature = "std")]
     clif_dir: Option<path::PathBuf>,
-    #[cfg(feature = "wmemcheck")]
     pub(crate) wmemcheck: bool,
 }
 
@@ -147,7 +145,6 @@ impl Compiler {
             cache_store,
             #[cfg(feature = "std")]
             clif_dir,
-            #[cfg(feature = "wmemcheck")]
             wmemcheck,
         }
     }
@@ -250,11 +247,13 @@ impl Compiler {
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
         let ptr = isa.pointer_bytes();
+        let store_ctx_offset = ptr.vmcontext_store_context();
+        let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlagsData::trusted(),
+            MemFlagsData::trusted().with_alias_region(Some(region)),
             caller_vmctx,
-            i32::from(ptr.vmcontext_store_context()),
+            i32::from(store_ctx_offset),
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, vm_store_context);
 
@@ -286,11 +285,15 @@ impl Compiler {
         // Increment the "execution version" on the VMStoreContext if
         // guest debugging is enabled.
         if self.tunables.debug_guest {
+            let store_ctx_offset = ptr_size.vmctx_store_context();
+            let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
             let vmstore_ctx_ptr = builder.ins().load(
                 pointer_type,
-                MemFlagsData::trusted().with_readonly(),
+                MemFlagsData::trusted()
+                    .with_readonly()
+                    .with_alias_region(Some(region)),
                 caller_vmctx,
-                i32::from(ptr_size.vmctx_store_context()),
+                i32::from(store_ctx_offset),
             );
             let old_version = builder.ins().load(
                 ir::types::I64,
@@ -298,7 +301,7 @@ impl Compiler {
                 vmstore_ctx_ptr,
                 i32::from(ptr_size.vmstore_context_execution_version()),
             );
-            let new_version = builder.ins().iadd_imm(old_version, 1);
+            let new_version = builder.ins().iadd_imm_s(old_version, 1);
             builder.ins().store(
                 MemFlagsData::trusted(),
                 new_version,
@@ -315,7 +318,7 @@ impl Compiler {
         let results =
             self.load_values_from_array(wasm_func_ty.results(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -358,11 +361,13 @@ impl Compiler {
         // additionally perform the "routine of the exit trampoline" of saving
         // fp/pc/etc.
         self.debug_assert_vmctx_kind(&mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
+        let store_ctx_offset = ptr_size.vmcontext_store_context();
+        let region = vmctx_alias_region(builder.func, store_ctx_offset.into());
         let vm_store_context = builder.ins().load(
             pointer_type,
-            MemFlagsData::trusted(),
+            MemFlagsData::trusted().with_alias_region(Some(region)),
             vmctx,
-            ptr_size.vmcontext_store_context(),
+            store_ctx_offset,
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, vm_store_context);
 
@@ -412,7 +417,7 @@ impl Compiler {
         } else {
             builder.ins().return_(&[]);
         }
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -556,11 +561,19 @@ impl wasmtime_environ::Compiler for Compiler {
             let vmctx = context
                 .func
                 .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_region = vmctx_alias_region(
+                &mut context.func,
+                func_env.offsets.ptr.vmctx_store_context().into(),
+            );
             let interrupts_flags = context
                 .func
                 .dfg
                 .mem_flags
-                .insert(MemFlagsData::trusted().with_readonly())
+                .insert(
+                    MemFlagsData::trusted()
+                        .with_readonly()
+                        .with_alias_region(Some(interrupts_region)),
+                )
                 .unwrap();
             let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
@@ -647,7 +660,6 @@ impl wasmtime_environ::Compiler for Compiler {
                 let ty = types[ty].unwrap_func();
                 self.compile_wasm_to_array_trampoline(ty, key, symbol)
             }
-            #[cfg(feature = "component-model")]
             FuncKey::ResourceDropTrampoline => {
                 let ty = types.find_resource_drop_signature().unwrap();
                 let ty = types[ty].unwrap_func();
@@ -664,7 +676,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
             FuncKey::PulleyHostCall(_) => unreachable!(),
 
-            #[cfg(feature = "component-model")]
             FuncKey::ComponentTrampoline(..) | FuncKey::UnsafeIntrinsic(..) => {
                 unreachable!()
             }
@@ -875,7 +886,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.is_branch_protection_enabled()
     }
 
-    #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self
     }
@@ -989,7 +999,6 @@ impl InliningCompiler for Compiler {
                 .map(|name| FuncKey::from_raw_parts(name.namespace, name.index))
                 .filter(|key| match key {
                     FuncKey::DefinedWasmFunction(..) => true,
-                    #[cfg(feature = "component-model")]
                     FuncKey::UnsafeIntrinsic(..) => true,
                     _ => false,
                 }),
@@ -1049,7 +1058,6 @@ impl InliningCompiler for Compiler {
                 let callee = FuncKey::from_raw_parts(callee.namespace, callee.index);
                 match callee {
                     FuncKey::DefinedWasmFunction(..) => {}
-                    #[cfg(feature = "component-model")]
                     FuncKey::UnsafeIntrinsic(..) => {}
                     _ => return InlineCommand::KeepCall,
                 }
@@ -1114,56 +1122,39 @@ impl InliningCompiler for Compiler {
     }
 }
 
-#[cfg(feature = "incremental-cache")]
-mod incremental_cache {
-    use super::*;
+struct CraneliftCacheStore(Arc<dyn CacheStore>);
 
-    struct CraneliftCacheStore(Arc<dyn CacheStore>);
-
-    impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
-        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
-            self.0.get(key)
-        }
-        fn insert(&mut self, key: &[u8], val: Vec<u8>) {
-            self.0.insert(key, val);
-        }
+impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
+    fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
+        self.0.get(key)
     }
-
-    pub(super) fn compile_maybe_cached<'a>(
-        context: &'a mut Context,
-        isa: &dyn TargetIsa,
-        cache_ctx: Option<&mut IncrementalCacheContext>,
-    ) -> Result<CompiledCode, CompileError> {
-        let cache_ctx = match cache_ctx {
-            Some(ctx) => ctx,
-            None => return compile_uncached(context, isa),
-        };
-
-        let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
-        let (_compiled_code, from_cache) = context
-            .compile_with_cache(isa, &mut cache_store, &mut Default::default())
-            .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
-
-        if from_cache {
-            cache_ctx.num_hits += 1;
-        } else {
-            cache_ctx.num_cached += 1;
-        }
-
-        Ok(context.take_compiled_code().unwrap())
+    fn insert(&mut self, key: &[u8], val: Vec<u8>) {
+        self.0.insert(key, val);
     }
 }
 
-#[cfg(feature = "incremental-cache")]
-use incremental_cache::*;
-
-#[cfg(not(feature = "incremental-cache"))]
 fn compile_maybe_cached<'a>(
     context: &'a mut Context,
     isa: &dyn TargetIsa,
-    _cache_ctx: Option<&mut IncrementalCacheContext>,
+    cache_ctx: Option<&mut IncrementalCacheContext>,
 ) -> Result<CompiledCode, CompileError> {
-    compile_uncached(context, isa)
+    let cache_ctx = match cache_ctx {
+        Some(ctx) => ctx,
+        None => return compile_uncached(context, isa),
+    };
+
+    let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
+    let (_compiled_code, from_cache) = context
+        .compile_with_cache(isa, &mut cache_store, &mut Default::default())
+        .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
+
+    if from_cache {
+        cache_ctx.num_hits += 1;
+    } else {
+        cache_ctx.num_cached += 1;
+    }
+
+    Ok(context.take_compiled_code().unwrap())
 }
 
 fn compile_uncached<'a>(
@@ -1305,7 +1296,6 @@ impl Compiler {
                     ctx
                 })
                 .unwrap_or_else(|| CompilerContext {
-                    #[cfg(feature = "incremental-cache")]
                     incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
                         IncrementalCacheContext {
                             cache_store: cache_store.clone(),
@@ -1374,11 +1364,13 @@ impl Compiler {
         // base pointer of the array and then load the entry of the array that
         // corresponds to this builtin.
         let mem_flags = ir::MemFlagsData::trusted().with_readonly();
+        let builtins_offset = ptr_size.vmcontext_builtin_functions();
+        let region = vmctx_alias_region(builder.func, builtins_offset.into());
         let array_addr = builder.ins().load(
             pointer_type,
-            mem_flags,
+            mem_flags.with_alias_region(Some(region)),
             vmctx,
-            i32::from(ptr_size.vmcontext_builtin_functions()),
+            i32::from(builtins_offset),
         );
         let body_offset = i32::try_from(builtin.index() * pointer_type.bytes()).unwrap();
         let func_addr = builder
@@ -1406,7 +1398,7 @@ impl Compiler {
         if !self.emit_debug_checks {
             return;
         }
-        let enough_capacity = builder.ins().icmp_imm(
+        let enough_capacity = builder.ins().icmp_imm_s(
             ir::condcodes::IntCC::UnsignedGreaterThanOrEqual,
             capacity,
             ir::immediates::Imm64::new(length.try_into().unwrap()),
@@ -1429,7 +1421,7 @@ impl Compiler {
             vmctx,
             0,
         );
-        let is_expected_vmctx = builder.ins().icmp_imm(
+        let is_expected_vmctx = builder.ins().icmp_imm_s(
             ir::condcodes::IntCC::Equal,
             magic,
             i64::from(expected_vmctx_magic),
@@ -1563,7 +1555,7 @@ impl Compiler {
         let false_return = builder.ins().iconst(ir::types::I8, 0);
         builder.ins().return_(&[false_return]);
 
-        builder.finalize();
+        builder.finalize(self.isa().frontend_config());
 
         Ok(CompiledFunctionBody {
             code: box_dyn_any_compiler_context(Some(compiler.cx)),
@@ -1810,6 +1802,21 @@ fn clif_to_env_breakpoints(
     Ok(())
 }
 
+/// Insert (deduplicated) an alias region for the `VMContext` field at `offset`.
+///
+/// This is the trampoline-side equivalent of
+/// `FuncEnvironment::vmctx_alias_region`, for the trampoline compilers that do
+/// not have a `FuncEnvironment` on hand.
+fn vmctx_alias_region(func: &mut ir::Function, offset: u32) -> ir::AliasRegion {
+    func.dfg.alias_regions.insert(
+        AliasRegionKey::Vm {
+            ty: VmType::VMContext,
+            offset,
+        }
+        .into(),
+    )
+}
+
 fn save_last_wasm_entry_context(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
@@ -1819,9 +1826,10 @@ fn save_last_wasm_entry_context(
     block: ir::Block,
 ) {
     // First we need to get the `VMStoreContext`.
+    let region = vmctx_alias_region(builder.func, vm_store_context_offset);
     let vm_store_context = builder.ins().load(
         pointer_type,
-        MemFlagsData::trusted(),
+        MemFlagsData::trusted().with_alias_region(Some(region)),
         vmctx,
         i32::try_from(vm_store_context_offset).unwrap(),
     );

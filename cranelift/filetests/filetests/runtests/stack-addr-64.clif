@@ -16,13 +16,15 @@ block0(v0: i64):
     v10 = iconst.i64 8
     v2 = iadd v1, v10
 
-    stack_store.i64 v0, ss0+8
+    v12 = stack_addr.i64 ss0+8
+    store.i64 notrap v0, v12
     v3 = load.i64 v2
 
     v11 = iconst.i64 20
     v5 = iadd v0, v11
     store.i64 v5, v2
-    v6 = stack_load.i64 ss0+8
+    v13 = stack_addr.i64 ss0+8
+    v6 = load.i64 notrap v13
 
     v7 = icmp eq v0, v3
     v8 = icmp eq v5, v6
@@ -38,13 +40,15 @@ function %stack_addr_64(i64) -> i8 {
 
 block0(v0: i64):
     v1 = stack_addr.i64 ss0
-    stack_store.i64 v0, ss0
+    v12 = stack_addr.i64 ss0
+    store.i64 notrap v0, v12
     v2 = load.i64 v1
     v3 = icmp eq v0, v2
 
     v4 = stack_addr.i64 ss0+8
     store.i64 v0, v4
-    v5 = stack_load.i64 ss0+8
+    v13 = stack_addr.i64 ss0+8
+    v5 = load.i64 notrap v13
     v6 = icmp eq v0, v5
 
     v7 = stack_addr.i64 ss0+16

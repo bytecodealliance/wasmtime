@@ -20,6 +20,7 @@ allow = [
     "MPL-2.0",
     "Zlib",
     "Unicode-3.0",
+    "CDLA-Permissive-2.0",
 ]
 
 [[licenses.clarify]]
@@ -38,8 +39,7 @@ skip = [
     { name = "cpufeatures", reason = "requires an update to `sha2` which pulls in a lot of other dependencies which doesn't seem worth it" },
     { name = "hashbrown", reason = "waiting on lots of crates to update" },
     { name = "gimli", reason = "waiting on a few crates to update" },
-    { name = "linux-raw-sys", reason = "waiting on `system-interface` to update" },
-    { name = "rustix", reason = "waiting on `system-interface` to update" },
+    { name = "io-lifetimes", reason = "waiting on `fs-set-times` to update" },
 ]
 skip-tree = [
     { name = "rand", reason = "waiting on `proptest` to update" },

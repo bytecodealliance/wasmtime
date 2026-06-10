@@ -1047,7 +1047,7 @@ mod tests {
         let x3 = ssa.use_var(&mut func, x_var, I32, block2).0;
         let x4 = {
             let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
-            cur.ins().iadd_imm(x3, 1)
+            cur.ins().iadd_imm_s(x3, 1)
         };
         ssa.def_var(x_var, x4, block2);
         {

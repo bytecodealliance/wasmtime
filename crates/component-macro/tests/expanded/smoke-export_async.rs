@@ -230,6 +230,11 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_y(&self) -> wasmtime::component::TypedFunc<(), ()> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
+                }
+            }
             pub async fn call_y<S: wasmtime::AsContextMut>(
                 &self,
                 mut store: S,
@@ -237,9 +242,7 @@ pub mod exports {
             where
                 <S as wasmtime::AsContext>::Data: Send,
             {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
-                };
+                let callee = self.func_y();
                 let () = callee.call_async(store.as_context_mut(), ()).await?;
                 Ok(())
             }

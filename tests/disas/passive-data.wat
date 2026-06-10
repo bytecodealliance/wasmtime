@@ -14,8 +14,9 @@
     data.drop $passive))
 
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -38,20 +39,20 @@
 ;; @003d                               v15 = iconst.i64 1
 ;; @003d                               v16 = imul v14, v15  ; v15 = 1
 ;; @003d                               v17 = iadd v13, v16
-;; @003d                               v19 = load.i32 notrap aligned v0+152
-;; @003d                               v20 = uextend.i64 v19
-;; @003d                               v21 = uextend.i64 v3
-;; @003d                               v22 = uextend.i64 v4
-;; @003d                               v23 = iconst.i64 1
-;; @003d                               v24 = imul v22, v23  ; v23 = 1
-;; @003d                               v25 = iadd v21, v24
-;; @003d                               v26 = icmp ugt v25, v20
-;; @003d                               trapnz v26, heap_oob
-;; @003d                               v28 = load.i64 notrap aligned v0+144
-;; @003d                               v29 = uextend.i64 v3
-;; @003d                               v30 = iadd v28, v29
-;; @003d                               v31 = uextend.i64 v4
-;; @003d                               call fn0(v0, v17, v30, v31)
+;; @003d                               v18 = load.i32 notrap aligned v0+152
+;; @003d                               v19 = uextend.i64 v18
+;; @003d                               v20 = uextend.i64 v3
+;; @003d                               v21 = uextend.i64 v4
+;; @003d                               v22 = iconst.i64 1
+;; @003d                               v23 = imul v21, v22  ; v22 = 1
+;; @003d                               v24 = iadd v20, v23
+;; @003d                               v25 = icmp ugt v24, v19
+;; @003d                               trapnz v25, heap_oob
+;; @003d                               v26 = load.i64 notrap aligned v0+144
+;; @003d                               v27 = uextend.i64 v3
+;; @003d                               v28 = iadd v26, v27
+;; @003d                               v29 = uextend.i64 v4
+;; @003d                               call fn0(v0, v17, v28, v29)
 ;; @0041                               jump block1
 ;;
 ;;                                 block1:
@@ -59,15 +60,15 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) tail {
+;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0044                               v3 = iconst.i32 0
-;; @0044                               store notrap aligned v3, v0+152  ; v3 = 0
+;; @0044                               v2 = iconst.i32 0
+;; @0044                               store notrap aligned v2, v0+152  ; v2 = 0
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:

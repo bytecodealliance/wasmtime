@@ -1,6 +1,7 @@
 ;;! bulk_memory = true
 ;;! multi_memory = true
 ;;! memory64 = true
+;;! hogs_memory = true
 
 (module
   (memory 1 1)
@@ -272,3 +273,17 @@
 (assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const 100) (i32.const -1)) "out of bounds")
 (assert_trap (invoke "m64_to_m32" (i32.const -1) (i64.const 0) (i32.const 100)) "out of bounds")
 (assert_trap (invoke "m64_to_m32" (i32.const 0) (i64.const -1) (i32.const 100)) "out of bounds")
+
+;; Copying a big chunk up one byte should do a backwards copy, not a forwards
+;; copy, even if this is chunked up in to separate slices for fuel/epochs/etc.
+(module
+  (memory (export "mem") 3200 3200) ;; 200 MiB
+  (func (export "run") (result i32)
+    (i32.store8 (i32.const 134217727) (i32.const 0xAA))
+    (i32.store8 (i32.const 134217728) (i32.const 0xBB))
+    (memory.copy (i32.const 1) (i32.const 0) (i32.const 134217744))
+    (i32.load8_u (i32.const 134217729))
+  )
+)
+
+(assert_return (invoke "run") (i32.const 0xBB))

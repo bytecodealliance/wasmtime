@@ -12,8 +12,10 @@ function %i128_stack_store_load(i128) -> i8 {
     ss0 = explicit_slot 16
 
 block0(v0: i128):
-    stack_store.i128 v0, ss0
-    v1 = stack_load.i128 ss0
+    v3 = stack_addr.i64 ss0
+    store.i128 notrap v0, v3
+    v4 = stack_addr.i64 ss0
+    v1 = load.i128 notrap v4
 
     v2 = icmp.i128 eq v0, v1
     return v2
@@ -33,8 +35,10 @@ function %i128_stack_store_load_inst_offset(i128) -> i8 {
     ss2 = explicit_slot 16
 
 block0(v0: i128):
-    stack_store.i128 v0, ss1+16
-    v1 = stack_load.i128 ss1+16
+    v3 = stack_addr.i64 ss1+16
+    store.i128 notrap v0, v3
+    v4 = stack_addr.i64 ss1+16
+    v1 = load.i128 notrap v4
 
     v2 = icmp.i128 eq v0, v1
     return v2
@@ -55,8 +59,10 @@ function %i128_stack_store_load_big_offset(i128) -> i8 {
     ss1 = explicit_slot 8
 
 block0(v0: i128):
-    stack_store.i128 v0, ss0
-    v1 = stack_load.i128 ss0
+    v3 = stack_addr.i64 ss0
+    store.i128 notrap v0, v3
+    v4 = stack_addr.i64 ss0
+    v1 = load.i128 notrap v4
 
     v2 = icmp.i128 eq v0, v1
     return v2

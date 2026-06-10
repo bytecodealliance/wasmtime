@@ -27,7 +27,6 @@ fn is_load_with_defined_trapping(
         return false;
     }
     match *data {
-        InstructionData::StackLoad { .. } => false,
         InstructionData::Load { flags, .. } => !dfg.mem_flags[flags].notrap(),
         _ => true,
     }

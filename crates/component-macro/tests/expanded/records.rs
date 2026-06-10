@@ -981,152 +981,207 @@ pub mod exports {
                     }
                 }
                 impl Guest {
+                    pub fn func_tuple_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<((char, u32),), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                ((char, u32),),
+                                (),
+                            >::new_unchecked(self.tuple_arg)
+                        }
+                    }
                     pub fn call_tuple_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: (char, u32),
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                ((char, u32),),
-                                (),
-                            >::new_unchecked(self.tuple_arg)
-                        };
+                        let callee = self.func_tuple_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_tuple_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), ((char, u32),)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                ((char, u32),),
+                            >::new_unchecked(self.tuple_result)
+                        }
                     }
                     pub fn call_tuple_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<(char, u32)> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                ((char, u32),),
-                            >::new_unchecked(self.tuple_result)
-                        };
+                        let callee = self.func_tuple_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_empty_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Empty,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Empty,),
+                                (),
+                            >::new_unchecked(self.empty_arg)
+                        }
                     }
                     pub fn call_empty_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Empty,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Empty,),
-                                (),
-                            >::new_unchecked(self.empty_arg)
-                        };
+                        let callee = self.func_empty_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_empty_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Empty,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Empty,),
+                            >::new_unchecked(self.empty_result)
+                        }
                     }
                     pub fn call_empty_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<Empty> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Empty,),
-                            >::new_unchecked(self.empty_result)
-                        };
+                        let callee = self.func_empty_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_scalar_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(Scalars,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (Scalars,),
+                                (),
+                            >::new_unchecked(self.scalar_arg)
+                        }
                     }
                     pub fn call_scalar_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Scalars,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (Scalars,),
-                                (),
-                            >::new_unchecked(self.scalar_arg)
-                        };
+                        let callee = self.func_scalar_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_scalar_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Scalars,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Scalars,),
+                            >::new_unchecked(self.scalar_result)
+                        }
                     }
                     pub fn call_scalar_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<Scalars> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Scalars,),
-                            >::new_unchecked(self.scalar_result)
-                        };
+                        let callee = self.func_scalar_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_flags_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(ReallyFlags,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (ReallyFlags,),
+                                (),
+                            >::new_unchecked(self.flags_arg)
+                        }
                     }
                     pub fn call_flags_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: ReallyFlags,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (ReallyFlags,),
-                                (),
-                            >::new_unchecked(self.flags_arg)
-                        };
+                        let callee = self.func_flags_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_flags_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (ReallyFlags,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (ReallyFlags,),
+                            >::new_unchecked(self.flags_result)
+                        }
                     }
                     pub fn call_flags_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<ReallyFlags> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (ReallyFlags,),
-                            >::new_unchecked(self.flags_result)
-                        };
+                        let callee = self.func_flags_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_aggregate_arg(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(&Aggregates,), ()> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (&Aggregates,),
+                                (),
+                            >::new_unchecked(self.aggregate_arg)
+                        }
                     }
                     pub fn call_aggregate_arg<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: &Aggregates,
                     ) -> wasmtime::Result<()> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (&Aggregates,),
-                                (),
-                            >::new_unchecked(self.aggregate_arg)
-                        };
+                        let callee = self.func_aggregate_arg();
                         let () = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(())
+                    }
+                    pub fn func_aggregate_result(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(), (Aggregates,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (),
+                                (Aggregates,),
+                            >::new_unchecked(self.aggregate_result)
+                        }
                     }
                     pub fn call_aggregate_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> wasmtime::Result<Aggregates> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Aggregates,),
-                            >::new_unchecked(self.aggregate_result)
-                        };
+                        let callee = self.func_aggregate_result();
                         let (ret0,) = callee.call(store.as_context_mut(), ())?;
                         Ok(ret0)
+                    }
+                    pub fn func_typedef_inout(
+                        &self,
+                    ) -> wasmtime::component::TypedFunc<(TupleTypedef2,), (i32,)> {
+                        unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (TupleTypedef2,),
+                                (i32,),
+                            >::new_unchecked(self.typedef_inout)
+                        }
                     }
                     pub fn call_typedef_inout<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: TupleTypedef2,
                     ) -> wasmtime::Result<i32> {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (TupleTypedef2,),
-                                (i32,),
-                            >::new_unchecked(self.typedef_inout)
-                        };
+                        let callee = self.func_typedef_inout();
                         let (ret0,) = callee.call(store.as_context_mut(), (arg0,))?;
                         Ok(ret0)
                     }

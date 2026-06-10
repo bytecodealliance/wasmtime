@@ -7,7 +7,8 @@ function %store_scale() {
 
 block0:
   v0 = global_value.i64 gv0
-  stack_store.i64 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i64 notrap v0, v1
   return
 }
 
@@ -40,7 +41,8 @@ function %store_scale_lt_128() {
 
 block0:
   v0 = global_value.i64 gv0
-  stack_store.i64 v0, ss0
+  v1 = stack_addr.i64 ss0
+  store.i64 notrap v0, v1
   return
 }
 
@@ -74,7 +76,8 @@ function %store_explicit(i32) {
 
 block0(v0: i32):
   v1 = splat.dt0 v0
-  dynamic_stack_store.dt0 v1, dss0
+  v2 = dynamic_stack_addr.i64 dss0
+  store.dt0 notrap aligned v1, v2
   return
 }
 
@@ -109,7 +112,8 @@ function %load_explicit() -> i32x4 {
   dss0 = explicit_dynamic_slot dt0
 
 block0:
-  v0 = dynamic_stack_load.dt0 dss0
+  v2 = dynamic_stack_addr.i64 dss0
+  v0 = load.dt0 notrap aligned v2
   v1 = extract_vector.dt0 v0, 0
   return v1
 }
@@ -144,7 +148,8 @@ function %store_implicit(i32) {
 
 block0(v0: i32):
   v1 = splat.dt0 v0
-  dynamic_stack_store v1, dss0
+  v2 = dynamic_stack_addr.i64 dss0
+  store notrap aligned v1, v2
   return
 }
 

@@ -74,13 +74,19 @@ impl WizerCommand {
         let wasm = wat::parse_bytes(&wasm)?;
         let is_component = wasmparser::Parser::is_component(&wasm);
 
+        let init_func = self.wizer.get_init_func();
+
         let mut run = RunCommand {
             run: self.run,
             argv0: None,
             invoke: Some(if is_component {
-                format!("{}()", self.wizer.get_init_func())
+                if !init_func.contains(')') {
+                    format!("{init_func}()")
+                } else {
+                    init_func.to_string()
+                }
             } else {
-                self.wizer.get_init_func().to_string()
+                init_func.to_string()
             }),
             module_and_args: vec![self.input.clone().into()],
             preloads: self.preloads.clone(),

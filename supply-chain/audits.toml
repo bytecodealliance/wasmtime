@@ -2754,6 +2754,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.5 -> 0.4.3"
 notes = "No substantive changes to `unsafe` code and otherwise all looks good."
 
+[[audits.cpp_demangle]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.3 -> 0.5.1"
+notes = "API refactors, support for new symbols, nothing awry."
+
 [[audits.cpufeatures]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -4641,6 +4647,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "1.4.1"
 
+[[audits.similar]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.7.0 -> 3.1.1"
+notes = "Lots of crate changes, new algorithms, etc, but nothing awry. No `unsafe` changes"
+
 [[audits.sized-chunks]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -6311,6 +6323,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.23.0 -> 0.25.2"
 
+[[audits.webpki-roots]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.26.1 -> 1.0.7"
+notes = "Minor changes, new certs, etc. Nothing major"
+
 [[audits.which]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -6847,7 +6865,7 @@ end = "2025-12-05"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-net-ext]]
 criteria = "safe-to-deploy"
@@ -6855,11 +6873,17 @@ user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"
 end = "2024-07-14"
 
+[[trusted.cap-net-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-04-07"
+end = "2027-06-05"
+
 [[trusted.cap-primitives]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-08-07"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-rand]]
 criteria = "safe-to-deploy"
@@ -6871,7 +6895,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-06-25"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cap-tempfile]]
 criteria = "safe-to-deploy"
@@ -6883,7 +6907,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-21"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.cc]]
 criteria = "safe-to-deploy"
@@ -7081,7 +7105,7 @@ end = "2026-11-17"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-06-12"
-end = "2024-07-14"
+end = "2027-06-05"
 
 [[trusted.is-terminal]]
 criteria = "safe-to-deploy"
@@ -7393,7 +7417,7 @@ end = "2025-07-30"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-03-06"
-end = "2025-12-06"
+end = "2027-06-05"
 
 [[trusted.termcolor]]
 criteria = "safe-to-deploy"

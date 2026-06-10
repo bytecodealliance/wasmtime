@@ -18,7 +18,7 @@ cfg_if::cfg_if! {
 
         pub enum TrapHandler {
             Signals(super::signals::TrapHandler),
-            #[allow(dead_code)] // used for its drop
+            #[allow(dead_code, reason = "used for its drop")]
             MachPorts(super::machports::TrapHandler),
         }
 

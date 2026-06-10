@@ -5,7 +5,8 @@ target x86_64 has_bmi1
 function %andn_i8_load(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
     v2 = load.i8 v0
-    v3 = band_not v2, v1
+    v4 = bnot v1
+    v3 = band v2, v4
     return v3
 }
 
@@ -33,7 +34,8 @@ block0(v0: i64, v1: i8):
 function %andn_i16_load(i64, i16) -> i16 {
 block0(v0: i64, v1: i16):
     v2 = load.i16 v0
-    v3 = band_not v2, v1
+    v4 = bnot v1
+    v3 = band v2, v4
     return v3
 }
 
@@ -61,7 +63,8 @@ block0(v0: i64, v1: i16):
 function %andn_i32_load(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
     v2 = load.i32 v0
-    v3 = band_not v2, v1
+    v4 = bnot v1
+    v3 = band v2, v4
     return v3
 }
 
@@ -87,7 +90,8 @@ block0(v0: i64, v1: i32):
 function %andn_i64_load(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = load.i64 v0
-    v3 = band_not v2, v1
+    v4 = bnot v1
+    v3 = band v2, v4
     return v3
 }
 

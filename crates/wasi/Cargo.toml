@@ -28,8 +28,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true, features = ["std", "attributes"] }
 cap-std = { workspace = true }
 cap-fs-ext = { workspace = true }
-cap-net-ext = { workspace = true }
-cap-time-ext = { workspace = true }
 io-lifetimes = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
@@ -52,7 +50,6 @@ env_logger = { workspace = true }
 rustix = { workspace = true, features = ["event", "fs", "net"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = { workspace = true }
 rustix = { workspace = true, features = ["event", "net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
@@ -62,6 +59,7 @@ features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_IO",
+  "Win32_System_Performance",
 ]
 
 [features]

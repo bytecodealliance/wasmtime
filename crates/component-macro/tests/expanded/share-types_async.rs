@@ -405,6 +405,16 @@ pub mod exports {
             }
         }
         impl Guest {
+            pub fn func_handle_request(
+                &self,
+            ) -> wasmtime::component::TypedFunc<(&Request,), (Response,)> {
+                unsafe {
+                    wasmtime::component::TypedFunc::<
+                        (&Request,),
+                        (Response,),
+                    >::new_unchecked(self.handle_request)
+                }
+            }
             pub async fn call_handle_request<S: wasmtime::AsContextMut>(
                 &self,
                 mut store: S,
@@ -413,12 +423,7 @@ pub mod exports {
             where
                 <S as wasmtime::AsContext>::Data: Send,
             {
-                let callee = unsafe {
-                    wasmtime::component::TypedFunc::<
-                        (&Request,),
-                        (Response,),
-                    >::new_unchecked(self.handle_request)
-                };
+                let callee = self.func_handle_request();
                 let (ret0,) = callee.call_async(store.as_context_mut(), (arg0,)).await?;
                 Ok(ret0)
             }

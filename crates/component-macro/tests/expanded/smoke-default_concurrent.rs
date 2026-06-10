@@ -180,6 +180,9 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
         }
+        pub fn func_y(&self) -> wasmtime::component::TypedFunc<(), ()> {
+            unsafe { wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y) }
+        }
         pub async fn call_y<_T, _D>(
             &self,
             accessor: &wasmtime::component::Accessor<_T, _D>,
@@ -188,9 +191,7 @@ const _: () = {
             _T: Send,
             _D: wasmtime::component::HasData,
         {
-            let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
-            };
+            let callee = self.func_y();
             let () = callee.call_concurrent(accessor, ()).await?;
             Ok(())
         }

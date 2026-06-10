@@ -24,7 +24,8 @@ function %band_not() -> i8 {
 block0:
     v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
     v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v2 = band_not v0, v1
+    v6 = bnot v1
+    v2 = band v0, v6
     v3 = extractlane v2, 0
     v5 = iconst.i16 1
     v4 = icmp eq v3, v5

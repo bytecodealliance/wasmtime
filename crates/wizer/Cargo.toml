@@ -62,6 +62,9 @@ wasmtime = [
   'wasmtime/gc',
   'wasmtime/gc-null',
   'wasmtime/async',
+  # Need wave and wit-parser features to parse init func expressions
+  'wasmtime/wave',
+  'wasmtime/wit-parser',
 ]
 
 # Enable support for wizening components.
