@@ -48,9 +48,13 @@
     )
 )
 ;; function u0:0(i64 vmctx, i64, i64, i64) tail {
-;;     region0 = 2 "vmctx"
+;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 72 "VMContext+0x48"
+;;     region2 = 268435560 "VMStoreContext+0x68"
+;;     region3 = 104 "VMContext+0x68"
+;;     region4 = 136 "VMContext+0x88"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
@@ -68,7 +72,7 @@
 ;; @01b0                               v15 = bor v13, v14
 ;; @01b0                               trapnz v15, heap_oob
 ;; @01aa                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @01aa                               v8 = load.i64 notrap aligned readonly can_move region0 v7+104
+;; @01aa                               v8 = load.i64 notrap aligned readonly can_move region2 v7+104
 ;; @01b0                               v16 = iadd v8, v2
 ;; @01b0                               v17 = load.i32 notrap aligned v16
 ;; @01bf                               v27, v28 = uadd_overflow v2, v11  ; v11 = 4

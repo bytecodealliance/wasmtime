@@ -2087,13 +2087,18 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     .env
                     .get_or_create_imported_func_ref(self.builder.func, callee_index);
                 if self.can_directly_inline_unsafe_intrinsic(*abi) {
-                    let result = super::compiler::component::UnsafeIntrinsicCompiler {
-                        cursor: self.builder.cursor(),
-                        isa: self.env.isa,
-                        ptr: &self.env.offsets.ptr,
-                    }
-                    .translate(*intrinsic, &real_call_args)
-                    .unwrap();
+                    let isa = self.env.compiler.isa();
+                    let ptr = self.env.offsets.ptr;
+                    let mut intrinsic_compiler =
+                        super::compiler::component::UnsafeIntrinsicCompiler {
+                            builder: self.builder,
+                            isa,
+                            ptr,
+                            traps: self.env,
+                        };
+                    let result = intrinsic_compiler
+                        .translate(*intrinsic, &real_call_args)
+                        .unwrap();
                     Ok(result.into_iter().collect())
                 } else {
                     Ok(self.direct_call_inst(callee, &real_call_args))

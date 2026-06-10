@@ -698,8 +698,6 @@ fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> 
     });
 
     if spectre {
-        // Spectre heap mitigations require signals-based traps.
-        config.signals_based_traps(true);
         unsafe {
             config.cranelift_flag_set("enable_heap_access_spectre_mitigation", "true");
         }
@@ -709,7 +707,24 @@ fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> 
         }
     }
 
-    let engine = Engine::new(&config)?;
+    let engine = match Engine::new(&config) {
+        Ok(engine) => engine,
+
+        // Some build configurations don't support signals-based traps, which
+        // means that we cannot test checked intrinsics with Spectre mitigations
+        // on them, as Spectre mitigations require signals-based traps.
+        Err(e)
+            if spectre
+                && e.to_string().contains(
+                    "when signals-based traps are disabled then spectre mitigations \
+                     must also be disabled",
+                ) =>
+        {
+            return Ok(());
+        }
+
+        Err(e) => return Err(e),
+    };
 
     // A few distinct values, used for the initial buffer contents (`KNOWN*`)
     // and the values written by the store intrinsic (`STORED*`).

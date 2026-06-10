@@ -11,7 +11,7 @@
 )
 
 ;; function u0:0(i64 vmctx, i64, i32) tail {
-;;     region0 = 2 "vmctx"
+;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 16 "VMContext+0x10"
 ;;     sig0 = (i64 sext, i32 sext, i32 sext, i32 sext) -> i64 sext system_v
 ;;     sig1 = (i64 sext vmctx) system_v
