@@ -32,8 +32,8 @@ brew install z3
 Alternatively, on Linux or MacOS you can install from Github release with:
 
 ```
-./veri/script/install/cvc5.sh -i <install_path>
-./veri/script/install/z3.sh -b <install_path>/bin
+./setup/install-cvc5.sh -i <install_path>
+./setup/install-z3.sh -b <install_path>/bin
 ```
 
 If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
@@ -113,10 +113,19 @@ specifications with it.
 To run ISA specification generation, you will first need to install ASLp:
 
 1.  [Install `opam`](https://opam.ocaml.org/doc/Install.html), the OCaml Package
-    Manager. The "Binary distribution" method is recommended.
-2.  Install ASLp with `./veri/script/install/aslp.sh -i <aslp_install_path>`.
-3.  Ensure ASLp tools are available by adding `<aslp_install_path>/bin` to your
-    `PATH`.
+    Manager. The "Binary distribution" method is recommended. Ensure it is
+    initialized with `opam init`; the install script assumes a working opam.
+    Building ASLp also needs a C toolchain and GMP (`libgmp-dev` on Debian,
+    `gmp-devel` on Fedora); recent opam may offer to install these for you.
+2.  Install ASLp with `./setup/install-aslp.sh`. This creates a dedicated
+    OCaml 5.x opam switch named `aslp` and installs the upstream
+    [ASLp](https://github.com/UQ-PAC/aslp) and
+    [aslp-rpc](https://github.com/UQ-PAC/aslp-rpc) packages into it. This
+    provides both the `aslp_server_http` server (used by generation) and the
+    `asli` CLI (used by the `aslp` crate's test-data scripts). Set the
+    `ASLP_SWITCH` environment variable to use a different switch name (the same
+    variable is read by those scripts). Remove it later with
+    `opam switch remove aslp`.
 
 To run ISA specification generation, from the `isaspec` directory run:
 
@@ -126,9 +135,9 @@ To run ISA specification generation, from the `isaspec` directory run:
 
 This will:
 
-1.  Launch an instance of the `aslp-server`. Communicating with ASLp over a
-    server connection allows us to pay the initialization cost of reading the
-    large ASL specification once.
+1.  Launch an instance of the `aslp_server_http` server (via `opam exec` in the
+    `aslp` switch). Communicating with ASLp over a server connection allows us
+    to pay the initialization cost of reading the large ASL specification once.
 2.  Build and execute the `isaspec` tool.
 3.  Write outputs to the `cranelift/codegen/src/isa/aarch64/spec/` directory.
 

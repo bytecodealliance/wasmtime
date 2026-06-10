@@ -373,7 +373,14 @@ fn define_alu_rrr_shift() -> Result<SpecConfig> {
         ALUOp::OrrNot,
         ALUOp::EorNot,
         ALUOp::AndNot,
-        ALUOp::Extr,
+        // TEMP: EXTR disabled. The fork's ASLp lifted this fine (see the EXTR
+        // block in the committed alu_rrr_shift.isle), but upstream ASLp 0.3.2
+        // emits a slice whose width is an unsimplified expression in the
+        // symbolic lsb -- algebraically 32, but left as (amt+31)-amt+1 -- which
+        // its RASL backend rejects: "Illegal slice expr (must have single slice
+        // of constant values)". This is a regression in the fork->upstream
+        // migration; re-enable once upstream lifts symbolic EXTR (try 0.3.3+).
+        // ALUOp::Extr,
         // Flags:
         // ALUOp::AddS,
         // ALUOp::SubS,

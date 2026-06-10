@@ -9,6 +9,7 @@ function usage() {
 }
 
 launch_server="false"
+aslp_switch="${ASLP_SWITCH:-aslp}"
 aslp_server_host="${ASLP_SERVER_HOST:-127.0.0.1}"
 aslp_server_port="${ASLP_SERVER_PORT:-4207}"
 output_path="../../../codegen/src/isa/aarch64/spec/"
@@ -28,7 +29,8 @@ cargo run --bin fpconst > "${output_path}/fp_const.isle"
 
 # Launch server
 if [[ "${launch_server}" == "true" ]]; then
-    aslp-server --host "${aslp_server_host}" --port "${aslp_server_port}" &
+    opam exec --switch "${aslp_switch}" -- \
+        aslp_server_http --host "${aslp_server_host}" --port "${aslp_server_port}" &
     aslp_server_pid=$!
     trap 'kill "${aslp_server_pid}"' EXIT
 fi

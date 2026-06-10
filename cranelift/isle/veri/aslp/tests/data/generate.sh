@@ -2,6 +2,8 @@
 
 set -euxo pipefail
 
+aslp_switch="${ASLP_SWITCH:-aslp}"
+
 # Assemble AArch64 assembly to 32-bit hex opcode.
 function assemble() {
     local asm="$1"
@@ -20,7 +22,7 @@ function aslt() {
     {
         echo ':set impdef "Has SHA1 Crypto instructions" = TRUE'
         echo ":ast A64 0x${opcode}"
-    } | asli
+    } | opam exec --switch "${aslp_switch}" -- asli
 }
 
 # Generate named testcase for a given assembly instruction.
