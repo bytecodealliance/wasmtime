@@ -1,6 +1,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
 use gimli::{AttributeValue, RangeListsOffset, UnitRef, write};
+use std::vec::Vec;
 use wasmtime_environ::DefinedFuncIndex;
 use wasmtime_environ::error::Error;
 

@@ -292,7 +292,11 @@ pub enum ModuleError {
     /// Memory allocation failure from a backend
     Allocation {
         /// Io error the allocation failed with
+        #[cfg(feature = "std")]
         err: std::io::Error,
+        /// Error the allocation failed with
+        #[cfg(not(feature = "std"))]
+        err: Box<dyn core::error::Error + Send + Sync + 'static>,
     },
 
     /// Wraps a generic error from a backend
@@ -308,10 +312,22 @@ impl<'a> From<CompileError<'a>> for ModuleError {
     }
 }
 
+impl ModuleError {
+    /// Constructs a [`ModuleError::Allocation`] from an arbitrary allocation
+    /// failure, internalizing the std/no_std representation of the payload.
+    pub fn allocation(err: impl core::error::Error + Send + Sync + 'static) -> Self {
+        #[cfg(feature = "std")]
+        let err = std::io::Error::other(err);
+        #[cfg(not(feature = "std"))]
+        let err: Box<dyn core::error::Error + Send + Sync + 'static> = Box::new(err);
+        Self::Allocation { err }
+    }
+}
+
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
 // of dependencies used by Cranelift.
-impl std::error::Error for ModuleError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for ModuleError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Undeclared { .. }
             | Self::IncompatibleDeclaration { .. }
@@ -319,7 +335,10 @@ impl std::error::Error for ModuleError {
             | Self::DuplicateDefinition { .. }
             | Self::InvalidImportDefinition { .. } => None,
             Self::Compilation(source) => Some(source),
+            #[cfg(feature = "std")]
             Self::Allocation { err: source } => Some(source),
+            #[cfg(not(feature = "std"))]
+            Self::Allocation { err: source } => Some(&**source),
             Self::Backend(source) => Some(&**source),
             Self::Flag(source) => Some(source),
         }
@@ -362,13 +381,13 @@ impl std::fmt::Display for ModuleError {
     }
 }
 
-impl std::convert::From<CodegenError> for ModuleError {
+impl core::convert::From<CodegenError> for ModuleError {
     fn from(source: CodegenError) -> Self {
         Self::Compilation { 0: source }
     }
 }
 
-impl std::convert::From<SetError> for ModuleError {
+impl core::convert::From<SetError> for ModuleError {
     fn from(source: SetError) -> Self {
         Self::Flag { 0: source }
     }

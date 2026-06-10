@@ -168,7 +168,7 @@ backtrace = ["std", "wasmtime-environ/backtrace"]
 # with the Cranelift compiler. Cranelift is the default compilation backend of
 # Wasmtime. If disabled then WebAssembly modules can only be created from
 # precompiled WebAssembly modules.
-cranelift = ["dep:wasmtime-cranelift", "std", "wasmtime-unwinder/cranelift"]
+cranelift = ["dep:wasmtime-cranelift", "wasmtime-unwinder/cranelift"]
 
 # Enables support for Winch, the WebAssembly baseline compiler. The Winch compiler
 # strategy in `Config` will be available. It is currently in active development
@@ -362,6 +362,7 @@ std = [
   "wasmtime-jit-icache-coherence",
   "wasmtime-jit-debug?/std",
   "futures?/std",
+  "wasmtime-cranelift?/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

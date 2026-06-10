@@ -2,6 +2,13 @@
 //! Cranelift to generate code to run on the same machine.
 
 #![deny(missing_docs)]
+#![no_std]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
@@ -43,7 +50,7 @@ pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'
 /// useful when more than one backend exists for a given target
 /// (e.g., on x86-64).
 pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", feature = "std"))]
     {
         if !std::is_x86_feature_detected!("sse2") {
             return Err("x86 support requires SSE2");
@@ -102,7 +109,7 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         }
     }
 
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(target_arch = "aarch64", feature = "std"))]
     {
         if std::arch::is_aarch64_feature_detected!("lse") {
             isa_builder.enable("has_lse").unwrap();
@@ -120,6 +127,16 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             // Pointer authentication is always available on Apple Silicon.
             isa_builder.enable("sign_return_address").unwrap();
             // macOS enforces the use of the B key for return addresses.
+            isa_builder.enable("sign_return_address_with_bkey").unwrap();
+        }
+    }
+
+    // When the `std` feature is disabled on aarch64, still enable the
+    // compile-time known Apple Silicon flags.
+    #[cfg(all(target_arch = "aarch64", not(feature = "std")))]
+    {
+        if cfg!(target_os = "macos") {
+            isa_builder.enable("sign_return_address").unwrap();
             isa_builder.enable("sign_return_address_with_bkey").unwrap();
         }
     }

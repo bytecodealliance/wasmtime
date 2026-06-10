@@ -7,6 +7,8 @@ use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
+use core::mem;
+use core::{u16, u32};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
@@ -15,21 +17,21 @@ use cranelift_codegen::ir::immediates::{
 };
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::{self, StackSlotKey, UserExternalNameRef};
-use cranelift_codegen::ir::{DebugTag, types::*};
-
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
     Function, GlobalValue, GlobalValueData, JumpTableData, MemFlagsData, MemFlagsSet, Opcode,
     SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, UserFuncName, Value, types,
 };
+use cranelift_codegen::ir::{DebugTag, types::*};
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
-use std::mem;
+use std::borrow::ToOwned;
 use std::str::FromStr;
-use std::{u16, u32};
+use std::string::{String, ToString};
+use std::vec::Vec;
 use target_lexicon::Triple;
 
 macro_rules! match_imm {
@@ -1255,7 +1257,7 @@ impl<'a> Parser<'a> {
 
         // Claim all the declared user-defined function names.
         for (user_func_ref, user_external_name) in
-            std::mem::take(&mut self.predeclared_external_names)
+            core::mem::take(&mut self.predeclared_external_names)
         {
             let actual_ref = ctx
                 .function

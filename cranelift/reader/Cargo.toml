@@ -14,11 +14,17 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, features = ['std'] }
+anyhow = { workspace = true }
 cranelift-codegen = { workspace = true }
+hashbrown = { workspace = true }
+log = { workspace = true }
 smallvec = { workspace = true }
-target-lexicon = { workspace = true, features = ['std'] }
+target-lexicon = { workspace = true }
 
 [dev-dependencies]
 # Some tests require that the x86_64 target parses for the target specification.
 cranelift-codegen = { workspace = true, features = ['x86'] }
+
+[features]
+default = ["std"]
+std = ["anyhow/std", "target-lexicon/std", "cranelift-codegen/std"]

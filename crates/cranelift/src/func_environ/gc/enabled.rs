@@ -15,6 +15,9 @@ use cranelift_codegen::{
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::{SmallVec, smallvec};
+use std::boxed::Box;
+use std::string::ToString;
+use std::vec;
 use wasmtime_environ::{
     Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
     PtrSize, TagIndex, TypeIndex, VMGcKind, WasmCompositeInnerType, WasmHeapTopType, WasmHeapType,

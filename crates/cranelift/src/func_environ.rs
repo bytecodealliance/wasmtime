@@ -12,6 +12,8 @@ use crate::{
     BuiltinFunctionSignatures, TRAP_ARRAY_OUT_OF_BOUNDS, TRAP_GC_HEAP_CORRUPT,
     TRAP_TABLE_OUT_OF_BOUNDS,
 };
+use core::iter::Peekable;
+use core::mem;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, V128Imm};
@@ -25,9 +27,11 @@ use cranelift_entity::packed_option::{PackedOption, ReservedValue};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
+use hashbrown::HashMap;
 use smallvec::{SmallVec, smallvec};
-use std::iter::Peekable;
-use std::mem;
+use std::string::ToString;
+use std::vec;
+use std::vec::Vec;
 use wasmparser::{
     BranchHint, FuncValidator, Operator, SectionLimitedIntoIter, WasmFeatures, WasmModuleResources,
 };
@@ -154,10 +158,7 @@ pub struct FuncEnvironment<'module_environment> {
     pub(crate) stacks: FuncTranslationStacks,
 
     #[cfg(feature = "gc")]
-    ty_to_gc_layout: std::collections::HashMap<
-        wasmtime_environ::ModuleInternedTypeIndex,
-        wasmtime_environ::GcLayout,
-    >,
+    ty_to_gc_layout: HashMap<wasmtime_environ::ModuleInternedTypeIndex, wasmtime_environ::GcLayout>,
 
     #[cfg(feature = "gc")]
     gc_heap: Option<Heap>,
@@ -247,7 +248,7 @@ pub struct FuncEnvironment<'module_environment> {
     func_body_offset: usize,
 
     /// Cached alias regions for alias analysis.
-    alias_regions: std::collections::HashMap<AliasRegionKey, ir::AliasRegion>,
+    alias_regions: HashMap<AliasRegionKey, ir::AliasRegion>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -286,7 +287,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             stacks: FuncTranslationStacks::new(),
 
             #[cfg(feature = "gc")]
-            ty_to_gc_layout: std::collections::HashMap::new(),
+            ty_to_gc_layout: HashMap::new(),
             #[cfg(feature = "gc")]
             gc_heap: None,
             #[cfg(feature = "gc")]
@@ -322,7 +323,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             branch_hints,
             func_body_offset,
 
-            alias_regions: std::collections::HashMap::new(),
+            alias_regions: HashMap::new(),
         }
     }
 

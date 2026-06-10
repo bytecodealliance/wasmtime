@@ -8,6 +8,7 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::unit::InheritedAttr;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{AttributeValue, UnitOffset, write};
+use std::vec::Vec;
 use wasmtime_environ::error::Error;
 
 #[derive(Debug)]

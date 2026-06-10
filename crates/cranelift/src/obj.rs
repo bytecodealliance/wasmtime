@@ -14,6 +14,7 @@
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
 use crate::CompiledFunction;
+use core::ops::Range;
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
 use cranelift_control::ControlPlane;
@@ -21,7 +22,9 @@ use gimli::RunTimeEndian;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
-use std::ops::Range;
+use std::boxed::Box;
+use std::vec;
+use std::vec::Vec;
 use wasmtime_environ::error::Result;
 use wasmtime_environ::{Compiler, TripleExt};
 use wasmtime_environ::{FuncKey, obj};

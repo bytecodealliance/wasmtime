@@ -19,11 +19,11 @@ where
 {
     return Ok(match ty {
         wasmparser::BlockType::Empty => (
-            itertools::Either::Left(std::iter::empty()),
+            itertools::Either::Left(core::iter::empty()),
             itertools::Either::Left(None.into_iter()),
         ),
         wasmparser::BlockType::Type(ty) => (
-            itertools::Either::Left(std::iter::empty()),
+            itertools::Either::Left(core::iter::empty()),
             itertools::Either::Left(Some(ty).into_iter()),
         ),
         wasmparser::BlockType::FuncType(ty_index) => {

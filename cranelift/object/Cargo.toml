@@ -14,17 +14,19 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-cranelift-module = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["std"] }
-cranelift-control = { workspace = true }
-object = { workspace = true, features = ["write", "std"] }
-target-lexicon = { workspace = true }
 anyhow = { workspace = true }
-log = { workspace = true }
+cranelift-codegen = { workspace = true }
+cranelift-control = { workspace = true }
+cranelift-module = { workspace = true }
 gimli = { workspace = true, features = ["write"], optional = true }
+hashbrown = { workspace = true }
+log = { workspace = true }
+object = { workspace = true, features = ["write"] }
+target-lexicon = { workspace = true }
 
 [features]
-default = ["unwind"]
+default = ["std", "unwind"]
+std = ["cranelift-codegen/std", "cranelift-module/std", "object/std", "target-lexicon/std", "anyhow/std"]
 
 # Enables `.eh_frame` section emission via `ObjectBuilder::unwind_info`.
 unwind = ["dep:gimli", "cranelift-codegen/unwind"]

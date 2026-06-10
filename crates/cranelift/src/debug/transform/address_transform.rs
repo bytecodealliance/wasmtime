@@ -1,7 +1,9 @@
 use crate::FunctionAddressMap;
 use crate::debug::Compilation;
 use gimli::write;
+use std::boxed::Box;
 use std::collections::BTreeMap;
+use std::vec::Vec;
 use wasmtime_environ::{DefinedFuncIndex, FilePos, PrimaryMap, StaticModuleIndex};
 
 pub type GeneratedAddress = usize;

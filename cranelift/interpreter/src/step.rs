@@ -5,6 +5,7 @@ use crate::frame::Frame;
 use crate::instruction::InstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::value::{DataValueExt, ValueConversionKind, ValueError, ValueResult};
+use core::ops::RangeFrom;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
@@ -13,8 +14,10 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::{SmallVec, smallvec};
+use std::borrow::ToOwned;
 use std::fmt::Debug;
-use std::ops::RangeFrom;
+use std::string::String;
+use std::vec::Vec;
 use thiserror::Error;
 
 /// Ensures that all types in args are the same as expected by the signature

@@ -29,4 +29,3 @@ cranelift-codegen = { workspace = true, features = ['x86'] }
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
-core = ["cranelift-codegen/core"]

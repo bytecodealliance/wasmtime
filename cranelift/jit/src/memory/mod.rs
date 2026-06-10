@@ -1,11 +1,16 @@
-use cranelift_module::{ModuleError, ModuleResult};
-use std::io;
+use cranelift_module::ModuleResult;
 
+#[cfg(feature = "std")]
 mod arena;
+#[cfg(feature = "std")]
 mod system;
+mod vec;
 
+#[cfg(feature = "std")]
 pub use arena::ArenaMemoryProvider;
+#[cfg(feature = "std")]
 pub use system::SystemMemoryProvider;
+pub use vec::VecMemoryProvider;
 
 /// Type of branch protection to apply to executable memory.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -16,6 +21,7 @@ pub enum BranchProtection {
     BTI,
 }
 
+/// The kind of memory allocation for JIT code and data.
 pub enum JITMemoryKind {
     /// Allocate memory that will be executable once finalized.
     Executable,
@@ -27,11 +33,12 @@ pub enum JITMemoryKind {
 
 /// A provider of memory for the JIT.
 pub trait JITMemoryProvider {
-    /// Allocate memory
-    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8>;
+    /// Allocate memory of the given size and alignment.
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> ModuleResult<*mut u8>;
 
     /// Free the memory region.
     unsafe fn free_memory(&mut self);
+
     /// Finalize the memory region and apply memory protections.
     fn finalize(&mut self, branch_protection: BranchProtection) -> ModuleResult<()>;
 }
@@ -42,11 +49,14 @@ pub trait JITMemoryProvider {
 /// but *doesn't* flush the pipeline. Callers have to ensure that
 /// [`wasmtime_jit_icache_coherence::pipeline_flush_mt`] is called before the
 /// mappings are used.
+#[cfg(feature = "std")]
 pub(crate) fn set_readable_and_executable(
     ptr: *mut u8,
     len: usize,
     branch_protection: BranchProtection,
 ) -> ModuleResult<()> {
+    use cranelift_module::ModuleError;
+
     // Clear all the newly allocated code from cache if the processor requires it
     //
     // Do this before marking the memory as R+X, technically we should be able to do it after
@@ -73,7 +83,7 @@ pub(crate) fn set_readable_and_executable(
             unsafe {
                 if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
                     return Err(ModuleError::Backend(
-                        anyhow::Error::new(io::Error::last_os_error())
+                        anyhow::Error::new(std::io::Error::last_os_error())
                             .context("unable to make memory readable+executable"),
                     ));
                 }

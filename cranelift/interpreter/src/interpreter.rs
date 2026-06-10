@@ -9,6 +9,7 @@ use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{ControlFlow, CraneliftTrap, StepError, step};
 use crate::value::{DataValueExt, ValueError};
+use core::iter;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
@@ -17,7 +18,8 @@ use cranelift_codegen::ir::{
 use log::trace;
 use smallvec::SmallVec;
 use std::fmt::Debug;
-use std::iter;
+use std::string::{String, ToString};
+use std::vec::Vec;
 use thiserror::Error;
 
 /// The Cranelift interpreter; this contains some high-level functions to control the interpreter's

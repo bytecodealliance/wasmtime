@@ -12,10 +12,12 @@ use cranelift_codegen::ir::ValueLabel;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{Expression, Operation, Reader, ReaderOffset, write};
 use itertools::Itertools;
+use std::boxed::Box;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::vec::Vec;
 use wasmtime_environ::error::{Context, Error, Result};
 
 #[derive(Debug)]

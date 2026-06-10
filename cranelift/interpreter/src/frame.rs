@@ -1,4 +1,5 @@
 //! Implements a call frame (activation record) for the Cranelift interpreter.
+use std::vec::Vec;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{Function, Value as ValueRef, types};
@@ -69,7 +70,7 @@ impl<'a> Frame<'a> {
     pub fn set(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
         assert!(name.index() < self.registers.len());
         trace!("Set {name} -> {value}");
-        std::mem::replace(&mut self.registers[name.index()], Some(value))
+        core::mem::replace(&mut self.registers[name.index()], Some(value))
     }
 
     /// Assign to multiple SSA references; see `set`.
@@ -88,10 +89,10 @@ impl<'a> Frame<'a> {
         trace!("Renaming {old_names:?} -> {new_names:?}");
         assert_eq!(old_names.len(), new_names.len());
         let new_registers = vec![None; self.registers.len()];
-        let mut old_registers = std::mem::replace(&mut self.registers, new_registers);
+        let mut old_registers = core::mem::replace(&mut self.registers, new_registers);
         self.registers = vec![None; self.registers.len()];
         for (&on, &nn) in old_names.iter().zip(new_names) {
-            let value = std::mem::replace(&mut old_registers[on.index()], None);
+            let value = core::mem::replace(&mut old_registers[on.index()], None);
             self.registers[nn.index()] = value;
         }
     }

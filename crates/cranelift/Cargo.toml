@@ -24,8 +24,8 @@ cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
-gimli = { workspace = true, features = ['std'] }
-object = { workspace = true, features = ['write', 'std'] }
+gimli = { workspace = true }
+object = { workspace = true, features = ['write'] }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
@@ -34,8 +34,22 @@ itertools = { workspace = true }
 pulley-interpreter = { workspace = true, optional = true }
 wasmtime-core = { workspace = true }
 wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
+spin = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher"] }
 
 [features]
+default = ["std"]
+std = [
+  "wasmtime-environ/std",
+  "cranelift-codegen/std",
+  "cranelift-frontend/std",
+  "cranelift-native/std",
+  "gimli/std",
+  "object/std",
+  "thiserror/std",
+  "wasmtime-core/std",
+  "pulley-interpreter?/std",
+]
 all-arch = ["cranelift-codegen/all-arch"]
 host-arch = ["cranelift-codegen/host-arch"]
 pulley = ["cranelift-codegen/pulley", "dep:pulley-interpreter"]

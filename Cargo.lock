@@ -895,6 +895,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-reader",
+ "hashbrown 0.17.0",
  "libm",
  "log",
  "smallvec 1.15.1",
@@ -921,6 +922,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "cranelift-native",
+ "hashbrown 0.17.0",
  "libc",
  "log",
  "memmap2",
@@ -963,6 +965,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "gimli 0.33.0",
+ "hashbrown 0.17.0",
  "log",
  "object 0.39.0",
  "target-lexicon",
@@ -974,6 +977,8 @@ version = "0.133.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "hashbrown 0.17.0",
+ "log",
  "smallvec 1.15.1",
  "target-lexicon",
 ]
@@ -2466,9 +2471,9 @@ dependencies = [
 
 [[package]]
 name = "memmap2"
-version = "0.2.3"
+version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723e3ebdcdc5c023db1df315364573789f8857c11b631a2fdfad7c00f5c046b4"
+checksum = "714098028fe011992e1c3962653c96b2d578c4b4bce9036e15ff220319b1e0e3"
 dependencies = [
  "libc",
 ]
@@ -3595,6 +3600,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
+name = "spin"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1527984ca054dfca79333baec451042863f485fbee01b7bf6d911de915cac865"
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4619,7 +4630,7 @@ version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1fda10642ea9ba8141d50976b2b3a02d30511baa4b938383b9fa823b35d4138"
 dependencies = [
- "spin",
+ "spin 0.9.8",
  "wasmi_collections",
  "wasmi_core",
  "wasmi_ir",
@@ -5101,11 +5112,13 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "gimli 0.33.0",
+ "hashbrown 0.17.0",
  "itertools 0.14.0",
  "log",
  "object 0.39.0",
  "pulley-interpreter",
  "smallvec 1.15.1",
+ "spin 0.12.0",
  "target-lexicon",
  "thiserror 2.0.17",
  "wasmparser 0.251.0",

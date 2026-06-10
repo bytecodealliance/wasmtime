@@ -1,4 +1,5 @@
 use crate::TRAP_INTERNAL_ASSERT;
+#[cfg(feature = "std")]
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::FuncTranslator;
@@ -22,16 +23,22 @@ use cranelift_codegen::{
 };
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
+use hashbrown::HashMap;
 use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationFlags, RelocationKind, SectionKind};
+#[cfg(not(feature = "std"))]
+use spin::Mutex;
 use std::any::Any;
 use std::borrow::Cow;
 use std::cmp;
-use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
+#[cfg(feature = "std")]
 use std::path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(feature = "std")]
+use std::sync::Mutex;
+use std::vec::Vec;
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::error::{Context as _, Result};
 use wasmtime_environ::obj::{ELF_WASMTIME_EXCEPTIONS, ELF_WASMTIME_FRAMES};
@@ -86,6 +93,7 @@ pub struct Compiler {
     emit_debug_checks: bool,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
+    #[cfg(feature = "std")]
     clif_dir: Option<path::PathBuf>,
     #[cfg(feature = "wmemcheck")]
     pub(crate) wmemcheck: bool,
@@ -99,7 +107,7 @@ impl Drop for Compiler {
 
         let mut num_hits = 0;
         let mut num_cached = 0;
-        for ctx in self.contexts.lock().unwrap().iter() {
+        for ctx in self.lock_contexts().iter() {
             if let Some(ref cache_ctx) = ctx.incremental_cache_ctx {
                 num_hits += cache_ctx.num_hits;
                 num_cached += cache_ctx.num_cached;
@@ -126,7 +134,7 @@ impl Compiler {
         cache_store: Option<Arc<dyn CacheStore>>,
         emit_debug_checks: bool,
         linkopts: LinkOptions,
-        clif_dir: Option<path::PathBuf>,
+        #[cfg(feature = "std")] clif_dir: Option<path::PathBuf>,
         wmemcheck: bool,
     ) -> Compiler {
         let _ = wmemcheck;
@@ -137,10 +145,21 @@ impl Compiler {
             emit_debug_checks,
             linkopts,
             cache_store,
+            #[cfg(feature = "std")]
             clif_dir,
             #[cfg(feature = "wmemcheck")]
             wmemcheck,
         }
+    }
+
+    #[cfg(feature = "std")]
+    fn lock_contexts(&self) -> std::sync::MutexGuard<'_, Vec<CompilerContext>> {
+        self.contexts.lock().unwrap()
+    }
+
+    #[cfg(not(feature = "std"))]
+    fn lock_contexts(&self) -> spin::MutexGuard<Vec<CompilerContext>> {
+        self.contexts.lock()
     }
 
     /// Perform an indirect call from Cranelift-generated code to native code in
@@ -440,7 +459,7 @@ fn box_dyn_any_compiler_context(ctx: Option<CompilerContext>) -> Box<dyn Any + S
 fn box_dyn_any(x: impl Any + Send + Sync) -> Box<dyn Any + Send + Sync> {
     log::trace!(
         "making Box<dyn Any + Send + Sync> of {}",
-        std::any::type_name_of_val(&x)
+        core::any::type_name_of_val(&x)
     );
     let b = Box::new(x);
     let r: &(dyn Any + Sync + Send) = &*b;
@@ -861,6 +880,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self
     }
 
+    #[cfg(feature = "std")]
     fn append_dwarf<'a>(
         &self,
         obj: &mut Object<'_>,
@@ -1276,7 +1296,7 @@ impl Compiler {
     }
 
     fn function_compiler(&self) -> FunctionCompiler<'_> {
-        let saved_context = self.contexts.lock().unwrap().pop();
+        let saved_context = self.lock_contexts().pop();
         FunctionCompiler {
             compiler: self,
             cx: saved_context
@@ -1593,6 +1613,7 @@ impl FunctionCompiler<'_> {
         let compilation_result =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut());
 
+        #[cfg(feature = "std")]
         if let Some(path) = &self.compiler.clif_dir {
             use std::io::Write;
 
@@ -1672,7 +1693,7 @@ impl FunctionCompiler<'_> {
             }
         }
 
-        self.compiler.contexts.lock().unwrap().push(self.cx);
+        self.compiler.lock_contexts().push(self.cx);
 
         Ok(compiled_function)
     }

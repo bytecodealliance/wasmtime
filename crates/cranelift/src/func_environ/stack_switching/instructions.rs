@@ -1,5 +1,7 @@
 use cranelift_codegen::ir::BlockArg;
 use itertools::{Either, Itertools};
+use std::vec;
+use std::vec::Vec;
 
 use crate::trap::TranslateTrap;
 use cranelift_codegen::ir::condcodes::*;
@@ -30,6 +32,8 @@ pub(crate) mod stack_switching_helpers {
     use cranelift_codegen::ir::types::*;
     use cranelift_codegen::ir::{StackSlot, StackSlotKind::*};
     use cranelift_frontend::FunctionBuilder;
+    use std::vec;
+    use std::vec::Vec;
     use wasmtime_environ::PtrSize;
 
     /// Provides information about the layout of a type when it is used as an
@@ -1632,7 +1636,7 @@ pub(crate) fn translate_suspend<'a>(
     // 2. Afterwards, the tag return values
     let values = active_contref.values(env, builder);
     let required_capacity =
-        u32::try_from(std::cmp::max(suspend_args.len(), tag_return_types.len()))
+        u32::try_from(core::cmp::max(suspend_args.len(), tag_return_types.len()))
             .expect("Number of stack switching payloads should fit in u32");
 
     if required_capacity > 0 {

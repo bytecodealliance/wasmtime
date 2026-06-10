@@ -14,6 +14,7 @@ use core::fmt;
 use cranelift_codegen::isa::TargetIsa;
 use object::write::SymbolId;
 use std::collections::HashMap;
+use std::vec::Vec;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, EntityRef, MemoryIndex, ModuleTranslation,
     OwnedMemoryIndex, PrimaryMap, PtrSize, StaticModuleIndex, Tunables, VMOffsets,

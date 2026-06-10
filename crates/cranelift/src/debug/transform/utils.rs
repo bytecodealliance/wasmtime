@@ -4,6 +4,7 @@ use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{AttributeValue, UnitRef, write};
+use std::vec::Vec;
 use wasmtime_environ::error::Error;
 
 pub(crate) fn append_vmctx_info(

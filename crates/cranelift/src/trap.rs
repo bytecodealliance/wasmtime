@@ -5,6 +5,8 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::types::I8;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
+use std::vec;
+use std::vec::Vec;
 use wasmtime_environ::{BuiltinFunctionIndex, TripleExt};
 
 /// Helper trait to share translation of traps between core functions and

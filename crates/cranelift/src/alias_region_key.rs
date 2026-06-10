@@ -1,5 +1,6 @@
 use core::fmt;
 use cranelift_codegen::ir;
+use std::format;
 use wasmtime_environ::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, StaticModuleIndex,
 };
@@ -11,7 +12,7 @@ use wasmtime_environ::{
 ///
 /// The key encodes into a single `u32` with the following layout:
 /// `[ kind: 4 bits | data: 28 bits ]`
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum AliasRegionKey {
     /// A `VMContext` field access.
     VMContext {

@@ -5,6 +5,7 @@ use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
+use std::boxed::Box;
 use wasmtime_environ::{
     GcArrayLayout, ModuleInternedTypeIndex, TagIndex, TypeIndex, WasmRefType, WasmResult,
     WasmStorageType, wasm_unsupported,

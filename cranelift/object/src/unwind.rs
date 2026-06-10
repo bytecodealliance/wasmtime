@@ -8,6 +8,8 @@
 //!
 //! [`ObjectModule`]: crate::ObjectModule
 
+use std::vec::Vec;
+
 use anyhow::{Result, anyhow};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::isa::unwind::UnwindInfo;

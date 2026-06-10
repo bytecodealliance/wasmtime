@@ -1,6 +1,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::Reader;
 use gimli::write;
+use std::vec::Vec;
 use wasmtime_environ::error::Error;
 
 pub(crate) fn clone_line_program(

@@ -12,6 +12,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+use std::{vec, vec::Vec};
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, OperatorsReader, WasmModuleResources};
 use wasmtime_environ::{TypeConvert, WasmResult};
 

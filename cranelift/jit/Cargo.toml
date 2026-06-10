@@ -14,19 +14,20 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
+cranelift-codegen = { workspace = true }
+cranelift-control = { workspace = true }
+cranelift-entity = { workspace = true }
 cranelift-module = { workspace = true }
 cranelift-native = { workspace = true }
-cranelift-codegen = { workspace = true, features = ["std"] }
-cranelift-entity = { workspace = true }
-cranelift-control = { workspace = true }
-wasmtime-unwinder = { workspace = true, optional = true, features = ["cranelift"] }
-anyhow = { workspace = true }
-region = "3.0.2"
+hashbrown = { workspace = true }
 libc = { workspace = true }
-target-lexicon = { workspace = true }
-memmap2 = "0.2.1"
 log = { workspace = true }
+memmap2 = "0.9.10"
+region = "3.0.2"
+target-lexicon = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
+wasmtime-unwinder = { workspace = true, optional = true, features = ["cranelift"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
@@ -37,7 +38,8 @@ features = [
 ]
 
 [features]
-default = []
+default = ["std"]
+std = ["cranelift-codegen/std", "cranelift-module/std", "cranelift-native/std"]
 
 wasmtime-unwinder = ["dep:wasmtime-unwinder"]
 

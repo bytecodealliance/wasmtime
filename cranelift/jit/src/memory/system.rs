@@ -1,6 +1,6 @@
-use std::io;
 use std::mem;
 use std::ptr;
+use std::vec::Vec;
 
 use cranelift_module::{ModuleError, ModuleResult};
 use memmap2::MmapMut;
@@ -26,17 +26,19 @@ impl PtrLen {
 
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
-    fn with_size(size: usize) -> io::Result<Self> {
+    fn with_size(size: usize) -> ModuleResult<Self> {
         let alloc_size = region::page::ceil(size as *const ()) as usize;
-        MmapMut::map_anon(alloc_size).map(|mut mmap| {
-            // The order here is important; we assign the pointer first to get
-            // around compile time borrow errors.
-            Self {
-                ptr: mmap.as_mut_ptr(),
-                map: Some(mmap),
-                len: alloc_size,
-            }
-        })
+        MmapMut::map_anon(alloc_size)
+            .map(|mut mmap| {
+                // The order here is important; we assign the pointer first to get
+                // around compile time borrow errors.
+                Self {
+                    ptr: mmap.as_mut_ptr(),
+                    map: Some(mmap),
+                    len: alloc_size,
+                }
+            })
+            .map_err(|err| ModuleError::Allocation { err })
     }
 }
 
@@ -69,7 +71,7 @@ impl Memory {
         self.position = 0;
     }
 
-    pub(crate) fn allocate(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
+    pub(crate) fn allocate(&mut self, size: usize, align: u64) -> ModuleResult<*mut u8> {
         let align = usize::try_from(align).expect("alignment too big");
         if self.position % align != 0 {
             self.position += align - self.position % align;
@@ -187,7 +189,7 @@ impl JITMemoryProvider for SystemMemoryProvider {
         self.code.set_readable_and_executable(branch_protection)
     }
 
-    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8> {
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> ModuleResult<*mut u8> {
         match kind {
             JITMemoryKind::Executable => self.code.allocate(size, align),
             JITMemoryKind::Writable => self.writable.allocate(size, align),
