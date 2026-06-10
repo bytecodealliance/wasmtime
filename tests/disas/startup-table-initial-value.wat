@@ -40,54 +40,25 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-<<<<<<< HEAD
 ;;     region0 = 671088640 "VMTableDefinition+0x0"
-;;     region1 = 671088648 "VMTableDefinition+0x8"
-;;     region2 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region1 = 335544320 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v9 = load.i64 notrap aligned region1 v0+56
-;;     v10 = ireduce.i32 v9
-;;     v11 = uextend.i64 v10
-;;     v39 = iconst.i64 10
-;;     v51 = icmp ult v11, v39  ; v39 = 10
-;;     trapnz v51, user6
-;;     v18 = load.i64 notrap aligned region0 v0+48
+;;     v17 = load.i64 notrap aligned readonly can_move region0 v0+48
 ;;     v3 = iconst.i32 1
-;;     v81 = iconst.i64 36
-;;     v83 = iadd v18, v81  ; v81 = 36
-;;     v20 = iconst.i64 4
-;;     jump block1(v18)
-;;
-;; block1(v29: i64):
-;;     v86 = iconst.i32 1
-;;     store notrap aligned region2 v86, v29  ; v86 = 1
-;;     v87 = iadd.i64 v18, v81  ; v81 = 36
-;;     v88 = icmp eq v29, v87
-;;     v89 = iconst.i64 4
-;;     v90 = iadd v29, v89  ; v89 = 4
-;;     brif v88, block2, block1(v90)
-=======
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move gv0+48
-;;
-;; block0(v0: i64, v1: i64):
-;;     v17 = load.i64 notrap aligned readonly can_move v0+48
-;;     v3 = iconst.i32 1
-;;     v84 = iconst.i64 36
-;;     v86 = iadd v17, v84  ; v84 = 36
+;;     v83 = iconst.i64 36
+;;     v85 = iadd v17, v83  ; v83 = 36
 ;;     v19 = iconst.i64 4
 ;;     jump block1(v17)
 ;;
 ;; block1(v28: i64):
-;;     v89 = iconst.i32 1
-;;     store notrap aligned v89, v28  ; v89 = 1
-;;     v90 = iadd.i64 v17, v84  ; v84 = 36
-;;     v91 = icmp eq v28, v90
-;;     v92 = iconst.i64 4
-;;     v93 = iadd v28, v92  ; v92 = 4
-;;     brif v91, block2, block1(v93)
->>>>>>> 8ca462d0d4 (port call_indirect elisions to upstream table_initialization model)
+;;     v88 = iconst.i32 1
+;;     store notrap aligned region1 v88, v28  ; v88 = 1
+;;     v89 = iadd.i64 v17, v83  ; v83 = 36
+;;     v90 = icmp eq v28, v89
+;;     v91 = iconst.i64 4
+;;     v92 = iadd v28, v91  ; v91 = 4
+;;     brif v90, block2, block1(v92)
 ;;
 ;; block2:
 ;;     return
