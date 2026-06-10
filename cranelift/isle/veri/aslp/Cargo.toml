@@ -13,5 +13,10 @@ anyhow = { workspace = true, features = ['std', 'backtrace'] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 cranelift-isle-veri-test-macros = { path = "../test-macros" }
-reqwest = { workspace = true, features = ["blocking", "json"] }
+hyper = { workspace = true, features = ["client", "http1"] }
+http-body-util = { workspace = true }
+tokio = { workspace = true, features = ["rt", "net"] }
+bytes = { workspace = true }
+url = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

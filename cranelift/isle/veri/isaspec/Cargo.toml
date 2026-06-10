@@ -8,7 +8,6 @@ edition.workspace = true
 cranelift-isle-veri-aslp = { path = "../aslp" }
 cranelift-isle = { path = "../../isle" }
 cranelift-codegen = { workspace = true, features = ["all-arch"] }
-reqwest = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }
 clap = { workspace = true, features = ['default'] }
 tracing = { workspace = true }

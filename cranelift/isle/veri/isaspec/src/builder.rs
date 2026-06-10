@@ -166,11 +166,11 @@ pub struct InstConfig {
 
 pub struct Builder<'a> {
     cfg: SpecConfig,
-    client: &'a Client<'a>,
+    client: &'a Client,
 }
 
 impl<'a> Builder<'a> {
-    pub fn new(cfg: SpecConfig, client: &'a Client<'a>) -> Self {
+    pub fn new(cfg: SpecConfig, client: &'a Client) -> Self {
         Self { cfg, client }
     }
 
