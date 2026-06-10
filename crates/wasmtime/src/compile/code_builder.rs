@@ -309,17 +309,25 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// # Intrinsics
     ///
-    /// | Name                 | Parameters   | Results |
-    /// |----------------------|--------------|---------|
-    /// | `u8-native-load`     | `u64`        | `u8`    |
-    /// | `u16-native-load`    | `u64`        | `u16`   |
-    /// | `u32-native-load`    | `u64`        | `u32`   |
-    /// | `u64-native-load`    | `u64`        | `u64`   |
-    /// | `u8-native-store`    | `u64`, `u8`  | -       |
-    /// | `u16-native-load`    | `u64`, `u16` | -       |
-    /// | `u32-native-load`    | `u64`, `u32` | -       |
-    /// | `u64-native-load`    | `u64`, `u64` | -       |
-    /// | `store-data-address` | -            | `u64`   |
+    /// | Name                       | Parameters                  | Results |
+    /// |----------------------------|-----------------------------|---------|
+    /// | `u8-native-load`           | `u64`                       | `u8`    |
+    /// | `u16-native-load`          | `u64`                       | `u16`   |
+    /// | `u32-native-load`          | `u64`                       | `u32`   |
+    /// | `u64-native-load`          | `u64`                       | `u64`   |
+    /// | `u8-native-store`          | `u64`, `u8`                 | -       |
+    /// | `u16-native-store`         | `u64`, `u16`                | -       |
+    /// | `u32-native-store`         | `u64`, `u32`                | -       |
+    /// | `u64-native-store`         | `u64`, `u64`                | -       |
+    /// | `u8-checked-native-load`   | `u64`, `u64`, `u64`         | `u8`    |
+    /// | `u16-checked-native-load`  | `u64`, `u64`, `u64`         | `u16`   |
+    /// | `u32-checked-native-load`  | `u64`, `u64`, `u64`         | `u32`   |
+    /// | `u64-checked-native-load`  | `u64`, `u64`, `u64`         | `u64`   |
+    /// | `u8-checked-native-store`  | `u64`, `u64`, `u64`, `u8`   | -       |
+    /// | `u16-checked-native-store` | `u64`, `u64`, `u64`, `u16`  | -       |
+    /// | `u32-checked-native-store` | `u64`, `u64`, `u64`, `u32`  | -       |
+    /// | `u64-checked-native-store` | `u64`, `u64`, `u64`, `u64`  | -       |
+    /// | `store-data-address`       | -                           | `u64`   |
     ///
     /// ## `*-native-load`
     ///
@@ -330,6 +338,38 @@ impl<'a> CodeBuilder<'a> {
     ///
     /// These intrinsics perform an unsandboxed, unsynchronized store to native
     /// memory, using the native endianness.
+    ///
+    /// ## `*-checked-native-load`
+    ///
+    /// These intrinsics perform a bounds-checked version of the corresponding
+    /// `*-native-load` intrinsic. Their parameters are a `base_address`, an
+    /// `offset`, and a `length` (in bytes) describing a region of native
+    /// memory, and they load from `base_address + offset`.
+    ///
+    /// Before performing the load, they check that the access is in bounds. If
+    /// `offset + SIZE > length` -- where `SIZE` is the byte width of the access
+    /// (e.g. `4` for `u32-checked-native-load`) -- or if that addition
+    /// overflows, then the intrinsic raises a trap and the load is *not*
+    /// performed. Otherwise the load is performed exactly as the corresponding
+    /// unchecked `*-native-load` intrinsic would, against the address
+    /// `base_address + offset`.
+    ///
+    /// Note that the bounds check is performed against the given `length`
+    /// argument; it is the caller's responsibility to pass a `length` that
+    /// actually describes a valid region of memory beginning at `base_address`.
+    /// When the access is in bounds, the resulting `base_address + offset`
+    /// access must still uphold all of the safety invariants described above
+    /// for the unchecked intrinsics.
+    ///
+    /// ## `*-checked-native-store`
+    ///
+    /// These intrinsics perform a bounds-checked version of the corresponding
+    /// `*-native-store` intrinsic. Their parameters are a `base_address`, an
+    /// `offset`, a `length` (in bytes), and a `value`. They perform the same
+    /// bounds check as the `*-checked-native-load` intrinsics -- trapping,
+    /// without storing anything, if `offset + SIZE > length` or if that
+    /// addition overflows -- and otherwise store `value` to `base_address +
+    /// offset`.
     ///
     /// ## `store-data-address`
     ///
