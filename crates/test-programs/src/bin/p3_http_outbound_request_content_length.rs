@@ -63,7 +63,7 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         println!("writing too little");
         {
             let (request, mut contents_tx, trailers_tx, transmit) = make_request();
-            let (handle, transmit, ()) = join!(
+            let (_handle, transmit, ()) = join!(
                 async { client::send(request).await },
                 async { transmit.await },
                 async {
@@ -73,18 +73,26 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
                     drop(contents_tx);
                 },
             );
-            // The request body will be polled before `handle` returns.
+
+            // Note: The request body will be polled before `handle` returns.
             // Due to the way implementation is structured, by the time it happens
             // the error will be already available in most cases and `handle` will fail,
             // but it is a race condition, since `handle` may also succeed if
             // polling body returns `Poll::Pending`
-            assert!(
-                matches!(handle, Ok(..) | Err(ErrorCode::HttpProtocolError)),
-                "unexpected handle result: {handle:#?}"
-            );
+            //
+            // In those cases, the `ErrorCode::HttpProtocolError` would be observable
+            // as the handle.
+            //
+            // Rather than checking for this condition, which may race, we check the
+            // transmit directly below
             let err = transmit.expect_err("request transmission should have failed");
             assert!(
-                matches!(err, ErrorCode::HttpRequestBodySize(Some(3))),
+                matches!(
+                    err,
+                    // Depending on timing, other non-wasmtime hosts may already
+                    // have reported the request body size error
+                    ErrorCode::HttpRequestBodySize(Some(3))
+                ),
                 "unexpected error: {err:#?}"
             );
         }
