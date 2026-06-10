@@ -627,6 +627,349 @@ fn store_data_address() -> Result<()> {
     Ok(())
 }
 
+/// A 16-byte buffer aligned to 8 bytes so that aligned native accesses of any
+/// of our intrinsic widths (`u8`/`u16`/`u32`/`u64`) are well-defined.
+#[repr(align(8))]
+struct AlignedBuf([u8; 16]);
+
+/// Get the native-endian byte encoding of `x` truncated to the given intrinsic
+/// width.
+fn ne_bytes(comp_ty: &str, x: u64) -> Vec<u8> {
+    match comp_ty {
+        "u8" => (x as u8).to_ne_bytes().to_vec(),
+        "u16" => (x as u16).to_ne_bytes().to_vec(),
+        "u32" => (x as u32).to_ne_bytes().to_vec(),
+        "u64" => x.to_ne_bytes().to_vec(),
+        _ => unreachable!(),
+    }
+}
+
+/// Truncate `x` to the given intrinsic width, zero-extended back into a `u64`
+/// (matching what a checked load of that width returns).
+fn mask(comp_ty: &str, x: u64) -> u64 {
+    match comp_ty {
+        "u8" => x as u8 as u64,
+        "u16" => x as u16 as u64,
+        "u32" => x as u32 as u64,
+        "u64" => x,
+        _ => unreachable!(),
+    }
+}
+
+fn val_to_u64(v: &component::Val) -> u64 {
+    match v {
+        component::Val::U8(x) => u64::from(*x),
+        component::Val::U16(x) => u64::from(*x),
+        component::Val::U32(x) => u64::from(*x),
+        component::Val::U64(x) => *x,
+        other => panic!("unexpected result value: {other:?}"),
+    }
+}
+
+fn val_of_width(comp_ty: &str, x: u64) -> component::Val {
+    match comp_ty {
+        "u8" => component::Val::U8(x as u8),
+        "u16" => component::Val::U16(x as u16),
+        "u32" => component::Val::U32(x as u32),
+        "u64" => component::Val::U64(x),
+        _ => unreachable!(),
+    }
+}
+
+/// Exercise the bounds-checked native load/store intrinsics, both the
+/// non-trapping (in-bounds) and trapping (out-of-bounds and overflowing) cases,
+/// for every access width.
+///
+/// The functional behavior must be identical regardless of whether Spectre
+/// mitigations are enabled; `spectre` controls the
+/// `enable_heap_access_spectre_mitigation` Cranelift setting so that we cover
+/// both code paths. (The actual codegen difference is checked by the `disas`
+/// filetests.)
+///
+/// `inlining` controls whether the intrinsics are inlined into their callers,
+/// which is a separate code path in the compiler (the trampoline compiler
+/// versus the inlined-intrinsic compiler); we cover both.
+fn checked_native_loads_and_stores(spectre: bool, inlining: bool) -> Result<()> {
+    let mut config = Config::new();
+    config.compiler_inlining(if inlining {
+        Inlining::Yes
+    } else {
+        Inlining::No
+    });
+
+    if spectre {
+        unsafe {
+            config.cranelift_flag_set("enable_heap_access_spectre_mitigation", "true");
+        }
+    } else {
+        unsafe {
+            config.cranelift_flag_set("enable_heap_access_spectre_mitigation", "false");
+        }
+    }
+
+    let engine = match Engine::new(&config) {
+        Ok(engine) => engine,
+
+        // Some build configurations don't support signals-based traps, which
+        // means that we cannot test checked intrinsics with Spectre mitigations
+        // on them, as Spectre mitigations require signals-based traps.
+        Err(e)
+            if spectre
+                && e.to_string().contains(
+                    "when signals-based traps are disabled then spectre mitigations \
+                     must also be disabled",
+                ) =>
+        {
+            return Ok(());
+        }
+
+        Err(e) => return Err(e),
+    };
+
+    // A few distinct values, used for the initial buffer contents (`KNOWN*`)
+    // and the values written by the store intrinsic (`STORED*`).
+    const KNOWN: u64 = 0x1122_3344_5566_7788;
+    const KNOWN2: u64 = 0x99aa_bbcc_ddee_ff00;
+    const STORED: u64 = 0xa5b6_c7d8_e9fa_0b1c;
+    const STORED2: u64 = 0x0102_0304_0506_0708;
+
+    for (comp_ty, core_ty, size) in [
+        ("u8", "i32", 1),
+        ("u16", "i32", 2),
+        ("u32", "i32", 4),
+        ("u64", "i64", 8),
+    ] {
+        let wat = format!(
+            r#"
+                (component
+                    ;; Import the unsafe intrinsics.
+                    (import "unsafe-intrinsics"
+                        (instance $intrinsics
+                            (export "{comp_ty}-checked-native-load"
+                                (func (param "base" u64) (param "offset" u64) (param "length" u64)
+                                      (result {comp_ty})))
+                            (export "{comp_ty}-checked-native-store"
+                                (func (param "base" u64) (param "offset" u64) (param "length" u64)
+                                      (param "value" {comp_ty})))
+                        )
+                    )
+
+                    ;; Lower them to core functions.
+                    (core func $load' (canon lower (func $intrinsics "{comp_ty}-checked-native-load")))
+                    (core func $store' (canon lower (func $intrinsics "{comp_ty}-checked-native-store")))
+
+                    ;; Define a core module that imports them and exports functions that wrap them.
+                    (core module $m
+                        (import "" "load" (func $load (param i64 i64 i64) (result {core_ty})))
+                        (import "" "store" (func $store (param i64 i64 i64 {core_ty})))
+
+                        (func (export "load") (param $base i64) (param $offset i64) (param $length i64)
+                                              (result {core_ty})
+                            (call $load (local.get $base)
+                                        (local.get $offset)
+                                        (local.get $length))
+                        )
+
+                        (func (export "store") (param $base i64) (param $offset i64) (param $length i64)
+                                               (param $value {core_ty})
+                            (call $store (local.get $base)
+                                         (local.get $offset)
+                                         (local.get $length)
+                                         (local.get $value))
+                        )
+                    )
+
+                    ;; Instantiate that core module.
+                    (core instance $i
+                        (instantiate $m
+                            (with "" (instance (export "load" (func $load'))
+                                               (export "store" (func $store'))))
+                        )
+                    )
+
+                    ;; Export lifted versions of the core instance's wrapper functions.
+                    (func (export "load") (param "base" u64)
+                                          (param "offset" u64)
+                                          (param "length" u64)
+                                          (result {comp_ty})
+                        (canon lift (core func $i "load"))
+                    )
+                    (func (export "store") (param "base" u64)
+                                           (param "offset" u64)
+                                           (param "length" u64)
+                                           (param "value" {comp_ty})
+                        (canon lift (core func $i "store"))
+                    )
+                )
+            "#
+        );
+
+        let mut code_builder = CodeBuilder::new(&engine);
+        code_builder.wasm_binary_or_text(wat.as_bytes(), None)?;
+        unsafe {
+            code_builder.expose_unsafe_intrinsics("unsafe-intrinsics");
+        }
+        let component = code_builder.compile_component()?;
+        let linker = component::Linker::new(&engine);
+
+        // Allocate a host buffer that Wasm will access directly via the
+        // intrinsics. We tell the intrinsics its length so they can bounds
+        // check accesses against it.
+        let data = Arc::new(UnsafeCell::new(AlignedBuf([0; 16])));
+        let base_ptr = data.get().cast::<u8>();
+        let base = base_ptr as usize as u64;
+        let length: u64 = 16;
+        // The last offset at which a `size`-byte access is in bounds.
+        let boundary: u64 = length - size;
+
+        // Initialize known values at the start of the buffer and at the last
+        // in-bounds slot.
+        unsafe {
+            let bytes = ne_bytes(comp_ty, KNOWN);
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), base_ptr, bytes.len());
+            let bytes = ne_bytes(comp_ty, KNOWN2);
+            std::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                base_ptr.add(usize::try_from(boundary).unwrap()),
+                bytes.len(),
+            );
+        }
+
+        // Each call uses a fresh store and instance because a trap leaves the
+        // instance unusable.
+        let call_load = |offset: u64, len: u64| -> Result<u64> {
+            let mut store = Store::new(&engine, ());
+            let instance = linker.instantiate(&mut store, &component)?;
+            let func = instance.get_func(&mut store, "load").unwrap();
+            let mut results = [component::Val::Bool(false)];
+            func.call(
+                &mut store,
+                &[
+                    component::Val::U64(base),
+                    component::Val::U64(offset),
+                    component::Val::U64(len),
+                ],
+                &mut results,
+            )?;
+            Ok(val_to_u64(&results[0]))
+        };
+        let call_store = |offset: u64, len: u64, value: u64| -> Result<()> {
+            let mut store = Store::new(&engine, ());
+            let instance = linker.instantiate(&mut store, &component)?;
+            let func = instance.get_func(&mut store, "store").unwrap();
+            func.call(
+                &mut store,
+                &[
+                    component::Val::U64(base),
+                    component::Val::U64(offset),
+                    component::Val::U64(len),
+                    val_of_width(comp_ty, value),
+                ],
+                &mut [],
+            )?;
+            Ok(())
+        };
+        let assert_oob = |result: Result<u64>, what: &str| {
+            let err = result.err().unwrap_or_else(|| {
+                panic!("expected a trap for {what} (spectre={spectre}, inlining={inlining}, ty={comp_ty})")
+            });
+            match err.downcast::<Trap>() {
+                Ok(trap) => assert_eq!(
+                    trap,
+                    Trap::MemoryOutOfBounds,
+                    "wrong trap for {what} (spectre={spectre}, inlining={inlining}, ty={comp_ty})"
+                ),
+                Err(e) => panic!(
+                    "expected a Trap for {what} (spectre={spectre}, inlining={inlining}, ty={comp_ty}), got: {e:?}"
+                ),
+            }
+        };
+
+        // Non-trapping loads.
+
+        // A load at offset 0 reads the value we wrote there.
+        assert_eq!(call_load(0, length)?, mask(comp_ty, KNOWN));
+        // A load at the very last in-bounds offset is allowed.
+        assert_eq!(call_load(boundary, length)?, mask(comp_ty, KNOWN2));
+
+        // Trapping loads.
+
+        // One byte past the last in-bounds offset traps.
+        assert_oob(call_load(boundary + 1, length), "load one past the end");
+        // An offset equal to the length traps.
+        assert_oob(call_load(length, length), "load at offset == length");
+        // The `length` argument is what is checked, not the underlying
+        // allocation: shrinking it makes otherwise-valid offsets trap.
+        assert_oob(call_load(size, size), "load past a shortened length");
+        // A huge offset whose `offset + size` does not overflow but exceeds the
+        // length still traps (and must not wrap around to an in-bounds access).
+        assert_oob(call_load(u64::MAX - 100, length), "load at a huge offset");
+        // An offset whose `offset + size` overflows traps.
+        assert_oob(
+            call_load(u64::MAX, length),
+            "load whose offset + size overflows",
+        );
+
+        // Non-trapping stores.
+
+        // Store at offset 0 and at the last in-bounds offset, then read the
+        // values back out of the host buffer.
+        call_store(0, length, STORED)?;
+        call_store(boundary, length, STORED2)?;
+        let buf = unsafe { (*data.get()).0 };
+        let size = usize::try_from(size).unwrap();
+        let boundary = usize::try_from(boundary).unwrap();
+        assert_eq!(&buf[..size], &ne_bytes(comp_ty, STORED)[..]);
+        assert_eq!(&buf[boundary..], &ne_bytes(comp_ty, STORED2)[..]);
+
+        // Trapping stores.
+
+        // All of these must trap and leave the buffer unmodified.
+        assert_oob(
+            call_store(boundary as u64 + 1, length, !STORED).map(|()| 0),
+            "store one past the end",
+        );
+        assert_oob(
+            call_store(length, length, !STORED).map(|()| 0),
+            "store at offset == length",
+        );
+        assert_oob(
+            call_store(size as u64, size as u64, !STORED).map(|()| 0),
+            "store past a shortened length",
+        );
+        assert_oob(
+            call_store(u64::MAX, length, !STORED).map(|()| 0),
+            "store whose offset + size overflows",
+        );
+
+        // Confirm the failed stores did not corrupt the buffer.
+        let buf = unsafe { (*data.get()).0 };
+        assert_eq!(&buf[..size], &ne_bytes(comp_ty, STORED)[..]);
+        assert_eq!(&buf[boundary..], &ne_bytes(comp_ty, STORED2)[..]);
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+// These tests require signals-based traps, and we can't always enable that on
+// 32-bit architectures.
+#[cfg(target_pointer_width = "64")]
+fn checked_native_loads_and_stores_with_spectre_mitigations() -> Result<()> {
+    checked_native_loads_and_stores(true, false)?;
+    checked_native_loads_and_stores(true, true)?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn checked_native_loads_and_stores_without_spectre_mitigations() -> Result<()> {
+    checked_native_loads_and_stores(false, false)?;
+    checked_native_loads_and_stores(false, true)?;
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn other_import_name() -> Result<()> {
