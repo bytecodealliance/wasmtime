@@ -458,11 +458,6 @@ pin-project-lite = "0.2.14"
 sha2 = { version = "0.10.2", default-features = false }
 gdbstub = "0.7.10"
 gdbstub_arch = "0.3.3"
-pest = "2.7.8"
-pest_derive = "2.7.8"
-num-bigint = "0.4"
-num-traits = "0.2"
-easy-smt = "0.2.4"
 
 # =============================================================================
 #

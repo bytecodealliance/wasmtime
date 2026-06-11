@@ -12,9 +12,9 @@ anyhow = { workspace = true, features = ['std', 'backtrace'] }
 clap = { workspace = true, features = ['default', 'env'] }
 serde = { workspace = true, features = ['derive'] }
 serde_json = { workspace = true }
-num-bigint = { workspace = true }
-num-traits = { workspace = true }
-easy-smt = { workspace = true }
+num-bigint = "0.4"
+num-traits = "0.2"
+easy-smt = "0.2.4"
 rayon = { workspace = true }
 tempfile = { workspace = true }
 
