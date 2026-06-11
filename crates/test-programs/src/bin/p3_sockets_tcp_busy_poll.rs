@@ -11,7 +11,7 @@ use test_programs::p3::wit_stream;
 use test_programs::sockets::supports_ipv6;
 use wit_bindgen::StreamResult;
 
-#[link(wasm_import_module = "wasi:http/types@0.3.0-rc-2026-03-15")]
+#[link(wasm_import_module = "wasi:http/types@0.3.0")]
 unsafe extern "C" {
     #[link_name = "[async-lower][stream-read-0][static]request.new"]
     fn stream_read(_: u32, _: *mut u8, _: usize) -> u32;

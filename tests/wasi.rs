@@ -15,14 +15,53 @@ use std::path::Path;
 use std::process::{Child, Stdio};
 use tempfile::TempDir;
 use wasmtime::error::Context;
-use wasmtime::{Result, ToWasmtimeResult as _, format_err};
-use wit_component::ComponentEncoder;
+use wasmtime::{Result, format_err};
 
 const KNOWN_FAILURES: &[&str] = &[
     #[cfg(windows)]
     "renumber",
     #[cfg(windows)]
     "stdio",
+    // Waiting for the upstream tests to update to use the 0.3.0 official WITs.
+    "multi-clock-wait",
+    "filesystem-unlink-errors",
+    "monotonic-clock",
+    "filesystem-open-errors",
+    "cli-terminal",
+    "sockets-udp-bind",
+    "wall-clock",
+    "sockets-tcp-bind",
+    "cli-env",
+    "cli-stdio-roundtrip",
+    "cli-stdio",
+    "filesystem-flags-and-type",
+    "sockets-tcp-send",
+    "filesystem-set-size",
+    "sockets-udp-connect",
+    "sockets-echo",
+    "random",
+    "sockets-udp-properties",
+    "filesystem-metadata-hash",
+    "sockets-tcp-listen",
+    "sockets-udp-send",
+    "filesystem-read-directory",
+    "sockets-tcp-receive",
+    "sockets-tcp-properties",
+    "filesystem-dotdot",
+    "filesystem-io",
+    "sockets-tcp-connect",
+    "sockets-udp-receive",
+    "run-with-err",
+    "filesystem-advise",
+    "http-fields",
+    "http-response",
+    "filesystem-is-same-object",
+    "filesystem-rename",
+    "filesystem-hard-links",
+    "filesystem-stat",
+    "http-request",
+    "filesystem-mkdir-rmdir",
+    "http-service",
 ];
 
 fn main() -> Result<()> {
@@ -53,16 +92,37 @@ fn find_tests(path: &Path, trials: &mut Vec<Trial>) -> Result<()> {
             format!("wasmtime-wasi - {}", path.display()),
             {
                 let path = path.clone();
-                move || run_test(&path, false).map_err(|e| format!("{e:?}").into())
+                move || run_test(&path).map_err(|e| format!("{e:?}").into())
             },
         ));
     }
     Ok(())
 }
 
-fn run_test(path: &Path, componentize: bool) -> Result<()> {
-    let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
+fn run_test(path: &Path) -> Result<()> {
     let test_name = path.file_stem().unwrap().to_str().unwrap();
+    let mut should_fail = KNOWN_FAILURES.contains(&test_name);
+    if path.iter().any(|p| p == "wasm32-wasip3") && !cfg!(feature = "component-model-async") {
+        should_fail = true;
+    }
+    match (execute(path), should_fail) {
+        // If this test passed and is not a known failure, or if it failed and
+        // it's a known failure, then flag this test as "ok".
+        (Ok(_), false) | (Err(_), true) => Ok(()),
+
+        // If this test failed and it's not known to fail, explain why.
+        (Err(e), false) => Err(e),
+
+        // If this test passed but it's flagged as should be failed, then fail
+        // this test for someone to update `KNOWN_FAILURES`.
+        (Ok(()), true) => {
+            wasmtime::bail!("test passed but it's listed in `KNOWN_FAILURES`")
+        }
+    }
+}
+
+fn execute(path: &Path) -> Result<()> {
+    let wasmtime = Path::new(env!("CARGO_BIN_EXE_wasmtime"));
     let target_dir = wasmtime.parent().unwrap().parent().unwrap();
     let parent_dir = path.parent().ok_or(format_err!("module has no parent?"))?;
     let spec = if let Ok(contents) = fs::read_to_string(&path.with_extension("json")) {
@@ -73,26 +133,6 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
 
     let mut td = TempDir::new_in(&target_dir)?;
     td.disable_cleanup(true);
-    let path = if componentize {
-        let module = fs::read(path).expect("read wasm module");
-        let component = ComponentEncoder::default()
-            .module(module.as_slice())
-            .to_wasmtime_result()?
-            .validate(true)
-            .adapter(
-                "wasi_snapshot_preview1",
-                &fs::read(test_programs_artifacts::ADAPTER_COMMAND)?,
-            )
-            .to_wasmtime_result()?
-            .encode()
-            .to_wasmtime_result()?;
-        let stem = path.file_stem().unwrap().to_str().unwrap();
-        let component_path = td.path().join(format!("{stem}.component.wasm"));
-        fs::write(&component_path, component)?;
-        component_path
-    } else {
-        path.to_path_buf()
-    };
 
     let spec_debug = format!("{spec:#?}");
     let spec_world = spec.world.clone();
@@ -220,14 +260,14 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
                             }
                         }
                         let addr = String::from_utf8_lossy(&buf[..i]);
-                        let addr = addr
+                        let Some(addr) = addr
                             .trim()
                             .strip_prefix("Serving HTTP on http://")
-                            .unwrap()
-                            .strip_suffix("/")
-                            .unwrap()
-                            .parse::<SocketAddr>()
-                            .unwrap();
+                            .and_then(|s| s.strip_suffix("/"))
+                            .and_then(|s| s.parse::<SocketAddr>().ok())
+                        else {
+                            wasmtime::bail!("unexpected output from server: {addr:?}");
+                        };
                         http_addr = Some(addr);
                         addr
                     }
@@ -256,49 +296,28 @@ fn run_test(path: &Path, componentize: bool) -> Result<()> {
                 let ok = (Some(exit_code.unwrap_or(0)) == result.status.code() || killed)
                     && matches_or_missing(&stdout, &result.stdout)
                     && matches_or_missing(&stderr, &result.stderr);
-                let mut should_fail = KNOWN_FAILURES.contains(&test_name);
-                if path.iter().any(|p| p == "wasm32-wasip3")
-                    && !cfg!(feature = "component-model-async")
-                {
-                    should_fail = true;
-                }
 
-                match (ok, should_fail) {
-                    // If this test passed and is not a known failure, or if it failed and
-                    // it's a known failure, then flag this test as "ok".
-                    (true, false) | (false, true) => {}
-
-                    // If this test failed and it's not known to fail, explain why.
-                    (false, false) => {
-                        td.disable_cleanup(false);
-                        let mut msg = String::new();
-                        writeln!(msg, "  command: {cmd_debug}")?;
-                        writeln!(msg, "  spec: {spec_debug}")?;
-                        writeln!(msg, "  result.status: {}", result.status)?;
-                        if !result.stdout.is_empty() {
-                            write!(
-                                msg,
-                                "  result.stdout:\n    {}",
-                                String::from_utf8_lossy(&result.stdout).replace("\n", "\n    ")
-                            )?;
-                        }
-                        if !result.stderr.is_empty() {
-                            writeln!(
-                                msg,
-                                "  result.stderr:\n    {}",
-                                String::from_utf8_lossy(&result.stderr).replace("\n", "\n    ")
-                            )?;
-                        }
-                        wasmtime::bail!(
-                            "{msg}\nFAILED! The result does not match the specification"
-                        );
+                if !ok {
+                    td.disable_cleanup(false);
+                    let mut msg = String::new();
+                    writeln!(msg, "  command: {cmd_debug}")?;
+                    writeln!(msg, "  spec: {spec_debug}")?;
+                    writeln!(msg, "  result.status: {}", result.status)?;
+                    if !result.stdout.is_empty() {
+                        write!(
+                            msg,
+                            "  result.stdout:\n    {}",
+                            String::from_utf8_lossy(&result.stdout).replace("\n", "\n    ")
+                        )?;
                     }
-
-                    // If this test passed but it's flagged as should be failed, then fail
-                    // this test for someone to update `KNOWN_FAILURES`.
-                    (true, true) => {
-                        wasmtime::bail!("test passed but it's listed in `KNOWN_FAILURES`")
+                    if !result.stderr.is_empty() {
+                        writeln!(
+                            msg,
+                            "  result.stderr:\n    {}",
+                            String::from_utf8_lossy(&result.stderr).replace("\n", "\n    ")
+                        )?;
                     }
+                    wasmtime::bail!("{msg}\nFAILED! The result does not match the specification");
                 }
             }
         }
