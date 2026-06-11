@@ -13,6 +13,7 @@ mod async_dynamic;
 mod bindgen;
 mod call_hook;
 mod dynamic;
+mod exceptions;
 mod func;
 mod import;
 mod instance;

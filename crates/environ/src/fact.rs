@@ -61,6 +61,15 @@ pub struct Module<'a> {
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
+    /// Whether Wasm exceptions are enabled.
+    ///
+    /// When enabled, each adapter function wraps its body in a
+    /// `try_table` with a `catch_all` clause which traps: the adapter
+    /// is the boundary between two components and the component
+    /// model's canonical ABI specifies that an exception which
+    /// propagates out of a component uncaught becomes a trap.
+    exceptions: bool,
+
     /// Core wasm type section that's incrementally built
     core_types: core_types::CoreTypes,
 
@@ -259,10 +268,15 @@ enum HelperLocation {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypesBuilder, tunables: &'a Tunables) -> Module<'a> {
+    pub fn new(
+        types: &'a ComponentTypesBuilder,
+        tunables: &'a Tunables,
+        exceptions: bool,
+    ) -> Module<'a> {
         Module {
             tunables,
             types,
+            exceptions,
             core_types: Default::default(),
             core_imports: Default::default(),
             imported: Default::default(),
