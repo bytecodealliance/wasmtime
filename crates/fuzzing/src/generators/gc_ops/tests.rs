@@ -235,6 +235,47 @@ fn every_op_generated() -> mutatis::Result<()> {
 }
 
 #[test]
+fn i31_and_eq_upcast_ops_validate() -> mutatis::Result<()> {
+    let _ = env_logger::try_init();
+
+    // Exercise every new i31/eqref op end-to-end through encoding + validation.
+    let mut ops = test_ops(5, 5, 5);
+    ops.ops = vec![
+        // Create i31 values and route them through locals/globals/tables.
+        GcOp::RefI31 { value: 0x4000_0001 },
+        GcOp::I31LocalSet,
+        GcOp::I31LocalGet,
+        GcOp::I31GlobalSet,
+        GcOp::I31GlobalGet,
+        GcOp::I31TableSet { elem_index: 0 },
+        GcOp::I31TableGet { elem_index: 0 },
+        // Inline i31.get_s / i31.get_u (null-guarded).
+        GcOp::I31GetS,
+        GcOp::RefI31 { value: 7 },
+        GcOp::I31GetU,
+        // Null i31, then differential host check.
+        GcOp::NullI31,
+        GcOp::TakeI31Call,
+        GcOp::RefI31 { value: 0x7fff_ffff },
+        GcOp::TakeI31Call,
+        // Upcast i31 -> eqref and hand it to the eqref-taking host function.
+        GcOp::RefI31 { value: 1 },
+        GcOp::I31RefAsEq,
+        GcOp::TakeEqCall,
+        // Upcast abstract and concrete struct refs -> eqref.
+        GcOp::NullStruct,
+        GcOp::StructRefAsEq,
+        GcOp::TakeEqCall,
+        GcOp::StructNew { type_index: 0 },
+        GcOp::TypedStructRefAsEq { type_index: 0 },
+        GcOp::TakeEqCall,
+    ];
+    assert_valid_wasm(&mut ops);
+
+    Ok(())
+}
+
+#[test]
 fn emits_rec_groups_and_validates() -> mutatis::Result<()> {
     let _ = env_logger::try_init();
 

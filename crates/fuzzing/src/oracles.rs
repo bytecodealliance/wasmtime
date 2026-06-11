@@ -862,6 +862,34 @@ pub fn gc_ops(mut fuzz_config: generators::Config, mut ops: GcOps) -> Result<usi
 
         linker.define(&store, "", "take_eq", func).unwrap();
 
+        // `take_i31` receives an `i31ref` along with the guest's inline
+        // `i31.get_s` and `i31.get_u` results, and asserts that the host's own
+        // view of the i31 matches the values the Wasm instructions produced.
+        linker
+            .func_wrap("", "take_i31", {
+                move |_caller: Caller<'_, StoreLimits>,
+                      r: Option<I31>,
+                      wasm_get_s: i32,
+                      wasm_get_u: i32|
+                      -> Result<()> {
+                    log::info!("gc_ops: take_i31({r:?}, get_s={wasm_get_s}, get_u={wasm_get_u})");
+                    if let Some(i31) = r {
+                        assert_eq!(
+                            i31.get_i32(),
+                            wasm_get_s,
+                            "host `i31.get_s` must match inline Wasm `i31.get_s`"
+                        );
+                        assert_eq!(
+                            i31.get_u32() as i32,
+                            wasm_get_u,
+                            "host `i31.get_u` must match inline Wasm `i31.get_u`"
+                        );
+                    }
+                    Ok(())
+                }
+            })
+            .unwrap();
+
         for imp in module.imports() {
             if imp.module() == "" {
                 let name = imp.name();
