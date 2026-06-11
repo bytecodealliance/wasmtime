@@ -11,4 +11,3 @@ proc-macro = true
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"]}
 proc-macro2 = { workspace = true }
-proc-macro-error = { workspace = true }

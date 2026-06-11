@@ -1,33 +1,36 @@
 extern crate proc_macro;
 
-use std::{collections::HashMap, env, ffi::OsStr, fs, path::PathBuf, str::FromStr};
+use std::{env, ffi::OsStr, fs, path::PathBuf, str::FromStr};
 
 use proc_macro::TokenStream;
-use proc_macro_error::{abort_call_site, proc_macro_error};
 use quote::quote;
-use syn::{Expr, ExprLit, ItemFn, Lit, Meta, parse_macro_input, punctuated::Punctuated};
+use syn::{ItemFn, LitStr, parse_macro_input};
 
-#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn file_tests(attrs: TokenStream, input: TokenStream) -> TokenStream {
-    // Parse attributes.
-    let metas = parse_macro_input!(attrs with Punctuated::<Meta, syn::Token![,]>::parse_terminated);
-    let mut attrs = parse_attrs(&metas);
+    let mut path = ".".to_string();
+    let mut ext = "test".to_string();
+    let attr_parser = syn::meta::parser(|meta| {
+        if meta.path.is_ident("path") {
+            path = meta.value()?.parse::<LitStr>()?.value();
+            Ok(())
+        } else if meta.path.is_ident("ext") {
+            ext = meta.value()?.parse::<LitStr>()?.value();
+            Ok(())
+        } else {
+            Err(meta.error("unknown attribute key"))
+        }
+    });
+    parse_macro_input!(attrs with attr_parser);
+    let input = parse_macro_input!(input as ItemFn);
 
-    let relative_path = attrs.remove("path").unwrap_or(".".to_string());
-    let ext = attrs.remove("ext").unwrap_or("test".to_string());
-    if !attrs.is_empty() {
-        let keys: String = attrs.keys().cloned().collect::<Vec<_>>().join(", ");
-        abort_call_site!(format!("unknown keys: {keys}"));
-    }
+    expand(path, ext, input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
 
-    // Parse the input as a function.
-    let input = proc_macro2::TokenStream::from(input);
-
-    let func_ast: ItemFn =
-        syn::parse(input.clone().into()).expect("should be able to parse tokens as function");
-
-    let func_ident = &func_ast.sig.ident;
+fn expand(path: String, ext: String, input: ItemFn) -> syn::Result<proc_macro2::TokenStream> {
+    let func_ident = &input.sig.ident;
     let func_name = func_ident.to_string();
 
     // Locate test data directory.
@@ -36,7 +39,7 @@ pub fn file_tests(attrs: TokenStream, input: TokenStream) -> TokenStream {
             .expect("CARGO_MANIFEST_DIR environment variable must be set"),
     )
     .expect("CARGO_MANIFEST_DIR should be a valid path");
-    let test_data_dir = crate_dir.join(relative_path);
+    let test_data_dir = crate_dir.join(path);
 
     // Collect files with requested extension.
     let mut paths = Vec::new();
@@ -48,7 +51,10 @@ pub fn file_tests(attrs: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     if paths.is_empty() {
-        abort_call_site!("no test case files found");
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "no test case files found",
+        ));
     }
 
     // Generate one test case per file.
@@ -72,30 +78,10 @@ pub fn file_tests(attrs: TokenStream, input: TokenStream) -> TokenStream {
         }
     });
 
-    // Combining the function and test cases.
-    let output = quote! {
+    // Combine the function and test cases.
+    Ok(quote! {
         #input
 
         #(#test_cases)*
-    };
-
-    output.into()
-}
-
-fn parse_attrs(metas: &Punctuated<Meta, syn::Token![,]>) -> HashMap<String, String> {
-    let mut attrs = HashMap::new();
-    for meta in metas.iter() {
-        if let Meta::NameValue(n) = meta {
-            let key = n.path.get_ident().unwrap().to_string();
-            match &n.value {
-                Expr::Lit(ExprLit {
-                    lit: Lit::Str(s), ..
-                }) => {
-                    attrs.insert(key, s.value());
-                }
-                _ => abort_call_site!("attribute values must be string"),
-            }
-        }
-    }
-    attrs
+    })
 }
