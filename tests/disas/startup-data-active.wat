@@ -36,6 +36,8 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
+;;     region0 = 112 "VMContext+0x70"
+;;     region1 = 120 "VMContext+0x78"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned gv0+64
 ;;     gv2 = load.i64 notrap aligned readonly can_move gv0+56
@@ -43,13 +45,13 @@
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v2 = load.i64 notrap aligned v0+112
+;;     v2 = load.i64 notrap aligned region0 v0+112
 ;;     v3 = iconst.i64 0
 ;;     v4 = icmp eq v2, v3  ; v3 = 0
 ;;     brif v4, block2, block1
 ;;
 ;; block1:
-;;     v6 = load.i32 notrap aligned v0+120
+;;     v6 = load.i32 notrap aligned region1 v0+120
 ;;     v9 = load.i64 notrap aligned v0+64
 ;;     v11 = uextend.i64 v6
 ;;     v15 = icmp ugt v11, v9
