@@ -32,6 +32,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use wasm_encoder::*;
+use wasmparser::WasmFeatures;
 
 mod core_types;
 mod signature;
@@ -61,14 +62,8 @@ pub struct Module<'a> {
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
 
-    /// Whether Wasm exceptions are enabled.
-    ///
-    /// When enabled, each adapter function wraps its body in a
-    /// `try_table` with a `catch_all` clause which traps: the adapter
-    /// is the boundary between two components and the component
-    /// model's canonical ABI specifies that an exception which
-    /// propagates out of a component uncaught becomes a trap.
-    exceptions: bool,
+    /// The Wasm features enabled for validation of this module.
+    features: WasmFeatures,
 
     /// Core wasm type section that's incrementally built
     core_types: core_types::CoreTypes,
@@ -271,12 +266,12 @@ impl<'a> Module<'a> {
     pub fn new(
         types: &'a ComponentTypesBuilder,
         tunables: &'a Tunables,
-        exceptions: bool,
+        features: WasmFeatures,
     ) -> Module<'a> {
         Module {
             tunables,
             types,
-            exceptions,
+            features,
             core_types: Default::default(),
             core_imports: Default::default(),
             imported: Default::default(),

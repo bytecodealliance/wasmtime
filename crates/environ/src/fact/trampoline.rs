@@ -3880,7 +3880,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
     }
 
     /// Emits the prologue of an exception barrier wrapping the body of a
-    /// function, returning whether the barrier was emitted.
+    /// function.
     ///
     /// An adapter is the boundary between two components, and the
     /// component model's canonical ABI specifies that an exception
@@ -3892,33 +3892,56 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// itself but also by any other guest functions the adapter
     /// invokes (e.g. `realloc`).
     ///
+    /// The generated structure, completed by `exit_exception_barrier`,
+    /// is:
+    ///
+    /// ```wasm
+    /// block (result ...)        ;; carries results past the handler
+    ///   block                   ;; catch_all landing pad
+    ///     try_table (result ...) (catch_all 0)
+    ///       ;; ... body ...
+    ///     end
+    ///     br 1                  ;; done; carry results past the handler
+    ///   end
+    ///   ;; an exception was caught: raise a trap
+    ///   unreachable
+    /// end
+    /// ```
+    ///
     /// This is only done when the exceptions proposal is enabled.
     fn enter_exception_barrier(&mut self, results: &[ValType]) {
-        if !self.module.exceptions {
+        if !self.module.features.exceptions() {
             return;
         }
-        // Landing pad targeted by the `catch_all` clause below.
-        self.instruction(Block(BlockType::Empty));
         let block_ty = match results.len() {
             0 => BlockType::Empty,
             1 => BlockType::Result(results[0]),
             _ => BlockType::FunctionType(self.module.core_types.function(&[], results)),
         };
+        // Outer block: carries the body's results past the handler.
+        self.instruction(Block(block_ty));
+        // Inner block: the landing pad targeted by the `catch_all` clause.
+        self.instruction(Block(BlockType::Empty));
         self.instruction(TryTable(block_ty, vec![Catch::All { label: 0 }].into()));
     }
 
     /// Emits the epilogue of an exception barrier started with
-    /// `enter_exception_barrier`: the body's results are returned directly
-    /// while the `catch_all` landing pad turns a caught exception into a
+    /// `enter_exception_barrier`: the body's results jump past the
+    /// `catch_all` landing pad, which turns a caught exception into a
     /// trap.
     fn exit_exception_barrier(&mut self) {
-        if !self.module.exceptions {
+        if !self.module.features.exceptions() {
             return;
         }
+        // End of the `try_table`.
         self.instruction(End);
-        self.instruction(Return);
+        // Normal completion: jump over the handler, carrying the results.
+        self.instruction(Br(1));
+        // End of the inner block: the `catch_all` landing pad.
         self.instruction(End);
         self.trap(Trap::UncaughtException);
+        // End of the outer block; the body's results flow out.
+        self.instruction(End);
     }
 
     /// Flushes out the current `code` instructions into the destination

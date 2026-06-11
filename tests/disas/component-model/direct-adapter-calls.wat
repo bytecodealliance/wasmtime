@@ -114,58 +114,64 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0079                               jump block3
+;; @007b                               jump block4
 ;;
-;;                                 block5(v6: i64):
-;; @0079                               jump block2
+;;                                 block6(v7: i64):
+;; @007b                               jump block3
 ;;
-;;                                 block3:
-;; @007e                               v8 = load.i64 notrap aligned readonly can_move region1 v0+136
-;; @007e                               v9 = load.i32 notrap aligned region2 v8
-;; @0080                               v10 = iconst.i32 1
-;; @0082                               v11 = band v9, v10  ; v10 = 1
+;;                                 block4:
+;; @0080                               v9 = load.i64 notrap aligned readonly can_move region1 v0+136
+;; @0080                               v10 = load.i32 notrap aligned region2 v9
+;; @0082                               v11 = iconst.i32 1
+;; @0084                               v12 = band v10, v11  ; v11 = 1
 ;; @0075                               v4 = iconst.i32 0
-;; @0083                               v13 = icmp eq v11, v4  ; v4 = 0
-;; @0084                               brif v13, block6, block7
-;;
-;;                                 block6:
-;; @0088                               v18 = load.i64 notrap aligned readonly can_move region4 v0+88
-;; @0088                               v17 = load.i64 notrap aligned readonly can_move region3 v0+104
-;; @0086                               v15 = iconst.i32 23
-;; @0088                               try_call_indirect v18(v17, v0, v15), sig0, block8, [ context v0, default: block5(exn0) ]  ; v15 = 23
-;;
-;;                                 block8:
-;; @008a                               trap user12
+;; @0085                               v14 = icmp eq v12, v4  ; v4 = 0
+;; @0086                               brif v14, block7, block8
 ;;
 ;;                                 block7:
-;; @008c                               v19 = load.i64 notrap aligned readonly can_move region5 v0+112
-;; @008c                               v20 = load.i32 notrap aligned region2 v19
-;; @008e                               v21 = iconst.i32 -2
-;; @0090                               v22 = band v20, v21  ; v21 = -2
-;; @0091                               store notrap aligned region2 v22, v19
-;;                                     v59 = iconst.i32 1
-;;                                     v60 = bor v20, v59  ; v59 = 1
-;; @009a                               store notrap aligned region2 v60, v19
-;; @009c                               v30 = load.i64 notrap aligned readonly can_move region6 v0+72
-;; @009c                               try_call fn0(v30, v0, v2), sig1, block9(ret0), [ context v0, default: block5(exn0) ]
+;; @008a                               v19 = load.i64 notrap aligned readonly can_move region4 v0+88
+;; @008a                               v18 = load.i64 notrap aligned readonly can_move region3 v0+104
+;; @0088                               v16 = iconst.i32 23
+;; @008a                               try_call_indirect v19(v18, v0, v16), sig0, block9, [ context v0, default: block6(exn0) ]  ; v16 = 23
 ;;
-;;                                 block9(v31: i32):
-;; @00a0                               v33 = load.i32 notrap aligned region2 v8
-;;                                     v61 = iconst.i32 -2
-;;                                     v62 = band v33, v61  ; v61 = -2
-;; @00a5                               store notrap aligned region2 v62, v8
-;;                                     v63 = iconst.i32 1
-;;                                     v64 = bor v33, v63  ; v63 = 1
-;; @00ae                               store notrap aligned region2 v64, v8
-;; @00b0                               jump block4(v31)
+;;                                 block9:
+;; @008c                               trap user12
 ;;
-;;                                 block4(v5: i32):
-;; @00b1                               return v5
+;;                                 block8:
+;; @008e                               v20 = load.i64 notrap aligned readonly can_move region5 v0+112
+;; @008e                               v21 = load.i32 notrap aligned region2 v20
+;; @0090                               v22 = iconst.i32 -2
+;; @0092                               v23 = band v21, v22  ; v22 = -2
+;; @0093                               store notrap aligned region2 v23, v20
+;;                                     v60 = iconst.i32 1
+;;                                     v61 = bor v21, v60  ; v60 = 1
+;; @009c                               store notrap aligned region2 v61, v20
+;; @009e                               v31 = load.i64 notrap aligned readonly can_move region6 v0+72
+;; @009e                               try_call fn0(v31, v0, v2), sig1, block10(ret0), [ context v0, default: block6(exn0) ]
 ;;
-;;                                 block2:
-;;                                     v65 = load.i64 notrap aligned readonly can_move region4 v0+88
-;;                                     v66 = load.i64 notrap aligned readonly can_move region3 v0+104
-;; @00b3                               v42 = iconst.i32 49
-;; @00b5                               call_indirect sig0, v65(v66, v0, v42)  ; v42 = 49
-;; @00b7                               trap user12
+;;                                 block10(v32: i32):
+;; @00a2                               v34 = load.i32 notrap aligned region2 v9
+;;                                     v62 = iconst.i32 -2
+;;                                     v63 = band v34, v62  ; v62 = -2
+;; @00a7                               store notrap aligned region2 v63, v9
+;;                                     v64 = iconst.i32 1
+;;                                     v65 = bor v34, v64  ; v64 = 1
+;; @00b0                               store notrap aligned region2 v65, v9
+;; @00b2                               jump block5(v32)
+;;
+;;                                 block5(v6: i32):
+;; @00b3                               jump block2(v6)
+;;
+;;                                 block3:
+;;                                     v66 = load.i64 notrap aligned readonly can_move region4 v0+88
+;;                                     v67 = load.i64 notrap aligned readonly can_move region3 v0+104
+;; @00b6                               v43 = iconst.i32 49
+;; @00b8                               call_indirect sig0, v66(v67, v0, v43)  ; v43 = 49
+;; @00ba                               trap user12
+;;
+;;                                 block2(v5: i32):
+;; @00bc                               jump block1(v5)
+;;
+;;                                 block1(v3: i32):
+;; @00bc                               return v3
 ;; }

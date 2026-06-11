@@ -209,7 +209,7 @@ impl<'data> Translator<'_, 'data> {
             let mut module = fact::Module::new(
                 self.types.types(),
                 self.tunables,
-                self.validator.features().exceptions(),
+                *self.validator.features(),
             );
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
