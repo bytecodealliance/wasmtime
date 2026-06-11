@@ -10,10 +10,11 @@ use core::ops::Deref;
 use wasmtime_environ::PanicOnOom as _;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
-    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedSizeListIndex, TypeFlagsIndex, TypeFuncIndex,
-    TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex, TypeModuleIndex,
-    TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, alternate_lookup_key,
+    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedSizeListIndex, TypeFlagsIndex,
+    TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
+    TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
+    TypeResultIndex, TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
+    alternate_lookup_key,
 };
 
 pub use crate::component::resources::ResourceType;
