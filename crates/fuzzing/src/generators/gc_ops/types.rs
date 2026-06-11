@@ -57,6 +57,10 @@ macro_rules! for_each_field_type {
             #[storage(wasm_encoder::StorageType::Val(wasm_encoder::ValType::Ref(wasm_encoder::RefType::EQREF)))]
             #[default_val(wasm_encoder::Instruction::RefNull(wasm_encoder::HeapType::Abstract { shared: false, ty: wasm_encoder::AbstractHeapType::Eq }))]
             EqRef,
+
+            #[storage(wasm_encoder::StorageType::Val(wasm_encoder::ValType::Ref(wasm_encoder::RefType::I31REF)))]
+            #[default_val(wasm_encoder::Instruction::RefNull(wasm_encoder::HeapType::I31))]
+            I31Ref,
         }
     };
 }
@@ -714,6 +718,8 @@ pub enum StackType {
     ExternRef,
     /// `eqref`.
     Eq,
+    /// `i31ref`.
+    I31,
     /// `(ref $*)` — optionally with a concrete type index.
     Struct(Option<u32>),
 }
@@ -759,8 +765,9 @@ impl StackType {
                 }
             },
             Some(Self::Eq) => match stack.last() {
-                // struct <: eq, so a struct on the stack satisfies an eqref requirement.
-                Some(Self::Eq) | Some(Self::Struct(_)) => {
+                // struct <: eq and i31 <: eq, so a struct or i31 on the stack
+                // satisfies an eqref requirement.
+                Some(Self::Eq) | Some(Self::Struct(_)) | Some(Self::I31) => {
                     log::trace!("[StackType::fixup] Eq: top ok -> pop");
                     stack.pop();
                 }
@@ -770,6 +777,28 @@ impl StackType {
                     let popped = stack.pop();
                     log::trace!(
                         "[StackType::fixup] Eq: after emit pop -> {popped:?} stack={stack:?}"
+                    );
+                }
+            },
+            Some(Self::I31) => match stack.last() {
+                Some(Self::I31) => {
+                    log::trace!("[StackType::fixup] I31: top ok -> pop");
+                    stack.pop();
+                }
+                other => {
+                    log::trace!(
+                        "[StackType::fixup] I31: mismatch top={other:?} -> emit RefI31+pop"
+                    );
+                    Self::emit(
+                        GcOp::RefI31 { value: 0 },
+                        stack,
+                        out,
+                        num_types,
+                        &mut result_types,
+                    );
+                    let popped = stack.pop();
+                    log::trace!(
+                        "[StackType::fixup] I31: after emit pop -> {popped:?} stack={stack:?}"
                     );
                 }
             },

@@ -21,12 +21,15 @@ struct WasmEncodingBases {
     typed_first_func_index: u32,
     struct_local_idx: u32,
     eq_local_idx: u32,
+    i31_local_idx: u32,
     typed_local_base: u32,
     struct_global_idx: u32,
     eq_global_idx: u32,
+    i31_global_idx: u32,
     typed_global_base: u32,
     struct_table_idx: u32,
     eq_table_idx: u32,
+    i31_table_idx: u32,
     typed_table_base: u32,
 }
 
@@ -118,6 +121,17 @@ impl GcOps {
             vec![],
         );
 
+        // 6: `take_i31`
+        //
+        // Takes a `(ref null i31)` along with the guest's inline `i31.get_s`
+        // and `i31.get_u` results, so the host can re-derive them and assert
+        // that its view of the i31 matches the Wasm instructions'.
+        let take_i31_type_idx = types.len();
+        types.ty().function(
+            vec![ValType::Ref(RefType::I31REF), ValType::I32, ValType::I32],
+            vec![],
+        );
+
         let struct_type_base: u32 = types.len();
 
         // Build the type-id-to-wasm-index map from the pre-computed
@@ -190,6 +204,7 @@ impl GcOps {
         imports.import("", "make_refs", EntityType::Function(3));
         imports.import("", "take_struct", EntityType::Function(4));
         imports.import("", "take_eq", EntityType::Function(5));
+        imports.import("", "take_i31", EntityType::Function(take_i31_type_idx));
 
         // For each of our concrete struct types, define a function
         // import that takes an argument of that concrete type.
@@ -229,6 +244,15 @@ impl GcOps {
         let eq_table_idx = tables.len();
         tables.table(TableType {
             element_type: RefType::EQREF,
+            minimum: u64::from(self.limits.table_size),
+            maximum: None,
+            table64: false,
+            shared: false,
+        });
+
+        let i31_table_idx = tables.len();
+        tables.table(TableType {
+            element_type: RefType::I31REF,
             minimum: u64::from(self.limits.table_size),
             maximum: None,
             table64: false,
@@ -297,6 +321,17 @@ impl GcOps {
             }),
         );
 
+        // Add exactly one (ref.null i31) global.
+        let i31_global_idx = globals.len();
+        globals.global(
+            wasm_encoder::GlobalType {
+                val_type: ValType::Ref(RefType::I31REF),
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::ref_null(wasm_encoder::HeapType::I31),
+        );
+
         // Add one typed (ref <type>) global per struct type.
         let typed_global_base = globals.len();
         for i in 0..struct_count {
@@ -343,7 +378,10 @@ impl GcOps {
         let eq_local_idx = struct_local_idx + 1;
         local_decls.push((1, ValType::Ref(RefType::EQREF)));
 
-        let typed_local_base: u32 = eq_local_idx + 1;
+        let i31_local_idx = eq_local_idx + 1;
+        local_decls.push((1, ValType::Ref(RefType::I31REF)));
+
+        let typed_local_base: u32 = i31_local_idx + 1;
         for i in 0..struct_count {
             let concrete = struct_type_base + i;
             local_decls.push((
@@ -360,12 +398,15 @@ impl GcOps {
             typed_first_func_index,
             struct_local_idx,
             eq_local_idx,
+            i31_local_idx,
             typed_local_base,
             struct_global_idx,
             eq_global_idx,
+            i31_global_idx,
             typed_global_base,
             struct_table_idx,
             eq_table_idx,
+            i31_table_idx,
             typed_table_base,
         };
 
@@ -722,6 +763,79 @@ macro_rules! for_each_gc_op {
                 type_index = type_index.checked_rem(num_types)?;
             })]
             StructSet { type_index: u32, field_index: u32 },
+
+            #[operands([])]
+            #[results([I31])]
+            NullI31,
+
+            #[operands([])]
+            #[results([I31])]
+            #[fixup(|_limits, _num_types| {
+                // Any `i32` is a valid operand to `ref.i31` (it wraps to 31
+                // bits), so no clamping is needed.
+            })]
+            RefI31 { value: u32 },
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            I31LocalSet,
+
+            #[operands([])]
+            #[results([I31])]
+            I31LocalGet,
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            I31GlobalSet,
+
+            #[operands([])]
+            #[results([I31])]
+            I31GlobalGet,
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            I31TableSet { elem_index: u32 },
+
+            #[operands([])]
+            #[results([I31])]
+            #[fixup(|limits, _num_types| {
+                // Add one to make sure that out-of-bounds table accesses are
+                // possible, but still rare.
+                elem_index = elem_index % (limits.table_size + 1);
+            })]
+            I31TableGet { elem_index: u32 },
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            TakeI31Call,
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            I31GetS,
+
+            #[operands([Some(I31)])]
+            #[results([])]
+            I31GetU,
+
+            #[operands([Some(Struct(None))])]
+            #[results([Eq])]
+            StructRefAsEq,
+
+            #[operands([Some(Struct(Some(type_index)))])]
+            #[results([Eq])]
+            #[fixup(|_limits, num_types| {
+                type_index = type_index.checked_rem(num_types)?;
+            })]
+            TypedStructRefAsEq { type_index: u32 },
+
+            #[operands([Some(I31)])]
+            #[results([Eq])]
+            I31RefAsEq,
         }
     };
 }
@@ -913,6 +1027,7 @@ impl GcOp {
         let make_refs_func_idx = 2;
         let take_structref_idx = 3;
         let take_eqref_idx = 4;
+        let take_i31_idx = 5;
 
         match *self {
             Self::Gc => {
@@ -1228,6 +1343,84 @@ impl GcOp {
                         func.instruction(&Instruction::Drop);
                     }
                 }
+            }
+            Self::NullI31 => {
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::I31));
+            }
+            Self::RefI31 { value } => {
+                func.instruction(&Instruction::I32Const(value.cast_signed()));
+                func.instruction(&Instruction::RefI31);
+            }
+            Self::I31LocalGet => {
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+            }
+            Self::I31LocalSet => {
+                func.instruction(&Instruction::LocalSet(encoding_bases.i31_local_idx));
+            }
+            Self::I31GlobalGet => {
+                func.instruction(&Instruction::GlobalGet(encoding_bases.i31_global_idx));
+            }
+            Self::I31GlobalSet => {
+                func.instruction(&Instruction::GlobalSet(encoding_bases.i31_global_idx));
+            }
+            Self::I31TableGet { elem_index } => {
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::TableGet(encoding_bases.i31_table_idx));
+            }
+            Self::I31TableSet { elem_index } => {
+                // Use i31_local_idx (i31ref) to temporarily store the value before table.set.
+                func.instruction(&Instruction::LocalSet(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::I32Const(elem_index.cast_signed()));
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::TableSet(encoding_bases.i31_table_idx));
+            }
+            Self::StructRefAsEq | Self::TypedStructRefAsEq { .. } | Self::I31RefAsEq => {
+                // Upcasting to `eqref` is implicit in Wasm subtyping: both
+                // `struct` and `i31` are subtypes of `eq`, so the value already
+                // on the stack is a valid `eqref` and no instruction is
+                // required. Only the abstract stack type changes (via
+                // `result_types`).
+            }
+            Self::I31GetS | Self::I31GetU => {
+                // `i31.get_s`/`i31.get_u` trap on a null reference, so guard
+                // against null: save the ref, test it, and only perform the
+                // get when non-null. The i32 result is not tracked on the
+                // abstract stack, so drop it.
+                func.instruction(&Instruction::LocalTee(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::RefIsNull);
+                func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                func.instruction(&Instruction::Else);
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+                if matches!(self, Self::I31GetS) {
+                    func.instruction(&Instruction::I31GetS);
+                } else {
+                    func.instruction(&Instruction::I31GetU);
+                }
+                func.instruction(&Instruction::Drop);
+                func.instruction(&Instruction::End);
+            }
+            Self::TakeI31Call => {
+                // Differential check: pass the i31ref plus the guest's inline
+                // `i31.get_s` and `i31.get_u` results to the host, which
+                // re-derives them and asserts they match. The get instructions
+                // trap on null, so guard against it.
+                func.instruction(&Instruction::LocalTee(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::RefIsNull);
+                func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
+                // Null branch: `take_i31(null, 0, 0)`.
+                func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::I31));
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::I32Const(0));
+                func.instruction(&Instruction::Call(take_i31_idx));
+                func.instruction(&Instruction::Else);
+                // Non-null branch: `take_i31(ref, i31.get_s, i31.get_u)`.
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::I31GetS);
+                func.instruction(&Instruction::LocalGet(encoding_bases.i31_local_idx));
+                func.instruction(&Instruction::I31GetU);
+                func.instruction(&Instruction::Call(take_i31_idx));
+                func.instruction(&Instruction::End);
             }
         }
     }
