@@ -5,8 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-pest = "2.7.8"
-pest_derive = "2.7.8"
+pest = "2.8.6"
+pest_derive = "2.8.6"
 clap = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }
 tracing = { workspace = true }

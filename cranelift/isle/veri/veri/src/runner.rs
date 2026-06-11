@@ -928,7 +928,8 @@ impl Runner {
         let args = solver_backend.args(self.timeout);
         let replay_file = Self::open_log_file(log_dir.clone(), "solver.smt2")?;
         let smt = easy_smt::ContextBuilder::new()
-            .solver(binary, &args)
+            .solver(binary)
+            .solver_args(&args)
             .replay_file(Some(replay_file))
             .build()?;
 

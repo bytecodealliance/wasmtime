@@ -1228,9 +1228,9 @@ dependencies = [
 
 [[package]]
 name = "easy-smt"
-version = "0.2.8"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f07ca2cd196ea6f5c1a728d609f4a38b02d5d0f1bd26c913929396bd38002d6"
+checksum = "515cd4ec35e586919a532a81ed1e9285e2502ed3f49ecb9ba75fa3fe29eb950f"
 dependencies = [
  "log",
  "unicode-segmentation",
