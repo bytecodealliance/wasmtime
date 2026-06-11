@@ -433,6 +433,22 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.alias_region(func, key)
     }
 
+    /// Get the alias region for the storage of a bulk-copy entity.
+    fn bulk_copy_alias_region(
+        &mut self,
+        func: &mut Function,
+        entity: CheckedEntity,
+    ) -> Option<ir::AliasRegion> {
+        match entity {
+            CheckedEntity::Memory(index) => Some(self.memory_alias_region(func, index)),
+            CheckedEntity::Table { table, .. } => Some(self.table_alias_region(func, table)),
+            CheckedEntity::Array { .. } => Some(self.gc_heap_alias_region(func)),
+            CheckedEntity::Data { .. } | CheckedEntity::RuntimeData(_) | CheckedEntity::Elem(_) => {
+                None
+            }
+        }
+    }
+
     pub(crate) fn vmctx_alias_region(
         &mut self,
         func: &mut Function,
@@ -3653,6 +3669,8 @@ impl FuncEnvironment<'_> {
             dst,
             src,
             const_len: Some(bytes),
+            src_entity,
+            dst_entity,
             ..
         } = op
         {
@@ -3660,7 +3678,9 @@ impl FuncEnvironment<'_> {
                 if self.tunables.consume_fuel {
                     self.fuel_consumed += bytes as i64;
                 }
-                self.emit_inline_memcpy(builder, dst, src, bytes);
+                let src_region = self.bulk_copy_alias_region(builder.func, src_entity);
+                let dst_region = self.bulk_copy_alias_region(builder.func, dst_entity);
+                self.emit_inline_memcpy(builder, dst, src, bytes, src_region, dst_region);
                 return;
             }
         }
@@ -4313,6 +4333,8 @@ impl FuncEnvironment<'_> {
                         src: src_raw_addr,
                         len: len_ptr,
                         const_len: const_count,
+                        src_entity,
+                        dst_entity,
                     },
                 );
                 Ok(())
@@ -4670,6 +4692,8 @@ impl FuncEnvironment<'_> {
                     src: src_elem_addr,
                     len: dst_copy_byte_len,
                     const_len,
+                    src_entity,
+                    dst_entity,
                 },
             );
             return Ok(());
@@ -4789,6 +4813,8 @@ impl FuncEnvironment<'_> {
         dst_addr: ir::Value,
         src_addr: ir::Value,
         bytes: u64,
+        src_region: Option<ir::AliasRegion>,
+        dst_region: Option<ir::AliasRegion>,
     ) {
         // `trusted()` (notrap + aligned) is sound: the range is already
         // bounds-checked, and each load feeds only its paired store, so the
@@ -4796,7 +4822,18 @@ impl FuncEnvironment<'_> {
         // Endianness is pinned to `Little` because Pulley's `v128` load/store
         // only encode the little-endian variant, and matching load/store
         // endianness preserves the destination bytes either way.
-        let flags = ir::MemFlagsData::trusted().with_endianness(Endianness::Little);
+        //
+        // The loads/stores carry the source/destination entity's alias region
+        // so alias analysis keeps them in the same disjoint memory category as
+        // the entity's other (region-tagged) accesses; otherwise a region-less
+        // load here could be forwarded a stale value across an intervening
+        // region-tagged store to the same address.
+        let load_flags = ir::MemFlagsData::trusted()
+            .with_endianness(Endianness::Little)
+            .with_alias_region(src_region);
+        let store_flags = ir::MemFlagsData::trusted()
+            .with_endianness(Endianness::Little)
+            .with_alias_region(dst_region);
         const WIDTHS: &[(u64, ir::Type)] = &[
             (16, ir::types::I8X16),
             (8, ir::types::I64),
@@ -4819,10 +4856,10 @@ impl FuncEnvironment<'_> {
         }
         let vals: SmallVec<[ir::Value; 12]> = chunks
             .iter()
-            .map(|&(off, ty)| builder.ins().load(ty, flags, src_addr, off))
+            .map(|&(off, ty)| builder.ins().load(ty, load_flags, src_addr, off))
             .collect();
         for (&(off, _), val) in chunks.iter().zip(vals) {
-            builder.ins().store(flags, val, dst_addr, off);
+            builder.ins().store(store_flags, val, dst_addr, off);
         }
     }
 
@@ -6281,11 +6318,20 @@ enum BulkOp {
     /// must have type `env.pointer_type()`. `const_len`, when set, is the
     /// statically-known byte length (from a constant wasm length); the inline
     /// fast path in `raw_bulk_memory_operation` uses it to expand small copies.
+    ///
+    /// `src_entity`/`dst_entity` are the source and destination entities,
+    /// carried so that the inline fast path can tag its loads/stores with each
+    /// entity's alias region (the per-memory or GC-heap region); otherwise a
+    /// region-less inline load could be forwarded a stale value across an
+    /// intervening region-tagged store to the same address. They are unused on
+    /// the libcall path.
     MemoryCopy {
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
         const_len: Option<u64>,
+        src_entity: CheckedEntity,
+        dst_entity: CheckedEntity,
     },
 
     /// A `memory.fill` operation, setting all bytes of `dst` to `val`.
