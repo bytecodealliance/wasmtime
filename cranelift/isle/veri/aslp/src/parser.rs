@@ -1,5 +1,4 @@
 use anyhow::Result;
-use enquote::unquote;
 use pest::{
     iterators::{Pair, Pairs},
     Parser,
@@ -229,7 +228,7 @@ fn parse_var(pair: Pair<Rule>) -> Result<String> {
     debug!(?rule, "parse var");
     match rule {
         Rule::var => parse_var(pair.into_inner().next().unwrap()),
-        Rule::var_ident => parse_ident(pair),
+        Rule::var_ident => parse_ident(pair.into_inner().next().unwrap()),
         _ => unreachable!("unexpected var: {rule:?}"),
     }
 }
@@ -262,7 +261,7 @@ fn parse_func_ident(pair: Pair<Rule>) -> Result<Func> {
 }
 
 fn parse_ident(pair: Pair<Rule>) -> Result<String> {
-    Ok(unquote(pair.as_str())?)
+    Ok(pair.into_inner().next().unwrap().as_str().to_string())
 }
 
 fn parse_literal(pair: Pair<Rule>) -> Result<String> {
@@ -270,7 +269,7 @@ fn parse_literal(pair: Pair<Rule>) -> Result<String> {
     debug!(?rule, "parse literal");
     match rule {
         Rule::integer => Ok(pair.as_str().to_string()),
-        Rule::bits => Ok(unquote(pair.as_str())?),
+        Rule::bits => Ok(pair.into_inner().next().unwrap().as_str().to_string()),
         _ => unreachable!("unexpected literal: {rule:?}"),
     }
 }

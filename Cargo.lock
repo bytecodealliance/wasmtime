@@ -901,7 +901,6 @@ dependencies = [
  "bytes",
  "clap",
  "cranelift-isle-veri-test-macros",
- "enquote",
  "http-body-util",
  "hyper",
  "pest",
@@ -1286,15 +1285,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "enquote"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06c36cb11dbde389f4096111698d8b567c0720e3452fd5ac3e6b4e47e1939932"
-dependencies = [
- "thiserror 1.0.69",
 ]
 
 [[package]]

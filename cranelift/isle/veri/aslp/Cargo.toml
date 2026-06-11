@@ -7,7 +7,6 @@ publish = false
 [dependencies]
 pest = { workspace = true }
 pest_derive = { workspace = true }
-enquote = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true, features = ['std', 'backtrace'] }
 tracing = { workspace = true }

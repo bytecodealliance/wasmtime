@@ -96,7 +96,7 @@ vars = { "[" ~ (var ~ (";" ~ var)*)? ~ "]" }
 
 func_ident = ${ "\"" ~ id ~ "." ~ decimal ~ "\"" }
 
-ident = @{ "\"" ~ id ~ "\"" }
+ident = ${ "\"" ~ id ~ "\"" }
 
 id = @{
     name ~ "." ~ name
@@ -111,7 +111,7 @@ name = @{
 
 integer = @{ decimal }
 
-bits = @{ "\'" ~ binary ~ "\'" }
+bits = ${ "\'" ~ binary ~ "\'" }
 
 decimal = @{ ASCII_DIGIT+ }
 
