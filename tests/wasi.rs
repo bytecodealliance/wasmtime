@@ -253,7 +253,9 @@ fn execute(path: &Path) -> Result<()> {
                         let mut i = 0;
                         loop {
                             let n = child.stderr.as_mut().unwrap().read(&mut buf[i..])?;
-                            assert!(n > 0);
+                            if n == 0 {
+                                break;
+                            }
                             i += n;
                             if buf[i - 1] == b'\n' {
                                 break;
