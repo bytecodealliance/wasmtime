@@ -1,5 +1,8 @@
 ;;! exceptions = true
 ;;! multi_memory = true
+;;! function_references = true
+;;! bulk_memory = true
+;;! reference_types = true
 
 ;; Tests for the interaction of Wasm exceptions and the component model.
 ;;
@@ -153,6 +156,82 @@
 
   (instance $a (instantiate $A))
   (instance $b (instantiate $B (with "f" (func $a "f"))))
+  (export "run" (func $b "run"))
+)
+(assert_trap (invoke "run") "uncaught exception propagated out of component")
+
+;; An exception thrown by a resource destructor: component $B drops a
+;; resource owned by component $A whose destructor throws. The
+;; `resource.drop` intrinsic is likewise a boundary between the two
+;; components, so the exception must become a trap rather than unwind into
+;; $B.
+(component
+  (component $A
+    ;; The destructor must be supplied when the resource type is declared,
+    ;; which is before the module defining the "real" (throwing) destructor
+    ;; can be instantiated, since that module imports `resource.new` for the
+    ;; type. Route the destructor through a mutable function reference in a
+    ;; shim module which is patched after instantiation.
+    (core module $shim
+      (type $f (func (param i32)))
+      (global $dtor-global (export "dtor-global") (mut (ref $f)) (ref.func $dummy))
+      (func $dummy (param i32) unreachable)
+      (func (export "dtor") (param i32)
+        local.get 0
+        global.get $dtor-global
+        call_ref $f))
+    (core instance $shim (instantiate $shim))
+
+    (type $t (resource (rep i32) (dtor (func $shim "dtor"))))
+    (core func $t.new (canon resource.new $t))
+
+    (core module $a
+      (import "" "t.new" (func $t.new (param i32) (result i32)))
+      (tag $t)
+      (func (export "run") (result i32) (call $t.new (i32.const 0)))
+      (func (export "dtor-real") (param i32) (throw $t)))
+    (core instance $a (instantiate $a
+      (with "" (instance (export "t.new" (func $t.new))))))
+
+    (core module $patch
+      (type $f (func (param i32)))
+      (import "shim" "dtor-global" (global $dtor-global (mut (ref $f))))
+      (import "a" "dtor-real" (func $dtor-real (param i32)))
+      (func $init (global.set $dtor-global (ref.func $dtor-real)))
+      (start $init)
+      (elem declare func $dtor-real))
+    (core instance (instantiate $patch
+      (with "shim" (instance $shim))
+      (with "a" (instance $a))))
+
+    (export $t' "t" (type $t))
+    (func (export "run") (result (own $t')) (canon lift (core func $a "run"))))
+
+  (component $B
+    (import "a" (instance $a
+      (export "t" (type $t (sub resource)))
+      (export "run" (func (result (own $t))))))
+
+    (core func $run (canon lower (func $a "run")))
+    (alias export $a "t" (type $t))
+    (core func $t.drop (canon resource.drop $t))
+    (core module $b
+      (import "" "run" (func $run (result i32)))
+      (import "" "t.drop" (func $t.drop (param i32)))
+      (func (export "run")
+        (block $caught
+          (try_table (catch_all $caught)
+            (call $t.drop (call $run)))
+          (return))
+        unreachable))
+    (core instance $b (instantiate $b
+      (with "" (instance
+        (export "run" (func $run))
+        (export "t.drop" (func $t.drop))))))
+    (func (export "run") (canon lift (core func $b "run"))))
+
+  (instance $a (instantiate $A))
+  (instance $b (instantiate $B (with "a" (instance $a))))
   (export "run" (func $b "run"))
 )
 (assert_trap (invoke "run") "uncaught exception propagated out of component")

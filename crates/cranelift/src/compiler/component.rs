@@ -3,7 +3,9 @@
 use crate::alias_region_key::{AliasRegionKey, VmType};
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
-use crate::{TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, compiler::Compiler};
+use crate::{
+    TRAP_CANNOT_LEAVE_COMPONENT, TRAP_INTERNAL_ASSERT, TRAP_UNCAUGHT_EXCEPTION, compiler::Compiler,
+};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlagsData, Value};
@@ -1266,11 +1268,37 @@ impl<'a> TrampolineCompiler<'a> {
             // takes ourselves out of the chain here but that's ok since the
             // caller is only used for store/limits and that same info is
             // stored, but elsewhere, in the component context.
-            self.builder.ins().call_indirect(
+            //
+            // The destructor is another component's code and this
+            // intrinsic is the boundary between the two components,
+            // so per the component model's canonical ABI an exception
+            // thrown by the destructor and not caught within its
+            // component must become a trap rather than unwinding into
+            // the calling component. That's implemented here with a
+            // catch-all exception handler.
+            let continuation = self.builder.create_block();
+            let uncaught_exception = self.builder.create_block();
+            self.builder.set_cold_block(uncaught_exception);
+            let dfg = &mut self.builder.func.dfg;
+            let exception_table = dfg.exception_tables.push(ir::ExceptionTableData::new(
                 sig_ref,
+                ir::BlockCall::new(continuation, None, &mut dfg.value_lists),
+                [ir::ExceptionTableItem::Default(ir::BlockCall::new(
+                    uncaught_exception,
+                    None,
+                    &mut dfg.value_lists,
+                ))],
+            ));
+            self.builder.ins().try_call_indirect(
                 func_addr,
                 &[callee_vmctx, caller_vmctx, rep],
+                exception_table,
             );
+            self.builder.switch_to_block(uncaught_exception);
+            self.builder.seal_block(uncaught_exception);
+            self.builder.ins().trap(TRAP_UNCAUGHT_EXCEPTION);
+            self.builder.switch_to_block(continuation);
+            self.builder.seal_block(continuation);
         }
 
         if let Some(old_may_block) = old_may_block {

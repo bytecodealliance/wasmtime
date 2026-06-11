@@ -689,8 +689,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// This allows the host to delay copying the parameters until the callee
     /// signals readiness by clearing its backpressure flag.
     fn compile_async_start_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
-        self.enter_exception_barrier(&sig.results);
-
+        // Note that unlike `compile_sync_to_sync_adapter` no exception
+        // barrier is emitted here: this function is invoked by the host, so
+        // an exception thrown by any guest code it calls (e.g. `realloc`)
+        // unwinds to the host rather than into another component, and the
+        // host already catches it at that boundary.
         let param_locals = sig
             .params
             .iter()
@@ -701,8 +704,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, false);
         self.translate_params(adapter, &param_locals);
         self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, true);
-
-        self.exit_exception_barrier();
 
         self.finish();
     }
@@ -716,8 +717,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// callee to caller when that intrinsic is called rather than when the
     /// callee task fully completes (which may happen much later).
     fn compile_async_return_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
-        self.enter_exception_barrier(&sig.results);
-
+        // As with `compile_async_start_adapter`, no exception barrier is
+        // emitted here: the host invokes this function and already catches
+        // exceptions unwinding out of it.
         let param_locals = sig
             .params
             .iter()
@@ -738,8 +740,6 @@ impl<'a, 'b> Compiler<'a, 'b> {
         // use that pointer to store the results.
         self.translate_results(adapter, &param_locals, &param_locals);
         self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, true);
-
-        self.exit_exception_barrier();
 
         self.finish()
     }
