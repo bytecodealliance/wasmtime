@@ -10,7 +10,7 @@ use core::ops::Deref;
 use wasmtime_environ::PanicOnOom as _;
 use wasmtime_environ::component::{
     ComponentTypes, Export, InterfaceType, ResourceIndex, TypeComponentIndex,
-    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedSizeListIndex, TypeFlagsIndex,
+    TypeComponentInstanceIndex, TypeDef, TypeEnumIndex, TypeFixedLengthListIndex, TypeFlagsIndex,
     TypeFuncIndex, TypeFutureIndex, TypeFutureTableIndex, TypeListIndex, TypeMapIndex,
     TypeModuleIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTable, TypeResourceTableIndex,
     TypeResultIndex, TypeStreamIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex,
@@ -166,10 +166,10 @@ impl TypeChecker<'_> {
             (InterfaceType::Stream(_), _) => false,
             (InterfaceType::ErrorContext(_), InterfaceType::ErrorContext(_)) => true,
             (InterfaceType::ErrorContext(_), _) => false,
-            (InterfaceType::FixedLengthList(t1), InterfaceType::FixedSizeList(t2)) => {
+            (InterfaceType::FixedLengthList(t1), InterfaceType::FixedLengthList(t2)) => {
                 self.fixed_length_lists_equal(t1, t2)
             }
-            (InterfaceType::FixedSizeList(_), _) => false,
+            (InterfaceType::FixedLengthList(_), _) => false,
         }
     }
 
@@ -389,7 +389,7 @@ pub struct FixedLengthList(Handle<TypeFixedLengthListIndex>);
 impl PartialEq for FixedLengthList {
     fn eq(&self, other: &Self) -> bool {
         self.0
-            .equivalent(&other.0, TypeChecker::fixed_size_lists_equal)
+            .equivalent(&other.0, TypeChecker::fixed_length_lists_equal)
     }
 }
 
@@ -783,7 +783,7 @@ pub enum Type {
     Future(FutureType),
     Stream(StreamType),
     ErrorContext,
-    FixedSizeList(FixedSizeList),
+    FixedLengthList(FixedLengthList),
 }
 
 impl Type {
@@ -946,7 +946,7 @@ impl Type {
             InterfaceType::Stream(index) => Type::Stream(instance.stream_type(*index)),
             InterfaceType::ErrorContext(_) => Type::ErrorContext,
             InterfaceType::FixedLengthList(index) => {
-                Type::FixedLengthList(FixedSizeList::from(*index, instance))
+                Type::FixedLengthList(FixedLengthList::from(*index, instance))
             }
         }
     }
@@ -980,7 +980,7 @@ impl Type {
             Type::Future(_) => "future",
             Type::Stream(_) => "stream",
             Type::ErrorContext => "error-context",
-            Type::FixedSizeList(_) => "list<_, N>",
+            Type::FixedLengthList(_) => "list<_, N>",
         }
     }
 }

@@ -2979,11 +2979,11 @@ where
 {
     type Lower = [T::Lower; N];
 
-    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_size_list_static(&T::ABI, N as u32);
+    const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N as u32);
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
         match ty {
-            InterfaceType::FixedSizeList(t) => T::typecheck(&types.types[*t].element, types),
+            InterfaceType::FixedLengthList(t) => T::typecheck(&types.types[*t].element, types),
             other => bail!("expected `list<_, N>` found `{}`", desc(other)),
         }
     }
@@ -3000,7 +3000,7 @@ where
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()> {
         let element = match ty {
-            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
         for (i, val) in self.iter().enumerate() {
@@ -3017,7 +3017,7 @@ where
     ) -> Result<()> {
         debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
         let element = match ty {
-            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
         for (i, val) in self.iter().enumerate() {
@@ -3037,7 +3037,7 @@ where
         src: &Self::Lower,
     ) -> Result<Self> {
         let element = match ty {
-            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
         // this is reimplementation of array::try_from_fn
@@ -3076,7 +3076,7 @@ where
     ) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let element = match ty {
-            InterfaceType::FixedSizeList(ty) => cx.types[ty].element,
+            InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
         // this is reimplementation of array::try_from_fn

@@ -1983,7 +1983,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn type_fixed_size_list(
+    fn type_fixed_length_list(
         &mut self,
         id: TypeId,
         _name: &str,

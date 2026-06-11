@@ -40,7 +40,7 @@ impl WasmType for component::Type {
             Self::Option(_) => WasmTypeKind::Option,
             Self::Result(_) => WasmTypeKind::Result,
             Self::Flags(_) => WasmTypeKind::Flags,
-            Self::FixedSizeList(_) => WasmTypeKind::FixedSizeList,
+            Self::FixedLengthList(_) => WasmTypeKind::FixedLengthList,
 
             Self::Own(_)
             | Self::Borrow(_)

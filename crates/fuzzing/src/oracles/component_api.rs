@@ -138,7 +138,7 @@ fn arbitrary_val(
                 })
                 .collect::<arbitrary::Result<_>>()?,
         ),
-        Type::FixedSizeList(list) => Val::FixedSizeList(
+        Type::FixedLengthList(list) => Val::FixedLengthList(
             (0..list.size())
                 .map(|_| arbitrary_val(&list.ty(), input))
                 .collect::<arbitrary::Result<_>>()?,

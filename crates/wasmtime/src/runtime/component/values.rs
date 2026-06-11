@@ -93,7 +93,7 @@ pub enum Val {
     Future(FutureAny),
     Stream(StreamAny),
     ErrorContext(ErrorContextAny),
-    FixedSizeList(Vec<Val>),
+    FixedLengthList(Vec<Val>),
 }
 
 impl Val {
@@ -526,7 +526,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedLengthList(ty), Val::FixedSizeList(values)) => {
+            (InterfaceType::FixedLengthList(ty), Val::FixedLengthList(values)) => {
                 let ty = &cx.types[ty];
                 if ty.size as usize != values.len() {
                     bail!("expected vec of size {}, got {}", ty.size, values.len());
@@ -536,7 +536,7 @@ impl Val {
                 }
                 Ok(())
             }
-            (InterfaceType::FixedSizeList(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedLengthList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -699,7 +699,7 @@ impl Val {
                 )
             }
             (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
-            (InterfaceType::FixedLengthList(ty), Val::FixedSizeList(values)) => {
+            (InterfaceType::FixedLengthList(ty), Val::FixedLengthList(values)) => {
                 let ty = &cx.types[ty];
                 if ty.size as usize != values.len() {
                     bail!("expected {} types, got {}", ty.size, values.len());
@@ -710,7 +710,7 @@ impl Val {
                 }
                 Ok(())
             }
-            (InterfaceType::FixedSizeList(_), _) => unexpected(ty, self),
+            (InterfaceType::FixedLengthList(_), _) => unexpected(ty, self),
         }
     }
 
@@ -742,7 +742,7 @@ impl Val {
             Val::Future(_) => "future",
             Val::Stream(_) => "stream",
             Val::ErrorContext(_) => "error-context",
-            Val::FixedSizeList(_) => "list<_, N>",
+            Val::FixedLengthList(_) => "list<_, N>",
         }
     }
 
@@ -829,8 +829,8 @@ impl PartialEq for Val {
             (Self::Stream(_), _) => false,
             (Self::ErrorContext(l), Self::ErrorContext(r)) => l == r,
             (Self::ErrorContext(_), _) => false,
-            (Self::FixedSizeList(l), Self::FixedSizeList(r)) => l == r,
-            (Self::FixedSizeList(_), _) => false,
+            (Self::FixedLengthList(l), Self::FixedLengthList(r)) => l == r,
+            (Self::FixedLengthList(_), _) => false,
         }
     }
 }
