@@ -50,40 +50,46 @@
 ;;       ret
 ;;
 ;; wasm[0]::function[3]:
-;;       push_frame_save 48, x16, x17, x18, x27, x28, x29
+;;       push_frame_save 32, x16, x17, x28, x29
 ;;       xmov x29, x3
-;;       br_if_xugteq32_u8 x2, 3, 0x95    // target = 0xae
+;;       br_if_xugteq32_u8 x2, 3, 0xb1    // target = 0xca
 ;;   20: xload64le_o32 x28, x0, 48
 ;;       xmov x4, x0
 ;;       zext32 x1, x2
 ;;       xshl64_u6 x0, x1, 3
 ;;       xadd64 x0, x28, x0
-;;       xload64le_o32 x0, x0, 0
-;;       xband_funcref_dispatch_not_x64 x0, x17, x16, x0, 8, 24, 0x50    // target = 0x8a
-;;       xmov x18, x4
-;;       call_indirect2 x17, x16, x18
+;;       xload64le_o32 x2, x0, 0
+;;       xband64_s8 x0, x2, -2
+;;       br_if_xeq64_i8 x2, 0, 0x68    // target = 0xa6
+;;   45: xmov x16, x4
+;;       xload64le_o32 x1, x0, 8
+;;       xload64le_o32 x0, x0, 24
+;;       call_indirect2 x1, x0, x16
 ;;       xmov x3, x29
-;;       xmov x4, x18
+;;       xmov x4, x16
 ;;       xmov x17, x0
-;;       br_if_xugteq32_u8 x3, 3, 0x5c    // target = 0xb1
-;;   5c: zext32 x1, x3
+;;       br_if_xugteq32_u8 x3, 3, 0x6a    // target = 0xcd
+;;   6a: zext32 x1, x3
 ;;       xshl64_u6 x0, x1, 3
 ;;       xadd64 x0, x28, x0
-;;       xload64le_o32 x0, x0, 0
-;;       xband_funcref_dispatch_not_x64 x0, x27, x28, x0, 8, 24, 0x30    // target = 0x9c
-;;       xmov x16, x4
-;;       call_indirect2 x27, x28, x16
+;;       xload64le_o32 x2, x0, 0
+;;       xband64_s8 x0, x2, -2
+;;       br_if_xeq64_i8 x2, 0, 0x3a    // target = 0xb8
+;;   85: xmov x16, x4
+;;       xload64le_o32 x1, x0, 8
+;;       xload64le_o32 x0, x0, 24
+;;       call_indirect2 x1, x0, x16
 ;;       xmov x1, x17
 ;;       xadd32 x0, x1, x0
-;;       pop_frame_restore 48, x16, x17, x18, x27, x28, x29
+;;       pop_frame_restore 32, x16, x17, x28, x29
 ;;       ret
-;;   8a: xzero x0
-;;   8c: xmov x18, x4
-;;   8f: call3 x18, x0, x1, 0x28f    // target = 0x31e
-;;   97: jump -0x4f    // target = 0x48
-;;   9c: xzero x0
-;;   9e: xmov x16, x4
-;;   a1: call3 x16, x0, x1, 0x27d    // target = 0x31e
-;;   a9: jump -0x2f    // target = 0x7a
-;;   ae: trap
-;;   b1: trap
+;;   a6: xzero x0
+;;   a8: xmov x16, x4
+;;   ab: call3 x16, x0, x1, 0x28f    // target = 0x33a
+;;   b3: jump -0x6b    // target = 0x48
+;;   b8: xzero x0
+;;   ba: xmov x16, x4
+;;   bd: call3 x16, x0, x1, 0x27d    // target = 0x33a
+;;   c5: jump -0x3d    // target = 0x88
+;;   ca: trap
+;;   cd: trap

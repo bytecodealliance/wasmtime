@@ -1074,20 +1074,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
-        // Under `is_eagerly_initialized_funcref_table`, `value != 0` and
-        // `value_masked != 0` agree on every reachable slot, so we can
-        // test the masked result. The Pulley backend then fuses the
-        // `band + brif` pair.
-        let brif_cond = if self
-            .module
-            .is_eagerly_initialized_funcref_table(table_index)
-        {
-            value_masked
-        } else {
-            value
-        };
+        // Branching on `value_masked` instead (letting the Pulley backend
+        // fuse the `band + brif` pair) requires a table whose slots are
+        // all eagerly initialized; that variant comes with eager
+        // initialization support.
         builder.ins().brif(
-            brif_cond,
+            value,
             continuation_block,
             &[value_masked.into()],
             null_block,

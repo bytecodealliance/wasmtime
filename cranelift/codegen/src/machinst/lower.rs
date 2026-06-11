@@ -1724,16 +1724,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// unnecessary because we're not moving a side-effecting op — we're
     /// telling the lowerer it has been handled elsewhere.
     pub fn sink_pure_inst(&mut self, ir_inst: Inst) {
-        let dfg_inst = &self.f.dfg.insts[ir_inst];
         let is_pure = !has_lowering_side_effect(self.f, ir_inst);
-        let is_safe_load = matches!(
-            dfg_inst,
+        let is_safe_load = match &self.f.dfg.insts[ir_inst] {
             InstructionData::Load {
                 opcode: crate::ir::Opcode::Load,
                 flags,
                 ..
-            } if flags.readonly() && flags.notrap()
-        );
+            } => {
+                let flags = self.f.dfg.mem_flags[*flags];
+                flags.readonly() && flags.notrap()
+            }
+            _ => false,
+        };
         assert!(is_pure || is_safe_load);
         self.inst_absorbed_pure.insert(ir_inst);
     }
