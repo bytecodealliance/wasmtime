@@ -1,4 +1,5 @@
 use crate::TrapInformation;
+use crate::bytes::write_uleb;
 use crate::obj::ELF_WASMTIME_TRAPS;
 use crate::prelude::*;
 use crate::trap_encoding::TRAP_BLOCK_SIZE;
@@ -205,14 +206,6 @@ fn most_common_code(entries: &[(u32, u8)]) -> u8 {
         }
     }
     best
-}
-
-fn write_uleb(data: &mut Vec<u8>, mut value: u64) {
-    while value >= 0x80 {
-        data.push(0x80 | (value as u8 & 0x7f));
-        value >>= 7;
-    }
-    data.push(value as u8);
 }
 
 #[cfg(test)]

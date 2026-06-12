@@ -35,29 +35,10 @@ pub const SH_WASMTIME_NOT_EXECUTED: u64 = 1 << 0;
 /// mapping data from offsets in the image to offset in the original wasm
 /// binary.
 ///
-/// This section has a custom binary encoding. Currently its encoding is:
-///
-/// * The section starts with a 32-bit little-endian integer. This integer is
-///   how many entries are in the following two arrays.
-/// * Next is an array with the previous count number of 32-bit little-endian
-///   integers. This array is a sorted list of relative offsets within the text
-///   section. This is intended to be a lookup array to perform a binary search
-///   on an offset within the text section on this array.
-/// * Finally there is another array, with the same count as before, also of
-///   32-bit little-endian integers. These integers map 1:1 with the previous
-///   array of offsets, and correspond to what the original offset was in the
-///   wasm file.
-///
-/// Decoding this section is intentionally simple, it only requires loading a
-/// 32-bit little-endian integer plus some bounds checks. Reading this section
-/// is done with the `lookup_file_pos` function below. Reading involves
-/// performing a binary search on the first array using the index found for the
-/// native code offset to index into the second array and find the wasm code
-/// offset.
-///
-/// At this time this section has an alignment of 1, which means all reads of it
-/// are unaligned. Additionally at this time the 32-bit encodings chosen here
-/// mean that >=4gb text sections are not supported.
+/// This section's format is defined by the documentation of the
+/// `crate::compile::AddressMapSection` data structure, which builds it. It is
+/// decoded by `lookup_file_pos`. Its offsets are relative to the start of the
+/// text section.
 pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 
 /// A custom Wasmtime-specific section of compilation which store information

@@ -1,5 +1,6 @@
 //! Data structures to provide transformation of the source
 
+use crate::bytes::{read_sleb, read_uleb};
 use core::fmt;
 use object::{Bytes, LittleEndian, U32};
 use serde_derive::{Deserialize, Serialize};
@@ -141,76 +142,160 @@ impl fmt::Display for ModulePC {
     }
 }
 
-/// Parse an `ELF_WASMTIME_ADDRMAP` section, returning the slice of code offsets
-/// and the slice of associated file positions for each offset.
-fn parse_address_map(section: &[u8]) -> Option<(&[U32<LittleEndian>], &[U32<LittleEndian>])> {
+/// Number of address-mapping entries packed into one block of the address map
+/// section.
+///
+/// See `AddressMapSection` in `crate::compile` for the full section format.
+/// Chosen as a balance between the fixed-width index overhead per block (8
+/// bytes, amortized across entries) and the amount of linear decoding required
+/// to look up a single pc within a block.
+pub(crate) const ADDRMAP_BLOCK_SIZE: usize = 128;
+
+/// A parsed view of the address map section.
+///
+/// The fields here correspond to the pieces of the section layout described
+/// on `AddressMapSection` in `crate::compile`.
+#[derive(Clone, Copy)]
+struct AddressMap<'a> {
+    /// Total number of address-mapping entries in this section.
+    entries: usize,
+    /// One `(first_offset, block_pos)` pair per block.
+    block_index: &'a [[U32<LittleEndian>; 2]],
+    /// Variable-length block bodies, indexed by `block_pos` in the
+    /// `block_index` table above.
+    block_bodies: &'a [u8],
+}
+
+impl<'a> AddressMap<'a> {
+    /// Returns an iterator of `(text_offset, FilePos)` for all entries in
+    /// `block`, or `None` if the section is malformed.
+    fn block_entries(&self, block_index: usize) -> Option<BlockEntries<'a>> {
+        let [first_offset, block_pos] = self.block_index.get(block_index)?;
+        let first_offset = first_offset.get(LittleEndian);
+        let block_pos = block_pos.get(LittleEndian);
+        let block = self.block_bodies.get(usize::try_from(block_pos).ok()?..)?;
+        let remaining = core::cmp::min(
+            ADDRMAP_BLOCK_SIZE,
+            self.entries.checked_sub(block_index * ADDRMAP_BLOCK_SIZE)?,
+        );
+        Some(BlockEntries {
+            block,
+            prev_offset: first_offset,
+            prev_pos: None,
+            remaining,
+        })
+    }
+}
+
+/// Iterator over the entries of a single block, decoding the delta-and-flag
+/// varints described in the "block body" portion of the section format on
+/// `AddressMapSection` in `crate::compile`.
+struct BlockEntries<'a> {
+    block: &'a [u8],
+    prev_offset: u32,
+    prev_pos: Option<u32>,
+    remaining: usize,
+}
+
+impl Iterator for BlockEntries<'_> {
+    type Item = (u32, FilePos);
+
+    fn next(&mut self) -> Option<(u32, FilePos)> {
+        self.remaining = self.remaining.checked_sub(1)?;
+        let token = read_uleb(&mut self.block)?;
+        let delta = u32::try_from(token >> 1).ok()?;
+        let cur_offset = self.prev_offset.checked_add(delta)?;
+        self.prev_offset = cur_offset;
+        if token & 1 != 0 {
+            return Some((cur_offset, FilePos::none()));
+        }
+        let pos = match self.prev_pos {
+            // The first non-none position of a block is encoded absolutely...
+            None => u32::try_from(read_uleb(&mut self.block)?).ok()?,
+            // ... and subsequent positions are sleb deltas from the previous
+            // non-none position.
+            Some(prev) => {
+                let delta = read_sleb(&mut self.block)?;
+                prev.checked_add_signed(i32::try_from(delta).ok()?)?
+            }
+        };
+        self.prev_pos = Some(pos);
+        Some((cur_offset, FilePos(pos)))
+    }
+}
+
+/// Parse an `ELF_WASMTIME_ADDRMAP` section into its header, block index, and
+/// block bodies.
+fn parse(section: &[u8]) -> Option<AddressMap<'_>> {
     let mut section = Bytes(section);
-    // NB: this matches the encoding written by `append_to` in the
+    // NB: this matches the encoding written by `AddressMapSection` in the
     // `compile::address_map` module.
-    let count = section.read::<U32<LittleEndian>>().ok()?;
-    let count = usize::try_from(count.get(LittleEndian)).ok()?;
-    let (offsets, section) =
-        object::slice_from_bytes::<U32<LittleEndian>>(section.0, count).ok()?;
-    let (positions, section) =
-        object::slice_from_bytes::<U32<LittleEndian>>(section, count).ok()?;
-    debug_assert!(section.is_empty());
-    Some((offsets, positions))
+    let entries = section.read::<U32<LittleEndian>>().ok()?;
+    let entries = usize::try_from(entries.get(LittleEndian)).ok()?;
+    let num_blocks = section.read::<U32<LittleEndian>>().ok()?;
+    let num_blocks = usize::try_from(num_blocks.get(LittleEndian)).ok()?;
+    let (block_index, block_bodies) =
+        object::slice_from_bytes::<[U32<LittleEndian>; 2]>(section.0, num_blocks).ok()?;
+    Some(AddressMap {
+        entries,
+        block_index,
+        block_bodies,
+    })
 }
 
 /// Lookup an `offset` within an encoded address map section, returning the
 /// original `FilePos` that corresponds to the offset, if found.
 ///
 /// This function takes a `section` as its first argument which must have been
-/// created with `AddressMapSection` above. This is intended to be the raw
+/// created with `AddressMapSection` in `crate::compile`, whose documentation
+/// describes the format decoded here. This is intended to be the raw
 /// `ELF_WASMTIME_ADDRMAP` section from the compilation artifact.
 ///
 /// The `offset` provided is a relative offset from the start of the text
 /// section of the pc that is being looked up. If `offset` is out of range or
 /// doesn't correspond to anything in this file then `None` is returned.
 pub fn lookup_file_pos(section: &[u8], offset: usize) -> Option<FilePos> {
-    let (offsets, positions) = parse_address_map(section)?;
-
-    // First perform a binary search on the `offsets` array. This is a sorted
-    // array of offsets within the text section, which is conveniently what our
-    // `offset` also is. Note that we are somewhat unlikely to find a precise
-    // match on the element in the array, so we're largely interested in which
-    // "bucket" the `offset` falls into.
+    let section = parse(section)?;
     let offset = u32::try_from(offset).ok()?;
-    let index = match offsets.binary_search_by_key(&offset, |v| v.get(LittleEndian)) {
-        // Exact hit!
-        Ok(i) => i,
 
-        // This *would* be at the first slot in the array, so no
-        // instructions cover `pc`.
-        Err(0) => return None,
+    // Find the last block whose first pc is `<= offset`. Note that, unlike the
+    // trap section, this is a bucket-style search: each entry covers addresses
+    // from its own `text_offset` until the next entry's, so `offset` need not
+    // match an entry exactly. The covering entry is wholly contained in this
+    // block since the next block only takes over at its own `first_offset`.
+    let block = section
+        .block_index
+        .partition_point(|[first_offset, _]| first_offset.get(LittleEndian) <= offset)
+        .checked_sub(1)?;
 
-        // This would be at the `nth` slot, so we're at the `n-1`th slot.
-        Err(n) => n - 1,
-    };
-
-    // Using the `index` we found of which bucket `offset` corresponds to we can
-    // lookup the actual `FilePos` value in the `positions` array.
-    let pos = positions.get(index)?;
-    Some(FilePos(pos.get(LittleEndian)))
+    // Find the last entry within this block whose offset is `<= offset`; that
+    // entry's bucket covers `offset`. At least the block's first entry always
+    // qualifies due to the index search above.
+    let mut pos = None;
+    for (entry_offset, entry_pos) in section.block_entries(block)? {
+        if entry_offset > offset {
+            break;
+        }
+        pos = Some(entry_pos);
+    }
+    pos
 }
 
 /// Iterate over the address map contained in the given address map section.
 ///
 /// This function takes a `section` as its first argument which must have been
-/// created with `AddressMapSection` above. This is intended to be the raw
-/// `ELF_WASMTIME_ADDRMAP` section from the compilation artifact.
+/// created with `AddressMapSection` in `crate::compile`. This is intended to
+/// be the raw `ELF_WASMTIME_ADDRMAP` section from the compilation artifact.
 ///
 /// The yielded offsets are relative to the start of the text section for this
 /// map's code object.
 pub fn iterate_address_map<'a>(
     section: &'a [u8],
 ) -> Option<impl Iterator<Item = (u32, FilePos)> + 'a> {
-    let (offsets, positions) = parse_address_map(section)?;
+    let section = parse(section)?;
 
     Some(
-        offsets
-            .iter()
-            .map(|o| o.get(LittleEndian))
-            .zip(positions.iter().map(|pos| FilePos(pos.get(LittleEndian)))),
+        (0..section.block_index.len())
+            .flat_map(move |block| section.block_entries(block).into_iter().flatten()),
     )
 }

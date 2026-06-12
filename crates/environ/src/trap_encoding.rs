@@ -1,3 +1,4 @@
+use crate::bytes;
 use core::fmt;
 use object::{Bytes, LittleEndian, U32};
 
@@ -349,7 +350,7 @@ impl<'a> TrapSection<'a> {
         let first_offset = first_offset.get(LittleEndian);
         let block_pos = block_pos.get(LittleEndian);
         let mut block = self.block_bodies.get(usize::try_from(block_pos).ok()?..)?;
-        let default_code = pop(&mut block)?;
+        let default_code = bytes::pop(&mut block)?;
         let remaining = core::cmp::min(
             TRAP_BLOCK_SIZE,
             self.entries.checked_sub(block_index * TRAP_BLOCK_SIZE)?,
@@ -378,37 +379,17 @@ impl Iterator for BlockEntries<'_> {
 
     fn next(&mut self) -> Option<(u32, u8)> {
         self.remaining = self.remaining.checked_sub(1)?;
-        let token = read_uleb(&mut self.block)?;
+        let token = bytes::read_uleb(&mut self.block)?;
         let delta = u32::try_from(token >> 1).ok()?;
         let cur_offset = self.prev_offset.checked_add(delta)?;
         self.prev_offset = cur_offset;
         let code = if token & 1 != 0 {
-            pop(&mut self.block)?
+            bytes::pop(&mut self.block)?
         } else {
             self.default_code
         };
         Some((cur_offset, code))
     }
-}
-
-fn read_uleb(data: &mut &[u8]) -> Option<u64> {
-    let mut result = 0;
-    let mut shift = 0;
-    while shift < 64 {
-        let byte = pop(data)?;
-        result |= u64::from(byte & 0x7f) << shift;
-        if byte & 0x80 == 0 {
-            return Some(result);
-        }
-        shift += 7;
-    }
-    None
-}
-
-fn pop(data: &mut &[u8]) -> Option<u8> {
-    let (&byte, rest) = data.split_first()?;
-    *data = rest;
-    Some(byte)
 }
 
 fn parse(section: &[u8]) -> Option<TrapSection<'_>> {
