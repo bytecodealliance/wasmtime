@@ -13,6 +13,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
+<<<<<<< HEAD
+=======
+;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+>>>>>>> main
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
@@ -34,9 +38,9 @@
 ;; @0024                               trapnz v25, heap_oob
 ;; @0024                               v13 = load.i64 notrap aligned readonly can_move v0+56
 ;; @0024                               v30 = iadd v13, v20
-;; @0024                               v32 = load.i8x16 notrap aligned little v30
+;; @0024                               v32 = load.i8x16 notrap aligned little region1 v30
 ;; @0024                               v17 = iadd v13, v7
-;; @0024                               store notrap aligned little v32, v17
+;; @0024                               store notrap aligned little region1 v32, v17
 ;; @0028                               jump block1
 ;;
 ;;                                 block1:
