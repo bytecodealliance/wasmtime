@@ -80,3 +80,12 @@ runs:
     - name: Install the WASI target
       shell: bash
       run: rustup target add wasm32-wasip2 wasm32-wasip1 wasm32-unknown-unknown
+
+    - name: Fetch all Cargo dependencies
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          cargo fetch --locked && break
+          sleep 5
+        done
