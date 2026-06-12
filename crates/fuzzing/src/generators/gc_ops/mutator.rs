@@ -391,9 +391,14 @@ impl TypesMutator {
         c: &mut Candidates<'_>,
         types: &mut Types,
     ) -> mutatis::Result<()> {
+        // Snapshot target types up front so fields can reference any type (incl. self) without borrowing `types`.
+        let candidates: Vec<TypeId> = types.type_defs.keys().copied().collect();
         for (_, def) in types.type_defs.iter_mut() {
             let CompositeType::Struct(ref mut st) = def.composite_type;
-            m::vec(StructFieldMutator).mutate(c, &mut st.fields)?;
+            m::vec(StructFieldMutator {
+                candidates: &candidates,
+            })
+            .mutate(c, &mut st.fields)?;
         }
         Ok(())
     }
@@ -419,16 +424,17 @@ impl TypesMutator {
     }
 }
 
-/// Mutator for [`StructField`]: used by `m::vec` to add, remove, and
-/// modify fields within a struct type.
-#[derive(Debug, Default)]
-pub struct StructFieldMutator;
+/// Mutator for [`StructField`] (add/remove/modify fields).
+#[derive(Debug)]
+pub struct StructFieldMutator<'a> {
+    candidates: &'a [TypeId],
+}
 
-impl Mutate<StructField> for StructFieldMutator {
+impl Mutate<StructField> for StructFieldMutator<'_> {
     fn mutate(&mut self, c: &mut Candidates<'_>, field: &mut StructField) -> MutResult<()> {
         c.mutation(|ctx| {
             let old = format!("{field:?}");
-            field.field_type = FieldType::random(ctx.rng());
+            field.field_type = FieldType::generate(ctx.rng(), self.candidates);
             field.mutable = (ctx.rng().gen_u32() % 2) == 0;
             log::debug!("Mutated field {old} -> {field:?}");
             Ok(())
@@ -437,19 +443,15 @@ impl Mutate<StructField> for StructFieldMutator {
     }
 }
 
-impl Generate<StructField> for StructFieldMutator {
+impl Generate<StructField> for StructFieldMutator<'_> {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<StructField> {
         let field = StructField {
-            field_type: FieldType::random(ctx.rng()),
+            field_type: FieldType::generate(ctx.rng(), self.candidates),
             mutable: (ctx.rng().gen_u32() % 2) == 0,
         };
         log::debug!("Generated field {field:?}");
         Ok(field)
     }
-}
-
-impl DefaultMutate for StructField {
-    type DefaultMutate = StructFieldMutator;
 }
 
 /// Mutator for [`GcOps`].

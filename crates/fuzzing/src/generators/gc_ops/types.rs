@@ -5,7 +5,8 @@ use crate::generators::gc_ops::ops::GcOp;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use wasmtime_environ::graphs::{Dfs, DfsEvent, Graph};
+use wasmtime_environ::graphs::{Dfs, DfsEvent, Graph, StronglyConnectedComponents};
+use wasmtime_environ::{EntityRef, entity_impl};
 
 /// Identifies a `(rec ...)` group.
 #[derive(
@@ -72,22 +73,55 @@ macro_rules! define_field_type_enum {
         #[allow(missing_docs, reason = "self-describing")]
         pub enum FieldType {
             $( $variant, )*
+            /// Abstract `(ref null? struct)`.
+            StructRef { nullable: bool },
+            /// Concrete `(ref null? $t)` referencing a defined struct type.
+            Ref { nullable: bool, type_id: TypeId },
         }
 
         impl FieldType {
-            /// All possible field type variants, for random selection.
+            /// All scalar/abstract-leaf field type variants, for random selection.
             pub const ALL: &[FieldType] = &[ $( FieldType::$variant, )* ];
 
-            /// Pick a random field type.
+            /// Pick a random scalar/abstract-leaf field type.
             pub fn random(rng: &mut mutatis::Rng) -> FieldType {
                 let idx = rng.gen_index(FieldType::ALL.len()).unwrap();
                 FieldType::ALL[idx]
             }
 
             /// Convert to a `wasm_encoder::StorageType`.
-            pub fn to_storage_type(self) -> wasm_encoder::StorageType {
+            pub fn to_storage_type(
+                self,
+                type_ids_to_index: &BTreeMap<TypeId, u32>,
+            ) -> wasm_encoder::StorageType {
+                use wasm_encoder::{AbstractHeapType, HeapType, RefType, StorageType, ValType};
                 match self {
                     $( FieldType::$variant => $storage, )*
+                    FieldType::StructRef { nullable } => StorageType::Val(ValType::Ref(RefType {
+                        nullable,
+                        heap_type: HeapType::Abstract {
+                            shared: false,
+                            ty: AbstractHeapType::Struct,
+                        },
+                    })),
+                    FieldType::Ref { nullable, type_id } => {
+                        // Fixup guarantees every concrete reference target is a
+                        // live type that gets a Wasm index, so a miss here is a
+                        // bug in fixup, not a recoverable case. Panic loudly
+                        // rather than silently emitting a `(ref null struct)`,
+                        // which would not validate against this field's
+                        // concrete type.
+                        let &idx = type_ids_to_index.get(&type_id).unwrap_or_else(|| {
+                            unreachable!(
+                                "concrete struct reference to {type_id:?} missing from \
+                                 index map; fixup should keep all reference targets"
+                            )
+                        });
+                        StorageType::Val(ValType::Ref(RefType {
+                            nullable,
+                            heap_type: HeapType::Concrete(idx),
+                        }))
+                    }
                 }
             }
 
@@ -97,16 +131,63 @@ macro_rules! define_field_type_enum {
                 matches!(self, FieldType::I8 | FieldType::I16)
             }
 
-            /// Emit an iconic default constant for this field type onto the Wasm stack.
-            pub fn emit_default_const(self, func: &mut wasm_encoder::Function) {
+            /// Emit a default constant for this field type onto the stack
+            pub fn emit_default_const(
+                self,
+                func: &mut wasm_encoder::Function,
+                type_ids_to_index: &BTreeMap<TypeId, u32>,
+            ) {
                 match self {
                     $( FieldType::$variant => { func.instruction(&$default_val); } )*
+                    FieldType::StructRef { .. } => {
+                        func.instruction(&wasm_encoder::Instruction::RefNull(
+                            wasm_encoder::HeapType::Abstract {
+                                shared: false,
+                                ty: wasm_encoder::AbstractHeapType::Struct,
+                            },
+                        ));
+                    }
+                    FieldType::Ref { type_id, .. } => {
+                        // See `to_storage_type`: a missing index is a fixup bug.
+                        // Emitting `ref.null struct` here would produce a value
+                        // that does not match the field's concrete `(ref null
+                        // $t)` type and yield an invalid module, so panic.
+                        let &idx = type_ids_to_index.get(&type_id).unwrap_or_else(|| {
+                            unreachable!(
+                                "concrete struct reference to {type_id:?} missing from \
+                                 index map; fixup should keep all reference targets"
+                            )
+                        });
+                        func.instruction(&wasm_encoder::Instruction::RefNull(
+                            wasm_encoder::HeapType::Concrete(idx),
+                        ));
+                    }
                 }
             }
         }
     };
 }
 for_each_field_type!(define_field_type_enum);
+
+impl FieldType {
+    /// Generate a random field type, including reference types.
+    pub fn generate(rng: &mut mutatis::Rng, candidates: &[TypeId]) -> FieldType {
+        match rng.gen_u32() % 4 {
+            // Abstract `structref`.
+            0 => FieldType::StructRef { nullable: true },
+            // Concrete `(ref null $t)`, when we have a type to point at.
+            1 => match rng.choose(candidates).copied() {
+                Some(type_id) => FieldType::Ref {
+                    nullable: true,
+                    type_id,
+                },
+                None => FieldType::random(rng),
+            },
+            // Scalar / abstract-leaf type.
+            _ => FieldType::random(rng),
+        }
+    }
+}
 
 /// A single field within a struct type.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,10 +276,29 @@ impl Graph<RecGroupId> for RecGroupGraph<'_> {
 
         if let Some(type_ids) = self.rec_groups.get(&group) {
             for &ty in type_ids {
-                if let Some(super_ty) = self.type_defs.get(&ty).and_then(|d| d.supertype) {
+                let Some(def) = self.type_defs.get(&ty) else {
+                    continue;
+                };
+
+                // Supertype edge: the supertype's group must encode first.
+                if let Some(super_ty) = def.supertype {
                     if let Some(&super_group) = self.type_to_group.get(&super_ty) {
                         if super_group != group {
                             deps.insert(super_group);
+                        }
+                    }
+                }
+
+                // Field-reference edges: a concrete `(ref null $t)` field means
+                // `$t`'s group must encode first (references *within* a group are
+                // always legal and impose no ordering constraint).
+                let CompositeType::Struct(ref st) = def.composite_type;
+                for field in &st.fields {
+                    if let FieldType::Ref { type_id, .. } = field.field_type {
+                        if let Some(&ref_group) = self.type_to_group.get(&type_id) {
+                            if ref_group != group {
+                                deps.insert(ref_group);
+                            }
                         }
                     }
                 }
@@ -206,6 +306,37 @@ impl Graph<RecGroupId> for RecGroupGraph<'_> {
         }
 
         deps.into_iter().collect::<Vec<_>>().into_iter()
+    }
+}
+
+/// A dense [`EntityRef`] node used to run strongly-connected-component analysis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct RecGroupNode(u32);
+entity_impl!(RecGroupNode);
+
+/// A densely-indexed view of the rec-group dependency graph, suitable for
+struct DenseRecGroupGraph {
+    adjacency: Vec<Vec<RecGroupNode>>,
+}
+
+impl Graph<RecGroupNode> for DenseRecGroupGraph {
+    type NodesIter<'a>
+        = std::iter::Map<std::ops::Range<u32>, fn(u32) -> RecGroupNode>
+    where
+        Self: 'a;
+
+    fn nodes(&self) -> Self::NodesIter<'_> {
+        let len = u32::try_from(self.adjacency.len()).unwrap();
+        (0..len).map(RecGroupNode as fn(u32) -> RecGroupNode)
+    }
+
+    type SuccessorsIter<'a>
+        = std::iter::Copied<std::slice::Iter<'a, RecGroupNode>>
+    where
+        Self: 'a;
+
+    fn successors(&self, node: RecGroupNode) -> Self::SuccessorsIter<'_> {
+        self.adjacency[node.index()].iter().copied()
     }
 }
 
@@ -451,57 +582,53 @@ impl Types {
             .collect()
     }
 
-    /// Break cycles in the rec-group dependency graph by dropping cross-group
-    /// supertype edges that are DFS back edges.
-    pub fn break_rec_group_cycles(&mut self, type_to_group: &BTreeMap<TypeId, RecGroupId>) {
-        let graph = RecGroupGraph {
+    /// Resolve cross-group cycles in the rec-group dependency graph by
+    /// **merging** each strongly-connected component of mutually-dependent rec
+    /// groups into a single rec group.
+    pub fn merge_rec_group_cycles(&mut self, type_to_group: &BTreeMap<TypeId, RecGroupId>) {
+        if self.rec_groups.len() < 2 {
+            return;
+        }
+
+        let groups: Vec<RecGroupId> = self.rec_groups.keys().copied().collect();
+        let group_to_dense: BTreeMap<RecGroupId, u32> = groups
+            .iter()
+            .enumerate()
+            .map(|(i, &g)| (g, u32::try_from(i).unwrap()))
+            .collect();
+
+        let rec_graph = RecGroupGraph {
             type_defs: &self.type_defs,
             rec_groups: &self.rec_groups,
             type_to_group,
         };
+        let adjacency: Vec<Vec<RecGroupNode>> = groups
+            .iter()
+            .map(|&g| {
+                rec_graph
+                    .successors(g)
+                    .map(|succ| RecGroupNode(group_to_dense[&succ]))
+                    .collect()
+            })
+            .collect();
 
-        let mut seen = BTreeSet::new();
-        let mut back_edges: BTreeSet<(RecGroupId, RecGroupId)> = BTreeSet::new();
-        let mut dfs = Dfs::default();
+        let dense = DenseRecGroupGraph { adjacency };
+        let sccs = StronglyConnectedComponents::new(&dense);
 
-        for &root in self.rec_groups.keys() {
-            if seen.contains(&root) {
+        for (_, nodes) in sccs.iter() {
+            if nodes.len() < 2 {
                 continue;
             }
-            dfs.add_root(root);
-            let mut active = BTreeSet::new();
-
-            while let Some(event) = dfs.next(&graph, |id| seen.contains(&id)) {
-                match event {
-                    DfsEvent::Pre(id) => {
-                        seen.insert(id);
-                        active.insert(id);
-                    }
-                    DfsEvent::Post(id) => {
-                        active.remove(&id);
-                    }
-                    DfsEvent::AfterEdge(from, to) => {
-                        if active.contains(&to) {
-                            back_edges.insert((from, to));
-                        }
-                    }
+            // Fold every group in this component into the first one.
+            let group_ids: Vec<RecGroupId> = nodes.iter().map(|n| groups[n.index()]).collect();
+            let representative = group_ids[0];
+            let mut merged = BTreeSet::new();
+            for gid in &group_ids {
+                if let Some(members) = self.rec_groups.remove(gid) {
+                    merged.extend(members);
                 }
             }
-        }
-
-        // Drop supertype edges that correspond to back edges.
-        if !back_edges.is_empty() {
-            for (&tid, def) in self.type_defs.iter_mut() {
-                if let Some(st) = def.supertype {
-                    if let (Some(&sg), Some(&spg)) =
-                        (type_to_group.get(&tid), type_to_group.get(&st))
-                    {
-                        if back_edges.contains(&(sg, spg)) {
-                            def.supertype = None;
-                        }
-                    }
-                }
-            }
+            self.rec_groups.insert(representative, merged);
         }
     }
 
@@ -588,12 +715,35 @@ impl Types {
             st.fields.truncate(max_fields);
         }
 
-        // 9. Break supertype cycles and rec-group dependency cycles.
+        // 9. Normalize reference fields.
+        let valid_type_ids: BTreeSet<TypeId> = self.type_defs.keys().copied().collect();
+        for def in self.type_defs.values_mut() {
+            let CompositeType::Struct(ref mut st) = def.composite_type;
+            for field in &mut st.fields {
+                match &mut field.field_type {
+                    FieldType::StructRef { nullable } => *nullable = true,
+                    FieldType::Ref { nullable, type_id } => {
+                        if valid_type_ids.contains(type_id) {
+                            *nullable = true;
+                        } else {
+                            field.field_type = FieldType::StructRef { nullable: true };
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // 10. Break supertype cycles and merge rec-group reference cycles, so
+        //     the type graph is well-founded before we encode it.
         self.break_supertype_cycles();
         let type_to_group = self.type_to_group_map();
-        self.break_rec_group_cycles(&type_to_group);
+        self.merge_rec_group_cycles(&type_to_group);
+        // Merging changes group membership, so recompute the reverse map for
+        // the encoding-order computation below.
+        let type_to_group = self.type_to_group_map();
 
-        // 10. Ensure subtype fields are prefix-compatible with supertype fields.
+        // 11. Ensure subtype fields are prefix-compatible with supertype fields.
         //     Process in topological order (supertype before subtype).
         let mut topo_order = Vec::new();
         self.sort_types_topo(&mut topo_order);
@@ -627,7 +777,7 @@ impl Types {
 
         debug_assert!(self.is_well_formed(limits));
 
-        // 11. Compute encoding order (reuses type_to_group from step 9).
+        // 12. Compute encoding order (reuses type_to_group from step 10).
         self.encoding_order_grouped(encoding_order_grouped, &type_to_group);
     }
 
@@ -672,6 +822,24 @@ impl Types {
                     st.fields.len()
                 );
                 return false;
+            }
+
+            // Reference fields must be nullable (non-nullable references are
+            // deferred), and concrete references must target an existing type.
+            for field in &st.fields {
+                match field.field_type {
+                    FieldType::StructRef { nullable } | FieldType::Ref { nullable, .. }
+                        if !nullable =>
+                    {
+                        log::debug!("[-] Failed: type {tid:?} has a non-nullable reference field");
+                        return false;
+                    }
+                    FieldType::Ref { type_id, .. } if !self.type_defs.contains_key(&type_id) => {
+                        log::debug!("[-] Failed: type {tid:?} references missing type {type_id:?}");
+                        return false;
+                    }
+                    _ => {}
+                }
             }
 
             if let Some(super_id) = def.supertype {
