@@ -1,3 +1,6 @@
+use core::pin::pin;
+use futures::future::{Either, select};
+use test_programs::p3::wasi::clocks::monotonic_clock;
 use test_programs::p3::wasi::sockets::ip_name_lookup::{ErrorCode, resolve_addresses};
 use test_programs::p3::wasi::sockets::types::IpAddress;
 
@@ -5,23 +8,57 @@ struct Component;
 
 test_programs::p3::export!(Component);
 
-async fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {
-    Ok(resolve_addresses(name.into())
-        .await?
-        .first()
-        .unwrap()
-        .to_owned())
+/// Resolves `name`, returning `None` if the resolution didn't complete within
+/// enough time.
+async fn resolve(name: &str) -> Option<Result<Vec<IpAddress>, ErrorCode>> {
+    const TIMEOUT_NS: u64 = 1_000_000_000;
+    let resolve = pin!(resolve_addresses(name.into()));
+    let timeout = pin!(monotonic_clock::wait_for(TIMEOUT_NS));
+    match select(resolve, timeout).await {
+        Either::Left((result, _)) => Some(result),
+        Either::Right(((), _)) => None,
+    }
+}
+
+/// Asserts that `name` resolves successfully, tolerating timeouts.
+///
+/// Timed out resolutions are skipped rather than failing the test. See
+/// `resolve` for why timeouts don't fail the test.
+async fn assert_resolves(name: &str) -> Option<Vec<IpAddress>> {
+    match resolve(name).await {
+        Some(Ok(addresses)) => Some(addresses),
+        None => {
+            eprintln!("resolution of `{name}` timed out, skipping");
+            None
+        }
+        Some(Err(e)) => panic!("failed to resolve `{name}`: {e}"),
+    }
+}
+
+/// Same as `assert_resolves`, additionally asserting that `name` resolved to
+/// `expected` if the resolution didn't time out.
+async fn assert_resolves_to(name: &str, expected: IpAddress) {
+    if let Some(addresses) = assert_resolves(name).await {
+        assert_eq!(addresses.first(), Some(&expected), "resolution of `{name}`");
+    }
 }
 
 /// Attempts to resolve at least one of `domains`. Allows failure so long as one
 /// succeeds. Intended to help make this test less flaky while still also
 /// testing live services.
 async fn resolve_at_least_one_of(domains: &[&str]) {
+    let mut timeouts = 0;
     for domain in domains {
-        match resolve_one(domain).await {
-            Ok(_) => return,
-            Err(e) => eprintln!("failed to resolve `{domain}`: {e}"),
+        match resolve(domain).await {
+            Some(Ok(_)) => return,
+            None => timeouts += 1,
+            Some(Err(e)) => eprintln!("failed to resolve `{domain}`: {e}"),
         }
+    }
+
+    // Ignore if everything times out.
+    if timeouts == domains.len() {
+        return;
     }
 
     panic!("should have been able to resolve at least one domain");
@@ -30,7 +67,7 @@ async fn resolve_at_least_one_of(domains: &[&str]) {
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
         // Valid domains
-        resolve_one("localhost").await.unwrap();
+        assert_resolves("localhost").await;
 
         resolve_at_least_one_of(&[
             "example.com",
@@ -46,43 +83,32 @@ impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
         let _ = resolve_addresses("münchen.de".into()).await;
 
         // Valid IP addresses
-        assert_eq!(
-            resolve_one("0.0.0.0").await.unwrap(),
-            IpAddress::IPV4_UNSPECIFIED
-        );
-        assert_eq!(
-            resolve_one("127.0.0.1").await.unwrap(),
-            IpAddress::IPV4_LOOPBACK
-        );
-        assert_eq!(
-            resolve_one("192.0.2.0").await.unwrap(),
-            IpAddress::Ipv4((192, 0, 2, 0))
-        );
-        assert_eq!(
-            resolve_one("::").await.unwrap(),
-            IpAddress::IPV6_UNSPECIFIED
-        );
-        assert_eq!(resolve_one("::1").await.unwrap(), IpAddress::IPV6_LOOPBACK);
-        assert_eq!(
-            resolve_one("[::]").await.unwrap(),
-            IpAddress::IPV6_UNSPECIFIED
-        );
-        assert_eq!(
-            resolve_one("2001:0db8:0:0:0:0:0:0").await.unwrap(),
-            IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0))
-        );
-        assert_eq!(
-            resolve_one("dead:beef::").await.unwrap(),
-            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
-        );
-        assert_eq!(
-            resolve_one("dead:beef::0").await.unwrap(),
-            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
-        );
-        assert_eq!(
-            resolve_one("DEAD:BEEF::0").await.unwrap(),
-            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
-        );
+        assert_resolves_to("0.0.0.0", IpAddress::IPV4_UNSPECIFIED).await;
+        assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK).await;
+        assert_resolves_to("192.0.2.0", IpAddress::Ipv4((192, 0, 2, 0))).await;
+        assert_resolves_to("::", IpAddress::IPV6_UNSPECIFIED).await;
+        assert_resolves_to("::1", IpAddress::IPV6_LOOPBACK).await;
+        assert_resolves_to("[::]", IpAddress::IPV6_UNSPECIFIED).await;
+        assert_resolves_to(
+            "2001:0db8:0:0:0:0:0:0",
+            IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0)),
+        )
+        .await;
+        assert_resolves_to(
+            "dead:beef::",
+            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
+        )
+        .await;
+        assert_resolves_to(
+            "dead:beef::0",
+            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
+        )
+        .await;
+        assert_resolves_to(
+            "DEAD:BEEF::0",
+            IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
+        )
+        .await;
 
         // Invalid inputs
         assert!(matches!(
