@@ -32,6 +32,7 @@ use crate::{
 };
 use std::collections::HashMap;
 use wasm_encoder::*;
+use wasmparser::WasmFeatures;
 
 mod core_types;
 mod signature;
@@ -60,6 +61,9 @@ pub struct Module<'a> {
     tunables: &'a Tunables,
     /// Type information from the creator of this `Module`
     types: &'a ComponentTypesBuilder,
+
+    /// The Wasm features enabled for validation of this module.
+    features: WasmFeatures,
 
     /// Core wasm type section that's incrementally built
     core_types: core_types::CoreTypes,
@@ -259,10 +263,15 @@ enum HelperLocation {
 
 impl<'a> Module<'a> {
     /// Creates an empty module.
-    pub fn new(types: &'a ComponentTypesBuilder, tunables: &'a Tunables) -> Module<'a> {
+    pub fn new(
+        types: &'a ComponentTypesBuilder,
+        tunables: &'a Tunables,
+        features: WasmFeatures,
+    ) -> Module<'a> {
         Module {
             tunables,
             types,
+            features,
             core_types: Default::default(),
             core_imports: Default::default(),
             imported: Default::default(),

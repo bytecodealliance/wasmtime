@@ -35,7 +35,7 @@ use crate::{FuncIndex, GlobalIndex, IndexType, Trap};
 use std::collections::HashMap;
 use std::mem;
 use std::ops::Range;
-use wasm_encoder::{BlockType, Encode, Instruction, Instruction::*, MemArg, ValType};
+use wasm_encoder::{BlockType, Catch, Encode, Instruction, Instruction::*, MemArg, ValType};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 use super::DataModel;
@@ -689,6 +689,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// This allows the host to delay copying the parameters until the callee
     /// signals readiness by clearing its backpressure flag.
     fn compile_async_start_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
+        // Note that unlike `compile_sync_to_sync_adapter` no exception
+        // barrier is emitted here: this function is invoked by the host, so
+        // an exception thrown by any guest code it calls (e.g. `realloc`)
+        // unwinds to the host rather than into another component, and the
+        // host already catches it at that boundary.
         let param_locals = sig
             .params
             .iter()
@@ -712,6 +717,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// callee to caller when that intrinsic is called rather than when the
     /// callee task fully completes (which may happen much later).
     fn compile_async_return_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
+        // As with `compile_async_start_adapter`, no exception barrier is
+        // emitted here: the host invokes this function and already catches
+        // exceptions unwinding out of it.
         let param_locals = sig
             .params
             .iter()
@@ -748,6 +756,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         lower_sig: &Signature,
         lift_sig: &Signature,
     ) {
+        self.enter_exception_barrier(&lower_sig.results);
+
         // Check the instance flags required for this trampoline.
         //
         // This inserts the initial check required by `canon_lower` that the
@@ -901,6 +911,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
                 self.free_temp_local(old_task_may_block);
             }
         }
+
+        self.exit_exception_barrier();
 
         self.finish()
     }
@@ -3865,6 +3877,71 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(I32Const(trap as i32));
         self.instruction(Call(trap_func.as_u32()));
         self.instruction(Unreachable);
+    }
+
+    /// Emits the prologue of an exception barrier wrapping the body of a
+    /// function.
+    ///
+    /// An adapter is the boundary between two components, and the
+    /// component model's canonical ABI specifies that an exception
+    /// which propagates out of a component without being caught
+    /// becomes a trap rather than unwinding into the other
+    /// component. To implement that, the entire body of an adapter
+    /// function is wrapped in a `try_table` whose `catch_all` clause
+    /// traps. This catches exceptions thrown not only by the callee
+    /// itself but also by any other guest functions the adapter
+    /// invokes (e.g. `realloc`).
+    ///
+    /// The generated structure, completed by `exit_exception_barrier`,
+    /// is:
+    ///
+    /// ```wasm
+    /// block (result ...)        ;; carries results past the handler
+    ///   block                   ;; catch_all landing pad
+    ///     try_table (result ...) (catch_all 0)
+    ///       ;; ... body ...
+    ///     end
+    ///     br 1                  ;; done; carry results past the handler
+    ///   end
+    ///   ;; an exception was caught: raise a trap
+    ///   unreachable
+    /// end
+    /// ```
+    ///
+    /// This is only done when the exceptions proposal is enabled.
+    fn enter_exception_barrier(&mut self, results: &[ValType]) {
+        if !self.module.features.exceptions() {
+            return;
+        }
+        let block_ty = match results.len() {
+            0 => BlockType::Empty,
+            1 => BlockType::Result(results[0]),
+            _ => BlockType::FunctionType(self.module.core_types.function(&[], results)),
+        };
+        // Outer block: carries the body's results past the handler.
+        self.instruction(Block(block_ty));
+        // Inner block: the landing pad targeted by the `catch_all` clause.
+        self.instruction(Block(BlockType::Empty));
+        self.instruction(TryTable(block_ty, vec![Catch::All { label: 0 }].into()));
+    }
+
+    /// Emits the epilogue of an exception barrier started with
+    /// `enter_exception_barrier`: the body's results jump past the
+    /// `catch_all` landing pad, which turns a caught exception into a
+    /// trap.
+    fn exit_exception_barrier(&mut self) {
+        if !self.module.features.exceptions() {
+            return;
+        }
+        // End of the `try_table`.
+        self.instruction(End);
+        // Normal completion: jump over the handler, carrying the results.
+        self.instruction(Br(1));
+        // End of the inner block: the `catch_all` landing pad.
+        self.instruction(End);
+        self.trap(Trap::UncaughtException);
+        // End of the outer block; the body's results flow out.
+        self.instruction(End);
     }
 
     /// Flushes out the current `code` instructions into the destination
