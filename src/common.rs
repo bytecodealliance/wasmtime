@@ -14,9 +14,6 @@ use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime::component::Component;
 
 /// Whether or not WASIp3 is enabled by default.
-///
-/// Currently this is disabled (the `&& false`), but that'll get removed in the
-/// future.
 pub const P3_DEFAULT: bool = cfg!(feature = "component-model-async");
 
 #[derive(Clone)]
