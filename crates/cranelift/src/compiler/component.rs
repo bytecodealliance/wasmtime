@@ -1296,7 +1296,8 @@ impl<'a> TrampolineCompiler<'a> {
             );
             self.builder.switch_to_block(uncaught_exception);
             self.builder.seal_block(uncaught_exception);
-            self.builder.ins().trap(TRAP_UNCAUGHT_EXCEPTION);
+            let (mut traps, builder) = self.traps();
+            traps.trap(builder, TRAP_UNCAUGHT_EXCEPTION);
             self.builder.switch_to_block(continuation);
             self.builder.seal_block(continuation);
         }
