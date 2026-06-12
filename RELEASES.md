@@ -49,6 +49,11 @@ Unreleased.
   which can be used to determine which root task performed an import call.
   [#13510](https://github.com/bytecodealliance/wasmtime/pull/13510)
 
+* Wasmtime now supports WASI 0.3.0 by default and the `component-model-async`
+  wasm feature is now enabled by default.
+  [#13612](https://github.com/bytecodealliance/wasmtime/pull/13612)
+
+
 ### Changed
 
 * Performance of bulk-data-transfer instructions such as
@@ -212,6 +217,10 @@ Unreleased.
 * Component-to-component adapters which use resources in arguments and disable
   `concurrency_support` have been fixed.
   [#13542](https://github.com/bytecodealliance/wasmtime/pull/13542)
+
+* A panic in `substituted_component_type` has been fixed when guests have
+  exported resources.
+  [#13608](https://github.com/bytecodealliance/wasmtime/pull/13608)
 
 --------------------------------------------------------------------------------
 
