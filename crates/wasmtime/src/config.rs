@@ -2455,6 +2455,12 @@ impl Config {
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
         );
+        features.set(
+            WasmFeatures::CM_ASYNC,
+            self.tunables
+                .concurrency_support
+                .unwrap_or(cfg!(feature = "component-model-async")),
+        );
 
         // Next disable any features which the current compiler/target do not
         // support. This handles cases where Winch, for example, doesn't

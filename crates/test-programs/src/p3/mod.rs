@@ -6,13 +6,13 @@ wit_bindgen::generate!({
         package wasmtime:test;
 
         world testp3 {
-            include wasi:cli/imports@0.3.0-rc-2026-03-15;
+            include wasi:cli/imports@0.3.0;
             include wasi:tls/imports@0.3.0-draft;
-            import wasi:http/types@0.3.0-rc-2026-03-15;
-            import wasi:http/client@0.3.0-rc-2026-03-15;
-            import wasi:http/handler@0.3.0-rc-2026-03-15;
+            import wasi:http/types@0.3.0;
+            import wasi:http/client@0.3.0;
+            import wasi:http/handler@0.3.0;
 
-            export wasi:cli/run@0.3.0-rc-2026-03-15;
+            export wasi:cli/run@0.3.0;
         }
     ",
     path: [
@@ -32,19 +32,19 @@ pub mod service {
         default_bindings_module: "test_programs::p3::service",
         pub_export_macro: true,
         with: {
-            "wasi:http/handler@0.3.0-rc-2026-03-15": crate::p3::wasi::http::handler,
-            "wasi:http/types@0.3.0-rc-2026-03-15": crate::p3::wasi::http::types,
-            "wasi:http/client@0.3.0-rc-2026-03-15": crate::p3::wasi::http::client,
-            "wasi:random/random@0.3.0-rc-2026-03-15": crate::p3::wasi::random::random,
-            "wasi:random/insecure@0.3.0-rc-2026-03-15": crate::p3::wasi::random::insecure,
-            "wasi:random/insecure-seed@0.3.0-rc-2026-03-15": crate::p3::wasi::random::insecure_seed,
-            "wasi:cli/stdout@0.3.0-rc-2026-03-15": crate::p3::wasi::cli::stdout,
-            "wasi:cli/stderr@0.3.0-rc-2026-03-15": crate::p3::wasi::cli::stderr,
-            "wasi:cli/stdin@0.3.0-rc-2026-03-15": crate::p3::wasi::cli::stdin,
-            "wasi:cli/types@0.3.0-rc-2026-03-15": crate::p3::wasi::cli::types,
-            "wasi:clocks/monotonic-clock@0.3.0-rc-2026-03-15": crate::p3::wasi::clocks::monotonic_clock,
-            "wasi:clocks/system-clock@0.3.0-rc-2026-03-15": crate::p3::wasi::clocks::system_clock,
-            "wasi:clocks/types@0.3.0-rc-2026-03-15": crate::p3::wasi::clocks::types,
+            "wasi:http/handler@0.3.0": crate::p3::wasi::http::handler,
+            "wasi:http/types@0.3.0": crate::p3::wasi::http::types,
+            "wasi:http/client@0.3.0": crate::p3::wasi::http::client,
+            "wasi:random/random@0.3.0": crate::p3::wasi::random::random,
+            "wasi:random/insecure@0.3.0": crate::p3::wasi::random::insecure,
+            "wasi:random/insecure-seed@0.3.0": crate::p3::wasi::random::insecure_seed,
+            "wasi:cli/stdout@0.3.0": crate::p3::wasi::cli::stdout,
+            "wasi:cli/stderr@0.3.0": crate::p3::wasi::cli::stderr,
+            "wasi:cli/stdin@0.3.0": crate::p3::wasi::cli::stdin,
+            "wasi:cli/types@0.3.0": crate::p3::wasi::cli::types,
+            "wasi:clocks/monotonic-clock@0.3.0": crate::p3::wasi::clocks::monotonic_clock,
+            "wasi:clocks/system-clock@0.3.0": crate::p3::wasi::clocks::system_clock,
+            "wasi:clocks/types@0.3.0": crate::p3::wasi::clocks::types,
         },
     });
 }
