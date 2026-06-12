@@ -344,9 +344,11 @@ pub(crate) fn clone_unit<'a>(
                 let frame_info = compilation.function_frame_info(module, func);
                 current_value_range.push(new_stack_len, frame_info);
                 let (symbol, _) = compilation.function(module, func);
-                translated.insert(symbol);
-                current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
-                Some(range_builder)
+                symbol.map(|symbol| {
+                    translated.insert(symbol);
+                    current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
+                    range_builder
+                })
             } else {
                 // FIXME current_scope_ranges.push()
                 None

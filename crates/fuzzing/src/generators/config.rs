@@ -303,6 +303,7 @@ impl Config {
         cfg.codegen.parallel_compilation = Some(false);
 
         cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
+        cfg.debug.symbols = Some(self.wasmtime.debug_symbols);
         cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
         cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
         cfg.opts.signals_based_traps = Some(self.wasmtime.signals_based_traps);
@@ -584,6 +585,7 @@ pub struct WasmtimeConfig {
     opt_level: OptLevel,
     regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
+    debug_symbols: bool,
     canonicalize_nans: bool,
     interruptible: bool,
     pub(crate) consume_fuel: bool,
@@ -878,6 +880,10 @@ impl WasmtimeConfig {
             // memory_may_move is not in MemoryConfig, but gc_heap_may_move
             // must not conflict. Set it to None so the default matches.
             mcfg.gc_heap_may_move = None;
+        }
+
+        if !self.debug_symbols {
+            self.debug_info = false;
         }
     }
 }

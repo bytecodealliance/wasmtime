@@ -694,7 +694,7 @@ impl wasmtime_environ::Compiler for Compiler {
         obj: &mut Object<'static>,
         funcs: &[(String, FuncKey, Box<dyn Any + Send + Sync>)],
         resolve_reloc: &dyn Fn(usize, FuncKey) -> usize,
-    ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
+    ) -> Result<Vec<(Option<SymbolId>, FunctionLoc)>> {
         log::trace!(
             "appending functions to object file: {:#?}",
             funcs.iter().map(|(sym, _, _)| sym).collect::<Vec<_>>()
@@ -878,7 +878,7 @@ impl wasmtime_environ::Compiler for Compiler {
         get_func: &'a dyn Fn(
             StaticModuleIndex,
             DefinedFuncIndex,
-        ) -> (SymbolId, &'a (dyn Any + Send + Sync)),
+        ) -> (Option<SymbolId>, &'a (dyn Any + Send + Sync)),
         dwarf_package_bytes: Option<&'a [u8]>,
         tunables: &'a Tunables,
     ) -> Result<()> {
@@ -922,7 +922,7 @@ impl wasmtime_environ::Compiler for Compiler {
             let section_id = *dwarf_sections_ids.get(name).unwrap();
             for reloc in relocs {
                 let target_symbol = match reloc.target {
-                    DwarfSectionRelocTarget::Func(id) => compilation.symbol_id(id),
+                    DwarfSectionRelocTarget::Func(id) => compilation.symbol_id(id).unwrap(),
                     DwarfSectionRelocTarget::Section(name) => {
                         obj.section_symbol(dwarf_sections_ids[name])
                     }

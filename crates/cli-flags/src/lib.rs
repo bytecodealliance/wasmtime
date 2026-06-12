@@ -319,6 +319,8 @@ wasmtime_option_group! {
         pub inherit_stderr: Option<bool>,
         /// Maximum number of frames to capture in backtraces.
         pub max_backtrace: Option<usize>,
+        /// Whether or not `*.cwasm` files have symbols in them.
+        pub symbols: Option<bool>,
     }
 
     enum Debug {
@@ -973,6 +975,9 @@ impl CommonOptions {
                     config.wasm_backtrace_max_frames(Some(amt));
                 }
             }
+        }
+        if let Some(enable) = self.debug.symbols {
+            config.debug_symbols(enable);
         }
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);

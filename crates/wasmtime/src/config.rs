@@ -439,6 +439,29 @@ impl Config {
         self
     }
 
+    /// Whether or not symbols are located in generated compiled module
+    /// artifacts.
+    ///
+    /// Wasmtime's currently representation of compiled artifacts is an ELF
+    /// file. ELF files have symbol tables and such and this option enables
+    /// whether symbols are emitted for wasm functions. This utility can be
+    /// useful when profiling wasm modules (many profilers work with
+    /// ELF-in-memory by default without futher configuration), introspection of
+    /// a `*.cwasm` (e.g. the symbol table is what `wasmtime objdump` reads), or
+    /// just general binary analysis of the result ELF file. Large wasm modules
+    /// can have large symbol tables, however, and the symbols serve no purpose
+    /// at runtime meaning that they are pure overhead for minimal module as
+    /// well. This option can be used to disable these symbols which will reduce
+    /// the debuggability of modules but will also reduce their size.
+    ///
+    /// This option is `true` by default.
+    ///
+    /// This option is required if [`Config::debug_info`] is enabled.
+    pub fn debug_symbols(&mut self, enable: bool) -> &mut Self {
+        self.tunables.debug_symbols = Some(enable);
+        self
+    }
+
     /// Configures whether compiled guest code will be instrumented to
     /// provide debugging at the Wasm VM level.
     ///
@@ -2722,6 +2745,10 @@ impl Config {
                     tunables.gc_heap_may_move,
                 );
             }
+        }
+
+        if tunables.debug_native && !tunables.debug_symbols {
+            bail!("cannot enable native debug info while debug symbols are disabled");
         }
 
         Ok((tunables, features))
