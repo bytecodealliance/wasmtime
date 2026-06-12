@@ -3,10 +3,7 @@
 set -euxo pipefail
 
 # Pinned package sources.
-#
-# asli is pinned to a commit, not a release: the symbolic-EXTR fix (PR #152) is
-# merged upstream but not yet in a tagged release.
-aslp="https://github.com/UQ-PAC/aslp.git#3b302bd1be7c860888471fdbdf735a5462970d9a"
+aslp="https://github.com/UQ-PAC/aslp.git#0.3.4"
 aslp_rpc="https://github.com/UQ-PAC/aslp-rpc.git#v0.1.4"
 
 switch="${ASLP_SWITCH:-aslp}"
