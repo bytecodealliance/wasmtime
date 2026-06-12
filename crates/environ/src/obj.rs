@@ -75,27 +75,13 @@ pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
 /// encodes the ability to map an offset in the text section to the trap code
 /// that it corresponds to.
 ///
-/// This section is used at runtime to determine what flavor of trap happened to
-/// ensure that embedders and debuggers know the reason for the wasm trap. The
-/// encoding of this section is custom to Wasmtime and managed with helpers in
-/// the `object` crate:
+/// This section is used at runtime to determine what flavor of trap happened
+/// to ensure that embedders and debuggers know the reason for the wasm trap.
 ///
-/// * First the section has a 32-bit little endian integer indicating how many
-///   trap entries are in the section.
-/// * Next is an array, of the same length as read before, of 32-bit
-///   little-endian integers. These integers are offsets into the text section
-///   of the compilation image.
-/// * Finally is the same count number of bytes. Each of these bytes corresponds
-///   to a trap code.
-///
-/// This section is decoded by `lookup_trap_code` below which will read the
-/// section count, slice some bytes to get the various arrays, and then perform
-/// a binary search on the offsets array to find the index corresponding to
-/// the pc being looked up. If found the same index in the trap array (the array
-/// of bytes) is the trap code for that offset.
-///
-/// Note that at this time this section has an alignment of 1. Additionally due
-/// to the 32-bit encodings for offsets this doesn't support images >=4gb.
+/// This section's format is defined by the documentation of the
+/// `crate::compile::TrapEncodingBuilder` data structure, which builds it. It
+/// is decoded by `lookup_trap_code`. Its offsets are relative to the start of
+/// the text section.
 pub const ELF_WASMTIME_TRAPS: &str = ".wasmtime.traps";
 
 /// A custom binary-encoded section of the wasmtime compilation
