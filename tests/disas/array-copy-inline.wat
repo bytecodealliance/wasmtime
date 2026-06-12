@@ -69,21 +69,12 @@
 ;; @002a                               v70 = uadd_overflow_trap v52, v92, user2  ; v92 = 28
 ;; @002a                               v71 = icmp ugt v70, v62
 ;; @002a                               trapnz v71, user2
-<<<<<<< HEAD
-;; @002a                               v72 = load.i8x16 notrap aligned little v52
-;; @002a                               v73 = load.i64 notrap aligned little v52+16
-;; @002a                               v74 = load.i32 notrap aligned little v52+24
-;; @002a                               store notrap aligned little v72, v29
-;; @002a                               store notrap aligned little v73, v29+16
-;; @002a                               store notrap aligned little v74, v29+24
-=======
 ;; @002a                               v72 = load.i8x16 notrap aligned little region1 v52
 ;; @002a                               v73 = load.i64 notrap aligned little region1 v52+16
 ;; @002a                               v74 = load.i32 notrap aligned little region1 v52+24
 ;; @002a                               store notrap aligned little region1 v72, v29
 ;; @002a                               store notrap aligned little region1 v73, v29+16
 ;; @002a                               store notrap aligned little region1 v74, v29+24
->>>>>>> main
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
