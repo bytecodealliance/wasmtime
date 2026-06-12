@@ -62,19 +62,7 @@ pub fn add_to_linker<T>(linker: &mut Linker<T>) -> wasmtime::Result<()>
 where
     T: WasiCliView + 'static,
 {
-    let exit_options = exit::LinkOptions::default();
-    add_to_linker_with_options(linker, &exit_options)
-}
-
-/// Similar to [`add_to_linker`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options<T>(
-    linker: &mut Linker<T>,
-    exit_options: &exit::LinkOptions,
-) -> wasmtime::Result<()>
-where
-    T: WasiCliView + 'static,
-{
-    exit::add_to_linker::<_, WasiCli>(linker, exit_options, T::cli)?;
+    exit::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     environment::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     stdin::add_to_linker::<_, WasiCli>(linker, T::cli)?;
     stdout::add_to_linker::<_, WasiCli>(linker, T::cli)?;
