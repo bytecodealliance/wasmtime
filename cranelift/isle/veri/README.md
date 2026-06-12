@@ -38,6 +38,31 @@ Alternatively, on Linux or MacOS you can install from Github release with:
 
 If you use this method, ensure that `<install_path>/bin` is on your `$PATH`.
 
+## Configuration files
+
+Rather than configuring arguments on the command line, you can store
+them in a configuration file and point the verifier at it with `--config`:
+
+```
+cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-default-excludes.args
+```
+
+A configuration file lists one or more per line command-line arguments per line.
+Blank lines and anything following a `#` (whole-line or trailing comments) are
+ignored. The arguments from the file are applied *before* any passed on the
+command line, so the command line always takes precedence (for example, you can
+reuse a config but override its `--timeout`). Multi-valued arguments such as
+`--filter` accumulate, while single-valued arguments (like `--name`) take their
+last value.
+
+Three example configurations live in [`configs/`](configs):
+
+| File                              | Equivalent to                                                       |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `aarch64-fast.args`               | `--default-excludes` (the default AArch64 run, see below)           |
+| `aarch64.args`                    | the default AArch64 excludes but with `slow` expansions included    |
+| `x64-iadd-base-case.args`         | `--name x64 --rule iadd_base_case_32_or_64_lea` (the x64 example below) |
+
 ## Running for `aarch64`
 
 To run the verifier, run:

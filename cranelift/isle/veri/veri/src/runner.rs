@@ -445,14 +445,14 @@ pub struct RunSummary {
 
 impl RunSummary {
     pub fn print(&self) {
-        println!("=== verification summary ===");
+        println!("============================= Verification summary ============================");
         println!("Total expansions:    {}", self.total_expansions);
-        println!("In scope:            {}", self.in_scope);
+        println!("In scope expansions: {}", self.in_scope);
         println!("Type instantiations: {}", self.total_instantiations);
         println!("Applicable:          {}", self.applicable);
         println!("Verification passed: {}", self.success);
         println!("Verification failed: {}", self.failure);
-        println!("============================");
+        println!("===============================================================================");
     }
 }
 
@@ -811,7 +811,7 @@ impl Runner {
             let mut summary =
                 Self::open_log_file(self.log_dir.clone(), "unreachable_warnings.out").ok();
             eprintln!(
-                "=== Unreachable expansion warnings ({n}) (only reachable to the right of excluded rules; see {dir}/unreachable_warnings.out) ===",
+                "Unreachable expansion warnings ({n}) (only reachable to the right of excluded rules; see {dir}/unreachable_warnings.out)",
                 n = suppressed.len(),
                 dir = self.log_dir.display(),
             );

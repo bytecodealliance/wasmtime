@@ -1,12 +1,29 @@
+use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{Result, format_err};
+use anyhow::{Context as _, Result, format_err};
 use clap::{ArgAction, Parser};
 use cranelift_codegen_meta::{generate_isle, isle::get_isle_compilations};
 use cranelift_isle_veri::runner::{Filter, Runner, SolverBackend, SolverRule};
 
+/// Configuration file applied by default when no `--config` is given.
+const DEFAULT_CONFIG: &str = "cranelift/isle/veri/configs/aarch64-fast.args";
+
 #[derive(Parser)]
+// Allow a single-valued argument to appear more than once, with the last
+// occurrence winning. This lets a value set in a `--config` file  be overridden
+// on the command line. Multi-valued arguments such as `--filter` still accumulate.
+#[command(args_override_self = true)]
 struct Opts {
+    /// Read additional arguments from one or more configuration files.
+    ///
+    /// Each file lists command-line arguments, one or more per line (blank
+    /// lines and `#` comments are ignored). The arguments are applied before
+    /// those given directly on the command line, so anything passed on the
+    /// command line overrides the configuration.
+    #[arg(long = "config", value_name = "FILE")]
+    config: Vec<std::path::PathBuf>,
+
     /// Name of the ISLE compilation.
     #[arg(long, default_value = "aarch64")]
     name: String,
@@ -98,9 +115,63 @@ impl Opts {
     }
 }
 
+/// Collect the paths passed via `--config` directly from the raw arguments.
+fn collect_config_paths(args: &[String]) -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if let Some(path) = arg.strip_prefix("--config=") {
+            paths.push(std::path::PathBuf::from(path));
+        } else if arg == "--config" {
+            if let Some(path) = args.next() {
+                paths.push(std::path::PathBuf::from(path));
+            }
+        }
+    }
+    paths
+}
+
+/// Read a configuration file into a list of arguments. Each line may contain
+/// one or more whitespace-separated arguments. Blank lines are ignored, as is
+/// any text following a `#`
+fn read_config_args(path: &Path) -> Result<Vec<String>> {
+    let contents = std::fs::read_to_string(path)
+        .with_context(|| format!("reading config file {}", path.display()))?;
+    let mut args = Vec::new();
+    for line in contents.lines() {
+        // Strip trailing (or whole-line) comment.
+        let line = match line.split_once('#') {
+            Some((before, _)) => before,
+            None => line,
+        };
+        for token in line.split_whitespace() {
+            args.push(token.to_string());
+        }
+    }
+    Ok(args)
+}
+
 fn main() -> Result<()> {
     env_logger::builder().format_target(false).init();
-    let opts = Opts::parse();
+
+    // Expand any `--config` files into the argument list before parsing.
+    // Configuration arguments are placed ahead of the arguments given on the
+    // command line so that the command line takes precedence.
+    let raw: Vec<String> = std::env::args().collect();
+    let mut config_paths = collect_config_paths(&raw[1..]);
+    if config_paths.is_empty() {
+        config_paths.push(std::path::PathBuf::from(DEFAULT_CONFIG));
+    }
+    let opts = if config_paths.is_empty() {
+        Opts::parse()
+    } else {
+        let mut combined = vec![raw[0].clone()];
+        for path in &config_paths {
+            combined.extend(read_config_args(path)?);
+        }
+        combined.extend(raw[1..].iter().cloned());
+        Opts::parse_from(combined)
+    };
 
     // Setup thread pool.
     //
@@ -194,7 +265,7 @@ fn main() -> Result<()> {
 
     // Summarize what is being excluded and where output is going before
     // starting verification.
-    println!("=== veri configuration ===");
+    println!("========================== Verification configuration =========================");
     println!("Number of threads:  {}", rayon::current_num_threads());
     println!("Working directory:  {}", work_dir.display());
     println!("Log directory:      {}", log_dir.display());
