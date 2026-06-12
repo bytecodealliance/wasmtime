@@ -34,7 +34,9 @@ cfg_if::cfg_if! {
         use unix as imp;
         mod stackswitch;
     } else {
-        compile_error!("fibers are not supported on this platform");
+        mod nostd;
+        use nostd as imp;
+        mod stackswitch;
     }
 }
 
