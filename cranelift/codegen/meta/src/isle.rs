@@ -68,7 +68,10 @@ impl IsleCompilation {
         for entry in std::fs::read_dir(input).map_err(|e| {
             std::io::Error::new(
                 e.kind(),
-                format!("failed to read ISLE input directory {}: {e}", input.display()),
+                format!(
+                    "failed to read ISLE input directory {}: {e}",
+                    input.display()
+                ),
             )
         })? {
             let path = entry?.path();
