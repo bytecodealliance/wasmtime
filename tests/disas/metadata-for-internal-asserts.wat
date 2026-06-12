@@ -20,8 +20,8 @@
 ;;       movl    (%rsi), %eax
 ;;       cmpl    $0x65726f63, %eax
 ;;       jne     0x70
-;;   22: movq    8(%rsi), %rax
-;;       movq    %rbp, %rcx
+;;   22: movq    %rbp, %rcx
+;;       movq    8(%rsi), %rax
 ;;       movq    %rcx, 0x30(%rax)
 ;;       movq    %rbp, %rcx
 ;;       movq    8(%rcx), %rcx

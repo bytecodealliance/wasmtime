@@ -914,21 +914,12 @@ pub(crate) fn tag_address<'a>(
 ) -> ir::Value {
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let tag_index = wasmtime_environ::TagIndex::from_u32(index);
-    let pointer_type = env.pointer_type();
     if let Some(def_index) = env.module.defined_tag_index(tag_index) {
         let offset = i32::try_from(env.offsets.vmctx_vmtag_definition(def_index)).unwrap();
         builder.ins().iadd_imm_s(vmctx, i64::from(offset))
     } else {
-        let from_offset = env.offsets.vmctx_vmtag_import_from(tag_index);
-        let region = env.vmctx_alias_region(builder.func, from_offset);
-        builder.ins().load(
-            pointer_type,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_alias_region(Some(region)),
-            vmctx,
-            ir::immediates::Offset32::new(i32::try_from(from_offset).unwrap()),
-        )
+        env.alias_regions
+            .vmctx_vmtag_import_from(&mut builder.cursor(), vmctx, tag_index)
     }
 }
 
@@ -943,14 +934,9 @@ pub fn vmctx_load_stack_chain<'a>(
     let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
-    let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
-    let region = env.vmctx_alias_region(builder.func, vm_store_context_offset.into());
-    let vm_store_context = builder.ins().load(
-        env.pointer_type(),
-        MemFlagsData::trusted().with_alias_region(Some(region)),
-        vmctx,
-        vm_store_context_offset,
-    );
+    let vm_store_context = env
+        .alias_regions
+        .vmctx_store_context(&mut builder.cursor(), vmctx);
 
     VMStackChain::load(
         env,
@@ -972,14 +958,9 @@ pub fn vmctx_store_stack_chain<'a>(
     let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
-    let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
-    let region = env.vmctx_alias_region(builder.func, vm_store_context_offset.into());
-    let vm_store_context = builder.ins().load(
-        env.pointer_type(),
-        MemFlagsData::trusted().with_alias_region(Some(region)),
-        vmctx,
-        vm_store_context_offset,
-    );
+    let vm_store_context = env
+        .alias_regions
+        .vmctx_store_context(&mut builder.cursor(), vmctx);
 
     stack_chain.store(env, builder, vm_store_context, stack_chain_offset)
 }
@@ -994,26 +975,6 @@ pub fn vmctx_set_active_continuation<'a>(
 ) {
     let chain = VMStackChain::from_continuation(env, builder, contref);
     vmctx_store_stack_chain(env, builder, vmctx, &chain)
-}
-
-pub fn vmctx_load_vm_runtime_limits_ptr<'a>(
-    env: &mut crate::func_environ::FuncEnvironment<'a>,
-    builder: &mut FunctionBuilder,
-    vmctx: ir::Value,
-) -> ir::Value {
-    let pointer_type = env.pointer_type();
-    let store_ctx_offset = env.offsets.ptr.vmctx_store_context();
-    let region = env.vmctx_alias_region(builder.func, store_ctx_offset.into());
-
-    // The *pointer* to the VMRuntimeLimits does not change within the
-    // same function, allowing us to set the `read_only` flag.
-    let flags = ir::MemFlagsData::trusted()
-        .with_readonly()
-        .with_alias_region(Some(region));
-
-    builder
-        .ins()
-        .load(pointer_type, flags, vmctx, i32::from(store_ctx_offset))
 }
 
 /// This function generates code that searches for a handler for `tag_address`,
@@ -1372,7 +1333,9 @@ pub(crate) fn translate_resume<'a>(
         // as well as the `VMRuntimeLimits`.
         // See the comment on `wasmtime_environ::VMStackChain` for a description
         // of the invariants that we maintain for the various stack limits.
-        let vm_runtime_limits_ptr = vmctx_load_vm_runtime_limits_ptr(env, builder, vmctx);
+        let vm_runtime_limits_ptr = env
+            .alias_regions
+            .vmctx_store_context(&mut builder.cursor(), vmctx);
         parent_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, true);
         resume_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
@@ -1771,7 +1734,9 @@ pub(crate) fn translate_switch<'a>(
 
         // Load current runtime limits from `VMContext` and store in the
         // switcher continuation.
-        let vm_runtime_limits_ptr = vmctx_load_vm_runtime_limits_ptr(env, builder, vmctx);
+        let vm_runtime_limits_ptr = env
+            .alias_regions
+            .vmctx_store_context(&mut builder.cursor(), vmctx);
         switcher_contref_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, false);
 
         let revision = switcher_contref.get_revision(env, builder);

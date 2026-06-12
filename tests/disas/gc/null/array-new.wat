@@ -15,7 +15,7 @@
 ;;     region2 = 2147483648 "GcHeap"
 ;;     region3 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
@@ -39,7 +39,7 @@
 ;; @0022                               v14 = iconst.i32 -67108864
 ;; @0022                               v15 = band v12, v14  ; v14 = -67108864
 ;; @0022                               trapnz v15, user18
-;; @0022                               v16 = load.i64 notrap aligned readonly region1 v0+32
+;; @0022                               v16 = load.i64 notrap aligned readonly can_move region1 v0+32
 ;; @0022                               v17 = load.i32 user2 region2 v16
 ;;                                     v94 = iconst.i32 7
 ;; @0022                               v20 = uadd_overflow_trap v17, v94, user18  ; v94 = 7

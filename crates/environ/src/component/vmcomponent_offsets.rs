@@ -16,6 +16,7 @@
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
+use crate::GetPtrSize;
 use crate::PtrSize;
 use crate::component::*;
 
@@ -74,6 +75,15 @@ pub struct VMComponentOffsets<P> {
     post_returns: u32,
     resource_destructors: u32,
     size: u32,
+}
+
+impl<P: PtrSize> GetPtrSize for VMComponentOffsets<P> {
+    type Ptr = P;
+
+    #[inline]
+    fn get_ptr_size(&self) -> &Self::Ptr {
+        &self.ptr
+    }
 }
 
 #[inline]

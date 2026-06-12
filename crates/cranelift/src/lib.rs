@@ -37,7 +37,7 @@ pub use obj::*;
 mod compiled_function;
 pub use compiled_function::*;
 
-mod alias_region_key;
+mod alias_region;
 mod bounds_checks;
 mod builder;
 mod compiler;

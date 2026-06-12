@@ -1,6 +1,8 @@
 //! Compilation support for the component model.
 
-use crate::alias_region_key::{AliasRegionKey, VmType};
+use std::marker::PhantomData;
+
+use crate::alias_region::AliasRegions;
 use crate::func_environ::BuiltinFunctions;
 use crate::trap::TranslateTrap;
 use crate::{
@@ -11,6 +13,7 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlagsData, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
+use wasmtime_environ::GetPtrSize;
 use wasmtime_environ::error::{Result, bail};
 use wasmtime_environ::{
     Abi, BuiltinFunctionIndex, CompiledFunctionBody, EntityRef, FuncKey, HostCall, PanicOnOom as _,
@@ -28,6 +31,7 @@ struct TrampolineCompiler<'a> {
     block0: ir::Block,
     signature: &'a WasmFuncType,
     builtins: BuiltinFunctions,
+    alias_regions: AliasRegions<VMComponentOffsets<u8>>,
 }
 
 /// What host functions can be called, used in `translate_hostcall` below.
@@ -111,16 +115,18 @@ impl<'a> TrampolineCompiler<'a> {
             crate::wasm_call_signature(isa, signature, &compiler.tunables),
         );
         let (builder, block0) = func_compiler.builder(func);
+        let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
         TrampolineCompiler {
             compiler,
             isa,
             builder,
             component,
             types,
-            offsets: VMComponentOffsets::new(isa.pointer_bytes(), component),
+            offsets,
             block0,
             signature,
             builtins: BuiltinFunctions::new(compiler),
+            alias_regions: AliasRegions::new(offsets),
         }
     }
 
@@ -1427,8 +1433,12 @@ impl<'a> TrampolineCompiler<'a> {
 
     fn raise_if_host_trapped(&mut self, succeeded: ir::Value) {
         let caller_vmctx = self.caller_vmctx();
-        self.compiler
-            .raise_if_host_trapped(&mut self.builder, caller_vmctx, succeeded);
+        self.compiler.raise_if_host_trapped(
+            &mut self.builder,
+            &mut self.alias_regions,
+            caller_vmctx,
+            succeeded,
+        );
     }
 
     fn raise_if_transcode_trapped(&mut self, amount_copied: ir::Value) {
@@ -1548,12 +1558,18 @@ impl<'a> TrampolineCompiler<'a> {
         traps.trapz(builder, may_leave_bit, TRAP_CANNOT_LEAVE_COMPONENT);
     }
 
-    fn traps(&mut self) -> (TrapTranslator<'_>, &mut FunctionBuilder<'a>) {
+    fn traps(
+        &mut self,
+    ) -> (
+        TrapTranslator<'_, VMComponentOffsets<u8>>,
+        &mut FunctionBuilder<'a>,
+    ) {
         (
             TrapTranslator {
                 compiler: self.compiler,
                 vmctx: self.caller_vmctx(),
                 builtins: &mut self.builtins,
+                alias_regions: &mut self.alias_regions,
             },
             &mut self.builder,
         )
@@ -1570,42 +1586,32 @@ impl<'a> TrampolineCompiler<'a> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self) -> ir::Value {
         let caller_vmctx = self.abi_load_params()[1];
-        let offset = self.offsets.ptr.vmctx_store_context();
-        let region = self.builder.func.dfg.alias_regions.insert(
-            AliasRegionKey::Vm {
-                ty: VmType::VMContext,
-                offset: offset.into(),
-            }
-            .into(),
-        );
-        self.builder.ins().load(
-            self.isa.pointer_type(),
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_alias_region(Some(region))
-                .with_can_move(),
-            caller_vmctx,
-            i32::from(offset),
-        )
+        self.alias_regions
+            .vmctx_store_context(&mut self.builder.cursor(), caller_vmctx)
     }
 }
 
 // XXX: we can't implement this for `TrampolineCompiler` directly because it
 // stores `FunctionBuilder` internally, but this needs to take the builder as an
 // argument.
-struct TrapTranslator<'a> {
+struct TrapTranslator<'a, O: GetPtrSize> {
     compiler: &'a Compiler,
     vmctx: ir::Value,
+    alias_regions: &'a mut AliasRegions<O>,
     builtins: &'a mut BuiltinFunctions,
 }
 
-impl TranslateTrap for TrapTranslator<'_> {
+impl<O: GetPtrSize> TranslateTrap<O> for TrapTranslator<'_, O> {
     fn compiler(&self) -> &Compiler {
         self.compiler
     }
 
     fn vmctx_val(&mut self, _: &mut FuncCursor<'_>) -> ir::Value {
         self.vmctx
+    }
+
+    fn alias_regions(&mut self) -> &mut AliasRegions<O> {
+        self.alias_regions
     }
 
     fn builtin_funcref(
@@ -1617,7 +1623,7 @@ impl TranslateTrap for TrapTranslator<'_> {
     }
 }
 
-fn checked_native_addr<T: TranslateTrap>(
+fn checked_native_addr<T: TranslateTrap<O>, O: GetPtrSize>(
     traps: &mut T,
     builder: &mut FunctionBuilder<'_>,
     isa: &(dyn TargetIsa + 'static),
@@ -1697,8 +1703,17 @@ impl ComponentCompiler for Compiler {
                     FuncKey::ComponentTrampoline(Abi::Wasm, trampoline_index),
                     sig,
                     symbol,
-                    offsets.vm_store_context(),
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                    |_alias_regions, pointer_type, cursor, vmctx| {
+                        // TODO: `VMComponentContext` doesn't have its own alias
+                        // region or helpers yet.
+                        cursor.ins().load(
+                            pointer_type,
+                            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+                            vmctx,
+                            i32::try_from(offsets.vm_store_context()).unwrap(),
+                        )
+                    },
                 )?);
             }
 
@@ -1719,6 +1734,7 @@ impl ComponentCompiler for Compiler {
         let pointer_type = self.isa.pointer_type();
         self.debug_assert_vmctx_kind(
             &mut c.builder,
+            &mut c.alias_regions,
             vmctx,
             wasmtime_environ::component::VMCOMPONENT_MAGIC,
         );
@@ -1769,8 +1785,17 @@ impl ComponentCompiler for Compiler {
                     FuncKey::UnsafeIntrinsic(Abi::Wasm, intrinsic),
                     &wasm_func_ty,
                     symbol,
-                    offsets.vm_store_context(),
                     wasmtime_environ::component::VMCOMPONENT_MAGIC,
+                    |_alias_regions, pointer_type, cursor, vmctx| {
+                        // TODO: `VMComponentContext` doesn't have its own alias
+                        // region or helpers yet.
+                        cursor.ins().load(
+                            pointer_type,
+                            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+                            vmctx,
+                            i32::try_from(offsets.vm_store_context()).unwrap(),
+                        )
+                    },
                 )?);
             }
 
@@ -1805,6 +1830,7 @@ impl ComponentCompiler for Compiler {
             builder,
             ptr,
             traps: &mut traps,
+            phantom: PhantomData,
         };
         match intrinsic_compiler.translate(intrinsic, &params)? {
             Some(value) => c.abi_store_results(&[value]),
@@ -2048,14 +2074,23 @@ impl TrampolineCompiler<'_> {
 /// This type itself is more of a context type of sorts where it maintains
 /// little-to-no state and instead just weaves together all that's necessary for
 /// translating an intrinsic.
-pub struct UnsafeIntrinsicCompiler<'a, 'b, T: TranslateTrap> {
+pub struct UnsafeIntrinsicCompiler<'a, 'b, T, O>
+where
+    T: TranslateTrap<O>,
+    O: GetPtrSize,
+{
     pub isa: &'a (dyn TargetIsa + 'static),
     pub builder: &'a mut FunctionBuilder<'b>,
     pub ptr: u8,
     pub traps: &'a mut T,
+    pub phantom: PhantomData<O>,
 }
 
-impl<T: TranslateTrap> UnsafeIntrinsicCompiler<'_, '_, T> {
+impl<T, O> UnsafeIntrinsicCompiler<'_, '_, T, O>
+where
+    T: TranslateTrap<O>,
+    O: GetPtrSize,
+{
     /// Translates the `intrinsic` provided which is provided `params` as
     /// arguments.
     ///
@@ -2108,23 +2143,10 @@ impl<T: TranslateTrap> UnsafeIntrinsicCompiler<'_, '_, T> {
                 let store_ctx = self.load_vm_store_context(params);
 
                 // Load the `*mut T` out of the `VMStoreContext`.
-                let offset = self.ptr.vmstore_context_store_data();
-                let region = self.builder.func.dfg.alias_regions.insert(
-                    AliasRegionKey::Vm {
-                        ty: VmType::VMStoreContext,
-                        offset: offset.into(),
-                    }
-                    .into(),
-                );
-                let data_address = self.builder.ins().load(
-                    pointer_type,
-                    ir::MemFlagsData::trusted()
-                        .with_readonly()
-                        .with_alias_region(Some(region))
-                        .with_can_move(),
-                    store_ctx,
-                    i32::from(offset),
-                );
+                let data_address = self
+                    .traps
+                    .alias_regions()
+                    .vmstore_context_store_data(&mut self.builder.cursor(), store_ctx);
 
                 // Zero-extend the address if we are on a 32-bit architecture.
                 let data_address = match pointer_type.bits() {
@@ -2392,23 +2414,9 @@ impl<T: TranslateTrap> UnsafeIntrinsicCompiler<'_, '_, T> {
     /// `VMComponentContext` if it's otherwise unused.
     fn load_vm_store_context(&mut self, params: &[ir::Value]) -> ir::Value {
         let caller_vmctx = params[1];
-        let offset = self.ptr.vmctx_store_context();
-        let region = self.builder.func.dfg.alias_regions.insert(
-            AliasRegionKey::Vm {
-                ty: VmType::VMContext,
-                offset: offset.into(),
-            }
-            .into(),
-        );
-        self.builder.ins().load(
-            self.isa.pointer_type(),
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_alias_region(Some(region))
-                .with_can_move(),
-            caller_vmctx,
-            i32::from(offset),
-        )
+        self.traps
+            .alias_regions()
+            .vmctx_store_context(&mut self.builder.cursor(), caller_vmctx)
     }
 }
 
