@@ -326,6 +326,8 @@
 ;; Get the type of each lane in the given type.
 (decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
+;; For now: single-lane, non-vector types assumed here
+(spec (lane_type ty) (provide (= result ty)))
 
 ;; Get a type with the same element type, but half the number of lanes.
 (decl pure partial ty_half_lanes (Type) Type)
@@ -336,6 +338,7 @@
 (extern constructor ty_half_width ty_half_width)
 
 ;; Generate a mask for the maximum shift amount for a given type. i.e 31 for I32.
+(attr ty_shift_mask (tag TODO)) ; not currently used for aarch64
 (decl pure ty_shift_mask (Type) u64)
 (rule (ty_shift_mask ty) (u64_sub (ty_bits (lane_type ty)) 1))
 
@@ -362,6 +365,8 @@
 (extern constructor mem_flags_intern mem_flags_intern)
 
 ;; Returns the trusted MemFlagsData value directly (for helpers that still take MemFlagsData).
+(spec (mem_flags_trusted_data)
+      (provide (:aligned result) (= (:trapcode result) #b1111)))
 (decl pure mem_flags_trusted_data () MemFlagsData)
 (extern constructor mem_flags_trusted_data mem_flags_trusted_data)
 
@@ -800,3 +805,4 @@
 (spec (u64_wrapping_sub x y) (provide (= result (bvsub x y))))
 (spec (u64_wrapping_add x y) (provide (= result (bvadd x y))))
 (spec (u64_gt x y) (provide (bvugt x y)))
+(spec (u32_lt_eq x y) (provide (bvule x y)))

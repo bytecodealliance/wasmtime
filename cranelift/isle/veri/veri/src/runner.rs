@@ -422,6 +422,40 @@ pub struct FailureRecord {
     pub failure_path: PathBuf,
 }
 
+/// An expansion that could not be processed at all (for example, because a term
+/// it reaches has no spec). Recorded and reported rather than aborting the run,
+/// so a single un-verifiable expansion does not hide coverage of the rest.
+#[derive(Debug, Clone)]
+pub struct ExpansionError {
+    pub expansion_id: usize,
+    pub description: String,
+    pub message: String,
+}
+
+/// High-level counts for a single verification run, for printing summary stats.
+#[derive(Debug, Clone, Default)]
+pub struct RunSummary {
+    pub total_expansions: usize,
+    pub total_instantiations: usize,
+    pub in_scope: usize,
+    pub applicable: usize,
+    pub success: usize,
+    pub failure: usize,
+}
+
+impl RunSummary {
+    pub fn print(&self) {
+        println!("=== verification summary ===");
+        println!("Total expansions:    {}", self.total_expansions);
+        println!("In scope:            {}", self.in_scope);
+        println!("Type instantiations: {}", self.total_instantiations);
+        println!("Applicable:          {}", self.applicable);
+        println!("Verification passed: {}", self.success);
+        println!("Verification failed: {}", self.failure);
+        println!("============================");
+    }
+}
+
 #[derive(Serialize)]
 pub struct Report {
     build_profile: String,
@@ -477,6 +511,26 @@ impl Runner {
 
     pub fn set_root_term(&mut self, term: &str) {
         self.root_term = Some(term.to_string());
+    }
+
+    /// Restrict verification to the expansions that contain the named rule.
+    ///
+    /// Expansion is seeded from the rule's root term, so the rule is reached
+    /// even when that root term has no standalone spec (and would therefore not
+    /// be seeded by the default all-roots behaviour). A filter is then added so
+    /// that, of the expansions generated from that root, only the ones actually
+    /// containing the named rule are verified.
+    pub fn set_root_rule(&mut self, name: &str) -> Result<()> {
+        let rule = self
+            .prog
+            .get_rule_by_identifier(name)
+            .ok_or_else(|| format_err!("unknown rule '{name}'"))?;
+        let root_term = self.prog.term_name(rule.root_term).to_string();
+        self.root_term = Some(root_term);
+        self.filter(Filter::exclude(ExpansionPredicate::Not(Box::new(
+            ExpansionPredicate::ContainsRule(name.to_string()),
+        ))));
+        Ok(())
     }
 
     pub fn filter(&mut self, filter: Filter) {
@@ -542,7 +596,7 @@ impl Runner {
         self.debug = debug;
     }
 
-    pub fn run(&self) -> Result<()> {
+    pub fn run(&self) -> Result<RunSummary> {
         // Clean log directory.
         if self.log_dir.exists() {
             std::fs::remove_dir_all(&self.log_dir)?;
@@ -556,23 +610,37 @@ impl Runner {
         // TODO(mbm): don't hardcode the expansion configuration
         let chaining = Chaining::new(&self.prog, &self.term_rule_sets)?;
         chaining.validate()?;
+
+        // Determine the default set of root terms, using `chaining` before it
+        // is moved into the expander.
+        let used_terms: BTreeSet<TermId> = self
+            .term_rule_sets
+            .values()
+            .flat_map(crate::reachability::used_terms)
+            .collect();
+        let default_roots: Vec<TermId> = match &self.root_term {
+            Some(_) => Vec::new(),
+            None => self
+                .term_rule_sets
+                .keys()
+                .copied()
+                .filter(|&term_id| {
+                    self.prog.term(term_id).has_constructor()
+                        && (self.prog.specenv.has_spec(term_id)
+                            || !chaining.is_chainable(term_id)
+                            || !used_terms.contains(&term_id))
+                })
+                .collect(),
+        };
+
         let mut expander = Expander::new(&self.prog, &self.term_rule_sets, chaining);
         match &self.root_term {
             // Scope expansion to a single explicitly configured root term.
             Some(root_term) => expander.add_root_term_name(root_term)?,
-            // Default: seed an expansion at every term that has rules, a
-            // constructor, and an explicit specification. Terms without a spec
-            // are not verified standalone: they are assumed to be part of some
-            // real chain and are reached only by being chained (inlined) into a
-            // specified root's expansion. Sub-terms reachable from another root
-            // are deduplicated by `add_root`.
+            // Default: seed the roots computed above.
             None => {
-                for &term_id in self.term_rule_sets.keys() {
-                    if self.prog.term(term_id).has_constructor()
-                        && self.prog.specenv.has_spec(term_id)
-                    {
-                        expander.add_root(term_id);
-                    }
+                for term_id in default_roots {
+                    expander.add_root(term_id);
                 }
             }
         }
@@ -583,23 +651,71 @@ impl Runner {
         let expansions = expander.expansions();
         log::info!("expansions: {n}", n = expansions.len());
 
+        // Decide include/exclude for every expansion up front, and record the
+        // terms each one reaches. Both feed verification and the error
+        // suppression logic below.
+        let included: Vec<bool> = expansions
+            .iter()
+            .map(|expansion| self.should_verify(expansion))
+            .collect::<Result<_>>()?;
+        let expansion_terms: Vec<Vec<TermId>> =
+            expansions.iter().map(|e| e.terms(&self.prog)).collect();
+
+        // Set of "live" root terms: those reachable from a genuine top-level
+        // root via *included* expansion chains. An expansion error whose root
+        // term is not live is only reachable to the right of an excluded
+        // starting rule -- the rules that actually use it are excluded -- so it
+        // is suppressed rather than reported (see the error handling below).
+        let live = live_terms(expansions, &included, &expansion_terms);
+
         let failures: Mutex<Vec<FailureRecord>> = Mutex::new(Vec::new());
+        let errors: Mutex<Vec<ExpansionError>> = Mutex::new(Vec::new());
+        let suppressed: Mutex<Vec<ExpansionError>> = Mutex::new(Vec::new());
 
         let mut expansion_reports = expansions
             .par_iter()
             .enumerate()
             .map(|(i, expansion)| -> Result<Option<ExpansionReport>> {
                 // Skip?
-                if !self.should_verify(expansion)? {
+                if !included[i] {
                     return Ok(None);
                 }
 
-                // Verify
+                // Verify. An error here (for example, a term reached by this
+                // expansion that has no spec) is recorded and reported rather
+                // than aborting the whole run, so that one un-verifiable
+                // expansion does not hide coverage of all the others.
                 let expansion_log_dir = self.log_dir.join("expansions").join(format!("{:05}", i));
-                let report =
-                    self.verify_expansion(expansion, i, expansion_log_dir.clone(), &failures)?;
-
-                Ok(Some(report))
+                match self.verify_expansion(expansion, i, expansion_log_dir.clone(), &failures) {
+                    Ok(report) => Ok(Some(report)),
+                    Err(err) => {
+                        let description = expansion_description(expansion, &self.prog)
+                            .unwrap_or_else(|_| "<unknown expansion>".to_string());
+                        // Suppress errors whose root term is only reachable to
+                        // the right of an excluded starting rule (i.e. no
+                        // included expansion chain reaches it). Such a term is
+                        // verified only because it happens to be seeded
+                        // standalone; the rules that actually use it are
+                        // excluded, so its missing spec/model is not a real
+                        // coverage gap.
+                        if !live.contains(&expansion.term) {
+                            log::debug!("suppressed expansion error: #{i} {description}: {err:#}");
+                            suppressed.lock().unwrap().push(ExpansionError {
+                                expansion_id: i,
+                                description,
+                                message: format!("{err:#}"),
+                            });
+                            return Ok(None);
+                        }
+                        log::warn!("expansion error: #{i} {description}: {err:#}");
+                        errors.lock().unwrap().push(ExpansionError {
+                            expansion_id: i,
+                            description,
+                            message: format!("{err:#}"),
+                        });
+                        Ok(None)
+                    }
+                }
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
@@ -664,6 +780,85 @@ impl Runner {
             );
         }
 
+        // Report expansions that could not be processed at all (for example,
+        // because a term they reach has no spec). These are surfaced rather
+        // than silently dropped so that gaps in coverage are visible.
+        let errors = errors.into_inner().unwrap();
+        if !errors.is_empty() {
+            let mut summary = Self::open_log_file(self.log_dir.clone(), "errors.out").ok();
+            eprintln!("=== EXPANSION ERRORS ({n}) ===", n = errors.len());
+            for error in &errors {
+                let line = format!(
+                    "#{id}\t{description}\t{message}",
+                    id = error.expansion_id,
+                    description = error.description,
+                    message = error.message,
+                );
+                eprintln!("ERROR {line}");
+                if let Some(f) = summary.as_mut() {
+                    let _ = writeln!(f, "{line}");
+                }
+            }
+            log::warn!("expansion errors: {n}", n = errors.len());
+        }
+
+        // Expansions whose root term is only reachable to the right of an
+        // excluded starting rule. These would otherwise be reported as errors,
+        // but the rules that actually use them are excluded, so the missing
+        // spec/model is not a real coverage gap. Report but don't error.
+        let suppressed = suppressed.into_inner().unwrap();
+        if !suppressed.is_empty() {
+            let mut summary =
+                Self::open_log_file(self.log_dir.clone(), "unreachable_warnings.out").ok();
+            eprintln!(
+                "=== Unreachable expansion warnings ({n}) (only reachable to the right of excluded rules; see {dir}/unreachable_warnings.out) ===",
+                n = suppressed.len(),
+                dir = self.log_dir.display(),
+            );
+            for error in &suppressed {
+                let line = format!(
+                    "#{id}\t{description}\t{message}",
+                    id = error.expansion_id,
+                    description = error.description,
+                    message = error.message,
+                );
+                if let Some(f) = summary.as_mut() {
+                    let _ = writeln!(f, "{line}");
+                }
+            }
+            log::info!("suppressed expansion errors: {n}", n = suppressed.len());
+        }
+
+        // Compute the summary stats
+        let total_expansions = expansions.len();
+        let in_scope = included.iter().filter(|&&b| b).count();
+        let mut summary = RunSummary {
+            total_expansions,
+            in_scope,
+            ..Default::default()
+        };
+        for report in &expansion_reports {
+            for instantiation in &report.type_instantiations {
+                summary.total_instantiations += 1;
+                match instantiation.verify.verdict {
+                    Verdict::Success => {
+                        summary.applicable += 1;
+                        summary.success += 1;
+                    }
+                    Verdict::Failure => {
+                        summary.applicable += 1;
+                        summary.failure += 1;
+                    }
+                    // Reached the verification step but the solver returned
+                    // unknown: still applicable, but neither success nor failure.
+                    Verdict::Unknown => {
+                        summary.applicable += 1;
+                    }
+                    Verdict::Inapplicable | Verdict::ApplicabilityUnknown => {}
+                }
+            }
+        }
+
         // Prepare report
         expansion_reports.sort_by_key(|a| a.id);
         let terms = TermMetadata::from_prog(&self.prog);
@@ -684,32 +879,36 @@ impl Runner {
         let output = Self::open_log_file(self.log_dir.clone(), "report.json")?;
         serde_json::to_writer_pretty(output, &report)?;
 
-        // Verification failures are an overall error so that callers (the
-        // `veri` binary and tests) observe them via the returned `Result`.
-        if !verification_failures.is_empty() {
-            bail!("verification failures: {}", verification_failures.len());
+        // Print the funnel summary. Done here (rather than only on the success
+        // path in the caller) so the breakdown is visible even when the run
+        // fails below.
+        summary.print();
+
+        // Verification failures and un-processable expansions are both overall
+        // errors so that callers (the `veri` binary and tests) observe them via
+        // the returned `Result`.
+        if !verification_failures.is_empty() || !errors.is_empty() {
+            bail!(
+                "verification failures: {}, expansion errors: {}",
+                verification_failures.len(),
+                errors.len()
+            );
         }
 
-        Ok(())
+        Ok(summary)
     }
 
     fn should_verify(&self, expansion: &Expansion) -> Result<bool> {
-        let mut verdict = None;
-        for filter in self.filters.iter() {
-            verdict = self.eval_filter(filter, expansion)?.or(verdict);
+        // Include by default; each matching filter overrides the verdict, so
+        // the last matching filter wins. An `include` filter can therefore
+        // carve an exception back out of a broader preceding `exclude`.
+        let mut verdict = true;
+        for filter in &self.filters {
+            if self.eval_predicate(&filter.predicate, expansion)? {
+                verdict = filter.include;
+            }
         }
-        // Default to including an expansion unless an `exclude` filter matches
-        // it. Because the last matching filter wins, an `include` filter can
-        // still carve an exception back out of a broader `exclude`.
-        Ok(verdict.unwrap_or(true))
-    }
-
-    fn eval_filter(&self, filter: &Filter, expansion: &Expansion) -> Result<Option<bool>> {
-        Ok(if self.eval_predicate(&filter.predicate, expansion)? {
-            Some(filter.include)
-        } else {
-            None
-        })
+        Ok(verdict)
     }
 
     fn eval_predicate(
@@ -1053,6 +1252,64 @@ impl Runner {
         let file = File::create(&path)?;
         Ok(file)
     }
+}
+
+/// Compute the set of "live" root terms.
+///
+/// A term is live if it is reachable from a genuine top-level root (one never
+/// used as a sub-term of any expansion, e.g. `lower`) by following the chains
+/// of *included* expansions only. Equivalently, a term is not live when every
+/// expansion that reaches it is excluded -- it sits entirely to the right of
+/// excluded starting rules. Such a term is verified only because it happens to
+/// be seeded as a standalone root, so an error from its standalone expansion is
+/// suppressed rather than reported.
+///
+/// `expansion_terms[i]` must be the terms reached by `expansions[i]`, and
+/// `included[i]` whether that expansion passed the include/exclude filters.
+fn live_terms(
+    expansions: &[Expansion],
+    included: &[bool],
+    expansion_terms: &[Vec<TermId>],
+) -> BTreeSet<TermId> {
+    // Terms used as a (non-root) sub-term of some expansion. A term that is
+    // never used this way is a genuine top-level root.
+    let mut used_as_subterm: BTreeSet<TermId> = BTreeSet::new();
+    for (i, expansion) in expansions.iter().enumerate() {
+        for &term_id in &expansion_terms[i] {
+            if term_id != expansion.term {
+                used_as_subterm.insert(term_id);
+            }
+        }
+    }
+
+    // Seed liveness with the genuine top-level roots. Note an expansion rooted
+    // at a term does not by itself make that term live: liveness must arrive
+    // from another expansion reaching it, otherwise every standalone-seeded
+    // term would be trivially live and nothing could ever be suppressed.
+    let mut live: BTreeSet<TermId> = expansions
+        .iter()
+        .map(|e| e.term)
+        .filter(|term_id| !used_as_subterm.contains(term_id))
+        .collect();
+
+    // Fixpoint: a term becomes live once some included expansion rooted at an
+    // already-live term reaches it.
+    loop {
+        let mut changed = false;
+        for (i, expansion) in expansions.iter().enumerate() {
+            if !included[i] || !live.contains(&expansion.term) {
+                continue;
+            }
+            for &term_id in &expansion_terms[i] {
+                changed |= live.insert(term_id);
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    live
 }
 
 /// Human-readable description of an expansion.

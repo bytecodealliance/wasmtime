@@ -32,6 +32,14 @@ struct Opts {
     #[arg(long = "only-root", value_name = "TERM")]
     only_root: Option<String>,
 
+    /// Verify only the expansions containing the named rule.
+    ///
+    /// Expansion is seeded from the rule's root term (so the rule is reached
+    /// even if that term has no standalone spec), then narrowed to the
+    /// expansions that actually contain the rule. Conflicts with `--only-root`.
+    #[arg(long = "rule", value_name = "RULE", conflicts_with = "only_root")]
+    rule: Option<String>,
+
     /// Don't skip expansions tagged TODO.
     #[arg(long = "no-skip-todo", action = ArgAction::SetFalse)]
     skip_todo: bool,
@@ -52,7 +60,7 @@ struct Opts {
     #[arg(long, default_value = "30", env = "ISLE_VERI_TIMEOUT")]
     timeout: u64,
 
-    /// Number of threads to use.
+    /// Number of threads to use (0 defaults to # of logical cores)
     #[arg(long, default_value = "0")]
     num_threads: usize,
 
@@ -61,7 +69,7 @@ struct Opts {
     log_dir: Option<std::path::PathBuf>,
 
     /// Write results to files under log directory. (Use 0 to select automatically.)
-    #[arg(long)]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     results_to_log_dir: bool,
 
     /// Skip solver.
@@ -131,6 +139,13 @@ fn main() -> Result<()> {
         runner.set_root_term(root);
     }
 
+    // Scope verification to a single named rule, if requested. This seeds
+    // expansion from the rule's root term and filters down to the expansions
+    // containing the rule.
+    if let Some(rule) = &opts.rule {
+        runner.set_root_rule(rule)?;
+    }
+
     // Configure runner.
     // Default behaviour is to include every expansion (all paths from all
     // roots); any provided filters only narrow that down via `exclude`.
@@ -194,6 +209,9 @@ fn main() -> Result<()> {
     if let Some(root) = &opts.only_root {
         println!("only root term:     {root}");
     }
+    if let Some(rule) = &opts.rule {
+        println!("only rule:          {rule}");
+    }
     if opts.default_excludes {
         println!(
             "Excluding ISLE terms with any of the following tags (the default exclude set): {}.",
@@ -219,6 +237,7 @@ fn main() -> Result<()> {
     }
     println!("==========================");
 
-    // Run.
-    runner.run()
+    runner.run()?;
+
+    Ok(())
 }

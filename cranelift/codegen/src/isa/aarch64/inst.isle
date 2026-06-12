@@ -2456,13 +2456,6 @@
             (imm $I64 (ImmExtend.Zero) 0)
             (imm $I64 (ImmExtend.Zero) 0)))
 
-;; Helper for emitting `MInst.Mov` instructions.
-(decl mov (Reg Type) Reg)
-(rule (mov src ty)
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.Mov (operand_size ty) dst src))))
-        dst))
-
 ;; Helper for emitting `MInst.MovZ` instructions.
 (attr movz (veri chain))
 (decl movz (MoveWideConst OperandSize) Reg)
@@ -2539,13 +2532,6 @@
 (rule (fpu_rri op src)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRRI op dst src))))
-        dst))
-
-(attr fpu_rri_mod (veri chain))
-(decl fpu_rri_mod (FPUOpRIMod Reg Reg) Reg)
-(rule (fpu_rri_mod op dst_src src)
-      (let ((dst WritableReg (temp_writable_reg $F64))
-            (_ Unit (emit (MInst.FpuRRIMod op dst dst_src src))))
         dst))
 
 ;; Helper for emitting `MInst.FpuRRR` instructions.
@@ -2725,13 +2711,6 @@
          (MInst.AluRRR (ALUOp.SubS) (operand_size ty) dst src1 src2)
          dst)))
 
-(attr cmn_imm (veri chain))
-(decl cmn_imm (OperandSize Reg Imm12) ProducesFlags)
-(rule (cmn_imm size src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.AluRRImm12 (ALUOp.AddS) size (writable_zero_reg)
-        src1 src2)))
-
 (attr cmp (veri chain))
 (decl cmp (OperandSize Reg Reg) ProducesFlags)
 (rule (cmp size src1 src2)
@@ -2891,17 +2870,6 @@
 (rule (fpu_round op rn)
       (let ((dst WritableReg (temp_writable_reg $F64))
             (_ Unit (emit (MInst.FpuRound op dst rn))))
-        dst))
-
-;; Helper for emitting `MInst.FpuMove64` and `MInst.FpuMove128` instructions.
-(decl fpu_move (Type Reg) Reg)
-(rule (fpu_move _ src)
-      (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.FpuMove128 dst src))))
-        dst))
-(rule 1 (fpu_move (fits_in_64 _) src)
-      (let ((dst WritableReg (temp_writable_reg $F64))
-            (_ Unit (emit (MInst.FpuMove64 dst src))))
         dst))
 
 ;; Helper for emitting `MInst.MovToFpu` instructions.
@@ -3097,10 +3065,6 @@
 (attr add_extend (veri chain))
 (decl add_extend (Type Reg ExtendedValue) Reg)
 (rule (add_extend ty x y) (alu_rr_extend_reg (ALUOp.Add) ty x y))
-
-(attr add_extend_op (veri chain))
-(decl add_extend_op (Type Reg Reg ExtendOp) Reg)
-(rule (add_extend_op ty x y extend) (alu_rrr_extend (ALUOp.Add) ty x y extend))
 
 (attr add_shift (veri chain))
 (decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
@@ -3391,10 +3355,6 @@
 (attr orr_imm (veri chain))
 (decl orr_imm (Type Reg ImmLogic) Reg)
 (rule (orr_imm ty x y) (alu_rr_imm_logic (ALUOp.Orr) ty x y))
-
-(attr orr_shift (veri chain))
-(decl orr_shift (Type Reg Reg ShiftOpAndAmt) Reg)
-(rule (orr_shift ty x y shift) (alu_rrr_shift (ALUOp.Orr) ty x y shift))
 
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
@@ -5063,27 +5023,6 @@
 (type FlagsAndCC (enum (FlagsAndCC (flags ProducesFlags)
                                    (cc IntCC))))
 
-;; Helper constructor for `FlagsAndCC`.
-(attr flags_and_cc (veri chain))
-(decl flags_and_cc (ProducesFlags IntCC) FlagsAndCC)
-(rule (flags_and_cc flags cc) (FlagsAndCC.FlagsAndCC flags cc))
-
-;; Materialize a `FlagsAndCC` into a boolean `ValueRegs`.
-(attr flags_and_cc_to_bool (veri chain))
-(decl flags_and_cc_to_bool (FlagsAndCC) ValueRegs)
-(rule (flags_and_cc_to_bool (FlagsAndCC.FlagsAndCC flags cc))
-      (with_flags flags (cset (cond_code cc))))
-
-;; Get the `ProducesFlags` out of a `FlagsAndCC`.
-(attr flags_and_cc_flags (veri chain))
-(decl flags_and_cc_flags (FlagsAndCC) ProducesFlags)
-(rule (flags_and_cc_flags (FlagsAndCC.FlagsAndCC flags _cc)) flags)
-
-;; Get the `IntCC` out of a `FlagsAndCC`.
-(attr flags_and_cc_cc (veri chain))
-(decl flags_and_cc_cc (FlagsAndCC) IntCC)
-(rule (flags_and_cc_cc (FlagsAndCC.FlagsAndCC _flags cc)) cc)
-
 ;; Determines the appropriate extend op given the value type and the given ArgumentExtension.
 (attr lower_extend_op (veri chain))
 (decl lower_extend_op (Type ArgumentExtension) ExtendOp)
@@ -5262,12 +5201,6 @@
 (decl tbz (BranchTarget BranchTarget Reg u8) SideEffectNoResult)
 (rule (tbz taken not_taken rn bit)
       (test_branch (TestBitAndBranchKind.Z) taken not_taken rn bit))
-
-;; Helper for emitting `MInst.MovToNZCV` instructions.
-(decl mov_to_nzcv (Reg) ProducesFlags)
-(rule (mov_to_nzcv rn)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.MovToNZCV rn)))
 
 ;; Helper for emitting `MInst.EmitIsland` instructions.
 (attr emit_island (veri chain))
@@ -5574,12 +5507,7 @@
 
 ;; Other terms chained for verification
 (attr br_cond_result (veri chain))
-(attr consumes_flags_get_reg (veri chain))
-(attr consumes_flags_get_regs (veri chain))
-(attr lo_reg (veri chain))
 (attr lower_return (veri chain))
-(attr multi_reg_to_pair (veri chain))
-(attr multi_reg_to_single (veri chain))
 (attr output_reg (veri chain))
 (attr output_value (veri chain))
 (attr produces_flags_concat (veri chain))
@@ -5587,10 +5515,8 @@
 (attr produces_flags_ignore (veri chain))
 (attr put_in_reg_ext32 (veri chain))
 (attr side_effect (veri chain))
-(attr side_effect_concat (veri chain))
 (attr small_rotr (veri chain))
 (attr small_rotr_imm (veri chain))
-(attr temp_reg (veri chain))
 (attr trap_if_cond_result (veri chain))
 (attr with_flags_chained (veri chain))
 (attr with_flags_reg (veri chain))
@@ -5679,6 +5605,7 @@
 (attr get_return_address (tag TODO))
 (attr lower_bmask (tag TODO))
 (attr nop (tag TODO))
+(attr invalid_reg (tag TODO))
 (attr return (tag TODO))
 (attr return_call (tag TODO))
 (attr return_call_indirect (tag TODO))
@@ -5692,3 +5619,8 @@
 (attr vhigh_bits (tag TODO))
 (attr with_flags (tag TODO))
 (attr get_exception_handler_address (tag TODO))
+(attr lo_reg (tag TODO))
+(attr produces_flags_ignore (tag TODO))
+(attr produces_flags_get_reg (tag TODO))
+(attr consumes_flags_get_regs (tag TODO))
+(attr consumes_flags_get_reg (tag TODO))

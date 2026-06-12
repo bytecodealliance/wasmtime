@@ -457,6 +457,18 @@ pub enum Symbolic {
 }
 
 impl Symbolic {
+    /// Name of the symbolic value's variant, for use in diagnostics.
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Scalar(_) => "scalar",
+            Self::Struct(_) => "struct",
+            Self::Enum(_) => "enum",
+            Self::Option(_) => "option",
+            Self::Tuple(_) => "tuple",
+            Self::Macro(_) => "macro",
+        }
+    }
+
     fn as_scalar(&self) -> Option<ExprId> {
         match self {
             Self::Scalar(x) => Some(*x),
@@ -2210,7 +2222,11 @@ impl<'a> ConditionsBuilder<'a> {
 
     fn values_equal(&mut self, a: Symbolic, b: Symbolic) -> Result<ExprId> {
         if std::mem::discriminant(&a) != std::mem::discriminant(&b) {
-            return Err(self.error("equality on different symbolic types"));
+            return Err(self.error(format!(
+                "equality on different symbolic types: {} != {}",
+                a.kind(),
+                b.kind()
+            )));
         }
         match (a, b) {
             (Symbolic::Scalar(u), Symbolic::Scalar(v)) => Ok(self.exprs_equal(u, v)),

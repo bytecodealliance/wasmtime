@@ -107,6 +107,7 @@
 (extern constructor temp_writable_reg temp_writable_reg)
 
 ;; Get a temporary register for reading.
+(attr temp_reg (tag TODO)) ; not currently used for aarch64
 (decl temp_reg (Type) Reg)
 (rule (temp_reg ty)
       (writable_reg_to_reg (temp_writable_reg ty)))
@@ -189,16 +190,6 @@
 (decl multi_reg_to_pair_and_single (MultiReg) InstOutput)
 (rule (multi_reg_to_pair_and_single (MultiReg.Three a b c))
       (output_pair (value_regs a b) c))
-
-;; Convert a MultiReg with two registers into an InstOutput containing one ValueRegs with both regs
-(decl multi_reg_to_pair (MultiReg) InstOutput)
-(rule (multi_reg_to_pair (MultiReg.Two a b))
-      (value_regs a b))
-
-;; Convert a MultiReg with one register into an InstOutput containing one ValueRegs with the register
-(decl multi_reg_to_single (MultiReg) InstOutput)
-(rule (multi_reg_to_single (MultiReg.One a))
-      (value_reg a))
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -493,6 +484,7 @@
       (let ((_ Unit (emit_side_effect inst)))
         (output_none)))
 
+(attr side_effect_concat (tag TODO)) ; not currently used for aarch64
 (decl side_effect_concat (SideEffectNoResult SideEffectNoResult) SideEffectNoResult)
 (rule (side_effect_concat (SideEffectNoResult.Inst inst1) (SideEffectNoResult.Inst inst2))
       (SideEffectNoResult.Inst2 inst1 inst2))
@@ -780,13 +772,6 @@
 (rule (with_flags_reg p c)
       (let ((v ValueRegs (with_flags p c)))
         (value_regs_get v 0)))
-
-;; Indicate that the current state of the flags register from the instruction
-;; that produces this Value is relied on.
-(decl flags_to_producesflags (Value) ProducesFlags)
-(rule (flags_to_producesflags val)
-      (let ((_ Unit (mark_value_used val)))
-        (ProducesFlags.AlreadyExistingFlags)))
 
 ;; Combine a flags-producing instruction and a flags-consuming instruction that
 ;; produces no results.

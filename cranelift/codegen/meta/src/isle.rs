@@ -57,8 +57,20 @@ impl IsleCompilation {
             return Ok(vec![input.clone()]);
         }
 
+        if !input.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("ISLE input does not exist: {}", input.display()),
+            ));
+        }
+
         let mut paths = Vec::new();
-        for entry in std::fs::read_dir(input)? {
+        for entry in std::fs::read_dir(input).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("failed to read ISLE input directory {}: {e}", input.display()),
+            )
+        })? {
             let path = entry?.path();
             if let Some(ext) = path.extension() {
                 if ext == "isle" {
@@ -183,6 +195,7 @@ pub fn get_isle_compilations(
                     prelude_spec_isle.clone(),
                     inst_specs_isle.clone(),
                     inst_tags_isle.clone(),
+                    state_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
