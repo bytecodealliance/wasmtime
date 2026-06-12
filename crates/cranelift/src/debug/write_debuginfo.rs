@@ -9,6 +9,7 @@ use gimli::write::{
     Address, Dwarf, EndianVec, FrameTable, Result as WriteResult, Sections, Writer,
 };
 use gimli::{RunTimeEndian, SectionId};
+use std::vec::Vec;
 use wasmtime_environ::error::Result as EnvResult;
 
 pub struct DwarfSection {

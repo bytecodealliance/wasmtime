@@ -3,6 +3,14 @@
 //! This re-exports `object` so you don't have to explicitly keep the versions in sync.
 
 #![deny(missing_docs)]
+#![cfg_attr(not(test), no_std)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 mod backend;
 #[cfg(feature = "unwind")]

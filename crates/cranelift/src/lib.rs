@@ -10,9 +10,18 @@
 //! > Wasmtime repository to start a discussion about doing so, but otherwise
 //! > be aware that your usage of this crate is not supported.
 
-// See documentation in crates/wasmtime/src/runtime.rs for why this is
-// selectively enabled here.
+#![cfg_attr(not(test), no_std)]
 #![warn(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
+
+use std::vec;
+use std::vec::Vec;
 
 use cranelift_codegen::{
     FinalizedMachReloc, FinalizedRelocTarget, MachTrap, binemit,
@@ -41,6 +50,7 @@ mod alias_region_key;
 mod bounds_checks;
 mod builder;
 mod compiler;
+#[cfg(feature = "std")]
 mod debug;
 mod func_environ;
 mod translate;

@@ -12,6 +12,9 @@ use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::{
     Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, SigRef, StackSlot, Value,
 };
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+#[cfg(feature = "std")]
 use std::collections::HashMap;
 
 /// Mapping from entity names to source locations.
@@ -25,47 +28,47 @@ pub struct SourceMap {
 impl SourceMap {
     /// Look up a value entity.
     pub fn contains_value(&self, v: Value) -> bool {
-        self.locations.contains_key(&v.into())
+        self.locations.contains_key(&AnyEntity::from(v))
     }
 
     /// Look up a block entity.
     pub fn contains_block(&self, block: Block) -> bool {
-        self.locations.contains_key(&block.into())
+        self.locations.contains_key(&AnyEntity::from(block))
     }
 
     /// Look up a stack slot entity.
     pub fn contains_ss(&self, ss: StackSlot) -> bool {
-        self.locations.contains_key(&ss.into())
+        self.locations.contains_key(&AnyEntity::from(ss))
     }
 
     /// Look up a dynamic stack slot entity.
     pub fn contains_dss(&self, dss: DynamicStackSlot) -> bool {
-        self.locations.contains_key(&dss.into())
+        self.locations.contains_key(&AnyEntity::from(dss))
     }
 
     /// Look up a global value entity.
     pub fn contains_gv(&self, gv: GlobalValue) -> bool {
-        self.locations.contains_key(&gv.into())
+        self.locations.contains_key(&AnyEntity::from(gv))
     }
 
     /// Look up a signature entity.
     pub fn contains_sig(&self, sig: SigRef) -> bool {
-        self.locations.contains_key(&sig.into())
+        self.locations.contains_key(&AnyEntity::from(sig))
     }
 
     /// Look up a function entity.
     pub fn contains_fn(&self, fn_: FuncRef) -> bool {
-        self.locations.contains_key(&fn_.into())
+        self.locations.contains_key(&AnyEntity::from(fn_))
     }
 
     /// Look up a jump table entity.
     pub fn contains_jt(&self, jt: JumpTable) -> bool {
-        self.locations.contains_key(&jt.into())
+        self.locations.contains_key(&AnyEntity::from(jt))
     }
 
     /// Look up a constant entity.
     pub fn contains_constant(&self, c: Constant) -> bool {
-        self.locations.contains_key(&c.into())
+        self.locations.contains_key(&AnyEntity::from(c))
     }
 
     /// Look up an entity by source name.

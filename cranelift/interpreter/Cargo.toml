@@ -17,13 +17,16 @@ workspace = true
 [dependencies]
 cranelift-codegen = { workspace = true }
 cranelift-entity = { workspace = true }
+hashbrown = { workspace = true }
+libm = { workspace = true }
 log = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 
-[target.x86_64-pc-windows-gnu.dependencies]
-libm = { workspace = true }
-
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-reader = { workspace = true }
+
+[features]
+default = ["std"]
+std = ["cranelift-codegen/std", "thiserror/std"]

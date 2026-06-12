@@ -1,10 +1,10 @@
 //! Lexical analysis for .clif files.
 
 use crate::error::Location;
+use core::u16;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{Block, Value};
 use std::str::CharIndices;
-use std::u16;
 
 /// A Token returned from the `Lexer`.
 ///

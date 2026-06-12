@@ -6,6 +6,9 @@
 //! If a test case file contains `isa` commands, the tests will only be run against the specified
 //! ISAs. If the file contains no `isa` commands, the tests will be run against all supported ISAs.
 
+use std::string::{String, ToString};
+use std::vec::Vec;
+
 use crate::error::{Location, ParseError};
 use crate::testcommand::TestOption;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};

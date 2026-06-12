@@ -4,6 +4,14 @@
 //! testing Cranelift, but is not essential for a JIT compiler.
 
 #![deny(missing_docs)]
+#![cfg_attr(not(test), no_std)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate alloc as std;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{IsaSpec, ParseOptionError, parse_option, parse_options};
@@ -26,6 +34,8 @@ use anyhow::{Error, Result};
 use cranelift_codegen::isa::{self, OwnedTargetIsa};
 use cranelift_codegen::settings::{self, FlagsOrIsa};
 use std::str::FromStr;
+use std::string::String;
+use std::vec::Vec;
 use target_lexicon::Triple;
 
 /// Like `FlagsOrIsa`, but holds ownership.
@@ -70,7 +80,10 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
     if let Some(triple_name) = words.next() {
         let triple = match Triple::from_str(triple_name) {
             Ok(triple) => triple,
+            #[cfg(feature = "std")]
             Err(parse_error) => return Err(Error::from(parse_error)),
+            #[cfg(not(feature = "std"))]
+            Err(parse_error) => return Err(Error::msg(parse_error)),
         };
 
         let mut isa_builder = isa::lookup(triple).map_err(|err| match err {

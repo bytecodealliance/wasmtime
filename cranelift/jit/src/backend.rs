@@ -1,9 +1,12 @@
 //! Defines `JITModule`.
 
+#[cfg(not(feature = "std"))]
+use crate::memory::VecMemoryProvider;
 use crate::{
     compiled_blob::CompiledBlob,
-    memory::{BranchProtection, JITMemoryKind, JITMemoryProvider, SystemMemoryProvider},
+    memory::{BranchProtection, JITMemoryKind, JITMemoryProvider},
 };
+use core::cell::RefCell;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
@@ -15,11 +18,20 @@ use cranelift_module::{
     ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
 use log::info;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::ffi::CString;
-use std::io::Write;
+use std::borrow::ToOwned;
+use std::boxed::Box;
+use std::string::String;
+use std::vec::Vec;
 use target_lexicon::PointerWidth;
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{HashMap, hash_map::Entry};
+#[cfg(feature = "std")]
+use std::collections::{HashMap, hash_map::Entry};
+#[cfg(feature = "std")]
+use std::ffi::CString;
+#[cfg(feature = "std")]
+use std::io::Write as _;
 
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
@@ -88,7 +100,16 @@ impl JITBuilder {
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         let symbols = HashMap::new();
-        let lookup_symbols = vec![Box::new(lookup_with_dlsym) as Box<_>];
+        let lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>> = {
+            #[cfg(feature = "std")]
+            {
+                std::vec![Box::new(lookup_with_dlsym) as Box<_>]
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                std::vec::Vec::new()
+            }
+        };
         Self {
             isa,
             symbols,
@@ -195,8 +216,8 @@ impl JITModule {
 
     fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
         match self.symbols.borrow_mut().entry(name.to_owned()) {
-            std::collections::hash_map::Entry::Occupied(occ) => Some(occ.get().0),
-            std::collections::hash_map::Entry::Vacant(vac) => {
+            Entry::Occupied(occ) => Some(occ.get().0),
+            Entry::Vacant(vac) => {
                 let ptr = self
                     .lookup_symbols
                     .iter()
@@ -273,6 +294,22 @@ impl JITModule {
             .ptr()
     }
 
+    /// Returns the compiled bytes of a finalized function as a byte slice.
+    ///
+    /// The slice remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual function is used.
+    pub fn get_finalized_function_bytes(&self, func_id: FuncId) -> &[u8] {
+        let info = &self.compiled_functions[func_id];
+        assert!(
+            !self.functions_to_finalize.iter().any(|x| *x == func_id),
+            "function not yet finalized"
+        );
+        let compiled = info
+            .as_ref()
+            .expect("function must be compiled before it can be finalized");
+        unsafe { core::slice::from_raw_parts(compiled.ptr(), compiled.size()) }
+    }
+
     /// Returns the address and size of a finalized data object.
     ///
     /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
@@ -290,6 +327,7 @@ impl JITModule {
         (compiled.ptr(), compiled.size())
     }
 
+    #[cfg(feature = "std")]
     fn record_function_for_perf(&self, ptr: *const u8, size: usize, name: &str) {
         // The Linux perf tool supports JIT code via a /tmp/perf-$PID.map file,
         // which contains memory regions and their associated names.  If we
@@ -316,7 +354,7 @@ impl JITModule {
     ///
     /// Returns ModuleError in case of allocation or syscall failure
     pub fn finalize_definitions(&mut self) -> ModuleResult<()> {
-        for func in std::mem::take(&mut self.functions_to_finalize) {
+        for func in core::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             assert!(decl.linkage.is_definable());
             let func = self.compiled_functions[func]
@@ -325,7 +363,7 @@ impl JITModule {
             func.perform_relocations(|name| self.get_address(name));
         }
 
-        for data in std::mem::take(&mut self.data_objects_to_finalize) {
+        for data in core::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             assert!(decl.linkage.is_definable());
             let data = self.compiled_data_objects[data]
@@ -355,9 +393,16 @@ impl JITModule {
             "cranelift-jit needs is_pic=false"
         );
 
-        let memory = builder
-            .memory
-            .unwrap_or_else(|| Box::new(SystemMemoryProvider::new()));
+        let memory = builder.memory.unwrap_or_else(|| {
+            #[cfg(feature = "std")]
+            {
+                Box::new(crate::memory::SystemMemoryProvider::new())
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                Box::new(VecMemoryProvider::new())
+            }
+        });
         Self {
             isa: builder.isa,
             symbols: RefCell::new(builder.symbols),
@@ -517,6 +562,7 @@ impl Module for JITModule {
             JITMemoryKind::Executable,
         )?);
         let (ptr, size) = (blob.ptr(), blob.size());
+        #[cfg(feature = "std")]
         self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
 
         let range_start = ptr.addr();
@@ -563,8 +609,16 @@ impl Module for JITModule {
             None,
             JITMemoryKind::Executable,
         )?);
-        let (ptr, size) = (blob.ptr(), blob.size());
-        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
+
+        #[cfg(feature = "std")]
+        {
+            let ptr = blob.ptr();
+            let size = blob.size();
+            self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
+        }
+
+        #[cfg(not(feature = "std"))]
+        let _ = &blob;
 
         self.functions_to_finalize.push(id);
 
@@ -656,7 +710,7 @@ impl Module for JITModule {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(feature = "std", not(windows)))]
 fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
@@ -668,7 +722,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     }
 }
 
-#[cfg(windows)]
+#[cfg(all(feature = "std", windows))]
 fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     use std::os::windows::io::RawHandle;
     use std::ptr;
@@ -682,9 +736,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 
     unsafe {
         let handles = [
-            // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
-            // try to find the searched symbol in local c runtime
             LibraryLoader::GetModuleHandleA(UCRTBASE.as_ptr()) as RawHandle,
         ];
 

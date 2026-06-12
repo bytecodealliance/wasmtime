@@ -36,3 +36,4 @@ testcase*.json
 perf.data*
 miri-wast/
 report/
+target-*/

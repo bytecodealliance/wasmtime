@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 cranelift = { workspace = true }
-cranelift-native = { workspace = true }
+cranelift-native = { workspace = true, features = ["std"] }
 
 anyhow = { workspace = true, features = ['std'] }
 arbitrary = { workspace = true }

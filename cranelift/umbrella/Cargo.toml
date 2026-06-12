@@ -32,10 +32,9 @@ object = ["dep:cranelift-object"]
 std = [
     "cranelift-codegen/std",
     "cranelift-frontend?/std",
+    "cranelift-interpreter?/std",
+    "cranelift-jit?/std",
     "cranelift-module?/std",
-]
-core = [
-    "cranelift-codegen/core",
-    "cranelift-frontend?/core",
-    "cranelift-module?/core",
+    "cranelift-native?/std",
+    "cranelift-object?/std",
 ]

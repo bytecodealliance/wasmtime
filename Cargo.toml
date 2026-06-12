@@ -128,7 +128,7 @@ object = { workspace = true, features = ['std'] }
 wasmtime-test-macros = { path = "crates/test-macros" }
 pulley-interpreter = { workspace = true, features = ["disas"] }
 wasm-encoder = { workspace = true }
-cranelift-native = { workspace = true }
+cranelift-native = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 rand = { workspace = true }
 
@@ -285,7 +285,7 @@ wasmtime-core = { path = "crates/core", version = "=47.0.0", package = 'wasmtime
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=47.0.0", package = 'wasmtime-internal-wmemcheck' }
 wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=47.0.0", package = 'wasmtime-internal-c-api-macros' }
 wasmtime-cache = { path = "crates/cache", version = "=47.0.0", package = 'wasmtime-internal-cache' }
-wasmtime-cranelift = { path = "crates/cranelift", version = "=47.0.0", package = 'wasmtime-internal-cranelift' }
+wasmtime-cranelift = { path = "crates/cranelift", version = "=47.0.0", package = 'wasmtime-internal-cranelift', default-features = false }
 wasmtime-winch = { path = "crates/winch", version = "=47.0.0", package = 'wasmtime-internal-winch'  }
 wasmtime-explorer = { path = "crates/explorer", version = "=47.0.0", package = 'wasmtime-internal-explorer'  }
 wasmtime-fiber = { path = "crates/fiber", version = "=47.0.0", package = 'wasmtime-internal-fiber' }
@@ -311,21 +311,21 @@ pulley-macros = { path = 'pulley/macros', version = "=47.0.0" }
 # Cranelift crates in this workspace
 cranelift-assembler-x64 = { path = "cranelift/assembler-x64", version = "0.134.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.134.0", default-features = false, features = ["unwind"] }
-cranelift-frontend = { path = "cranelift/frontend", version = "0.134.0" }
+cranelift-frontend = { path = "cranelift/frontend", version = "0.134.0", default-features = false }
 cranelift-entity = { path = "cranelift/entity", version = "0.134.0" }
-cranelift-native = { path = "cranelift/native", version = "0.134.0" }
-cranelift-module = { path = "cranelift/module", version = "0.134.0" }
-cranelift-interpreter = { path = "cranelift/interpreter", version = "0.134.0" }
-cranelift-reader = { path = "cranelift/reader", version = "0.134.0" }
+cranelift-native = { path = "cranelift/native", version = "0.134.0", default-features = false }
+cranelift-module = { path = "cranelift/module", version = "0.134.0", default-features = false }
+cranelift-interpreter = { path = "cranelift/interpreter", version = "0.134.0", default-features = false }
+cranelift-reader = { path = "cranelift/reader", version = "0.134.0", default-features = false }
 cranelift-filetests = { path = "cranelift/filetests" }
-cranelift-object = { path = "cranelift/object", version = "0.134.0" }
-cranelift-jit = { path = "cranelift/jit", version = "0.134.0" }
+cranelift-object = { path = "cranelift/object", version = "0.134.0", default-features = false }
+cranelift-jit = { path = "cranelift/jit", version = "0.134.0", default-features = false }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.134.0" }
 cranelift-bitset = { path = "cranelift/bitset", version = "0.134.0" }
 cranelift-control = { path = "cranelift/control", version = "0.134.0", default-features = false }
 cranelift-srcgen = { path = "cranelift/srcgen", version = "0.134.0" }
-cranelift = { path = "cranelift/umbrella", version = "0.134.0" }
+cranelift = { path = "cranelift/umbrella", version = "0.134.0", default-features = false }
 
 # Winch crates in this workspace.
 winch-codegen = { path = "winch/codegen", version = "=47.0.0" }
@@ -341,7 +341,7 @@ component-async-tests = { path = "crates/misc/component-async-tests" }
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.15.1"
+regalloc2 = { version = "0.15.1", default-features = false }
 wasip1 = { version = "1.0.0", default-features = false }
 
 # cap-std family:
@@ -393,7 +393,7 @@ capstone = { version = "0.14.0", default-features = false, features = ['full', '
 smallvec = { version = "1.15.1", features = ["union"] }
 tracing = { version = "0.1.41", default-features = false }
 bitflags = "2.9.4"
-thiserror = "2.0.17"
+thiserror = { version = "2.0.17", default-features = false }
 async-trait = "0.1.89"
 heck = "0.5"
 similar = "3.1.1"
@@ -456,6 +456,7 @@ pin-project-lite = "0.2.14"
 sha2 = { version = "0.10.2", default-features = false }
 gdbstub = "0.7.10"
 gdbstub_arch = "0.3.3"
+spin = { version = "0.12.0", default-features = false, features = ["mutex", "spin_mutex"] }
 
 # =============================================================================
 #
@@ -669,7 +670,7 @@ harness = false
 name = "thread_eager_init"
 harness = false
 
-[[bench]]
+[[bench]] 
 name = "trap"
 harness = false
 

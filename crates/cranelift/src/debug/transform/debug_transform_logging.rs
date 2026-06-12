@@ -2,6 +2,8 @@ use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
 use cranelift_codegen::{LabelValueLoc, ValueLabelsRanges, ir::ValueLabel, isa::TargetIsa};
 use gimli::{AttributeValue, LittleEndian, UnitRef, write};
+use std::string::String;
+use std::vec::Vec;
 
 macro_rules! dbi_log_enabled {
     () => {

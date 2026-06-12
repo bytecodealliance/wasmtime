@@ -1,7 +1,8 @@
-use std::ptr;
+use core::ptr;
+use std::vec::Vec;
 
 use cranelift_codegen::binemit::Reloc;
-use cranelift_module::{ModuleError, ModuleReloc, ModuleRelocTarget, ModuleResult};
+use cranelift_module::{ModuleReloc, ModuleRelocTarget, ModuleResult};
 
 use crate::JITMemoryProvider;
 use crate::memory::JITMemoryKind;
@@ -46,9 +47,7 @@ impl CompiledBlob {
             }
         }
 
-        let ptr = memory
-            .allocate(data.len() + veneer_count * VENEER_SIZE, align, kind)
-            .map_err(|e| ModuleError::Allocation { err: e })?;
+        let ptr = memory.allocate(data.len() + veneer_count * VENEER_SIZE, align, kind)?;
 
         unsafe {
             ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
@@ -72,9 +71,7 @@ impl CompiledBlob {
         #[cfg(feature = "wasmtime-unwinder")] wasmtime_exception_data: Option<Vec<u8>>,
         kind: JITMemoryKind,
     ) -> ModuleResult<Self> {
-        let ptr = memory
-            .allocate(size, align, kind)
-            .map_err(|e| ModuleError::Allocation { err: e })?;
+        let ptr = memory.allocate(size, align, kind)?;
 
         unsafe { ptr::write_bytes(ptr, 0, size) };
 
@@ -105,7 +102,7 @@ impl CompiledBlob {
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
-        use std::ptr::write_unaligned;
+        use core::ptr::write_unaligned;
 
         let mut next_veneer_idx = 0;
 

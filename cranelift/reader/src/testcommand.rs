@@ -12,7 +12,10 @@
 //! The parser does not understand the test commands or which options are valid. It simply parses
 //! the general format into a `TestCommand` data structure.
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    vec::Vec,
+};
 
 /// A command appearing in a test file.
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -1,7 +1,7 @@
 //! Top-level lib.rs for `cranelift_module`.
 
 #![deny(missing_docs)]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]

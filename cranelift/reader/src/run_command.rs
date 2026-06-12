@@ -7,7 +7,11 @@
 //! - `; run: %fn(42, 4.2) == false`: this syntax specifies the parameters and return values.
 
 use cranelift_codegen::data_value::{self, DataValue, DisplayDataValues};
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// A run command appearing in a test file.
 ///
@@ -35,7 +39,12 @@ impl RunCommand {
         match self {
             RunCommand::Print(invoke) => {
                 let actual = invoke_fn(&invoke.func, &invoke.args)?;
-                println!("{} -> {}", invoke, DisplayDataValues(&actual))
+
+                #[cfg(feature = "std")]
+                println!("{} -> {}", invoke, DisplayDataValues(&actual));
+
+                #[cfg(not(feature = "std"))]
+                log::info!("{} -> {}", invoke, DisplayDataValues(&actual));
             }
             RunCommand::Run(invoke, compare, expected) => {
                 let actual = invoke_fn(&invoke.func, &invoke.args)?;

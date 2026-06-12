@@ -2,7 +2,7 @@
 
 #![macro_use]
 
-use std::fmt;
+use std::{fmt, string::String};
 
 /// The location of a `Token` or `Error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -33,7 +33,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl std::error::Error for ParseError {}
+impl core::error::Error for ParseError {}
 
 /// Result of a parser operation. The `ParseError` variant includes a location.
 pub type ParseResult<T> = Result<T, ParseError>;

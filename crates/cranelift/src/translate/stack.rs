@@ -6,6 +6,7 @@
 
 use cranelift_codegen::ir::{self, Block, ExceptionTag, Inst, Value};
 use cranelift_frontend::FunctionBuilder;
+use std::vec;
 use std::vec::Vec;
 use wasmtime_environ::FrameStackShape;
 

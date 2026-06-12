@@ -89,9 +89,11 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
+use hashbrown::{HashMap, hash_map};
 use itertools::Itertools;
 use smallvec::{SmallVec, ToSmallVec};
-use std::collections::{HashMap, hash_map};
+use std::string::ToString;
+use std::vec;
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{

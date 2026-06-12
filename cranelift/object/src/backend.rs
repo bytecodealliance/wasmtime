@@ -1,6 +1,7 @@
 //! Defines `ObjectModule`.
 
 use anyhow::anyhow;
+use core::mem;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::ir;
@@ -18,10 +19,15 @@ use object::{
     RelocationEncoding, RelocationFlags, RelocationKind, SectionFlags, SectionKind, SymbolFlags,
     SymbolKind, SymbolScope, elf,
 };
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::mem;
+use std::boxed::Box;
+use std::string::String;
+use std::vec::Vec;
 use target_lexicon::{PointerWidth, Triple};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{HashMap, hash_map::Entry};
+#[cfg(feature = "std")]
+use std::collections::{HashMap, hash_map::Entry};
 
 /// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
@@ -611,7 +617,7 @@ impl Module for ObjectModule {
             }
         }
 
-        let align = std::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
+        let align = core::cmp::max(align.unwrap_or(1), self.isa.symbol_alignment());
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");

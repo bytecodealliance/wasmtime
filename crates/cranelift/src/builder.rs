@@ -4,13 +4,16 @@
 //! well as providing a function to return the default configuration to build.
 
 use crate::isa_builder::IsaBuilder;
+use core::fmt;
 use cranelift_codegen::{
     CodegenResult,
     isa::{self, OwnedTargetIsa},
 };
-use std::fmt;
+use std::boxed::Box;
+#[cfg(feature = "std")]
 use std::path;
 use std::sync::Arc;
+use std::vec::Vec;
 use target_lexicon::Triple;
 use wasmtime_environ::error::Result;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting, Tunables};
@@ -21,6 +24,7 @@ struct Builder {
     emit_debug_checks: bool,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
+    #[cfg(feature = "std")]
     clif_dir: Option<path::PathBuf>,
     wmemcheck: bool,
 }
@@ -44,6 +48,7 @@ pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
         inner: IsaBuilder::new(triple, |triple| isa::lookup(triple).map_err(|e| e.into()))?,
         linkopts: LinkOptions::default(),
         cache_store: None,
+        #[cfg(feature = "std")]
         clif_dir: None,
         wmemcheck: false,
         emit_debug_checks: false,
@@ -68,6 +73,7 @@ impl CompilerBuilder for Builder {
         self.inner.triple()
     }
 
+    #[cfg(feature = "std")]
     fn clif_dir(&mut self, path: &path::Path) -> Result<()> {
         self.clif_dir = Some(path.to_path_buf());
         Ok(())
@@ -127,6 +133,7 @@ impl CompilerBuilder for Builder {
             self.cache_store.clone(),
             self.emit_debug_checks,
             self.linkopts.clone(),
+            #[cfg(feature = "std")]
             self.clif_dir.clone(),
             self.wmemcheck,
         )))
@@ -152,7 +159,10 @@ impl CompilerBuilder for Builder {
 impl fmt::Debug for Builder {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Builder")
-            .field("shared_flags", &self.inner.shared_flags().to_string())
+            .field(
+                "shared_flags",
+                &std::format!("{}", self.inner.shared_flags()),
+            )
             .finish()
     }
 }

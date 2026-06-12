@@ -15,6 +15,8 @@ use cranelift_codegen::isa::TargetIsa;
 use gimli::AttributeValue;
 use gimli::write;
 use std::collections::HashSet;
+use std::string::String;
+use std::vec::Vec;
 use wasmtime_environ::StaticModuleIndex;
 use wasmtime_environ::error::{Context, Error};
 use wasmtime_versioned_export_macros::versioned_stringify_ident;

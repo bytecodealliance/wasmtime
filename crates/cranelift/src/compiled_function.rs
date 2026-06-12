@@ -1,4 +1,7 @@
-use std::ops::Range;
+use core::ops::Range;
+use std::boxed::Box;
+use std::vec;
+use std::vec::Vec;
 
 use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{

@@ -4,6 +4,8 @@
 //! file-based test case.
 //!
 
+use std::vec::Vec;
+
 use crate::error::Location;
 use crate::isaspec::IsaSpec;
 use crate::sourcemap::SourceMap;

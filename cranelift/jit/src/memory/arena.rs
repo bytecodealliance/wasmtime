@@ -1,8 +1,8 @@
-use std::io;
-use std::mem::ManuallyDrop;
-use std::ptr;
+use core::mem::ManuallyDrop;
+use core::ptr;
+use std::vec::Vec;
 
-use cranelift_module::ModuleResult;
+use cranelift_module::{ModuleError, ModuleResult};
 
 use super::{BranchProtection, JITMemoryKind, JITMemoryProvider};
 
@@ -128,7 +128,7 @@ impl ArenaMemoryProvider {
         size: usize,
         align: u64,
         protection: region::Protection,
-    ) -> io::Result<*mut u8> {
+    ) -> ModuleResult<*mut u8> {
         let align = usize::try_from(align).expect("alignment too big");
         assert!(
             align <= region::page::size(),
@@ -170,14 +170,13 @@ impl ArenaMemoryProvider {
         &mut self,
         size: usize,
         target_prot: region::Protection,
-    ) -> Result<(), io::Error> {
+    ) -> ModuleResult<()> {
         let size = align_up(size, region::page::size());
         let ptr = unsafe { self.ptr.add(self.position) };
         if self.position + size > self.size {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "pre-allocated jit memory region exhausted",
-            ));
+            return Err(ModuleError::Backend(anyhow::anyhow!(
+                "pre-allocated jit memory region exhausted"
+            )));
         }
         self.position += size;
         self.segments.push(Segment::new(ptr, size, target_prot));
@@ -221,7 +220,7 @@ impl Drop for ArenaMemoryProvider {
 }
 
 impl JITMemoryProvider for ArenaMemoryProvider {
-    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> io::Result<*mut u8> {
+    fn allocate(&mut self, size: usize, align: u64, kind: JITMemoryKind) -> ModuleResult<*mut u8> {
         self.allocate_inner(
             size,
             align,

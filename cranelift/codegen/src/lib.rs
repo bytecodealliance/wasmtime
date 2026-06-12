@@ -2,7 +2,7 @@
 #![deny(missing_docs)]
 // Display feature requirements in the documentation when building on docs.rs
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On
 // CI we build at least one version of this crate with `--features all-arch`

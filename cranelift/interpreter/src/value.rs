@@ -105,7 +105,7 @@ pub enum ValueError {
     #[error("unable to convert value into type {0}")]
     InvalidValue(Type),
     #[error("unable to convert to primitive integer")]
-    InvalidInteger(#[from] std::num::TryFromIntError),
+    InvalidInteger(#[from] core::num::TryFromIntError),
     #[error("unable to cast data value")]
     InvalidDataValueCast(#[from] DataValueCastFailure),
     #[error("performed a division by zero")]
@@ -628,31 +628,11 @@ impl DataValueExt for DataValue {
     fn fma(self, b: Self, c: Self) -> ValueResult<Self> {
         match (self, b, c) {
             (DataValue::F32(a), DataValue::F32(b), DataValue::F32(c)) => {
-                // The `fma` function for `x86_64-pc-windows-gnu` is incorrect. Use `libm`'s instead.
-                // See: https://github.com/bytecodealliance/wasmtime/issues/4512
-                #[cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "gnu"))]
                 let res = libm::fmaf(a.as_f32(), b.as_f32(), c.as_f32());
-
-                #[cfg(not(all(
-                    target_arch = "x86_64",
-                    target_os = "windows",
-                    target_env = "gnu"
-                )))]
-                let res = a.as_f32().mul_add(b.as_f32(), c.as_f32());
-
                 Ok(DataValue::F32(res.into()))
             }
             (DataValue::F64(a), DataValue::F64(b), DataValue::F64(c)) => {
-                #[cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "gnu"))]
                 let res = libm::fma(a.as_f64(), b.as_f64(), c.as_f64());
-
-                #[cfg(not(all(
-                    target_arch = "x86_64",
-                    target_os = "windows",
-                    target_env = "gnu"
-                )))]
-                let res = a.as_f64().mul_add(b.as_f64(), c.as_f64());
-
                 Ok(DataValue::F64(res.into()))
             }
             (a, _b, _c) => Err(ValueError::InvalidType(ValueTypeClass::Float, a.ty())),
