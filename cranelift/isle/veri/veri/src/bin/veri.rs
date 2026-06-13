@@ -122,10 +122,10 @@ fn collect_config_paths(args: &[String]) -> Vec<std::path::PathBuf> {
     while let Some(arg) = args.next() {
         if let Some(path) = arg.strip_prefix("--config=") {
             paths.push(std::path::PathBuf::from(path));
-        } else if arg == "--config" {
-            if let Some(path) = args.next() {
-                paths.push(std::path::PathBuf::from(path));
-            }
+        } else if arg == "--config"
+            && let Some(path) = args.next()
+        {
+            paths.push(std::path::PathBuf::from(path));
         }
     }
     paths
