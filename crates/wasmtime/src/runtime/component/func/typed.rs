@@ -2979,7 +2979,10 @@ where
 {
     type Lower = [T::Lower; N];
 
-    #[allow(clippy::cast_possible_truncation, reason = "there is no fallible const conversion, yet")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "there is no fallible const conversion, yet"
+    )]
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::fixed_length_list_static(&T::ABI, N as u32);
 
     fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
