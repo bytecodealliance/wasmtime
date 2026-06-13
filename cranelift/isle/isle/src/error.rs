@@ -258,7 +258,7 @@ impl ErrorsBuilder {
         self.errors(vec![error])
     }
 
-    /// Set the [Errors::files] field of the under-construction [Errors] object.
+    /// Set the `files` field of the under-construction [Errors] object.
     pub fn files(mut self, files: Arc<Files>) -> Self {
         self.0.files = files;
         self

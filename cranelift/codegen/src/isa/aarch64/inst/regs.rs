@@ -16,7 +16,7 @@ use alloc::string::{String, ToString};
 
 /// The pinned register on this architecture.
 /// It must be the same as Spidermonkey's HeapReg, as found in this file.
-/// https://searchfox.org/mozilla-central/source/js/src/jit/arm64/Assembler-arm64.h#103
+/// <https://searchfox.org/mozilla-central/source/js/src/jit/arm64/Assembler-arm64.h#103>
 pub const PINNED_REG: u8 = 21;
 
 /// Get a reference to an X-register (integer register). Do not use
