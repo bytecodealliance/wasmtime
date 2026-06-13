@@ -3031,6 +3031,40 @@ where
     }
 }
 
+// this is a reimplementation of array::try_from_fn, replace once that became stable
+fn array_try_from_fn<E, F, T, const N: usize>(mut cb: F) -> Result<[T; N], E>
+where
+    F: FnMut(usize) -> Result<T, E>,
+{
+    let mut valid = 0;
+    let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
+    let mut error: Option<E> = None;
+    for n in 0..N {
+        match cb(n) {
+            Ok(v) => {
+                result[valid].write(v);
+                valid += 1;
+            }
+            Err(e) => {
+                error = Some(e);
+                // continue to consume all input
+            }
+        }
+    }
+    if let Some(e) = error {
+        // on error drop all valid elements
+        for n in 0..valid {
+            unsafe {
+                result[n].assume_init_drop();
+            }
+        }
+        return Err(e);
+    }
+    assert!(valid == N);
+    // this is a copy of array_assume_init from stdlib to avoid requiring nightly
+    Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+}
+
 unsafe impl<T, const N: usize> Lift for [T; N]
 where
     T: Lift + Sized,
@@ -3044,33 +3078,7 @@ where
             InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
-        // this is reimplementation of array::try_from_fn
-        let mut valid = 0;
-        let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
-        let mut error: Option<crate::error::Error> = None;
-        for n in 0..N {
-            match T::linear_lift_from_flat(cx, element, &src[n]) {
-                Ok(v) => {
-                    result[valid].write(v);
-                    valid += 1;
-                }
-                Err(e) => {
-                    error = Some(e);
-                    // continue to consume all input
-                }
-            }
-        }
-        if let Some(e) = error {
-            for n in 0..valid {
-                unsafe {
-                    result[n].assume_init_drop();
-                }
-            }
-            return Err(e);
-        }
-        assert!(valid == N);
-        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
-        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+        array_try_from_fn(|n| T::linear_lift_from_flat(cx, element, &src[n]))
     }
 
     fn linear_lift_from_memory(
@@ -3083,35 +3091,10 @@ where
             InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
-        // this is reimplementation of array::try_from_fn
-        let mut valid = 0;
-        let mut result: [MaybeUninit<T>; N] = [const { MaybeUninit::uninit() }; N];
-        let mut error: Option<crate::error::Error> = None;
-        let mut offset = 0;
-        for _ in 0..N {
-            match T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32]) {
-                Ok(v) => {
-                    result[valid].write(v);
-                    valid += 1;
-                }
-                Err(e) => {
-                    error = Some(e);
-                    // continue to consume all input
-                }
-            }
-            offset += T::SIZE32;
-        }
-        if let Some(e) = error {
-            for n in 0..valid {
-                unsafe {
-                    result[n].assume_init_drop();
-                }
-            }
-            return Err(e);
-        }
-        assert!(valid == N);
-        // this is a copy of array_assume_init from stdlib to avoid requiring nightly
-        Ok(unsafe { (&result as *const _ as *const [T; N]).read() })
+        array_try_from_fn(|n| {
+            let offset = n * T::SIZE32;
+            T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32])
+        })
     }
 }
 
