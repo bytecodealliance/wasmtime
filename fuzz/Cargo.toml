@@ -1,135 +1,14 @@
 [package]
 name = "wasmtime-fuzz"
 version = "0.0.0"
-edition.workspace = true
-rust-version.workspace = true
+edition = "2021"
 publish = false
-
-[lints]
-workspace = true
-
 [package.metadata]
 cargo-fuzz = true
-
 [dependencies]
-mutatis = { workspace = true }
-rand = { workspace = true }
-postcard = { workspace = true }
-env_logger = { workspace = true }
-cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
-cranelift-codegen = { workspace = true, features = ["incremental-cache", "x86", "arm64", "s390x", "riscv64"] }
-cranelift-reader = { workspace = true }
-cranelift-filetests = { workspace = true }
-cranelift-interpreter = { workspace = true }
-cranelift-fuzzgen = { workspace = true }
-cranelift-native = { workspace = true }
-cranelift-control = { workspace = true }
-libfuzzer-sys = { workspace = true, features = ["arbitrary-derive"] }
-target-lexicon = { workspace = true }
-pulley-interpreter-fuzz = { workspace = true }
-smallvec = { workspace = true }
-wasmparser = { workspace = true }
-wasmtime = { workspace = true, features = ["winch"] }
-wasmtime-core = { workspace = true }
-wasmtime-fuzzing = { workspace = true }
-wasmtime-test-util = { workspace = true }
-log = { workspace = true }
-
-# Only for use by the Cranlift fuzz targets. Wasmtime fuzz targets should
-# use `wasmtime::{Error, Result}`.
-anyhow = { workspace = true }
-
-[build-dependencies]
-proc-macro2 = { workspace = true }
-arbitrary = { workspace = true, features = ["derive"] }
-rand = { workspace = true, features = ['std_rng', 'thread_rng'] }
-quote = { workspace = true }
-wasmtime = { workspace = true }
-wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
-
-[features]
-default = ['fuzz-spec-interpreter', 'v8']
-fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
-v8 = ['wasmtime-fuzzing/v8']
-chaos = ["cranelift-control/chaos"]
-
+libfuzzer-sys = "0.4"
 [[bin]]
-name = "compile"
-path = "fuzz_targets/compile.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "instantiate"
-path = "fuzz_targets/instantiate.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "differential"
-path = "fuzz_targets/differential.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "wast_tests"
-path = "fuzz_targets/wast_tests.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "cranelift-fuzzgen"
-path = "fuzz_targets/cranelift-fuzzgen.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "instantiate-many"
-path = "fuzz_targets/instantiate-many.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "component_api"
-path = "fuzz_targets/component_api.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "cranelift-icache"
-path = "fuzz_targets/cranelift-icache.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "call_async"
-path = "fuzz_targets/call_async.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "misc"
-path = "fuzz_targets/misc.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "exception_ops"
-path = "fuzz_targets/exception_ops.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "gc_ops"
-path = "fuzz_targets/gc_ops.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "oom"
-path = "fuzz_targets/oom.rs"
+name = "fuzz_parse"
+path = "fuzz_targets/fuzz_parse.rs"
 test = false
 doc = false
