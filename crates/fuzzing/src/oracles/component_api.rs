@@ -140,7 +140,7 @@ fn arbitrary_val(
         ),
         Type::FixedLengthList(list) => Val::FixedLengthList(
             (0..list.size())
-                .map(|_| arbitrary_val(&list.ty(), input))
+                .map(|_| arbitrary_val(&list.ty(), fuel, input))
                 .collect::<arbitrary::Result<_>>()?,
         ),
 

@@ -355,7 +355,7 @@ impl Val {
                 ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
             }
             InterfaceType::FixedLengthList(i) => {
-                let element = cx.types[i].element.clone();
+                let element = cx.types[i].element;
                 let abi = cx.types.canonical_abi(&element);
                 Val::Tuple(
                     (0..cx.types[i].size)
