@@ -129,6 +129,12 @@ fn parse_header_value(
 ) -> Result<http::HeaderValue, HeaderError> {
     if name == CONTENT_LENGTH {
         let s = str::from_utf8(value.as_ref()).or(Err(HeaderError::InvalidSyntax))?;
+        // RFC 9110 defines `Content-Length` as `1*DIGIT`. `u64`'s `FromStr` is
+        // more lenient and also accepts a leading `+`, so reject anything that
+        // isn't a non-empty run of decimal digits.
+        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(HeaderError::InvalidSyntax);
+        }
         let v: u64 = s.parse().or(Err(HeaderError::InvalidSyntax))?;
         Ok(v.into())
     } else {
@@ -703,5 +709,26 @@ impl Host for WasiHttpCtxView<'_> {
         error: crate::p3::RequestOptionsError,
     ) -> wasmtime::Result<RequestOptionsError> {
         error.downcast()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_header_value;
+    use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
+
+    #[test]
+    fn content_length_rejects_non_digits() {
+        assert!(parse_header_value(&CONTENT_LENGTH, "0").is_ok());
+        assert!(parse_header_value(&CONTENT_LENGTH, "1234").is_ok());
+
+        // `u64::from_str` accepts these but they are not `1*DIGIT` per RFC 9110.
+        assert!(parse_header_value(&CONTENT_LENGTH, "+5").is_err());
+        assert!(parse_header_value(&CONTENT_LENGTH, "-5").is_err());
+        assert!(parse_header_value(&CONTENT_LENGTH, " 5").is_err());
+        assert!(parse_header_value(&CONTENT_LENGTH, "").is_err());
+
+        // other header names are unaffected
+        assert!(parse_header_value(&CONTENT_TYPE, "text/plain").is_ok());
     }
 }
