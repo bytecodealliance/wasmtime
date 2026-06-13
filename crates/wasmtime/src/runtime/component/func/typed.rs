@@ -3091,9 +3091,11 @@ where
             InterfaceType::FixedLengthList(ty) => cx.types[ty].element,
             _ => bad_type_info(),
         };
-        array_try_from_fn(|n| {
-            let offset = n * T::SIZE32;
-            T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32])
+        let mut offset = 0;
+        array_try_from_fn(|_n| {
+            let res = T::linear_lift_from_memory(cx, element, &bytes[offset..offset + T::SIZE32]);
+            offset += T::SIZE32;
+            res
         })
     }
 }
