@@ -514,7 +514,7 @@ impl AddressTransform {
             object::Endianness::Little,
         );
         let dummy_symbol = dummy_obj.add_file_symbol(Vec::new());
-        let func_lookup = move |_, f| (dummy_symbol, module_map[f]);
+        let func_lookup = move |_, f| (Some(dummy_symbol), module_map[f]);
         let tunables = wasmtime_environ::Tunables::default_host();
         let compile = Compilation::new(
             &*cranelift_codegen::isa::lookup(target_lexicon::Triple::host())
