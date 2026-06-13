@@ -885,14 +885,12 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
         memory_alloc_index: MemoryAllocationIndex,
-        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        let ret = self.gc_heaps.as_ref().unwrap().allocate(
-            engine,
-            gc_runtime,
-            memory_alloc_index,
-            memory,
-        )?;
+        let ret =
+            self.gc_heaps
+                .as_ref()
+                .unwrap()
+                .allocate(engine, gc_runtime, memory_alloc_index)?;
         self.live_gc_heaps.fetch_add(1, Ordering::Relaxed);
         Ok(ret)
     }
@@ -902,7 +900,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         &self,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
-    ) -> (MemoryAllocationIndex, Memory) {
+    ) -> MemoryAllocationIndex {
         let gc_heaps = self.gc_heaps.as_ref().unwrap();
         self.live_gc_heaps.fetch_sub(1, Ordering::Relaxed);
         gc_heaps.deallocate(allocation_index, gc_heap)

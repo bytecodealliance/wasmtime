@@ -236,11 +236,9 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
         memory_alloc_index: MemoryAllocationIndex,
-        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
         debug_assert_eq!(memory_alloc_index, MemoryAllocationIndex::default());
-        let mut heap = gc_runtime.new_gc_heap(engine)?;
-        heap.attach(memory);
+        let heap = gc_runtime.new_gc_heap(engine)?;
         Ok((GcHeapAllocationIndex::default(), heap))
     }
 
@@ -248,9 +246,10 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     fn deallocate_gc_heap(
         &self,
         allocation_index: GcHeapAllocationIndex,
-        mut gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
-    ) -> (MemoryAllocationIndex, Memory) {
+        gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
+    ) -> MemoryAllocationIndex {
         debug_assert_eq!(allocation_index, GcHeapAllocationIndex::default());
-        (MemoryAllocationIndex::default(), gc_heap.detach())
+        debug_assert!(!gc_heap.is_attached());
+        MemoryAllocationIndex::default()
     }
 }
