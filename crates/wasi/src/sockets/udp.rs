@@ -181,7 +181,12 @@ impl UdpSocket {
             (UdpState::BindStarted, _) => Err(ErrorCode::InvalidState),
             (UdpState::Default | UdpState::Bound, None) => Err(ErrorCode::InvalidArgument),
             (UdpState::Default | UdpState::Bound, Some(addr)) => {
-                Ok(Mode::SendTo(Arc::clone(&self.socket), addr))
+                if is_valid_remote_address(addr) && is_valid_address_family(addr.ip(), self.family)
+                {
+                    Ok(Mode::SendTo(Arc::clone(&self.socket), addr))
+                } else {
+                    Err(ErrorCode::InvalidArgument)
+                }
             }
             (UdpState::Connected(..), None) => Ok(Mode::Send(Arc::clone(&self.socket))),
             (UdpState::Connected(caddr), Some(addr)) => {
