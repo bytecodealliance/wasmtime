@@ -16,6 +16,7 @@ pub enum BranchProtection {
     BTI,
 }
 
+/// The kind of memory allocation requested by a [`JITMemoryProvider`].
 pub enum JITMemoryKind {
     /// Allocate memory that will be executable once finalized.
     Executable,
