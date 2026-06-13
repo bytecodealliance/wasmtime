@@ -41,6 +41,12 @@ cfg_if::cfg_if! {
 /// Represents an execution stack to use for a fiber.
 pub struct FiberStack(imp::FiberStack);
 
+impl core::fmt::Debug for FiberStack {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FiberStack").finish_non_exhaustive()
+    }
+}
+
 fn _assert_send_sync() {
     fn _assert_send<T: Send>() {}
     fn _assert_sync<T: Sync>() {}
@@ -171,11 +177,17 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     /// This function returns a `Fiber` which, when resumed, will execute `func`
     /// to completion. When desired the `func` can suspend itself via
     /// `Fiber::suspend`.
+    /// On error the provided `stack` is handed back to the caller (paired with
+    /// the error) so that it can be deallocated rather than leaked; the stack is
+    /// only consumed by this `Fiber` on success.
     pub fn new(
         stack: FiberStack,
         func: impl FnOnce(Resume, &mut Suspend<Resume, Yield, Return>) -> Return + 'a,
-    ) -> Result<Self> {
-        let inner = imp::Fiber::new(&stack.0, func)?;
+    ) -> Result<Self, (Error, FiberStack)> {
+        let inner = match imp::Fiber::new(&stack.0, func) {
+            Ok(inner) => inner,
+            Err(e) => return Err((e, stack)),
+        };
 
         Ok(Self {
             stack: Some(stack),

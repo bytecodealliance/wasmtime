@@ -6,6 +6,7 @@ use std::io;
 use std::mem::needs_drop;
 use std::ops::Range;
 use std::ptr;
+use wasmtime_environ::prelude::*;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Threading::*;
 
@@ -102,13 +103,13 @@ where
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
+    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> Result<Self>
     where
         F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
         unsafe {
             let state = Box::new(StartState {
-                initial_closure: Cell::new(Box::into_raw(Box::new(func)).cast()),
+                initial_closure: Cell::new(Box::into_raw(try_new(func)?).cast()),
                 parent: Cell::new(ptr::null_mut()),
                 result_location: Cell::new(ptr::null()),
             });
@@ -123,7 +124,7 @@ impl Fiber {
 
             if fiber.is_null() {
                 drop(Box::from_raw(state.initial_closure.get().cast::<F>()));
-                return Err(io::Error::last_os_error());
+                return Err(io::Error::last_os_error().into());
             }
 
             Ok(Self { fiber, state })
