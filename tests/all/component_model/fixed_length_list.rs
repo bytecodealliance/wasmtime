@@ -15,7 +15,7 @@ fn fixed_length_list() -> Result<()> {
     (memory (;0;) 2)
     (global (;0;) (mut i32) i32.const 67248)
     (export "memory" (memory 0))
-    (export "test:fixed-size-lists/to-test#nested-roundtrip" (func 0))
+    (export "test:fixed-length-lists/to-test#nested-roundtrip" (func 0))
     (func (;0;) (type 0) (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
       (local i32 i32 i64 i64)
       global.get 0
@@ -145,9 +145,9 @@ fn fixed_length_list() -> Result<()> {
   (type (;3;) (list 2 2))
   (type (;4;) (tuple 1 3))
   (type (;5;) (func (param "a" 1) (param "b" 3) (result 4)))
-  (alias core export $main "test:fixed-size-lists/to-test#nested-roundtrip" (core func $test:fixed-size-lists/to-test#nested-roundtrip (;0;)))
-  (func $nested-roundtrip (;0;) (type 5) (canon lift (core func $test:fixed-size-lists/to-test#nested-roundtrip) (memory $memory)))
-  (component $test:fixed-size-lists/to-test-shim-component (;0;)
+  (alias core export $main "test:fixed-length-lists/to-test#nested-roundtrip" (core func $test:fixed-length-lists/to-test#nested-roundtrip (;0;)))
+  (func $nested-roundtrip (;0;) (type 5) (canon lift (core func $test:fixed-length-lists/to-test#nested-roundtrip) (memory $memory)))
+  (component $test:fixed-length-lists/to-test-shim-component (;0;)
     (type (;0;) (list u32 2))
     (type (;1;) (list 0 2))
     (type (;2;) (list s32 2))
@@ -163,11 +163,11 @@ fn fixed_length_list() -> Result<()> {
     (type (;11;) (func (param "a" 7) (param "b" 9) (result 10)))
     (export (;1;) "nested-roundtrip" (func 0) (func (type 11)))
   )
-  (instance $test:fixed-size-lists/to-test-shim-instance (;0;) (instantiate $test:fixed-size-lists/to-test-shim-component
+  (instance $test:fixed-length-lists/to-test-shim-instance (;0;) (instantiate $test:fixed-length-lists/to-test-shim-component
       (with "import-func-nested-roundtrip" (func $nested-roundtrip))
     )
   )
-  (export $test:fixed-size-lists/to-test (;1;) "test:fixed-size-lists/to-test" (instance $test:fixed-size-lists/to-test-shim-instance))
+  (export $test:fixed-length-lists/to-test (;1;) "test:fixed-length-lists/to-test" (instance $test:fixed-length-lists/to-test-shim-instance))
   (@producers
     (processed-by "wit-component" "0.243.0")
   )
@@ -178,9 +178,9 @@ fn fixed_length_list() -> Result<()> {
         package root:root;
 
 world root {
-  export test:fixed-size-lists/to-test;
+  export test:fixed-length-lists/to-test;
 }
-package test:fixed-size-lists {
+package test:fixed-length-lists {
   interface to-test {
     nested-roundtrip: func(a: list<list<u32, 2>, 2>, b: list<list<s32, 2>, 2>) -> tuple<list<list<u32, 2>, 2>, list<list<s32, 2>, 2>>;
   }

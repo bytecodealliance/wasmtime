@@ -405,8 +405,8 @@ impl FixedLengthList {
         Type::from(&self.0.types[self.0.index].element, &self.0.instance())
     }
 
-    /// Retrieve the size of this `list`.
-    pub fn size(&self) -> u32 {
+    /// Retrieve the length of this `list`.
+    pub fn len(&self) -> u32 {
         self.0.types[self.0.index].size
     }
 }

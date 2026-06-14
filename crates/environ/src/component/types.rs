@@ -751,7 +751,7 @@ impl CanonicalAbiInfo {
         return ret;
     }
 
-    /// Returns the abi for a fixed size list
+    /// Returns the abi for a fixed length list
     pub const fn fixed_length_list_static(
         element: &CanonicalAbiInfo,
         count: u32,
