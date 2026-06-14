@@ -140,7 +140,7 @@ impl wasm_val_t {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_val_copy(out: &mut MaybeUninit<wasm_val_t>, source: &wasm_val_t) {
-    crate::initialize(out, source.clone());
+    out.write(source.clone());
 }
 
 #[unsafe(no_mangle)]
