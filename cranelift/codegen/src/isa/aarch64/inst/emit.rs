@@ -2764,6 +2764,11 @@ impl MachInstEmit for Inst {
                     VecALUModOp::Fmls => {
                         (0b000_01110_10_1 | (size.enc_float_size() << 1), 0b110011)
                     }
+                    // SDOT Vd.4S, Vn.16B, Vm.16B (FEAT_DotProd). The size/element
+                    // field (bits 23:22 = 0b10) is part of the dot-product opcode,
+                    // so it is baked into top11; only Q (from `size`) is variable.
+                    // top11 (Q=0) | q<<9 with bit15_10 yields 0x4E809400 for .4S/.16B.
+                    VecALUModOp::Sdot => (0b000_01110_10_0, 0b100101),
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }

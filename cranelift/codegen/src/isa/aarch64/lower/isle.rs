@@ -179,6 +179,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
+    fn use_dotprod(&mut self, _: Inst) -> Option<()> {
+        if self.backend.isa_flags.has_dotprod() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
     fn use_fp16(&mut self) -> bool {
         self.backend.isa_flags.has_fp16()
     }

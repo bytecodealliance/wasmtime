@@ -25,6 +25,14 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
     settings.add_bool(
+        "has_dotprod",
+        "Has Dot Product (FEAT_DotProd) support; enables lowering i8 dot \
+         products (e.g. the relaxed-SIMD i8x16 dot) to SDOT/UDOT instead of \
+         a smull/saddlp widening fallback.",
+        "",
+        false,
+    );
+    settings.add_bool(
         "sign_return_address_all",
         "If function return address signing is enabled, then apply it to all \
         functions; does not have an effect on code generation by itself.",
