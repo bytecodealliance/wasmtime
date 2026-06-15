@@ -24,7 +24,7 @@ use std::ops::Range;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 
-pub type Error = io::Error;
+pub use wasmtime_environ::error::Error;
 
 pub struct FiberStack(usize);
 
@@ -34,7 +34,7 @@ impl FiberStack {
     }
 
     pub unsafe fn from_raw_parts(_base: *mut u8, _guard_size: usize, _len: usize) -> Result<Self> {
-        Err(io::ErrorKind::Unsupported.into())
+        Err(io::Error::from(io::ErrorKind::Unsupported).into())
     }
 
     pub fn is_from_raw_parts(&self) -> bool {
@@ -42,7 +42,7 @@ impl FiberStack {
     }
 
     pub fn from_custom(_custom: Box<dyn RuntimeFiberStack>) -> Result<Self> {
-        Err(io::ErrorKind::Unsupported.into())
+        Err(io::Error::from(io::ErrorKind::Unsupported).into())
     }
 
     pub fn top(&self) -> Option<*mut u8> {
