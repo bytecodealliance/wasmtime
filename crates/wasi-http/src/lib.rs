@@ -33,8 +33,42 @@ fn get_content_length(headers: &http::HeaderMap) -> wasmtime::Result<Option<u64>
         return Ok(None);
     };
     let v = v.to_str()?;
+    // RFC 9110 defines `Content-Length` as `1*DIGIT`. `u64`'s `FromStr` is more
+    // lenient and also accepts a leading `+`, so reject anything that isn't a
+    // non-empty run of decimal digits before parsing.
+    if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) {
+        wasmtime::bail!("invalid `content-length` header value: {v:?}");
+    }
     let v = v.parse()?;
     Ok(Some(v))
+}
+
+#[cfg(all(test, any(feature = "p2", feature = "p3")))]
+mod content_length_tests {
+    use super::get_content_length;
+    use http::{HeaderMap, HeaderValue, header};
+
+    fn headers(value: &str) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        map.insert(
+            header::CONTENT_LENGTH,
+            HeaderValue::from_str(value).unwrap(),
+        );
+        map
+    }
+
+    #[test]
+    fn content_length_must_be_decimal_digits() {
+        assert_eq!(get_content_length(&HeaderMap::new()).unwrap(), None);
+        assert_eq!(get_content_length(&headers("0")).unwrap(), Some(0));
+        assert_eq!(get_content_length(&headers("1234")).unwrap(), Some(1234));
+
+        // `u64::from_str` accepts these but they are not `1*DIGIT` per RFC 9110.
+        assert!(get_content_length(&headers("+5")).is_err());
+        assert!(get_content_length(&headers("-5")).is_err());
+        assert!(get_content_length(&headers(" 5")).is_err());
+        assert!(get_content_length(&headers("")).is_err());
+    }
 }
 
 /// Set of [http::header::HeaderName], that are forbidden by default

@@ -126,7 +126,7 @@ macro_rules! ref_wrapper {
                 let mut scope = wasmtime::RootScope::new(cx);
                 let anyref = $wasmtime::from_raw(&mut scope, raw)
                     .map(|a| a.to_owned_rooted(&mut scope).expect("in scope"));
-                crate::initialize(val, anyref.into());
+                val.write(anyref.into());
             }
         )?
     };
@@ -151,7 +151,7 @@ pub extern "C" fn wasmtime_anyref_from_i31(
     let mut scope = RootScope::new(cx);
     let anyref = AnyRef::from_i31(&mut scope, I31::wrapping_u32(val));
     let anyref = anyref.to_owned_rooted(&mut scope).expect("in scope");
-    crate::initialize(out, Some(anyref).into())
+    out.write(Some(anyref).into());
 }
 
 #[unsafe(no_mangle)]
@@ -177,7 +177,7 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_u(
                 .unwrap_i31(&cx)
                 .expect("OwnedRooted always in scope")
                 .get_u32();
-            crate::initialize(dst, val);
+            dst.write(val);
             true
         }
         _ => false,
@@ -196,7 +196,7 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_s(
                 .unwrap_i31(&cx)
                 .expect("OwnedRooted always in scope")
                 .get_i32();
-            crate::initialize(dst, val);
+            dst.write(val);
             true
         }
         _ => false,
@@ -225,11 +225,11 @@ pub unsafe extern "C" fn wasmtime_anyref_as_eqref(
         let rooted = anyref.to_rooted(&mut scope);
         if let Ok(Some(eqref)) = rooted.as_eqref(&mut scope) {
             let owned = eqref.to_owned_rooted(&mut scope).expect("in scope");
-            crate::initialize(out, Some(owned).into());
+            out.write(Some(owned).into());
             return true;
         }
     }
-    crate::initialize(out, None::<OwnedRooted<EqRef>>.into());
+    out.write(None::<OwnedRooted<EqRef>>.into());
     false
 }
 
@@ -255,11 +255,11 @@ pub unsafe extern "C" fn wasmtime_anyref_as_struct(
         let rooted = anyref.to_rooted(&mut scope);
         if let Ok(Some(structref)) = rooted.as_struct(&scope) {
             let owned = structref.to_owned_rooted(&mut scope).expect("in scope");
-            crate::initialize(out, Some(owned).into());
+            out.write(Some(owned).into());
             return true;
         }
     }
-    crate::initialize(out, None::<OwnedRooted<StructRef>>.into());
+    out.write(None::<OwnedRooted<StructRef>>.into());
     false
 }
 
@@ -285,11 +285,11 @@ pub unsafe extern "C" fn wasmtime_anyref_as_array(
         let rooted = anyref.to_rooted(&mut scope);
         if let Ok(Some(arrayref)) = rooted.as_array(&scope) {
             let owned = arrayref.to_owned_rooted(&mut scope).expect("in scope");
-            crate::initialize(out, Some(owned).into());
+            out.write(Some(owned).into());
             return true;
         }
     }
-    crate::initialize(out, None::<OwnedRooted<ArrayRef>>.into());
+    out.write(None::<OwnedRooted<ArrayRef>>.into());
     false
 }
 

@@ -155,7 +155,7 @@ pub unsafe extern "C" fn wasm_func_call(
     match result {
         Ok(Ok(())) => {
             for (slot, val) in results.iter_mut().zip(wt_results.iter().cloned()) {
-                crate::initialize(slot, wasm_val_t::from_val(val));
+                slot.write(wasm_val_t::from_val(val));
             }
             ptr::null_mut()
         }
@@ -376,7 +376,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
         Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(&mut store, *val));
+                slot.write(wasmtime_val_t::from_val(&mut store, *val));
             }
             params.truncate(0);
             store.as_context_mut().data_mut().wasm_val_storage = params;
@@ -455,7 +455,7 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
         Some(item) => item,
         None => return false,
     };
-    crate::initialize(item, which.into());
+    item.write(which.into());
     true
 }
 

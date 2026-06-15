@@ -2455,6 +2455,12 @@ impl Config {
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
         );
+        features.set(
+            WasmFeatures::CM_ASYNC,
+            self.tunables
+                .concurrency_support
+                .unwrap_or(cfg!(feature = "component-model-async")),
+        );
 
         // Next disable any features which the current compiler/target do not
         // support. This handles cases where Winch, for example, doesn't
@@ -4291,6 +4297,7 @@ fn detect_host_feature(feature: &str) -> Option<bool> {
             "lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
             "paca" => Some(std::arch::is_aarch64_feature_detected!("paca")),
             "fp16" => Some(std::arch::is_aarch64_feature_detected!("fp16")),
+            "dotprod" => Some(std::arch::is_aarch64_feature_detected!("dotprod")),
 
             _ => None,
         };

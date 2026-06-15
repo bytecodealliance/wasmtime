@@ -379,7 +379,7 @@ arbitrary = "1.4.2"
 backtrace = "0.3.76"
 bumpalo = "3.20.2"
 mutatis = { version = "0.5.2", features = ["alloc", "derive", "check"] }
-cc = "1.2.41"
+cc = "1.2.0" # intentionally smaller-than-latest to accommodate rust-lang/rust
 object = { version = "0.39.0", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.33.0", default-features = false, features = ['read'] }
 addr2line = { version = "0.26.0", default-features = false }

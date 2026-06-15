@@ -14,8 +14,8 @@
 )
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 40 "VMContext+0x28"
-;;     region2 = 32 "VMContext+0x20"
+;;     region1 = 32 "VMContext+0x20"
+;;     region2 = 40 "VMContext+0x28"
 ;;     region3 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
@@ -26,7 +26,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0023                               v8 = load.i64 notrap aligned readonly can_move v0+32
+;; @0023                               v8 = load.i64 notrap aligned readonly can_move region1 v0+32
 ;; @0023                               v9 = load.i32 notrap aligned v8
 ;; @0023                               v10 = load.i32 notrap aligned v8+4
 ;; @0023                               v16 = uextend.i64 v9
@@ -39,13 +39,13 @@
 ;;                                 block2:
 ;;                                     v63 = iconst.i32 48
 ;;                                     v61 = iadd.i32 v9, v63  ; v63 = 48
-;; @0023                               store notrap aligned region2 v61, v8
+;; @0023                               store notrap aligned region1 v61, v8
 ;;                                     v64 = iconst.i32 -1342177246
 ;;                                     v65 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v66 = load.i64 notrap aligned readonly can_move v65+32
 ;; @0023                               v33 = iadd v66, v16
 ;; @0023                               store notrap aligned v64, v33  ; v64 = -1342177246
-;;                                     v67 = load.i64 notrap aligned readonly can_move region1 v0+40
+;;                                     v67 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;;                                     v68 = load.i32 notrap aligned readonly can_move v67
 ;; @0023                               store notrap aligned v68, v33+4
 ;;                                     v69 = iconst.i64 48
@@ -54,7 +54,7 @@
 ;;
 ;;                                 block3 cold:
 ;; @0023                               v20 = iconst.i32 -1342177246
-;; @0023                               v21 = load.i64 notrap aligned readonly can_move region1 v0+40
+;; @0023                               v21 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @0023                               v22 = load.i32 notrap aligned readonly can_move v21
 ;; @0023                               v7 = iconst.i32 48
 ;; @0023                               v23 = iconst.i32 16

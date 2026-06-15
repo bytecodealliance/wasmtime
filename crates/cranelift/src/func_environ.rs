@@ -4276,11 +4276,13 @@ impl FuncEnvironment<'_> {
         // the value 0 to the `VMContext`'s slot for this passive data segment.
         let vmctx = self.vmctx_val(&mut pos);
         let new_length = pos.ins().iconst(I32, 0);
+        let length_offset = self.offsets.vmctx_runtime_data_length(runtime_index);
+        let region = self.vmctx_alias_region(pos.func, length_offset);
         pos.ins().store(
-            ir::MemFlagsData::trusted(),
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             new_length,
             vmctx,
-            i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap(),
+            i32::try_from(length_offset).unwrap(),
         );
 
         Ok(())
@@ -4561,9 +4563,12 @@ impl FuncEnvironment<'_> {
         runtime_index: RuntimeDataIndex,
     ) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let offset = i32::try_from(self.offsets.vmctx_runtime_data_length(runtime_index)).unwrap();
-        let flags = ir::MemFlagsData::trusted();
-        builder.ins().load(I32, flags, vmctx, offset)
+        let length_offset = self.offsets.vmctx_runtime_data_length(runtime_index);
+        let region = self.vmctx_alias_region(builder.func, length_offset);
+        let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
+        builder
+            .ins()
+            .load(I32, flags, vmctx, i32::try_from(length_offset).unwrap())
     }
 
     fn load_runtime_data_length_as_pointer(
@@ -4581,12 +4586,13 @@ impl FuncEnvironment<'_> {
         runtime_index: RuntimeDataIndex,
     ) -> ir::Value {
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let offset = i32::try_from(self.offsets.vmctx_runtime_data_base(runtime_index)).unwrap();
+        let base_offset = self.offsets.vmctx_runtime_data_base(runtime_index);
+        let region = self.vmctx_alias_region(builder.func, base_offset);
         builder.ins().load(
             self.pointer_type(),
-            ir::MemFlagsData::trusted(),
+            ir::MemFlagsData::trusted().with_alias_region(Some(region)),
             vmctx,
-            offset,
+            i32::try_from(base_offset).unwrap(),
         )
     }
 

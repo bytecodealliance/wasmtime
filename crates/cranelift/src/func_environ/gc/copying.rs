@@ -33,12 +33,18 @@ impl CopyingCompiler {
         builder: &mut FunctionBuilder,
     ) -> ir::Value {
         let pointer_type = func_env.pointer_type();
+        let gc_heap_data_offset = func_env.offsets.ptr.vmctx_gc_heap_data();
+        let vmctx_region =
+            func_env.vmctx_alias_region(&mut builder.func, u32::from(gc_heap_data_offset));
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         builder.ins().load(
             pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(vmctx_region)),
             vmctx,
-            i32::from(func_env.offsets.ptr.vmctx_gc_heap_data()),
+            i32::from(gc_heap_data_offset),
         )
     }
 

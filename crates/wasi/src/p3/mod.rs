@@ -178,12 +178,12 @@ where
 /// Similar to [`add_to_linker`], but with the ability to enable unstable features.
 pub fn add_to_linker_with_options<T>(
     linker: &mut Linker<T>,
-    options: &LinkOptions,
+    _options: &LinkOptions,
 ) -> wasmtime::Result<()>
 where
     T: WasiView + 'static,
 {
-    cli::add_to_linker_with_options(linker, &options.into())?;
+    cli::add_to_linker(linker)?;
     clocks::add_to_linker(linker)?;
     filesystem::add_to_linker(linker)?;
     random::add_to_linker(linker)?;

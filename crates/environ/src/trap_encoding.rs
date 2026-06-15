@@ -275,6 +275,9 @@ generate_trap_type! {
         /// synchronous operation while it was added to a waitable set.
         WaitableSyncAndAsync = "waitable cannot be used synchronously while added to a waitable set",
 
+        /// An exception propagated out of a component without being caught.
+        UncaughtException = "uncaught exception propagated out of component",
+
         // if adding a variant here be sure to update `trap.rs` and `trap.h` as
         // mentioned above
     }

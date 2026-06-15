@@ -710,8 +710,6 @@ jobs:
     - uses: ./.github/actions/apt-get-install
       with:
         packages: ocaml-nox ocamlbuild ocaml-findlib libzarith-ocaml-dev
-    - run: cargo fetch
-      working-directory: ./fuzz
     - run: cargo fuzz check --dev
     - run: cargo fuzz check --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz check --dev --fuzz-dir ./crates/environ/fuzz --features component-model
@@ -842,8 +840,6 @@ jobs:
     - shell: pwsh
       run: echo "C:\msys64\mingw64\bin" >> $Env:GITHUB_PATH
       if: matrix.target == 'x86_64-pc-windows-gnu'
-
-    - run: cargo fetch --locked
 
     - uses: ./.github/actions/apt-get-install
       name: Install cross-compilation tools

@@ -142,6 +142,8 @@ enum wasmtime_trap_code_enum {
   /// was being used in a synchronous operation or tried to use it in a
   /// synchronous operation while it was added to a waitable set.
   WASMTIME_TRAP_CODE_WAITABLE_SYNC_AND_ASYNC = 48,
+  /// An exception propagated out of a component without being caught.
+  WASMTIME_TRAP_CODE_UNCAUGHT_EXCEPTION = 49,
 };
 
 /**

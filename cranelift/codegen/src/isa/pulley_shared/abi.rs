@@ -713,29 +713,47 @@ impl FrameLayout {
         &'a self,
         style: &'a FrameStyle,
     ) -> impl Iterator<Item = (i32, Type, Reg)> + 'a {
-        let mut offset = self.stack_size();
+        // `push_frame_save` always saves the pulley-managed registers at the
+        // *top* of the allocated frame (the highest addresses, `amt - 8`
+        // downward). Therefore the manually-managed clobbers must be placed
+        // *below* that pulley-saved region. The pulley-saved registers are not
+        // necessarily first in `clobbered_callee_saves` (it is sorted by
+        // register, and the manually-managed integer registers x0..x15 sort
+        // before the pulley-managed x16..x31), so we cannot simply walk the
+        // list from the top assigning slots in order -- doing so would place a
+        // manually-managed register on top of a pulley-saved one and the two
+        // stores would collide.
+        //
+        // Instead reserve the top `num_saved_by_pulley` 8-byte slots for the
+        // pulley-managed registers (matching `push_frame_save`) and hand out
+        // the remaining, lower slots to the manually-managed registers.
+        let num_saved_by_pulley = match style {
+            FrameStyle::PulleySetupAndSaveClobbers {
+                saved_by_pulley, ..
+            } => u32::from(saved_by_pulley.len()),
+            _ => 0,
+        };
+        let mut offset = self.stack_size() - num_saved_by_pulley * 8;
         self.clobbered_callee_saves.iter().filter_map(move |reg| {
-            // Allocate space for this clobber no matter what. If pulley is
-            // managing this then we're just accounting for the pulley-saved
-            // registers as well. Note that all pulley-managed registers come
-            // first in the list here.
-            offset -= 8;
             let r_reg = reg.to_reg();
-            let ty = match r_reg.class() {
-                RegClass::Int => {
-                    // If this register is saved by pulley, skip this clobber.
-                    if let FrameStyle::PulleySetupAndSaveClobbers {
-                        saved_by_pulley, ..
-                    } = style
-                    {
-                        if let Some(reg) = r_reg.hw_enc().checked_sub(16) {
-                            if saved_by_pulley.contains(reg) {
-                                return None;
-                            }
+            // If this register is saved by pulley, skip it: its slot is one of
+            // the reserved top slots accounted for above.
+            if let FrameStyle::PulleySetupAndSaveClobbers {
+                saved_by_pulley, ..
+            } = style
+            {
+                if r_reg.class() == RegClass::Int {
+                    if let Some(reg) = r_reg.hw_enc().checked_sub(16) {
+                        if saved_by_pulley.contains(reg) {
+                            return None;
                         }
                     }
-                    I64
                 }
+            }
+            // Allocate space for this manually-managed clobber.
+            offset -= 8;
+            let ty = match r_reg.class() {
+                RegClass::Int => I64,
                 RegClass::Float => F64,
                 RegClass::Vector => I8X16,
             };

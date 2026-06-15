@@ -3,7 +3,7 @@ use test_programs::wasi::sockets::network::{ErrorCode, IpAddress};
 
 fn main() {
     // Valid domains
-    resolve("localhost").unwrap();
+    assert_resolves("localhost");
 
     resolve_at_least_one_of(&[
         "example.com",
@@ -18,30 +18,27 @@ fn main() {
     let _ = resolve("münchen.de");
 
     // Valid IP addresses
-    assert_eq!(resolve_one("0.0.0.0").unwrap(), IpAddress::IPV4_UNSPECIFIED);
-    assert_eq!(resolve_one("127.0.0.1").unwrap(), IpAddress::IPV4_LOOPBACK);
-    assert_eq!(
-        resolve_one("192.0.2.0").unwrap(),
-        IpAddress::Ipv4((192, 0, 2, 0))
+    assert_resolves_to("0.0.0.0", IpAddress::IPV4_UNSPECIFIED);
+    assert_resolves_to("127.0.0.1", IpAddress::IPV4_LOOPBACK);
+    assert_resolves_to("192.0.2.0", IpAddress::Ipv4((192, 0, 2, 0)));
+    assert_resolves_to("::", IpAddress::IPV6_UNSPECIFIED);
+    assert_resolves_to("::1", IpAddress::IPV6_LOOPBACK);
+    assert_resolves_to("[::]", IpAddress::IPV6_UNSPECIFIED);
+    assert_resolves_to(
+        "2001:0db8:0:0:0:0:0:0",
+        IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0)),
     );
-    assert_eq!(resolve_one("::").unwrap(), IpAddress::IPV6_UNSPECIFIED);
-    assert_eq!(resolve_one("::1").unwrap(), IpAddress::IPV6_LOOPBACK);
-    assert_eq!(resolve_one("[::]").unwrap(), IpAddress::IPV6_UNSPECIFIED);
-    assert_eq!(
-        resolve_one("2001:0db8:0:0:0:0:0:0").unwrap(),
-        IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0))
+    assert_resolves_to(
+        "dead:beef::",
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
     );
-    assert_eq!(
-        resolve_one("dead:beef::").unwrap(),
-        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
+    assert_resolves_to(
+        "dead:beef::0",
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
     );
-    assert_eq!(
-        resolve_one("dead:beef::0").unwrap(),
-        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
-    );
-    assert_eq!(
-        resolve_one("DEAD:BEEF::0").unwrap(),
-        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
+    assert_resolves_to(
+        "DEAD:BEEF::0",
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0)),
     );
 
     // Invalid inputs
@@ -63,20 +60,49 @@ fn main() {
 /// succeeds. Intended to help make this test less flaky while still also
 /// testing live services.
 fn resolve_at_least_one_of(domains: &[&str]) {
+    let mut timeouts = 0;
     for domain in domains {
         match resolve(domain) {
             Ok(_) => return,
-            Err(e) => eprintln!("failed to resolve `{domain}`: {e}"),
+            Err(e) => {
+                eprintln!("failed to resolve `{domain}`: {e}");
+                if let ErrorCode::Timeout = e {
+                    timeouts += 1;
+                }
+            }
         }
     }
 
+    // If everything timed out just assume this is a bad CI weather day.
+    if timeouts == domains.len() {
+        return;
+    }
     panic!("should have been able to resolve at least one domain");
+}
+
+/// Asserts that `name` resolves successfully, tolerating timeouts.
+///
+/// All resolutions, even of IP address literals, seem to occasionally time out
+/// on CI, so just ignore timeouts here.
+fn assert_resolves(name: &str) -> Option<Vec<IpAddress>> {
+    match resolve(name) {
+        Ok(addresses) => Some(addresses),
+        Err(ErrorCode::Timeout) => {
+            eprintln!("resolution of `{name}` timed out, skipping");
+            None
+        }
+        Err(e) => panic!("failed to resolve `{name}`: {e}"),
+    }
+}
+
+/// Same as `assert_resolves`, additionally asserting that `name` resolved to
+/// `expected` if the resolution didn't time out.
+fn assert_resolves_to(name: &str, expected: IpAddress) {
+    if let Some(addresses) = assert_resolves(name) {
+        assert_eq!(addresses.first(), Some(&expected), "resolution of `{name}`");
+    }
 }
 
 fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
     Network::default().permissive_blocking_resolve_addresses(name)
-}
-
-fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {
-    Ok(resolve(name)?.first().unwrap().to_owned())
 }

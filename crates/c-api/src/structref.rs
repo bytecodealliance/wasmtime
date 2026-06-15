@@ -39,11 +39,11 @@ pub unsafe extern "C" fn wasmtime_structref_new(
             let owned = structref
                 .to_owned_rooted(&mut scope)
                 .expect("just allocated");
-            crate::initialize(out, Some(owned).into());
+            out.write(Some(owned).into());
             None
         }
         Err(e) => {
-            crate::initialize(out, None::<OwnedRooted<StructRef>>.into());
+            out.write(None::<OwnedRooted<StructRef>>.into());
             Some(Box::new(e.into()))
         }
     }
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn wasmtime_structref_to_anyref(
     let anyref = structref
         .and_then(|s| s.as_wasmtime())
         .map(|s| s.to_anyref());
-    crate::initialize(out, anyref.into());
+    out.write(anyref.into());
 }
 
 #[unsafe(no_mangle)]
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn wasmtime_structref_to_eqref(
     let eqref = structref
         .and_then(|s| s.as_wasmtime())
         .map(|s| s.to_eqref());
-    crate::initialize(out, eqref.into());
+    out.write(eqref.into());
 }
 
 #[unsafe(no_mangle)]
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn wasmtime_structref_field(
     match rooted.field(&mut scope, index) {
         Ok(val) => {
             let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
-            crate::initialize(out, c_val);
+            out.write(c_val);
             None
         }
         Err(e) => Some(Box::new(e.into())),

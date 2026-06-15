@@ -1395,9 +1395,12 @@ impl Compiler {
         if !self.emit_debug_checks {
             return;
         }
+        let magic_region = vmctx_alias_region(builder.func, 0);
         let magic = builder.ins().load(
             ir::types::I32,
-            MemFlagsData::trusted().with_endianness(self.isa.endianness()),
+            MemFlagsData::trusted()
+                .with_endianness(self.isa.endianness())
+                .with_alias_region(Some(magic_region)),
             vmctx,
             0,
         );

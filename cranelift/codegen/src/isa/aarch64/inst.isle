@@ -1851,6 +1851,8 @@
     (Fmla)
     ;; Floating-point fused multiply-subtract vectors
     (Fmls)
+    ;; Signed integer dot product (FEAT_DotProd)
+    (Sdot)
 ))
 
 ;; A Vector miscellaneous operation with two registers.
@@ -2069,6 +2071,10 @@
 
 (decl use_lse () Inst)
 (extern extractor use_lse use_lse)
+
+;; Matches any instruction when the `has_dotprod` (FEAT_DotProd) setting is on.
+(decl use_dotprod () Inst)
+(extern extractor use_dotprod use_dotprod)
 
 (spec (use_fp16) (provide (not result)))
 (decl pure use_fp16 () bool)
@@ -3490,6 +3496,12 @@
 (decl bsl (Type Reg Reg Reg) Reg)
 (rule (bsl ty c x y)
       (vec_rrr_mod (VecALUModOp.Bsl) c x y (vector_size ty)))
+
+;; SDOT Vd.4S, Vn.16B, Vm.16B -- accumulates the 4-way i8 dot product into
+;; `acc` (which is both source and destination). `a`/`b` are i8x16.
+(decl sdot (Reg Reg Reg) Reg)
+(rule (sdot acc a b)
+      (vec_rrr_mod (VecALUModOp.Sdot) acc a b (VectorSize.Size32x4)))
 
 ;; Helper for generating a `udf` instruction.
 

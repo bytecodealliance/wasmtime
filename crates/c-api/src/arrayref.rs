@@ -38,11 +38,11 @@ pub unsafe extern "C" fn wasmtime_arrayref_new(
             let owned = arrayref
                 .to_owned_rooted(&mut scope)
                 .expect("just allocated");
-            crate::initialize(out, Some(owned).into());
+            out.write(Some(owned).into());
             None
         }
         Err(e) => {
-            crate::initialize(out, None::<OwnedRooted<ArrayRef>>.into());
+            out.write(None::<OwnedRooted<ArrayRef>>.into());
             Some(Box::new(e.into()))
         }
     }
@@ -56,7 +56,7 @@ pub unsafe extern "C" fn wasmtime_arrayref_to_anyref(
     let anyref = arrayref
         .and_then(|a| a.as_wasmtime())
         .map(|a| a.to_anyref());
-    crate::initialize(out, anyref.into());
+    out.write(anyref.into());
 }
 
 #[unsafe(no_mangle)]
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn wasmtime_arrayref_to_eqref(
     out: &mut MaybeUninit<wasmtime_eqref_t>,
 ) {
     let eqref = arrayref.and_then(|a| a.as_wasmtime()).map(|a| a.to_eqref());
-    crate::initialize(out, eqref.into());
+    out.write(eqref.into());
 }
 
 #[unsafe(no_mangle)]
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn wasmtime_arrayref_len(
         .expect("non-null arrayref required");
     match arrayref.len(&cx) {
         Ok(len) => {
-            crate::initialize(out, len);
+            out.write(len);
             None
         }
         Err(e) => Some(Box::new(e.into())),
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn wasmtime_arrayref_get(
     match rooted.get(&mut scope, index) {
         Ok(val) => {
             let c_val = crate::wasmtime_val_t::from_val(&mut scope, val);
-            crate::initialize(out, c_val);
+            out.write(c_val);
             None
         }
         Err(e) => Some(Box::new(e.into())),
