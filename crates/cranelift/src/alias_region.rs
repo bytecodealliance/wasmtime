@@ -689,7 +689,7 @@ where
             func,
             AliasRegionKey::Vm {
                 ty: VmType::VMStoreContext,
-                offset: offset.into(),
+                offset,
             },
         )
     }
