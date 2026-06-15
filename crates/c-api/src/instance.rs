@@ -127,7 +127,7 @@ pub unsafe extern "C" fn wasmtime_instance_export_get(
     };
     match instance.get_export(store, name) {
         Some(e) => {
-            crate::initialize(item, e.into());
+            item.write(e.into());
             true
         }
         None => false,
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn wasmtime_instance_export_nth(
         Some(e) => {
             *name_ptr = e.name().as_ptr();
             *name_len = e.name().len();
-            crate::initialize(item, e.into_extern().into());
+            item.write(e.into_extern().into());
             true
         }
         None => false,

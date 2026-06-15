@@ -25,7 +25,7 @@ pub extern "C" fn wasmtime_externref_new(
         Err(_) => return false,
     };
     let e = e.to_owned_rooted(&mut scope).expect("in scope");
-    crate::initialize(out, Some(e).into());
+    out.write(Some(e).into());
     true
 }
 

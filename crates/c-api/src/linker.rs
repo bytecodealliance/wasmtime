@@ -205,7 +205,7 @@ pub unsafe extern "C" fn wasmtime_linker_get(
     };
     match linker.get(store, module, name) {
         Ok(which) => {
-            crate::initialize(item_ptr, which.into());
+            item_ptr.write(which.into());
             true
         }
         Err(_) => false,

@@ -163,7 +163,7 @@ pub extern "C" fn wasmtime_table_get(
 
     match table.get(&mut store, index) {
         Some(r) => {
-            crate::initialize(ret, wasmtime_val_t::from_val(&mut store, r.into()));
+            ret.write(wasmtime_val_t::from_val(&mut store, r.into()));
             true
         }
         None => false,

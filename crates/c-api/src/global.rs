@@ -67,10 +67,7 @@ pub unsafe extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globalt
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_global_get(g: &mut wasm_global_t, out: &mut MaybeUninit<wasm_val_t>) {
     let global = g.global();
-    crate::initialize(
-        out,
-        wasm_val_t::from_val(global.get(g.ext.store.context_mut())),
-    );
+    out.write(wasm_val_t::from_val(global.get(g.ext.store.context_mut())));
 }
 
 #[unsafe(no_mangle)]
@@ -116,7 +113,7 @@ pub extern "C" fn wasmtime_global_get(
     let mut store = RootScope::new(&mut store);
 
     let gval = global.get(&mut store);
-    crate::initialize(val, wasmtime_val_t::from_val(&mut store, gval))
+    val.write(wasmtime_val_t::from_val(&mut store, gval));
 }
 
 #[unsafe(no_mangle)]

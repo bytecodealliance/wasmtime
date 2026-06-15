@@ -77,7 +77,7 @@ pub unsafe extern "C" fn wasmtime_exnref_field(
     let mut scope = RootScope::new(&mut store);
     let rooted = exn.as_wasmtime()?.to_rooted(&mut scope);
     handle_result(rooted.field(&mut scope, index), |val| {
-        crate::initialize(val_ret, wasmtime_val_t::from_val(&mut scope, val));
+        val_ret.write(wasmtime_val_t::from_val(&mut scope, val));
     })
 }
 
