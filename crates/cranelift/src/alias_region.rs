@@ -567,7 +567,7 @@ impl AliasRegions<VMOffsets<u8>> {
         let mem_index_offset = mem_offset + u32::from(self.offsets.vmmemory_import_from());
         self.vmctx_load(
             cursor,
-            ir::types::I32,
+            self.pointer_type,
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             mem_index_offset,
