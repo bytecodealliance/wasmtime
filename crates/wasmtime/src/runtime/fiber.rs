@@ -836,7 +836,16 @@ where
         let reset = ResetCurrentPointersToNull(store_ref);
 
         fun(reset.0)
-    })?;
+    });
+    let fiber = match fiber {
+        Ok(fiber) => fiber,
+        Err((e, stack)) => {
+            unsafe {
+                engine.allocator().deallocate_fiber_stack(stack);
+            }
+            return Err(e);
+        }
+    };
     Ok(StoreFiber {
         state: Some(
             FiberResumeState {
