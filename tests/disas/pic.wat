@@ -76,8 +76,8 @@
 ;;     region3 = 1207959552 "VMMemoryDefinition+0x0"
 ;;     region4 = 1207959560 "VMMemoryDefinition+0x8"
 ;;     region5 = 402653184 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
-;;     region6 = 96 "VMContext+0x60"
-;;     region7 = 80 "VMContext+0x50"
+;;     region6 = 2415919128 "VMFunctionImport+0x18"
+;;     region7 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24

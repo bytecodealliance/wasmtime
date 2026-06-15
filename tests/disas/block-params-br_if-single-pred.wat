@@ -23,12 +23,8 @@
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 134217752 "VMStoreContext+0x18"
-;;     region2 = 72 "VMContext+0x48"
-;;     region3 = 56 "VMContext+0x38"
-;;     region4 = 104 "VMContext+0x68"
-;;     region5 = 88 "VMContext+0x58"
-;;     region6 = 136 "VMContext+0x88"
-;;     region7 = 120 "VMContext+0x78"
+;;     region2 = 2415919128 "VMFunctionImport+0x18"
+;;     region3 = 2415919112 "VMFunctionImport+0x8"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -45,14 +41,14 @@
 ;; @003f                               brif v6, block2, block3
 ;;
 ;;                                 block3:
-;; @0041                               v7 = load.i64 notrap aligned readonly can_move region4 v0+104
-;; @0041                               v8 = load.i64 notrap aligned readonly can_move region5 v0+88
+;; @0041                               v7 = load.i64 notrap aligned readonly can_move region2 v0+104
+;; @0041                               v8 = load.i64 notrap aligned readonly can_move region3 v0+88
 ;; @0041                               call_indirect sig1, v8(v7, v0, v2, v3)  ; v2 = 1, v3 = 2
 ;; @0043                               trap user12
 ;;
 ;;                                 block2:
-;; @0045                               v9 = load.i64 notrap aligned readonly can_move region6 v0+136
-;; @0045                               v10 = load.i64 notrap aligned readonly can_move region7 v0+120
+;; @0045                               v9 = load.i64 notrap aligned readonly can_move region2 v0+136
+;; @0045                               v10 = load.i64 notrap aligned readonly can_move region3 v0+120
 ;; @0045                               call_indirect sig1, v10(v9, v0, v2, v3)  ; v2 = 1, v3 = 2
 ;; @0047                               jump block1
 ;;
