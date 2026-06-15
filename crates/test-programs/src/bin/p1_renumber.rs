@@ -113,6 +113,34 @@ unsafe fn test_renumber(dir_fd: wasip1::Fd) {
     );
 }
 
+unsafe fn test_renumber_loop(dir_fd: wasip1::Fd) {
+    let mut cur = wasip1::path_open(
+        dir_fd,
+        0,
+        "file1",
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("opening a file");
+
+    // Historically `fd_renumber` didn't properly close the "to" file descriptor
+    // which meant that the resources would be leaked. The test harness here
+    // allows 1000 entries in the resource table, and then most unix systems
+    // allow ~1000 fds open by default. Round that up and do this 2000 times to
+    // try to exercise any bugs should they show up. Historically this would
+    // exhaust host file descriptors before `fd_renumber` was fixed.
+    for _ in 0..2000 {
+        let next = wasip1::path_open(dir_fd, 0, "file1", 0, wasip1::RIGHTS_FD_READ, 0, 0)
+            .expect("opening a file");
+        wasip1::fd_renumber(cur, next).unwrap();
+        cur = next;
+    }
+
+    wasip1::fd_close(cur).unwrap();
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -134,4 +162,5 @@ fn main() {
 
     // Run the tests.
     unsafe { test_renumber(dir_fd) }
+    unsafe { test_renumber_loop(dir_fd) }
 }

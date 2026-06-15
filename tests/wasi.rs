@@ -18,10 +18,6 @@ use wasmtime::error::Context;
 use wasmtime::{Result, format_err};
 
 const KNOWN_FAILURES: &[&str] = &[
-    #[cfg(windows)]
-    "renumber",
-    #[cfg(windows)]
-    "stdio",
     // Waiting for the upstream tests to update to use the 0.3.0 official WITs.
     "multi-clock-wait",
     "filesystem-unlink-errors",
