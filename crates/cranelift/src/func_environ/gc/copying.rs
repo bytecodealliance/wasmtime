@@ -172,12 +172,16 @@ impl CopyingCompiler {
             let heap_offset = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
             let obj_ptr = builder.ins().iadd(base, heap_offset);
 
+            // These header writes target the GC heap, so tag them with the
+            // GC-heap region (like the null collector does).
+            let header_flags = func_env.gc_memflags(&mut builder.func);
+
             // Write `VMGcHeader::kind` with inline trace info bits included.
             let kind_val = builder
                 .ins()
                 .iconst(ir::types::I32, i64::from(kind.as_u32() | reserved_bits));
             builder.ins().store(
-                ir::MemFlagsData::trusted(),
+                header_flags,
                 kind_val,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET).unwrap(),
@@ -186,7 +190,7 @@ impl CopyingCompiler {
             // Write `VMGcHeader::type_index`.
             let shared_ty = func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty);
             builder.ins().store(
-                ir::MemFlagsData::trusted(),
+                header_flags,
                 shared_ty,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET).unwrap(),
@@ -194,7 +198,7 @@ impl CopyingCompiler {
 
             // Write `VMCopyingHeader::object_size`.
             builder.ins().istore32(
-                ir::MemFlagsData::trusted(),
+                header_flags,
                 aligned_size_64,
                 obj_ptr,
                 i32::try_from(wasmtime_environ::VM_GC_HEADER_SIZE).unwrap(),
