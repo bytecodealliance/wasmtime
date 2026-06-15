@@ -24,6 +24,7 @@ mod address_map;
 mod frame_table;
 #[macro_use]
 mod builtin;
+pub mod bytes;
 mod demangling;
 mod ext;
 mod gc;
