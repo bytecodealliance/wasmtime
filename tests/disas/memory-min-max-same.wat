@@ -38,7 +38,9 @@
 ;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     region2 = 96 "VMContext+0x60"
 ;;     region3 = 80 "VMContext+0x50"
-;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region4 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region5 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region6 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -51,7 +53,7 @@
 ;; @0030                               v5 = load.i64 notrap aligned readonly can_move region2 v0+96
 ;; @0039                               v12 = iconst.i64 0x0001_0000
 ;; @0039                               v16 = iconst.i64 0
-;; @0039                               v14 = load.i64 notrap aligned readonly can_move v0+56
+;; @0039                               v14 = load.i64 notrap aligned readonly can_move region4 v0+56
 ;; @003e                               v18 = iconst.i32 1
 ;; @002e                               jump block2(v3)  ; v3 = 0
 ;;
@@ -65,7 +67,7 @@
 ;; @0039                               v15 = iadd.i64 v14, v11
 ;;                                     v23 = iconst.i64 0
 ;;                                     v24 = select_spectre_guard v22, v23, v15  ; v23 = 0
-;; @0039                               store little region4 v20, v24  ; v20 = 0
+;; @0039                               store little region6 v20, v24  ; v20 = 0
 ;;                                     v25 = iconst.i32 1
 ;;                                     v26 = iadd v8, v25  ; v25 = 1
 ;; @0043                               jump block2(v26)

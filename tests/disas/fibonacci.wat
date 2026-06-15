@@ -26,7 +26,9 @@
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -55,9 +57,9 @@
 ;;                                 block2:
 ;; @0056                               v16 = iconst.i32 0
 ;; @005a                               v17 = uextend.i64 v16  ; v16 = 0
-;; @005a                               v18 = load.i64 notrap aligned readonly can_move v0+56
+;; @005a                               v18 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @005a                               v19 = iadd v18, v17
-;; @005a                               store.i32 little region2 v11, v19
+;; @005a                               store.i32 little region4 v11, v19
 ;; @005d                               jump block1
 ;;
 ;;                                 block1:

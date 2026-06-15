@@ -27,7 +27,9 @@
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region2 = 2415919104 "VMMemoryDefinition+0x0"
+;;     region3 = 2415919112 "VMMemoryDefinition+0x8"
+;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -35,20 +37,20 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @002a                               v3 = iconst.i32 0
-;; @002c                               v5 = load.i64 notrap aligned readonly can_move v0+56
+;; @002c                               v5 = load.i64 notrap aligned readonly can_move region2 v0+56
 ;; @002c                               v4 = uextend.i64 v2
 ;; @002c                               v6 = iadd v5, v4
-;; @002c                               istore8 little region2 v3, v6  ; v3 = 0
+;; @002c                               istore8 little region4 v3, v6  ; v3 = 0
 ;; @0033                               v11 = iconst.i64 0x07ff_ffff
 ;; @0033                               v12 = iadd v6, v11  ; v11 = 0x07ff_ffff
-;; @0033                               istore8 little region2 v3, v12  ; v3 = 0
-;; @003d                               v15 = load.i64 notrap aligned v0+64
+;; @0033                               istore8 little region4 v3, v12  ; v3 = 0
+;; @003d                               v15 = load.i64 notrap aligned region3 v0+64
 ;; @003d                               v16 = icmp ugt v4, v15
 ;; @003d                               v21 = iconst.i64 0
 ;; @003d                               v19 = iconst.i64 0xffff_ffff
 ;; @003d                               v20 = iadd v6, v19  ; v19 = 0xffff_ffff
 ;; @003d                               v22 = select_spectre_guard v16, v21, v20  ; v21 = 0
-;; @003d                               istore8 little region2 v3, v22  ; v3 = 0
+;; @003d                               istore8 little region4 v3, v22  ; v3 = 0
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:

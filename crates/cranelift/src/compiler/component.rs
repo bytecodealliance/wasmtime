@@ -2052,14 +2052,9 @@ impl TrampolineCompiler<'_> {
     }
 
     fn load_runtime_memory_base(&mut self, vmctx: ir::Value, mem: RuntimeMemoryIndex) -> ir::Value {
-        let pointer_type = self.isa.pointer_type();
         let from_vmmemory_definition = self.load_memory(vmctx, mem);
-        self.builder.ins().load(
-            pointer_type,
-            MemFlagsData::trusted(),
-            from_vmmemory_definition,
-            i32::from(self.offsets.ptr.vmmemory_definition_base()),
-        )
+        self.alias_regions
+            .vmmemory_definition_base(&mut self.builder.cursor(), from_vmmemory_definition)
     }
 }
 

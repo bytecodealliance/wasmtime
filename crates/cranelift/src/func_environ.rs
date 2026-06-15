@@ -1565,25 +1565,16 @@ impl FuncEnvironment<'_> {
         func: &mut ir::Function,
         index: MemoryIndex,
     ) -> (VmctxLoadChain, VmctxLoadChain) {
-        let pointer_type = self.pointer_type();
         let memory = self.module.memories[index];
         let is_shared = memory.shared;
 
         // The base pointer load is `can_move`, and additionally `readonly` when
         // this memory's base can never move.
         let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
-        let mut flags = ir::MemFlagsData::trusted().with_can_move();
+        let mut base_flags = ir::MemFlagsData::trusted().with_can_move();
         if !memory.memory_may_move(&memory_tunables) {
-            flags.set_readonly();
+            base_flags.set_readonly();
         }
-
-        let load = |offset, flags| Load {
-            offset,
-            flags,
-            ty: pointer_type,
-        };
-        let base_load = |offset: u32| load(offset, flags);
-        let bound_load = |offset: u32| load(offset, ir::MemFlagsData::trusted());
 
         if let Some(def_index) = self.module.defined_memory_index(index) {
             if is_shared {
@@ -1597,23 +1588,29 @@ impl FuncEnvironment<'_> {
                 (
                     VmctxLoadChain::new(smallvec![
                         mem,
-                        base_load(self.offsets.ptr.vmmemory_definition_base().into()),
+                        self.alias_regions
+                            .vmmemory_definition_base_load(func, base_flags),
                     ]),
                     VmctxLoadChain::new(smallvec![
                         mem,
-                        bound_load(self.offsets.ptr.vmmemory_definition_current_length().into()),
+                        self.alias_regions
+                            .vmmemory_definition_current_length_load(func),
                     ]),
                 )
             } else {
                 let owned_index = self.module.owned_memory_index(def_index);
                 (
-                    VmctxLoadChain::new(smallvec![base_load(
-                        self.offsets.vmctx_vmmemory_definition_base(owned_index)
-                    )]),
-                    VmctxLoadChain::new(smallvec![bound_load(
-                        self.offsets
-                            .vmctx_vmmemory_definition_current_length(owned_index)
-                    )]),
+                    VmctxLoadChain::new(smallvec![
+                        self.alias_regions.vmctx_vmmemory_definition_base_load(
+                            func,
+                            owned_index,
+                            base_flags
+                        )
+                    ]),
+                    VmctxLoadChain::new(smallvec![
+                        self.alias_regions
+                            .vmctx_vmmemory_definition_current_length_load(func, owned_index)
+                    ]),
                 )
             }
         } else {
@@ -1623,11 +1620,13 @@ impl FuncEnvironment<'_> {
             (
                 VmctxLoadChain::new(smallvec![
                     mem,
-                    base_load(self.offsets.ptr.vmmemory_definition_base().into()),
+                    self.alias_regions
+                        .vmmemory_definition_base_load(func, base_flags),
                 ]),
                 VmctxLoadChain::new(smallvec![
                     mem,
-                    bound_load(self.offsets.ptr.vmmemory_definition_current_length().into()),
+                    self.alias_regions
+                        .vmmemory_definition_current_length_load(func),
                 ]),
             )
         }
@@ -3316,65 +3315,30 @@ impl FuncEnvironment<'_> {
     /// Returns the `ir::Value`, typed as a pointer-width integer, that is the
     /// size in bytes.
     fn memory_size_in_bytes(&mut self, pos: &mut FuncCursor<'_>, index: MemoryIndex) -> ir::Value {
-        let pointer_type = self.pointer_type();
         let vmctx = self.vmctx_val(pos);
         let is_shared = self.module.memories[index].shared;
-        match self.module.defined_memory_index(index) {
-            Some(def_index) => {
-                if is_shared {
-                    let vmmemory_ptr = self
-                        .alias_regions
-                        .vmctx_vmmemory_pointer(pos, vmctx, def_index);
-                    let vmmemory_definition_offset =
-                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    let vmmemory_definition_ptr = pos
-                        .ins()
-                        .iadd_imm_s(vmmemory_ptr, vmmemory_definition_offset);
-                    // This atomic access of the
-                    // `VMMemoryDefinition::current_length` is direct; no bounds
-                    // check is needed. This is possible because shared memory
-                    // has a static size (the maximum is always known). Shared
-                    // memory is thus built with a static memory plan and no
-                    // bounds-checked version of this is implemented.
-                    pos.ins().atomic_load(
-                        pointer_type,
-                        ir::MemFlagsData::trusted(),
-                        vmmemory_definition_ptr,
-                    )
-                } else {
-                    let owned_index = self.module.owned_memory_index(def_index);
-                    let offset = i32::try_from(
-                        self.offsets
-                            .vmctx_vmmemory_definition_current_length(owned_index),
-                    )
-                    .unwrap();
-                    pos.ins()
-                        .load(pointer_type, ir::MemFlagsData::trusted(), vmctx, offset)
-                }
-            }
-            None => {
-                let vmmemory_ptr = self
+        if let Some(def_index) = self.module.defined_memory_index(index) {
+            if is_shared {
+                let mem_ptr = self
                     .alias_regions
-                    .vmctx_vmmemory_import_from(pos, vmctx, index);
-                if is_shared {
-                    let vmmemory_definition_offset =
-                        i64::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    let vmmemory_definition_ptr = pos
-                        .ins()
-                        .iadd_imm_s(vmmemory_ptr, vmmemory_definition_offset);
-                    pos.ins().atomic_load(
-                        pointer_type,
-                        ir::MemFlagsData::trusted(),
-                        vmmemory_definition_ptr,
-                    )
-                } else {
-                    pos.ins().load(
-                        pointer_type,
-                        ir::MemFlagsData::trusted(),
-                        vmmemory_ptr,
-                        i32::from(self.offsets.ptr.vmmemory_definition_current_length()),
-                    )
-                }
+                    .vmctx_vmmemory_pointer(pos, vmctx, def_index);
+                self.alias_regions
+                    .vmmemory_definition_current_length_atomic(pos, mem_ptr)
+            } else {
+                let owned_index = self.module.owned_memory_index(def_index);
+                self.alias_regions
+                    .vmctx_vmmemory_definition_current_length(pos, owned_index, vmctx)
+            }
+        } else {
+            let mem_ptr = self
+                .alias_regions
+                .vmctx_vmmemory_import_from(pos, vmctx, index);
+            if is_shared {
+                self.alias_regions
+                    .vmmemory_definition_current_length_atomic(pos, mem_ptr)
+            } else {
+                self.alias_regions
+                    .vmmemory_definition_current_length(pos, mem_ptr)
             }
         }
     }
