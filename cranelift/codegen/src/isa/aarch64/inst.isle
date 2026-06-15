@@ -1983,7 +1983,7 @@
 )
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
-  (imm12_from_negated_value (has_type ty (iconst _ n)))
+  (imm12_from_negated_value (iconst ty n))
   (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_checked_neg (i64_sextend_imm64 ty n))))
   imm)
 
