@@ -1550,11 +1550,7 @@
             (b ValueRegs (and_i128 (not_i128 c) f)))
         (or_i128 a b)))
 
-<<<<<<< HEAD
-(rule 4 (lower (has_type (ty_int_ref_scalar_64_extract ty) (bitselect _ c t f)))
-=======
-(rule 4 (lower (bitselect (ty_int_ref_scalar_64 ty) c t f))
->>>>>>> main
+(rule 4 (lower (bitselect (ty_int_ref_scalar_64_extract ty) c t f))
       (let ((a Gpr (x64_and ty c t))
             (b Gpr (x64_and ty (x64_not ty c) f)))
         (x64_or ty a b)))
@@ -2453,12 +2449,8 @@
             (final Gpr (x64_shrl_mi mul 24)))
         final))
 
-<<<<<<< HEAD
-(rule 2 (lower (has_type $I8X16 (popcnt _ src)))
-=======
 
 (rule 2 (lower (popcnt $I8X16 src))
->>>>>>> main
       (if-let true (has_avx512vl))
       (if-let true (has_avx512bitalg))
       (x64_vpopcntb src))
@@ -2482,12 +2474,8 @@
 ;;
 ;; __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
 
-<<<<<<< HEAD
-(rule 1 (lower (has_type $I8X16 (popcnt _ src)))
-=======
 
 (rule 1 (lower (popcnt $I8X16 src))
->>>>>>> main
       (if-let true (has_ssse3))
       (let ((low_mask XmmMem128 (emit_xmm_mem_128_le_const 0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f))
             (low_nibbles Xmm (x64_pand src low_mask))
@@ -3015,12 +3003,8 @@
 (rule 1 (fnmadd ty x @ (sinkable_load _) y z) (x64_vfnmadd132 ty y z x))
 (rule 2 (fnmadd ty x y @ (sinkable_load _) z) (x64_vfnmadd132 ty x z y))
 
-<<<<<<< HEAD
-(rule 2 (lower (has_type ty (fma _ x y (fneg _ z))))
-=======
 
 (rule 2 (lower (fma ty x y (fneg _ z)))
->>>>>>> main
       (if-let true (use_fma))
       (fmsub ty x y z))
 
@@ -3969,12 +3953,8 @@
         )
         (x64_paddb evens odds)))
 
-<<<<<<< HEAD
-(rule 1 (lower (has_type $I16X8 (iadd_pairwise _ x y)))
-=======
 
 (rule 1 (lower (iadd_pairwise $I16X8 x y))
->>>>>>> main
         (if-let true (has_ssse3))
         (x64_phaddw x y))
 

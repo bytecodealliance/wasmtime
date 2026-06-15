@@ -228,8 +228,8 @@ fn main() -> Result<()> {
         "narrowfloat",
         "amode_const",
         "i128",
-        "slow",
         "wasm_category_stack",
+        "slow",
     ];
     if opts.default_excludes {
         for tag in default_exclude_tags {
