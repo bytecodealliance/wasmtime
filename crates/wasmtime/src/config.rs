@@ -454,6 +454,10 @@ impl Config {
     /// well. This option can be used to disable these symbols which will reduce
     /// the debuggability of modules but will also reduce their size.
     ///
+    /// Note that the ELF file representation is considered an implementation
+    /// detail of Wasmtime and embedders should not rely on this format.
+    /// Wasmtime may change the format of artifacts in the future.
+    ///
     /// This option is `true` by default.
     ///
     /// This option is required if [`Config::debug_info`] is enabled.

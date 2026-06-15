@@ -6,12 +6,12 @@ minimize the size of their `*.cwasm` they're compiling as well.  These size of a
 example, and thus minimizing that can lead to freeing up resources to use
 elsewhere.
 
-As with building a [minimal embedding] wasmtime is not optimized for this use
-case, so some knobs will need to be turned to enable this. The first step to
-building a minimal `*.cwasm` is building a minimal wasm itself. To that extent
-many of the instructions on [minimal embedding] about recompiling code with
-smaller options apply here too. This example will walk through compiling a Rust
-"hello world" program and optimizing the size of the output `*.cwasm`.
+As with building a [minimal embedding] wasmtime is by default not optimized for
+this use case, so some knobs will need to be turned to enable this. The first
+step to building a minimal `*.cwasm` is building a minimal wasm itself. To that
+extent many of the instructions on [minimal embedding] about recompiling code
+with smaller options apply here too. This example will walk through compiling a
+Rust "hello world" program and optimizing the size of the output `*.cwasm`.
 
 The source code we have here is:
 
@@ -23,7 +23,7 @@ fn main() {
 
 The defaults are:
 
-```bash
+```shell-session
 $ rustc foo.rs --target wasm32-wasip2
 $ wasmtime compile foo.wasm
 $ ls -lh foo.wasm foo.cwasm
@@ -31,30 +31,31 @@ $ ls -lh foo.wasm foo.cwasm
 -rw-rw-r-- 1 alex alex 2.5M Jun 12 16:58 foo.wasm
 ```
 
-While this might look like Wasmtime is a super awesome optimizing compiler here
-what's actually happening is that the Rust compiler is preserving DWARF debug
-info by default, but Wasmtime strips guest-DWARF information by default. The
-first step to minimizing a wasm is to strip out unnecessary custom sections like
-this:
+While this looks like Wasmtime was able to shave off ~2M of data here what's
+actually happening is that the Rust compiler is preserving DWARF debug info by
+default. Wasmtime strips guest-DWARF information by default, however, so the
+first step to minimizing a wasm is to strip out unnecessary custom sections
+like this:
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2
-$ wasm-tools strip foo.wasm -o foo.wasm
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Cstrip=debuginfo
 $ wasmtime compile foo.wasm
 $ ls -lh foo.wasm foo.cwasm
 -rw-rw-r-- 1 alex alex 284K Jun 12 16:59 foo.cwasm
 -rw-rw-r-- 1 alex alex  78K Jun 12 16:59 foo.wasm
 ```
 
-Here we can see a not-so-awesome property, which is that compiled `*.cwasm`
-files are often larger than their corresponding `*.wasm` file. This is expected
-and generally always going to be the case. First though let's apply many
-learnings from a [minimal embedding] to shrink the size of this wasm module.
-Note that here we're compiling with rustc manually, but for Cargo or other
-projects it'll look similar.
+Here we can see that compiled `*.cwasm` files are often larger than their
+corresponding `*.wasm` file. This is expected and generally always going to be
+the case. First though let's apply many learnings from a [minimal embedding] and
+[general purpose Rust advice for compiling minimal binaries][min-sized-rust] to
+shrink the size of this wasm module. Note that here we're compiling with rustc
+manually, but for Cargo or other projects it'll look similar.
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+[min-sized-rust]: https://github.com/johnthagen/min-sized-rust
+
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasmtime compile foo.wasm
 $ ls -lh foo.wasm foo.cwasm
 -rw-rw-r-- 1 alex alex 219K Jun 12 17:02 foo.cwasm
@@ -71,8 +72,8 @@ Like with the documentation of a [minimal embedding] the trend here is that by
 removing features of Wasmtime or the compiled artifact you'll be able to shrink
 the output. First what we can do is to disable Wasmtime's "address maps":
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasmtime compile foo.wasm -Daddress-map=n
 $ ls -lh foo.wasm foo.cwasm
 -rw-rw-r-- 1 alex alex 167K Jun 12 17:04 foo.cwasm
@@ -87,26 +88,27 @@ be safely stripped out as we won't be using it.
 
 The next optimization is to disable debug symbols in Wasmtime:
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasmtime compile foo.wasm -Daddress-map=n -Dsymbols=n
 $ ls -lh foo.wasm foo.cwasm
 -rw-rw-r-- 1 alex alex 143K Jun 12 17:06 foo.cwasm
 -rw-rw-r-- 1 alex alex  64K Jun 12 17:06 foo.wasm
 ```
 
-Wasmtime's `*.cwasm` artifacts are ELF files and by default they contain ELF
-symbol information for debugging. This can help with native profilers and
-`wasmtime objdump` for example, but this information isn't needed at runtime and
-is safe to remove.
+Wasmtime's `.cwasm` artifacts are designed to integrate with the system's native
+profiler and other developer tools like `wasmtime objdump` by default, but this
+information isn't needed to actually run the program and is safe to remove.
 
-The final optimization is noticing that the original wasm's `name` custom
-section is actually still present. This section generally survives stripping
+The final optimization is noticing that the original wasm's [`name` custom
+section][name section] is actually still present. This section generally survives stripping
 because of how useful it is for debugging, but for the absolutely minimal size
 it can be stripped away:
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+[name section]: https://webassembly.github.io/spec/core/appendix/custom.html#name-section
+
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasm-tools strip -a foo.wasm -o foo.wasm
 $ wasmtime compile foo.wasm -Daddress-map=n -Dsymbols=n
 $ ls -lh foo.wasm foo.cwasm
@@ -123,8 +125,8 @@ initialization and page-aligns it, but this page-alignment and precomputation
 can add fair amount of empty space in the output file. This can be disabled to
 avoid CoW initialization and instead manually initialize all linear memories:
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasm-tools strip -a foo.wasm -o foo.wasm
 $ wasmtime compile foo.wasm -Daddress-map=n -Dsymbols=n -Omemory-init-cow=n
 $ ls -lh foo.wasm foo.cwasm
@@ -136,8 +138,8 @@ The final optimization is that Wasmtime's interpreter, Pulley, can sometimes
 have smaller output than native machine output. This is another hit on runtime
 performance, but for the sake of example:
 
-```bash
-$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cdstrip=debuginfo
+```shell-session
+$ rustc foo.rs --target wasm32-wasip2 -Copt-level=s -Clto -Ccodegen-units=1 -Cstrip=debuginfo
 $ wasm-tools strip -a foo.wasm -o foo.wasm
 $ wasmtime compile foo.wasm -Daddress-map=n -Dsymbols=n -Omemory-init-cow=n --target pulley64
 $ ls -lh foo.wasm foo.cwasm
@@ -161,7 +163,7 @@ The steps you'll want to use when minimizing `*.cwasm` size are:
     Rust's libstd, etc.
 * Pass `-Daddress-map=n` to disable the ability to generate backtraces with wasm
   pc's in the backtrace.
-* Pass `-Dsymbols=n` to diasble ELF symbols used for debugging/profiling in the
+* Pass `-Dsymbols=n` to diasble symbols used for debugging/profiling in the
   output artifact.
 * Pass `-Omemory-init-cow=n` to disable page-aligned data sections and
   precomputation of a memory image that may have holes in it.
