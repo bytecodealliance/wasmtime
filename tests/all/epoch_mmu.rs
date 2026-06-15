@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use object::{Object, ObjectSection};
+use object::{LittleEndian, Object, ObjectSection, U32Bytes};
 use wasmtime::{Config, Engine};
 use wasmtime_environ::obj::ELF_WASMTIME_EPOCH_CHECKS;
 
@@ -35,17 +35,28 @@ fn epoch_check_offsets() {
             "{ELF_WASMTIME_EPOCH_CHECKS} section should be present"
         ));
     let data = section.data().unwrap();
-    let offsets: Vec<u32> = data
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
-        .collect();
+
+    let (count_raw, rest) = object::from_bytes::<U32Bytes<LittleEndian>>(data).expect(
+        ".wasmtime.epochchecks section should be long enough to contain a count of epoch checks",
+    );
+    let count = count_raw.get(LittleEndian) as usize;
+    let (starts_raw, rest) = object::slice_from_bytes::<U32Bytes<LittleEndian>>(rest, count)
+        .expect(".wasmtime.epochchecks section should be long enough to contain a location for each epoch check");
+    let starts: Vec<u32> = starts_raw.iter().map(|b| b.get(LittleEndian)).collect();
+    let (length_bits, _rest) = object::slice_from_bytes::<u8>(rest, count.div_ceil(8))
+        .expect(".wasmtime.epochchecks section should be long enough to contain a length bit for each epoch check");
 
     // The emitted machine code is nailed down by the
     // epoch-interruption-mmu-compile-loop.wat disas test. As long as that keeps
-    // passing, these offsets remain valid.
+    // passing, these values remain valid.
     assert_eq!(
-        offsets,
-        vec![15, 18],
-        "There should be 2 epoch checks (function prologue & loop backedge). The offset after the prologue's dead load should be 15, and the one after the loop's backedge should be 18."
+        starts,
+        vec![12, 15],
+        "There should be 2 epoch checks (function prologue & loop backedge). The offset of the prologue's dead load should be 12, and that of the loop's backedge should be 15."
+    );
+    assert_eq!(
+        length_bits,
+        vec![0],
+        "Neither check's load instruction uses R12 of RSP as its source, so all length bits should be 0."
     );
 }

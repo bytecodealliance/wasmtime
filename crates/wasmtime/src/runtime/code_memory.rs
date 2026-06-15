@@ -8,7 +8,7 @@ use core::ops::Range;
 use object::SectionFlags;
 use object::endian::Endianness;
 use object::read::{Object, ObjectSection, elf::ElfFile64};
-use wasmtime_environ::{Trap, lookup_trap_code, obj};
+use wasmtime_environ::{Trap, lookup_trap_code, obj, return_offset_for_epoch_check};
 use wasmtime_unwinder::ExceptionTable;
 
 /// Management of executable memory within a `MmapVec`
@@ -33,6 +33,7 @@ pub struct CodeMemory {
     text: Range<usize>,
     unwind: Range<usize>,
     trap_data: Range<usize>,
+    epoch_check_data: Range<usize>,
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
     stack_map_data: Range<usize>,
@@ -127,6 +128,7 @@ impl CodeMemory {
         #[cfg(feature = "debug-builtins")]
         let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
+        let mut epoch_check_data = 0..0;
         let mut exception_data = 0..0;
         let mut frame_tables_data = 0..0;
         let mut wasm_data = 0..0;
@@ -178,6 +180,7 @@ impl CodeMemory {
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
+                obj::ELF_WASMTIME_EPOCH_CHECKS => epoch_check_data = range,
                 obj::ELF_WASMTIME_EXCEPTIONS => exception_data = range,
                 obj::ELF_WASMTIME_FRAMES => frame_tables_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
@@ -222,6 +225,7 @@ impl CodeMemory {
             text,
             unwind,
             trap_data,
+            epoch_check_data,
             address_map_data,
             stack_map_data,
             exception_data,

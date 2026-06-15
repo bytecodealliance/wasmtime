@@ -90,7 +90,7 @@ define_tunables! {
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
 
-        /// Whether or not to use MMU tricks to speed epoch deadline checks.
+        /// Whether or not to use MMU tricks to speed epoch-end checks.
         /// TODO: Consider whether this should be orthogonal to
         /// epoch_interruption. If not, combine them into an enum or something.
         pub epoch_interruption_via_mmu: bool,

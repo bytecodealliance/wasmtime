@@ -393,8 +393,9 @@ fn define_control_flow(
         segfault, which hands off control to a signal handler for further
         action. The handler has access to ``context`` (typically the
         ``VMContext``'s ``vm_store_context``) and can use the second
-        reserved register to store a temp value, as needed on platforms
-        where signal handlers cannot push stack frames.
+        reserved register to store a temp value--like the original return
+        value--as needed on platforms where signal handlers cannot push stack
+        frames.
 
         On x64, RDI holds ``context``, and R10 is used as scratch space.
         "#,

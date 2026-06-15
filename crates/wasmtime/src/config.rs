@@ -755,7 +755,8 @@ impl Config {
         self
     }
 
-    /// Stuff
+    /// Enables a faster-than-deadlines epoch detection mechanism based on
+    /// memory-page permissions
     pub fn epoch_interruption_via_mmu(&mut self, enable: bool) -> &mut Self {
         self.tunables.epoch_interruption_via_mmu = Some(enable);
         self

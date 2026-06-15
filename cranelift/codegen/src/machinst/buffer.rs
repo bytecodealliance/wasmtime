@@ -253,7 +253,7 @@ pub struct MachBuffer<I: VCodeInst> {
     /// Any patchable call site locations.
     patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any locations which do an MMU-based check for the end of an epoch.
-    epoch_checks: SmallVec<[EpochCheckOffset; 16]>,
+    epoch_checks: SmallVec<[Range<CodeOffset>; 16]>,
     /// Any exception-handler records referred to at call sites.
     exception_handlers: SmallVec<[MachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -384,7 +384,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any patchable call site locations refering to this code.
     pub(crate) patchable_call_sites: SmallVec<[MachPatchableCallSite; 16]>,
     /// Any locations which do an MMU-based check for the end of an epoch.
-    pub epoch_checks: SmallVec<[EpochCheckOffset; 16]>,
+    pub epoch_checks: SmallVec<[Range<CodeOffset>; 16]>,
     /// Any exception-handler records referred to at call sites.
     pub(crate) exception_handlers: SmallVec<[FinalizedMachExceptionHandler; 16]>,
     /// Any source location mappings referring to this code.
@@ -1704,11 +1704,13 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Record that an MMU-based epoch interruption check occurs at the current
-    /// offset. The signal handler uses these annotations to distinguish that a
+    /// offset. A signal handler may use these annotations to distinguish that a
     /// segfault is actually an epoch interruption in disguise. The
     /// DeadLoadWithContext instruction is assumed to have already been emitted.
-    pub fn add_epoch_check(&mut self) {
-        self.epoch_checks.push(self.cur_offset());
+    /// `start` is the offset of the emitted instruction, and `end` is the
+    /// offset of the immediately following instruction.
+    pub fn add_epoch_check(&mut self, start: CodeOffset, end: CodeOffset) {
+        self.epoch_checks.push(start..end);
     }
 
     /// Add an unwind record at the current offset.
@@ -2212,12 +2214,6 @@ pub struct MachPatchableCallSite {
     /// The length of the region to be patched by NOP bytes.
     pub len: u32,
 }
-
-/// The location of an epoch-end check, when using MMU-based epoch interruption.
-///
-/// Specifically, this points to the instruction after the one that does the
-/// epoch-end check: the one at which to resume execution.
-pub type EpochCheckOffset = CodeOffset;
 
 /// A source-location mapping resulting from a compilation.
 #[derive(PartialEq, Debug, Clone)]

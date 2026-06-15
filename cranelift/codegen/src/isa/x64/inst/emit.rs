@@ -648,17 +648,15 @@ pub(crate) fn emit(
         Inst::DeadLoadWithContext { dst, load_ptr, .. } => {
             let start = sink.cur_offset();
 
-            // Since we're clobbering r10 anyway to store the original return
-            // address, we also use it as a destination for the dead load rather
-            // than sucking up another reg:
             let load_ptr_addr = SyntheticAmode::real(Amode::imm_reg(0, **load_ptr));
+            // Since we're clobbering dst anyway to store the original return
+            // address, also use it as a destination for the dead load rather
+            // than sucking up another reg:
             asm::inst::movq_rm::new(*dst, load_ptr_addr).emit(sink, info, state);
-
-            let end = sink.cur_offset();
 
             // Put the address of this instruction aside so we can later
             // distinguish whether a segfault is its fault.
-            sink.add_epoch_check();
+            sink.add_epoch_check(start, sink.cur_offset());
         }
 
         Inst::JmpKnown { dst } => uncond_jmp(sink, *dst),
