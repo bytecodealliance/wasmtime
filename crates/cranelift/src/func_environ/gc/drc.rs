@@ -30,20 +30,10 @@ impl DrcCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
     ) -> ir::Value {
-        let ptr_ty = func_env.pointer_type();
-        let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
-        let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
-        let vmctx = func_env.vmctx(&mut builder.func);
-        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
-        builder.ins().load(
-            ptr_ty,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(vmctx_region)),
-            vmctx,
-            i32::try_from(gc_heap_data_offset).unwrap(),
-        )
+        let vmctx = func_env.vmctx_val(&mut builder.cursor());
+        func_env
+            .alias_regions
+            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx)
     }
 
     /// Generate code to load the given GC reference's ref count.

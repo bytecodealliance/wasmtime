@@ -56,8 +56,10 @@ pub struct Compilation<'a> {
     ///
     /// This returns the `object`-based-symbol for the function as well as the
     /// `&CompiledFunction`.
-    get_func:
-        &'a dyn Fn(StaticModuleIndex, DefinedFuncIndex) -> (SymbolId, &'a CompiledFunctionMetadata),
+    get_func: &'a dyn Fn(
+        StaticModuleIndex,
+        DefinedFuncIndex,
+    ) -> (Option<SymbolId>, &'a CompiledFunctionMetadata),
 
     /// Optionally-specified `*.dwp` file, currently only supported for core
     /// wasm modules.
@@ -68,7 +70,7 @@ pub struct Compilation<'a> {
 
     /// Translation between `SymbolId` and a `usize`-based symbol which gimli
     /// uses.
-    symbol_index_to_id: Vec<SymbolId>,
+    symbol_index_to_id: Vec<Option<SymbolId>>,
     symbol_id_to_index: HashMap<SymbolId, (usize, StaticModuleIndex, DefinedFuncIndex)>,
 
     /// The `ModuleMemoryOffset` for each module within `translations`.
@@ -84,7 +86,7 @@ impl<'a> Compilation<'a> {
         get_func: &'a dyn Fn(
             StaticModuleIndex,
             DefinedFuncIndex,
-        ) -> (SymbolId, &'a CompiledFunctionMetadata),
+        ) -> (Option<SymbolId>, &'a CompiledFunctionMetadata),
         dwarf_package_bytes: Option<&'a [u8]>,
         tunables: &'a Tunables,
     ) -> Compilation<'a> {
@@ -127,7 +129,9 @@ impl<'a> Compilation<'a> {
         for (module, translation) in translations {
             for func in translation.module.defined_func_indices() {
                 let (sym, _func) = get_func(module, func);
-                symbol_id_to_index.insert(sym, (symbol_index_to_id.len(), module, func));
+                if let Some(sym) = sym {
+                    symbol_id_to_index.insert(sym, (symbol_index_to_id.len(), module, func));
+                }
                 symbol_index_to_id.push(sym);
             }
         }
@@ -157,7 +161,13 @@ impl<'a> Compilation<'a> {
     /// function metadata that were produced during compilation.
     fn functions(
         &self,
-    ) -> impl Iterator<Item = (StaticModuleIndex, usize, &'a CompiledFunctionMetadata)> + '_ {
+    ) -> impl Iterator<
+        Item = (
+            StaticModuleIndex,
+            Option<usize>,
+            &'a CompiledFunctionMetadata,
+        ),
+    > + '_ {
         self.indexes().map(move |(module, func)| {
             let (sym, func) = self.function(module, func);
             (module, sym, func)
@@ -169,14 +179,14 @@ impl<'a> Compilation<'a> {
         &self,
         module: StaticModuleIndex,
         func: DefinedFuncIndex,
-    ) -> (usize, &'a CompiledFunctionMetadata) {
+    ) -> (Option<usize>, &'a CompiledFunctionMetadata) {
         let (sym, func) = (self.get_func)(module, func);
-        (self.symbol_id_to_index[&sym].0, func)
+        (sym.map(|sym| self.symbol_id_to_index[&sym].0), func)
     }
 
     /// Maps a `usize`-based symbol used by gimli to the object-based
     /// `SymbolId`.
-    pub fn symbol_id(&self, sym: usize) -> SymbolId {
+    pub fn symbol_id(&self, sym: usize) -> Option<SymbolId> {
         self.symbol_index_to_id[sym]
     }
 }

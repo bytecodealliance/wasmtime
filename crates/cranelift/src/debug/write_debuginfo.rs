@@ -146,6 +146,9 @@ fn create_frame_table(
     let cie_id = table.add_cie(isa.create_systemv_cie()?);
 
     for (_, symbol, metadata) in compilation.functions() {
+        let Some(symbol) = symbol else {
+            continue;
+        };
         // The CFA-based unwind info will either be natively present, or we
         // have generated it and placed into the "cfa_unwind_info" auxiliary
         // field. We shouldn't emit both, though, it'd be wasteful.

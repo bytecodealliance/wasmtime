@@ -14,6 +14,7 @@ mod config;
 mod engine;
 mod entity_set;
 mod error;
+mod fiber_stack;
 mod func;
 mod func_type;
 mod fuzz;

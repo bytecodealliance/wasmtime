@@ -149,7 +149,9 @@ impl RangeInfoBuilder {
                 }
             }
             RangeInfoBuilder::Function(index) => {
-                let symbol = addr_tr.map()[*index].symbol;
+                let Some(symbol) = addr_tr.map()[*index].symbol else {
+                    return;
+                };
                 let range = addr_tr.func_range(*index);
                 let addr = write::Address::Symbol {
                     symbol,

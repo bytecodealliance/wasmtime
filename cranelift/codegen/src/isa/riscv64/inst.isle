@@ -1981,7 +1981,7 @@
 ;; value (first sign-extending to handle narrow widths).
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule
-  (imm12_from_negated_value (has_type ty (iconst _ n)))
+  (imm12_from_negated_value (iconst ty n))
   (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_wrapping_neg (i64_sextend_imm64 ty n))))
   imm)
 
@@ -2034,7 +2034,7 @@
 
 ;; Like imm5_from_value, but first negates the `Value`.
 (decl pure partial imm5_from_negated_value (Value) Imm5)
-(rule (imm5_from_negated_value (has_type ty (iconst _ n)))
+(rule (imm5_from_negated_value (iconst ty n))
   (if-let (imm5_from_i64 imm) (i64_wrapping_neg (i64_sextend_imm64 ty n)))
   imm)
 
@@ -2344,11 +2344,11 @@
 ;; extension is from 32 to 64, 16/8-bit operations are explicitly excluded here.
 ;; There are no native instructions for the 16/8 bit operations so they must
 ;; fall through to actual sign extension above.
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _ _))) true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (ishl $I32 _ _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (ushr $I32 _ _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (sshr $I32 _ _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (iadd $I32 _ _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (isub $I32 _ _)) true)
 
 (type ExtendOp
   (enum
@@ -2485,7 +2485,7 @@
 (extractor (sinkable_load inst ty flags addr offset)
            (and
               (load _ (little_or_native_endian flags) addr offset)
-              (sinkable_inst (has_type ty inst))))
+              (sinkable_inst (and (result_type ty) inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
 (decl load_op_reg_type (LoadOP) Type)

@@ -154,7 +154,7 @@ impl GcOps {
                         .fields
                         .iter()
                         .map(|f| wasm_encoder::FieldType {
-                            element_type: f.field_type.to_storage_type(),
+                            element_type: f.field_type.to_storage_type(&type_ids_to_index),
                             mutable: f.mutable,
                         })
                         .collect();
@@ -425,6 +425,7 @@ impl GcOps {
                 storage_bases,
                 &self.types,
                 &encoding_order,
+                &type_ids_to_index,
             );
         }
         func.instruction(&Instruction::Br(0));
@@ -1021,6 +1022,7 @@ impl GcOp {
         encoding_bases: WasmEncodingBases,
         types: &Types,
         encoding_order: &[TypeId],
+        type_ids_to_index: &BTreeMap<TypeId, u32>,
     ) {
         let gc_func_idx = 0;
         let take_refs_func_idx = 1;
@@ -1115,7 +1117,7 @@ impl GcOp {
                     if let Some(def) = types.type_defs.get(tid) {
                         let CompositeType::Struct(ref st) = def.composite_type;
                         for field in &st.fields {
-                            field.field_type.emit_default_const(func);
+                            field.field_type.emit_default_const(func, type_ids_to_index);
                         }
                     }
                 }
@@ -1326,7 +1328,9 @@ impl GcOp {
                                 func.instruction(&Instruction::If(wasm_encoder::BlockType::Empty));
                                 func.instruction(&Instruction::Else);
                                 func.instruction(&Instruction::LocalGet(typed_local));
-                                fields[idx].field_type.emit_default_const(func);
+                                fields[idx]
+                                    .field_type
+                                    .emit_default_const(func, type_ids_to_index);
                                 let idx = u32::try_from(idx).unwrap();
                                 func.instruction(&Instruction::StructSet {
                                     struct_type_index: wasm_type,

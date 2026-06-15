@@ -14,8 +14,8 @@
 ;;     jump block1
 ;;
 ;; block1:
-;;     v4 = load.i64 notrap aligned region0 v0+8
 ;;     v5 = get_frame_pointer.i64 
+;;     v4 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;     store notrap aligned v5, v4+72
 ;;     v6 = get_stack_pointer.i64 
 ;;     store notrap aligned v6, v4+64
@@ -34,7 +34,6 @@
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
 ;;     region0 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     gv0 = vmctx
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v2 = iconst.i64 0

@@ -32,20 +32,10 @@ impl CopyingCompiler {
         func_env: &mut FuncEnvironment<'_>,
         builder: &mut FunctionBuilder,
     ) -> ir::Value {
-        let pointer_type = func_env.pointer_type();
-        let gc_heap_data_offset = func_env.offsets.ptr.vmctx_gc_heap_data();
-        let vmctx_region =
-            func_env.vmctx_alias_region(&mut builder.func, u32::from(gc_heap_data_offset));
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        builder.ins().load(
-            pointer_type,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_can_move()
-                .with_alias_region(Some(vmctx_region)),
-            vmctx,
-            i32::from(gc_heap_data_offset),
-        )
+        func_env
+            .alias_regions
+            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx)
     }
 
     /// Load the current bump pointer and active-space end from a `*mut
@@ -70,6 +60,21 @@ impl CopyingCompiler {
             i32::from(func_env.offsets.ptr.vmcopying_heap_data_active_space_end()),
         );
         (bump_ptr, active_space_end)
+    }
+
+    /// Store the new bump pointer into the given `*mut VMCopyingHeapData`.
+    fn store_bump_pointer(
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        heap_data_ptr: ir::Value,
+        end_of_object: ir::Value,
+    ) {
+        builder.ins().store(
+            ir::MemFlagsData::trusted(),
+            end_of_object,
+            heap_data_ptr,
+            i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
+        );
     }
 
     /// Round `size` (an `i32`) up to `ALIGN`, returning the result as an `i64`.
@@ -160,14 +165,7 @@ impl CopyingCompiler {
 
             // Update the bump pointer.
             let end_of_object = builder.ins().ireduce(ir::types::I32, end_64);
-            let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
-            let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
-            builder.ins().store(
-                ir::MemFlagsData::trusted().with_alias_region(Some(vmctx_region)),
-                end_of_object,
-                ptr_to_heap_data,
-                i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
-            );
+            Self::store_bump_pointer(func_env, builder, ptr_to_heap_data, end_of_object);
 
             // Compute the raw pointer to the new object.
             let base = func_env.get_gc_heap_base(builder)?;

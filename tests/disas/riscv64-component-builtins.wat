@@ -35,8 +35,8 @@
 ;;     brif v15, block2, block1
 ;;
 ;; block1 cold:
-;;     v16 = load.i64 notrap aligned readonly region1 v1+16
-;;     v17 = load.i64 notrap aligned readonly v16+328
+;;     v16 = load.i64 notrap aligned readonly can_move region1 v1+16
+;;     v17 = load.i64 notrap aligned readonly can_move v16+328
 ;;     call_indirect sig1, v17(v1)
 ;;     trap user1
 ;;

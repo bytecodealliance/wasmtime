@@ -82,6 +82,10 @@ define_tunables! {
         /// the guest.
         pub debug_guest: bool,
 
+        /// Whether we are enabling native symbols to get inserted into the
+        /// final `*.cwasm`.
+        pub debug_symbols: bool,
+
         /// Whether or not to retain DWARF sections in compiled modules.
         pub parse_wasm_debuginfo: bool,
 
@@ -278,6 +282,7 @@ impl Tunables {
             metadata_for_internal_asserts: false,
             metadata_for_gc_heap_corruption: true,
             branch_hinting: false,
+            debug_symbols: true,
         }
     }
 

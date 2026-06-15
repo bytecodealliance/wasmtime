@@ -39,16 +39,14 @@
 ;;     region1 = 72 "VMContext+0x48"
 ;;     region2 = 104 "VMContext+0x68"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = vmctx
-;;     gv5 = load.i64 notrap aligned readonly region0 gv4+8
-;;     gv6 = load.i64 notrap aligned gv5+24
-;;     gv7 = vmctx
-;;     gv8 = vmctx
-;;     gv9 = load.i64 notrap aligned readonly region0 gv8+8
-;;     gv10 = load.i64 notrap aligned gv9+24
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
+;;     gv5 = load.i64 notrap aligned gv4+24
+;;     gv6 = vmctx
+;;     gv7 = load.i64 notrap aligned readonly can_move region0 gv6+8
+;;     gv8 = load.i64 notrap aligned gv7+24
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64) tail
@@ -64,9 +62,9 @@
 ;;                                     jump block4
 ;;
 ;;                                 block4:
-;; @00d4                               v4 = load.i64 notrap aligned readonly can_move region1 v0+72
-;;                                     v10 = load.i64 notrap aligned readonly can_move region2 v4+104
-;;                                     call fn2(v10, v10)
+;; @00d4                               v3 = load.i64 notrap aligned readonly can_move region1 v0+72
+;;                                     v9 = load.i64 notrap aligned readonly can_move region2 v3+104
+;;                                     call fn2(v9, v9)
 ;;                                     jump block5
 ;;
 ;;                                 block5:
@@ -82,6 +80,6 @@
 ;; @00d6                               jump block1
 ;;
 ;;                                 block1:
-;;                                     v11 = iconst.i32 1
-;; @00d6                               return v11  ; v11 = 1
+;;                                     v10 = iconst.i32 1
+;; @00d6                               return v10  ; v10 = 1
 ;; }

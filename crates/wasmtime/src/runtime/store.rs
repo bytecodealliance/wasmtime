@@ -1846,6 +1846,9 @@ impl StoreOpaque {
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
             );
+            let gc_runtime = engine
+                .gc_runtime()
+                .context("no GC runtime: GC disabled at compile time or configuration time")?;
 
             // First, allocate the memory that will be our GC heap's storage.
             let mut request = InstanceAllocationRequest {
@@ -1868,13 +1871,20 @@ impl StoreOpaque {
 
             // Then, allocate the actual GC heap, passing in that memory
             // storage.
-            let gc_runtime = engine
-                .gc_runtime()
-                .context("no GC runtime: GC disabled at compile time or configuration time")?;
-            let (index, heap) =
-                engine
+            let (index, mut heap) =
+                match engine
                     .allocator()
-                    .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index, mem)?;
+                    .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index)
+                {
+                    Ok(pair) => pair,
+                    Err(e) => unsafe {
+                        engine
+                            .allocator()
+                            .deallocate_memory(None, mem_alloc_index, mem);
+                        return Err(e);
+                    },
+                };
+            heap.attach(mem);
 
             let mut gc_store = GcStore::new(index, heap, engine.tunables().gc_zeal_alloc_counter);
 
@@ -2573,11 +2583,12 @@ impl Drop for StoreOpaque {
             let store_id = self.id();
 
             #[cfg(feature = "gc")]
-            if let Some(gc_store) = self.gc_store.take() {
+            if let Some(mut gc_store) = self.gc_store.take() {
                 let gc_alloc_index = gc_store.allocation_index;
                 log::trace!("store {store_id:?} is deallocating GC heap {gc_alloc_index:?}");
                 debug_assert!(self.engine.features().gc_types());
-                let (mem_alloc_index, mem) =
+                let mem = gc_store.gc_heap.detach();
+                let mem_alloc_index =
                     allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap);
                 allocator.deallocate_memory(None, mem_alloc_index, mem);
             }

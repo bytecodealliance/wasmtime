@@ -55,9 +55,8 @@
 ;;     region3 = 104 "VMContext+0x68"
 ;;     region4 = 136 "VMContext+0x88"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64, i64, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64, i64, i64, i64, i32) tail
@@ -67,25 +66,25 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64):
-;; @01b0                               v11 = iconst.i64 4
-;; @01b0                               v12, v13 = uadd_overflow v2, v11  ; v11 = 4
-;; @01b0                               v14 = icmp ugt v12, v3
-;; @01b0                               v15 = bor v13, v14
-;; @01b0                               v17 = iconst.i64 0
-;; @01aa                               v7 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @01aa                               v8 = load.i64 notrap aligned readonly can_move region2 v7+104
-;; @01b0                               v16 = iadd v8, v2
-;; @01b0                               v18 = select_spectre_guard v15, v17, v16  ; v17 = 0
-;; @01b0                               trapz v18, heap_oob
-;; @01b0                               v19 = load.i32 notrap aligned v18
-;; @01bf                               v29, v30 = uadd_overflow v2, v11  ; v11 = 4
-;; @01bf                               v31 = icmp ugt v29, v3
-;; @01bf                               v32 = bor v30, v31
-;; @01bf                               v35 = select_spectre_guard v32, v17, v16  ; v17 = 0
-;; @01bf                               trapz v35, heap_oob
-;; @01bc                               v24 = iconst.i32 1
-;; @01be                               v25 = iadd v19, v24  ; v24 = 1
-;; @01bf                               store notrap aligned v25, v35
+;; @01b0                               v9 = iconst.i64 4
+;; @01b0                               v10, v11 = uadd_overflow v2, v9  ; v9 = 4
+;; @01b0                               v12 = icmp ugt v10, v3
+;; @01b0                               v13 = bor v11, v12
+;; @01b0                               v15 = iconst.i64 0
+;; @01aa                               v6 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @01aa                               v7 = load.i64 notrap aligned readonly can_move region2 v6+104
+;; @01b0                               v14 = iadd v7, v2
+;; @01b0                               v16 = select_spectre_guard v13, v15, v14  ; v15 = 0
+;; @01b0                               trapz v16, heap_oob
+;; @01b0                               v17 = load.i32 notrap aligned v16
+;; @01bf                               v25, v26 = uadd_overflow v2, v9  ; v9 = 4
+;; @01bf                               v27 = icmp ugt v25, v3
+;; @01bf                               v28 = bor v26, v27
+;; @01bf                               v31 = select_spectre_guard v28, v15, v14  ; v15 = 0
+;; @01bf                               trapz v31, heap_oob
+;; @01bc                               v21 = iconst.i32 1
+;; @01be                               v22 = iadd v17, v21  ; v21 = 1
+;; @01bf                               store notrap aligned v22, v31
 ;; @01c1                               jump block1
 ;;
 ;;                                 block1:

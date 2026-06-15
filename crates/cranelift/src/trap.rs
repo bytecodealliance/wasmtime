@@ -1,25 +1,34 @@
 use crate::TRAP_INTERNAL_ASSERT;
+use crate::alias_region::AliasRegions;
 use crate::compiler::Compiler;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::types::I8;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{BuiltinFunctionIndex, TripleExt};
+use wasmtime_environ::{BuiltinFunctionIndex, GetPtrSize, TripleExt};
 
 /// Helper trait to share translation of traps between core functions and
 /// component trampolines.
 ///
 /// Traps are conditionally performed as libcalls when signals-based-traps are
 /// disabled, for example, but otherwise use the native CLIF `trap` instruction.
-pub trait TranslateTrap {
+pub trait TranslateTrap<Offsets>
+where
+    Offsets: GetPtrSize,
+{
     fn compiler(&self) -> &Compiler;
+
     fn vmctx_val(&mut self, cursor: &mut FuncCursor<'_>) -> ir::Value;
+
+    fn alias_regions(&mut self) -> &mut AliasRegions<Offsets>;
+
     fn builtin_funcref(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         index: BuiltinFunctionIndex,
     ) -> ir::FuncRef;
+
     fn debug_tags(&self, _srcloc: ir::SourceLoc) -> Vec<ir::DebugTag> {
         vec![]
     }

@@ -565,6 +565,27 @@ pub trait PtrSize {
     }
 }
 
+/// A trait to abstract over various types that contain a `P: PtrSize`.
+pub trait GetPtrSize {
+    /// The type that implements `PtrSize`.
+    type Ptr: PtrSize;
+
+    /// Get a `&P` where `P: PtrSize`.
+    fn get_ptr_size(&self) -> &Self::Ptr;
+}
+
+impl<P> GetPtrSize for P
+where
+    P: PtrSize,
+{
+    type Ptr = Self;
+
+    #[inline]
+    fn get_ptr_size(&self) -> &Self::Ptr {
+        self
+    }
+}
+
 /// Type representing the size of a pointer for the current compilation host
 #[derive(Clone, Copy)]
 pub struct HostPtr;
@@ -719,6 +740,15 @@ impl<P: PtrSize> VMOffsets<P> {
             defined_memories: "defined memories",
             imported_memories: "imported memories",
         }
+    }
+}
+
+impl<P: PtrSize> GetPtrSize for VMOffsets<P> {
+    type Ptr = P;
+
+    #[inline]
+    fn get_ptr_size(&self) -> &Self::Ptr {
+        &self.ptr
     }
 }
 

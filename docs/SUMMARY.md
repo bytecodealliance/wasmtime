@@ -33,6 +33,7 @@
     - [Profiling with `samply`](./examples-profiling-samply.md)
     - [Cross-platform Profiling](./examples-profiling-guest.md)
   - [Building a Minimal Embedding](./examples-minimal.md)
+    - [Building a Minimal `*.cwasm`](./examples-minimal-cwasm.md)
   - [Portable Interpretation](./examples-pulley.md)
   - [Pre-Compiling Wasm](./examples-pre-compiling-wasm.md)
   - [Fast Execution](./examples-fast-execution.md)

@@ -49,9 +49,8 @@
 ;;     region3 = 104 "VMContext+0x68"
 ;;     region4 = 136 "VMContext+0x88"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i64) -> i32 tail
 ;;     sig2 = (i64 vmctx, i64, i64, i32) tail
@@ -61,12 +60,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0153                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @0153                               v6 = load.i64 notrap aligned readonly can_move region2 v5+104
-;; @0155                               v9 = load.i8 notrap aligned v6
-;;                                     v22 = iconst.i8 1
-;;                                     v23 = iadd v9, v22  ; v22 = 1
-;; @0160                               store notrap aligned v23, v6
+;; @0153                               v4 = load.i64 notrap aligned readonly can_move region0 v0+8
+;; @0153                               v5 = load.i64 notrap aligned readonly can_move region2 v4+104
+;; @0155                               v7 = load.i8 notrap aligned v5
+;;                                     v18 = iconst.i8 1
+;;                                     v19 = iadd v7, v18  ; v18 = 1
+;; @0160                               store notrap aligned v19, v5
 ;; @0162                               jump block1
 ;;
 ;;                                 block1:

@@ -3636,3 +3636,56 @@ async fn issue_13516_copying_collector_cancellation_during_gc() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pooling_gc_heap_failure_does_not_leak_memory_slot() -> Result<()> {
+    if crate::skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
+    const TOTAL_MEMORIES: u32 = 4;
+
+    let mut pool = crate::small_pool_config();
+    pool.total_memories(TOTAL_MEMORIES)
+        .total_gc_heaps(1)
+        .total_core_instances(TOTAL_MEMORIES + 2)
+        .total_tables(TOTAL_MEMORIES + 2)
+        .memory_protection_keys(Enabled::No);
+
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    let engine = Engine::new(&config)?;
+
+    let gc_module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $s (struct))
+                (func (export "alloc")
+                    (drop (struct.new $s)))
+            )
+        "#,
+    )?;
+
+    // Hold the gc slot, then assert other attempts are failures
+    {
+        let mut held = Store::new(&engine, ());
+        Instance::new(&mut held, &gc_module, &[])?;
+
+        for _ in 0..10 {
+            let mut store = Store::new(&engine, ());
+            let err = Instance::new(&mut store, &gc_module, &[]).unwrap_err();
+            assert!(err.is::<PoolConcurrencyLimitError>(), "bad error: {err:?}");
+        }
+    }
+
+    // should be able to use all slots now...
+    let mut store = Store::new(&engine, ());
+    let mem_module = Module::new(&engine, r#"(module (memory 1 1))"#)?;
+    for _ in 0..TOTAL_MEMORIES {
+        Instance::new(&mut store, &mem_module, &[]).unwrap();
+    }
+
+    Ok(())
+}

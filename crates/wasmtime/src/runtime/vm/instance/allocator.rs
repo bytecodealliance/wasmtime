@@ -253,7 +253,6 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
         memory_alloc_index: MemoryAllocationIndex,
-        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)>;
 
     /// Deallocate a GC heap that was previously allocated with
@@ -265,7 +264,7 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         &self,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
-    ) -> (MemoryAllocationIndex, Memory);
+    ) -> MemoryAllocationIndex;
 
     /// Purges all lingering resources related to `module` from within this
     /// allocator.

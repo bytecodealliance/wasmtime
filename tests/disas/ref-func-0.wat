@@ -17,22 +17,21 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 1610612736 "PublicGlobal"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @008f                               v7 = iconst.i64 80
-;; @008f                               v8 = iadd v0, v7  ; v7 = 80
-;; @008f                               v9 = load.i32 notrap aligned v8
-;; @0091                               v11 = iconst.i64 96
-;; @0091                               v12 = iadd v0, v11  ; v11 = 96
-;; @0091                               v13 = load.i32 notrap aligned v12
-;; @0093                               v15 = load.i64 notrap aligned region1 v0+112
-;; @0095                               v17 = load.i64 notrap aligned region1 v0+128
+;; @008f                               v6 = iconst.i64 80
+;; @008f                               v7 = iadd v0, v6  ; v6 = 80
+;; @008f                               v8 = load.i32 notrap aligned v7
+;; @0091                               v9 = iconst.i64 96
+;; @0091                               v10 = iadd v0, v9  ; v9 = 96
+;; @0091                               v11 = load.i32 notrap aligned v10
+;; @0093                               v12 = load.i64 notrap aligned region1 v0+112
+;; @0095                               v13 = load.i64 notrap aligned region1 v0+128
 ;; @0097                               jump block1
 ;;
 ;;                                 block1:
-;; @0097                               return v9, v13, v15, v17
+;; @0097                               return v8, v11, v12, v13
 ;; }

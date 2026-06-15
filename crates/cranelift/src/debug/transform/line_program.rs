@@ -26,7 +26,9 @@ pub(crate) fn clone_line_program(
         let Some(map) = addr_tr.map().get(index) else {
             continue; // no code generated
         };
-        let symbol = map.symbol;
+        let Some(symbol) = map.symbol else {
+            continue;
+        };
         let base_addr = map.offset;
         transform.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
         // TODO track and place function declaration line here
