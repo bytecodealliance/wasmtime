@@ -3030,6 +3030,12 @@ start a print 1234
         assert!(stdout.contains("please see me"));
         Ok(())
     }
+
+    #[test]
+    fn p3_cli_many_stream() -> Result<()> {
+        run_wasmtime(&["run", "-Smax-resources=100", P3_CLI_MANY_STREAM_COMPONENT])?;
+        Ok(())
+    }
 }
 
 #[test]
