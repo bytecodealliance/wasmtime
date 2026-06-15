@@ -3502,7 +3502,7 @@ impl Instance {
         if count > 0 && size > 0 {
             self.options_memory(store, options)
                 .get(address..)
-                .and_then(|b| b.get(..(size * count)))
+                .and_then(|b| b.get(..size.checked_mul(count)?))
                 .map(drop)
                 .ok_or_else(|| crate::format_err!("read pointer out of bounds of memory"))
         } else {
