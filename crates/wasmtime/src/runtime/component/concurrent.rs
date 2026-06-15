@@ -1539,8 +1539,9 @@ impl<T> StoreContextMut<'_, T> {
     /// is the current task, and the last item in the iterator is the original
     /// call.
     pub fn async_call_stack(&mut self) -> impl Iterator<Item = GuestTaskId> {
+        let cur0 = self.0.current_thread();
         let state = self.0.concurrent_state_mut();
-        let mut cur = Some(state.current_thread);
+        let mut cur = Some(cur0);
         core::iter::from_fn(move || {
             while let Some(t) = cur {
                 cur = state.parent(t);
@@ -1555,6 +1556,29 @@ impl<T> StoreContextMut<'_, T> {
 }
 
 impl StoreOpaque {
+    /// Returns the currently-running thread as last materialized in the
+    /// `ConcurrentState`.
+    ///
+    /// Note that this does *not* consult the JIT-visible deferred-thread
+    /// pointer in `VMStoreContext` and assumes that it has already been forced,
+    /// if necessary.
+    ///
+    /// Use `force_current_thread` when the caller requires that any pending
+    /// deferred thread (pushed inline by a fused adapter's fast path) be
+    /// promoted to a real thread first.
+    pub(crate) fn current_thread(&mut self) -> CurrentThread {
+        self.concurrent_state_mut().current_thread
+    }
+
+    /// Returns the currently-running thread, promoting any deferred lazy thread
+    /// into a fully-materialized `CurrentThread`.
+    pub(crate) fn force_current_thread(&mut self) -> Result<CurrentThread> {
+        // FIXME(#12311): this is currently a stub that simply returns the
+        // already materialized thread; the deferred-thread promotion is
+        // implemented in a follow-up commit.
+        Ok(self.concurrent_state_mut().current_thread)
+    }
+
     /// Push a `GuestTask` onto the task stack for either a sync-to-sync,
     /// guest-to-guest call or a sync host-to-guest call.
     ///
@@ -1572,8 +1596,8 @@ impl StoreOpaque {
             return self.enter_call_not_concurrent();
         }
 
+        let thread = self.force_current_thread()?;
         let state = self.concurrent_state_mut();
-        let thread = state.current_thread;
         let instance = if let Some(thread) = thread.guest() {
             Some(state.get_mut(thread.task)?.instance)
         } else {
@@ -1708,8 +1732,8 @@ impl StoreOpaque {
         if !self.concurrency_support() {
             return Ok(true);
         }
+        let mut cur = Some(self.force_current_thread()?);
         let state = self.concurrent_state_mut();
-        let mut cur = Some(state.current_thread);
         while let Some(t) = cur {
             if let Some(thread) = t.guest() {
                 let task = state.get_mut(thread.task)?;
@@ -1886,7 +1910,7 @@ impl StoreOpaque {
     /// Resume the specified fiber, giving it exclusive access to the specified
     /// store.
     async fn resume_fiber(&mut self, fiber: StoreFiber<'static>) -> Result<()> {
-        let old_thread = self.concurrent_state_mut().current_thread;
+        let old_thread = self.current_thread();
         log::trace!("resume_fiber: save current thread {old_thread:?}");
 
         let fiber = fiber::resolve_or_release(self, fiber).await?;
@@ -1962,7 +1986,7 @@ impl StoreOpaque {
         };
 
         let old_guest_thread = if task.is_some() {
-            self.concurrent_state_mut().current_thread
+            self.current_thread()
         } else {
             CurrentThread::None
         };
