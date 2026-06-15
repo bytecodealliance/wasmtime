@@ -6,7 +6,7 @@ test_programs::p3::export!(Component);
 
 impl test_programs::p3::exports::wasi::cli::run::Guest for Component {
     async fn run() -> Result<(), ()> {
-        for i in 0..200 {
+        for _ in 0..200 {
             let (tx, rx) = wit_stream::new();
             let _future = wasip3::cli::stdout::write_via_stream(rx);
             drop(tx);
