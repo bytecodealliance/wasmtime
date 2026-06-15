@@ -1,7 +1,7 @@
-use super::GcHeapAllocationIndex;
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
+use super::{GcHeapAllocationIndex, PoolConcurrencyLimitError};
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
-use crate::vm::{Memory, MemoryAllocationIndex};
+use crate::vm::MemoryAllocationIndex;
 use crate::{Engine, prelude::*};
 use std::sync::Mutex;
 use wasmtime_environ::Tunables;
@@ -28,11 +28,11 @@ impl HeapSlot {
         }
     }
 
-    fn dealloc(&mut self, heap: Box<dyn GcHeap>) -> MemoryAllocationIndex {
+    fn dealloc(&mut self, heap: Option<Box<dyn GcHeap>>) -> MemoryAllocationIndex {
         match *self {
             HeapSlot::Free(_) => panic!("already free"),
             HeapSlot::InUse(memory_alloc_index) => {
-                *self = HeapSlot::Free(Some(heap));
+                *self = HeapSlot::Free(heap);
                 memory_alloc_index
             }
         }
@@ -103,21 +103,15 @@ impl GcHeapPool {
         engine: &Engine,
         gc_runtime: &dyn GcRuntime,
         memory_alloc_index: MemoryAllocationIndex,
-        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
         let allocation_index = self
             .index_allocator
             .alloc()
             .map(|slot| GcHeapAllocationIndex(slot.0))
-            .ok_or_else(|| {
-                format_err!(
-                    "maximum concurrent GC heap limit of {} reached",
-                    self.max_gc_heaps
-                )
-            })?;
+            .ok_or_else(|| PoolConcurrencyLimitError::new(self.max_gc_heaps, "GC heaps"))?;
         debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
 
-        let mut heap = match {
+        let heap = match {
             let mut heaps = self.heaps.lock().unwrap();
             heaps[allocation_index.index()].alloc(memory_alloc_index)
         } {
@@ -125,11 +119,16 @@ impl GcHeapPool {
             Some(heap) => heap,
             // Otherwise, we haven't forced this slot's lazily allocated heap
             // yet. So do that now.
-            None => gc_runtime.new_gc_heap(engine)?,
+            None => match gc_runtime.new_gc_heap(engine) {
+                Ok(heap) => heap,
+                Err(e) => {
+                    self.deallocate_maybe_with_heap(allocation_index, None);
+                    return Err(e);
+                }
+            },
         };
 
         debug_assert!(!heap.is_attached());
-        heap.attach(memory);
 
         Ok((allocation_index, heap))
     }
@@ -138,11 +137,20 @@ impl GcHeapPool {
     pub fn deallocate(
         &self,
         allocation_index: GcHeapAllocationIndex,
-        mut heap: Box<dyn GcHeap>,
-    ) -> (MemoryAllocationIndex, Memory) {
-        debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
+        heap: Box<dyn GcHeap>,
+    ) -> MemoryAllocationIndex {
+        self.deallocate_maybe_with_heap(allocation_index, Some(heap))
+    }
 
-        let memory = heap.detach();
+    fn deallocate_maybe_with_heap(
+        &self,
+        allocation_index: GcHeapAllocationIndex,
+        heap: Option<Box<dyn GcHeap>>,
+    ) -> MemoryAllocationIndex {
+        debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
+        if let Some(heap) = &heap {
+            debug_assert!(!heap.is_attached());
+        }
 
         // NB: Replace the heap before freeing the index. If we did it in the
         // opposite order, a concurrent allocation request could reallocate the
@@ -155,6 +163,6 @@ impl GcHeapPool {
 
         self.index_allocator.free(SlotId(allocation_index.0), 0);
 
-        (memory_alloc_index, memory)
+        memory_alloc_index
     }
 }

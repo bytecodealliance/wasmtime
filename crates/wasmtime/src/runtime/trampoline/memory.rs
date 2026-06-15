@@ -263,7 +263,6 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         _engine: &crate::Engine,
         _gc_runtime: &dyn crate::vm::GcRuntime,
         _memory_alloc_index: crate::vm::MemoryAllocationIndex,
-        _memory: Memory,
     ) -> Result<(crate::vm::GcHeapAllocationIndex, Box<dyn crate::vm::GcHeap>)> {
         unreachable!()
     }
@@ -273,7 +272,7 @@ unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
         &self,
         _allocation_index: crate::vm::GcHeapAllocationIndex,
         _gc_heap: Box<dyn crate::vm::GcHeap>,
-    ) -> (crate::vm::MemoryAllocationIndex, crate::vm::Memory) {
+    ) -> crate::vm::MemoryAllocationIndex {
         unreachable!()
     }
 }
