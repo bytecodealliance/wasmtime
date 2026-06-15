@@ -19,7 +19,7 @@ pub const MAX_FIELDS_RANGE: RangeInclusive<u32> = 0..=8;
 pub const MAX_OPS: usize = 100;
 
 /// Limits controlling the structure of a generated Wasm module.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GcOpsLimits {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
@@ -29,11 +29,22 @@ pub struct GcOpsLimits {
     pub(crate) max_fields: u32,
 }
 
+impl Default for GcOpsLimits {
+    fn default() -> Self {
+        Self {
+            num_params: 5,
+            num_globals: 5,
+            table_size: 5,
+            max_rec_groups: 5,
+            max_types: 5,
+            max_fields: 5,
+        }
+    }
+}
+
 impl GcOpsLimits {
     /// Fixup the limits to ensure they are within the valid range.
     pub(crate) fn fixup(&mut self) {
-        // NB: Exhaustively match so that we remember to fixup any other new
-        // limits we add in the future.
         let Self {
             num_params,
             num_globals,
