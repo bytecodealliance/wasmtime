@@ -863,7 +863,7 @@ wiggle::from_witx!({
             fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
             fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
             path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-            path_rename, path_symlink, path_unlink_file
+            path_rename, path_symlink, path_unlink_file, fd_renumber
         }
     },
     errors: { errno => trappable Error },
@@ -882,7 +882,7 @@ pub(crate) mod sync {
                 fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
                 fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
                 path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
-                path_rename, path_symlink, path_unlink_file
+                path_rename, path_symlink, path_unlink_file, fd_renumber
             }
         },
         errors: { errno => trappable Error },
@@ -1853,28 +1853,33 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
     }
 
     /// Atomically replace a file descriptor by renumbering another file descriptor.
-    #[instrument(skip(self, _memory))]
-    fn fd_renumber(
+    #[instrument(skip(self, memory))]
+    async fn fd_renumber(
         &mut self,
-        _memory: &mut GuestMemory<'_>,
-        from: types::Fd,
-        to: types::Fd,
+        memory: &mut GuestMemory<'_>,
+        from_fd: types::Fd,
+        to_fd: types::Fd,
     ) -> Result<(), types::Error> {
-        let mut st = self.transact()?;
-        let from = from.into();
-        let to = to.into();
-        if !st.descriptors.used.contains_key(&to) {
-            return Err(types::Errno::Badf.into());
+        let from = from_fd.into();
+        let to = to_fd.into();
+        {
+            let st = self.transact()?;
+            if !st.descriptors.used.contains_key(&to) || !st.descriptors.used.contains_key(&from) {
+                return Err(types::Errno::Badf.into());
+            }
+            if from == to {
+                return Ok(());
+            }
         }
+        self.fd_close(memory, to_fd).await?;
+        let mut st = self.transact()?;
         let btree_map::Entry::Occupied(desc) = st.descriptors.used.entry(from) else {
             return Err(types::Errno::Badf.into());
         };
-        if from != to {
-            let desc = desc.remove();
-            st.descriptors.free.insert(from);
-            st.descriptors.free.remove(&to);
-            st.descriptors.used.insert(to, desc);
-        }
+        let desc = desc.remove();
+        st.descriptors.free.insert(from);
+        st.descriptors.free.remove(&to);
+        st.descriptors.used.insert(to, desc);
         Ok(())
     }
 
