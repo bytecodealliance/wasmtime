@@ -19,15 +19,6 @@ runs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
 
-    # Disable things that docker has on-by-default from the above which we're
-    # not interested in.
-    - name: Disable some docker things that are on-by-default
-      shell: bash
-      run: |
-        echo DOCKER_BUILD_CHECKS_ANNOTATIONS=false >> $GITHUB_ENV
-        echo DOCKER_BUILD_SUMMARY=false >> $GITHUB_ENV
-        echo DOCKER_BUILD_RECORD_UPLOAD=false >> $GITHUB_ENV
-
     # We'll be using this cache key and the "local" caching mode of docker. This
     # allows pretty fine-grained views into what's being cache. Experimentation
     # found that the default `gha` caching mode sprays quite a lot into the
@@ -41,15 +32,24 @@ runs:
         path: ${{ runner.tool_cache }}/docker-buildx-cache
         key: ${{ inputs.cache_key_prefix }}-${{ hashFiles(inputs.file) }}
 
+    # Note that this is a hand-rolled `docker buildx build` instead of
+    # `docker/build-push-action` to enable retrying the build. Fetching base
+    # images from Docker Hub is flaky enough that an unretried build fails
+    # CI from time to time, and the action itself has no retry option.
     - name: Build docker image
-      uses: docker/build-push-action@v7
-      with:
-        context: ${{ inputs.context }}
-        file: ${{ inputs.file }}
-        tags: build-image
-        cache-from: type=local,src=${{ runner.tool_cache }}/docker-buildx-cache
-        cache-to: type=local,dest=${{ runner.tool_cache }}/docker-buildx-cache
-        outputs: type=docker
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          docker buildx build \
+            --file ${{ inputs.file }} \
+            --tag build-image \
+            --cache-from type=local,src=${{ runner.tool_cache }}/docker-buildx-cache \
+            --cache-to type=local,dest=${{ runner.tool_cache }}/docker-buildx-cache \
+            --load \
+            ${{ inputs.context }} && break
+          sleep 5
+        done
 
     # Only save caches on the `main` branch since these docker images are
     # relatively large. This means that caches aren't filled through the merge

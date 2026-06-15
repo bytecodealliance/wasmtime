@@ -2450,6 +2450,12 @@ impl Config {
             WasmFeatures::COMPONENT_MODEL,
             cfg!(feature = "component-model"),
         );
+        features.set(
+            WasmFeatures::CM_ASYNC,
+            self.tunables
+                .concurrency_support
+                .unwrap_or(cfg!(feature = "component-model-async")),
+        );
 
         // From the default set of proposals remove any that the current
         // compiler backend may panic on if the module contains them.
