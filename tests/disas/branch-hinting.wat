@@ -172,7 +172,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -184,8 +183,8 @@
 ;; @009f                               jump block3
 ;;
 ;;                                 block4 cold:
-;; @00a0                               v5 = iconst.i32 2
-;; @00a2                               store notrap aligned region1 v5, v0+48  ; v5 = 2
+;; @00a0                               v4 = iconst.i32 2
+;; @00a2                               store notrap aligned region1 v4, v0+48  ; v4 = 2
 ;; @00a4                               jump block3
 ;;
 ;;                                 block3:

@@ -34,7 +34,6 @@
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
 ;;     region0 = 1879048192 "DefinedGlobal(StaticModuleIndex(0), DefinedGlobalIndex(0))"
-;;     gv0 = vmctx
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v2 = iconst.i64 0

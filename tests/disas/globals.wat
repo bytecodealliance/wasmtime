@@ -24,11 +24,11 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0027                               v2 = iconst.i32 0
 ;; @0029                               v3 = iconst.i32 0
-;; @002b                               v5 = load.i32 notrap aligned region1 v0+80
-;; @002d                               v6 = uextend.i64 v3  ; v3 = 0
-;; @002d                               v7 = load.i64 notrap aligned readonly can_move v0+56
-;; @002d                               v8 = iadd v7, v6
-;; @002d                               store little region2 v5, v8
+;; @002b                               v4 = load.i32 notrap aligned region1 v0+80
+;; @002d                               v5 = uextend.i64 v3  ; v3 = 0
+;; @002d                               v6 = load.i64 notrap aligned readonly can_move v0+56
+;; @002d                               v7 = iadd v6, v5
+;; @002d                               store little region2 v4, v7
 ;; @0030                               jump block1
 ;;
 ;;                                 block1:
