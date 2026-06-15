@@ -2,7 +2,6 @@ use std::{fmt::Write, path::PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=isle_examples");
 
     let out_dir = std::path::PathBuf::from(
         std::env::var_os("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
@@ -44,6 +43,8 @@ fn isle_printer_tests(out_dir: &std::path::PathBuf) {
 }
 
 fn emit_tests(out: &mut String, dir_name: &str, runner_func: &str) {
+    println!("cargo:rerun-if-changed={dir_name}");
+
     let dir_path = PathBuf::from(dir_name);
     let test_name = dir_path.file_name().unwrap().to_string_lossy();
     for test_file in std::fs::read_dir(dir_name).unwrap() {
