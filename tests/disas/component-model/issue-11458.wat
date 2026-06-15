@@ -23,12 +23,11 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 72 "VMContext+0x48"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
-;;     gv4 = vmctx
-;;     gv5 = load.i64 notrap aligned readonly region0 gv4+8
-;;     gv6 = load.i64 notrap aligned gv5+24
+;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
+;;     gv5 = load.i64 notrap aligned gv4+24
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     fn0 = colocated u0:0 sig0
@@ -39,14 +38,14 @@
 ;; @006f                               jump block2
 ;;
 ;;                                 block2:
-;; @006f                               v6 = load.i64 notrap aligned readonly can_move region1 v0+72
-;;                                     v10 = iconst.i32 1
-;;                                     v12 = call fn1(v6, v6, v10)  ; v10 = 1
+;; @006f                               v5 = load.i64 notrap aligned readonly can_move region1 v0+72
+;;                                     v9 = iconst.i32 1
+;;                                     v11 = call fn1(v5, v5, v9)  ; v9 = 1
 ;;                                     jump block4
 ;;
 ;;                                 block4:
 ;; @0071                               jump block1
 ;;
 ;;                                 block1:
-;; @0071                               return v12
+;; @0071                               return v11
 ;; }

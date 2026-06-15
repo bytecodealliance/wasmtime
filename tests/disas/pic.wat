@@ -51,7 +51,7 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -76,7 +76,7 @@
 ;;     region3 = 96 "VMContext+0x60"
 ;;     region4 = 80 "VMContext+0x50"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -98,14 +98,14 @@
 ;; @0078                               v17 = iconst.i64 12
 ;; @0078                               v18 = iadd v16, v17  ; v17 = 12
 ;; @0078                               store little region2 v13, v18
-;; @0084                               v24 = load.i64 notrap aligned readonly can_move region4 v0+80
-;; @0084                               v23 = load.i64 notrap aligned readonly can_move region3 v0+96
-;;                                     v36 = iconst.i32 -4
-;;                                     v37 = iadd v6, v36  ; v36 = -4
-;; @0084                               call_indirect sig0, v24(v23, v0, v37)
-;;                                     v44 = iconst.i64 0x0010_0000
-;; @0090                               v29 = iadd v11, v44  ; v44 = 0x0010_0000
-;; @0090                               store little region2 v13, v29
+;; @0084                               v23 = load.i64 notrap aligned readonly can_move region4 v0+80
+;; @0084                               v22 = load.i64 notrap aligned readonly can_move region3 v0+96
+;;                                     v35 = iconst.i32 -4
+;;                                     v36 = iadd v6, v35  ; v35 = -4
+;; @0084                               call_indirect sig0, v23(v22, v0, v36)
+;;                                     v43 = iconst.i64 0x0010_0000
+;; @0090                               v28 = iadd v11, v43  ; v43 = 0x0010_0000
+;; @0090                               store little region2 v13, v28
 ;; @0098                               store notrap aligned region1 v6, v0+128
 ;; @009c                               jump block1
 ;;

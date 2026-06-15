@@ -12,7 +12,7 @@ use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_environ::null::{EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET};
 use wasmtime_environ::{
-    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmRefType, WasmResult,
+    GcTypeLayouts, ModuleInternedTypeIndex, TypeIndex, VMGcKind, WasmRefType, WasmResult,
     null::NullTypeLayouts,
 };
 
@@ -69,18 +69,10 @@ impl NullCompiler {
 
         // Load the bump "pointer" (it is actually an index into the GC heap,
         // not a raw pointer).
-        let pointer_type = func_env.pointer_type();
-        let gc_heap_data_offset = u32::from(func_env.offsets.ptr.vmctx_gc_heap_data());
-        let vmctx_region = func_env.vmctx_alias_region(&mut builder.func, gc_heap_data_offset);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
-        let ptr_to_next = builder.ins().load(
-            pointer_type,
-            ir::MemFlagsData::trusted()
-                .with_readonly()
-                .with_alias_region(Some(vmctx_region)),
-            vmctx,
-            i32::try_from(gc_heap_data_offset).unwrap(),
-        );
+        let ptr_to_next = func_env
+            .alias_regions
+            .vmctx_gc_heap_data(&mut builder.cursor(), vmctx);
         let flags = func_env.gc_memflags(&mut builder.func);
         let next = builder.ins().load(ir::types::I32, flags, ptr_to_next, 0);
 
@@ -107,7 +99,8 @@ impl NullCompiler {
         // Check whether the allocation fits in the heap space we have left.
         let end_of_object =
             func_env.uadd_overflow_trap(builder, aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
-        let uext_end_of_object = uextend_i32_to_pointer_type(builder, pointer_type, end_of_object);
+        let uext_end_of_object =
+            uextend_i32_to_pointer_type(builder, func_env.pointer_type(), end_of_object);
         let bound = func_env.get_gc_heap_bound(builder)?;
         let is_in_bounds = builder.ins().icmp(
             ir::condcodes::IntCC::UnsignedLessThanOrEqual,
@@ -146,7 +139,7 @@ impl NullCompiler {
         // code for big-endian architectures, and I haven't bothered doing that
         // yet.
         let base = func_env.get_gc_heap_base(builder)?;
-        let uext_aligned = uextend_i32_to_pointer_type(builder, pointer_type, aligned);
+        let uext_aligned = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), aligned);
         let ptr_to_object = builder.ins().iadd(base, uext_aligned);
         let kind = builder
             .ins()

@@ -16,8 +16,8 @@
 ;;       stp     d12, d13, [sp, #-0x10]!
 ;;       stp     d10, d11, [sp, #-0x10]!
 ;;       stp     d8, d9, [sp, #-0x10]!
-;;       ldr     x11, [x0, #8]
 ;;       mov     x12, x29
+;;       ldr     x11, [x0, #8]
 ;;       str     x12, [x11, #0x48]
 ;;       mov     x12, sp
 ;;       str     x12, [x11, #0x40]

@@ -1,7 +1,6 @@
 //! Interface to compiling GC-related things.
 
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
-use crate::alias_region_key::AliasRegionKey;
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
 use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
@@ -1392,10 +1391,6 @@ fn initialize_struct_fields(
 }
 
 impl FuncEnvironment<'_> {
-    pub(crate) fn gc_heap_alias_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
-        self.alias_region(func, AliasRegionKey::GcHeap)
-    }
-
     /// Flags to use for general-purpose GC loads/stores.
     ///
     /// This is used for accesses to the GC heap which aren't expected to trap, but
@@ -1403,7 +1398,7 @@ impl FuncEnvironment<'_> {
     /// is here to ensure that in the face of heap corruption that there's no
     /// possible UB within Cranelift and/or the runtime.
     fn gc_memflags(&mut self, func: &mut ir::Function) -> ir::MemFlagsData {
-        let region = self.gc_heap_alias_region(func);
+        let region = self.alias_regions.gc_heap_region(func);
         ir::MemFlagsData::new()
             .with_trap_code(Some(crate::TRAP_GC_HEAP_CORRUPT))
             .with_alias_region(Some(region))

@@ -39,7 +39,7 @@
 ;;     region2 = 80 "VMContext+0x50"
 ;;     region3 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+64
@@ -49,26 +49,26 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0028                               v3 = iconst.i32 0
-;; @0030                               v7 = load.i64 notrap aligned readonly can_move region2 v0+80
-;; @0030                               v6 = load.i64 notrap aligned readonly can_move region1 v0+96
-;; @0039                               v13 = iconst.i64 0x0001_0000
-;; @0039                               v17 = iconst.i64 0
-;; @0039                               v15 = load.i64 notrap aligned readonly can_move v0+56
-;; @003e                               v19 = iconst.i32 1
+;; @0030                               v6 = load.i64 notrap aligned readonly can_move region2 v0+80
+;; @0030                               v5 = load.i64 notrap aligned readonly can_move region1 v0+96
+;; @0039                               v12 = iconst.i64 0x0001_0000
+;; @0039                               v16 = iconst.i64 0
+;; @0039                               v14 = load.i64 notrap aligned readonly can_move v0+56
+;; @003e                               v18 = iconst.i32 1
 ;; @002e                               jump block2(v3)  ; v3 = 0
 ;;
-;;                                 block2(v9: i32):
-;; @0030                               call_indirect.i64 sig0, v7(v6, v0)
-;;                                     v22 = iconst.i32 0
-;; @0036                               v10 = iadd.i32 v2, v9
-;; @0039                               v12 = uextend.i64 v10
-;;                                     v23 = iconst.i64 0x0001_0000
-;;                                     v24 = icmp ugt v12, v23  ; v23 = 0x0001_0000
-;; @0039                               v16 = iadd.i64 v15, v12
-;;                                     v25 = iconst.i64 0
-;;                                     v26 = select_spectre_guard v24, v25, v16  ; v25 = 0
-;; @0039                               store little region3 v22, v26  ; v22 = 0
-;;                                     v27 = iconst.i32 1
-;;                                     v28 = iadd v9, v27  ; v27 = 1
-;; @0043                               jump block2(v28)
+;;                                 block2(v8: i32):
+;; @0030                               call_indirect.i64 sig0, v6(v5, v0)
+;;                                     v21 = iconst.i32 0
+;; @0036                               v9 = iadd.i32 v2, v8
+;; @0039                               v11 = uextend.i64 v9
+;;                                     v22 = iconst.i64 0x0001_0000
+;;                                     v23 = icmp ugt v11, v22  ; v22 = 0x0001_0000
+;; @0039                               v15 = iadd.i64 v14, v11
+;;                                     v24 = iconst.i64 0
+;;                                     v25 = select_spectre_guard v23, v24, v15  ; v24 = 0
+;; @0039                               store little region3 v21, v25  ; v21 = 0
+;;                                     v26 = iconst.i32 1
+;;                                     v27 = iadd v8, v26  ; v26 = 1
+;; @0043                               jump block2(v27)
 ;; }

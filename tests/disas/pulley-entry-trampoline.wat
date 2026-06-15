@@ -6,8 +6,8 @@
 
 ;; wasm[0]::array_to_wasm_trampoline[0]:
 ;;       push_frame_save 128, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
-;;       xload64le_o32 x11, x0, 8
 ;;       xmov_fp x12
+;;       xload64le_o32 x11, x0, 8
 ;;       xstore64le_o32 x11, 72, x12
 ;;       xmov x12, sp
 ;;       xstore64le_o32 x11, 64, x12

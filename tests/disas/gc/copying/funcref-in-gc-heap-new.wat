@@ -15,7 +15,7 @@
 ;;     region2 = 40 "VMContext+0x28"
 ;;     region3 = 2147483648 "GcHeap"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i64 tail
@@ -37,7 +37,7 @@
 ;;                                 block2:
 ;;                                     v59 = iconst.i32 32
 ;;                                     v57 = iadd.i32 v6, v59  ; v59 = 32
-;; @0020                               store notrap aligned region1 v57, v5
+;; @0020                               store notrap aligned v57, v5
 ;;                                     v60 = iconst.i32 -1342177278
 ;;                                     v61 = load.i64 notrap aligned readonly can_move region0 v0+8
 ;;                                     v62 = load.i64 notrap aligned readonly can_move v61+32
