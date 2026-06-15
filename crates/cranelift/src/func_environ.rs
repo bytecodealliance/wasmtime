@@ -3035,12 +3035,14 @@ impl FuncEnvironment<'_> {
                         unreachable!()
                     };
                     let src = builder.ins().iadd_imm_s(base, i64::from(offset));
-                    let flags =
+                    let region = self.global_alias_region(builder.func, global_index);
+                    let mut flags =
                         if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector() {
                             ir::MemFlagsData::trusted()
                         } else {
                             ir::MemFlagsData::trusted().with_readonly().with_can_move()
                         };
+                    flags.set_alias_region(Some(region));
                     gc::gc_compiler(self)?
                         .translate_read_gc_reference(self, builder, ref_ty, src, flags)
                 } else {
@@ -3095,25 +3097,13 @@ impl FuncEnvironment<'_> {
             };
             let offset = builder.ins().iconst(self.pointer_type(), i64::from(offset));
             let src = builder.ins().iadd(base, offset);
+            let region = self.global_alias_region(builder.func, global_index);
+            let flags = ir::MemFlagsData::trusted().with_alias_region(Some(region));
             let mut gc = gc::gc_compiler(self)?;
             if initialized {
-                gc.translate_write_gc_reference(
-                    self,
-                    builder,
-                    ty,
-                    src,
-                    val,
-                    ir::MemFlagsData::trusted(),
-                )?;
+                gc.translate_write_gc_reference(self, builder, ty, src, val, flags)?;
             } else {
-                gc.translate_init_gc_reference(
-                    self,
-                    builder,
-                    ty,
-                    src,
-                    val,
-                    ir::MemFlagsData::trusted(),
-                )?;
+                gc.translate_init_gc_reference(self, builder, ty, src, val, flags)?;
             }
         } else {
             let ty = super::value_type(self.isa, wasm_ty);
