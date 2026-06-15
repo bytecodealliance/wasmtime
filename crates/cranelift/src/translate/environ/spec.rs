@@ -9,20 +9,7 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use smallvec::SmallVec;
-use wasmtime_environ::{GlobalConstValue, Tunables, TypeConvert, WasmHeapType};
-
-/// The value of a WebAssembly global variable.
-#[derive(Clone, Copy)]
-pub enum GlobalVariable {
-    /// The global is known to be a constant value.
-    Constant {
-        /// The global's known value.
-        value: GlobalConstValue,
-    },
-
-    /// This global is reified in memory.
-    Reified,
-}
+use wasmtime_environ::{Tunables, TypeConvert, WasmHeapType};
 
 /// Environment affecting the translation of a WebAssembly.
 pub trait TargetEnvironment: TypeConvert {

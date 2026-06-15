@@ -3,4 +3,4 @@
 #[macro_use]
 mod spec;
 
-pub use crate::translate::environ::spec::{GlobalVariable, StructFieldsVec, TargetEnvironment};
+pub use crate::translate::environ::spec::{StructFieldsVec, TargetEnvironment};
