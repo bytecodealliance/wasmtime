@@ -39,6 +39,7 @@
 ;; function u2415919104:0(i64 vmctx, i64) tail {
 ;;     region0 = 2684354560 "VMTableDefinition+0x0"
 ;;     region1 = 2684354568 "VMTableDefinition+0x8"
+;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;
 ;; block0(v0: i64, v1: i64):
 ;;     v9 = load.i64 notrap aligned region1 v0+56
@@ -56,7 +57,7 @@
 ;;
 ;; block1(v29: i64):
 ;;     v86 = iconst.i32 1
-;;     store notrap aligned v86, v29  ; v86 = 1
+;;     store notrap aligned region2 v86, v29  ; v86 = 1
 ;;     v87 = iadd.i64 v18, v81  ; v81 = 36
 ;;     v88 = icmp eq v29, v87
 ;;     v89 = iconst.i64 4
