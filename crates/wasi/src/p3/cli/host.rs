@@ -84,6 +84,39 @@ impl<D> StreamProducer<D> for InputStreamProducer {
 struct OutputStreamConsumer {
     tx: Pin<Box<dyn AsyncWrite + Send + Sync>>,
     result_tx: Option<oneshot::Sender<ErrorCode>>,
+    flush_pending: bool,
+}
+
+impl OutputStreamConsumer {
+    fn poll_flush(
+        &mut self,
+        cx: &mut Context<'_>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        match self.tx.as_mut().poll_flush(cx) {
+            Poll::Ready(Ok(())) => {
+                self.flush_pending = false;
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(e)) => self.dropped(e),
+            Poll::Pending => {
+                if finish {
+                    self.flush_pending = false;
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    self.flush_pending = true;
+                    Poll::Pending
+                }
+            }
+        }
+    }
+
+    fn dropped(&mut self, err: io::Error) -> Poll<wasmtime::Result<StreamResult>> {
+        if let Some(tx) = self.result_tx.take() {
+            let _ = tx.send(io_error_to_error_code(err));
+        }
+        Poll::Ready(Ok(StreamResult::Dropped))
+    }
 }
 
 impl<D> StreamConsumer<D> for OutputStreamConsumer {
@@ -96,6 +129,10 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
         src: Source<Self::Item>,
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
+        if self.flush_pending {
+            return self.poll_flush(cx, finish);
+        }
+
         let mut src = src.as_direct(store);
         let buf = src.remaining();
 
@@ -110,18 +147,12 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
             return Poll::Ready(Ok(StreamResult::Completed));
         }
         match self.tx.as_mut().poll_write(cx, buf) {
+            Poll::Ready(Ok(0)) => self.dropped(io::ErrorKind::WriteZero.into()),
             Poll::Ready(Ok(n)) => {
                 src.mark_read(n);
-                Poll::Ready(Ok(StreamResult::Completed))
+                self.poll_flush(cx, finish)
             }
-            Poll::Ready(Err(e)) => {
-                let _ = self
-                    .result_tx
-                    .take()
-                    .unwrap()
-                    .send(io_error_to_error_code(e));
-                Poll::Ready(Ok(StreamResult::Dropped))
-            }
+            Poll::Ready(Err(e)) => self.dropped(e),
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
             Poll::Pending => Poll::Pending,
         }
@@ -228,6 +259,7 @@ impl<U> stdout::HostWithStore<U> for WasiCli {
             OutputStreamConsumer {
                 tx: Box::into_pin(tx),
                 result_tx: Some(result_tx),
+                flush_pending: false,
             },
         )?;
         FutureReader::new(&mut store, async {
@@ -253,6 +285,7 @@ impl<U> stderr::HostWithStore<U> for WasiCli {
             OutputStreamConsumer {
                 tx: Box::into_pin(tx),
                 result_tx: Some(result_tx),
+                flush_pending: false,
             },
         )?;
         FutureReader::new(&mut store, async {
