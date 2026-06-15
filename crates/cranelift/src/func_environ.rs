@@ -3227,7 +3227,7 @@ impl FuncEnvironment<'_> {
                     let WasmValType::Ref(ty) = wasm_ty else {
                         unreachable!()
                     };
-                    let offset = builder.ins().iconst(self.pointer_type(), offset);
+                    let offset = builder.ins().iconst(self.pointer_type(), i64::from(offset));
                     let src = builder.ins().iadd(base, offset);
                     let mut gc = gc::gc_compiler(self)?;
                     if initialized {
