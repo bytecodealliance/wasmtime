@@ -37,14 +37,17 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
+;;     region0 = 2684354560 "VMTableDefinition+0x0"
+;;     region1 = 2684354568 "VMTableDefinition+0x8"
+;;
 ;; block0(v0: i64, v1: i64):
-;;     v9 = load.i64 notrap aligned v0+56
+;;     v9 = load.i64 notrap aligned region1 v0+56
 ;;     v10 = ireduce.i32 v9
 ;;     v11 = uextend.i64 v10
 ;;     v39 = iconst.i64 10
 ;;     v51 = icmp ult v11, v39  ; v39 = 10
 ;;     trapnz v51, user6
-;;     v18 = load.i64 notrap aligned v0+48
+;;     v18 = load.i64 notrap aligned region0 v0+48
 ;;     v3 = iconst.i32 1
 ;;     v81 = iconst.i64 36
 ;;     v83 = iadd v18, v81  ; v81 = 36

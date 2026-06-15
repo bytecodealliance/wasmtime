@@ -43,36 +43,38 @@
 ;; }
 ;;
 ;; function u2415919104:0(i64 vmctx, i64) tail {
-;;     region0 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region0 = 2684354560 "VMTableDefinition+0x0"
+;;     region1 = 2684354568 "VMTableDefinition+0x8"
+;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;
 ;; block0(v0: i64, v1: i64):
-;;     v4 = load.i64 notrap aligned v0+56
+;;     v4 = load.i64 notrap aligned region1 v0+56
 ;;     v5 = ireduce.i32 v4
 ;;     v6 = uextend.i64 v5
 ;;     v78 = iconst.i64 4
 ;;     v84 = icmp ult v6, v78  ; v78 = 4
 ;;     trapnz v84, user6
-;;     v13 = load.i64 notrap aligned v0+48
+;;     v13 = load.i64 notrap aligned region0 v0+48
 ;;     v95 = iconst.i32 21
 ;;     v2 = iconst.i32 1
 ;;     v106 = icmp ule v5, v2  ; v2 = 1
 ;;     v71 = iconst.i64 0
 ;;     v17 = iadd v13, v78  ; v78 = 4
 ;;     v34 = select_spectre_guard v106, v71, v17  ; v71 = 0
-;;     store user6 aligned region0 v95, v34  ; v95 = 21
+;;     store user6 aligned region2 v95, v34  ; v95 = 21
 ;;     v109 = iconst.i32 23
 ;;     v115 = iconst.i32 2
 ;;     v121 = icmp ule v5, v115  ; v115 = 2
 ;;     v123 = iconst.i64 8
 ;;     v49 = iadd v13, v123  ; v123 = 8
 ;;     v51 = select_spectre_guard v121, v71, v49  ; v71 = 0
-;;     store user6 aligned region0 v109, v51  ; v109 = 23
+;;     store user6 aligned region2 v109, v51  ; v109 = 23
 ;;     v125 = iconst.i32 25
 ;;     v3 = iconst.i32 3
 ;;     v136 = icmp ule v5, v3  ; v3 = 3
 ;;     v138 = iconst.i64 12
 ;;     v66 = iadd v13, v138  ; v138 = 12
 ;;     v68 = select_spectre_guard v136, v71, v66  ; v71 = 0
-;;     store user6 aligned region0 v125, v68  ; v125 = 25
+;;     store user6 aligned region2 v125, v68  ; v125 = 25
 ;;     return
 ;; }

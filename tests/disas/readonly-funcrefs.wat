@@ -36,8 +36,9 @@
 ;; function u0:1(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region3 = 40 "VMContext+0x28"
+;;     region2 = 2684354560 "VMTableDefinition+0x0"
+;;     region3 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region4 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -50,13 +51,13 @@
 ;; @0031                               v3 = iconst.i32 2
 ;; @0031                               v4 = icmp uge v2, v3  ; v3 = 2
 ;; @0031                               v10 = iconst.i64 0
-;; @0031                               v6 = load.i64 notrap aligned readonly can_move v0+48
+;; @0031                               v6 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;; @0031                               v5 = uextend.i64 v2
 ;; @0031                               v7 = iconst.i64 3
 ;; @0031                               v8 = ishl v5, v7  ; v7 = 3
 ;; @0031                               v9 = iadd v6, v8
 ;; @0031                               v11 = select_spectre_guard v4, v10, v9  ; v10 = 0
-;; @0031                               v12 = load.i64 user6 aligned region2 v11
+;; @0031                               v12 = load.i64 user6 aligned region3 v11
 ;; @0031                               v13 = iconst.i64 -2
 ;; @0031                               v14 = band v12, v13  ; v13 = -2
 ;; @0031                               brif v12, block3(v14), block2
@@ -68,7 +69,7 @@
 ;;
 ;;                                 block3(v15: i64):
 ;; @0031                               v21 = load.i32 user7 aligned readonly v15+16
-;; @0031                               v19 = load.i64 notrap aligned readonly can_move region3 v0+40
+;; @0031                               v19 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @0031                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0031                               v22 = icmp eq v21, v20
 ;; @0031                               trapz v22, user8

@@ -25,8 +25,9 @@
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region3 = 40 "VMContext+0x28"
+;;     region2 = 2684354560 "VMTableDefinition+0x0"
+;;     region3 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region4 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -39,7 +40,7 @@
 ;; @002b                               v4 = iconst.i32 2
 ;; @002b                               v5 = icmp uge v2, v4  ; v4 = 2
 ;; @002b                               v11 = iconst.i64 0
-;; @002b                               v7 = load.i64 notrap aligned readonly can_move v0+48
+;; @002b                               v7 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;; @002b                               v6 = uextend.i64 v2
 ;; @002b                               v8 = iconst.i64 3
 ;; @002b                               v9 = ishl v6, v8  ; v8 = 3
@@ -47,12 +48,12 @@
 ;; @002b                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
 ;; @002b                               v14 = iconst.i64 -2
 ;; @002b                               v17 = iconst.i32 0
-;; @002b                               v20 = load.i64 notrap aligned readonly can_move region3 v0+40
+;; @002b                               v20 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @002b                               v21 = load.i32 notrap aligned readonly can_move v20
 ;; @0027                               jump block2
 ;;
 ;;                                 block2:
-;; @002b                               v13 = load.i64 user6 aligned region2 v12
+;; @002b                               v13 = load.i64 user6 aligned region3 v12
 ;;                                     v29 = iconst.i64 -2
 ;;                                     v30 = band v13, v29  ; v29 = -2
 ;; @002b                               brif v13, block5(v30), block4
@@ -75,8 +76,9 @@
 ;; function u0:1(i64 vmctx, i64) tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 268435480 "VMStoreContext+0x18"
-;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region3 = 40 "VMContext+0x28"
+;;     region2 = 2684354560 "VMTableDefinition+0x0"
+;;     region3 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region4 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned region1 gv1+24
@@ -86,19 +88,19 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0038                               v6 = load.i64 notrap aligned readonly can_move v0+48
+;; @0038                               v6 = load.i64 notrap aligned readonly can_move region2 v0+48
 ;;                                     v34 = iconst.i64 8
 ;; @0038                               v9 = iadd v6, v34  ; v34 = 8
 ;; @0038                               v13 = iconst.i64 -2
 ;; @0038                               v16 = iconst.i32 0
 ;;                                     v33 = iconst.i64 1
-;; @0038                               v19 = load.i64 notrap aligned readonly can_move region3 v0+40
+;; @0038                               v19 = load.i64 notrap aligned readonly can_move region4 v0+40
 ;; @0038                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0034                               jump block2
 ;;
 ;;                                 block2:
 ;;                                     v35 = iadd.i64 v6, v34  ; v34 = 8
-;; @0038                               v12 = load.i64 user6 aligned region2 v35
+;; @0038                               v12 = load.i64 user6 aligned region3 v35
 ;;                                     v36 = iconst.i64 -2
 ;;                                     v37 = band v12, v36  ; v36 = -2
 ;; @0038                               brif v12, block5(v37), block4
