@@ -44,16 +44,13 @@ Rather than configuring arguments on the command line, you can store
 them in a configuration file and point the verifier at it with `--config`:
 
 ```
-cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-default-excludes.args
+cargo run -p cranelift-isle-veri --bin veri -- --config cranelift/isle/veri/configs/aarch64-fast.args
 ```
 
 A configuration file lists one or more per line command-line arguments per line.
-Blank lines and anything following a `#` (whole-line or trailing comments) are
-ignored. The arguments from the file are applied *before* any passed on the
-command line, so the command line always takes precedence (for example, you can
-reuse a config but override its `--timeout`). Multi-valued arguments such as
-`--filter` accumulate, while single-valued arguments (like `--name`) take their
-last value.
+Blank lines and anything following a `#` (whole-line or trailing comments) are ignored.
+The arguments from the file are applied *before* any passed on the command line, so the command line always takes precedence (for example, you can reuse a config but override its `--timeout`).
+Multi-valued arguments such as `--filter` accumulate, while single-valued arguments (like `--name`) take their last value.
 
 Three example configurations live in [`configs/`](configs):
 
@@ -125,7 +122,7 @@ To verify just the expansions containing one rule (first add a name to the rule
 if it does not have one), pass `--rule <rule>`:
 
 ```
-./script/veri.sh -- --rule <rule>
+cargo run -p cranelift-isle-veri --bin veri -- --rule <rule>
 ```
 
 This seeds expansion from the rule's root term and then narrows to the
