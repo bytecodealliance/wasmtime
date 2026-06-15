@@ -2478,8 +2478,6 @@ impl StoreOpaque {
                 )?;
             }
 
-            WriteState::HostReady { .. } => {}
-
             WriteState::Open => {
                 state.update_event(
                     write_handle.rep(),
@@ -2496,7 +2494,11 @@ impl StoreOpaque {
                 )?;
             }
 
-            WriteState::Dropped => {
+            // If the writer has already been dropped, then this cleans out the
+            // state that the reader is using. If the write is host-owned then
+            // by cleaning this out we run the host's `Drop` implementation
+            // which notifies it of this drop.
+            WriteState::Dropped | WriteState::HostReady { .. } => {
                 log::trace!("host_drop_reader delete {transmit_id:?}");
                 state.delete_transmit(transmit_id)?;
             }
@@ -2577,8 +2579,6 @@ impl StoreOpaque {
                 )?;
             }
 
-            ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {}
-
             // If the read state is open, then there are no registered readers of the stream/future
             ReadState::Open => {
                 self.concurrent_state_mut().update_event(
@@ -2596,9 +2596,13 @@ impl StoreOpaque {
                 )?;
             }
 
-            // If the read state was already dropped, then we can remove the transmit state completely
-            // (both writer and reader have been dropped)
-            ReadState::Dropped => {
+            // If the read state was already dropped, then we can remove the
+            // transmit state completely (both writer and reader have been
+            // dropped). If the read state is host-owned then it's additionally
+            // deleted here as a notification that the read end has gone away.
+            // Running the host's `Drop` implementation is what notifies it of
+            // this event.
+            ReadState::Dropped | ReadState::HostReady { .. } | ReadState::HostToHost { .. } => {
                 log::trace!("host_drop_writer delete {transmit_id:?}");
                 self.concurrent_state_mut().delete_transmit(transmit_id)?;
             }
