@@ -88,9 +88,27 @@ struct OutputStreamConsumer {
 }
 
 impl OutputStreamConsumer {
-    fn pending_flush(&mut self) -> Poll<wasmtime::Result<StreamResult>> {
-        self.flush_pending = true;
-        Poll::Pending
+    fn poll_flush(
+        &mut self,
+        cx: &mut Context<'_>,
+        finish: bool,
+    ) -> Poll<wasmtime::Result<StreamResult>> {
+        match self.tx.as_mut().poll_flush(cx) {
+            Poll::Ready(Ok(())) => {
+                self.flush_pending = false;
+                Poll::Ready(Ok(StreamResult::Completed))
+            }
+            Poll::Ready(Err(e)) => self.dropped(e),
+            Poll::Pending => {
+                if finish {
+                    self.flush_pending = false;
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    self.flush_pending = true;
+                    Poll::Pending
+                }
+            }
+        }
     }
 
     fn dropped(&mut self, err: io::Error) -> Poll<wasmtime::Result<StreamResult>> {
@@ -112,14 +130,7 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
         finish: bool,
     ) -> Poll<wasmtime::Result<StreamResult>> {
         if self.flush_pending {
-            match self.tx.as_mut().poll_flush(cx) {
-                Poll::Ready(Ok(())) => {
-                    self.flush_pending = false;
-                    return Poll::Ready(Ok(StreamResult::Completed));
-                }
-                Poll::Ready(Err(e)) => return self.dropped(e),
-                Poll::Pending => return self.pending_flush(),
-            }
+            return self.poll_flush(cx, finish);
         }
 
         let mut src = src.as_direct(store);
@@ -139,11 +150,7 @@ impl<D> StreamConsumer<D> for OutputStreamConsumer {
             Poll::Ready(Ok(0)) => self.dropped(io::ErrorKind::WriteZero.into()),
             Poll::Ready(Ok(n)) => {
                 src.mark_read(n);
-                match self.tx.as_mut().poll_flush(cx) {
-                    Poll::Ready(Ok(())) => Poll::Ready(Ok(StreamResult::Completed)),
-                    Poll::Ready(Err(e)) => self.dropped(e),
-                    Poll::Pending => self.pending_flush(),
-                }
+                self.poll_flush(cx, finish)
             }
             Poll::Ready(Err(e)) => self.dropped(e),
             Poll::Pending if finish => Poll::Ready(Ok(StreamResult::Cancelled)),
