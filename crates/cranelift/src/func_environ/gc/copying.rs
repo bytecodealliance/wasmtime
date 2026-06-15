@@ -16,9 +16,8 @@ use wasmtime_environ::copying::{
     ALIGN, EXCEPTION_TAG_DEFINED_OFFSET, EXCEPTION_TAG_INSTANCE_OFFSET, InlineTraceInfo,
 };
 use wasmtime_environ::{
-    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
-    copying::CopyingTypeLayouts,
+    GcTypeLayouts, ModuleInternedTypeIndex, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmStorageType, WasmValType, copying::CopyingTypeLayouts,
 };
 
 #[derive(Default)]
@@ -47,18 +46,12 @@ impl CopyingCompiler {
         builder: &mut FunctionBuilder,
         ptr_to_heap_data: ir::Value,
     ) -> (ir::Value, ir::Value) {
-        let bump_ptr = builder.ins().load(
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
-            ptr_to_heap_data,
-            i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
-        );
-        let active_space_end = builder.ins().load(
-            ir::types::I32,
-            ir::MemFlagsData::trusted(),
-            ptr_to_heap_data,
-            i32::from(func_env.offsets.ptr.vmcopying_heap_data_active_space_end()),
-        );
+        let bump_ptr = func_env
+            .alias_regions
+            .vmcopying_heap_data_bump_ptr(&mut builder.cursor(), ptr_to_heap_data);
+        let active_space_end = func_env
+            .alias_regions
+            .vmcopying_heap_data_active_space_end(&mut builder.cursor(), ptr_to_heap_data);
         (bump_ptr, active_space_end)
     }
 
@@ -69,11 +62,10 @@ impl CopyingCompiler {
         heap_data_ptr: ir::Value,
         end_of_object: ir::Value,
     ) {
-        builder.ins().store(
-            ir::MemFlagsData::trusted(),
-            end_of_object,
+        func_env.alias_regions.store_vmcopying_heap_data_bump_ptr(
+            &mut builder.cursor(),
             heap_data_ptr,
-            i32::from(func_env.offsets.ptr.vmcopying_heap_data_bump_ptr()),
+            end_of_object,
         );
     }
 
