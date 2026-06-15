@@ -5294,12 +5294,12 @@ impl ConcurrentState {
     /// consuming the event if so.
     fn take_pending_cancellation(&mut self) -> Result<bool> {
         let thread = self.current_guest_thread()?;
-        if let Some(event) = self.get_mut(thread.task)?.event.take() {
-            assert!(matches!(event, Event::Cancelled));
-            Ok(true)
-        } else {
-            Ok(false)
+        let task = self.get_mut(thread.task)?;
+        if let Some(Event::Cancelled) = task.event {
+            task.event.take();
+            return Ok(true);
         }
+        Ok(false)
     }
 
     fn check_blocking_for(&mut self, task: TableId<GuestTask>) -> Result<()> {
