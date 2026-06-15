@@ -4,8 +4,8 @@ pub(crate) mod stack_switching;
 use crate::alias_region::AliasRegions;
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, GlobalVariable, Heap, HeapData, MemoryKind, StructFieldsVec, TableData,
-    TableSize, TargetEnvironment,
+    FuncTranslationStacks, Heap, HeapData, MemoryKind, StructFieldsVec, TableData, TableSize,
+    TargetEnvironment,
 };
 use crate::trap::TranslateTrap;
 use crate::{
@@ -451,36 +451,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn get_global_location(
         &mut self,
-        func: &mut ir::Function,
+        pos: &mut FuncCursor<'_>,
         index: GlobalIndex,
-    ) -> (ir::GlobalValue, i32) {
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(func);
+    ) -> (ir::Value, i32) {
+        let vmctx = self.vmctx_val(pos);
         if let Some(def_index) = self.module.defined_global_index(index) {
             let offset = i32::try_from(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
             (vmctx, offset)
         } else {
-            let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
-            let region = self
+            let addr = self
                 .alias_regions
-                .vmctx_region_for_use_in_ir_global(func, from_offset);
-            let global_flags = func
-                .dfg
-                .mem_flags
-                .insert(
-                    MemFlagsData::trusted()
-                        .with_readonly()
-                        .with_can_move()
-                        .with_alias_region(Some(region)),
-                )
-                .unwrap();
-            let global = func.create_global_value(ir::GlobalValueData::Load {
-                base: vmctx,
-                offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                global_type: pointer_type,
-                flags: global_flags,
-            });
-            (global, 0)
+                .vmctx_vmglobal_import_from(pos, vmctx, index);
+            (addr, 0)
         }
     }
 
@@ -1523,10 +1505,6 @@ impl TranslateTrap<VMOffsets<u8>> for FuncEnvironment<'_> {
 
 #[derive(Default)]
 pub(crate) struct WasmEntities {
-    /// Map from a Wasm global index from this module to its implementation in
-    /// the Cranelift function we are building.
-    pub(crate) globals: SecondaryMap<GlobalIndex, Option<GlobalVariable>>,
-
     /// Map from a Wasm memory index to its `Heap` implementation in the
     /// Cranelift function we are building.
     pub(crate) memories: SecondaryMap<MemoryIndex, PackedOption<Heap>>,
@@ -1568,7 +1546,6 @@ macro_rules! define_get_or_create_methods {
 
 impl FuncEnvironment<'_> {
     define_get_or_create_methods! {
-        get_or_create_global(globals) : make_global : GlobalIndex => GlobalVariable;
         get_or_create_heap(memories) : make_heap : MemoryIndex => Heap;
         get_or_create_interned_sig_ref(sig_refs) : make_sig_ref : ModuleInternedTypeIndex => ir::SigRef;
         get_or_create_defined_func_ref(defined_func_refs) : make_defined_func_ref : DefinedFuncIndex => ir::FuncRef;
@@ -1576,20 +1553,10 @@ impl FuncEnvironment<'_> {
         get_or_create_table(tables) : make_table : TableIndex => TableData;
     }
 
-    fn make_global(&mut self, func: &mut ir::Function, index: GlobalIndex) -> GlobalVariable {
+    fn get_const_value_for_global(&mut self, index: GlobalIndex) -> Option<GlobalConstValue> {
         let ty = self.module.globals[index].wasm_ty;
 
-        if ty.is_vmgcref_type() {
-            // Although reference-typed globals live at the same memory location as
-            // any other type of global at the same index would, getting or
-            // setting them requires ref counting barriers. Therefore, we need
-            // to use `GlobalVariable::Custom`, as that is the only kind of
-            // `GlobalVariable` for which translation supports custom
-            // access translation.
-            return GlobalVariable::Custom;
-        }
-
-        if !self.module.globals[index].mutability {
+        if !ty.is_vmgcref_type() && !self.module.globals[index].mutability {
             if let Some(index) = self.module.defined_global_index(index) {
                 if let Ok(i) = self
                     .module
@@ -1597,17 +1564,12 @@ impl FuncEnvironment<'_> {
                     .binary_search_by_key(&index, |(def_index, _)| *def_index)
                 {
                     let (_, value) = self.module.global_initializers[i];
-                    return GlobalVariable::Constant { value };
+                    return Some(value);
                 }
             }
         }
 
-        let (gv, offset) = self.get_global_location(func, index);
-        GlobalVariable::Memory {
-            gv,
-            offset: offset.into(),
-            ty: super::value_type(self.isa, ty),
-        }
+        None
     }
 
     pub(crate) fn get_or_create_sig_ref(
@@ -3176,8 +3138,8 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder<'_>,
         global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        match self.get_or_create_global(builder.func, global_index) {
-            GlobalVariable::Constant { value } => match value {
+        match self.get_const_value_for_global(global_index) {
+            Some(value) => match value {
                 GlobalConstValue::I32(x) => Ok(builder.ins().iconst(ir::types::I32, i64::from(x))),
                 GlobalConstValue::I64(x) => Ok(builder.ins().iconst(ir::types::I64, x)),
                 GlobalConstValue::F32(x) => {
@@ -3192,42 +3154,37 @@ impl FuncEnvironment<'_> {
                     Ok(builder.ins().vconst(ir::types::I8X16, handle))
                 }
             },
-            GlobalVariable::Memory { gv, offset, ty } => {
-                let addr = builder.ins().global_value(self.pointer_type(), gv);
-                let mut flags = ir::MemFlagsData::trusted();
-                // Store vector globals in little-endian format to avoid
-                // byte swaps on big-endian platforms since at-rest vectors
-                // should already be in little-endian format anyway.
-                if ty.is_vector() {
-                    flags.set_endianness(ir::Endianness::Little);
-                }
-                let region = self.global_alias_region(builder.func, global_index);
-                flags.set_alias_region(Some(region));
-                Ok(builder.ins().load(ty, flags, addr, offset))
-            }
-            GlobalVariable::Custom => {
+            None => {
                 let global_ty = self.module.globals[global_index];
                 let wasm_ty = global_ty.wasm_ty;
-                debug_assert!(
-                    wasm_ty.is_vmgcref_type(),
-                    "We only use GlobalVariable::Custom for VMGcRef types"
-                );
-                let WasmValType::Ref(ref_ty) = wasm_ty else {
-                    unreachable!()
-                };
+                let (base, offset) = self.get_global_location(&mut builder.cursor(), global_index);
 
-                let (gv, offset) = self.get_global_location(builder.func, global_index);
-                let gv = builder.ins().global_value(self.pointer_type(), gv);
-                let src = builder.ins().iadd_imm_s(gv, i64::from(offset));
-
-                let flags = if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector()
-                {
-                    ir::MemFlagsData::trusted()
+                if wasm_ty.is_vmgcref_type() {
+                    let WasmValType::Ref(ref_ty) = wasm_ty else {
+                        unreachable!()
+                    };
+                    let src = builder.ins().iadd_imm_s(base, i64::from(offset));
+                    let flags =
+                        if global_ty.mutability || gc::gc_compiler(self)?.is_moving_collector() {
+                            ir::MemFlagsData::trusted()
+                        } else {
+                            ir::MemFlagsData::trusted().with_readonly().with_can_move()
+                        };
+                    gc::gc_compiler(self)?
+                        .translate_read_gc_reference(self, builder, ref_ty, src, flags)
                 } else {
-                    ir::MemFlagsData::trusted().with_readonly().with_can_move()
-                };
-                gc::gc_compiler(self)?
-                    .translate_read_gc_reference(self, builder, ref_ty, src, flags)
+                    let ty = super::value_type(self.isa, wasm_ty);
+                    let mut flags = ir::MemFlagsData::trusted();
+                    // Store vector globals in little-endian format to avoid
+                    // byte swaps on big-endian platforms since at-rest vectors
+                    // should already be in little-endian format anyway.
+                    if ty.is_vector() {
+                        flags.set_endianness(ir::Endianness::Little);
+                    }
+                    let region = self.global_alias_region(builder.func, global_index);
+                    flags.set_alias_region(Some(region));
+                    Ok(builder.ins().load(ty, flags, base, offset))
+                }
             }
         }
     }
@@ -3253,58 +3210,52 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
         initialized: bool,
     ) -> WasmResult<()> {
-        match self.get_or_create_global(builder.func, global_index) {
-            GlobalVariable::Constant { .. } => {
-                unreachable!("validation checks that Wasm cannot `global.set` constant globals")
-            }
-            GlobalVariable::Memory { gv, offset, ty } => {
-                let addr = builder.ins().global_value(self.pointer_type(), gv);
-                let mut flags = ir::MemFlagsData::trusted();
-                // Like `global.get`, store globals in little-endian format.
-                if ty.is_vector() {
-                    flags.set_endianness(ir::Endianness::Little);
-                }
-                let region = self.global_alias_region(builder.func, global_index);
-                flags.set_alias_region(Some(region));
-                debug_assert_eq!(ty, builder.func.dfg.value_type(val));
-                builder.ins().store(flags, val, addr, offset);
-                self.update_global(builder, global_index, val);
-            }
-            GlobalVariable::Custom => {
-                let ty = self.module.globals[global_index].wasm_ty;
-                debug_assert!(
-                    ty.is_vmgcref_type(),
-                    "We only use GlobalVariable::Custom for VMGcRef types"
-                );
-                let WasmValType::Ref(ty) = ty else {
-                    unreachable!()
-                };
+        debug_assert!(
+            self.get_const_value_for_global(global_index).is_none(),
+            "validation checks that Wasm cannot `global.set` constant globals"
+        );
 
-                let (gv, offset) = self.get_global_location(builder.func, global_index);
-                let gv = builder.ins().global_value(self.pointer_type(), gv);
-                let src = builder.ins().iadd_imm_s(gv, i64::from(offset));
+        let wasm_ty = self.module.globals[global_index].wasm_ty;
+        let (base, offset) = self.get_global_location(&mut builder.cursor(), global_index);
 
-                let mut gc = gc::gc_compiler(self)?;
-                if initialized {
-                    gc.translate_write_gc_reference(
-                        self,
-                        builder,
-                        ty,
-                        src,
-                        val,
-                        ir::MemFlagsData::trusted(),
-                    )?;
-                } else {
-                    gc.translate_init_gc_reference(
-                        self,
-                        builder,
-                        ty,
-                        src,
-                        val,
-                        ir::MemFlagsData::trusted(),
-                    )?;
-                }
+        if wasm_ty.is_vmgcref_type() {
+            let WasmValType::Ref(ty) = wasm_ty else {
+                unreachable!()
+            };
+            let offset = builder.ins().iconst(self.pointer_type(), i64::from(offset));
+            let src = builder.ins().iadd(base, offset);
+            let mut gc = gc::gc_compiler(self)?;
+            if initialized {
+                gc.translate_write_gc_reference(
+                    self,
+                    builder,
+                    ty,
+                    src,
+                    val,
+                    ir::MemFlagsData::trusted(),
+                )?;
+            } else {
+                gc.translate_init_gc_reference(
+                    self,
+                    builder,
+                    ty,
+                    src,
+                    val,
+                    ir::MemFlagsData::trusted(),
+                )?;
             }
+        } else {
+            let ty = super::value_type(self.isa, wasm_ty);
+            let mut flags = ir::MemFlagsData::trusted();
+            // Like `global.get`, store globals in little-endian format.
+            if ty.is_vector() {
+                flags.set_endianness(ir::Endianness::Little);
+            }
+            let region = self.global_alias_region(builder.func, global_index);
+            flags.set_alias_region(Some(region));
+            debug_assert_eq!(ty, builder.func.dfg.value_type(val));
+            builder.ins().store(flags, val, base, offset);
+            self.update_global(builder, global_index, val);
         }
         Ok(())
     }

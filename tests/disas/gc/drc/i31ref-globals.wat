@@ -17,17 +17,16 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0036                               v4 = iconst.i64 48
-;; @0036                               v5 = iadd v0, v4  ; v4 = 48
-;; @0036                               v6 = load.i32 notrap aligned v5
+;; @0036                               v3 = iconst.i64 48
+;; @0036                               v4 = iadd v0, v3  ; v3 = 48
+;; @0036                               v5 = load.i32 notrap aligned v4
 ;; @0038                               jump block1
 ;;
 ;;                                 block1:
-;; @0038                               return v6
+;; @0038                               return v5
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) tail {
@@ -35,13 +34,12 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @003d                               v4 = iconst.i64 48
-;; @003d                               v5 = iadd v0, v4  ; v4 = 48
-;; @003d                               store notrap aligned v2, v5
+;; @003d                               v3 = iconst.i64 48
+;; @003d                               v4 = iadd v0, v3  ; v3 = 48
+;; @003d                               store notrap aligned v2, v4
 ;; @003f                               jump block1
 ;;
 ;;                                 block1:

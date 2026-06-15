@@ -7,33 +7,9 @@
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use smallvec::SmallVec;
-use wasmtime_environ::{GlobalConstValue, Tunables, TypeConvert, WasmHeapType};
-
-/// The value of a WebAssembly global variable.
-#[derive(Clone, Copy)]
-pub enum GlobalVariable {
-    /// The global is known to be a constant value.
-    Constant {
-        /// The global's known value.
-        value: GlobalConstValue,
-    },
-
-    /// This is a variable in memory that should be referenced through a `GlobalValue`.
-    Memory {
-        /// The address of the global variable storage.
-        gv: ir::GlobalValue,
-        /// An offset to add to the address.
-        offset: Offset32,
-        /// The global variable's type.
-        ty: ir::Type,
-    },
-
-    /// This is a global variable that needs to be handled by the environment.
-    Custom,
-}
+use wasmtime_environ::{Tunables, TypeConvert, WasmHeapType};
 
 /// Environment affecting the translation of a WebAssembly.
 pub trait TargetEnvironment: TypeConvert {

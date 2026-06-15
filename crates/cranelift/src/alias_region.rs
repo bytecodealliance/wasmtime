@@ -4,8 +4,9 @@ use cranelift_codegen::{
     ir::{self, InstBuilder as _},
 };
 use wasmtime_environ::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, MemoryIndex,
-    PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex, TagIndex, VMOffsets,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GetPtrSize, GlobalIndex,
+    MemoryIndex, PtrSize as _, RuntimeDataIndex, StaticModuleIndex, TableIndex, TagIndex,
+    VMOffsets,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -609,6 +610,24 @@ impl AliasRegions<VMOffsets<u8>> {
             ir::MemFlagsData::trusted().with_readonly().with_can_move(),
             vmctx,
             table_index_offset,
+        )
+    }
+
+    /// Load the imported global's address (`VMGlobalImport::from`) out of the
+    /// `*mut VMContext`.
+    pub fn vmctx_vmglobal_import_from(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmctx: ir::Value,
+        global: GlobalIndex,
+    ) -> ir::Value {
+        let from_offset = self.offsets.vmctx_vmglobal_import_from(global);
+        self.vmctx_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
+            vmctx,
+            from_offset,
         )
     }
 
