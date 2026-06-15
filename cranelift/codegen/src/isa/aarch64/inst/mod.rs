@@ -2287,6 +2287,9 @@ impl Inst {
                     VecALUModOp::Bsl => ("bsl", VectorSize::Size8x16),
                     VecALUModOp::Fmla => ("fmla", size),
                     VecALUModOp::Fmls => ("fmls", size),
+                    // Note: the real operand arrangement is .4s, .16b, .16b;
+                    // this debug print renders all lanes as .4s.
+                    VecALUModOp::Sdot => ("sdot", VectorSize::Size32x4),
                 };
                 let rd = pretty_print_vreg_vector(rd.to_reg(), size);
                 let ri = pretty_print_vreg_vector(ri, size);
