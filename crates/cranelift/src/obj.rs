@@ -13,7 +13,7 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::CompiledFunction;
+use crate::{CompiledFunction, Compiler};
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
 use cranelift_control::ControlPlane;
@@ -23,12 +23,11 @@ use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, Symbol
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::ops::Range;
 use wasmtime_environ::error::Result;
-use wasmtime_environ::{Compiler, TripleExt};
-use wasmtime_environ::{FuncKey, obj};
+use wasmtime_environ::{Compiler as _, FuncKey, TripleExt, obj};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
-fn text_align(compiler: &dyn Compiler) -> u64 {
+fn text_align(compiler: &Compiler) -> u64 {
     // text pages will not be made executable with pulley, so the section
     // doesn't need to be padded out to page alignment boundaries.
     if compiler.triple().is_pulley() {
@@ -47,7 +46,7 @@ fn text_align(compiler: &dyn Compiler) -> u64 {
 pub struct ModuleTextBuilder<'a> {
     /// The target that we're compiling for, used to query target-specific
     /// information as necessary.
-    compiler: &'a dyn Compiler,
+    compiler: &'a Compiler,
 
     /// The object file that we're generating code into.
     obj: &'a mut Object<'static>,
@@ -73,7 +72,7 @@ impl<'a> ModuleTextBuilder<'a> {
     /// be called. The `finish` function will panic if this contract is not met.
     pub fn new(
         obj: &'a mut Object<'static>,
-        compiler: &'a dyn Compiler,
+        compiler: &'a Compiler,
         text: Box<dyn TextSectionBuilder>,
     ) -> Self {
         // Entire code (functions and trampolines) will be placed
@@ -121,7 +120,7 @@ impl<'a> ModuleTextBuilder<'a> {
         name: &str,
         compiled_func: &'a CompiledFunction,
         resolve_reloc_target: impl Fn(wasmtime_environ::FuncKey) -> usize,
-    ) -> (SymbolId, Range<u64>) {
+    ) -> (Option<SymbolId>, Range<u64>) {
         let body = compiled_func.buffer.data();
         let alignment = compiled_func.alignment;
         let body_len = body.len() as u64;
@@ -129,16 +128,20 @@ impl<'a> ModuleTextBuilder<'a> {
             .text
             .append(true, &body, alignment, &mut self.ctrl_plane);
 
-        let symbol_id = self.obj.add_symbol(Symbol {
-            name: name.as_bytes().to_vec(),
-            value: off,
-            size: body_len,
-            kind: SymbolKind::Text,
-            scope: SymbolScope::Compilation,
-            weak: false,
-            section: SymbolSection::Section(self.text_section),
-            flags: SymbolFlags::None,
-        });
+        let symbol_id = if self.compiler.tunables().debug_symbols {
+            Some(self.obj.add_symbol(Symbol {
+                name: name.as_bytes().to_vec(),
+                value: off,
+                size: body_len,
+                kind: SymbolKind::Text,
+                scope: SymbolScope::Compilation,
+                weak: false,
+                section: SymbolSection::Section(self.text_section),
+                flags: SymbolFlags::None,
+            }))
+        } else {
+            None
+        };
 
         if let Some(info) = compiled_func.unwind_info() {
             self.unwind_info.push(off, body_len, info);
@@ -375,12 +378,7 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// section immediately.
     ///
     /// The `text_section`'s section identifier is passed into this function.
-    fn append_section(
-        &self,
-        compiler: &dyn Compiler,
-        obj: &mut Object<'_>,
-        text_section: SectionId,
-    ) {
+    fn append_section(&self, compiler: &Compiler, obj: &mut Object<'_>, text_section: SectionId) {
         // This write will align the text section to a page boundary and then
         // return the offset at that point. This gives us the full size of the
         // text section at that point, after alignment.
@@ -513,7 +511,7 @@ impl<'a> UnwindInfoBuilder<'a> {
     /// bits.
     fn write_systemv_unwind_info(
         &self,
-        compiler: &dyn Compiler,
+        compiler: &Compiler,
         obj: &mut Object<'_>,
         section_id: SectionId,
         text_section_size: u64,

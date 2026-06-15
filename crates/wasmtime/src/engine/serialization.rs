@@ -298,6 +298,7 @@ impl Metadata<'_> {
             memory_guard_size,
             debug_native,
             debug_guest,
+            debug_symbols,
             parse_wasm_debuginfo,
             consume_fuel,
             ref operator_cost,
@@ -365,6 +366,7 @@ impl Metadata<'_> {
             "native debug information support",
         )?;
         Self::check_bool(debug_guest, other.debug_guest, "guest debug")?;
+        Self::check_bool(debug_symbols, other.debug_symbols, "debug symbols")?;
         Self::check_bool(
             parse_wasm_debuginfo,
             other.parse_wasm_debuginfo,

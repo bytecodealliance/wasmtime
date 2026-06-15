@@ -60,10 +60,11 @@ fn generate_line_info(
 
     let maps = addr_tr.iter().flat_map(|(_, transform)| {
         transform.map().iter().filter_map(|(_, map)| {
-            if translated.contains(&map.symbol) {
+            let sym = map.symbol?;
+            if translated.contains(&sym) {
                 None
             } else {
-                Some((map.symbol, map))
+                Some((sym, map))
             }
         })
     });
@@ -357,7 +358,9 @@ pub fn generate_simulated_dwarf(
     let wasm_types = add_wasm_types(unit, root_id, out_strings);
     let mut unit_ranges = vec![];
     for (module, index) in compilation.indexes().collect::<Vec<_>>() {
-        let (symbol, _) = compilation.function(module, index);
+        let (Some(symbol), _) = compilation.function(module, index) else {
+            continue;
+        };
         if translated.contains(&symbol) {
             continue;
         }

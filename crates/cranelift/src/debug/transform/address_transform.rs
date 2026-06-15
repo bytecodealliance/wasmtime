@@ -19,7 +19,7 @@ pub struct AddressMap {
 /// length, and instructions addresses.
 #[derive(Debug)]
 pub struct FunctionMap {
-    pub symbol: usize,
+    pub symbol: Option<usize>,
     pub offset: GeneratedAddress,
     pub len: GeneratedAddress,
     pub wasm_start: WasmAddress,
@@ -514,7 +514,7 @@ impl AddressTransform {
             object::Endianness::Little,
         );
         let dummy_symbol = dummy_obj.add_file_symbol(Vec::new());
-        let func_lookup = move |_, f| (dummy_symbol, module_map[f]);
+        let func_lookup = move |_, f| (Some(dummy_symbol), module_map[f]);
         let tunables = wasmtime_environ::Tunables::default_host();
         let compile = Compilation::new(
             &*cranelift_codegen::isa::lookup(target_lexicon::Triple::host())
@@ -565,10 +565,10 @@ impl AddressTransform {
             if addr == func.end {
                 // Clamp last address to the end to extend translation to the end
                 // of the function.
-                return Some((map.symbol, map.len));
+                return Some((map.symbol?, map.len));
             }
             let first_result = TransformRangeStartIter::new(func, addr).next();
-            first_result.map(|(address, _)| (map.symbol, address))
+            first_result.and_then(|(address, _)| Some((map.symbol?, address)))
         } else {
             // Address was not found: function was not compiled?
             None
@@ -598,7 +598,7 @@ impl AddressTransform {
         }
         if let Some(func) = self.find_func(start) {
             let result = TransformRangeIter::new(func, start, end);
-            let symbol = self.map[func.index].symbol;
+            let symbol = self.map[func.index].symbol?;
             return Some((symbol, result));
         }
         // Address was not found: function was not compiled?
