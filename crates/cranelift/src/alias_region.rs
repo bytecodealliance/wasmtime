@@ -25,6 +25,8 @@ enum VmType {
     VMCopyingHeapData,
     VMNullHeapData,
     VMDeferredThread,
+    VMContRef,
+    ContinuationStackMemory,
 }
 
 /// A key that uniquely identifies an alias region across an entire compilation.
@@ -86,7 +88,7 @@ enum AliasRegionKey {
 }
 
 impl AliasRegionKey {
-    const KIND_BITS: u32 = 4;
+    const KIND_BITS: u32 = 5;
     const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
     const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
 
@@ -103,22 +105,24 @@ impl AliasRegionKey {
         kind << Self::KIND_OFFSET
     }
 
-    const VM_CONTEXT_KIND: u32 = Self::new_kind(0b0000);
-    const VM_STORE_CONTEXT_KIND: u32 = Self::new_kind(0b0001);
-    const IMPORTED_MEMORY_KIND: u32 = Self::new_kind(0b0010);
-    const DEFINED_MEMORY_KIND: u32 = Self::new_kind(0b0011);
-    const IMPORTED_TABLE_KIND: u32 = Self::new_kind(0b0100);
-    const DEFINED_TABLE_KIND: u32 = Self::new_kind(0b0101);
-    const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b0110);
-    const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b0111);
-    const GC_HEAP_KIND: u32 = Self::new_kind(0b1000);
-    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b1001);
-    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b1010);
-    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b1011);
-    const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b1100);
-    const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b1101);
-    const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b1110);
-    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b1111);
+    const VM_CONTEXT_KIND: u32 = Self::new_kind(0b00000);
+    const VM_STORE_CONTEXT_KIND: u32 = Self::new_kind(0b00001);
+    const IMPORTED_MEMORY_KIND: u32 = Self::new_kind(0b00010);
+    const DEFINED_MEMORY_KIND: u32 = Self::new_kind(0b00011);
+    const IMPORTED_TABLE_KIND: u32 = Self::new_kind(0b00100);
+    const DEFINED_TABLE_KIND: u32 = Self::new_kind(0b00101);
+    const IMPORTED_GLOBAL_KIND: u32 = Self::new_kind(0b00110);
+    const DEFINED_GLOBAL_KIND: u32 = Self::new_kind(0b00111);
+    const GC_HEAP_KIND: u32 = Self::new_kind(0b01000);
+    const VM_MEMORY_DEFINITION_KIND: u32 = Self::new_kind(0b01001);
+    const VM_TABLE_DEFINITION_KIND: u32 = Self::new_kind(0b01010);
+    const VM_COMPONENT_CONTEXT_KIND: u32 = Self::new_kind(0b01011);
+    const VM_DRC_HEAP_DATA_KIND: u32 = Self::new_kind(0b01100);
+    const VM_COPYING_HEAP_DATA_KIND: u32 = Self::new_kind(0b01101);
+    const VM_NULL_HEAP_DATA_KIND: u32 = Self::new_kind(0b01110);
+    const VM_DEFERRED_THREAD_KIND: u32 = Self::new_kind(0b01111);
+    const VM_CONTREF_KIND: u32 = Self::new_kind(0b10000);
+    const CONTINUATION_STACK_MEMORY_KIND: u32 = Self::new_kind(0b10001);
 
     /// Encode this key into a raw `u32` suitable for use as an
     /// `AliasRegionData::user_id`.
@@ -136,6 +140,8 @@ impl AliasRegionKey {
                     VmType::VMCopyingHeapData => Self::VM_COPYING_HEAP_DATA_KIND,
                     VmType::VMNullHeapData => Self::VM_NULL_HEAP_DATA_KIND,
                     VmType::VMDeferredThread => Self::VM_DEFERRED_THREAD_KIND,
+                    VmType::VMContRef => Self::VM_CONTREF_KIND,
+                    VmType::ContinuationStackMemory => Self::CONTINUATION_STACK_MEMORY_KIND,
                 };
                 kind | (offset & Self::OFFSET_MASK)
             }
@@ -2113,5 +2119,47 @@ where
             null_collector_heap_data,
             0,
         );
+    }
+}
+
+/// Stack-switching and continuation-object methods.
+impl<Offsets> AliasRegions<Offsets>
+where
+    Offsets: GetPtrSize,
+{
+    /// Region for a continuation-reference object and its inline
+    /// sub-structures.
+    ///
+    /// A `VMContRef` (and its inline `VMCommonStackInformation` /
+    /// `VMStackLimits` / `VMHostArray` headers) is reached through a `*mut
+    /// VMContRef`.
+    ///
+    /// A single region covers the whole object: this is coarse but sound, and
+    /// keeps every field of the object disjoint from linear memory, the vmctx,
+    /// the store context, etc...
+    pub fn vmcontref_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::VMContRef,
+                offset: 0,
+            },
+        )
+    }
+
+    /// Region for a continuation's stack memory: its payload/handler data
+    /// buffers and the control-context records stored on the continuation
+    /// stack.
+    ///
+    /// These are distinct from the `VMContRef` object itself (which only holds
+    /// pointers to them).
+    pub fn continuation_stack_memory_region(&mut self, func: &mut ir::Function) -> ir::AliasRegion {
+        self.region(
+            func,
+            AliasRegionKey::Vm {
+                ty: VmType::ContinuationStackMemory,
+                offset: 0,
+            },
+        )
     }
 }
