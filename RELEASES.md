@@ -1,3 +1,14 @@
+## 36.0.11
+
+Released 2026-06-15.
+
+### Fixed
+
+* Leak in WASIp1 `fd_renumber` implementation.
+  [GHSA-3p27-qvp9-27qf](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-3p27-qvp9-27qf)
+
+--------------------------------------------------------------------------------
+
 ## 36.0.10
 
 Released 2026-05-21.
