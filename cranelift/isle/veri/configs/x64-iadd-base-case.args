@@ -1,0 +1,8 @@
+# Example x64 verification run (see the "Running for `x64`" section of the
+# README).
+#
+# Verifies the possible expansions for the base case of an x64 `iadd` of 32- or
+# 64-bit values. `--name` selects the x64 ISLE compilation unit and `--rule`
+# scopes to the single `lower` rule (and its downstream chained rules).
+--name x64
+--rule iadd_base_case_32_or_64_lea

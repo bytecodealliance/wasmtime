@@ -1,0 +1,14 @@
+# AArch64 verification run that includes the `slow` expansions.
+#
+# Applies the same default exclusions as --default-excludes *except* `slow`,
+# so that slow-to-verify expansions are included while the other unsupported
+# tags (vector, atomics, spectre, narrowfloat, amode_const, i128,
+# wasm_category_stack) remain excluded.
+--name aarch64
+--filter exclude:tag:vector
+--filter exclude:tag:atomics
+--filter exclude:tag:spectre
+--filter exclude:tag:narrowfloat
+--filter exclude:tag:amode_const
+--filter exclude:tag:i128
+--filter exclude:tag:wasm_category_stack

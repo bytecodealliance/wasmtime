@@ -2,6 +2,7 @@
 name = "cranelift-isle-veri"
 version = "0.1.0"
 edition.workspace = true
+publish = false
 
 [dependencies]
 cranelift-isle = { version = "*", path = "../../isle/", features = ["fancy-errors", "logging"] }
