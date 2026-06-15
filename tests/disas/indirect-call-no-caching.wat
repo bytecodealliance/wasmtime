@@ -22,9 +22,10 @@
  (elem (i32.const 1) func $f1 $f2 $f3))
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -37,9 +38,10 @@
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -52,9 +54,10 @@
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
@@ -67,11 +70,12 @@
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
-;;     region2 = 40 "VMContext+0x28"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
+;;     region3 = 40 "VMContext+0x28"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -87,7 +91,7 @@
 ;; @0050                               v10 = iadd v7, v9
 ;; @0050                               v11 = iconst.i64 0
 ;; @0050                               v12 = select_spectre_guard v5, v11, v10  ; v11 = 0
-;; @0050                               v13 = load.i64 user6 aligned region1 v12
+;; @0050                               v13 = load.i64 user6 aligned region2 v12
 ;; @0050                               v14 = iconst.i64 -2
 ;; @0050                               v15 = band v13, v14  ; v14 = -2
 ;; @0050                               brif v13, block3(v15), block2
@@ -99,7 +103,7 @@
 ;; @0050                               jump block3(v19)
 ;;
 ;;                                 block3(v16: i64):
-;; @0050                               v20 = load.i64 notrap aligned readonly can_move region2 v0+40
+;; @0050                               v20 = load.i64 notrap aligned readonly can_move region3 v0+40
 ;; @0050                               v21 = load.i32 notrap aligned readonly can_move v20
 ;; @0050                               v22 = load.i32 user7 aligned readonly v16+16
 ;; @0050                               v23 = icmp eq v22, v21

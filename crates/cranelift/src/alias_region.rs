@@ -853,4 +853,322 @@ where
             new_version,
         )
     }
+
+    /// Get the alias region for the `VMStoreContext` field at `offset`, for use
+    /// in an `ir::GlobalValue`'s memory flags.
+    ///
+    /// XXX: This is ONLY for use with `ir::GlobalValue`s; all other uses should
+    /// instead use a helper method that actually emits the full load/store
+    /// instruction.
+    pub fn vmstore_context_region_for_use_in_ir_global(
+        &mut self,
+        func: &mut ir::Function,
+        offset: u32,
+    ) -> ir::AliasRegion {
+        self.vmstore_context_region(func, offset)
+    }
+
+    /// Load the `VMStoreContext::fuel_consumed` field.
+    pub fn vmstore_context_fuel_consumed(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            ir::types::I64,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_fuel_consumed()
+                .into(),
+        )
+    }
+
+    /// Store the `VMStoreContext::fuel_consumed` field.
+    pub fn store_vmstore_context_fuel_consumed(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        fuel_consumed: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_fuel_consumed()
+                .into(),
+            fuel_consumed,
+        )
+    }
+
+    /// Load the `VMStoreContext::epoch_deadline` field.
+    pub fn vmstore_context_epoch_deadline(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            ir::types::I64,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_epoch_deadline()
+                .into(),
+        )
+    }
+
+    /// Load the `VMStoreContext::stack_limit` field.
+    pub fn vmstore_context_stack_limit(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_stack_limit()
+                .into(),
+        )
+    }
+
+    /// Store the `VMStoreContext::stack_limit` field.
+    pub fn store_vmstore_context_stack_limit(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        stack_limit: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_stack_limit()
+                .into(),
+            stack_limit,
+        )
+    }
+
+    /// Load the GC heap base pointer (`VMStoreContext::gc_heap.base`).
+    ///
+    /// The caller supplies the base flags because whether the base pointer is
+    /// `readonly`/`can_move` depends on the GC heap's tunables.
+    pub fn vmstore_context_gc_heap_base(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        base_flags: ir::MemFlagsData,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            base_flags,
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_gc_heap_base()
+                .into(),
+        )
+    }
+
+    /// Load the GC heap bound (`VMStoreContext::gc_heap.current_length`).
+    pub fn vmstore_context_gc_heap_current_length(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_gc_heap_current_length()
+                .into(),
+        )
+    }
+
+    /// Load the `VMStoreContext::last_wasm_entry_fp` field.
+    pub fn vmstore_context_last_wasm_entry_fp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            self.pointer_type,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_fp()
+                .into(),
+        )
+    }
+
+    /// Store the `VMStoreContext::last_wasm_entry_fp` field.
+    pub fn store_vmstore_context_last_wasm_entry_fp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        fp: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_fp()
+                .into(),
+            fp,
+        )
+    }
+
+    /// Store the `VMStoreContext::last_wasm_entry_sp` field.
+    pub fn store_vmstore_context_last_wasm_entry_sp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        sp: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_sp()
+                .into(),
+            sp,
+        )
+    }
+
+    /// Store the `VMStoreContext::last_wasm_entry_trap_handler` field.
+    pub fn store_vmstore_context_last_wasm_entry_trap_handler(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        trap_handler: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_entry_trap_handler()
+                .into(),
+            trap_handler,
+        )
+    }
+
+    /// Store the `VMStoreContext::last_wasm_exit_trampoline_fp` field.
+    pub fn store_vmstore_context_last_wasm_exit_trampoline_fp(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        fp: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_exit_trampoline_fp()
+                .into(),
+            fp,
+        )
+    }
+
+    /// Store the `VMStoreContext::last_wasm_exit_pc` field.
+    pub fn store_vmstore_context_last_wasm_exit_pc(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        pc: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_last_wasm_exit_pc()
+                .into(),
+            pc,
+        )
+    }
+
+    /// Get the alias region for the `VMStoreContext::stack_chain` field.
+    ///
+    /// The `VMStackChain` is two pointers wide and is emitted by the stack
+    /// switching `VMStackChain` load/store helpers, which take a region
+    /// argument; this provides that region.
+    pub fn vmstore_context_stack_chain_region(
+        &mut self,
+        func: &mut ir::Function,
+    ) -> ir::AliasRegion {
+        let offset = self.offsets.get_ptr_size().vmstore_context_stack_chain();
+        self.vmstore_context_region(func, offset.into())
+    }
+
+    /// Load a `VMStoreContext` component-context slot.
+    ///
+    /// The slot is indexed by a compile-time constant, so the alias region is
+    /// keyed on the precise per-slot offset.
+    pub fn vmstore_context_component_context_slot(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        ty: ir::Type,
+        vmstore_ctx: ir::Value,
+        slot: u8,
+    ) -> ir::Value {
+        self.vmstore_context_load(
+            cursor,
+            ty,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_component_context_slot(slot)
+                .into(),
+        )
+    }
+
+    /// Store a `VMStoreContext` component-context slot.
+    ///
+    /// The slot is indexed by a compile-time constant, so the alias region is
+    /// keyed on the precise per-slot offset.
+    pub fn store_vmstore_context_component_context_slot(
+        &mut self,
+        cursor: &mut FuncCursor<'_>,
+        vmstore_ctx: ir::Value,
+        slot: u8,
+        val: ir::Value,
+    ) {
+        self.vmstore_context_store(
+            cursor,
+            ir::MemFlagsData::trusted(),
+            vmstore_ctx,
+            self.offsets
+                .get_ptr_size()
+                .vmstore_context_component_context_slot(slot)
+                .into(),
+            val,
+        )
+    }
 }

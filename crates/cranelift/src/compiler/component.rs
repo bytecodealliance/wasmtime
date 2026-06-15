@@ -1742,7 +1742,7 @@ impl ComponentCompiler for Compiler {
         super::save_last_wasm_exit_fp_and_pc(
             &mut c.builder,
             pointer_type,
-            &c.offsets.ptr,
+            &mut c.alias_regions,
             vm_store_context,
         );
 
@@ -1823,12 +1823,10 @@ impl ComponentCompiler for Compiler {
         // value (if any) it produces.
         let params = c.abi_load_params();
         let isa = c.isa;
-        let ptr = c.offsets.ptr;
         let (mut traps, builder) = c.traps();
         let mut intrinsic_compiler = UnsafeIntrinsicCompiler {
             isa,
             builder,
-            ptr,
             traps: &mut traps,
             phantom: PhantomData,
         };
@@ -2081,7 +2079,6 @@ where
 {
     pub isa: &'a (dyn TargetIsa + 'static),
     pub builder: &'a mut FunctionBuilder<'b>,
-    pub ptr: u8,
     pub traps: &'a mut T,
     pub phantom: PhantomData<O>,
 }
@@ -2377,26 +2374,30 @@ where
             UnsafeIntrinsic::ContextGetI32_1 | UnsafeIntrinsic::ContextSetI32_1 => 1,
             _ => unreachable!(),
         };
-        let offset = self.ptr.vmstore_context_component_context_slot(slot);
         let vmstore_context = self.load_vm_store_context(params);
         match intrinsic {
             UnsafeIntrinsic::ContextGetI32_0 | UnsafeIntrinsic::ContextGetI32_1 => {
-                let context = self.builder.ins().load(
-                    ty,
-                    MemFlagsData::trusted(),
-                    vmstore_context,
-                    i32::from(offset),
-                );
+                let context = self
+                    .traps
+                    .alias_regions()
+                    .vmstore_context_component_context_slot(
+                        &mut self.builder.cursor(),
+                        ty,
+                        vmstore_context,
+                        slot,
+                    );
                 Some(context)
             }
             UnsafeIntrinsic::ContextSetI32_0 | UnsafeIntrinsic::ContextSetI32_1 => {
                 let new_context = params[2];
-                self.builder.ins().store(
-                    MemFlagsData::trusted(),
-                    new_context,
-                    vmstore_context,
-                    i32::from(offset),
-                );
+                self.traps
+                    .alias_regions()
+                    .store_vmstore_context_component_context_slot(
+                        &mut self.builder.cursor(),
+                        vmstore_context,
+                        slot,
+                        new_context,
+                    );
                 None
             }
             _ => unreachable!(),

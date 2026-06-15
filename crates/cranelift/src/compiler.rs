@@ -230,10 +230,14 @@ impl Compiler {
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        let ptr = isa.pointer_bytes();
         let vm_store_context =
             alias_regions.vmctx_store_context(&mut builder.cursor(), caller_vmctx);
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, vm_store_context);
+        save_last_wasm_exit_fp_and_pc(
+            &mut builder,
+            pointer_type,
+            &mut alias_regions,
+            vm_store_context,
+        );
 
         // Spill all wasm arguments to the stack in `ValRaw` slots.
         let (args_base, args_len) =
@@ -333,7 +337,12 @@ impl Compiler {
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
         let vm_store_context = alias_regions.vmctx_store_context(&mut builder.cursor(), vmctx);
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, vm_store_context);
+        save_last_wasm_exit_fp_and_pc(
+            &mut builder,
+            pointer_type,
+            &mut alias_regions,
+            vm_store_context,
+        );
 
         // Now it's time to delegate to the actual builtin. Forward all our own
         // arguments to the libcall itself.
@@ -558,11 +567,17 @@ impl wasmtime_environ::Compiler for Compiler {
                 flags,
             });
 
+            let stack_limit_region = func_env
+                .alias_regions
+                .vmstore_context_region_for_use_in_ir_global(
+                    &mut context.func,
+                    func_env.offsets.ptr.vmstore_context_stack_limit().into(),
+                );
             let flags = context
                 .func
                 .dfg
                 .mem_flags
-                .insert(MemFlagsData::trusted())
+                .insert(MemFlagsData::trusted().with_alias_region(Some(stack_limit_region)))
                 .unwrap();
 
             let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
@@ -1481,7 +1496,7 @@ impl Compiler {
         save_last_wasm_entry_context(
             &mut builder,
             pointer_type,
-            &self.isa.pointer_bytes(),
+            &mut alias_regions,
             vm_store_ctx,
             try_call_block,
         );
@@ -1805,27 +1820,27 @@ fn clif_to_env_breakpoints(
     Ok(())
 }
 
-fn save_last_wasm_entry_context(
+fn save_last_wasm_entry_context<O>(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
-    ptr_size: &dyn PtrSize,
+    alias_regions: &mut AliasRegions<O>,
     vm_store_context: ir::Value,
     block: ir::Block,
-) {
+) where
+    O: GetPtrSize,
+{
     // Save the current fp/sp of the entry trampoline into the `VMStoreContext`.
     let fp = builder.ins().get_frame_pointer(pointer_type);
-    builder.ins().store(
-        MemFlagsData::trusted(),
-        fp,
+    alias_regions.store_vmstore_context_last_wasm_entry_fp(
+        &mut builder.cursor(),
         vm_store_context,
-        ptr_size.vmstore_context_last_wasm_entry_fp(),
+        fp,
     );
     let sp = builder.ins().get_stack_pointer(pointer_type);
-    builder.ins().store(
-        MemFlagsData::trusted(),
-        sp,
+    alias_regions.store_vmstore_context_last_wasm_entry_sp(
+        &mut builder.cursor(),
         vm_store_context,
-        ptr_size.vmstore_context_last_wasm_entry_sp(),
+        sp,
     );
 
     // Also save the address of this function's exception handler. This is used
@@ -1833,39 +1848,34 @@ fn save_last_wasm_entry_context(
     let trap_handler = builder
         .ins()
         .get_exception_handler_address(pointer_type, block, 0);
-    builder.ins().store(
-        MemFlagsData::trusted(),
-        trap_handler,
+    alias_regions.store_vmstore_context_last_wasm_entry_trap_handler(
+        &mut builder.cursor(),
         vm_store_context,
-        ptr_size.vmstore_context_last_wasm_entry_trap_handler(),
+        trap_handler,
     );
 }
 
-fn save_last_wasm_exit_fp_and_pc(
+fn save_last_wasm_exit_fp_and_pc<O>(
     builder: &mut FunctionBuilder,
     pointer_type: ir::Type,
-    ptr: &impl PtrSize,
+    alias_regions: &mut AliasRegions<O>,
     limits: Value,
-) {
+) where
+    O: GetPtrSize,
+{
     // Save the trampoline FP to the limits. Exception unwind needs
     // this so that it can know the SP (bottom of frame) for the very
     // last Wasm frame.
     let trampoline_fp = builder.ins().get_frame_pointer(pointer_type);
-    builder.ins().store(
-        MemFlagsData::trusted(),
-        trampoline_fp,
+    alias_regions.store_vmstore_context_last_wasm_exit_trampoline_fp(
+        &mut builder.cursor(),
         limits,
-        ptr.vmstore_context_last_wasm_exit_trampoline_fp(),
+        trampoline_fp,
     );
 
     // Finally save the Wasm return address to the limits.
     let wasm_pc = builder.ins().get_return_address(pointer_type);
-    builder.ins().store(
-        MemFlagsData::trusted(),
-        wasm_pc,
-        limits,
-        ptr.vmstore_context_last_wasm_exit_pc(),
-    );
+    alias_regions.store_vmstore_context_last_wasm_exit_pc(&mut builder.cursor(), limits, wasm_pc);
 }
 
 fn key_to_name(key: FuncKey) -> ir::UserFuncName {

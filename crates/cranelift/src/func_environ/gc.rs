@@ -1441,9 +1441,6 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
-        let pointer_type = self.pointer_type();
-        let offset = i32::from(self.offsets.ptr.vmstore_context_gc_heap_base());
-
         let mut flags = ir::MemFlagsData::trusted();
         let memory_tunables =
             wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
@@ -1461,9 +1458,11 @@ impl FuncEnvironment<'_> {
         }
 
         let store_context_ptr = self.get_vmstore_context_ptr(builder);
-        Ok(builder
-            .ins()
-            .load(pointer_type, flags, store_context_ptr, offset))
+        Ok(self.alias_regions.vmstore_context_gc_heap_base(
+            &mut builder.cursor(),
+            flags,
+            store_context_ptr,
+        ))
     }
 
     /// Get the GC heap's bound.
@@ -1471,15 +1470,10 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<ir::Value> {
-        let pointer_type = self.pointer_type();
-        let offset = i32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length());
         let store_context_ptr = self.get_vmstore_context_ptr(builder);
-        Ok(builder.ins().load(
-            pointer_type,
-            ir::MemFlagsData::trusted(),
-            store_context_ptr,
-            offset,
-        ))
+        Ok(self
+            .alias_regions
+            .vmstore_context_gc_heap_current_length(&mut builder.cursor(), store_context_ptr))
     }
 
     /// Get or create the `Heap` for our GC heap.
@@ -1490,11 +1484,23 @@ impl FuncEnvironment<'_> {
 
         let store_ctx = self.alias_regions.vmctx_store_context_load(func);
 
+        // The GC heap base/bound live in the `VMStoreContext`, so the second
+        // load in each chain (off the `*mut VMStoreContext`) is tagged with the
+        // `VMStoreContext` region for that field.
+        let base_offset = u32::from(self.offsets.ptr.vmstore_context_gc_heap_base());
+        let bound_offset = u32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length());
+        let base_region = self
+            .alias_regions
+            .vmstore_context_region_for_use_in_ir_global(func, base_offset);
+        let bound_region = self
+            .alias_regions
+            .vmstore_context_region_for_use_in_ir_global(func, bound_offset);
+
         // The base pointer's load is `can_move` and `readonly` when the GC
         // heap's base can never move.
         let memory_tunables =
             wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
-        let mut flags = ir::MemFlagsData::trusted();
+        let mut flags = ir::MemFlagsData::trusted().with_alias_region(Some(base_region));
         if !self
             .tunables
             .gc_heap_memory_type()
@@ -1509,7 +1515,7 @@ impl FuncEnvironment<'_> {
             base: VmctxLoadChain::new(smallvec![
                 store_ctx,
                 Load {
-                    offset: u32::from(self.offsets.ptr.vmstore_context_gc_heap_base()),
+                    offset: base_offset,
                     flags,
                     ty: self.pointer_type(),
                 }
@@ -1517,8 +1523,8 @@ impl FuncEnvironment<'_> {
             bound: VmctxLoadChain::new(smallvec![
                 store_ctx,
                 Load {
-                    offset: u32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length()),
-                    flags: ir::MemFlagsData::trusted(),
+                    offset: bound_offset,
+                    flags: ir::MemFlagsData::trusted().with_alias_region(Some(bound_region)),
                     ty: self.pointer_type(),
                 }
             ]),

@@ -12,9 +12,10 @@
 )
 ;; function u0:0(i64 vmctx, i64, i8x16) -> i8x16 tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     const0 = 0xffffffffffffffffffffffffffffffff
 ;;     stack_limit = gv2
 ;;

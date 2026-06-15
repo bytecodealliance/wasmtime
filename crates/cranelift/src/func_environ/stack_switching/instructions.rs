@@ -137,7 +137,8 @@ pub(crate) mod stack_switching_helpers {
             new_stack_chain: &VMStackChain,
         ) {
             let offset = env.offsets.ptr.vmcontref_parent_chain().into();
-            new_stack_chain.store(env, builder, self.address, offset)
+            // TODO: tag with the `VMContRef` alias region.
+            new_stack_chain.store(env, builder, self.address, offset, None)
         }
 
         /// Loads the parent of this continuation, which may either be another
@@ -149,7 +150,8 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> VMStackChain {
             let offset = env.offsets.ptr.vmcontref_parent_chain().into();
-            VMStackChain::load(env, builder, self.address, offset, env.pointer_type())
+            // TODO: tag with the `VMContRef` alias region.
+            VMStackChain::load(env, builder, self.address, offset, env.pointer_type(), None)
         }
 
         pub fn set_last_ancestor<'a>(
@@ -510,14 +512,19 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Load a `VMStackChain` object from the given address.
+        ///
+        /// The `region` is the alias region for the two-pointer field being
+        /// loaded (e.g. the `VMStoreContext::stack_chain` region, or the
+        /// `VMContRef` region for a continuation's parent chain).
         pub fn load<'a>(
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             pointer: ir::Value,
             initial_offset: i32,
             pointer_type: ir::Type,
+            region: Option<ir::AliasRegion>,
         ) -> VMStackChain {
-            let memflags = ir::MemFlagsData::trusted();
+            let memflags = ir::MemFlagsData::trusted().with_alias_region(region);
             let mut offset = initial_offset;
             let mut data = vec![];
             for _ in 0..2 {
@@ -529,14 +536,19 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Store this `VMStackChain` object at the given address.
+        ///
+        /// The `region` is the alias region for the two-pointer field being
+        /// stored (e.g. the `VMStoreContext::stack_chain` region, or the
+        /// `VMContRef` region for a continuation's parent chain).
         pub fn store<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             target_pointer: ir::Value,
             initial_offset: i32,
+            region: Option<ir::AliasRegion>,
         ) {
-            let memflags = ir::MemFlagsData::trusted();
+            let memflags = ir::MemFlagsData::trusted().with_alias_region(region);
             let mut offset = initial_offset;
             let data = self.to_raw_parts();
 
@@ -726,33 +738,36 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let memflags = ir::MemFlagsData::trusted();
-
-            let mut copy_to_vm_runtime_limits = |our_offset, their_offset| {
-                let our_value = builder.ins().load(
-                    env.pointer_type(),
-                    memflags,
-                    stack_limits_ptr,
-                    i32::from(our_offset),
-                );
-                builder.ins().store(
-                    memflags,
-                    our_value,
-                    vmruntime_limits_ptr,
-                    i32::from(their_offset),
-                );
-            };
-
-            let pointer_size = u8::try_from(env.pointer_type().bytes()).unwrap();
+            let pointer_type = env.pointer_type();
             let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
             let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
-            copy_to_vm_runtime_limits(
-                stack_limit_offset,
-                pointer_size.vmstore_context_stack_limit(),
+
+            // The load side reads this continuation's inline `VMStackLimits`;
+            // the store side targets the `VMStoreContext`.
+            let our_memflags = ir::MemFlagsData::trusted();
+
+            let stack_limit = builder.ins().load(
+                pointer_type,
+                our_memflags,
+                stack_limits_ptr,
+                i32::from(stack_limit_offset),
             );
-            copy_to_vm_runtime_limits(
-                last_wasm_entry_fp_offset,
-                pointer_size.vmstore_context_last_wasm_entry_fp(),
+            env.alias_regions.store_vmstore_context_stack_limit(
+                &mut builder.cursor(),
+                vmruntime_limits_ptr,
+                stack_limit,
+            );
+
+            let last_wasm_entry_fp = builder.ins().load(
+                pointer_type,
+                our_memflags,
+                stack_limits_ptr,
+                i32::from(last_wasm_entry_fp_offset),
+            );
+            env.alias_regions.store_vmstore_context_last_wasm_entry_fp(
+                &mut builder.cursor(),
+                vmruntime_limits_ptr,
+                last_wasm_entry_fp,
             );
         }
 
@@ -770,35 +785,31 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
-            let memflags = ir::MemFlagsData::trusted();
-            let pointer_size = u8::try_from(env.pointer_type().bytes()).unwrap();
-
-            let mut copy = |runtime_limits_offset, stack_limits_offset| {
-                let from_vm_runtime_limits = builder.ins().load(
-                    env.pointer_type(),
-                    memflags,
-                    vmruntime_limits_ptr,
-                    runtime_limits_offset,
-                );
-                builder.ins().store(
-                    memflags,
-                    from_vm_runtime_limits,
-                    stack_limits_ptr,
-                    stack_limits_offset,
-                );
-            };
-
+            // The load side reads the `VMStoreContext`; the store side writes
+            // this continuation's inline `VMStackLimits`.
+            let our_memflags = ir::MemFlagsData::trusted();
             let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
-            copy(
-                pointer_size.vmstore_context_last_wasm_entry_fp(),
-                last_wasm_entry_fp_offset,
+
+            let last_wasm_entry_fp = env
+                .alias_regions
+                .vmstore_context_last_wasm_entry_fp(&mut builder.cursor(), vmruntime_limits_ptr);
+            builder.ins().store(
+                our_memflags,
+                last_wasm_entry_fp,
+                stack_limits_ptr,
+                i32::from(last_wasm_entry_fp_offset),
             );
 
             if load_stack_limit {
                 let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
-                copy(
-                    pointer_size.vmstore_context_stack_limit(),
-                    stack_limit_offset,
+                let stack_limit = env
+                    .alias_regions
+                    .vmstore_context_stack_limit(&mut builder.cursor(), vmruntime_limits_ptr);
+                builder.ins().store(
+                    our_memflags,
+                    stack_limit,
+                    stack_limits_ptr,
+                    i32::from(stack_limit_offset),
                 );
             }
         }
@@ -938,12 +949,16 @@ pub fn vmctx_load_stack_chain<'a>(
         .alias_regions
         .vmctx_store_context(&mut builder.cursor(), vmctx);
 
+    let stack_chain_region = env
+        .alias_regions
+        .vmstore_context_stack_chain_region(builder.func);
     VMStackChain::load(
         env,
         builder,
         vm_store_context,
         stack_chain_offset,
         env.pointer_type(),
+        Some(stack_chain_region),
     )
 }
 
@@ -962,7 +977,16 @@ pub fn vmctx_store_stack_chain<'a>(
         .alias_regions
         .vmctx_store_context(&mut builder.cursor(), vmctx);
 
-    stack_chain.store(env, builder, vm_store_context, stack_chain_offset)
+    let stack_chain_region = env
+        .alias_regions
+        .vmstore_context_stack_chain_region(builder.func);
+    stack_chain.store(
+        env,
+        builder,
+        vm_store_context,
+        stack_chain_offset,
+        Some(stack_chain_region),
+    )
 }
 
 /// Similar to `vmctx_store_stack_chain`, but instead of storing an arbitrary

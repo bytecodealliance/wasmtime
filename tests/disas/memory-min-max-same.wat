@@ -35,19 +35,20 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
-;;     region1 = 96 "VMContext+0x60"
-;;     region2 = 80 "VMContext+0x50"
-;;     region3 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 96 "VMContext+0x60"
+;;     region3 = 80 "VMContext+0x50"
+;;     region4 = 805306368 "DefinedMemory(StaticModuleIndex(0), DefinedMemoryIndex(0))"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0028                               v3 = iconst.i32 0
-;; @0030                               v6 = load.i64 notrap aligned readonly can_move region2 v0+80
-;; @0030                               v5 = load.i64 notrap aligned readonly can_move region1 v0+96
+;; @0030                               v6 = load.i64 notrap aligned readonly can_move region3 v0+80
+;; @0030                               v5 = load.i64 notrap aligned readonly can_move region2 v0+96
 ;; @0039                               v12 = iconst.i64 0x0001_0000
 ;; @0039                               v16 = iconst.i64 0
 ;; @0039                               v14 = load.i64 notrap aligned readonly can_move v0+56
@@ -64,7 +65,7 @@
 ;; @0039                               v15 = iadd.i64 v14, v11
 ;;                                     v23 = iconst.i64 0
 ;;                                     v24 = select_spectre_guard v22, v23, v15  ; v23 = 0
-;; @0039                               store little region3 v20, v24  ; v20 = 0
+;; @0039                               store little region4 v20, v24  ; v20 = 0
 ;;                                     v25 = iconst.i32 1
 ;;                                     v26 = iadd v8, v25  ; v25 = 1
 ;; @0043                               jump block2(v26)

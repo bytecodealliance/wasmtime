@@ -584,34 +584,23 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Loads the fuel consumption value from `VMStoreContext` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
-        let fuel = builder
-            .ins()
-            .load(ir::types::I64, ir::MemFlagsData::trusted(), addr, offset);
+        let vmstore_ctx = self.get_vmstore_context_ptr(builder);
+        let fuel = self
+            .alias_regions
+            .vmstore_context_fuel_consumed(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.fuel_var, fuel);
     }
 
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMStoreContext`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset(builder);
-        let fuel_consumed = builder.use_var(self.fuel_var);
-        builder
-            .ins()
-            .store(ir::MemFlagsData::trusted(), fuel_consumed, addr, offset);
-    }
-
-    /// Returns the `(address, offset)` of the fuel consumption within
-    /// `VMStoreContext`, used to perform loads/stores later.
-    fn fuel_addr_offset(
-        &mut self,
-        builder: &mut FunctionBuilder<'_>,
-    ) -> (ir::Value, ir::immediates::Offset32) {
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
-        (
+        let fuel_consumed = builder.use_var(self.fuel_var);
+        self.alias_regions.store_vmstore_context_fuel_consumed(
+            &mut builder.cursor(),
             vmstore_ctx,
-            i32::from(self.offsets.ptr.vmstore_context_fuel_consumed()).into(),
-        )
+            fuel_consumed,
+        );
     }
 
     /// Checks the amount of remaining, and if we've run out of fuel we call
@@ -805,12 +794,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // in the common case (between epoch ticks) but we want to do a
         // precise check here by reloading the cache first.
         let vmstore_ctx = self.get_vmstore_context_ptr(builder);
-        let deadline = builder.ins().load(
-            ir::types::I64,
-            ir::MemFlagsData::trusted(),
-            vmstore_ctx,
-            ir::immediates::Offset32::new(self.offsets.ptr.vmstore_context_epoch_deadline() as i32),
-        );
+        let deadline = self
+            .alias_regions
+            .vmstore_context_epoch_deadline(&mut builder.cursor(), vmstore_ctx);
         builder.def_var(self.epoch_deadline_var, deadline);
         self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
 
@@ -1901,12 +1887,10 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     .get_or_create_imported_func_ref(self.builder.func, callee_index);
                 if self.can_directly_inline_unsafe_intrinsic(*abi) {
                     let isa = self.env.compiler.isa();
-                    let ptr = self.env.offsets.ptr;
                     let mut intrinsic_compiler =
                         super::compiler::component::UnsafeIntrinsicCompiler {
                             builder: self.builder,
                             isa,
-                            ptr,
                             traps: self.env,
                             phantom: PhantomData,
                         };

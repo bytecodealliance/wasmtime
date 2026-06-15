@@ -10,9 +10,11 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32, i32, i32) tail {
 ;;     region0 = 8 "VMContext+0x8"
+;;     region1 = 268435480 "VMStoreContext+0x18"
+;;     region2 = 268435456 "VMStoreContext+0x0"
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+24
+;;     gv2 = load.i64 notrap aligned region1 gv1+24
 ;;     sig0 = (i64 vmctx) -> i8 tail
 ;;     sig1 = (i64 vmctx, i64, i64, i64) tail
 ;;     fn0 = colocated u805306368:12 sig0
@@ -21,7 +23,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @001e                               v5 = load.i64 notrap aligned readonly can_move region0 v0+8
-;; @001e                               v6 = load.i64 notrap aligned v5
+;; @001e                               v6 = load.i64 notrap aligned region2 v5
 ;; @001e                               v7 = iconst.i64 1
 ;; @001e                               v8 = iadd v6, v7  ; v7 = 1
 ;; @001e                               v9 = iconst.i64 0
@@ -30,9 +32,9 @@
 ;;
 ;;                                 block2:
 ;;                                     v106 = iadd.i64 v6, v7  ; v7 = 1
-;; @001e                               store notrap aligned v106, v5
+;; @001e                               store notrap aligned region2 v106, v5
 ;; @001e                               v12 = call fn0(v0)
-;; @001e                               v14 = load.i64 notrap aligned v5
+;; @001e                               v14 = load.i64 notrap aligned region2 v5
 ;; @001e                               jump block3(v14)
 ;;
 ;;                                 block3(v43: i64):
@@ -73,9 +75,9 @@
 ;;
 ;;                                 block8:
 ;;                                     v122 = iadd.i64 v52, v116  ; v116 = 0x0800_0000
-;; @0025                               store notrap aligned v122, v5
+;; @0025                               store notrap aligned region2 v122, v5
 ;; @0025                               v57 = call fn0(v0)
-;; @0025                               v59 = load.i64 notrap aligned v5
+;; @0025                               v59 = load.i64 notrap aligned region2 v5
 ;; @0025                               jump block9(v59)
 ;;
 ;;                                 block9(v64: i64):
@@ -103,9 +105,9 @@
 ;; @0025                               brif v110, block12, block13(v108)
 ;;
 ;;                                 block12:
-;; @0025                               store.i64 notrap aligned v108, v5
+;; @0025                               store.i64 notrap aligned region2 v108, v5
 ;; @0025                               v78 = call fn0(v0)
-;; @0025                               v80 = load.i64 notrap aligned v5
+;; @0025                               v80 = load.i64 notrap aligned region2 v5
 ;; @0025                               jump block13(v80)
 ;;
 ;;                                 block13(v83: i64):
@@ -123,9 +125,9 @@
 ;; @0025                               jump block5(v87, v88, v86, v93)
 ;;
 ;;                                 block14:
-;; @0025                               store.i64 notrap aligned v94, v5
+;; @0025                               store.i64 notrap aligned region2 v94, v5
 ;; @0025                               v98 = call fn0(v0)
-;; @0025                               v100 = load.i64 notrap aligned v5
+;; @0025                               v100 = load.i64 notrap aligned region2 v5
 ;; @0025                               jump block15(v100)
 ;;
 ;;                                 block15(v102: i64):
@@ -133,6 +135,6 @@
 ;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               store.i64 notrap aligned v102, v5
+;; @0029                               store.i64 notrap aligned region2 v102, v5
 ;; @0029                               return
 ;; }
