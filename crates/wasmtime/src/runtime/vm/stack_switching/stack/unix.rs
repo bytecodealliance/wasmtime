@@ -63,6 +63,7 @@ use std::io;
 use std::ops::Range;
 use std::ptr;
 
+use crate::prelude::*;
 use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
@@ -230,7 +231,7 @@ impl VMContinuationStack {
         args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
-    ) {
+    ) -> Result<()> {
         let tos = self.top;
 
         unsafe {
@@ -245,8 +246,31 @@ impl VMContinuationStack {
             debug_assert_eq!(args_ref.capacity, 0);
             debug_assert_eq!(args_ref.length, 0);
 
-            let args_data_size =
-                usize::try_from(args_capacity).unwrap() * std::mem::size_of::<ValRaw>();
+            let args_data_size = usize::try_from(args_capacity)
+                .unwrap()
+                .checked_mul(std::mem::size_of::<ValRaw>())
+                .and_then(|s| s.checked_add(0x40))
+                .ok_or_else(|| {
+                    format_err!(
+                        "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                    )
+                })?;
+            // `args_data_size` now includes the 0x40 bytes of fixed control
+            // data. Subtract it back for the raw buffer size used below.
+            let args_data_size = args_data_size - 0x40;
+
+            // Ensure the control data (fixed header + args buffer) fits
+            // within the stack allocation. Without this check, a
+            // high-arity function type could write past the guard page
+            // into adjacent memory.
+            let total_control_size = 0x40 + args_data_size;
+            ensure!(
+                total_control_size <= self.len,
+                "continuation function type requires {total_control_size} bytes \
+                 of stack control data, which exceeds the {}-byte stack allocation",
+                self.len,
+            );
             let args_data_ptr = if args_capacity == 0 {
                 ptr::null_mut()
             } else {
@@ -276,6 +300,8 @@ impl VMContinuationStack {
                 store(offset, data);
             }
         }
+
+        Ok(())
     }
 }
 

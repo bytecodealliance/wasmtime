@@ -62,6 +62,7 @@ impl VMContinuationStack {
         _args: *mut VMHostArray<ValRaw>,
         _parameter_count: u32,
         _return_value_count: u32,
-    ) {
+    ) -> Result<()> {
+        Ok(())
     }
 }
