@@ -105,7 +105,7 @@ impl VMContinuationStack {
         args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
-    ) {
+    ) -> Result<()> {
         self.0.initialize(
             func_ref,
             caller_vmctx,

@@ -80,6 +80,60 @@ fn wasm_import_tags() -> Result<()> {
     return Ok(());
 }
 
+// Tests that `cont.new` with a function type whose arity exceeds the
+// continuation stack size produces an error rather than writing past the
+// stack allocation.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn stack_switching_cont_new_high_arity_rejected() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_stack_switching(true);
+    config.wasm_exceptions(true);
+    config.wasm_function_references(true);
+
+    // Use a small continuation stack so we can overflow it with fewer
+    // than 1000 params (the wasmparser limit for function params).
+    // With async_stack_size = 8192:
+    //   VMContinuationStack::new rounds to page size (8192), adds a
+    //   guard page, so self.len = 8192 + 4096 = 12288.
+    //   800 params * 16 bytes + 64 byte header = 12864 > 12288.
+    config.async_stack_size(8192);
+    config.max_wasm_stack(4096);
+
+    let Ok(engine) = Engine::new(&config) else {
+        // Stack switching is not supported on all platforms; skip gracefully.
+        assert!(!(cfg!(target_arch = "x86_64") && cfg!(unix)));
+        return Ok(());
+    };
+
+    // Build a WAT module with a high-arity function type.
+    // 800 params stays under wasmparser's MAX_WASM_FUNCTION_PARAMS (1000)
+    // but exceeds the 12288-byte stack allocation.
+    let n_params = 800;
+    let params: String = (0..n_params).map(|_| " i32").collect();
+    let wat = format!(
+        r#"(module
+            (type $ft (func (param{params})))
+            (type $ct (cont $ft))
+            (func $target (type $ft))
+            (elem declare func $target)
+            (func (export "run")
+                (drop (cont.new $ct (ref.func $target)))
+            )
+        )"#
+    );
+
+    let module = Module::new(&engine, &wat)?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+
+    let err = run.call(&mut store, ()).unwrap_err();
+    err.assert_contains("exceeds");
+
+    return Ok(());
+}
+
 // Tests that enabling inlining with stack switching, for now, returns an error.
 // If the support in Cranelift is fixed to the point that this is fine to
 // enable, then delete this test and the check in `config.rs` as well.

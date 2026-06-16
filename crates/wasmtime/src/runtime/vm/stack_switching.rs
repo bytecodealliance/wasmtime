@@ -327,7 +327,7 @@ pub fn cont_new(
         contref_args_ptr,
         param_count,
         result_count,
-    );
+    )?;
 
     // Now that the initial stack pointer was set by the initialization
     // function, use it to determine stack limit.

@@ -63,6 +63,7 @@ use std::io;
 use std::ops::Range;
 use std::ptr;
 
+use crate::prelude::*;
 use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
@@ -230,7 +231,7 @@ impl VMContinuationStack {
         args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
-    ) {
+    ) -> Result<()> {
         let tos = self.top;
 
         unsafe {
@@ -245,8 +246,27 @@ impl VMContinuationStack {
             debug_assert_eq!(args_ref.capacity, 0);
             debug_assert_eq!(args_ref.length, 0);
 
-            let args_data_size =
-                usize::try_from(args_capacity).unwrap() * std::mem::size_of::<ValRaw>();
+            let total_control_size = usize::try_from(args_capacity)?
+                .checked_mul(std::mem::size_of::<ValRaw>())
+                .and_then(|s| s.checked_add(0x40))
+                .ok_or_else(|| {
+                    format_err!(
+                        "continuation function type with {args_capacity} args \
+                         overflows stack control data size calculation"
+                    )
+                })?;
+            let args_data_size = total_control_size - 0x40;
+
+            // Ensure the control data (fixed header + args buffer) fits
+            // within the stack allocation. Without this check, a
+            // high-arity function type could write past the guard page
+            // into adjacent memory.
+            ensure!(
+                total_control_size <= self.len,
+                "continuation function type requires {total_control_size} bytes \
+                 of stack control data, which exceeds the {}-byte stack allocation",
+                self.len,
+            );
             let args_data_ptr = if args_capacity == 0 {
                 ptr::null_mut()
             } else {
@@ -260,22 +280,21 @@ impl VMContinuationStack {
                 // Data near top of stack:
                 (0x08, wasmtime_continuation_start_address().addr()),
                 (0x10, tos.sub(0x10).addr()),
-                (0x18, tos.sub(0x40 + args_data_size).addr()),
-                (0x20, usize::try_from(args_capacity).unwrap()),
+                (0x18, tos.sub(total_control_size).addr()),
+                (0x20, usize::try_from(args_capacity)?),
                 // Data after the args buffer:
                 (0x28 + args_data_size, func_ref.addr()),
                 (0x30 + args_data_size, caller_vmctx.addr()),
                 (0x38 + args_data_size, args.addr()),
-                (
-                    0x40 + args_data_size,
-                    usize::try_from(return_value_count).unwrap(),
-                ),
+                (0x40 + args_data_size, usize::try_from(return_value_count)?),
             ];
 
             for (offset, data) in to_store {
                 store(offset, data);
             }
         }
+
+        Ok(())
     }
 }
 
