@@ -2789,8 +2789,12 @@ impl Config {
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
                 let mut config = config.config;
-                config.stack_size = self.async_stack_size;
-                config.async_stack_zeroing = self.async_stack_zeroing;
+                let _ = &mut config;
+                #[cfg(feature = "async")]
+                {
+                    config.stack_size = self.async_stack_size;
+                    config.async_stack_zeroing = self.async_stack_zeroing;
+                }
                 let allocator = try_new::<Box<_>>(
                     crate::runtime::vm::PoolingInstanceAllocator::new(&config, tunables)?,
                 )?;
