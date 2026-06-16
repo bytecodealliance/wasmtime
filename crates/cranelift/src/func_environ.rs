@@ -14,7 +14,7 @@ use crate::{
 };
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, V128Imm};
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, V128Imm};
 use cranelift_codegen::ir::{
     self, BlockArg, Endianness, ExceptionTableData, ExceptionTableItem, types,
 };
@@ -1660,94 +1660,93 @@ impl FuncEnvironment<'_> {
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> TableData {
-        let pointer_type = self.pointer_type();
-
-        let (ptr, base_offset, current_elements_offset) = {
-            let vmctx = self.vmctx(func);
-            if let Some(def_index) = self.module.defined_table_index(index) {
-                let base_offset =
-                    i32::try_from(self.offsets.vmctx_vmtable_definition_base(def_index)).unwrap();
-                let current_elements_offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmtable_definition_current_elements(def_index),
-                )
-                .unwrap();
-                (vmctx, base_offset, current_elements_offset)
-            } else {
-                let from_offset = self.offsets.vmctx_vmtable_from(index);
-                let region = self
-                    .alias_regions
-                    .vmctx_region_for_use_in_ir_global(func, from_offset);
-                let table_flags = func
-                    .dfg
-                    .mem_flags
-                    .insert(
-                        MemFlagsData::trusted()
-                            .with_readonly()
-                            .with_can_move()
-                            .with_alias_region(Some(region)),
-                    )
-                    .unwrap();
-                let table = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    flags: table_flags,
-                });
-                let base_offset = i32::from(self.offsets.vmtable_definition_base());
-                let current_elements_offset =
-                    i32::from(self.offsets.vmtable_definition_current_elements());
-                (table, base_offset, current_elements_offset)
-            }
-        };
-
-        let table = &self.module.tables[index];
+        let table = self.module.tables[index];
         let element_size = if table.ref_type.is_vmgcref_type() {
             // For GC-managed references, tables store `Option<VMGcRef>`s.
             ir::types::I32.bytes()
         } else {
             self.reference_type(table.ref_type.heap_type).0.bytes()
         };
-
-        let base_flags = if Some(table.limits.min) == table.limits.max {
-            func.dfg
-                .mem_flags
-                .insert(MemFlagsData::trusted().with_readonly().with_can_move())
-                .unwrap()
-        } else {
-            func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap()
-        };
-        let base_gv = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(base_offset),
-            global_type: pointer_type,
-            // A fixed-size table can't be resized so its base address won't change.
-            flags: base_flags,
-        });
-
-        let bound = if Some(table.limits.min) == table.limits.max {
-            TableSize::Static {
-                bound: table.limits.min,
-            }
-        } else {
-            let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
-            TableSize::Dynamic {
-                bound_gv: func.create_global_value(ir::GlobalValueData::Load {
-                    base: ptr,
-                    offset: Offset32::new(current_elements_offset),
-                    global_type: ir::Type::int(
-                        u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
-                    )
-                    .unwrap(),
-                    flags: bound_flags,
-                }),
-            }
-        };
-
+        let (base, bound) = self.make_table_base_bound(func, index);
         TableData {
-            base_gv,
+            base,
             bound,
             element_size,
+        }
+    }
+
+    fn make_table_base_bound(
+        &mut self,
+        func: &mut ir::Function,
+        index: TableIndex,
+    ) -> (VmctxLoadChain, TableSize) {
+        let pointer_type = self.pointer_type();
+        let table = self.module.tables[index];
+        let bound_ty = ir::Type::int(
+            u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
+        )
+        .unwrap();
+
+        // A fixed-size table can't be resized, so its base address won't change
+        // and its base load is `readonly` and `can_move`.
+        let is_static = Some(table.limits.min) == table.limits.max;
+        let mut base_flags = ir::MemFlagsData::trusted();
+        if is_static {
+            base_flags = base_flags.with_readonly().with_can_move();
+        }
+
+        let base = |from: Option<Load>, offset| {
+            VmctxLoadChain::new(
+                from.into_iter()
+                    .chain(std::iter::once(Load {
+                        offset,
+                        flags: base_flags,
+                        ty: pointer_type,
+                    }))
+                    .collect(),
+            )
+        };
+        let bound = |from: Option<Load>, offset| {
+            if is_static {
+                TableSize::Static {
+                    bound: table.limits.min,
+                }
+            } else {
+                TableSize::Dynamic {
+                    bound: VmctxLoadChain::new(
+                        from.into_iter()
+                            .chain(std::iter::once(Load {
+                                offset,
+                                flags: ir::MemFlagsData::trusted(),
+                                ty: bound_ty,
+                            }))
+                            .collect(),
+                    ),
+                }
+            }
+        };
+
+        if let Some(def_index) = self.module.defined_table_index(index) {
+            (
+                base(None, self.offsets.vmctx_vmtable_definition_base(def_index)),
+                bound(
+                    None,
+                    self.offsets
+                        .vmctx_vmtable_definition_current_elements(def_index),
+                ),
+            )
+        } else {
+            let from = self.alias_regions.vmctx_vmtable_from_load(func, index);
+            (
+                base(
+                    Some(from),
+                    u32::from(self.offsets.vmtable_definition_base()),
+                ),
+                bound(
+                    Some(from),
+                    u32::from(self.offsets.vmtable_definition_current_elements()),
+                ),
+            )
         }
     }
 
@@ -4051,7 +4050,7 @@ impl FuncEnvironment<'_> {
     pub fn translate_table_size(&mut self, pos: FuncCursor, table_index: TableIndex) -> ir::Value {
         let table_data = self.get_or_create_table(pos.func, table_index);
         let index_type = index_type_to_ir_type(self.table(table_index).idx_type);
-        table_data.bound.bound(&*self.isa, pos, index_type)
+        table_data.bound.bound(pos, index_type)
     }
 
     /// Copies elements from `src_entity` to `dst_entity`.
@@ -4261,7 +4260,8 @@ impl FuncEnvironment<'_> {
             }
             CheckedEntity::Table { table, .. } => {
                 let table = self.get_or_create_table(builder.func, table);
-                builder.ins().global_value(pointer_type, table.base_gv)
+                let vmctx = self.vmctx_val(&mut builder.cursor());
+                table.base.emit(&mut builder.cursor(), vmctx)
             }
             CheckedEntity::Data { segment, .. } => match self.translation.runtime_data_map[segment]
             {

@@ -29,8 +29,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -54,13 +52,13 @@
 ;;
 ;;                                 block2:
 ;; @002b                               v13 = load.i64 user6 aligned region1 v12
-;;                                     v30 = iconst.i64 -2
-;;                                     v31 = band v13, v30  ; v30 = -2
-;; @002b                               brif v13, block5(v31), block4
+;;                                     v29 = iconst.i64 -2
+;;                                     v30 = band v13, v29  ; v29 = -2
+;; @002b                               brif v13, block5(v30), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v32 = iconst.i32 0
-;; @002b                               v19 = call fn0(v0, v32, v6)  ; v32 = 0
+;;                                     v31 = iconst.i32 0
+;; @002b                               v19 = call fn0(v0, v31, v6)  ; v31 = 0
 ;; @002b                               jump block5(v19)
 ;;
 ;;                                 block5(v16: i64):
@@ -80,8 +78,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -89,26 +85,26 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0038                               v6 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v35 = iconst.i64 8
-;; @0038                               v9 = iadd v6, v35  ; v35 = 8
+;;                                     v34 = iconst.i64 8
+;; @0038                               v9 = iadd v6, v34  ; v34 = 8
 ;; @0038                               v13 = iconst.i64 -2
 ;; @0038                               v16 = iconst.i32 0
-;;                                     v34 = iconst.i64 1
+;;                                     v33 = iconst.i64 1
 ;; @0038                               v19 = load.i64 notrap aligned readonly can_move region2 v0+40
 ;; @0038                               v20 = load.i32 notrap aligned readonly can_move v19
 ;; @0034                               jump block2
 ;;
 ;;                                 block2:
-;;                                     v36 = iadd.i64 v6, v35  ; v35 = 8
-;; @0038                               v12 = load.i64 user6 aligned region1 v36
-;;                                     v37 = iconst.i64 -2
-;;                                     v38 = band v12, v37  ; v37 = -2
-;; @0038                               brif v12, block5(v38), block4
+;;                                     v35 = iadd.i64 v6, v34  ; v34 = 8
+;; @0038                               v12 = load.i64 user6 aligned region1 v35
+;;                                     v36 = iconst.i64 -2
+;;                                     v37 = band v12, v36  ; v36 = -2
+;; @0038                               brif v12, block5(v37), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v39 = iconst.i32 0
-;;                                     v40 = iconst.i64 1
-;; @0038                               v18 = call fn0(v0, v39, v40)  ; v39 = 0, v40 = 1
+;;                                     v38 = iconst.i32 0
+;;                                     v39 = iconst.i64 1
+;; @0038                               v18 = call fn0(v0, v38, v39)  ; v38 = 0, v39 = 1
 ;; @0038                               jump block5(v18)
 ;;
 ;;                                 block5(v15: i64):
