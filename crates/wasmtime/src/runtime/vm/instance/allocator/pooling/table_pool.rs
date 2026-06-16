@@ -260,7 +260,7 @@ impl TablePool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::vm::InstanceLimits;
+    use crate::vm::instance::allocator::pooling_config::InstanceLimits;
 
     #[test]
     fn test_table_pool() -> Result<()> {

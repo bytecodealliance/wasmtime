@@ -8,6 +8,7 @@ use core::str::FromStr;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 pub use wasmparser::WasmFeatures;
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 use wasmtime_environ::FlagValue;
 use wasmtime_environ::{ConfigTunables, OperatorCost, OperatorCostStrategy, TripleExt, Tunables};
 
@@ -4898,29 +4899,35 @@ impl Engine {
     pub fn get_cranelift_flags_enabled(&self) -> impl Iterator<Item = &str> {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         if let Some(config) = &self.config().compiler_config {
-            return Some(config.flags.iter().filter_map(|(k, v)| match v {
-                UserSpecified::Yes => Some(k.as_str()),
-                UserSpecified::No => None,
-            }))
-            .into_iter()
-            .flatten();
+            return config
+                .flags
+                .iter()
+                .filter_map(|(k, v)| match v {
+                    UserSpecified::Yes => Some(k.as_str()),
+                    UserSpecified::No => None,
+                })
+                .collect::<Vec<_>>()
+                .into_iter();
         }
 
-        None.into_iter().flatten()
+        Vec::new().into_iter()
     }
 
     /// Returns the enabled flags via [`Config::cranelift_flag_set`].
     pub fn get_cranelift_flags_set(&self) -> impl Iterator<Item = (&str, &str)> {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         if let Some(config) = &self.config().compiler_config {
-            return Some(config.settings.iter().filter_map(|(k, (v, s))| match s {
-                UserSpecified::Yes => Some((k.as_str(), v.as_str())),
-                UserSpecified::No => None,
-            }))
-            .into_iter()
-            .flatten();
+            return config
+                .settings
+                .iter()
+                .filter_map(|(k, (v, s))| match s {
+                    UserSpecified::Yes => Some((k.as_str(), v.as_str())),
+                    UserSpecified::No => None,
+                })
+                .collect::<Vec<_>>()
+                .into_iter();
         }
 
-        None.into_iter().flatten()
+        Vec::new().into_iter()
     }
 }

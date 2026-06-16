@@ -262,7 +262,7 @@ impl StackPool {
 #[cfg(all(test, unix, feature = "async", not(miri), not(asan)))]
 mod tests {
     use super::*;
-    use crate::runtime::vm::InstanceLimits;
+    use crate::vm::instance::allocator::pooling_config::InstanceLimits;
 
     #[test]
     fn test_stack_pool() -> Result<()> {

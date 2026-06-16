@@ -239,7 +239,7 @@ impl PoolingInstanceAllocator {
                 })?),
                 Enabled::No => None,
             },
-            config: config.clone(),
+            config: *config,
         })
     }
 
