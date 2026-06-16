@@ -1492,24 +1492,8 @@ pub(super) fn lift_index_to_future(
 ) -> Result<TableId<TransmitHandle>> {
     match ty {
         InterfaceType::Future(src) => {
-            let handle_table = cx
-                .instance_mut()
-                .table_for_transmit(TransmitIndex::Future(src));
-            let (rep, is_done) = handle_table.future_remove_readable(src, index)?;
-            if is_done {
-                bail!("cannot lift future after being notified that the writable end dropped");
-            }
-            let id = TableId::<TransmitHandle>::new(rep);
-            let concurrent_state = cx.concurrent_state_mut();
-            let future = concurrent_state.get_mut(id)?;
-            future.common.handle = None;
-            let state = future.state;
-
-            if concurrent_state.get_mut(state)?.done {
-                bail!("cannot lift future after previous read succeeded");
-            }
-
-            Ok(id)
+            let (state, instance) = cx.concurrent_state_and_instance_mut();
+            lift_index_to_transmit(instance, state, TransmitIndex::Future(src), index)
         }
         _ => func::bad_type_info(),
     }
@@ -1523,18 +1507,8 @@ pub(super) fn lower_future_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Future(dst) => {
-            let concurrent_state = cx.store.0.concurrent_state_mut();
-            let state = concurrent_state.get_mut(id)?.state;
-            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
-
-            let handle = cx
-                .instance_mut()
-                .table_for_transmit(TransmitIndex::Future(dst))
-                .future_insert_read(dst, rep)?;
-
-            cx.store.0.concurrent_state_mut().get_mut(id)?.common.handle = Some(handle);
-
-            Ok(handle)
+            cx.instance_handle()
+                .lower_transmit_to_index(cx.store.0, TransmitIndex::Future(dst), id)
         }
         _ => func::bad_type_info(),
     }
@@ -1877,16 +1851,8 @@ pub(super) fn lift_index_to_stream(
 ) -> Result<TableId<TransmitHandle>> {
     match ty {
         InterfaceType::Stream(src) => {
-            let handle_table = cx
-                .instance_mut()
-                .table_for_transmit(TransmitIndex::Stream(src));
-            let (rep, is_done) = handle_table.stream_remove_readable(src, index)?;
-            if is_done {
-                bail!("cannot lift stream after being notified that the writable end dropped");
-            }
-            let id = TableId::<TransmitHandle>::new(rep);
-            cx.concurrent_state_mut().get_mut(id)?.common.handle = None;
-            Ok(id)
+            let (state, instance) = cx.concurrent_state_and_instance_mut();
+            lift_index_to_transmit(instance, state, TransmitIndex::Stream(src), index)
         }
         _ => func::bad_type_info(),
     }
@@ -1900,18 +1866,8 @@ pub(super) fn lower_stream_to_index<U>(
 ) -> Result<u32> {
     match ty {
         InterfaceType::Stream(dst) => {
-            let concurrent_state = cx.store.0.concurrent_state_mut();
-            let state = concurrent_state.get_mut(id)?.state;
-            let rep = concurrent_state.get_mut(state)?.read_handle.rep();
-
-            let handle = cx
-                .instance_mut()
-                .table_for_transmit(TransmitIndex::Stream(dst))
-                .stream_insert_read(dst, rep)?;
-
-            cx.store.0.concurrent_state_mut().get_mut(id)?.common.handle = Some(handle);
-
-            Ok(handle)
+            cx.instance_handle()
+                .lower_transmit_to_index(cx.store.0, TransmitIndex::Stream(dst), id)
         }
         _ => func::bad_type_info(),
     }
@@ -4519,26 +4475,28 @@ impl Instance {
         src: TransmitIndex,
         dst: TransmitIndex,
     ) -> Result<u32> {
-        let mut instance = self.id().get_mut(store);
-        let src_table = instance.as_mut().table_for_transmit(src);
-        let (rep, is_done) = match src {
-            TransmitIndex::Future(idx) => src_table.future_remove_readable(idx, src_idx)?,
-            TransmitIndex::Stream(idx) => src_table.stream_remove_readable(idx, src_idx)?,
-        };
-        if is_done {
-            bail!("cannot lift after being notified that the writable end dropped");
-        }
-        let dst_table = instance.table_for_transmit(dst);
-        let handle = match dst {
-            TransmitIndex::Future(idx) => dst_table.future_insert_read(idx, rep),
-            TransmitIndex::Stream(idx) => dst_table.stream_insert_read(idx, rep),
-        }?;
-        store
-            .concurrent_state_mut()
-            .get_mut(TableId::<TransmitHandle>::new(rep))?
-            .common
-            .handle = Some(handle);
-        Ok(handle)
+        let id = self.lift_index_to_transmit(store, src, src_idx)?;
+        self.lower_transmit_to_index(store, dst, id)
+    }
+
+    fn lift_index_to_transmit(
+        self,
+        store: &mut StoreOpaque,
+        ty: TransmitIndex,
+        src_idx: u32,
+    ) -> Result<TableId<TransmitHandle>> {
+        let (state, _, _, instance) = store.lift_context_parts(self);
+        lift_index_to_transmit(instance, state.concurrent_state_mut(), ty, src_idx)
+    }
+
+    fn lower_transmit_to_index(
+        self,
+        store: &mut StoreOpaque,
+        ty: TransmitIndex,
+        id: TableId<TransmitHandle>,
+    ) -> Result<u32> {
+        let (state, _, _, instance) = store.lift_context_parts(self);
+        lower_transmit_to_index(instance, state.concurrent_state_mut(), ty, id)
     }
 
     /// Implements the `future.new` intrinsic.
@@ -4626,6 +4584,60 @@ impl Instance {
 
         Ok(dst_idx)
     }
+}
+
+/// Performs the opertion of lifting a future or stream from and instance into
+/// the `TransmitHandle` for it.
+///
+/// The `src_idx` is the guest-specified index within `instance` and `ty` is the
+/// expected type of future/stream.
+fn lift_index_to_transmit(
+    instance: Pin<&mut ComponentInstance>,
+    concurrent_state: &mut ConcurrentState,
+    ty: TransmitIndex,
+    src_idx: u32,
+) -> Result<TableId<TransmitHandle>> {
+    let handle_table = instance.table_for_transmit(ty);
+    let (rep, is_done) = match ty {
+        TransmitIndex::Future(idx) => handle_table.future_remove_readable(idx, src_idx)?,
+        TransmitIndex::Stream(idx) => handle_table.stream_remove_readable(idx, src_idx)?,
+    };
+    let desc = match ty {
+        TransmitIndex::Future(_) => "future",
+        TransmitIndex::Stream(_) => "stream",
+    };
+    if is_done {
+        bail!("cannot lift {desc} after being notified that the writable end dropped");
+    }
+    let id = TableId::<TransmitHandle>::new(rep);
+    let future = concurrent_state.get_mut(id)?;
+    future.common.handle = None;
+
+    let state = future.state;
+    if concurrent_state.get_mut(state)?.done {
+        bail!("cannot lift {desc} after previous read succeeded");
+    }
+
+    Ok(id)
+}
+
+/// Performs the opertion of lowering a future or stream `TransmitHandle` into
+/// an instance.
+fn lower_transmit_to_index(
+    instance: Pin<&mut ComponentInstance>,
+    concurrent_state: &mut ConcurrentState,
+    ty: TransmitIndex,
+    id: TableId<TransmitHandle>,
+) -> Result<u32> {
+    let state = concurrent_state.get_mut(id)?.state;
+    debug_assert_eq!(concurrent_state.get_mut(state)?.read_handle, id);
+    let handle_table = instance.table_for_transmit(ty);
+    let handle = match ty {
+        TransmitIndex::Future(idx) => handle_table.future_insert_read(idx, id.rep()),
+        TransmitIndex::Stream(idx) => handle_table.stream_insert_read(idx, id.rep()),
+    }?;
+    concurrent_state.get_mut(id)?.common.handle = Some(handle);
+    Ok(handle)
 }
 
 impl ComponentInstance {
