@@ -4611,6 +4611,9 @@ fn lift_index_to_transmit(
     }
     let id = TableId::<TransmitHandle>::new(rep);
     let future = concurrent_state.get_mut(id)?;
+    if future.common.set.is_some() {
+        bail!("cannot lift {desc} while it's in a waitable set");
+    }
     future.common.handle = None;
 
     let state = future.state;
