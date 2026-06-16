@@ -3304,7 +3304,7 @@ impl Config {
             }
         }
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        if let Some(v) = self
+        if let Some((v, _)) = self
             .compiler_config
             .as_ref()
             .and_then(|c| c.settings.get("enable_nan_canonicalization"))
