@@ -1,3 +1,8 @@
+#![cfg_attr(
+    any(not(feature = "async"), not(feature = "pooling-allocator")),
+    expect(dead_code, reason = "too much #[cfg] noise")
+)]
+
 use crate::Enabled;
 
 /// Instance-related limit configuration for pooling.
@@ -108,12 +113,10 @@ pub struct PoolingInstanceAllocatorConfig {
     pub decommit_batch_size: usize,
     /// The size, in bytes, of async stacks to allocate (not including the guard
     /// page).
-    #[cfg(feature = "async")]
     pub stack_size: usize,
     /// The limits to apply to instances allocated within this allocator.
     pub limits: InstanceLimits,
     /// Whether or not async stacks are zeroed after use.
-    #[cfg(feature = "async")]
     pub async_stack_zeroing: bool,
     /// If async stack zeroing is enabled and the host platform is Linux this is
     /// how much memory to zero out with `memset`.
@@ -144,10 +147,8 @@ impl Default for PoolingInstanceAllocatorConfig {
         PoolingInstanceAllocatorConfig {
             max_unused_warm_slots: 100,
             decommit_batch_size: 1,
-            #[cfg(feature = "async")]
             stack_size: 2 << 20,
             limits: InstanceLimits::default(),
-            #[cfg(feature = "async")]
             async_stack_zeroing: false,
             async_stack_keep_resident: 0,
             linear_memory_keep_resident: 0,
