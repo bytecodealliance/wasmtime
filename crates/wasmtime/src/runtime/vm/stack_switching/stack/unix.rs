@@ -286,10 +286,7 @@ impl VMContinuationStack {
                 (0x28 + args_data_size, func_ref.addr()),
                 (0x30 + args_data_size, caller_vmctx.addr()),
                 (0x38 + args_data_size, args.addr()),
-                (
-                    0x40 + args_data_size,
-                    usize::try_from(return_value_count)?,
-                ),
+                (0x40 + args_data_size, usize::try_from(return_value_count)?),
             ];
 
             for (offset, data) in to_store {
