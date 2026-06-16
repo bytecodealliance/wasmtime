@@ -76,6 +76,26 @@ pub struct ModuleTranslation<'data> {
     /// trampolines for each of these signatures are required.
     pub exported_signatures: Vec<ModuleInternedTypeIndex>,
 
+    /// Per-table flag indicating whether the table is ever mutated by any
+    /// function defined in this module via `table.set` / `table.fill` /
+    /// `table.copy` (as the destination) / `table.grow` / `table.init`.
+    ///
+    /// `false` (the default) means the table's contents are determined
+    /// entirely by its `elem` segments and any active initializer, and never
+    /// change at runtime — provably immutable for the lifetime of any
+    /// instance of this module.
+    ///
+    /// `true` means the contents can change at runtime (or the table is
+    /// imported, in which case we conservatively assume the importer
+    /// mutates it).
+    ///
+    /// This is groundwork for later passes that turn `call_indirect`
+    /// through provably-immutable function tables into direct calls when
+    /// the dispatched-to slot is statically known. Set during module
+    /// translation (see `analyze_table_mutability`); read by Cranelift
+    /// lowering and by Pulley AOT IC seeding.
+    pub tables_mutated: SecondaryMap<TableIndex, bool>,
+
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
 
@@ -193,6 +213,7 @@ impl<'data> ModuleTranslation<'data> {
             function_body_inputs: PrimaryMap::default(),
             known_imported_functions: SecondaryMap::default(),
             exported_signatures: Vec::default(),
+            tables_mutated: SecondaryMap::default(),
             debuginfo: DebugInfoData::default(),
             has_unparsed_debuginfo: false,
             data_align: None,
@@ -314,6 +335,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
         for payload in parser.parse_all(data) {
             self.translate_payload(payload?)?;
         }
+
+        analyze_table_mutability(&mut self.result)?;
 
         Ok(self.result)
     }
@@ -1547,4 +1570,86 @@ impl ModuleTranslation<'_> {
         };
         self.module.startup = ModuleStartup::IfMemoriesNeedInit(ty);
     }
+}
+
+/// Walk every defined function body, recording in
+/// `translation.tables_mutated` each table that is the destination of any
+/// runtime mutation opcode (`table.set`, `table.fill`, `table.copy` as the
+/// destination, `table.grow`, `table.init`).
+///
+/// Imported tables are conservatively pre-marked as mutated since the
+/// importer can mutate them in ways we can't see. Active `elem` segments
+/// applied at instantiation time are NOT counted as mutations — they are
+/// part of the table's *initial* state, not a runtime change.
+///
+/// `elem.drop` drops a passive element segment but does not write to any
+/// table directly, so it is intentionally not counted here. Conservatively,
+/// any `table.init` from a passive segment marks the destination table as
+/// mutated.
+fn analyze_table_mutability<'data>(
+    translation: &mut ModuleTranslation<'data>,
+) -> Result<()> {
+    // Resize the table-mutability map to cover every table in the module
+    // (imports + defined). `SecondaryMap` defaults to `false` for all
+    // unset entries, which is the correct "definitely-not-mutated" default
+    // for defined tables we haven't observed any mutations on yet.
+    let num_tables = translation.module.tables.len();
+    if num_tables == 0 {
+        return Ok(());
+    }
+
+    // Mark all imported tables as mutated up front. The importer can
+    // mutate them in ways this module can't see, so the conservative
+    // assumption is that they are not stable across calls.
+    let num_imported = translation.module.num_imported_tables;
+    for i in 0..num_imported {
+        translation.tables_mutated[TableIndex::from_u32(i as u32)] = true;
+    }
+
+    // Mark all *exported* tables as mutated as well. A host (or another
+    // instance importing the export) can call `Table::set` /
+    // `Table::grow` via the public wasmtime API on any exported table,
+    // and those mutations are not visible in this module's bytecode.
+    // The `call_indirect` optimizations that read this bit must
+    // therefore treat exported tables as conservatively non-stable.
+    for (_, entity_index) in &translation.module.exports {
+        if let EntityIndex::Table(table_index) = entity_index {
+            translation.tables_mutated[*table_index] = true;
+        }
+    }
+
+    // Walk every defined function body and look for table-mutation opcodes.
+    // The cost is O(total opcodes), one extra pass on top of the validator;
+    // typical large modules (sqlite3 ~50K opcodes) take well under a
+    // millisecond.
+    for (_, body_data) in &translation.function_body_inputs {
+        let mut reader = body_data.body.get_operators_reader()?;
+        while !reader.eof() {
+            use wasmparser::Operator;
+            match reader.read()? {
+                Operator::TableSet { table }
+                | Operator::TableFill { table }
+                | Operator::TableGrow { table } => {
+                    translation.tables_mutated[TableIndex::from_u32(table)] = true;
+                }
+                Operator::TableCopy {
+                    dst_table,
+                    src_table: _,
+                } => {
+                    // `src_table` is read-only in `table.copy`; only the
+                    // destination is mutated.
+                    translation.tables_mutated[TableIndex::from_u32(dst_table)] = true;
+                }
+                Operator::TableInit {
+                    table,
+                    elem_index: _,
+                } => {
+                    translation.tables_mutated[TableIndex::from_u32(table)] = true;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(())
 }

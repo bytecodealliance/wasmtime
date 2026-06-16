@@ -1,29 +1,34 @@
 ;;! target = "x86_64"
 
-;; This test checks that we do *not* get the indirect-call caching optimization
-;; when it is not enabled, because it is off by default.
+;; Immutable funcref table where every elem-segment entry has the same
+;; declared type as the call site. This module's `tables_mutated` bit
+;; for table 0 is clear (no opcode in any function writes to it), and
+;; all three slots resolve to the same module type as the call site.
+;; That triggers `try_elide_sig_check_for_immutable_table` →
+;; `CheckIndirectCallTypeSignature::StaticMatch`, removing the runtime
+;; signature load + compare from the dispatch hot path.
 ;;
-;; The key bit in the expectation below is that the call sequence in
-;; `u0:3` below goes straight to the bounds-check (v5), lazy-table
-;; init (masking of bits with v13), and loading of the funcref fields
-;; in block3, with no caching fastpath.
+;; Look for the absence of `load.i32 user6 aligned readonly v_+16` (the
+;; sig-id load) and the matching `icmp eq / trapz user7` on the call
+;; site. Compare with `indirect-call-no-caching.wat` for the
+;; non-elided shape.
 
 (module
- (table 10 10 funcref)
+  (table 10 10 funcref)
 
- (func $f1 (result i32) i32.const 1)
- (func $f2 (result i32) i32.const 2)
- (func $f3 (result i32) i32.const 3)
+  (func $f1 (result i32) i32.const 1)
+  (func $f2 (result i32) i32.const 2)
+  (func $f3 (result i32) i32.const 3)
 
- (func (export "call_it") (param i32) (result i32)
-  local.get 0
-  call_indirect (result i32))
+  (func (export "call_it") (param i32) (result i32)
+    local.get 0
+    call_indirect (result i32))
 
- (elem (i32.const 1) func $f1 $f2 $f3))
+  (elem (i32.const 0) func $f1 $f2 $f3))
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -38,7 +43,7 @@
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -53,7 +58,7 @@
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -69,7 +74,7 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48

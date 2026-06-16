@@ -1,29 +1,34 @@
 ;;! target = "x86_64"
 
-;; This test checks that we do *not* get the indirect-call caching optimization
-;; when it is not enabled, because it is off by default.
+;; Table declared with min < max (a "dynamic-declared" table) that is
+;; never written to in the module. Without the per-table mutability
+;; bit, Cranelift would emit `load.i64 v0+56` per dispatch to fetch
+;; the current bound. With it, `make_table` lowers to
+;; `TableSize::Static` and the bound becomes an immediate.
 ;;
-;; The key bit in the expectation below is that the call sequence in
-;; `u0:3` below goes straight to the bounds-check (v5), lazy-table
-;; init (masking of bits with v13), and loading of the funcref fields
-;; in block3, with no caching fastpath.
+;; Look for: bounds-check `iconst.i32 16` (the declared min, used as
+;; static bound) and NO `load.i64 ... v0+56` for the current_elements
+;; field. (`+48` for the funcref base is still loaded — that's the
+;; element-data pointer, separate from the bound.)
 
 (module
- (table 10 10 funcref)
+  ;; min=16, max=64 — distinct, so without our optimization the
+  ;; bound would be loaded per dispatch from `current_elements`.
+  (table 16 64 funcref)
 
- (func $f1 (result i32) i32.const 1)
- (func $f2 (result i32) i32.const 2)
- (func $f3 (result i32) i32.const 3)
+  (func $f1 (result i32) i32.const 1)
+  (func $f2 (result i32) i32.const 2)
+  (func $f3 (result i32) i32.const 3)
 
- (func (export "call_it") (param i32) (result i32)
-  local.get 0
-  call_indirect (result i32))
+  (func (export "call_it") (param i32) (result i32)
+    local.get 0
+    call_indirect (result i32))
 
- (elem (i32.const 1) func $f1 $f2 $f3))
+  (elem (i32.const 0) func $f1 $f2 $f3))
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -38,7 +43,7 @@
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -53,7 +58,7 @@
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
 ;;     region0 = 8 "VMContext+0x8"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     stack_limit = gv2
 ;;
@@ -69,7 +74,7 @@
 ;;     region0 = 8 "VMContext+0x8"
 ;;     region1 = 1342177280 "DefinedTable(StaticModuleIndex(0), DefinedTableIndex(0))"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
+;;     gv1 = load.i64 notrap aligned readonly region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
@@ -79,8 +84,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0050                               v4 = iconst.i32 10
-;; @0050                               v5 = icmp uge v2, v4  ; v4 = 10
+;; @0050                               v4 = iconst.i32 16
+;; @0050                               v5 = icmp uge v2, v4  ; v4 = 16
 ;; @0050                               v6 = uextend.i64 v2
 ;; @0050                               v7 = load.i64 notrap aligned readonly can_move v0+48
 ;; @0050                               v8 = iconst.i64 3
