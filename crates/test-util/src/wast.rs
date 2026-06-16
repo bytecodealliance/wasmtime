@@ -472,10 +472,6 @@ impl WastTest {
         }
 
         let unsupported = [
-            // These tests in the `component-model` submodule have not yet been
-            // updated to account for the recent threading-related intrinsic
-            // changes.
-            "test/async/trap-if-block-and-sync.wast",
             // Wasmtime doesn't expose the component-model `cm64` feature toggle
             // yet, so this parser-only test can't be enabled here.
             "test/wasm-tools/memory64.wast",
