@@ -25,6 +25,7 @@ wasmtime = { workspace = true, default-features = true, features = ["winch", "pu
 wasmtime-cli-flags = { workspace = true, default-features = true, features = [
     "cranelift",
     "gc",
+    "clap",
 ] }
 wasmtime-wasi = { workspace = true, features = ['p1', 'p2'] }
 wasmtime-wasi-nn = { workspace = true, optional = true }
