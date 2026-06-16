@@ -102,6 +102,7 @@ fn stack_switching_cont_new_high_arity_rejected() -> Result<()> {
 
     let Ok(engine) = Engine::new(&config) else {
         // Stack switching is not supported on all platforms; skip gracefully.
+        assert!(!cfg!(target_arch = "x86_64"));
         return Ok(());
     };
 
