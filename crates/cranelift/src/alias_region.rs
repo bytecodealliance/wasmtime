@@ -636,6 +636,21 @@ impl AliasRegions<VMOffsets<u8>> {
         )
     }
 
+    /// Get a `Load` for the imported table's `VMTableImport::from` field (a
+    /// `*mut VMTableDefinition`) out of a `*mut VMContext`.
+    pub fn vmctx_vmtable_from_load(&mut self, func: &mut ir::Function, table: TableIndex) -> Load {
+        let offset = self.offsets.vmctx_vmtable_from(table);
+        let region = self.vmctx_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
+    }
+
     /// Load the imported global's address (`VMGlobalImport::from`) out of the
     /// `*mut VMContext`.
     pub fn vmctx_vmglobal_import_from(

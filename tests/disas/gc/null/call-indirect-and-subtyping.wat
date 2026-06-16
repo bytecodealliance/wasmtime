@@ -23,8 +23,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+112
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     sig2 = (i64 vmctx, i32, i32) -> i32 tail

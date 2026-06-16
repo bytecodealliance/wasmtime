@@ -23,10 +23,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move region2 gv3+72
-;;     gv5 = load.i64 notrap aligned gv4
-;;     gv6 = load.i64 notrap aligned gv4+8
 ;;     sig0 = (i64 vmctx, i64, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:7 sig1
@@ -37,66 +33,66 @@
 ;; @0040                               v6 = uextend.i64 v3
 ;; @0040                               v8 = iadd v7, v6
 ;; @0040                               v9 = load.i32 little region1 v8
-;; @0043                               v72 = load.i64 notrap aligned readonly can_move region2 v0+72
-;; @0043                               v10 = load.i64 notrap aligned v72+8
-;; @0043                               v14 = load.i64 notrap aligned v72
-;; @0043                               v11 = ireduce.i32 v10
-;; @0043                               v12 = icmp uge v9, v11
-;; @0043                               v18 = iconst.i64 0
-;; @0043                               v13 = uextend.i64 v9
-;; @0043                               v15 = iconst.i64 3
-;; @0043                               v16 = ishl v13, v15  ; v15 = 3
-;; @0043                               v17 = iadd v14, v16
-;; @0043                               v19 = select_spectre_guard v12, v18, v17  ; v18 = 0
-;; @0043                               v20 = load.i64 user6 aligned region3 v19
-;; @0043                               v21 = iconst.i64 -2
-;; @0043                               v22 = band v20, v21  ; v21 = -2
-;; @0043                               brif v20, block3(v22), block2
+;; @0043                               v10 = load.i64 notrap aligned readonly can_move region2 v0+72
+;; @0043                               v11 = load.i64 notrap aligned v10+8
+;; @0043                               v16 = load.i64 notrap aligned v10
+;; @0043                               v12 = ireduce.i32 v11
+;; @0043                               v13 = icmp uge v9, v12
+;; @0043                               v20 = iconst.i64 0
+;; @0043                               v14 = uextend.i64 v9
+;; @0043                               v17 = iconst.i64 3
+;; @0043                               v18 = ishl v14, v17  ; v17 = 3
+;; @0043                               v19 = iadd v16, v18
+;; @0043                               v21 = select_spectre_guard v13, v20, v19  ; v20 = 0
+;; @0043                               v22 = load.i64 user6 aligned region3 v21
+;; @0043                               v23 = iconst.i64 -2
+;; @0043                               v24 = band v22, v23  ; v23 = -2
+;; @0043                               brif v22, block3(v24), block2
 ;;
 ;;                                 block2 cold:
-;; @0043                               v24 = iconst.i32 0
-;; @0043                               v26 = call fn0(v0, v24, v13)  ; v24 = 0
-;; @0043                               jump block3(v26)
+;; @0043                               v26 = iconst.i32 0
+;; @0043                               v28 = call fn0(v0, v26, v14)  ; v26 = 0
+;; @0043                               jump block3(v28)
 ;;
-;;                                 block3(v23: i64):
-;; @0043                               v29 = load.i32 user7 aligned readonly v23+16
-;; @0043                               v27 = load.i64 notrap aligned readonly can_move region4 v0+40
-;; @0043                               v28 = load.i32 notrap aligned readonly can_move v27+4
-;; @0043                               v30 = icmp eq v29, v28
-;; @0043                               trapz v30, user8
-;; @0043                               v32 = load.i64 notrap aligned readonly v23+8
-;; @0043                               v33 = load.i64 notrap aligned readonly v23+24
-;; @0043                               v34 = call_indirect sig0, v32(v33, v0, v2)
-;; @004a                               v40 = load.i32 little region1 v8
-;; @004d                               v41 = load.i64 notrap aligned v72+8
-;; @004d                               v45 = load.i64 notrap aligned v72
-;; @004d                               v42 = ireduce.i32 v41
-;; @004d                               v43 = icmp uge v40, v42
-;; @004d                               v44 = uextend.i64 v40
-;;                                     v74 = iconst.i64 3
-;;                                     v75 = ishl v44, v74  ; v74 = 3
-;; @004d                               v48 = iadd v45, v75
-;;                                     v76 = iconst.i64 0
-;;                                     v77 = select_spectre_guard v43, v76, v48  ; v76 = 0
-;; @004d                               v51 = load.i64 user6 aligned region3 v77
-;;                                     v78 = iconst.i64 -2
-;;                                     v79 = band v51, v78  ; v78 = -2
-;; @004d                               brif v51, block5(v79), block4
+;;                                 block3(v25: i64):
+;; @0043                               v31 = load.i32 user7 aligned readonly v25+16
+;; @0043                               v29 = load.i64 notrap aligned readonly can_move region4 v0+40
+;; @0043                               v30 = load.i32 notrap aligned readonly can_move v29+4
+;; @0043                               v32 = icmp eq v31, v30
+;; @0043                               trapz v32, user8
+;; @0043                               v34 = load.i64 notrap aligned readonly v25+8
+;; @0043                               v35 = load.i64 notrap aligned readonly v25+24
+;; @0043                               v36 = call_indirect sig0, v34(v35, v0, v2)
+;; @004a                               v42 = load.i32 little region1 v8
+;; @004d                               v44 = load.i64 notrap aligned v10+8
+;; @004d                               v49 = load.i64 notrap aligned v10
+;; @004d                               v45 = ireduce.i32 v44
+;; @004d                               v46 = icmp uge v42, v45
+;; @004d                               v47 = uextend.i64 v42
+;;                                     v70 = iconst.i64 3
+;;                                     v71 = ishl v47, v70  ; v70 = 3
+;; @004d                               v52 = iadd v49, v71
+;;                                     v72 = iconst.i64 0
+;;                                     v73 = select_spectre_guard v46, v72, v52  ; v72 = 0
+;; @004d                               v55 = load.i64 user6 aligned region3 v73
+;;                                     v74 = iconst.i64 -2
+;;                                     v75 = band v55, v74  ; v74 = -2
+;; @004d                               brif v55, block5(v75), block4
 ;;
 ;;                                 block4 cold:
-;;                                     v80 = iconst.i32 0
-;; @004d                               v57 = call fn0(v0, v80, v44)  ; v80 = 0
-;; @004d                               jump block5(v57)
+;;                                     v76 = iconst.i32 0
+;; @004d                               v61 = call fn0(v0, v76, v47)  ; v76 = 0
+;; @004d                               jump block5(v61)
 ;;
-;;                                 block5(v54: i64):
-;; @004d                               v60 = load.i32 user7 aligned readonly v54+16
-;; @004d                               v61 = icmp eq v60, v28
-;; @004d                               trapz v61, user8
-;; @004d                               v63 = load.i64 notrap aligned readonly v54+8
-;; @004d                               v64 = load.i64 notrap aligned readonly v54+24
-;; @004d                               v65 = call_indirect sig0, v63(v64, v0, v2)
+;;                                 block5(v58: i64):
+;; @004d                               v64 = load.i32 user7 aligned readonly v58+16
+;; @004d                               v65 = icmp eq v64, v30
+;; @004d                               trapz v65, user8
+;; @004d                               v67 = load.i64 notrap aligned readonly v58+8
+;; @004d                               v68 = load.i64 notrap aligned readonly v58+24
+;; @004d                               v69 = call_indirect sig0, v67(v68, v0, v2)
 ;; @0050                               jump block1
 ;;
 ;;                                 block1:
-;; @0050                               return v34, v65
+;; @0050                               return v36, v69
 ;; }

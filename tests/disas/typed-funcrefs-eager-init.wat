@@ -133,21 +133,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @0048                               v12 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v47 = iconst.i64 8
-;; @0048                               v15 = iadd v12, v47  ; v47 = 8
+;;                                     v45 = iconst.i64 8
+;; @0048                               v15 = iadd v12, v45  ; v45 = 8
 ;; @0048                               v18 = load.i64 user6 aligned region1 v15
 ;; @004a                               v19 = load.i64 user16 aligned readonly v18+8
 ;; @004a                               v20 = load.i64 notrap aligned readonly v18+24
 ;; @004a                               v21 = call_indirect sig0, v19(v20, v0, v2, v3, v4, v5)
-;;                                     v54 = iconst.i64 16
-;; @005b                               v30 = iadd v12, v54  ; v54 = 16
+;;                                     v52 = iconst.i64 16
+;; @005b                               v30 = iadd v12, v52  ; v52 = 16
 ;; @005b                               v33 = load.i64 user6 aligned region1 v30
 ;; @005d                               v34 = load.i64 user16 aligned readonly v33+8
 ;; @005d                               v35 = load.i64 notrap aligned readonly v33+24
@@ -165,21 +163,19 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+48
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
 ;; @0075                               v12 = load.i64 notrap aligned readonly can_move v0+48
-;;                                     v47 = iconst.i64 8
-;; @0075                               v15 = iadd v12, v47  ; v47 = 8
+;;                                     v45 = iconst.i64 8
+;; @0075                               v15 = iadd v12, v45  ; v45 = 8
 ;; @0075                               v18 = load.i64 user6 aligned region1 v15
 ;; @0075                               v19 = load.i64 user7 aligned readonly v18+8
 ;; @0075                               v20 = load.i64 notrap aligned readonly v18+24
 ;; @0075                               v21 = call_indirect sig0, v19(v20, v0, v2, v3, v4, v5)
-;;                                     v54 = iconst.i64 16
-;; @0087                               v30 = iadd v12, v54  ; v54 = 16
+;;                                     v52 = iconst.i64 16
+;; @0087                               v30 = iadd v12, v52  ; v52 = 16
 ;; @0087                               v33 = load.i64 user6 aligned region1 v30
 ;; @0087                               v34 = load.i64 user7 aligned readonly v33+8
 ;; @0087                               v35 = load.i64 notrap aligned readonly v33+24
