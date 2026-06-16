@@ -413,6 +413,7 @@
           (then unreachable))
         (if (i32.ne (i32.const 42) (i32.load (i32.const 16)))
           (then unreachable))
+        (call $waitable.join (local.get $fr) (i32.const 0))
 
         (call $future-read-expect-trap (local.get $fr) (i32.and (local.get $flags) (i32.const 0x03)))
       )
