@@ -55,9 +55,10 @@ use super::{
     index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
 };
 use crate::prelude::*;
+use crate::runtime::vm::instance::allocator::pooling_config::InstanceLimits;
 use crate::runtime::vm::{
-    CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryBase,
-    MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
+    CompiledModuleId, InstanceAllocationRequest, Memory, MemoryBase, MemoryImageSlot, Mmap,
+    MmapOffset, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
 };
 use crate::{
     Enabled,

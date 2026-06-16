@@ -452,6 +452,14 @@ jobs:
               -p wasmtime-wizer --no-default-features --features component-model
               -p wasmtime-wizer --no-default-features --features rayon
               -p wasmtime-wizer --no-default-features --all-features
+
+          - name: wasmtime-cli-flags
+            checks: |
+              -p wasmtime-cli-flags --no-default-features
+              -p wasmtime-cli-flags --no-default-features --features serde
+              -p wasmtime-cli-flags --no-default-features --features clap
+              -p wasmtime-cli-flags --no-default-features --features toml
+              -p wasmtime-cli-flags --no-default-features --all-features
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6

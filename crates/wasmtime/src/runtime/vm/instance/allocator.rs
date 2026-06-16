@@ -29,9 +29,10 @@ pub use self::on_demand::OnDemandInstanceAllocator;
 mod pooling;
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
-    InstanceLimits, PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
-    PoolingInstanceAllocatorConfig,
+    PoolConcurrencyLimitError, PoolingAllocatorMetrics, PoolingInstanceAllocator,
 };
+mod pooling_config;
+pub use pooling_config::PoolingInstanceAllocatorConfig;
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a, 'b> {

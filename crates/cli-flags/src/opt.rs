@@ -6,14 +6,17 @@
 //! option parsing is contained exclusively within this module.
 
 use crate::{KeyValuePair, WasiNnGraph};
+#[cfg(feature = "clap")]
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
+#[cfg(feature = "clap")]
 use clap::error::{Error, ErrorKind};
+#[cfg(feature = "serde")]
 use serde::de::{self, Visitor};
+use std::fmt;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
-use std::{fmt, marker};
 use wasmtime::{Result, bail, format_err};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
@@ -43,16 +46,18 @@ macro_rules! wasmtime_option_group {
             ...
         }
     ) => {
-        #[derive(Default, Debug)]
+        #[derive(Default, Debug, PartialEq, Clone)]
+        #[cfg_attr(feature = "serde", derive(serde_derive::Deserialize, serde_derive::Serialize))]
+        #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case", deny_unknown_fields))]
         $(#[$attr])*
         pub struct $opts {
             $(
-                $(#[serde($serde_attr)])*
+                $(#[cfg_attr(feature = "serde", serde($serde_attr))])*
                 $(#[doc($doc_attr)])?
                 pub $opt: $container<$payload>,
             )+
             $(
-                $(#[serde($serde_attr2)])*
+                $(#[cfg_attr(feature = "serde", serde($serde_attr2))])*
                 pub $prefixed: Vec<(String, Option<String>)>,
             )?
         }
@@ -158,6 +163,7 @@ macro_rules! wasmtime_option_group {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommaSeparated<T>(pub Vec<T>);
 
+#[cfg(feature = "clap")]
 impl<T> ValueParserFactory for CommaSeparated<T>
 where
     T: WasmtimeOption,
@@ -165,13 +171,15 @@ where
     type Parser = CommaSeparatedParser<T>;
 
     fn value_parser() -> CommaSeparatedParser<T> {
-        CommaSeparatedParser(marker::PhantomData)
+        CommaSeparatedParser(std::marker::PhantomData)
     }
 }
 
 #[derive(Clone)]
-pub struct CommaSeparatedParser<T>(marker::PhantomData<T>);
+#[cfg(feature = "clap")]
+pub struct CommaSeparatedParser<T>(std::marker::PhantomData<T>);
 
+#[cfg(feature = "clap")]
 impl<T> TypedValueParser for CommaSeparatedParser<T>
 where
     T: WasmtimeOption,
@@ -312,6 +320,7 @@ pub enum OptName {
 }
 
 impl OptName {
+    #[cfg(feature = "clap")]
     fn display_string(&self) -> String {
         match self {
             OptName::Name(s) => s.replace('_', "-"),
@@ -682,8 +691,10 @@ impl<T> OptionContainer<T> for Vec<T> {
 // for parsing toml values the same way we parse command line values.
 //
 // Used for wasmtime::Strategy, wasmtime::Collector, wasmtime::OptLevel, wasmtime::RegallocAlgorithm
+#[cfg(feature = "serde")]
 struct ToStringVisitor {}
 
+#[cfg(feature = "serde")]
 impl<'de> Visitor<'de> for ToStringVisitor {
     type Value = String;
 
@@ -714,7 +725,10 @@ impl<'de> Visitor<'de> for ToStringVisitor {
 }
 
 // Deserializer that uses the `WasmtimeOptionValue::parse` to parse toml values
-pub(crate) fn cli_parse_wrapper<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+#[cfg(feature = "serde")]
+pub(crate) fn deserialize_cli_parse_wrapper<'de, D, T>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error>
 where
     T: WasmtimeOptionValue,
     D: serde::Deserializer<'de>,
@@ -725,6 +739,18 @@ where
     T::parse(Some(&str))
         .map(Some)
         .map_err(serde::de::Error::custom)
+}
+
+#[cfg(feature = "serde")]
+pub(crate) fn serialize_cli_parse_wrapper<S, T>(val: &Option<T>, ser: S) -> Result<S::Ok, S::Error>
+where
+    T: WasmtimeOptionValue,
+    S: serde::Serializer,
+{
+    match val {
+        Some(val) => ser.serialize_some(&fmt::from_fn(|f| val.display(f)).to_string()),
+        None => ser.serialize_none(),
+    }
 }
 
 #[cfg(test)]

@@ -45,7 +45,7 @@ doc = false
 [dependencies]
 wasmtime = { workspace = true, features = ['std'] }
 wasmtime-cache = { workspace = true, optional = true }
-wasmtime-cli-flags = { workspace = true }
+wasmtime-cli-flags = { workspace = true, features = ['clap', 'toml'] }
 wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
