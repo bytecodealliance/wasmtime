@@ -22,23 +22,17 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move region1 gv3+48
-;;     gv5 = load.i64 notrap aligned gv4+8
-;;     gv6 = load.i64 notrap aligned readonly can_move gv4
-;;     gv7 = load.i64 notrap aligned gv3+88
-;;     gv8 = load.i64 notrap aligned readonly can_move gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;; @003b                               v18 = load.i64 notrap aligned readonly can_move region1 v0+48
-;; @003b                               v6 = load.i64 notrap aligned readonly can_move v18
+;; @003b                               v6 = load.i64 notrap aligned readonly can_move region1 v0+48
+;; @003b                               v7 = load.i64 notrap aligned readonly can_move v6
 ;; @003b                               v5 = uextend.i64 v2
-;; @003b                               v7 = iadd v6, v5
-;; @003b                               store little region2 v3, v7
-;; @0042                               v9 = load.i64 notrap aligned readonly can_move v0+80
-;; @0042                               v10 = iadd v9, v5
-;; @0042                               store little region3 v3, v10
+;; @003b                               v8 = iadd v7, v5
+;; @003b                               store little region2 v3, v8
+;; @0042                               v10 = load.i64 notrap aligned readonly can_move v0+80
+;; @0042                               v11 = iadd v10, v5
+;; @0042                               store little region3 v3, v11
 ;; @004b                               jump block1
 ;;
 ;;                                 block1:

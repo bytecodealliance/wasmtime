@@ -18,9 +18,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned readonly can_move gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):

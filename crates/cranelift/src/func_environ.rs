@@ -4,8 +4,8 @@ pub(crate) mod stack_switching;
 use crate::alias_region::AliasRegions;
 use crate::compiler::Compiler;
 use crate::translate::{
-    FuncTranslationStacks, Heap, HeapData, MemoryKind, StructFieldsVec, TableData, TableSize,
-    TargetEnvironment,
+    FuncTranslationStacks, Heap, HeapData, Load, MemoryKind, StructFieldsVec, TableData, TableSize,
+    TargetEnvironment, VmctxLoadChain,
 };
 use crate::trap::TranslateTrap;
 use crate::{
@@ -161,12 +161,6 @@ pub struct FuncEnvironment<'module_environment> {
 
     gc_heap: Option<Heap>,
 
-    /// The Cranelift global holding the GC heap's base address.
-    gc_heap_base: Option<ir::GlobalValue>,
-
-    /// The Cranelift global holding the GC heap's base address.
-    gc_heap_bound: Option<ir::GlobalValue>,
-
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -174,9 +168,6 @@ pub struct FuncEnvironment<'module_environment> {
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
-
-    /// The Cranelift global for our vmctx's `*mut VMStoreContext`.
-    vm_store_context: Option<ir::GlobalValue>,
 
     /// Caches of signatures for builtin functions.
     builtin_functions: BuiltinFunctions,
@@ -286,12 +277,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             ty_to_gc_layout: std::collections::HashMap::new(),
             gc_heap: None,
-            gc_heap_base: None,
-            gc_heap_bound: None,
 
             heaps: PrimaryMap::default(),
             vmctx: None,
-            vm_store_context: None,
             builtin_functions,
             offsets,
             tunables,
@@ -464,45 +452,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 .vmctx_vmglobal_import_from(pos, vmctx, index);
             (addr, 0)
         }
-    }
-
-    /// Get or create the `ir::Global` for the `*mut VMStoreContext` in our
-    /// `VMContext`.
-    #[cfg_attr(
-        not(feature = "gc"),
-        expect(
-            dead_code,
-            reason = "only used to derive the GC heap base/bound globals"
-        )
-    )]
-    fn get_vmstore_context_ptr_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
-        if let Some(ptr) = self.vm_store_context {
-            return ptr;
-        }
-
-        let offset = self.offsets.ptr.vmctx_store_context();
-        let base = self.vmctx(func);
-        let region = self
-            .alias_regions
-            .vmctx_region_for_use_in_ir_global(func, offset.into());
-        let ptr_flags = func
-            .dfg
-            .mem_flags
-            .insert(
-                ir::MemFlagsData::trusted()
-                    .with_readonly()
-                    .with_can_move()
-                    .with_alias_region(Some(region)),
-            )
-            .unwrap();
-        let ptr = func.create_global_value(ir::GlobalValueData::Load {
-            base,
-            offset: Offset32::new(offset.into()),
-            global_type: self.pointer_type(),
-            flags: ptr_flags,
-        });
-        self.vm_store_context = Some(ptr);
-        ptr
     }
 
     /// Get the `*mut VMStoreContext` value for our `VMContext`.
@@ -1091,39 +1040,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .copied()
     }
 
-    /// Create an `ir::Global` that does `load(ptr + offset)`.
-    pub(crate) fn global_load(
-        &mut self,
-        func: &mut ir::Function,
-        ptr: ir::GlobalValue,
-        offset: u32,
-        flags: ir::MemFlagsData,
-    ) -> ir::GlobalValue {
-        let flags = func.dfg.mem_flags.insert(flags).unwrap();
-        func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(i32::try_from(offset).unwrap()),
-            global_type: self.pointer_type(),
-            flags,
-        })
-    }
-
-    /// Like `global_load` but specialized for loads out of the
-    /// `vmctx`.
-    pub(crate) fn global_load_from_vmctx(
-        &mut self,
-        func: &mut ir::Function,
-        offset: u32,
-        flags: ir::MemFlagsData,
-    ) -> ir::GlobalValue {
-        let vmctx = self.vmctx(func);
-        let region = self
-            .alias_regions
-            .vmctx_region_for_use_in_ir_global(func, offset);
-        let flags = flags.with_alias_region(Some(region));
-        self.global_load(func, vmctx, offset, flags)
-    }
-
     /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
     /// test whether the divisor is zero.
     fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
@@ -1660,63 +1576,8 @@ impl FuncEnvironment<'_> {
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> Heap {
-        let pointer_type = self.pointer_type();
         let memory = self.module.memories[index];
-        let is_shared = memory.shared;
-
-        let (base_ptr, base_offset, current_length_offset) = {
-            let vmctx = self.vmctx(func);
-            if let Some(def_index) = self.module.defined_memory_index(index) {
-                if is_shared {
-                    // As with imported memory, the `VMMemoryDefinition` for a
-                    // shared memory is stored elsewhere. We store a `*mut
-                    // VMMemoryDefinition` to it and dereference that when
-                    // atomically growing it.
-                    let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
-                    let memory = self.global_load_from_vmctx(
-                        func,
-                        from_offset,
-                        ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-                    );
-                    let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
-                    let current_length_offset =
-                        i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    (memory, base_offset, current_length_offset)
-                } else {
-                    let owned_index = self.module.owned_memory_index(def_index);
-                    let owned_base_offset =
-                        self.offsets.vmctx_vmmemory_definition_base(owned_index);
-                    let owned_length_offset = self
-                        .offsets
-                        .vmctx_vmmemory_definition_current_length(owned_index);
-                    let current_base_offset = i32::try_from(owned_base_offset).unwrap();
-                    let current_length_offset = i32::try_from(owned_length_offset).unwrap();
-                    (vmctx, current_base_offset, current_length_offset)
-                }
-            } else {
-                let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let memory = self.global_load_from_vmctx(
-                    func,
-                    from_offset,
-                    ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-                );
-                let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
-                let current_length_offset =
-                    i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset)
-            }
-        };
-
-        let bound_flags = func.dfg.mem_flags.insert(MemFlagsData::trusted()).unwrap();
-        let bound = func.create_global_value(ir::GlobalValueData::Load {
-            base: base_ptr,
-            offset: Offset32::new(current_length_offset),
-            global_type: pointer_type,
-            flags: bound_flags,
-        });
-
-        let base = self.make_heap_base(func, memory, base_ptr, base_offset);
-
+        let (base, bound) = self.make_heap_base_bound(func, index);
         self.heaps.push(HeapData {
             base,
             bound,
@@ -1725,29 +1586,77 @@ impl FuncEnvironment<'_> {
         })
     }
 
-    pub(crate) fn make_heap_base(
-        &self,
-        func: &mut Function,
-        memory: Memory,
-        ptr: ir::GlobalValue,
-        offset: i32,
-    ) -> ir::GlobalValue {
+    fn make_heap_base_bound(
+        &mut self,
+        func: &mut ir::Function,
+        index: MemoryIndex,
+    ) -> (VmctxLoadChain, VmctxLoadChain) {
         let pointer_type = self.pointer_type();
-        let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
+        let memory = self.module.memories[index];
+        let is_shared = memory.shared;
 
+        // The base pointer load is `can_move`, and additionally `readonly` when
+        // this memory's base can never move.
+        let memory_tunables = MemoryTunables::new(self.tunables, MemoryKind::LinearMemory);
         let mut flags = ir::MemFlagsData::trusted().with_can_move();
         if !memory.memory_may_move(&memory_tunables) {
             flags.set_readonly();
         }
 
-        let heap_base_flags = func.dfg.mem_flags.insert(flags).unwrap();
-        let heap_base = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(offset),
-            global_type: pointer_type,
-            flags: heap_base_flags,
-        });
-        heap_base
+        let load = |offset, flags| Load {
+            offset,
+            flags,
+            ty: pointer_type,
+        };
+        let base_load = |offset: u32| load(offset, flags);
+        let bound_load = |offset: u32| load(offset, ir::MemFlagsData::trusted());
+
+        if let Some(def_index) = self.module.defined_memory_index(index) {
+            if is_shared {
+                // As with imported memory, the `VMMemoryDefinition` for a
+                // shared memory is stored elsewhere. We store a `*mut
+                // VMMemoryDefinition` to it and dereference that when
+                // atomically growing it.
+                let mem = self
+                    .alias_regions
+                    .vmctx_vmmemory_pointer_load(func, def_index);
+                (
+                    VmctxLoadChain::new(smallvec![
+                        mem,
+                        base_load(self.offsets.ptr.vmmemory_definition_base().into()),
+                    ]),
+                    VmctxLoadChain::new(smallvec![
+                        mem,
+                        bound_load(self.offsets.ptr.vmmemory_definition_current_length().into()),
+                    ]),
+                )
+            } else {
+                let owned_index = self.module.owned_memory_index(def_index);
+                (
+                    VmctxLoadChain::new(smallvec![base_load(
+                        self.offsets.vmctx_vmmemory_definition_base(owned_index)
+                    )]),
+                    VmctxLoadChain::new(smallvec![bound_load(
+                        self.offsets
+                            .vmctx_vmmemory_definition_current_length(owned_index)
+                    )]),
+                )
+            }
+        } else {
+            let mem = self
+                .alias_regions
+                .vmctx_vmmemory_import_from_load(func, index);
+            (
+                VmctxLoadChain::new(smallvec![
+                    mem,
+                    base_load(self.offsets.ptr.vmmemory_definition_base().into()),
+                ]),
+                VmctxLoadChain::new(smallvec![
+                    mem,
+                    bound_load(self.offsets.ptr.vmmemory_definition_current_length().into()),
+                ]),
+            )
+        }
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> TableData {
@@ -4345,8 +4254,10 @@ impl FuncEnvironment<'_> {
         let base = match entity {
             CheckedEntity::Memory(i) => {
                 let heap = self.get_or_create_heap(builder.func, i);
+                // Obtain the vmctx value before borrowing `self.heaps()`.
+                let vmctx = self.vmctx_val(&mut builder.cursor());
                 let heap = &self.heaps()[heap];
-                builder.ins().global_value(pointer_type, heap.base)
+                heap.base.emit(&mut builder.cursor(), vmctx)
             }
             CheckedEntity::Table { table, .. } => {
                 let table = self.get_or_create_table(builder.func, table);

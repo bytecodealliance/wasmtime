@@ -485,6 +485,12 @@ fn bounds_check_field_access(
     ))
 }
 
+fn vmctx(pos: &mut FuncCursor<'_>) -> ir::Value {
+    pos.func
+        .special_param(ir::ArgumentPurpose::VMContext)
+        .expect("missing vmctx parameter")
+}
+
 /// Get the bound of a dynamic heap as an `ir::Value`.
 fn get_dynamic_heap_bound(
     builder: &mut FunctionBuilder,
@@ -496,8 +502,11 @@ fn get_dynamic_heap_bound(
         // bound.
         Some(max_size) => builder.ins().iconst(env.pointer_type(), max_size as i64),
 
-        // Load the heap bound from its global variable.
-        _ => builder.ins().global_value(env.pointer_type(), heap.bound),
+        // Emit the load chain that computes the heap bound.
+        _ => {
+            let vmctx = vmctx(&mut builder.cursor());
+            heap.bound.emit(&mut builder.cursor(), vmctx)
+        }
     }
 }
 
@@ -631,7 +640,8 @@ pub fn compute_addr(
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
-    let heap_base = pos.ins().global_value(addr_ty, heap.base);
+    let vmctx = vmctx(pos);
+    let heap_base = heap.base.emit(pos, vmctx);
     let base_and_index = pos.ins().iadd(heap_base, index);
 
     if offset == 0 {

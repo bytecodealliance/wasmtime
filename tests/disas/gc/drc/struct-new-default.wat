@@ -18,10 +18,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
-;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u805306368:24 sig0
 ;;     stack_limit = gv2
@@ -48,10 +44,10 @@
 ;;                                     jump block3
 ;;
 ;;                                 block3:
-;;                                     v62 = iconst.i32 0
+;;                                     v60 = iconst.i32 0
 ;; @0021                               v20 = iconst.i64 32
 ;; @0021                               v21 = iadd.i64 v15, v20  ; v20 = 32
-;; @0021                               store user2 little region2 v62, v21  ; v62 = 0
+;; @0021                               store user2 little region2 v60, v21  ; v60 = 0
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:

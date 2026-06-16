@@ -1,10 +1,61 @@
 //! Heaps to implement WebAssembly linear memories.
 
-use cranelift_codegen::ir::{self, GlobalValue, Type};
+use cranelift_codegen::cursor::FuncCursor;
+use cranelift_codegen::ir::{self, InstBuilder, Type};
 use cranelift_entity::entity_impl;
+use smallvec::SmallVec;
 use wasmtime_environ::{IndexType, Memory};
 
 pub use wasmtime_environ::MemoryKind;
+
+/// A single load, relative to some base value.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Load {
+    /// The offset added to the base before loading.
+    pub offset: u32,
+    /// The memory flags for the load.
+    pub flags: ir::MemFlagsData,
+    /// The type loaded. Only the last load in a chain may be non-pointer-typed.
+    pub ty: ir::Type,
+}
+
+impl Load {
+    /// Emit this load, relative to the given `base`.
+    pub fn emit(&self, cursor: &mut FuncCursor<'_>, base: ir::Value) -> ir::Value {
+        cursor.ins().load(
+            self.ty,
+            self.flags,
+            base,
+            i32::try_from(self.offset).unwrap(),
+        )
+    }
+}
+
+/// A chain of loads, rooted at the `vmctx`.
+///
+/// Used to compute a heap's base address or bound.
+#[derive(Clone, PartialEq, Hash)]
+pub struct VmctxLoadChain(SmallVec<[Load; 2]>);
+
+impl VmctxLoadChain {
+    /// Create a new load sequence.
+    ///
+    /// The sequence must be non-empty.
+    pub fn new(loads: SmallVec<[Load; 2]>) -> Self {
+        assert!(!loads.is_empty());
+        VmctxLoadChain(loads)
+    }
+
+    /// Emit the load chain, starting from `vmctx`, returning the final loaded
+    /// value.
+    pub fn emit(&self, cursor: &mut FuncCursor<'_>, vmctx: ir::Value) -> ir::Value {
+        let mut val = vmctx;
+        for load in &self.0 {
+            val = load.emit(cursor, val);
+        }
+        val
+    }
+}
 
 /// An opaque reference to a [`HeapData`][crate::HeapData].
 ///
@@ -40,10 +91,10 @@ entity_impl!(Heap, "heap");
 #[derive(Clone, PartialEq, Hash)]
 pub struct HeapData {
     /// The address of the start of the heap's storage.
-    pub base: GlobalValue,
+    pub base: VmctxLoadChain,
 
     /// The dynamic byte length of this heap, if needed.
-    pub bound: GlobalValue,
+    pub bound: VmctxLoadChain,
 
     /// The type of wasm memory that this heap is operating on.
     pub memory: Memory,

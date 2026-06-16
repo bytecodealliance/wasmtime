@@ -3,10 +3,11 @@
 use crate::TRAP_ARRAY_OUT_OF_BOUNDS;
 use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{CheckedEntity, Extension, FuncEnvironment};
-use crate::translate::{Heap, HeapData, MemoryKind, StructFieldsVec, TargetEnvironment};
+use crate::translate::{
+    Heap, HeapData, Load, MemoryKind, StructFieldsVec, TargetEnvironment, VmctxLoadChain,
+};
 use crate::trap::TranslateTrap;
 use crate::{Reachability, TRAP_GC_HEAP_CORRUPT, TRAP_INTERNAL_ASSERT};
-use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{BlockArg, ExceptionTableData, ExceptionTableItem};
 use cranelift_codegen::{
     cursor::FuncCursor,
@@ -1435,38 +1436,6 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get or create the global for our GC heap's base pointer.
-    fn get_gc_heap_base_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
-        if let Some(base) = self.gc_heap_base {
-            return base;
-        }
-
-        let store_context_ptr = self.get_vmstore_context_ptr_global(func);
-        let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
-
-        let mut flags = ir::MemFlagsData::trusted();
-        let memory_tunables =
-            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
-        if !self
-            .tunables
-            .gc_heap_memory_type()
-            .memory_may_move(&memory_tunables)
-        {
-            flags.set_readonly();
-            flags.set_can_move();
-        }
-
-        let base_flags = func.dfg.mem_flags.insert(flags).unwrap();
-        let base = func.create_global_value(ir::GlobalValueData::Load {
-            base: store_context_ptr,
-            offset: Offset32::new(offset.into()),
-            global_type: self.pointer_type(),
-            flags: base_flags,
-        });
-
-        self.gc_heap_base = Some(base);
-        base
-    }
-
     /// Get the GC heap's base.
     pub(crate) fn get_gc_heap_base(
         &mut self,
@@ -1497,27 +1466,6 @@ impl FuncEnvironment<'_> {
             .load(pointer_type, flags, store_context_ptr, offset))
     }
 
-    fn get_gc_heap_bound_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
-        if let Some(bound) = self.gc_heap_bound {
-            return bound;
-        }
-        let store_context_ptr = self.get_vmstore_context_ptr_global(func);
-        let offset = self.offsets.ptr.vmstore_context_gc_heap_current_length();
-        let bound_flags = func
-            .dfg
-            .mem_flags
-            .insert(ir::MemFlagsData::trusted())
-            .unwrap();
-        let bound = func.create_global_value(ir::GlobalValueData::Load {
-            base: store_context_ptr,
-            offset: Offset32::new(offset.into()),
-            global_type: self.pointer_type(),
-            flags: bound_flags,
-        });
-        self.gc_heap_bound = Some(bound);
-        bound
-    }
-
     /// Get the GC heap's bound.
     pub(crate) fn get_gc_heap_bound(
         &mut self,
@@ -1540,12 +1488,40 @@ impl FuncEnvironment<'_> {
             return heap;
         }
 
-        let base = self.get_gc_heap_base_global(func);
-        let bound = self.get_gc_heap_bound_global(func);
+        let store_ctx = self.alias_regions.vmctx_store_context_load(func);
+
+        // The base pointer's load is `can_move` and `readonly` when the GC
+        // heap's base can never move.
+        let memory_tunables =
+            wasmtime_environ::MemoryTunables::new(self.tunables, MemoryKind::GcHeap);
+        let mut flags = ir::MemFlagsData::trusted();
+        if !self
+            .tunables
+            .gc_heap_memory_type()
+            .memory_may_move(&memory_tunables)
+        {
+            flags.set_readonly();
+            flags.set_can_move();
+        }
+
         let memory = self.tunables.gc_heap_memory_type();
         let heap = self.heaps.push(HeapData {
-            base,
-            bound,
+            base: VmctxLoadChain::new(smallvec![
+                store_ctx,
+                Load {
+                    offset: u32::from(self.offsets.ptr.vmstore_context_gc_heap_base()),
+                    flags,
+                    ty: self.pointer_type(),
+                }
+            ]),
+            bound: VmctxLoadChain::new(smallvec![
+                store_ctx,
+                Load {
+                    offset: u32::from(self.offsets.ptr.vmstore_context_gc_heap_current_length()),
+                    flags: ir::MemFlagsData::trusted(),
+                    ty: self.pointer_type(),
+                }
+            ]),
             memory,
             kind: MemoryKind::GcHeap,
         });

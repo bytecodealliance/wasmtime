@@ -39,8 +39,6 @@
 ;;     region0 = 112 "VMContext+0x70"
 ;;     region1 = 120 "VMContext+0x78"
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned gv0+64
-;;     gv2 = load.i64 notrap aligned readonly can_move gv0+56
 ;;     sig0 = (i64 vmctx, i64, i64, i64) tail
 ;;     fn0 = colocated u805306368:1 sig0
 ;;
