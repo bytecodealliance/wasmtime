@@ -53,15 +53,12 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned readonly can_move gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @005e                               v7 = load.i64 notrap aligned readonly can_move v0+56
-;;                                     v16 = iconst.i64 0x0010_0000
-;; @005e                               v8 = iadd v7, v16  ; v16 = 0x0010_0000
+;;                                     v15 = iconst.i64 0x0010_0000
+;; @005e                               v8 = iadd v7, v15  ; v15 = 0x0010_0000
 ;; @005e                               v9 = load.i32 little region1 v8
 ;; @0061                               jump block1
 ;;
@@ -78,9 +75,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+64
-;;     gv5 = load.i64 notrap aligned readonly can_move gv3+56
 ;;     sig0 = (i64 vmctx, i64, i32) tail
 ;;     stack_limit = gv2
 ;;
@@ -100,11 +94,11 @@
 ;; @0078                               store little region2 v11, v16
 ;; @0084                               v21 = load.i64 notrap aligned readonly can_move region4 v0+80
 ;; @0084                               v20 = load.i64 notrap aligned readonly can_move region3 v0+96
-;;                                     v32 = iconst.i32 -4
-;;                                     v33 = iadd v5, v32  ; v32 = -4
-;; @0084                               call_indirect sig0, v21(v20, v0, v33)
-;;                                     v40 = iconst.i64 0x0010_0000
-;; @0090                               v26 = iadd v9, v40  ; v40 = 0x0010_0000
+;;                                     v29 = iconst.i32 -4
+;;                                     v30 = iadd v5, v29  ; v29 = -4
+;; @0084                               call_indirect sig0, v21(v20, v0, v30)
+;;                                     v37 = iconst.i64 0x0010_0000
+;; @0090                               v26 = iadd v9, v37  ; v37 = 0x0010_0000
 ;; @0090                               store little region2 v11, v26
 ;; @0098                               store notrap aligned region1 v5, v0+128
 ;; @009c                               jump block1

@@ -48,8 +48,6 @@
 )
 ;; function u0:0(i32 vmctx, i32, i32, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i32 notrap aligned gv0+48
-;;     gv2 = load.i32 notrap aligned can_move gv0+44
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;
@@ -73,8 +71,6 @@
 ;;
 ;; function u0:1(i32 vmctx, i32, i64, i64) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i32 notrap aligned gv0+56
-;;     gv2 = load.i32 notrap aligned can_move gv0+52
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;
@@ -98,8 +94,6 @@
 ;;
 ;; function u0:2(i32 vmctx, i32, i32, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i32 notrap aligned gv0+64
-;;     gv2 = load.i32 notrap aligned can_move gv0+60
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;
@@ -123,8 +117,6 @@
 ;;
 ;; function u0:3(i32 vmctx, i32, i64, i64) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i32 notrap aligned gv0+72
-;;     gv2 = load.i32 notrap aligned can_move gv0+68
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;
@@ -148,8 +140,6 @@
 ;;
 ;; function u0:4(i32 vmctx, i32, i32, i32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i32 notrap aligned gv0+80
-;;     gv2 = load.i32 notrap aligned readonly can_move gv0+76
 ;;     sig0 = (i32 vmctx, i32, i32, i32) tail
 ;;     fn0 = colocated u805306368:2 sig0
 ;;

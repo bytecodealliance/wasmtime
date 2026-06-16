@@ -18,10 +18,6 @@
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly can_move region0 gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+24
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move region0 gv3+8
-;;     gv5 = load.i64 notrap aligned readonly can_move gv4+32
-;;     gv6 = load.i64 notrap aligned gv4+40
 ;;     sig0 = (i64 vmctx, i32, i32, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i64) -> i64 tail
 ;;     fn0 = colocated u805306368:24 sig0
@@ -30,15 +26,15 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001f                               v5 = uextend.i64 v2
-;;                                     v100 = iconst.i64 2
-;;                                     v101 = ishl v5, v100  ; v100 = 2
+;;                                     v99 = iconst.i64 2
+;;                                     v100 = ishl v5, v99  ; v99 = 2
 ;; @001f                               v8 = iconst.i64 32
-;; @001f                               v9 = ushr v101, v8  ; v8 = 32
+;; @001f                               v9 = ushr v100, v8  ; v8 = 32
 ;; @001f                               trapnz v9, user18
 ;; @001f                               v4 = iconst.i32 20
-;;                                     v107 = iconst.i32 2
-;;                                     v108 = ishl v2, v107  ; v107 = 2
-;; @001f                               v11 = uadd_overflow_trap v4, v108, user18  ; v4 = 20
+;;                                     v106 = iconst.i32 2
+;;                                     v107 = ishl v2, v106  ; v106 = 2
+;; @001f                               v11 = uadd_overflow_trap v4, v107, user18  ; v4 = 20
 ;; @001f                               v12 = load.i64 notrap aligned readonly can_move region1 v0+32
 ;; @001f                               v13 = load.i32 notrap aligned v12
 ;; @001f                               v14 = load.i32 notrap aligned v12+4
@@ -54,22 +50,22 @@
 ;; @001f                               brif v23, block2, block3
 ;;
 ;;                                 block2:
-;;                                     v116 = iconst.i32 15
-;;                                     v117 = iadd.i32 v11, v116  ; v116 = 15
-;;                                     v120 = iconst.i32 -16
-;;                                     v121 = band v117, v120  ; v120 = -16
-;;                                     v123 = iadd.i32 v13, v121
-;; @001f                               store notrap aligned v123, v12
-;;                                     v138 = iconst.i32 -1476395002
-;;                                     v139 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v140 = load.i64 notrap aligned readonly can_move v139+32
-;; @001f                               v37 = iadd v140, v20
-;; @001f                               store notrap aligned v138, v37  ; v138 = -1476395002
-;;                                     v141 = load.i64 notrap aligned readonly can_move region2 v0+40
-;;                                     v142 = load.i32 notrap aligned readonly can_move v141
-;; @001f                               store notrap aligned v142, v37+4
-;;                                     v143 = band.i64 v18, v17  ; v17 = -16
-;; @001f                               istore32 notrap aligned v143, v37+8
+;;                                     v115 = iconst.i32 15
+;;                                     v116 = iadd.i32 v11, v115  ; v115 = 15
+;;                                     v119 = iconst.i32 -16
+;;                                     v120 = band v116, v119  ; v119 = -16
+;;                                     v122 = iadd.i32 v13, v120
+;; @001f                               store notrap aligned v122, v12
+;;                                     v137 = iconst.i32 -1476395002
+;;                                     v138 = load.i64 notrap aligned readonly can_move region0 v0+8
+;;                                     v139 = load.i64 notrap aligned readonly can_move v138+32
+;; @001f                               v37 = iadd v139, v20
+;; @001f                               store notrap aligned v137, v37  ; v137 = -1476395002
+;;                                     v140 = load.i64 notrap aligned readonly can_move region2 v0+40
+;;                                     v141 = load.i32 notrap aligned readonly can_move v140
+;; @001f                               store notrap aligned v141, v37+4
+;;                                     v142 = band.i64 v18, v17  ; v17 = -16
+;; @001f                               istore32 notrap aligned v142, v37+8
 ;; @001f                               jump block4(v13, v37)
 ;;
 ;;                                 block3 cold:
@@ -85,47 +81,47 @@
 ;; @001f                               jump block4(v28, v32)
 ;;
 ;;                                 block4(v41: i32, v42: i64):
-;;                                     v97 = stack_addr.i64 ss0
-;;                                     store notrap v41, v97
+;;                                     v98 = stack_addr.i64 ss0
+;;                                     store notrap v41, v98
 ;; @001f                               v43 = iconst.i64 16
 ;; @001f                               v44 = iadd v42, v43  ; v43 = 16
 ;; @001f                               store.i32 user2 region3 v2, v44
 ;; @001f                               trapz v41, user16
-;;                                     v144 = load.i64 notrap aligned readonly can_move region0 v0+8
-;;                                     v145 = load.i64 notrap aligned readonly can_move v144+32
+;;                                     v143 = load.i64 notrap aligned readonly can_move region0 v0+8
+;;                                     v144 = load.i64 notrap aligned readonly can_move v143+32
 ;; @001f                               v47 = uextend.i64 v41
-;; @001f                               v49 = iadd v145, v47
-;; @001f                               v51 = iadd v49, v43  ; v43 = 16
-;; @001f                               v52 = load.i32 user2 readonly region3 v51
-;; @001f                               v53 = uextend.i64 v52
-;; @001f                               v59 = icmp.i64 ugt v5, v53
-;; @001f                               trapnz v59, user17
-;; @001f                               v76 = load.i64 notrap aligned v144+40
-;; @001f                               v64 = iconst.i64 20
-;; @001f                               v65 = iadd v49, v64  ; v64 = 20
-;; @001f                               v78 = uadd_overflow_trap v65, v101, user2
-;; @001f                               v77 = iadd v145, v76
-;; @001f                               v79 = icmp ugt v78, v77
-;; @001f                               trapnz v79, user2
+;; @001f                               v50 = iadd v144, v47
+;; @001f                               v52 = iadd v50, v43  ; v43 = 16
+;; @001f                               v53 = load.i32 user2 readonly region3 v52
+;; @001f                               v54 = uextend.i64 v53
+;; @001f                               v60 = icmp.i64 ugt v5, v54
+;; @001f                               trapnz v60, user17
+;; @001f                               v77 = load.i64 notrap aligned v143+40
+;; @001f                               v65 = iconst.i64 20
+;; @001f                               v66 = iadd v50, v65  ; v65 = 20
+;; @001f                               v79 = uadd_overflow_trap v66, v100, user2
+;; @001f                               v78 = iadd v144, v77
+;; @001f                               v80 = icmp ugt v79, v78
+;; @001f                               trapnz v80, user2
 ;; @001f                               v45 = iconst.i64 0
-;; @001f                               v80 = call fn1(v0, v45), stack_map=[i32 @ ss0+0]  ; v45 = 0
-;; @001f                               v84 = icmp.i64 eq v5, v45  ; v45 = 0
-;; @001f                               v81 = ireduce.i32 v80
+;; @001f                               v81 = call fn1(v0, v45), stack_map=[i32 @ ss0+0]  ; v45 = 0
+;; @001f                               v85 = icmp.i64 eq v5, v45  ; v45 = 0
+;; @001f                               v82 = ireduce.i32 v81
 ;; @001f                               v6 = iconst.i64 4
-;; @001f                               v82 = iadd v65, v101
-;; @001f                               brif v84, block6, block5(v65)
+;; @001f                               v83 = iadd v66, v100
+;; @001f                               brif v85, block6, block5(v66)
 ;;
-;;                                 block5(v85: i64):
-;; @001f                               store.i32 notrap aligned little v81, v85
-;;                                     v146 = iconst.i64 4
-;;                                     v147 = iadd v85, v146  ; v146 = 4
-;; @001f                               v88 = icmp eq v147, v82
-;; @001f                               brif v88, block6, block5(v147)
+;;                                 block5(v86: i64):
+;; @001f                               store.i32 notrap aligned little v82, v86
+;;                                     v145 = iconst.i64 4
+;;                                     v146 = iadd v86, v145  ; v145 = 4
+;; @001f                               v89 = icmp eq v146, v83
+;; @001f                               brif v89, block6, block5(v146)
 ;;
 ;;                                 block6:
-;;                                     v90 = load.i32 notrap v97
+;;                                     v91 = load.i32 notrap v98
 ;; @0022                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               return v90
+;; @0022                               return v91
 ;; }

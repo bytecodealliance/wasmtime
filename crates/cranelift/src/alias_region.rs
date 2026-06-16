@@ -1,3 +1,4 @@
+use crate::translate::Load;
 use core::fmt;
 use cranelift_codegen::{
     cursor::FuncCursor,
@@ -359,13 +360,22 @@ where
         cursor: &mut FuncCursor<'_>,
         vmctx: ir::Value,
     ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.get_ptr_size().vmctx_store_context().into(),
-        )
+        self.vmctx_store_context_load(cursor.func)
+            .emit(cursor, vmctx)
+    }
+
+    /// Get a `Load` for the `*mut VMStoreContext` value out of a `*mut VMContext`.
+    pub fn vmctx_store_context_load(&mut self, func: &mut ir::Function) -> Load {
+        let offset = u32::from(self.offsets.get_ptr_size().vmctx_store_context());
+        let region = self.vmctx_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
     }
 
     /// Load the `*mut i64` epoch pointer out of the given `*mut VMContext`.
@@ -564,15 +574,28 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         memory: MemoryIndex,
     ) -> ir::Value {
+        self.vmctx_vmmemory_import_from_load(cursor.func, memory)
+            .emit(cursor, vmctx)
+    }
+
+    /// Get a `Load` for the imported memory's `VMMemoryImport::from` field from
+    /// a `*mut VMContext`.
+    pub fn vmctx_vmmemory_import_from_load(
+        &mut self,
+        func: &mut ir::Function,
+        memory: MemoryIndex,
+    ) -> Load {
         let mem_offset = self.offsets.vmctx_vmmemory_import(memory);
-        let mem_index_offset = mem_offset + u32::from(self.offsets.vmmemory_import_from());
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            mem_index_offset,
-        )
+        let offset = mem_offset + u32::from(self.offsets.vmmemory_import_from());
+        let region = self.vmctx_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
     }
 
     /// Load the imported table's `VMTableImport::vmctx` field from the `*mut
@@ -639,13 +662,27 @@ impl AliasRegions<VMOffsets<u8>> {
         vmctx: ir::Value,
         memory: DefinedMemoryIndex,
     ) -> ir::Value {
-        self.vmctx_load(
-            cursor,
-            self.pointer_type,
-            ir::MemFlagsData::trusted().with_readonly().with_can_move(),
-            vmctx,
-            self.offsets.vmctx_vmmemory_pointer(memory),
-        )
+        self.vmctx_vmmemory_pointer_load(cursor.func, memory)
+            .emit(cursor, vmctx)
+    }
+
+    /// Get a `Load` for the defined memory's `*mut VMMemoryDefinition` out of a
+    /// `*mut VMContext`.
+    pub fn vmctx_vmmemory_pointer_load(
+        &mut self,
+        func: &mut ir::Function,
+        memory: DefinedMemoryIndex,
+    ) -> Load {
+        let offset = self.offsets.vmctx_vmmemory_pointer(memory);
+        let region = self.vmctx_region(func, offset);
+        Load {
+            offset,
+            flags: ir::MemFlagsData::trusted()
+                .with_readonly()
+                .with_can_move()
+                .with_alias_region(Some(region)),
+            ty: self.pointer_type,
+        }
     }
 
     /// Load the base of the given runtime data out of the `*mut VMContext`.
