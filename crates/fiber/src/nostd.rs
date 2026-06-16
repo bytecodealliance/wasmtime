@@ -41,7 +41,12 @@ pub struct FiberStack {
     len: usize,
     /// Backing storage, if owned. Allocated once at startup and then
     /// not reallocated afterward.
-    storage: TryVec<u8>,
+    storage: TryVec<Align16>,
+}
+
+#[repr(align(16))]
+struct Align16 {
+    _contents: u128,
 }
 
 struct BasePtr(*mut u8);
@@ -49,32 +54,23 @@ struct BasePtr(*mut u8);
 unsafe impl Send for BasePtr {}
 unsafe impl Sync for BasePtr {}
 
-const STACK_ALIGN: usize = 16;
-
-/// Align a pointer by incrementing it up to `align - 1`
-/// bytes. `align` must be a power of two. Also updates the length as
-/// appropriate so that `ptr + len` points to the same endpoint.
-fn align_ptr(ptr: *mut u8, len: usize, align: usize) -> (*mut u8, usize) {
-    let ptr = ptr as usize;
-    let aligned = (ptr + align - 1) & !(align - 1);
-    let new_len = len - (aligned - ptr);
-    (aligned as *mut u8, new_len)
-}
-
 impl FiberStack {
     pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
         let mut storage = TryVec::new();
-        storage.reserve_exact(size)?;
+        let size_rounded_up = size
+            .checked_next_multiple_of(16)
+            .ok_or_else(|| format_err!("stack size too large to round up to 16 bytes"))?;
+        let size_in_16byte_units = size_rounded_up / 16;
+        storage.reserve_exact(size_in_16byte_units)?;
         if zeroed {
-            storage.resize(size, 0)?;
+            storage.resize_with(size_in_16byte_units, || Align16 { _contents: 0 })?;
         }
-        let (base, len) = align_ptr(storage.as_mut_ptr(), size, STACK_ALIGN);
         Ok(FiberStack {
+            base: BasePtr(storage.as_mut_ptr().cast()),
+            len: storage.capacity() * 16,
             storage,
-            base: BasePtr(base),
-            len,
         })
     }
 

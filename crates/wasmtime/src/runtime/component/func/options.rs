@@ -100,6 +100,11 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         }
     }
 
+    /// Returns the `Instance` that's being lowered into.
+    pub fn instance_handle(&self) -> Instance {
+        self.instance
+    }
+
     /// Returns the `&ComponentInstance` that's being lowered into.
     pub fn instance(&self) -> &ComponentInstance {
         self.instance.id().get(self.store.0)
@@ -398,8 +403,13 @@ impl<'a> LiftContext<'a> {
     }
 
     #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(&mut self) -> &mut ConcurrentState {
-        self.task_state.concurrent_state_mut()
+    pub(crate) fn concurrent_state_and_instance_mut(
+        &mut self,
+    ) -> (&mut ConcurrentState, Pin<&mut ComponentInstance>) {
+        (
+            self.task_state.concurrent_state_mut(),
+            self.instance.as_mut(),
+        )
     }
 
     /// Lifts an `own` resource from the guest at the `idx` specified into its

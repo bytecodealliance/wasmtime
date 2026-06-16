@@ -413,6 +413,7 @@
           (then unreachable))
         (if (i32.ne (i32.const 42) (i32.load (i32.const 16)))
           (then unreachable))
+        (call $waitable.join (local.get $fr) (i32.const 0))
 
         (call $future-read-expect-trap (local.get $fr) (i32.and (local.get $flags) (i32.const 0x03)))
       )
@@ -659,3 +660,63 @@
 (assert_trap (invoke "trap-after-stream-writer-async-dropped" (u8.const 1)) "cannot read after being notified that the writable end dropped")
 (component instance $i9.2 $Tester)
 (assert_trap (invoke "trap-after-stream-writer-async-dropped" (u8.const 2)) "cannot lift stream after being notified that the writable end dropped")
+
+(component
+  (type $f (future u8))
+  (component $A
+    (core func $drop (canon future.drop-readable $f))
+    (func (export "consume") (param "x" $f) (canon lift (core func $drop)))
+  )
+  (instance $a (instantiate $A))
+  (component $B
+    (import "consume" (func $consume-import (param "x" $f)))
+    (core module $libc (memory (export "memory") 1))
+    (core instance $libc (instantiate $libc))
+    (core func $new (canon future.new $f))
+    (core func $read (canon future.read $f async (memory $libc "memory")))
+    (core func $write (canon future.write $f async (memory $libc "memory")))
+    (core func $consume (canon lower (func $consume-import)))
+    (core module $m
+      (import "" "new" (func $new (result i64)))
+      (import "" "read" (func $read (param i32 i32) (result i32)))
+      (import "" "write" (func $write (param i32 i32) (result i32)))
+      (import "" "consume" (func $consume (param i32)))
+      (func (export "run")
+        (local $tmp i64) (local $r i32) (local $w i32)
+        (local.set $tmp (call $new))
+        (local.set $r (i32.wrap_i64 (local.get $tmp)))
+        (local.set $w (i32.wrap_i64 (i64.shr_u (local.get $tmp) (i64.const 32))))
+
+        ;; start an async write which blocks waiting for a reader
+        (call $write (local.get $w) (i32.const 0))
+        i32.const -1 ;; BLOCKED
+        i32.ne
+        if unreachable end
+
+        ;; complete the write with a successful read
+        (call $read (local.get $r) (i32.const 0))
+        i32.const 0 ;; COMPLETED
+        i32.ne
+        if unreachable end
+
+        ;; attempt to transfer the now-`done` read end to the sibling consumer
+        (call $consume (local.get $r))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "new" (func $new))
+        (export "read" (func $read))
+        (export "write" (func $write))
+        (export "consume" (func $consume))
+      ))
+    ))
+    (func (export "run") (canon lift (core func $i "run")))
+  )
+  (instance $b (instantiate $B
+    (with "consume" (func $a "consume"))
+  ))
+  (export "run" (func $b "run"))
+)
+
+(assert_trap (invoke "run") "cannot lift future after previous read succeeded")

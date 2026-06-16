@@ -2957,6 +2957,54 @@ start a print 1234
         Ok(())
     }
 
+    #[test]
+    #[cfg_attr(not(feature = "component-model-async"), ignore)]
+    fn p3_cli_stdout_flush() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .arg("-Sp3")
+            .arg("-Wcomponent-model-async")
+            .arg(P3_CLI_STDOUT_FLUSH_COMPONENT)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let mut stdin = child.stdin.take().unwrap();
+        let mut stdout = child.stdout.take().unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reader = thread::spawn(move || {
+            let mut buf = [0u8; 5];
+            let res = stdout.read_exact(&mut buf).map(|()| buf);
+            let _ = tx.send(res);
+        });
+
+        let buf = match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+            Ok(Ok(buf)) => buf,
+            Ok(Err(e)) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(e.into());
+            }
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = reader.join();
+                panic!("guest stdout was not flushed");
+            }
+        };
+        assert_eq!(&buf, b"READY");
+
+        stdin.write_all(b"x")?;
+        drop(stdin);
+
+        let output = child.wait_with_output()?;
+        reader.join().unwrap();
+        assert!(output.status.success());
+
+        Ok(())
+    }
+
     #[tokio::test]
     async fn p3_cli_serve_post_return() -> Result<()> {
         let server = WasmtimeServe::new(P3_CLI_SERVE_POST_RETURN_COMPONENT, move |cmd| {
@@ -2980,6 +3028,12 @@ start a print 1234
         println!("stderr: {stderr}");
 
         assert!(stdout.contains("please see me"));
+        Ok(())
+    }
+
+    #[test]
+    fn p3_cli_many_stream() -> Result<()> {
+        run_wasmtime(&["run", "-Smax-resources=100", P3_CLI_MANY_STREAM_COMPONENT])?;
         Ok(())
     }
 }
